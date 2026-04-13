@@ -21,7 +21,7 @@
     --text-primary: #ffffff;
     --text-secondary: #a0a0b0;
     --text-muted: #606070;
-    --border-color: rgba(255, 255, 255, 0.1);
+    --border-color: rgba(255, 255, 255, 0.05);
     --glow-primary: 0 0 40px rgba(0, 240, 255, 0.3);
     --success: #00ff9d;
     --warning: #ffb800;
@@ -37,7 +37,7 @@
     --text-primary: #1a1a2e;
     --text-secondary: #4a5568;
     --text-muted: #718096;
-    --border-color: rgba(0, 0, 0, 0.08);
+    --border-color: rgba(0, 0, 0, 0.15);
     --accent-primary: #0088cc;
     --accent-secondary: #6b46c1;
     --glow-primary: 0 0 40px rgba(0, 136, 204, 0.15);
