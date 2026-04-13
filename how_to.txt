@@ -1,0 +1,33 @@
+Project structure
+
+  GEO/
+  ├── geo_checker/              # Python package
+  │   ├── __init__.py
+  │   └── __main__.py           # Main script
+  ├── geo_checker.py            # Standalone script (still works)
+  ├── .claude/commands/
+  │   └── geo-check.md          # Claude Code slash command skill
+  ├── pyproject.toml            # pip installable package config
+  ├── README.md                 # Full docs with install/usage/check table
+  ├── CLAUDE.md                 # Project context for Claude
+  └── .venv/                    # Virtual environment
+
+  3 ways to use it
+
+  1. pip install (recommended for sharing)
+  pip install -e .
+  geo-checker https://example.com --fix
+
+  2. Python module
+  python -m geo_checker https://example.com --fix
+
+  3. Claude Code slash command
+  Copy .claude/commands/geo-check.md into any project, then:
+  /geo-check https://example.com
+
+  To share/distribute
+
+  - pip/PyPI: pip install geo-checker (after publishing with python -m build && twine upload dist/*)
+  - Claude Code skill: Users just copy geo-check.md into their .claude/commands/ folder
+  - Git clone: git clone + pip install -e .
+

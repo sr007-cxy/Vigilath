@@ -1,0 +1,98 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "back": "Back",
+    "contact": "Contact"
+  },
+  "nav": {
+    "home": "Home",
+    "geoKnowledge": "GEO Knowledge",
+    "productsServices": "Products & Services",
+    "aboutUs": "About Us"
+  },
+  "home": {
+    "title": "GEO Readiness Checker",
+    "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
+    "placeholder": "https://example.com",
+    "button": "Check GEO Readiness",
+    "analyzing": "Analyzing...",
+    "error": {
+      "empty": "Please enter a URL",
+      "invalid": "Please enter a valid URL"
+    },
+    "poweredBy": "Powered by GEO AI",
+    "contactLink": "Need expert optimization help?"
+  },
+  "result": {
+    "title": "GEO Readiness Results",
+    "resultsFor": "Results for:",
+    "scoreCard": {
+      "title": "AI Visibility Score",
+      "description": "How well your website is optimized for AI search"
+    },
+    "summary": {
+      "passed": "Passed",
+      "warnings": "Warnings",
+      "failed": "Failed",
+      "info": "Info",
+      "totalChecks": "Total Checks"
+    },
+    "detailedResults": "Detailed Results",
+    "fix": "Fix:",
+    "error": {
+      "noData": "No check results found, please recheck the website"
+    },
+    "shareExport": {
+      "title": "Share & Export",
+      "copyLink": "Copy Link",
+      "exportPDF": "Export PDF",
+      "exportCSV": "Export CSV",
+      "share": "Share",
+      "copied": "Link copied to clipboard",
+      "shareSocial": "Share to social media"
+    },
+    "loginToView": "Login to view full results",
+    "loginToViewDesc": "Log in to see complete check results and detailed optimization suggestions",
+    "loginButton": "Log in",
+    "buttons": {
+      "checkAnother": "Check Another Website",
+      "getHelp": "Get Optimization Help"
+    }
+  },
+  "contact": {
+    "title": "Contact Us",
+    "description": "Need help optimizing your website for GEO? Get in touch with our experts.",
+    "form": {
+      "name": "Name",
+      "email": "Email",
+      "website": "Website",
+      "message": "Message",
+      "placeholders": {
+        "name": "Your name",
+        "email": "Your email",
+        "website": "https://example.com",
+        "message": "Tell us about your optimization needs"
+      },
+      "errors": {
+        "name": "Please enter your name",
+        "email": "Please enter a valid email",
+        "website": "Please enter a valid website URL",
+        "message": "Please enter a message"
+      },
+      "submit": "Send Message",
+      "sending": "Sending...",
+      "success": "Thank you for your message! We will get back to you soon.",
+      "error": "Failed to send message. Please try again later."
+    },
+    "otherWays": "Other Ways to Contact",
+    "backToHome": "Back to Home"
+  },
+  "status": {
+    "pass": "PASS",
+    "warn": "WARN",
+    "fail": "FAIL",
+    "info": "INFO"
+  }
+}

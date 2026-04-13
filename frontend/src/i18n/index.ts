@@ -1,0 +1,1429 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+// 检查 i18next 是否已初始化
+if (!i18n.isInitialized) {
+  i18n.use(initReactI18next).init({
+    resources: {
+      en: {
+        translation: {
+          "nav": {
+            "home": "Home",
+            "geoKnowledge": "GEO Knowledge",
+            "productsServices": "Products & Services",
+            "aboutUs": "About Us",
+            "about": "About GEO",
+            "process": "Process",
+            "pricing": "Pricing",
+            "data": "Insights",
+            "contact": "Contact",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "Error",
+            "loading": "Loading...",
+            "contact": "Login"
+          },
+          "hero": {
+            "title": "Get AI to Recommend Your Brand",
+            "subtitle": "Generative Engine Optimization (GEO)",
+            "description": "Ensure your business is recommended first when potential customers ask ChatGPT, Gemini, Perplexity, and other AI assistants for product or service recommendations.",
+            "cta": "Learn More",
+            "ctaSecondary": "Contact Us"
+          },
+          "about": {
+            "sectionTag": "About GEO",
+            "title": "What is Generative Engine Optimization?",
+            "description": "GEO (Generative Engine Optimization) is the process of getting businesses recommended by generative AI chatbots. It is an emerging technology that optimizes content for generative AI search engines (such as ChatGPT, Perplexity AI, Gemini, DeepSeek Search, as well as future AI-powered search from Baidu and Google).",
+            "definition": "GEO Definition",
+            "definitionText": "GEO is the process of getting your company suggested by generative AI chatbots when prospective customers ask for product or service recommendations, and this process can be tailored for specific generative AI search engines such as ChatGPT Optimization and Perplexity Optimization.",
+            "combination": "Three Pillars",
+            "combinationText": "GEO services are a combination of SEO, PR, and reputation management. The ideal GEO service package involves the following activities as a core strategy: superlative list ranking, website SEO optimization, review reputation management, and PR outreach.",
+            "difference": "GEO vs Traditional SEO",
+            "differenceText": "Traditional SEO focuses on getting your website to rank high in search engine results, while GEO focuses on getting your brand recommended in AI-generated content. With the rise of AI search, GEO is becoming an essential part of digital marketing."
+          },
+          "process": {
+            "sectionTag": "Our Process",
+            "title": "Four-Step GEO Strategy",
+            "subtitle": "Our GEO services cover the following four core steps to ensure your brand gets maximum exposure in the AI era.",
+            "step1": {
+              "title": "Superlative List Ranking",
+              "description": "Secure a high placement on superlative lists that rank well on Google. For example, for a fleet management software company, secure a top spot in a list article entitled \"The Top-Ranked Fleet Management Software of 2025.\" This can be accomplished via PR, paying for placement, or publishing your own superlative list article and ranking your company first."
+            },
+            "step2": {
+              "title": "Website SEO Optimization",
+              "description": "Perform SEO on your website so that your list articles rank highly. If you publish list articles for every category in which you sell products or services and they rank in the top 3 search results, you are much more likely to be recommended by ChatGPT, Gemini, and Perplexity."
+            },
+            "step3": {
+              "title": "Review Reputation Management",
+              "description": "Ensure good reviews on the most popular review websites. For technology services, these sites include G2 and Clutch; for software, Capterra and PC Magazine; for travel and leisure, TripAdvisor and Yelp; for consumer technology, CNet and Consumer Reports. B2B companies should also pay attention to employee review websites such as Glassdoor and Indeed."
+            },
+            "step4": {
+              "title": "PR Outreach",
+              "description": "Generate positive publicity via traditional PR. Generative AI chatbots are more likely to recommend a company if it's lauded in authoritative publications such as the Wall Street Journal and New York Times."
+            }
+          },
+          "pricing": {
+            "sectionTag": "Pricing",
+            "title": "Choose Your GEO Plan",
+            "subtitle": "We offer three tiers of GEO services to meet the needs of businesses of different sizes.",
+            "tier1": {
+              "name": "Starter",
+              "price": "$2,000",
+              "priceEnd": "–$3,000",
+              "period": "/month",
+              "description": "Ideal for businesses just starting with GEO",
+              "features": [
+                "Purchases low-cost placements on ranking websites",
+                "Basic list placement service",
+                "Monthly performance report"
+              ],
+              "notIncluded": [
+                "Superlative List SEO",
+                "Reputation Management",
+                "PR"
+              ]
+            },
+            "tier2": {
+              "name": "Professional",
+              "price": "$4,000",
+              "priceEnd": "–$7,000",
+              "period": "/month",
+              "description": "For businesses looking to systematically advance their GEO",
+              "features": [
+                "Monitors ranking website placement costs to determine most impactful placement spend",
+                "Creates & publishes 1-2 superlative list articles at the beginning of a campaign",
+                "Monthly performance report & strategy adjustment",
+                "Keyword ranking tracking"
+              ],
+              "notIncluded": [
+                "Reputation Management",
+                "PR"
+              ]
+            },
+            "tier3": {
+              "name": "Enterprise",
+              "price": "$8,000",
+              "priceEnd": "–$12,000",
+              "period": "/month",
+              "description": "Comprehensive GEO service for maximum AI recommendation impact",
+              "features": [
+                "Monitors ranking website placement costs to determine most impactful placement spend",
+                "Creates & publishes 3-5 superlative list articles per month, supported by metrics articles, authority statement placement, and validation pages",
+                "Facilitates positive reviews from customers/clients and minimize the impact of negative reviews",
+                "Ensures descriptions in major industry directories reflect industry leadership",
+                "Works with either internal staff or a dedicated PR agency to secure media coverage",
+                "Dedicated strategy consultant"
+              ],
+              "notIncluded": []
+            },
+            "cta": "Get Started"
+          },
+          "data": {
+            "sectionTag": "Insights",
+            "title": "GEO Key Metrics",
+            "subtitle": "Understand the latest trends in generative AI search and the impact of GEO.",
+            "stat1": {
+              "value": "65%",
+              "label": "Users search for product recommendations via AI"
+            },
+            "stat2": {
+              "value": "3x",
+              "label": "Brand recommendation rate increase after GEO"
+            },
+            "stat3": {
+              "value": "5+",
+              "label": "Major AI platforms covered"
+            },
+            "stat4": {
+              "value": "89%",
+              "label": "Client satisfaction rate"
+            },
+            "platforms": {
+              "title": "AI Platforms We Cover"
+            }
+          },
+          "contact": {
+            "sectionTag": "Contact Us",
+            "title": "Start Your GEO Journey",
+            "subtitle": "Fill in the information below and our GEO experts will contact you within 24 hours.",
+            "name": "Name",
+            "email": "Email",
+            "company": "Company",
+            "message": "Message",
+            "submit": "Submit Inquiry",
+            "info": {
+              "email": "geo@zen7.com",
+              "phone": "+86 400-XXX-XXXX"
+            },
+            "form": {
+              "name": "Name",
+              "email": "Email",
+              "website": "Website",
+              "message": "Message",
+              "submit": "Submit",
+              "sending": "Sending...",
+              "success": "Your message has been sent successfully! We will contact you soon.",
+              "error": "There was an error sending your message. Please try again later.",
+              "errors": {
+                "name": "Please enter your name",
+                "email": "Please enter a valid email address",
+                "website": "Please enter a valid website URL",
+                "message": "Please enter your message"
+              },
+              "placeholders": {
+                "name": "Your name",
+                "email": "Your email",
+                "website": "Your website",
+                "message": "Your message"
+              }
+            },
+            "otherWays": "Other Ways to Contact Us",
+            "backToHome": "Back to Home",
+            "faq": {
+              "title": "Frequently Asked Questions",
+              "questions": {
+                "question1": "What is GEO and how does it differ from SEO?",
+                "question2": "How long does it take to see results from GEO optimization?",
+                "question3": "What AI platforms do you optimize for?",
+                "question4": "How much does GEO optimization cost?",
+                "question5": "Do you offer ongoing GEO maintenance?"
+              },
+              "answers": {
+                "answer1": "GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI chatbots like ChatGPT, Gemini, and Perplexity, while traditional SEO focuses on ranking high in search engine results. GEO is specifically designed for the new era of AI-powered search.",
+                "answer2": "Results can vary depending on your industry and competition, but most clients start seeing improvements within 1-3 months. Full optimization typically takes 3-6 months to see maximum results.",
+                "answer3": "We optimize for all major AI platforms including ChatGPT, Gemini, Perplexity, DeepSeek, and future AI-powered search from Google and Baidu.",
+                "answer4": "Our GEO services range from $2,000-$12,000 per month depending on the scope and complexity of your project. We offer customized plans to fit different business needs and budgets.",
+                "answer5": "Yes, we offer ongoing GEO maintenance to ensure your brand continues to perform well as AI algorithms evolve. Our maintenance plans include regular monitoring, updates, and strategy adjustments."
+              }
+            }
+          },
+          "footer": {
+            "description": "Zen7 is a professional Generative Engine Optimization (GEO) service provider, helping businesses achieve maximum brand exposure in the AI era.",
+            "quickLinks": "Quick Links",
+            "contactInfo": "Contact Info",
+            "copyright": "© 2026 Zen7. All rights reserved."
+          },
+          "geoTool": {
+            "title": "Want to check your website GEO readiness?",
+            "description": "Use our free GEO Readiness Checker to analyze your website.",
+            "cta": "Check Your Website"
+          },
+          "home": {
+            "title": "GEO Readiness Checker",
+            "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
+            "placeholder": "https://example.com",
+            "button": "Check GEO Readiness",
+            "analyzing": "Analyzing...",
+            "error": {
+              "empty": "Please enter a URL",
+              "invalid": "Please enter a valid URL"
+            },
+            "poweredBy": "Powered by GEO AI",
+            "contactLink": "Need expert optimization help?",
+            "buttons": {
+              "geoKnowledge": "Learn about GEO Knowledge",
+              "services": "View Service Packages"
+            }
+          },
+          "result": {
+            "title": "GEO Readiness Results",
+            "resultsFor": "Results for:",
+            "scoreCard": {
+              "title": "AI Visibility Score",
+              "description": "How well your website is optimized for AI search"
+            },
+            "summary": {
+              "passed": "Passed",
+              "warnings": "Warnings",
+              "failed": "Failed",
+              "info": "Info",
+              "totalChecks": "Total Checks"
+            },
+            "detailedResults": "Detailed Results",
+            "fix": "Fix:",
+            "buttons": {
+              "checkAnother": "Check Another Website",
+              "getHelp": "Get Optimization Help"
+            },
+            "error": {
+              "noData": "No GEO check data found. Please run a check first."
+            },
+            "loginToView": "Login to View Full Results",
+            "loginToViewDesc": "Log in to see all detailed results and recommendations",
+            "loginButton": "Log In",
+            "shareExport": {
+              "title": "Share & Export",
+              "copied": "Link copied to clipboard!",
+              "copyLink": "Copy Link",
+              "exportPDF": "Export PDF",
+              "exportCSV": "Export CSV",
+              "shareSocial": "Share to social media",
+              "share": "Share"
+            }
+          },
+          "login": {
+            "title": "Login",
+            "subtitle": "or",
+            "createAccount": "Create New Account",
+            "email": "Email",
+            "emailPlaceholder": "Your email",
+            "password": "Password",
+            "passwordPlaceholder": "Your password",
+            "rememberMe": "Remember me",
+            "forgotPassword": "Forgot password?",
+            "button": "Login",
+            "loading": "Logging in...",
+            "error": "Invalid email or password"
+          },
+          "register": {
+            "title": "Create Account",
+            "subtitle": "or",
+            "loginAccount": "Login to Existing Account",
+            "name": "Name",
+            "namePlaceholder": "Your name",
+            "email": "Email",
+            "emailPlaceholder": "Your email",
+            "password": "Password",
+            "passwordPlaceholder": "Your password",
+            "confirmPassword": "Confirm Password",
+            "confirmPasswordPlaceholder": "Confirm your password",
+            "terms": "I agree to the terms of service and privacy policy",
+            "button": "Register",
+            "loading": "Registering...",
+            "error": "Passwords do not match"
+          },
+          "forgotPassword": {
+            "title": "Forgot Password",
+            "description": "Enter your email to receive a password reset link",
+            "button": "Send Reset Link",
+            "loading": "Sending...",
+            "success": {
+              "emailSent": "Password reset email sent. Check your inbox for instructions.",
+              "token": "Reset token",
+              "resetSuccess": "Password reset successfully. You can now login with your new password."
+            },
+            "error": {
+              "sendFailed": "Failed to send password reset email",
+              "resetFailed": "Failed to reset password"
+            },
+            "backToLogin": "Back to login",
+            "reset": {
+              "title": "Reset Password",
+              "description": "Enter your new password below",
+              "newPassword": "New Password",
+              "newPasswordPlaceholder": "Enter your new password",
+              "confirmPassword": "Confirm Password",
+              "confirmPasswordPlaceholder": "Confirm your new password",
+              "button": "Reset Password",
+              "loading": "Resetting..."
+            }
+          },
+          "about": {
+            "title": "About Us",
+            "description": "A technology service provider specializing in GEO (Generative Engine Optimization), helping websites perform better in the generative AI era.",
+            "story": {
+              "title": "Our Story",
+              "subtitle": "From Technological Innovation to Industry Leadership",
+              "paragraph1": "Our team consists of experts passionate about AI and search engine technology. In the era of generative AI technology explosion, we saw new opportunities and challenges in website optimization.",
+              "paragraph2": "In 2023, we began researching GEO (Generative Engine Optimization) technology, aiming to help websites perform better in the generative AI era. After a year of hard work, we developed a complete GEO detection and optimization system, providing professional technical support for enterprise and personal websites.",
+              "paragraph3": "Today, we have become a leading service provider in the GEO field, providing professional GEO detection and optimization services to many clients, helping them achieve better online performance in the generative AI era."
+            },
+            "mission": {
+              "title": "Our Mission",
+              "innovation": {
+                "title": "Technological Innovation",
+                "description": "Continuously explore and innovate GEO technology, providing clients with the most advanced detection and optimization solutions."
+              },
+              "value": {
+                "title": "Customer Value",
+                "description": "Customer-centric, providing high-quality GEO services to help clients gain competitive advantages in the generative AI era."
+              },
+              "leadership": {
+                "title": "Industry Leadership",
+                "description": "Become an industry leader in the GEO field, promoting the establishment and development of industry standards."
+              }
+            },
+            "team": {
+              "title": "Our Team",
+              "ceo": {
+                "name": "Zhang Ming",
+                "title": "Founder & CEO",
+                "description": "Former Google engineer with 10 years of experience in search engine and AI technology, focusing on GEO technology research and application."
+              },
+              "cto": {
+                "name": "Li Ting",
+                "title": "Technical Director",
+                "description": "Former Microsoft R&D engineer with 8 years of AI and machine learning experience, responsible for the technical architecture of the GEO detection system."
+              },
+              "marketing": {
+                "name": "Wang Qiang",
+                "title": "Marketing Director",
+                "description": "Former Baidu marketing expert with 7 years of digital marketing experience, responsible for the company's marketing strategy and client development."
+              },
+              "design": {
+                "name": "Zhao Fang",
+                "title": "Design Director",
+                "description": "Former Tencent UI/UX designer with 6 years of user experience design experience, responsible for product interface design and user experience."
+              }
+            },
+            "contact": {
+              "title": "Contact Us",
+              "info": {
+                "title": "Contact Information",
+                "address": "Address",
+                "addressValue": "Zhongguancun Science and Technology Park, Haidian District, Beijing",
+                "email": "Email",
+                "emailValue": "contact@geochecker.com",
+                "phone": "Phone",
+                "phoneValue": "+86 10 8888 8888"
+              },
+              "form": {
+                "title": "Send Message",
+                "name": "Name",
+                "namePlaceholder": "Your name",
+                "email": "Email",
+                "emailPlaceholder": "Your email",
+                "message": "Message",
+                "messagePlaceholder": "Please enter your message",
+                "button": "Send Message"
+              }
+            }
+          },
+          "geoKnowledge": {
+            "title": "GEO Knowledge Center",
+            "description": "Learn about the core concepts and best practices of GEO strategy to optimize your website for AI-powered search engines.",
+            "sections": {
+              "about": "About GEO",
+              "whatIsGeo": "What is GEO?",
+              "whyGeoImportant": "Why is GEO important?",
+              "whyGeoPoints": [
+                "Improve search visibility for global users",
+                "Adapt to different regional search algorithm preferences",
+                "Enhance user experience and conversion rates",
+                "Strengthen brand's global influence"
+              ],
+              "strategies": "GEO Strategies",
+              "contentLocalization": "Content Localization",
+              "contentLocalizationDesc": "Provide localized content for users in different regions, including language, cultural references, and region-specific information.",
+              "contentLocalizationPoints": [
+                "Translate and localize content",
+                "Use region-specific keywords",
+                "Adapt to regional cultural differences"
+              ],
+              "technicalOptimization": "Technical Optimization",
+              "technicalOptimizationDesc": "Ensure your website technically supports GEO optimization, including site structure, loading speed, and mobile-friendliness.",
+              "technicalOptimizationPoints": [
+                "Use hreflang tags",
+                "Optimize website loading speed",
+                "Ensure mobile-friendliness"
+              ],
+              "keyData": "GEO Key Data",
+              "importantMetrics": "Important GEO Metrics",
+              "regionalTraffic": "Regional Traffic Distribution",
+              "regionalTrafficDesc": "Understand user access patterns from different regions to optimize targeted content.",
+              "languagePreference": "Language Preference",
+              "languagePreferenceDesc": "Analyze user language preferences to provide corresponding localized content.",
+              "searchTrends": "Search Trends",
+              "searchTrendsDesc": "Track search trends in different regions to adjust keyword strategies."
+            }
+          },
+          "productsServices": {
+            "title": "Products & Services",
+            "description": "We offer a range of GEO detection and optimization services to help your website achieve optimal search visibility worldwide.",
+            "sections": {
+              "ourServices": "Our Services",
+              "contactConsultation": "Contact & Consultation"
+            },
+            "services": [
+              {
+                "title": "Basic Detection Service",
+                "description": "Provide basic GEO readiness detection for your website, including basic GEO configuration analysis and simple optimization suggestions.",
+                "price": "Free",
+                "features": [
+                  "Basic GEO configuration detection",
+                  "Simple optimization suggestions",
+                  "Detection result report",
+                  "Limited result viewing"
+                ],
+                "button": "Learn More"
+              },
+              {
+                "title": "Advanced Detection Service",
+                "description": "Provide comprehensive GEO detection and analysis, including detailed optimization suggestions and priority ranking.",
+                "price": "¥99 per time",
+                "features": [
+                  "Comprehensive GEO configuration detection",
+                  "Detailed optimization suggestions",
+                  "Priority ranking",
+                  "Complete result report"
+                ],
+                "button": "Learn More"
+              },
+              {
+                "title": "Custom GEO Optimization Service",
+                "description": "Customized GEO optimization services provided by our professional team, including implementation and continuous monitoring.",
+                "price": "From ¥999",
+                "features": [
+                  "Customized GEO strategy",
+                  "Professional team implementation",
+                  "Continuous monitoring and optimization",
+                  "Priority technical support"
+                ],
+                "button": "Learn More"
+              }
+            ],
+            "contact": {
+              "getCustomPlan": "Get Custom Plan",
+              "name": "Name",
+              "namePlaceholder": "Your name",
+              "email": "Email",
+              "emailPlaceholder": "Your email",
+              "website": "Website",
+              "websitePlaceholder": "https://example.com",
+              "service": "Interested Service",
+              "serviceOptions": [
+                "Basic Detection Service",
+                "Advanced Detection Service",
+                "Custom GEO Optimization Service"
+              ],
+              "message": "Message",
+              "messagePlaceholder": "Tell us your needs",
+              "submit": "Submit Inquiry",
+              "contactUs": "Contact Us",
+              "contactText": "If you have any questions or need more information, please contact us through the following methods. Our professional team will reply to you as soon as possible.",
+              "emailLabel": "Email",
+              "phoneLabel": "Phone"
+            }
+          }
+        }
+      },
+      ja: {
+        translation: {
+          "nav": {
+            "home": "ホーム",
+            "geoKnowledge": "GEO 知識",
+            "productsServices": "製品とサービス",
+            "aboutUs": "会社概要",
+            "about": "GEO について",
+            "process": "プロセス",
+            "pricing": "価格設定",
+            "data": "インサイト",
+            "contact": "お問い合わせ",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "エラー",
+            "loading": "読み込み中...",
+            "contact": "ログイン"
+          },
+          "hero": {
+            "title": "AI にあなたのブランドを推奨させよう",
+            "subtitle": "生成エンジン最適化 (GEO)",
+            "description": "潜在顧客が ChatGPT、Gemini、Perplexity などの AI アシスタントに製品やサービスの推奨を求めたときに、あなたの企業が最初に推奨されるようにしましょう。",
+            "cta": "詳しく知る",
+            "ctaSecondary": "お問い合わせ"
+          },
+          "login": {
+            "title": "ログイン",
+            "subtitle": "または",
+            "createAccount": "新規アカウントを作成",
+            "email": "メールアドレス",
+            "emailPlaceholder": "あなたのメールアドレス",
+            "password": "パスワード",
+            "passwordPlaceholder": "あなたのパスワード",
+            "rememberMe": "ログイン状態を保持",
+            "forgotPassword": "パスワードを忘れましたか？",
+            "button": "ログイン",
+            "loading": "ログイン中...",
+            "error": "メールアドレスまたはパスワードが正しくありません"
+          },
+          "register": {
+            "title": "アカウント作成",
+            "subtitle": "または",
+            "loginAccount": "既存のアカウントにログイン",
+            "name": "名前",
+            "namePlaceholder": "あなたの名前",
+            "email": "メールアドレス",
+            "emailPlaceholder": "あなたのメールアドレス",
+            "password": "パスワード",
+            "passwordPlaceholder": "あなたのパスワード",
+            "confirmPassword": "パスワードの確認",
+            "confirmPasswordPlaceholder": "パスワードを確認してください",
+            "terms": "利用規約とプライバシーポリシーに同意します",
+            "button": "登録",
+            "loading": "登録中...",
+            "error": "パスワードが一致しません"
+          },
+          "forgotPassword": {
+            "title": "パスワードを忘れた",
+            "description": "パスワードリセットリンクを受け取るためにメールアドレスを入力してください",
+            "button": "リセットリンクを送信",
+            "loading": "送信中...",
+            "success": {
+              "emailSent": "パスワードリセットメールを送信しました。指示に従うには受信トレイを確認してください。",
+              "token": "リセットトークン",
+              "resetSuccess": "パスワードのリセットに成功しました。新しいパスワードでログインできます。"
+            },
+            "error": {
+              "sendFailed": "パスワードリセットメールの送信に失敗しました",
+              "resetFailed": "パスワードのリセットに失敗しました"
+            },
+            "backToLogin": "ログインに戻る",
+            "reset": {
+              "title": "パスワードをリセット",
+              "description": "以下に新しいパスワードを入力してください",
+              "newPassword": "新しいパスワード",
+              "newPasswordPlaceholder": "新しいパスワードを入力してください",
+              "confirmPassword": "パスワードの確認",
+              "confirmPasswordPlaceholder": "パスワードを確認してください",
+              "button": "パスワードをリセット",
+              "loading": "リセット中..."
+            }
+          }
+        }
+      },
+      ko: {
+        translation: {
+          "nav": {
+            "home": "홈",
+            "geoKnowledge": "GEO 지식",
+            "productsServices": "제품 및 서비스",
+            "aboutUs": "회사 소개",
+            "about": "GEO 소개",
+            "process": "프로세스",
+            "pricing": "가격 설정",
+            "data": "인사이트",
+            "contact": "연락처",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "오류",
+            "loading": "로딩 중...",
+            "contact": "로그인"
+          },
+          "hero": {
+            "title": "AI가 귀하의 브랜드를 추천하도록 하세요",
+            "subtitle": "생성형 엔진 최적화 (GEO)",
+            "description": "잠재 고객이 ChatGPT, Gemini, Perplexity 등 AI 어시스턴트에게 제품이나 서비스 추천을 요청할 때 귀하의 비즈니스가 처음으로 추천되도록 보장하세요.",
+            "cta": "자세히 알아보기",
+            "ctaSecondary": "연락하기"
+          },
+          "login": {
+            "title": "로그인",
+            "subtitle": "또는",
+            "createAccount": "새 계정 만들기",
+            "email": "이메일",
+            "emailPlaceholder": "귀하의 이메일",
+            "password": "비밀번호",
+            "passwordPlaceholder": "귀하의 비밀번호",
+            "rememberMe": "로그인 상태 유지",
+            "forgotPassword": "비밀번호를 잊으셨나요?",
+            "button": "로그인",
+            "loading": "로그인 중...",
+            "error": "이메일 또는 비밀번호가 잘못되었습니다"
+          },
+          "register": {
+            "title": "계정 생성",
+            "subtitle": "또는",
+            "loginAccount": "기존 계정에 로그인",
+            "name": "이름",
+            "namePlaceholder": "귀하의 이름",
+            "email": "이메일",
+            "emailPlaceholder": "귀하의 이메일",
+            "password": "비밀번호",
+            "passwordPlaceholder": "귀하의 비밀번호",
+            "confirmPassword": "비밀번호 확인",
+            "confirmPasswordPlaceholder": "비밀번호를 확인하세요",
+            "terms": "서비스 약관 및 개인 정보 보호 정책에 동의합니다",
+            "button": "등록",
+            "loading": "등록 중...",
+            "error": "비밀번호가 일치하지 않습니다"
+          },
+          "forgotPassword": {
+            "title": "비밀번호를 잊으셨나요",
+            "description": "비밀번호 재설정 링크를 받기 위해 이메일을 입력하세요",
+            "button": "재설정 링크 보내기",
+            "loading": "전송 중...",
+            "success": {
+              "emailSent": "비밀번호 재설정 이메일을 보냈습니다. 지침을 따르려면 받은 편지를 확인하세요.",
+              "token": "재설정 토큰",
+              "resetSuccess": "비밀번호 재설정에 성공했습니다. 이제 새 비밀번호로 로그인할 수 있습니다."
+            },
+            "error": {
+              "sendFailed": "비밀번호 재설정 이메일 전송에 실패했습니다",
+              "resetFailed": "비밀번호 재설정에 실패했습니다"
+            },
+            "backToLogin": "로그인으로 돌아가기",
+            "reset": {
+              "title": "비밀번호 재설정",
+              "description": "아래에 새 비밀번호를 입력하세요",
+              "newPassword": "새 비밀번호",
+              "newPasswordPlaceholder": "새 비밀번호를 입력하세요",
+              "confirmPassword": "비밀번호 확인",
+              "confirmPasswordPlaceholder": "비밀번호를 확인하세요",
+              "button": "비밀번호 재설정",
+              "loading": "재설정 중..."
+            }
+          }
+        }
+      },
+      de: {
+        translation: {
+          "nav": {
+            "home": "Startseite",
+            "geoKnowledge": "GEO Wissen",
+            "productsServices": "Produkte & Dienstleistungen",
+            "aboutUs": "Über uns",
+            "about": "Über GEO",
+            "process": "Prozess",
+            "pricing": "Preise",
+            "data": "Einblicke",
+            "contact": "Kontakt",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "Fehler",
+            "loading": "Laden...",
+            "contact": "Anmelden"
+          },
+          "hero": {
+            "title": "Lassen Sie AI Ihre Marke empfehlen",
+            "subtitle": "Generative Engine Optimization (GEO)",
+            "description": "Stellen Sie sicher, dass Ihr Unternehmen als erstes empfohlen wird, wenn potenzielle Kunden ChatGPT, Gemini, Perplexity und andere KI-Assistenten nach Produkt- oder Dienstleistungsempfehlungen fragen.",
+            "cta": "Mehr erfahren",
+            "ctaSecondary": "Kontaktieren Sie uns"
+          },
+          "login": {
+            "title": "Anmelden",
+            "subtitle": "oder",
+            "createAccount": "Neues Konto erstellen",
+            "email": "E-Mail",
+            "emailPlaceholder": "Ihre E-Mail",
+            "password": "Passwort",
+            "passwordPlaceholder": "Ihr Passwort",
+            "rememberMe": "Angemeldet bleiben",
+            "forgotPassword": "Passwort vergessen?",
+            "button": "Anmelden",
+            "loading": "Anmelden...",
+            "error": "Ungültige E-Mail oder Passwort"
+          },
+          "register": {
+            "title": "Konto erstellen",
+            "subtitle": "oder",
+            "loginAccount": "Bei vorhandenen Konto anmelden",
+            "name": "Name",
+            "namePlaceholder": "Ihr Name",
+            "email": "E-Mail",
+            "emailPlaceholder": "Ihre E-Mail",
+            "password": "Passwort",
+            "passwordPlaceholder": "Ihr Passwort",
+            "confirmPassword": "Passwort bestätigen",
+            "confirmPasswordPlaceholder": "Bestätigen Sie Ihr Passwort",
+            "terms": "Ich stimme den Nutzungsbedingungen und der Datenschutzrichtlinie zu",
+            "button": "Registrieren",
+            "loading": "Registrieren...",
+            "error": "Passwörter stimmen nicht überein"
+          },
+          "forgotPassword": {
+            "title": "Passwort vergessen",
+            "description": "Geben Sie Ihre E-Mail ein, um einen Passwort-Zurücksetzungslink zu erhalten",
+            "button": "Zurücksetzungslink senden",
+            "loading": "Senden...",
+            "success": {
+              "emailSent": "Passwort-Zurücksetzungs-E-Mail gesendet. Überprüfen Sie Ihren Posteingang für Anweisungen.",
+              "token": "Zurücksetzungs-Token",
+              "resetSuccess": "Passwort erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
+            },
+            "error": {
+              "sendFailed": "Fehler beim Senden der Passwort-Zurücksetzungs-E-Mail",
+              "resetFailed": "Fehler beim Zurücksetzen des Passworts"
+            },
+            "backToLogin": "Zurück zur Anmeldung",
+            "reset": {
+              "title": "Passwort zurücksetzen",
+              "description": "Geben Sie unten Ihr neues Passwort ein",
+              "newPassword": "Neues Passwort",
+              "newPasswordPlaceholder": "Geben Sie Ihr neues Passwort ein",
+              "confirmPassword": "Passwort bestätigen",
+              "confirmPasswordPlaceholder": "Bestätigen Sie Ihr Passwort",
+              "button": "Passwort zurücksetzen",
+              "loading": "Zurücksetzen..."
+            }
+          }
+        }
+      },
+      fr: {
+        translation: {
+          "nav": {
+            "home": "Accueil",
+            "geoKnowledge": "Connaissances GEO",
+            "productsServices": "Produits & Services",
+            "aboutUs": "À propos de nous",
+            "about": "À propos de GEO",
+            "process": "Processus",
+            "pricing": "Tarification",
+            "data": "Insights",
+            "contact": "Contact",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "Erreur",
+            "loading": "Chargement...",
+            "contact": "Connexion"
+          },
+          "hero": {
+            "title": "Faites recommander votre marque par l'IA",
+            "subtitle": "Optimisation de Moteur Génératif (GEO)",
+            "description": "Assurez-vous que votre entreprise soit recommandée en premier lorsque des clients potentiels demandent des recommandations de produits ou services à ChatGPT, Gemini, Perplexity et autres assistants IA.",
+            "cta": "En savoir plus",
+            "ctaSecondary": "Contactez-nous"
+          },
+          "login": {
+            "title": "Connexion",
+            "subtitle": "ou",
+            "createAccount": "Créer un nouveau compte",
+            "email": "Email",
+            "emailPlaceholder": "Votre email",
+            "password": "Mot de passe",
+            "passwordPlaceholder": "Votre mot de passe",
+            "rememberMe": "Se souvenir de moi",
+            "forgotPassword": "Mot de passe oublié ?",
+            "button": "Connexion",
+            "loading": "Connexion...",
+            "error": "Email ou mot de passe invalide"
+          },
+          "register": {
+            "title": "Créer un compte",
+            "subtitle": "ou",
+            "loginAccount": "Se connecter à un compte existant",
+            "name": "Nom",
+            "namePlaceholder": "Votre nom",
+            "email": "Email",
+            "emailPlaceholder": "Votre email",
+            "password": "Mot de passe",
+            "passwordPlaceholder": "Votre mot de passe",
+            "confirmPassword": "Confirmer le mot de passe",
+            "confirmPasswordPlaceholder": "Confirmez votre mot de passe",
+            "terms": "J'accepte les conditions d'utilisation et la politique de confidentialité",
+            "button": "S'inscrire",
+            "loading": "Inscription...",
+            "error": "Les mots de passe ne correspondent pas"
+          },
+          "forgotPassword": {
+            "title": "Mot de passe oublié",
+            "description": "Entrez votre email pour recevoir un lien de réinitialisation de mot de passe",
+            "button": "Envoyer le lien de réinitialisation",
+            "loading": "Envoi...",
+            "success": {
+              "emailSent": "Email de réinitialisation de mot de passe envoyé. Vérifiez votre boîte de réception pour les instructions.",
+              "token": "Jeton de réinitialisation",
+              "resetSuccess": "Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe."
+            },
+            "error": {
+              "sendFailed": "Échec de l'envoi de l'email de réinitialisation de mot de passe",
+              "resetFailed": "Échec de la réinitialisation du mot de passe"
+            },
+            "backToLogin": "Retour à la connexion",
+            "reset": {
+              "title": "Réinitialiser le mot de passe",
+              "description": "Entrez votre nouveau mot de passe ci-dessous",
+              "newPassword": "Nouveau mot de passe",
+              "newPasswordPlaceholder": "Entrez votre nouveau mot de passe",
+              "confirmPassword": "Confirmer le mot de passe",
+              "confirmPasswordPlaceholder": "Confirmez votre mot de passe",
+              "button": "Réinitialiser le mot de passe",
+              "loading": "Réinitialisation..."
+            }
+          }
+        }
+      },
+      es: {
+        translation: {
+          "nav": {
+            "home": "Inicio",
+            "geoKnowledge": "Conocimientos GEO",
+            "productsServices": "Productos & Servicios",
+            "aboutUs": "Sobre nosotros",
+            "about": "Sobre GEO",
+            "process": "Proceso",
+            "pricing": "Precios",
+            "data": "Informes",
+            "contact": "Contacto",
+            "langSwitch": "中文"
+          },
+          "common": {
+            "error": "Error",
+            "loading": "Cargando...",
+            "contact": "Iniciar sesión"
+          },
+          "hero": {
+            "title": "Haz que la IA recomiende tu marca",
+            "subtitle": "Optimización de Motor Generativo (GEO)",
+            "description": "Asegúrate de que tu negocio sea recomendado primero cuando los clientes potenciales soliciten recomendaciones de productos o servicios a ChatGPT, Gemini, Perplexity y otros asistentes de IA.",
+            "cta": "Más información",
+            "ctaSecondary": "Contáctanos"
+          },
+          "login": {
+            "title": "Iniciar sesión",
+            "subtitle": "o",
+            "createAccount": "Crear una nueva cuenta",
+            "email": "Correo electrónico",
+            "emailPlaceholder": "Tu correo electrónico",
+            "password": "Contraseña",
+            "passwordPlaceholder": "Tu contraseña",
+            "rememberMe": "Recordarme",
+            "forgotPassword": "¿Olvidaste tu contraseña?",
+            "button": "Iniciar sesión",
+            "loading": "Iniciando sesión...",
+            "error": "Correo electrónico o contraseña inválidos"
+          },
+          "register": {
+            "title": "Crear cuenta",
+            "subtitle": "o",
+            "loginAccount": "Iniciar sesión en una cuenta existente",
+            "name": "Nombre",
+            "namePlaceholder": "Tu nombre",
+            "email": "Correo electrónico",
+            "emailPlaceholder": "Tu correo electrónico",
+            "password": "Contraseña",
+            "passwordPlaceholder": "Tu contraseña",
+            "confirmPassword": "Confirmar contraseña",
+            "confirmPasswordPlaceholder": "Confirma tu contraseña",
+            "terms": "Acepto los términos de servicio y la política de privacidad",
+            "button": "Registrarse",
+            "loading": "Registrando...",
+            "error": "Las contraseñas no coinciden"
+          },
+          "forgotPassword": {
+            "title": "Olvidé mi contraseña",
+            "description": "Ingresa tu correo electrónico para recibir un enlace de restablecimiento de contraseña",
+            "button": "Enviar enlace de restablecimiento",
+            "loading": "Enviando...",
+            "success": {
+              "emailSent": "Correo electrónico de restablecimiento de contraseña enviado. Verifica tu bandeja de entrada para instrucciones.",
+              "token": "Token de restablecimiento",
+              "resetSuccess": "Contraseña restablecida con éxito. Ahora puedes iniciar sesión con tu nueva contraseña."
+            },
+            "error": {
+              "sendFailed": "Error al enviar el correo electrónico de restablecimiento de contraseña",
+              "resetFailed": "Error al restablecer la contraseña"
+            },
+            "backToLogin": "Volver al inicio de sesión",
+            "reset": {
+              "title": "Restablecer contraseña",
+              "description": "Ingresa tu nueva contraseña a continuación",
+              "newPassword": "Nueva contraseña",
+              "newPasswordPlaceholder": "Ingresa tu nueva contraseña",
+              "confirmPassword": "Confirmar contraseña",
+              "confirmPasswordPlaceholder": "Confirma tu contraseña",
+              "button": "Restablecer contraseña",
+              "loading": "Restableciendo..."
+            }
+          }
+        }
+      },
+      zh: {
+        translation: {
+          "nav": {
+            "home": "首页",
+            "geoKnowledge": "GEO 知识",
+            "productsServices": "产品与服务",
+            "aboutUs": "关于我们",
+            "about": "关于 GEO",
+            "process": "服务流程",
+            "pricing": "定价方案",
+            "data": "数据洞察",
+            "contact": "联系我们",
+            "langSwitch": "EN"
+          },
+          "common": {
+            "error": "错误",
+            "loading": "加载中...",
+            "contact": "登录"
+          },
+          "hero": {
+            "title": "让 AI 推荐您的品牌",
+            "subtitle": "生成式引擎优化（GEO）",
+            "description": "当潜在客户向 ChatGPT、Gemini、Perplexity 等 AI 助手寻求产品或服务推荐时，确保您的企业被优先推荐。",
+            "cta": "了解更多",
+            "ctaSecondary": "联系我们"
+          },
+          "about": {
+            "sectionTag": "关于 GEO",
+            "title": "什么是生成式引擎优化？",
+            "description": "GEO（Generative Engine Optimization）是让企业在生成式 AI 聊天机器人中获得推荐的过程。一种针对生成式人工智能搜索引擎（如 ChatGPT、Perplexity AI、Gemini、DeepSeek Search 以及未来百度、谷歌的 AI 搜索）进行内容优化的新兴技术。",
+            "definition": "GEO 定义",
+            "definitionText": "GEO 是让您的公司在潜在客户向生成式 AI 聊天机器人寻求产品或服务推荐时被建议的过程，这一过程可以针对特定的生成式 AI 搜索引擎进行定制，如 ChatGPT 优化和 Perplexity 优化。",
+            "combination": "三位一体",
+            "combinationText": "GEO 服务是 SEO、PR 和声誉管理的结合。理想的 GEO 服务方案将以下活动作为核心策略：超级列表排名、网站 SEO 优化、评论声誉管理和公关传播。",
+            "difference": "GEO vs 传统 SEO",
+            "differenceText": "传统 SEO 专注于让您的网站在搜索引擎结果中排名靠前，而 GEO 专注于让您的品牌在 AI 生成的内容中被推荐。随着 AI 搜索的兴起，GEO 正成为数字营销不可或缺的组成部分。"
+          },
+          "process": {
+            "sectionTag": "服务流程",
+            "title": "GEO 四步核心策略",
+            "subtitle": "我们的 GEO 服务涵盖以下四个核心步骤，确保您的品牌在 AI 时代获得最大曝光。",
+            "step1": {
+              "title": "超级列表排名",
+              "description": "在 Google 排名靠前的超级列表中获取高排名位置。例如，对于车队管理软件公司，在「2025 年最佳车队管理软件」列表文章中获取顶级位置。可通过 PR、付费投放或自行发布超级列表文章并将公司排名第一来实现。"
+            },
+            "step2": {
+              "title": "网站 SEO 优化",
+              "description": "对您的网站进行 SEO 优化，使列表文章在搜索结果中排名靠前。如果您为每个产品或服务类别发布列表文章，且它们在搜索结果中排名前三，您被 ChatGPT、Gemini 和 Perplexity 推荐的可能性将大大增加。"
+            },
+            "step3": {
+              "title": "评论声誉管理",
+              "description": "确保在最热门的评论网站上获得好评。对于技术服务，这些网站包括 G2 和 Clutch；对于软件，Capterra 和 PC Magazine；对于旅游和休闲业务，TripAdvisor 和 Yelp；对于消费科技，CNet 和 Consumer Reports。B2B 企业还应关注 Glassdoor 和 Indeed 等员工评论网站。"
+            },
+            "step4": {
+              "title": "公关传播",
+              "description": "通过传统 PR 生成正面宣传。如果一家公司在华尔街日报和纽约时报等权威出版物中获得赞誉，生成式 AI 聊天机器人更有可能推荐该公司。"
+            }
+          },
+          "pricing": {
+            "sectionTag": "定价方案",
+            "title": "选择适合您的 GEO 方案",
+            "subtitle": "我们提供三个层级的 GEO 服务，满足不同规模企业的需求。",
+            "tier1": {
+              "name": "基础版",
+              "price": "¥14,000",
+              "priceEnd": "–¥21,000",
+              "period": "/月",
+              "description": "适合刚开始探索 GEO 的企业",
+              "features": [
+                "购买低成本排名网站位置",
+                "基础列表投放服务",
+                "月度效果报告"
+              ],
+              "notIncluded": [
+                "超级列表 SEO",
+                "声誉管理",
+                "公关传播"
+              ]
+            },
+            "tier2": {
+              "name": "专业版",
+              "price": "¥28,000",
+              "priceEnd": "–¥49,000",
+              "period": "/月",
+              "description": "适合希望系统化推进 GEO 的企业",
+              "features": [
+                "监控排名网站投放成本，确定最具影响力的投放支出",
+                "活动初期创建 1-2 篇超级列表文章",
+                "月度效果报告与策略调整",
+                "关键词排名追踪"
+              ],
+              "notIncluded": [
+                "声誉管理",
+                "公关传播"
+              ]
+            },
+            "tier3": {
+              "name": "旗舰版",
+              "price": "¥56,000",
+              "priceEnd": "–¥84,000",
+              "period": "/月",
+              "description": "全方位 GEO 服务，最大化 AI 推荐效果",
+              "features": [
+                "监控排名网站投放成本，确定最具影响力的投放支出",
+                "每月创建 3-5 篇超级列表文章，配合指标文章、权威声明和验证页面",
+                "促进客户正面评价，减少负面评价影响",
+                "确保主要行业目录描述反映行业领导地位",
+                "与内部团队或专业 PR 机构合作获取媒体报道",
+                "专属策略顾问"
+              ],
+              "notIncluded": []
+            },
+            "cta": "开始咨询"
+          },
+          "data": {
+            "sectionTag": "数据洞察",
+            "title": "GEO 关键数据",
+            "subtitle": "了解生成式 AI 搜索市场的最新趋势和 GEO 的影响力。",
+            "stat1": {
+              "value": "65%",
+              "label": "用户使用 AI 搜索产品推荐"
+            },
+            "stat2": {
+              "value": "3x",
+              "label": "GEO 优化后品牌推荐率提升"
+            },
+            "stat3": {
+              "value": "5+",
+              "label": "覆盖主流 AI 平台"
+            },
+            "stat4": {
+              "value": "89%",
+              "label": "客户满意度"
+            },
+            "platforms": {
+              "title": "我们覆盖的 AI 平台"
+            }
+          },
+          "contact": {
+            "sectionTag": "联系我们",
+            "title": "开启您的 GEO 之旅",
+            "subtitle": "填写以下信息，我们的 GEO 专家将在 24 小时内与您联系。",
+            "name": "姓名",
+            "email": "邮箱",
+            "company": "公司",
+            "message": "留言",
+            "submit": "提交咨询",
+            "info": {
+              "email": "geo@zen7.com",
+              "phone": "+86 400-XXX-XXXX"
+            },
+            "form": {
+              "name": "姓名",
+              "email": "邮箱",
+              "website": "网站",
+              "message": "留言",
+              "submit": "提交",
+              "sending": "发送中...",
+              "success": "您的留言已成功发送！我们将尽快与您联系。",
+              "error": "发送留言时出现错误，请稍后再试。",
+              "errors": {
+                "name": "请输入您的姓名",
+                "email": "请输入有效的邮箱地址",
+                "website": "请输入有效的网站 URL",
+                "message": "请输入您的留言"
+              },
+              "placeholders": {
+                "name": "您的姓名",
+                "email": "您的邮箱",
+                "website": "您的网站",
+                "message": "您的留言"
+              }
+            },
+            "otherWays": "其他联系方式",
+            "backToHome": "返回首页",
+            "faq": {
+              "title": "常见问题",
+              "questions": {
+                "question1": "什么是GEO，它与SEO有什么不同？",
+                "question2": "GEO优化需要多长时间才能看到效果？",
+                "question3": "你们为哪些AI平台进行优化？",
+                "question4": "GEO优化的费用是多少？",
+                "question5": "你们提供持续的GEO维护服务吗？"
+              },
+              "answers": {
+                "answer1": "GEO（生成式引擎优化）专注于让您的品牌被ChatGPT、Gemini和Perplexity等AI聊天机器人推荐，而传统SEO专注于在搜索引擎结果中排名靠前。GEO是专门为AI驱动搜索的新时代设计的。",
+                "answer2": "效果因行业和竞争而异，但大多数客户在1-3个月内开始看到改进。完全优化通常需要3-6个月才能看到最大效果。",
+                "answer3": "我们为所有主要AI平台进行优化，包括ChatGPT、Gemini、Perplexity、DeepSeek以及未来Google和百度的AI驱动搜索。",
+                "answer4": "我们的GEO服务根据项目范围和复杂性从每月¥14,000到¥84,000不等。我们提供定制计划以满足不同业务需求和预算。",
+                "answer5": "是的，我们提供持续的GEO维护服务，确保您的品牌在AI算法演变时继续表现良好。我们的维护计划包括定期监控、更新和策略调整。"
+              }
+            }
+          },
+          "footer": {
+            "description": "Zen7 是专业的生成式引擎优化（GEO）服务提供商，帮助企业在 AI 时代获得最大品牌曝光。",
+            "quickLinks": "快速链接",
+            "contactInfo": "联系方式",
+            "copyright": "© 2026 Zen7. 保留所有权利。"
+          },
+          "geoTool": {
+            "title": "想要检查您网站的 GEO 就绪状态？",
+            "description": "使用我们的免费 GEO 就绪检查器来分析您的网站。",
+            "cta": "检查您的网站"
+          },
+          "home": {
+            "title": "GEO 就绪检查器",
+            "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
+            "placeholder": "https://example.com",
+            "button": "检查 GEO 就绪性",
+            "analyzing": "分析中...",
+            "error": {
+              "empty": "请输入 URL",
+              "invalid": "请输入有效的 URL"
+            },
+            "poweredBy": "由 GEO AI 提供支持",
+            "contactLink": "需要专家优化帮助？",
+            "buttons": {
+              "geoKnowledge": "了解 GEO 知识",
+              "services": "查看服务套餐"
+            }
+          },
+          "result": {
+            "title": "GEO 就绪检查结果",
+            "resultsFor": "检查结果：",
+            "scoreCard": {
+              "title": "AI 可见性得分",
+              "description": "您的网站对 AI 搜索的优化程度"
+            },
+            "summary": {
+              "passed": "通过",
+              "warnings": "警告",
+              "failed": "失败",
+              "info": "信息",
+              "totalChecks": "总检查项"
+            },
+            "detailedResults": "详细结果",
+            "fix": "修复建议：",
+            "buttons": {
+              "checkAnother": "检查另一个网站",
+              "getHelp": "获取优化帮助"
+            },
+            "error": {
+              "noData": "未找到 GEO 检查数据。请先运行检查。"
+            },
+            "loginToView": "登录查看完整结果",
+            "loginToViewDesc": "登录以查看所有详细结果和建议",
+            "loginButton": "登录",
+            "shareExport": {
+              "title": "分享和导出",
+              "copied": "链接已复制到剪贴板！",
+              "copyLink": "复制链接",
+              "exportPDF": "导出 PDF",
+              "exportCSV": "导出 CSV",
+              "shareSocial": "分享到社交媒体",
+              "share": "分享"
+            }
+          },
+          "login": {
+            "title": "登录",
+            "subtitle": "或",
+            "createAccount": "创建新账号",
+            "email": "邮箱",
+            "emailPlaceholder": "您的邮箱",
+            "password": "密码",
+            "passwordPlaceholder": "您的密码",
+            "rememberMe": "记住我",
+            "forgotPassword": "忘记密码？",
+            "button": "登录",
+            "loading": "登录中...",
+            "error": "邮箱或密码错误"
+          },
+          "register": {
+            "title": "创建账号",
+            "subtitle": "或",
+            "loginAccount": "登录现有账号",
+            "name": "姓名",
+            "namePlaceholder": "您的姓名",
+            "email": "邮箱",
+            "emailPlaceholder": "您的邮箱",
+            "password": "密码",
+            "passwordPlaceholder": "您的密码",
+            "confirmPassword": "确认密码",
+            "confirmPasswordPlaceholder": "确认您的密码",
+            "terms": "我同意服务条款和隐私政策",
+            "button": "注册",
+            "loading": "注册中...",
+            "error": "密码不匹配"
+          },
+          "forgotPassword": {
+            "title": "忘记密码",
+            "description": "输入您的邮箱以获取密码重置链接",
+            "button": "发送重置链接",
+            "loading": "发送中...",
+            "success": {
+              "emailSent": "密码重置邮件已发送。请检查您的收件箱获取 instructions。",
+              "token": "重置令牌",
+              "resetSuccess": "密码重置成功。您现在可以使用新密码登录。"
+            },
+            "error": {
+              "sendFailed": "发送密码重置邮件失败",
+              "resetFailed": "重置密码失败"
+            },
+            "backToLogin": "返回登录",
+            "reset": {
+              "title": "重置密码",
+              "description": "请输入您的新密码",
+              "newPassword": "新密码",
+              "newPasswordPlaceholder": "输入您的新密码",
+              "confirmPassword": "确认密码",
+              "confirmPasswordPlaceholder": "确认您的新密码",
+              "button": "重置密码",
+              "loading": "重置中..."
+            }
+          },
+          "about": {
+            "title": "关于我们",
+            "description": "专注于GEO（生成式引擎优化）的技术服务提供商，帮助网站在生成式AI时代获得更好的表现。",
+            "story": {
+              "title": "我们的故事",
+              "subtitle": "从技术创新到行业领先",
+              "paragraph1": "我们的团队由一群对AI和搜索引擎技术充满热情的专家组成。在生成式AI技术爆发的时代，我们看到了网站优化的新机遇和挑战。",
+              "paragraph2": "2023年，我们开始研发GEO（生成式引擎优化）技术，旨在帮助网站在生成式AI时代获得更好的表现。经过一年的努力，我们开发出了一套完整的GEO检测和优化系统，为企业和个人网站提供专业的技术支持。",
+              "paragraph3": "今天，我们已经成为GEO领域的领先服务提供商，为众多客户提供了专业的GEO检测和优化服务，帮助他们在生成式AI时代获得更好的线上表现。"
+            },
+            "mission": {
+              "title": "我们的使命",
+              "innovation": {
+                "title": "技术创新",
+                "description": "不断探索和创新GEO技术，为客户提供最先进的检测和优化方案。"
+              },
+              "value": {
+                "title": "客户价值",
+                "description": "以客户需求为中心，提供高质量的GEO服务，帮助客户在生成式AI时代获得竞争优势。"
+              },
+              "leadership": {
+                "title": "行业领先",
+                "description": "成为GEO领域的行业领导者，推动行业标准的建立和发展。"
+              }
+            },
+            "team": {
+              "title": "我们的团队",
+              "ceo": {
+                "name": "张明",
+                "title": "创始人 & CEO",
+                "description": "前Google工程师，拥有10年搜索引擎和AI技术经验，专注于GEO技术的研发和应用。"
+              },
+              "cto": {
+                "name": "李婷",
+                "title": "技术总监",
+                "description": "前微软研发工程师，拥有8年AI和机器学习经验，负责GEO检测系统的技术架构。"
+              },
+              "marketing": {
+                "name": "王强",
+                "title": "市场总监",
+                "description": "前百度营销专家，拥有7年数字营销经验，负责公司的市场策略和客户拓展。"
+              },
+              "design": {
+                "name": "赵芳",
+                "title": "设计总监",
+                "description": "前腾讯UI/UX设计师，拥有6年用户体验设计经验，负责产品的界面设计和用户体验。"
+              }
+            },
+            "contact": {
+              "title": "联系我们",
+              "info": {
+                "title": "联系方式",
+                "address": "地址",
+                "addressValue": "北京市海淀区中关村科技园区",
+                "email": "邮箱",
+                "emailValue": "contact@geochecker.com",
+                "phone": "电话",
+                "phoneValue": "+86 10 8888 8888"
+              },
+              "form": {
+                "title": "发送消息",
+                "name": "姓名",
+                "namePlaceholder": "您的姓名",
+                "email": "邮箱",
+                "emailPlaceholder": "您的邮箱",
+                "message": "消息",
+                "messagePlaceholder": "请输入您的消息",
+                "button": "发送消息"
+              }
+            }
+          },
+          "geoKnowledge": {
+            "title": "GEO 知识中心",
+            "description": "了解 GEO 策略的核心概念和最佳实践，优化您的网站以适应 AI 驱动的搜索引擎。",
+            "sections": {
+              "about": "关于 GEO",
+              "whatIsGeo": "什么是 GEO？",
+              "whyGeoImportant": "为什么 GEO 很重要？",
+              "whyGeoPoints": [
+                "提高全球用户的搜索可见性",
+                "适应不同地区的搜索算法偏好",
+                "提升用户体验和转化率",
+                "增强品牌的全球影响力"
+              ],
+              "strategies": "GEO 策略",
+              "contentLocalization": "内容本地化",
+              "contentLocalizationDesc": "为不同地区的用户提供本地化的内容，包括语言、文化参考和地区特定信息。",
+              "contentLocalizationPoints": [
+                "翻译和本地化内容",
+                "使用地区特定的关键词",
+                "适应地区文化差异"
+              ],
+              "technicalOptimization": "技术优化",
+              "technicalOptimizationDesc": "确保网站在技术层面支持 GEO 优化，包括网站结构、加载速度和移动友好性。",
+              "technicalOptimizationPoints": [
+                "使用hreflang标签",
+                "优化网站加载速度",
+                "确保移动友好性"
+              ],
+              "keyData": "GEO 关键数据",
+              "importantMetrics": "重要的 GEO 指标",
+              "regionalTraffic": "地区流量分布",
+              "regionalTrafficDesc": "了解不同地区的用户访问情况，优化针对性内容。",
+              "languagePreference": "语言偏好",
+              "languagePreferenceDesc": "分析用户语言偏好，提供相应的本地化内容。",
+              "searchTrends": "搜索趋势",
+              "searchTrendsDesc": "跟踪不同地区的搜索趋势，调整关键词策略。"
+            }
+          },
+          "productsServices": {
+            "title": "产品 & 服务",
+            "description": "我们提供一系列GEO检测和优化服务，帮助您的网站在全球范围内获得最佳的搜索可见性。",
+            "sections": {
+              "ourServices": "我们的服务",
+              "contactConsultation": "联系咨询"
+            },
+            "services": [
+              {
+                "title": "基础检测服务",
+                "description": "提供网站GEO就绪性的基础检测，包括基本的GEO配置分析和简单的优化建议。",
+                "price": "免费",
+                "features": [
+                  "基础GEO配置检测",
+                  "简单的优化建议",
+                  "检测结果报告",
+                  "有限的结果查看"
+                ],
+                "button": "了解详情"
+              },
+              {
+                "title": "高级检测服务",
+                "description": "提供全面的GEO检测和分析，包括详细的优化建议和优先级排序。",
+                "price": "¥99/次",
+                "features": [
+                  "全面的GEO配置检测",
+                  "详细的优化建议",
+                  "优先级排序",
+                  "完整的结果报告"
+                ],
+                "button": "了解详情"
+              },
+              {
+                "title": "GEO优化定制服务",
+                "description": "由专业团队提供的定制化GEO优化服务，包括实施和持续监控。",
+                "price": "¥999起",
+                "features": [
+                  "定制化GEO策略",
+                  "专业团队实施",
+                  "持续监控和优化",
+                  "优先技术支持"
+                ],
+                "button": "了解详情"
+              }
+            ],
+            "contact": {
+              "getCustomPlan": "获取定制方案",
+              "name": "姓名",
+              "namePlaceholder": "您的姓名",
+              "email": "邮箱",
+              "emailPlaceholder": "您的邮箱",
+              "website": "网站",
+              "websitePlaceholder": "https://example.com",
+              "service": "感兴趣的服务",
+              "serviceOptions": [
+                "基础检测服务",
+                "高级检测服务",
+                "GEO优化定制服务"
+              ],
+              "message": "留言",
+              "messagePlaceholder": "告诉我们您的需求",
+              "submit": "提交咨询",
+              "contactUs": "联系我们",
+              "contactText": "如有任何疑问或需要更多信息，请通过以下方式联系我们。我们的专业团队将尽快回复您。",
+              "emailLabel": "邮箱",
+              "phoneLabel": "电话"
+            }
+          }
+        }
+      }
+    },
+    lng: 'zh',
+    fallbackLng: 'en',
+    defaultNS: 'translation',
+    interpolation: {
+      escapeValue: false
+    }
+  });
+}
+
+export default i18n;

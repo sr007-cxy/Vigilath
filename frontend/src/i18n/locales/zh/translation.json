@@ -1,0 +1,98 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "back": "返回",
+    "contact": "联系我们"
+  },
+  "nav": {
+    "home": "首页",
+    "geoKnowledge": "GEO知识",
+    "productsServices": "产品&服务",
+    "aboutUs": "关于我们"
+  },
+  "home": {
+    "title": "GEO 检查器",
+    "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
+    "placeholder": "https://example.com",
+    "button": "检查 GEO 就绪性",
+    "analyzing": "分析中...",
+    "error": {
+      "empty": "请输入 URL",
+      "invalid": "请输入有效的 URL"
+    },
+    "poweredBy": "由 GEO AI 提供支持",
+    "contactLink": "需要专家优化帮助？"
+  },
+  "result": {
+    "title": "GEO 就绪检查结果",
+    "resultsFor": "结果：",
+    "scoreCard": {
+      "title": "AI 可见性得分",
+      "description": "您的网站对 AI 搜索的优化程度"
+    },
+    "summary": {
+      "passed": "通过",
+      "warnings": "警告",
+      "failed": "失败",
+      "info": "信息",
+      "totalChecks": "总检查项"
+    },
+    "detailedResults": "详细结果",
+    "fix": "修复方案：",
+    "error": {
+      "noData": "没有找到检查结果，请重新检查网站"
+    },
+    "shareExport": {
+      "title": "分享和导出",
+      "copyLink": "复制链接",
+      "exportPDF": "导出 PDF",
+      "exportCSV": "导出 CSV",
+      "share": "分享",
+      "copied": "链接已复制到剪贴板",
+      "shareSocial": "分享到社交媒体"
+    },
+    "loginToView": "登录查看完整结果",
+    "loginToViewDesc": "登录后可以查看完整的检查结果和详细的优化建议",
+    "loginButton": "登录",
+    "buttons": {
+      "checkAnother": "检查另一个网站",
+      "getHelp": "获取优化帮助"
+    }
+  },
+  "contact": {
+    "title": "联系我们",
+    "description": "需要帮助优化您的网站以适应 GEO？请与我们的专家联系。",
+    "form": {
+      "name": "姓名",
+      "email": "邮箱",
+      "website": "网站",
+      "message": "留言",
+      "placeholders": {
+        "name": "您的姓名",
+        "email": "您的邮箱",
+        "website": "https://example.com",
+        "message": "告诉我们您的优化需求"
+      },
+      "errors": {
+        "name": "请输入您的姓名",
+        "email": "请输入有效的邮箱",
+        "website": "请输入有效的网站 URL",
+        "message": "请输入留言"
+      },
+      "submit": "发送留言",
+      "sending": "发送中...",
+      "success": "感谢您的留言！我们会尽快与您联系。",
+      "error": "发送留言失败。请稍后再试。"
+    },
+    "otherWays": "其他联系方式",
+    "backToHome": "返回首页"
+  },
+  "status": {
+    "pass": "通过",
+    "warn": "警告",
+    "fail": "失败",
+    "info": "信息"
+  }
+}

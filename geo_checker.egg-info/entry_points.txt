@@ -1,0 +1,2 @@
+[console_scripts]
+geo-checker = geo_checker.__main__:main
