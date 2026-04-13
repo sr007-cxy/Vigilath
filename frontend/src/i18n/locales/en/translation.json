@@ -10,7 +10,8 @@
     "home": "Home",
     "geoKnowledge": "GEO Knowledge",
     "productsServices": "Products & Services",
-    "aboutUs": "About Us"
+    "aboutUs": "About Us",
+    "login": "Log in"
   },
   "home": {
     "title": "GEO Readiness Checker",
@@ -53,9 +54,11 @@
       "copied": "Link copied to clipboard",
       "shareSocial": "Share to social media"
     },
-    "loginToView": "Login to view full results",
-    "loginToViewDesc": "Log in to see complete check results and detailed optimization suggestions",
+    "loginToView": "Unlock full results",
+    "loginToViewDesc": "Sign in and activate a plan to see all check results and detailed optimization suggestions",
     "loginButton": "Log in",
+    "unlock": "Unlock",
+    "unlockCta": "View more",
     "buttons": {
       "checkAnother": "Check Another Website",
       "getHelp": "Get Optimization Help"
@@ -94,5 +97,79 @@
     "warn": "WARN",
     "fail": "FAIL",
     "info": "INFO"
+  },
+  "payment": {
+    "welcome": "Welcome! Choose your plan",
+    "welcomeName": "Welcome, {{name}}!",
+    "subtitle": "Unlock the full power of GEO Checker by selecting a membership plan.",
+    "popular": "Popular",
+    "confirm": "Pay & Activate",
+    "processing": "Processing...",
+    "skip": "Skip for now",
+    "successMessage": "Membership activated successfully!",
+    "errorMessage": "Payment failed. Please try again."
+  },
+  "productsServices": {
+    "title": "AI-Powered GEO Optimization Services",
+    "description": "We provide comprehensive GEO optimization solutions to help your website stand out in the AI search era. From basic coverage to comprehensive strategies, we customize the best plan for your business.",
+    "sections": {
+      "ourServices": "Our Services",
+      "contactConsultation": "Contact Consultation"
+    },
+    "services": [
+      {
+        "title": "Starter",
+        "price": "$2,000–$3,000",
+        "description": "Basic GEO Coverage: $2,000–$3,000\nPaid Listings: Complete indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product information compliance configuration and ongoing maintenance\nBest List SEO: None (not included)\nReputation Management: None (not included)\nPR: None (not included)",
+        "features": [
+          "Basic GEO Coverage",
+          "Complete indexing standards for major overseas models",
+          "Website copy creation and optimization",
+          "Core product information compliance configuration and maintenance"
+        ],
+        "button": "Learn More"
+      },
+      {
+        "title": "Growth",
+        "price": "$4,000–$7,000",
+        "description": "Basic GEO Coverage: $4,000–$7,000\nPaid Listings: Adapt to indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product usage scenario information compliance configuration and ongoing maintenance\nBest List SEO: Purchase low-cost placement on ranking websites\nReputation Management: Create and publish 1–2 top list articles (e.g., "2026 Best XX Platform"), published at the start of the campaign and optimized for large language model retrieval and citation\nPR: None (not included)",
+        "features": [
+          "Basic GEO Coverage",
+          "Adapt to indexing standards for major overseas models",
+          "Purchase low-cost placement on ranking websites",
+          "Create and publish 1–2 top list articles"
+        ],
+        "button": "Learn More"
+      },
+      {
+        "title": "Scale",
+        "price": "$8,000–$12,000",
+        "description": "Basic GEO Coverage: $8,000–$12,000\nPaid Listings: Full-channel overseas model GEO indexing rules, customized completion of transaction product core usage scenarios, information verification and ongoing maintenance\nBest List SEO: Monitor placement costs on ranking websites, determine the most cost-effective placement budget\nReputation Management: Write and publish 3-5 best list articles monthly, with supporting data articles, backlinks and verification page support\nPR: Can cooperate with internal corporate teams or dedicated PR agencies to help obtain media coverage",
+        "features": [
+          "Full-channel overseas model GEO indexing rules",
+          "Monitor placement costs on ranking websites",
+          "Write and publish 3-5 best list articles monthly",
+          "Can cooperate with internal teams or PR agencies"
+        ],
+        "button": "Learn More"
+      }
+    ],
+    "contact": {
+      "getCustomPlan": "Get Custom Plan",
+      "name": "Name",
+      "email": "Email",
+      "website": "Website",
+      "service": "Service Type",
+      "message": "Message",
+      "namePlaceholder": "Your name",
+      "emailPlaceholder": "Your email",
+      "websitePlaceholder": "https://example.com",
+      "messagePlaceholder": "Tell us about your needs",
+      "submit": "Submit",
+      "contactUs": "Contact Us",
+      "contactText": "Whether you need to learn more about our services or have any questions, we are always ready to help. Please contact us through the following methods, and our expert team will get in touch with you as soon as possible.",
+      "emailLabel": "Email",
+      "phoneLabel": "Phone"
+    }
   }
 }

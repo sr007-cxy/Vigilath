@@ -121,8 +121,20 @@ export function Navbar() {
           <LanguageSwitcher />
           
           {user ? (
-            <div className="hidden md:block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-              {user}
+            <div className="hidden md:flex items-center gap-3">
+              <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                {user}
+              </span>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('user');
+                  setUser(null);
+                  console.log('User logged out');
+                }}
+                className="text-sm font-medium transition-colors duration-300 hover:text-white" style={{ color: 'var(--text-secondary)' }}
+              >
+                退出
+              </button>
             </div>
           ) : (
             <Link to="/login" className="hidden md:block text-sm font-medium transition-colors duration-300 hover:text-white" style={{ color: 'var(--text-secondary)' }}>
@@ -168,8 +180,22 @@ export function Navbar() {
             }
             
             {user ? (
-              <div className="px-4 py-2 rounded-lg text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {user}
+              <div className="space-y-2">
+                <div className="px-4 py-2 rounded-lg text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  {user}
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('user');
+                    setUser(null);
+                    setIsMenuOpen(false);
+                    console.log('User logged out');
+                  }}
+                  className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-left"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  退出
+                </button>
               </div>
             ) : (
               <Link

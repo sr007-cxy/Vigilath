@@ -29,6 +29,18 @@ export const geoApi = {
     }
   },
 
+  async checkGeo(data: any): Promise<GeoTestResult> {
+    try {
+      const response = await apiClient.post('/geo', data);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.detail || 'Failed to run GEO check');
+      }
+      throw new Error('Failed to run GEO check');
+    }
+  },
+
   runGeoCheckStream(url: string, includeFix: boolean = true, onUpdate: (data: any) => void, onError: (error: Error) => void): () => void {
     const encodedUrl = encodeURIComponent(url);
     const eventSource = new EventSource(`${API_BASE_URL}/geo/stream?url=${encodedUrl}&include_fix=${includeFix}`);

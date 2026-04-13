@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { PaymentModal } from '../components/PaymentModal';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
-interface User {
-  email: string;
-}
+const FREE_CHECKS_PER_CATEGORY = 2;
 
 // 定义分类映射
 const categoryGroups = {
@@ -23,8 +22,24 @@ export function Result() {
   const navigate = useNavigate();
   const result = location.state?.result as GeoTestResult;
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
-  const [user, setUser] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('网站基础');
+  const isLoggedIn = !!token;
+
+  const handleUnlockClick = () => {
+    if (!isLoggedIn) {
+      navigate('/login');
+      return;
+    }
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false);
+    const fresh = localStorage.getItem('token');
+    if (fresh) setToken(fresh);
+  };
 
 
 
@@ -69,23 +84,6 @@ export function Result() {
     return acc;
   }, {} as Record<string, CheckResult[]>) : {};
   
-  // 输出 checksByCategory 变量的内容
-  console.log('checksByCategory:', checksByCategory);
-  console.log('categoryGroups:', categoryGroups);
-  console.log('activeTab:', activeTab);
-
-  // Get checks for current tab
-  const getChecksForTab = (tab: string) => {
-    const categories = categoryGroups[tab as keyof typeof categoryGroups] || [];
-    let tabChecks: CheckResult[] = [];
-    categories.forEach(category => {
-      if (checksByCategory[category]) {
-        tabChecks = [...tabChecks, ...checksByCategory[category]];
-      }
-    });
-    return tabChecks;
-  };
-
   return (
     <div className="min-h-screen grid-background">
       {/* 背景发光效果 */}
@@ -214,19 +212,7 @@ export function Result() {
                           </div>
                           {isExpanded && (
                             <div className="space-y-4 pl-6 sm:pl-8 pr-4">
-                              {((() => {
-                try {
-                  const storedUser = localStorage.getItem('user');
-                  if (storedUser) {
-                    const parsedUser = JSON.parse(storedUser);
-                    return !!parsedUser.email;
-                  }
-                } catch (error) {
-                  console.error('Error parsing user from localStorage:', error);
-                  localStorage.removeItem('user');
-                }
-                return false;
-              })() ? checks : checks.slice(0, 2)).map((check: CheckResult, index: number) => (
+                              {(isLoggedIn ? checks : checks.slice(0, FREE_CHECKS_PER_CATEGORY)).map((check: CheckResult, index: number) => (
                                 <div key={index} className="bg-card border border-border rounded-xl p-4 sm:p-6 transition-all duration-300 hover:border-accent-primary hover:translate-x-1">
                                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4">
                                     <div className="flex-1">
@@ -245,26 +231,51 @@ export function Result() {
                                   </div>
                                 </div>
                               ))}
-                              {!user && checks.length > 2 && (
-                                <div className="bg-gradient-to-r from-accent-primary/10 to-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 sm:p-6">
-                                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                      </svg>
-                                      <div>
-                                        <h4 className="text-lg font-semibold text-accent-primary mb-2">{t('result.loginToView')}</h4>
-                                        <p className="text-secondary text-sm sm:text-base">{t('result.loginToViewDesc')}</p>
-                                      </div>
-                                    </div>
+                              {!isLoggedIn && checks.length > FREE_CHECKS_PER_CATEGORY && (
+                                <>
+                                  {checks.slice(FREE_CHECKS_PER_CATEGORY).map((_check: CheckResult, index: number) => (
                                     <button
-                                      onClick={() => navigate('/login')}
-                                      className="gradient-bg text-white rounded-xl py-2.5 px-4 font-semibold hover:opacity-90 transition-all duration-300 shadow-glow"
+                                      type="button"
+                                      key={`locked-${index}`}
+                                      onClick={handleUnlockClick}
+                                      className="w-full text-left bg-card border border-dashed border-border rounded-xl p-4 sm:p-6 transition-all duration-300 hover:border-accent-primary hover:bg-accent-primary/5 group"
                                     >
-                                      {t('result.loginButton')}
+                                      <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-accent-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                          </svg>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="h-3 bg-border rounded w-3/4 mb-2 group-hover:bg-accent-primary/30 transition-colors"></div>
+                                            <div className="h-3 bg-border rounded w-1/2 group-hover:bg-accent-primary/30 transition-colors"></div>
+                                          </div>
+                                        </div>
+                                        <span className="text-xs font-semibold text-accent-primary whitespace-nowrap">
+                                          {t('result.unlock')}
+                                        </span>
+                                      </div>
                                     </button>
+                                  ))}
+                                  <div className="bg-gradient-to-r from-accent-primary/10 to-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 sm:p-6">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                      <div className="flex items-center gap-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
+                                        <div>
+                                          <h4 className="text-lg font-semibold text-accent-primary mb-2">{t('result.loginToView')}</h4>
+                                          <p className="text-secondary text-sm sm:text-base">{t('result.loginToViewDesc')}</p>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={handleUnlockClick}
+                                        className="gradient-bg text-white rounded-xl py-2.5 px-4 font-semibold hover:opacity-90 transition-all duration-300 shadow-glow"
+                                      >
+                                        {t('result.unlockCta')}
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
+                                </>
                               )}
                             </div>
                           )}
@@ -369,6 +380,14 @@ export function Result() {
           </div>
         </div>
       </main>
+
+      {showPaymentModal && token && (
+        <PaymentModal
+          token={token}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 }

@@ -11,6 +11,8 @@ export function Home() {
   const { t } = useTranslation();
   const [url, setUrl] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [competitor, setCompetitor] = useState('');
+  const [auditUrl, setAuditUrl] = useState('');
   const [checkType, setCheckType] = useState('website');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,15 +92,13 @@ export function Home() {
     console.log('user:', user);
     console.log('url:', url);
     console.log('keyword:', keyword);
+    console.log('competitor:', competitor);
+    console.log('auditUrl:', auditUrl);
 
+    // 表单验证
     if (checkType === 'website' && !url.trim()) {
       setError(t('home.error.empty'));
       return;
-    }
-
-    if (checkType === 'website') {
-      console.log('url:', url);
-      console.log('validateUrl(url):', validateUrl(url));
     }
 
     if (checkType === 'website' && !validateUrl(url)) {
@@ -108,6 +108,26 @@ export function Home() {
 
     if (checkType === 'keyword' && !keyword.trim()) {
       setError('请输入关键词');
+      return;
+    }
+
+    if (checkType === 'competitor' && !competitor.trim()) {
+      setError('请输入竞争对手网站');
+      return;
+    }
+
+    if (checkType === 'competitor' && !validateUrl(competitor)) {
+      setError('请输入有效的竞争对手网站 URL');
+      return;
+    }
+
+    if (checkType === 'audit' && !auditUrl.trim()) {
+      setError('请输入网站地址');
+      return;
+    }
+
+    if (checkType === 'audit' && !validateUrl(auditUrl)) {
+      setError('请输入有效的网站 URL');
       return;
     }
 
@@ -137,136 +157,41 @@ export function Home() {
     setError('');
     setProgress(0);
 
-    // 模拟GEO检查结果
-    const mockResult = {
-      url: checkType === 'website' ? url : keyword,
-      score: 58,
-      grade: 'D',
-      checks: [
-        {
-          category: 'HTTPS',
-          status: 'PASS',
-          message: 'Site uses HTTPS',
-          fix: null
-        },
-        {
-          category: 'robots.txt',
-          status: 'PASS',
-          message: 'robots.txt found (171 bytes)',
-          fix: null
-        },
-        {
-          category: 'Sitemap',
-          status: 'FAIL',
-          message: 'No sitemap.xml found',
-          fix: 'Create a sitemap.xml at your site root'
-        },
-        {
-          category: 'URL Normalization',
-          status: 'PASS',
-          message: 'URL paths are consistent',
-          fix: null
-        },
-        {
-          category: 'llms.txt',
-          status: 'FAIL',
-          message: 'llms.txt not found',
-          fix: '  - [API Docs](https://yoursite.com/api)'
-        },
-        {
-          category: 'AI Crawl Readiness',
-          status: 'PASS',
-          message: 'Content is rendered server-side',
-          fix: null
-        },
-        {
-          category: 'AI Optimization',
-          status: 'WARN',
-          message: 'No llms.txt found',
-          fix: 'Create an llms.txt file at your site root'
-        },
-        {
-          category: 'AI Answer Formats',
-          status: 'PASS',
-          message: 'Definition sentences detected',
-          fix: null
-        },
-        {
-          category: 'Content Accessibility',
-          status: 'PASS',
-          message: 'Homepage has 1000 words in initial HTML',
-          fix: null
-        },
-        {
-          category: 'Content Quality',
-          status: 'PASS',
-          message: 'Readability: Flesch-Kincaid grade 8.5 (accessible)',
-          fix: null
-        },
-        {
-          category: 'Meta Tags',
-          status: 'PASS',
-          message: '<title> found: "Example Site"',
-          fix: null
-        },
-        {
-          category: 'Structured Data',
-          status: 'FAIL',
-          message: 'No JSON-LD structured data found',
-          fix: 'Add JSON-LD structured data to your <head>'
-        },
-        {
-          category: 'Technical Crawlability',
-          status: 'PASS',
-          message: 'Canonical URL set: https://example.com',
-          fix: null
-        },
-        {
-          category: 'Mobile & Weight',
-          status: 'PASS',
-          message: 'HTML page weight: 50 KB (lightweight)',
-          fix: null
-        },
-        {
-          category: '.well-known Discovery',
-          status: 'INFO',
-          message: 'No .well-known AI discovery files found',
-          fix: 'Consider adding .well-known/security.txt'
-        },
-        {
-          category: 'Authority & Trust',
-          status: 'PASS',
-          message: 'Strong security headers (3/4)',
-          fix: null
-        },
-        {
-          category: 'Social Signals',
-          status: 'WARN',
-          message: 'No Twitter/X card meta tags found',
-          fix: 'Add Twitter card tags to your <head>'
-        },
-        {
-          category: 'Cross-Platform',
-          status: 'PASS',
-          message: 'Strong cross-platform presence: 7/10 platforms',
-          fix: null
-        }
-      ],
-      summary: {
-        pass_count: 44,
-        warn_count: 20,
-        fail_count: 6,
-        info_count: 29,
-        total_checks: 99
-      }
-    };
-    // 输出 mockResult 变量的内容
-    console.log('mockResult:', mockResult);
-    setTimeout(() => {
-      navigate('/result', { state: { result: mockResult } });
-      setIsLoading(false);
-      setProgress(0);
-    }, 2000);
+    // 准备请求数据
+    let requestData: any = {};
+    switch (checkType) {
+      case 'website':
+        requestData = { url };
+        break;
+      case 'keyword':
+        requestData = { keyword };
+        break;
+      case 'competitor':
+        requestData = { competitor };
+        break;
+      case 'audit':
+        requestData = { url: auditUrl };
+        break;
+      default:
+        requestData = { url };
+    }
+
+    console.log('Request data:', requestData);
+
+    // 调用 API 进行实际检测
+    geoApi.checkGeo(requestData)
+      .then((result) => {
+        console.log('API response:', result);
+        navigate('/result', { state: { result } });
+      })
+      .catch((error) => {
+        console.error('API error:', error);
+        setError('检测失败，请稍后重试');
+      })
+      .finally(() => {
+        setIsLoading(false);
+        setProgress(0);
+      });
   };
 
   return (
@@ -425,6 +350,8 @@ export function Home() {
                     <input
                       type="text"
                       id="competitor"
+                      value={competitor}
+                      onChange={(e) => setCompetitor(e.target.value)}
                       placeholder="请输入竞争对手网站"
                       className="flex-1 py-3 px-3 text-base bg-transparent focus:outline-none"
                       disabled={isLoading}
@@ -434,6 +361,8 @@ export function Home() {
                     <input
                       type="text"
                       id="audit"
+                      value={auditUrl}
+                      onChange={(e) => setAuditUrl(e.target.value)}
                       placeholder="请输入网站地址"
                       className="flex-1 py-3 px-3 text-base bg-transparent focus:outline-none"
                       disabled={isLoading}

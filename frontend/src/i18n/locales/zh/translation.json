@@ -10,7 +10,8 @@
     "home": "首页",
     "geoKnowledge": "GEO知识",
     "productsServices": "产品&服务",
-    "aboutUs": "关于我们"
+    "aboutUs": "关于我们",
+    "login": "登录"
   },
   "home": {
     "title": "GEO 检查器",
@@ -53,9 +54,11 @@
       "copied": "链接已复制到剪贴板",
       "shareSocial": "分享到社交媒体"
     },
-    "loginToView": "登录查看完整结果",
-    "loginToViewDesc": "登录后可以查看完整的检查结果和详细的优化建议",
+    "loginToView": "解锁完整结果",
+    "loginToViewDesc": "登录并开通会员即可查看完整的检查结果和详细的优化建议",
     "loginButton": "登录",
+    "unlock": "解锁",
+    "unlockCta": "查看更多",
     "buttons": {
       "checkAnother": "检查另一个网站",
       "getHelp": "获取优化帮助"
@@ -94,5 +97,79 @@
     "warn": "警告",
     "fail": "失败",
     "info": "信息"
+  },
+  "payment": {
+    "welcome": "欢迎！请选择套餐",
+    "welcomeName": "欢迎，{{name}}！",
+    "subtitle": "选择一个会员套餐，解锁 GEO Checker 的全部功能。",
+    "popular": "推荐",
+    "confirm": "支付并激活",
+    "processing": "处理中...",
+    "skip": "暂时跳过",
+    "successMessage": "会员激活成功！",
+    "errorMessage": "支付失败，请稍后重试。"
+  },
+  "productsServices": {
+    "title": "AI 驱动的 GEO 优化服务",
+    "description": "我们提供全面的 GEO 优化解决方案，帮助您的网站在 AI 搜索时代脱颖而出。从基础覆盖到全面策略，我们为您的业务定制最佳方案。",
+    "sections": {
+      "ourServices": "我们的服务",
+      "contactConsultation": "联系咨询"
+    },
+    "services": [
+      {
+        "title": "Starter",
+        "price": "$2,000–$3,000",
+        "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
+        "features": [
+          "基础 GEO 覆盖",
+          "完成海外主流大模型收录规范",
+          "网站文案建设和优化",
+          "核心产品信息合规配置及持续维护"
+        ],
+        "button": "了解详情"
+      },
+      {
+        "title": "Growth",
+        "price": "$4,000–$7,000",
+        "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如"2026最佳XX平台"），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+        "features": [
+          "基础 GEO 覆盖",
+          "适配海外主流大模型收录规范",
+          "在排名类网站采购低成本投放位",
+          "创建并发布1–2篇顶级榜单文章"
+        ],
+        "button": "了解详情"
+      },
+      {
+        "title": "Scale",
+        "price": "$8,000–$12,000",
+        "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
+        "features": [
+          "全渠道海外大模型 GEO 收录规则",
+          "监测排名类网站的投放成本",
+          "每月撰写并发布 3-5 篇最佳榜单类文章",
+          "可配合企业内部团队或专属公关机构"
+        ],
+        "button": "了解详情"
+      }
+    ],
+    "contact": {
+      "getCustomPlan": "获取定制方案",
+      "name": "姓名",
+      "email": "邮箱",
+      "website": "网站",
+      "service": "服务类型",
+      "message": "留言",
+      "namePlaceholder": "您的姓名",
+      "emailPlaceholder": "您的邮箱",
+      "websitePlaceholder": "https://example.com",
+      "messagePlaceholder": "告诉我们您的需求",
+      "submit": "提交",
+      "contactUs": "联系我们",
+      "contactText": "无论您是需要了解更多关于我们的服务，还是有任何问题，我们都随时准备为您提供帮助。请通过以下方式联系我们，我们的专家团队将尽快与您取得联系。",
+      "emailLabel": "邮箱",
+      "phoneLabel": "电话"
+    }
   }
 }

@@ -41,20 +41,22 @@ export function ProductsServices() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {services.map((service: Service, index: number) => (
-                  <div key={index} className="bg-card border border-border rounded-2xl p-8 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300">
-                    <h3 className="text-xl font-bold mb-4">{service.title}</h3>
-                    <div className="text-2xl font-bold text-accent-primary mb-6">{service.price}</div>
-                    <p className="text-secondary mb-6 leading-relaxed">{service.description}</p>
-                    <ul className="space-y-3 mb-8">
-                      {service.features.map((feature: string, i: number) => (
-                        <li key={i} className="flex items-start gap-3">
-                          <svg className="w-5 h-5 text-accent-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                          </svg>
-                          <span className="text-secondary">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div key={index} className="bg-card border border-border rounded-2xl p-8 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col">
+                    <div className="flex-grow">
+                      <h3 className="text-xl font-bold mb-4">{service.title}</h3>
+                      <div className="text-2xl font-bold text-accent-primary mb-6">{service.price}</div>
+                      <p className="text-secondary mb-6 leading-relaxed">{service.description}</p>
+                      <ul className="space-y-3 mb-8">
+                        {service.features.map((feature: string, i: number) => (
+                          <li key={i} className="flex items-start gap-3">
+                            <svg className="w-5 h-5 text-accent-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <span className="text-secondary">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                     <button className="w-full py-3 rounded-lg bg-accent-primary text-white font-semibold hover:bg-accent-primary/80 transition-colors duration-300">
                       {service.button}
                     </button>

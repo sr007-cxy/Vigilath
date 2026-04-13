@@ -437,38 +437,38 @@ if (!i18n.isInitialized) {
             },
             "services": [
               {
-                "title": "Basic Detection Service",
-                "description": "Provide basic GEO readiness detection for your website, including basic GEO configuration analysis and simple optimization suggestions.",
-                "price": "Free",
+                "title": "Starter",
+                "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
+                "price": "$2,000–$3,000",
                 "features": [
-                  "Basic GEO configuration detection",
-                  "Simple optimization suggestions",
-                  "Detection result report",
-                  "Limited result viewing"
+                  "基础 GEO 覆盖",
+                  "完成海外主流大模型收录规范",
+                  "网站文案建设和优化",
+                  "核心产品信息合规配置及持续维护"
                 ],
                 "button": "Learn More"
               },
               {
-                "title": "Advanced Detection Service",
-                "description": "Provide comprehensive GEO detection and analysis, including detailed optimization suggestions and priority ranking.",
-                "price": "¥99 per time",
+                "title": "Growth",
+                "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如“2026最佳XX平台”），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+                "price": "$4,000–$7,000",
                 "features": [
-                  "Comprehensive GEO configuration detection",
-                  "Detailed optimization suggestions",
-                  "Priority ranking",
-                  "Complete result report"
+                  "基础 GEO 覆盖",
+                  "适配海外主流大模型收录规范",
+                  "在排名类网站采购低成本投放位",
+                  "创建并发布1–2篇顶级榜单文章"
                 ],
                 "button": "Learn More"
               },
               {
-                "title": "Custom GEO Optimization Service",
-                "description": "Customized GEO optimization services provided by our professional team, including implementation and continuous monitoring.",
-                "price": "From ¥999",
+                "title": "Scale",
+                "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
+                "price": "$8,000–$12,000",
                 "features": [
-                  "Customized GEO strategy",
-                  "Professional team implementation",
-                  "Continuous monitoring and optimization",
-                  "Priority technical support"
+                  "全渠道海外大模型 GEO 收录规则",
+                  "监测排名类网站的投放成本",
+                  "每月撰写并发布 3-5 篇最佳榜单类文章",
+                  "可配合企业内部团队或专属公关机构"
                 ],
                 "button": "Learn More"
               }
@@ -1355,38 +1355,38 @@ if (!i18n.isInitialized) {
             },
             "services": [
               {
-                "title": "基础检测服务",
-                "description": "提供网站GEO就绪性的基础检测，包括基本的GEO配置分析和简单的优化建议。",
-                "price": "免费",
+                "title": "Starter",
+                "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
+                "price": "$2,000–$3,000",
                 "features": [
-                  "基础GEO配置检测",
-                  "简单的优化建议",
-                  "检测结果报告",
-                  "有限的结果查看"
+                  "基础 GEO 覆盖",
+                  "完成海外主流大模型收录规范",
+                  "网站文案建设和优化",
+                  "核心产品信息合规配置及持续维护"
                 ],
                 "button": "了解详情"
               },
               {
-                "title": "高级检测服务",
-                "description": "提供全面的GEO检测和分析，包括详细的优化建议和优先级排序。",
-                "price": "¥99/次",
+                "title": "Growth",
+                "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如“2026最佳XX平台”），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+                "price": "$4,000–$7,000",
                 "features": [
-                  "全面的GEO配置检测",
-                  "详细的优化建议",
-                  "优先级排序",
-                  "完整的结果报告"
+                  "基础 GEO 覆盖",
+                  "适配海外主流大模型收录规范",
+                  "在排名类网站采购低成本投放位",
+                  "创建并发布1–2篇顶级榜单文章"
                 ],
                 "button": "了解详情"
               },
               {
-                "title": "GEO优化定制服务",
-                "description": "由专业团队提供的定制化GEO优化服务，包括实施和持续监控。",
-                "price": "¥999起",
+                "title": "Scale",
+                "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
+                "price": "$8,000–$12,000",
                 "features": [
-                  "定制化GEO策略",
-                  "专业团队实施",
-                  "持续监控和优化",
-                  "优先技术支持"
+                  "全渠道海外大模型 GEO 收录规则",
+                  "监测排名类网站的投放成本",
+                  "每月撰写并发布 3-5 篇最佳榜单类文章",
+                  "可配合企业内部团队或专属公关机构"
                 ],
                 "button": "了解详情"
               }

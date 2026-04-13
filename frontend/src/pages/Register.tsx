@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
+import { PaymentModal } from '../components/PaymentModal';
 
 export function Register() {
   const [name, setName] = useState('');
@@ -11,6 +12,7 @@ export function Register() {
   const [terms, setTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -35,13 +37,25 @@ export function Register() {
 
     try {
       await authApi.register(name, email, password);
-      // 注册成功，跳转到登录页
-      navigate('/login');
+      // 注册成功后自动登录以获取 token，然后弹出支付框
+      const loginRes = await authApi.login(email, password);
+      localStorage.setItem('token', loginRes.access_token);
+      setPaymentToken(loginRes.access_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    setPaymentToken(null);
+    navigate('/membership');
+  };
+
+  const handlePaymentClose = () => {
+    setPaymentToken(null);
+    navigate('/');
   };
 
   return (
@@ -173,6 +187,15 @@ export function Register() {
           </div>
         </div>
       </main>
+
+      {paymentToken && (
+        <PaymentModal
+          token={paymentToken}
+          userName={name}
+          onClose={handlePaymentClose}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 }
