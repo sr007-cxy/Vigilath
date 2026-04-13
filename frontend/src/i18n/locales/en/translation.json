@@ -21,33 +21,96 @@
     "analyzing": "Analyzing...",
     "error": {
       "empty": "Please enter a URL",
-      "invalid": "Please enter a valid URL"
+      "invalid": "Please enter a valid URL",
+      "failed": "Check failed. Please try again."
     },
     "poweredBy": "Powered by GEO AI",
-    "contactLink": "Need expert optimization help?"
+    "contactLink": "Need expert optimization help?",
+    "advanced": {
+      "badge": "Members Only",
+      "title": "Advanced Detection",
+      "subtitle": "Unlock professional GEO tools to measure how AI engines see your brand across the web.",
+      "upgrade": "Upgrade to unlock",
+      "comingSoon": "Coming soon",
+      "cards": {
+        "compare": {
+          "title": "Competitive Comparison",
+          "desc": "Benchmark multiple sites side-by-side across all GEO categories."
+        },
+        "crawlTest": {
+          "title": "AI Crawler Test",
+          "desc": "Verify that GPTBot, ClaudeBot and others can actually reach your pages."
+        },
+        "authority": {
+          "title": "Authority Audit",
+          "desc": "Evaluate reviews, mentions, and third-party signals AI engines trust."
+        },
+        "citation": {
+          "title": "AI Citation Check",
+          "desc": "See whether AI engines cite your site when asked brand-relevant questions."
+        },
+        "visibility": {
+          "title": "AI Visibility Audit",
+          "desc": "Full multi-engine visibility report across Perplexity, ChatGPT and Claude."
+        },
+        "entity": {
+          "title": "Entity GEO Audit",
+          "desc": "Audit how AI recognizes a brand, product, or person — no URL required."
+        }
+      }
+    }
   },
   "result": {
-    "title": "GEO Readiness Results",
-    "resultsFor": "Results for:",
+    "title": "GEO Readiness Report",
+    "resultsFor": "Target",
     "scoreCard": {
       "title": "AI Visibility Score",
-      "description": "How well your website is optimized for AI search"
+      "description": "How well your site is optimized for AI search engines",
+      "grade": "Grade"
     },
     "summary": {
       "passed": "Passed",
       "warnings": "Warnings",
       "failed": "Failed",
       "info": "Info",
-      "totalChecks": "Total Checks"
+      "totalChecks": "Total"
+    },
+    "categories": {
+      "websiteBasic": "Website Basics",
+      "aiOptimization": "AI Optimization",
+      "contentQuality": "Content Quality",
+      "technicalPerformance": "Technical & Performance",
+      "externalFactors": "External Signals",
+      "other": "Other"
+    },
+    "groupProgress": {
+      "title": "Category Breakdown",
+      "passRate": "{{rate}}% pass"
+    },
+    "topIssues": {
+      "title": "Critical Issues",
+      "empty": "No critical issues detected. Nice work.",
+      "viewAll": "View all"
+    },
+    "table": {
+      "category": "Check",
+      "status": "Status",
+      "message": "Detail",
+      "action": "Action",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "fix": "Recommended fix",
+      "noFix": "No specific fix recommendation provided.",
+      "lockedRow": "Locked — unlock to view"
     },
     "detailedResults": "Detailed Results",
     "fix": "Fix:",
     "error": {
-      "noData": "No check results found, please recheck the website"
+      "noData": "No check results found. Please run the check again."
     },
     "shareExport": {
       "title": "Share & Export",
-      "copyLink": "Copy Link",
+      "copyLink": "Copy link",
       "exportPDF": "Export PDF",
       "exportCSV": "Export CSV",
       "share": "Share",
@@ -59,9 +122,16 @@
     "loginButton": "Log in",
     "unlock": "Unlock",
     "unlockCta": "View more",
+    "paywall": {
+      "lockedCount": "{{count}} more checks locked",
+      "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
+      "viewAll": "Unlock all checks",
+      "perCategoryHint": "Free preview shows 2 items per tab. Unlock to see everything."
+    },
     "buttons": {
-      "checkAnother": "Check Another Website",
-      "getHelp": "Get Optimization Help"
+      "checkAnother": "Check another site",
+      "getHelp": "Get optimization help",
+      "rerun": "Re-run check"
     }
   },
   "contact": {
@@ -132,7 +202,7 @@
       {
         "title": "Growth",
         "price": "$4,000–$7,000",
-        "description": "Basic GEO Coverage: $4,000–$7,000\nPaid Listings: Adapt to indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product usage scenario information compliance configuration and ongoing maintenance\nBest List SEO: Purchase low-cost placement on ranking websites\nReputation Management: Create and publish 1–2 top list articles (e.g., "2026 Best XX Platform"), published at the start of the campaign and optimized for large language model retrieval and citation\nPR: None (not included)",
+        "description": "Basic GEO Coverage: $4,000–$7,000\nPaid Listings: Adapt to indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product usage scenario information compliance configuration and ongoing maintenance\nBest List SEO: Purchase low-cost placement on ranking websites\nReputation Management: Create and publish 1–2 top list articles (e.g., \"2026 Best XX Platform\"), published at the start of the campaign and optimized for large language model retrieval and citation\nPR: None (not included)",
         "features": [
           "Basic GEO Coverage",
           "Adapt to indexing standards for major overseas models",
