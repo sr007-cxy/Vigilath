@@ -126,7 +126,7 @@
       "lockedCount": "还有 {{count}} 项检测结果已锁定",
       "subtitle": "开通会员即可解锁所有检测详情与优化建议",
       "viewAll": "解锁全部检测",
-      "perCategoryHint": "免费预览：每个分类仅展示 2 项，解锁后查看全部"
+      "perCategoryHint": "免费预览：每个分组仅展示 2 项，解锁后查看全部"
     },
     "buttons": {
       "checkAnother": "检查另一个网站",

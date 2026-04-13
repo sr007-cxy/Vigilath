@@ -126,7 +126,7 @@
       "lockedCount": "{{count}} more checks locked",
       "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
       "viewAll": "Unlock all checks",
-      "perCategoryHint": "Free preview shows 2 items per category. Unlock to see everything."
+      "perCategoryHint": "Free preview shows 2 items per tab. Unlock to see everything."
     },
     "buttons": {
       "checkAnother": "Check another site",

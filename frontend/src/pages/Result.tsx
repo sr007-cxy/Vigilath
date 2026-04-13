@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
@@ -6,7 +6,8 @@ import { PaymentModal } from '../components/PaymentModal';
 import { useMembership } from '../hooks/useMembership';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
-const FREE_CHECKS_PER_CATEGORY = 2;
+const FREE_CHECKS_PER_TAB = 2;
+const FREE_TOP_ISSUES = 2;
 
 const categoryGroups: Record<string, string[]> = {
   websiteBasic: ['HTTPS', 'robots.txt', 'Sitemap', 'URL Normalization'],
@@ -104,7 +105,6 @@ export function Result() {
   const { token, isLoggedIn, isUnlocked, refresh } = useMembership();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('websiteBasic');
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const handleUnlockClick = () => {
     if (!isLoggedIn) {
@@ -163,13 +163,15 @@ export function Result() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory]);
 
-  const topIssues = useMemo(() => {
+  const allTopIssues = useMemo(() => {
     if (!result?.checks) return [];
     return [...result.checks]
       .filter((c) => c.status === 'FAIL' || c.status === 'WARN')
-      .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9))
-      .slice(0, 3);
+      .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
   }, [result]);
+
+  const topIssues = isUnlocked ? allTopIssues : allTopIssues.slice(0, FREE_TOP_ISSUES);
+  const lockedTopIssuesCount = isUnlocked ? 0 : Math.max(0, allTopIssues.length - FREE_TOP_ISSUES);
 
   if (!result) {
     return (
@@ -240,7 +242,7 @@ export function Result() {
                 {t('result.title')}
               </h1>
               <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0">
-                <span className="uppercase tracking-[0.15em] text-muted text-[10px]">{t('result.resultsFor')}</span>
+                <span className="uppercase tracking-[0.15em] text-[#d5d5dc] text-[10px]">{t('result.resultsFor')}</span>
                 <a
                   href={result.url}
                   target="_blank"
@@ -291,7 +293,7 @@ export function Result() {
               <div className="flex flex-col items-center gap-2">
                 <ScoreRing score={score} />
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted">{t('result.scoreCard.grade')}</span>
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-[#d5d5dc]">{t('result.scoreCard.grade')}</span>
                   <span className="text-sm font-bold gradient-text px-2.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-500/5">
                     {grade}
                   </span>
@@ -332,7 +334,7 @@ export function Result() {
                             style={{ width: `${g.passRate}%` }}
                           ></div>
                         </div>
-                        <span className="text-[10px] font-mono text-muted tabular-nums w-12 text-right">
+                        <span className="text-[10px] font-mono text-[#d5d5dc] tabular-nums w-12 text-right">
                           {g.passed}/{g.total}
                         </span>
                       </button>
@@ -352,8 +354,10 @@ export function Result() {
                   {t('result.topIssues.title')}
                 </h3>
               </div>
-              {topIssues.length > 0 && (
-                <span className="text-[10px] font-mono text-muted">{topIssues.length}</span>
+              {allTopIssues.length > 0 && (
+                <span className="text-[10px] font-mono text-[#d5d5dc]">
+                  {topIssues.length}/{allTopIssues.length}
+                </span>
               )}
             </div>
             {topIssues.length === 0 ? (
@@ -370,7 +374,7 @@ export function Result() {
                       <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${theme.dot}`}></span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-mono text-muted uppercase">{issue.category}</span>
+                          <span className="text-[10px] font-mono text-[#d5d5dc] uppercase">{issue.category}</span>
                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${theme.badge}`}>
                             {issue.status}
                           </span>
@@ -380,6 +384,23 @@ export function Result() {
                     </div>
                   );
                 })}
+                {lockedTopIssuesCount > 0 && (
+                  <button
+                    onClick={handleUnlockClick}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 border border-cyan-500/15 transition-colors group"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-accent-primary group-hover:text-primary transition-colors">
+                      {t('result.paywall.lockedCount', { count: lockedTopIssuesCount })}
+                    </span>
+                    <span className="text-[10px] text-[#d5d5dc]">·</span>
+                    <span className="text-[10px] text-[#d5d5dc] group-hover:text-accent-primary transition-colors">
+                      {t('result.paywall.viewAll')} →
+                    </span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -402,7 +423,7 @@ export function Result() {
                   >
                     <span>{tabLabel(g.tab)}</span>
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-cyan-500/10 text-accent-primary' : 'bg-white/5 text-muted'
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-cyan-500/10 text-accent-primary' : 'bg-white/5 text-[#d5d5dc]'
                         }`}
                     >
                       {g.total}
@@ -413,116 +434,138 @@ export function Result() {
             </div>
           </div>
 
-          {/* Detailed table grouped by sub-category */}
+          {/* Detailed table */}
           <div className="space-y-5 mb-8">
-            {!isUnlocked && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-cyan-500/5 border border-cyan-500/20">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-[11px] text-secondary leading-relaxed">{t('result.paywall.perCategoryHint')}</p>
-              </div>
-            )}
+            {(() => {
+              const renderRow = (check: CheckResult, rowKey: string) => {
+                const theme = statusTheme(check.status);
+                return (
+                  <div
+                    key={rowKey}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-tertiary/20 transition-colors"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
+                      {check.status}
+                    </span>
+                    <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
+                      {check.message}
+                    </p>
+                  </div>
+                );
+              };
 
-            {activeCategories.map((categoryKey) => {
-              const allChecks = checksByCategory[categoryKey];
-              if (!allChecks || allChecks.length === 0) return null;
-              const visible = isUnlocked ? allChecks : allChecks.slice(0, FREE_CHECKS_PER_CATEGORY);
-              const lockedCount = isUnlocked ? 0 : Math.max(0, allChecks.length - FREE_CHECKS_PER_CATEGORY);
+              const renderCategoryBlock = (
+                categoryKey: string,
+                rows: ReactNode,
+                visibleCount: number,
+                totalCount: number,
+              ) => {
+                const lockedInCat = totalCount - visibleCount;
+                return (
+                  <div key={categoryKey}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-4 gradient-bg rounded-full"></span>
+                        <h3 className="text-sm font-semibold text-primary">{categoryKey}</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {lockedInCat > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            +{lockedInCat}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-[#d5d5dc]">
+                          {visibleCount}/{totalCount}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-card border border-border rounded-xl overflow-hidden">
+                      <div className="divide-y divide-border">{rows}</div>
+                    </div>
+                  </div>
+                );
+              };
+
+              const lockedCta = (lockedCount: number) =>
+                lockedCount > 0 ? (
+                  <button
+                    onClick={handleUnlockClick}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 transition-colors group"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-accent-primary group-hover:text-primary transition-colors">
+                      {t('result.paywall.lockedCount', { count: lockedCount })}
+                    </span>
+                    <span className="text-[10px] text-[#d5d5dc]">·</span>
+                    <span className="text-[10px] text-[#d5d5dc] group-hover:text-accent-primary transition-colors">
+                      {t('result.paywall.viewAll')} →
+                    </span>
+                  </button>
+                ) : null;
+
+              const presentCategories = activeCategories.filter(
+                (c) => (checksByCategory[c]?.length ?? 0) > 0,
+              );
+
+              if (presentCategories.length === 0) {
+                return (
+                  <div className="bg-card border border-border rounded-xl p-8 text-center text-secondary text-xs">
+                    {t('result.error.noData')}
+                  </div>
+                );
+              }
+
+              // UNLOCKED: full content, grouped by big category, no row expand
+              if (isUnlocked) {
+                return presentCategories.map((categoryKey) => {
+                  const checks = checksByCategory[categoryKey];
+                  return renderCategoryBlock(
+                    categoryKey,
+                    checks.map((check, idx) => renderRow(check, `${categoryKey}-${idx}`)),
+                    checks.length,
+                    checks.length,
+                  );
+                });
+              }
+
+              // FREE: 2 items total across the whole tab, but still grouped under big-category headings.
+              // Distribute the budget by walking categories in order; categories that get 0 items are skipped
+              // entirely (their counts roll up into the bottom unlock CTA so we don't clutter every block).
+              let remaining = FREE_CHECKS_PER_TAB;
+              const totalInTab = presentCategories.reduce(
+                (sum, c) => sum + (checksByCategory[c]?.length ?? 0),
+                0,
+              );
+              let totalShown = 0;
+
+              const blocks: ReactNode[] = [];
+              for (const categoryKey of presentCategories) {
+                const checks = checksByCategory[categoryKey];
+                const take = Math.min(remaining, checks.length);
+                if (take === 0) continue;
+                remaining -= take;
+                totalShown += take;
+                const rows = checks
+                  .slice(0, take)
+                  .map((check, idx) => renderRow(check, `${categoryKey}-${idx}`));
+                blocks.push(renderCategoryBlock(categoryKey, rows, take, checks.length));
+              }
+
+              const lockedTotal = Math.max(0, totalInTab - totalShown);
 
               return (
-                <div key={categoryKey}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1 h-4 gradient-bg rounded-full"></span>
-                      <h3 className="text-sm font-semibold text-primary">{categoryKey}</h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-muted">
-                      {visible.length}/{allChecks.length}
-                    </span>
-                  </div>
-
-                  <div className="bg-card border border-border rounded-xl overflow-hidden">
-                    <div className="divide-y divide-border">
-                      {visible.map((check, idx) => {
-                        const theme = statusTheme(check.status);
-                        const rowKey = `${categoryKey}-${idx}`;
-                        const isExpanded = expandedKey === rowKey;
-                        return (
-                          <div key={rowKey}>
-                            <button
-                              onClick={() => setExpandedKey(isExpanded ? null : rowKey)}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-tertiary/20 transition-colors text-left"
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
-                                {check.status}
-                              </span>
-                              <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
-                                {check.message}
-                              </p>
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className={`h-3.5 w-3.5 text-muted shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                            {isExpanded && (
-                              <div className="px-4 pb-3 pt-1 bg-tertiary/20 border-t border-border/50">
-                                <p className="text-xs text-secondary leading-relaxed mb-2 whitespace-pre-wrap">
-                                  {check.message}
-                                </p>
-                                <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-cyan-500/5 border border-cyan-500/15">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                  </svg>
-                                  <div className="min-w-0">
-                                    <div className="text-[10px] font-semibold text-accent-primary uppercase tracking-wider mb-1">
-                                      {t('result.table.fix')}
-                                    </div>
-                                    <p className="text-xs text-secondary leading-relaxed whitespace-pre-wrap">
-                                      {check.fix || t('result.table.noFix')}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {lockedCount > 0 && (
-                        <button
-                          onClick={handleUnlockClick}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 transition-colors group"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                          </svg>
-                          <span className="text-xs font-semibold text-accent-primary group-hover:text-primary transition-colors">
-                            {t('result.paywall.lockedCount', { count: lockedCount })}
-                          </span>
-                          <span className="text-[10px] text-muted">·</span>
-                          <span className="text-[10px] text-muted group-hover:text-accent-primary transition-colors">
-                            {t('result.paywall.viewAll')} →
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <>
+                  {blocks}
+                  {lockedCta(lockedTotal)}
+                </>
               );
-            })}
-
-            {activeCategories.every((c) => !checksByCategory[c]?.length) && (
-              <div className="bg-card border border-border rounded-xl p-8 text-center text-secondary text-xs">
-                {t('result.error.noData')}
-              </div>
-            )}
+            })()}
           </div>
 
           {/* Footer actions */}
@@ -592,7 +635,7 @@ function StatPill({
       <span className={`w-1.5 h-1.5 rounded-full ${palette.dot}`}></span>
       <div className="flex flex-col leading-tight min-w-0">
         <span className={`text-base font-bold tabular-nums ${palette.text}`}>{value}</span>
-        <span className="text-[9px] uppercase tracking-wider text-muted truncate">{label}</span>
+        <span className="text-[9px] uppercase tracking-wider text-[#d5d5dc] truncate">{label}</span>
       </div>
     </div>
   );
