@@ -13,6 +13,91 @@
     "aboutUs": "关于我们",
     "login": "登录"
   },
+  "geoKnowledge": {
+    "title": "GEO 知识库",
+    "description": "了解 GEO（地理优化）的基础知识和最佳实践，帮助您的网站在 AI 驱动的搜索引擎中脱颖而出。",
+    "sections": {
+      "about": "关于 GEO",
+      "whatIsGeo": "什么是 GEO？",
+      "whyGeoImportant": "为什么 GEO 如此重要？",
+      "whyGeoPoints": [
+        "随着 AI 驱动的搜索引擎和助手的兴起，传统的 SEO 方法已经不再足够。",
+        "GEO 优化确保您的网站在不同地理位置和语言环境下都能获得最佳的搜索可见性。",
+        "通过 GEO 优化，您可以提高品牌在目标市场的认知度和影响力。",
+        "GEO 优化有助于提高网站的本地搜索排名，吸引更多潜在客户。"
+      ],
+      "strategies": "GEO 优化策略",
+      "contentLocalization": "内容本地化",
+      "contentLocalizationDesc": "创建针对特定地区和语言群体的内容，确保您的信息能够与当地用户产生共鸣。",
+      "contentLocalizationPoints": [
+        "使用本地语言创建内容，避免直译导致的语义偏差。",
+        "考虑当地的文化习俗和节日，制作相关的内容。",
+        "使用本地化的例子和案例研究，增强内容的相关性。"
+      ],
+      "technicalOptimization": "技术优化",
+      "technicalOptimizationDesc": "实施技术措施，确保您的网站在全球范围内都能快速加载并提供良好的用户体验。",
+      "technicalOptimizationPoints": [
+        "使用内容分发网络 (CDN) 来加速全球访问。",
+        "优化网站的加载速度，减少用户等待时间。",
+        "确保网站在不同设备和浏览器上都能正常显示。"
+      ],
+      "keyData": "关键数据指标",
+      "importantMetrics": "重要指标",
+      "regionalTraffic": "区域流量",
+      "regionalTrafficDesc": "跟踪不同地区的访问量，了解您的内容在哪些市场最受欢迎。",
+      "languagePreference": "语言偏好",
+      "languagePreferenceDesc": "分析用户使用的语言，优化多语言内容策略。",
+      "searchTrends": "搜索趋势",
+      "searchTrendsDesc": "监控不同地区的搜索趋势，及时调整内容策略以应对变化。"
+    }
+  },
+  "login": {
+    "title": "登录",
+    "subtitle": "欢迎回来！请登录您的账户",
+    "email": "邮箱",
+    "password": "密码",
+    "emailPlaceholder": "请输入邮箱",
+    "passwordPlaceholder": "请输入密码",
+    "rememberMe": "记住我",
+    "forgotPassword": "忘记密码？",
+    "button": "登录",
+    "loading": "登录中...",
+    "noAccount": "没有账户？",
+    "register": "立即注册",
+    "failed": "登录失败，请检查您的邮箱和密码"
+  },
+  "register": {
+    "title": "注册账户",
+    "subtitle": "加入我们，开始您的 GEO 优化之旅",
+    "email": "邮箱",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "emailPlaceholder": "请输入邮箱",
+    "passwordPlaceholder": "请输入密码",
+    "confirmPasswordPlaceholder": "请再次输入密码",
+    "button": "注册",
+    "loading": "注册中...",
+    "passwordMismatch": "两次输入的密码不一致",
+    "failed": "注册失败",
+    "hasAccount": "已有账户？",
+    "login": "立即登录",
+    "passwordHint": "密码长度至少 6 位"
+  },
+  "forgotPassword": {
+    "title": "重置密码",
+    "subtitle": "请输入您的邮箱，我们将向您发送重置链接",
+    "button": "发送重置链接",
+    "success": "重置链接已发送到您的邮箱，请查收",
+    "failed": "发送失败，请检查邮箱是否正确"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "back": "返回",
+    "contact": "联系我们",
+    "cancel": "取消"
+  },
   "home": {
     "title": "GEO 检查器",
     "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
@@ -76,21 +161,77 @@
       "totalChecks": "总计"
     },
     "categories": {
-      "websiteBasic": "网站基础",
-      "aiOptimization": "AI 优化",
-      "contentQuality": "内容质量",
-      "technicalPerformance": "技术与性能",
-      "externalFactors": "外部信号",
+      "infraProtocols": "基础协议与可抓取性",
+      "pageBasics": "页面基础与移动体验",
+      "aiProtocols": "AI 专属协议与抓取",
+      "structuredSemantic": "结构化与语义",
+      "contentQuality": "内容质量与可读性",
+      "techRobustness": "技术健壮性与媒体",
+      "authorityExternal": "权威与外部信号",
       "other": "其它"
+    },
+    "categoryLabels": {
+      "HTTPS": "HTTPS 安全协议",
+      "robots.txt": "robots.txt",
+      "llms.txt": "llms.txt",
+      ".well-known Discovery": ".well-known 发现",
+      "sitemap.xml": "sitemap.xml 站点地图",
+      "Search Engine & AI Platform Registration": "搜索引擎 / AI 平台收录",
+      "Structured Data": "结构化数据（JSON-LD）",
+      "Meta Tags": "Meta 标签",
+      "Content Accessibility": "内容可读性",
+      "AI Crawl Readiness": "AI 爬虫可访问性",
+      "Content Quality for AI": "内容质量（面向 AI）",
+      "Technical Crawlability": "技术抓取能力",
+      "Authority & Trust Signals": "权威与信任信号",
+      "AI-Specific Optimization": "AI 专项优化",
+      "Social Signals": "社交信号",
+      "AI Answer Format Optimization": "AI 答案格式优化",
+      "Schema Breadcrumbs & Knowledge Panel": "Schema / 知识面板",
+      "Mobile-Friendliness & Page Weight": "移动端友好性与页面体积",
+      "URL Normalization": "URL 规范化",
+      "Outbound Links & Media": "出站链接与媒体",
+      "Multilingual Content Depth": "多语言内容深度",
+      "Cross-Platform Content Distribution": "跨平台内容分发",
+      "Multi-Page Sampling": "多页面采样"
+    },
+    "header": {
+      "rerunPlaceholder": "输入新的 URL 重新检测",
+      "rerun": "重新检测",
+      "modeLabel": "检测模式",
+      "modeDefault": "标准检测（5 / 23 类）",
+      "modeLockedHint": "升级会员解锁此模式"
+    },
+    "visuals": {
+      "robots": {
+        "title": "AI 爬虫许可矩阵",
+        "filePresent": "robots.txt · 文件存在",
+        "fileMissing": "robots.txt · 文件缺失",
+        "sitemapRef": "sitemap 引用 ✓",
+        "noSitemapRef": "缺少 sitemap 引用",
+        "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。下方标为「继承通配符」的机器人在你覆盖之前实际上都是被屏蔽的。",
+        "legend": {
+          "allowed": "已允许",
+          "blocked": "已屏蔽",
+          "inherited": "继承通配符",
+          "unknown": "未知"
+        }
+      },
+      "meta": {
+        "title": "Meta 标签覆盖",
+        "subtitle": "AI 引擎用于生成摘要的 6 个信号",
+        "passCount": "{{pass}}/{{total}} 通过"
+      },
+      "platform": {
+        "titleCross": "跨平台存在度",
+        "titleSocial": "社交信号覆盖",
+        "subtitle": "AI 引擎会训练的平台来源",
+        "notDetected": "{{name}} 未检测到"
+      }
     },
     "groupProgress": {
       "title": "分组得分概览",
       "passRate": "通过率 {{rate}}%"
-    },
-    "topIssues": {
-      "title": "关键问题",
-      "empty": "没有发现关键问题，做得不错。",
-      "viewAll": "查看全部"
     },
     "table": {
       "category": "检测项",
@@ -126,7 +267,9 @@
       "lockedCount": "还有 {{count}} 项检测结果已锁定",
       "subtitle": "开通会员即可解锁所有检测详情与优化建议",
       "viewAll": "解锁全部检测",
-      "perCategoryHint": "免费预览：每个分组仅展示 2 项，解锁后查看全部"
+      "perCategoryHint": "免费预览：每个分组仅展示 2 项，解锁后查看全部",
+      "locked": "已锁定",
+      "unlockCategory": "升级检测会员解锁本项检测 →"
     },
     "buttons": {
       "checkAnother": "检查另一个网站",
@@ -160,7 +303,24 @@
       "error": "发送留言失败。请稍后再试。"
     },
     "otherWays": "其他联系方式",
-    "backToHome": "返回首页"
+    "backToHome": "返回首页",
+    "faq": {
+      "title": "常见问题",
+      "questions": {
+        "question1": "GEO 检查器是什么？",
+        "question2": "免费版和付费版有什么区别？",
+        "question3": "检测结果准确吗？",
+        "question4": "多久可以收到回复？",
+        "question5": "是否支持企业定制？"
+      },
+      "answers": {
+        "answer1": "GEO 检查器是一个帮助网站优化以适应 AI 驱动搜索引擎的工具。",
+        "answer2": "付费版提供更详细的检测报告、更多检测项和专业优化建议。",
+        "answer3": "我们的检测结果基于最新的 AI 搜索引擎算法，具有很高的准确性。",
+        "answer4": "一般在 24 小时内我们会回复您的留言。",
+        "answer5": "是的，我们提供企业定制服务，请联系我们获取更多信息。"
+      }
+    }
   },
   "status": {
     "pass": "通过",
@@ -186,44 +346,6 @@
       "ourServices": "我们的服务",
       "contactConsultation": "联系咨询"
     },
-    "services": [
-      {
-        "title": "Starter",
-        "price": "$2,000–$3,000",
-        "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
-        "features": [
-          "基础 GEO 覆盖",
-          "完成海外主流大模型收录规范",
-          "网站文案建设和优化",
-          "核心产品信息合规配置及持续维护"
-        ],
-        "button": "了解详情"
-      },
-      {
-        "title": "Growth",
-        "price": "$4,000–$7,000",
-        "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如\"2026最佳XX平台\"），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
-        "features": [
-          "基础 GEO 覆盖",
-          "适配海外主流大模型收录规范",
-          "在排名类网站采购低成本投放位",
-          "创建并发布1–2篇顶级榜单文章"
-        ],
-        "button": "了解详情"
-      },
-      {
-        "title": "Scale",
-        "price": "$8,000–$12,000",
-        "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
-        "features": [
-          "全渠道海外大模型 GEO 收录规则",
-          "监测排名类网站的投放成本",
-          "每月撰写并发布 3-5 篇最佳榜单类文章",
-          "可配合企业内部团队或专属公关机构"
-        ],
-        "button": "了解详情"
-      }
-    ],
     "contact": {
       "getCustomPlan": "获取定制方案",
       "name": "姓名",
@@ -240,6 +362,77 @@
       "contactText": "无论您是需要了解更多关于我们的服务，还是有任何问题，我们都随时准备为您提供帮助。请通过以下方式联系我们，我们的专家团队将尽快与您取得联系。",
       "emailLabel": "邮箱",
       "phoneLabel": "电话"
+    }
+  },
+  "aboutPage": {
+    "title": "关于我们",
+    "description": "GEO AI 致力于帮助企业和个人优化网站以适应 AI 驱动的搜索引擎和助手。",
+    "story": {
+      "title": "我们的故事",
+      "subtitle": "我们如何开始",
+      "paragraph1": "GEO AI 成立于 2024 年，由一群致力于人工智能和搜索引擎优化的专业人士共同创立。我们观察到，随着大型语言模型（LLM）的快速发展，传统的 SEO 方法已经无法满足新的搜索范式。",
+      "paragraph2": "我们的团队来自全球顶尖的科技公司和研究机构，拥有丰富的 AI 和 Web 技术经验。我们相信，未来的搜索引擎将不仅仅是关键词匹配，而是基于语义理解和上下文感知的智能系统。",
+      "paragraph3": "基于这一信念，我们开发了 GEO AI 检查器，帮助网站所有者理解 AI 引擎的工作原理，并提供切实可行的优化建议，让您的网站在 AI 时代脱颖而出。"
+    },
+    "mission": {
+      "title": "我们的使命",
+      "innovation": {
+        "title": "创新驱动",
+        "description": "我们不断探索 AI 和机器学习的最新进展，将前沿技术应用于 GEO 优化领域，为用户提供最先进的工具和服务。"
+      },
+      "value": {
+        "title": "客户至上",
+        "description": "我们始终以客户的需求为中心，提供定制化的解决方案和专业的咨询服务，帮助客户在 AI 时代实现业务增长。"
+      },
+      "leadership": {
+        "title": "行业领导",
+        "description": "我们的团队由 AI 和 SEO 领域的专家组成，致力于推动行业标准的制定，引领 GEO 优化的未来发展。"
+      }
+    },
+    "team": {
+      "title": "我们的团队",
+      "ceo": {
+        "name": "张伟",
+        "title": "创始人兼 CEO",
+        "description": "拥有 15 年互联网行业经验，前知名科技公司产品总监，AI 技术专家。"
+      },
+      "cto": {
+        "name": "李娜",
+        "title": "首席技术官",
+        "description": "人工智能博士，10 年机器学习和自然语言处理经验，发表过多篇顶级学术论文。"
+      },
+      "marketing": {
+        "name": "王强",
+        "title": "市场总监",
+        "description": "12 年数字营销经验，成功帮助多家企业实现品牌增长和市场扩张。"
+      },
+      "design": {
+        "name": "陈静",
+        "title": "设计总监",
+        "description": "10 年用户体验和界面设计经验，曾获得多个国际设计大奖。"
+      }
+    },
+    "contact": {
+      "title": "联系我们",
+      "info": {
+        "title": "联系信息",
+        "address": "地址",
+        "addressValue": "北京市朝阳区建国路 88 号 SOHO 现代中心 A 座 1001 室",
+        "email": "邮箱",
+        "emailValue": "contact@zen7geo.com",
+        "phone": "电话",
+        "phoneValue": "+86 10 12345 6789"
+      },
+      "form": {
+        "title": "发送消息",
+        "name": "姓名",
+        "email": "邮箱",
+        "message": "消息",
+        "namePlaceholder": "您的姓名",
+        "emailPlaceholder": "您的邮箱",
+        "messagePlaceholder": "告诉我们您的需求",
+        "button": "发送消息"
+      }
     }
   }
 }

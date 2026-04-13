@@ -13,6 +13,91 @@
     "aboutUs": "About Us",
     "login": "Log in"
   },
+  "geoKnowledge": {
+    "title": "GEO Knowledge Base",
+    "description": "Learn the basics and best practices of GEO (Geographic Optimization) to help your website stand out in AI-powered search engines.",
+    "sections": {
+      "about": "About GEO",
+      "whatIsGeo": "What is GEO?",
+      "whyGeoImportant": "Why is GEO important?",
+      "whyGeoPoints": [
+        "With the rise of AI-powered search engines and assistants, traditional SEO methods are no longer sufficient.",
+        "GEO optimization ensures your website gets optimal search visibility across different geographic locations and language environments.",
+        "Through GEO optimization, you can enhance brand awareness and influence in your target markets.",
+        "GEO optimization helps improve local search rankings, attracting more potential customers."
+      ],
+      "strategies": "GEO Optimization Strategies",
+      "contentLocalization": "Content Localization",
+      "contentLocalizationDesc": "Create content tailored to specific regions and language groups, ensuring your message resonates with local users.",
+      "contentLocalizationPoints": [
+        "Create content in local languages to avoid semantic deviations from literal translation.",
+        "Consider local cultural customs and holidays when creating content.",
+        "Use local examples and case studies to enhance content relevance."
+      ],
+      "technicalOptimization": "Technical Optimization",
+      "technicalOptimizationDesc": "Implement technical measures to ensure your website loads quickly and provides a good user experience globally.",
+      "technicalOptimizationPoints": [
+        "Use Content Delivery Network (CDN) to accelerate global access.",
+        "Optimize website loading speed to reduce user wait times.",
+        "Ensure the website displays correctly across different devices and browsers."
+      ],
+      "keyData": "Key Data Metrics",
+      "importantMetrics": "Important Metrics",
+      "regionalTraffic": "Regional Traffic",
+      "regionalTrafficDesc": "Track visit volume from different regions to understand which markets your content is most popular in.",
+      "languagePreference": "Language Preference",
+      "languagePreferenceDesc": "Analyze user language usage to optimize multilingual content strategy.",
+      "searchTrends": "Search Trends",
+      "searchTrendsDesc": "Monitor search trends in different regions to adjust content strategy in response to changes."
+    }
+  },
+  "login": {
+    "title": "Log in",
+    "subtitle": "Welcome back! Please log in to your account",
+    "email": "Email",
+    "password": "Password",
+    "emailPlaceholder": "Enter your email",
+    "passwordPlaceholder": "Enter your password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "button": "Log in",
+    "loading": "Logging in...",
+    "noAccount": "Don't have an account?",
+    "register": "Sign up now",
+    "failed": "Login failed. Please check your email and password"
+  },
+  "register": {
+    "title": "Sign up",
+    "subtitle": "Join us and start your GEO optimization journey",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "emailPlaceholder": "Enter your email",
+    "passwordPlaceholder": "Enter your password",
+    "confirmPasswordPlaceholder": "Enter your password again",
+    "button": "Sign up",
+    "loading": "Signing up...",
+    "passwordMismatch": "Passwords do not match",
+    "failed": "Registration failed",
+    "hasAccount": "Already have an account?",
+    "login": "Log in now",
+    "passwordHint": "Password must be at least 6 characters"
+  },
+  "forgotPassword": {
+    "title": "Reset Password",
+    "subtitle": "Enter your email and we'll send you a reset link",
+    "button": "Send Reset Link",
+    "success": "Reset link sent to your email. Please check your inbox",
+    "failed": "Failed to send. Please check if the email is correct"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "back": "Back",
+    "contact": "Contact",
+    "cancel": "Cancel"
+  },
   "home": {
     "title": "GEO Readiness Checker",
     "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
@@ -76,21 +161,77 @@
       "totalChecks": "Total"
     },
     "categories": {
-      "websiteBasic": "Website Basics",
-      "aiOptimization": "AI Optimization",
-      "contentQuality": "Content Quality",
-      "technicalPerformance": "Technical & Performance",
-      "externalFactors": "External Signals",
+      "infraProtocols": "Protocols & Crawlability",
+      "pageBasics": "Page Basics & Mobile",
+      "aiProtocols": "AI-Specific Protocols",
+      "structuredSemantic": "Structured & Semantic Data",
+      "contentQuality": "Content Quality & Readability",
+      "techRobustness": "Technical Robustness & Media",
+      "authorityExternal": "Authority & External Signals",
       "other": "Other"
+    },
+    "categoryLabels": {
+      "HTTPS": "HTTPS",
+      "robots.txt": "robots.txt",
+      "llms.txt": "llms.txt",
+      ".well-known Discovery": ".well-known Discovery",
+      "sitemap.xml": "Sitemap (sitemap.xml)",
+      "Search Engine & AI Platform Registration": "Search Engine & AI Platform Registration",
+      "Structured Data": "Structured Data (JSON-LD)",
+      "Meta Tags": "Meta Tags",
+      "Content Accessibility": "Content Accessibility",
+      "AI Crawl Readiness": "AI Crawl Readiness",
+      "Content Quality for AI": "Content Quality for AI",
+      "Technical Crawlability": "Technical Crawlability",
+      "Authority & Trust Signals": "Authority & Trust Signals",
+      "AI-Specific Optimization": "AI-Specific Optimization",
+      "Social Signals": "Social Signals",
+      "AI Answer Format Optimization": "AI Answer Format Optimization",
+      "Schema Breadcrumbs & Knowledge Panel": "Schema Breadcrumbs & Knowledge Panel",
+      "Mobile-Friendliness & Page Weight": "Mobile-Friendliness & Page Weight",
+      "URL Normalization": "URL Normalization",
+      "Outbound Links & Media": "Outbound Links & Media",
+      "Multilingual Content Depth": "Multilingual Content Depth",
+      "Cross-Platform Content Distribution": "Cross-Platform Content Distribution",
+      "Multi-Page Sampling": "Multi-Page Sampling"
+    },
+    "header": {
+      "rerunPlaceholder": "Enter a URL to re-run the check",
+      "rerun": "Re-run check",
+      "modeLabel": "Detection mode",
+      "modeDefault": "Standard check (5 / 23 categories)",
+      "modeLockedHint": "Upgrade your plan to unlock this mode"
+    },
+    "visuals": {
+      "robots": {
+        "title": "AI Crawler Permissions",
+        "filePresent": "robots.txt · file present",
+        "fileMissing": "robots.txt · file missing",
+        "sitemapRef": "sitemap ref ✓",
+        "noSitemapRef": "no sitemap ref",
+        "wildcardWarning": "Wildcard rule User-agent: * blocks every crawler. Bots shown as \"inherit\" below are effectively blocked until you override them.",
+        "legend": {
+          "allowed": "Allowed",
+          "blocked": "Blocked",
+          "inherited": "Inherits wildcard",
+          "unknown": "Unknown"
+        }
+      },
+      "meta": {
+        "title": "Meta Tag Coverage",
+        "subtitle": "6 signals AI engines rely on for summaries",
+        "passCount": "{{pass}}/{{total}} pass"
+      },
+      "platform": {
+        "titleCross": "Cross-Platform Presence",
+        "titleSocial": "Social Signal Coverage",
+        "subtitle": "Platforms AI engines train on",
+        "notDetected": "{{name}} not detected"
+      }
     },
     "groupProgress": {
       "title": "Category Breakdown",
       "passRate": "{{rate}}% pass"
-    },
-    "topIssues": {
-      "title": "Critical Issues",
-      "empty": "No critical issues detected. Nice work.",
-      "viewAll": "View all"
     },
     "table": {
       "category": "Check",
@@ -126,7 +267,9 @@
       "lockedCount": "{{count}} more checks locked",
       "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
       "viewAll": "Unlock all checks",
-      "perCategoryHint": "Free preview shows 2 items per tab. Unlock to see everything."
+      "perCategoryHint": "Free preview shows 2 items per tab. Unlock to see everything.",
+      "locked": "Locked",
+      "unlockCategory": "Upgrade to unlock this category →"
     },
     "buttons": {
       "checkAnother": "Check another site",
@@ -160,7 +303,24 @@
       "error": "Failed to send message. Please try again later."
     },
     "otherWays": "Other Ways to Contact",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "faq": {
+      "title": "FAQ",
+      "questions": {
+        "question1": "What is GEO Checker?",
+        "question2": "What's the difference between free and paid versions?",
+        "question3": "Are the check results accurate?",
+        "question4": "How soon will I get a reply?",
+        "question5": "Do you support enterprise customization?"
+      },
+      "answers": {
+        "answer1": "GEO Checker is a tool that helps websites optimize for AI-powered search engines.",
+        "answer2": "The paid version provides more detailed reports, more check items, and professional optimization suggestions.",
+        "answer3": "Our check results are based on the latest AI search engine algorithms and are highly accurate.",
+        "answer4": "We usually reply to messages within 24 hours.",
+        "answer5": "Yes, we offer enterprise customization services. Please contact us for more information."
+      }
+    }
   },
   "status": {
     "pass": "PASS",
@@ -186,44 +346,6 @@
       "ourServices": "Our Services",
       "contactConsultation": "Contact Consultation"
     },
-    "services": [
-      {
-        "title": "Starter",
-        "price": "$2,000–$3,000",
-        "description": "Basic GEO Coverage: $2,000–$3,000\nPaid Listings: Complete indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product information compliance configuration and ongoing maintenance\nBest List SEO: None (not included)\nReputation Management: None (not included)\nPR: None (not included)",
-        "features": [
-          "Basic GEO Coverage",
-          "Complete indexing standards for major overseas models",
-          "Website copy creation and optimization",
-          "Core product information compliance configuration and maintenance"
-        ],
-        "button": "Learn More"
-      },
-      {
-        "title": "Growth",
-        "price": "$4,000–$7,000",
-        "description": "Basic GEO Coverage: $4,000–$7,000\nPaid Listings: Adapt to indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product usage scenario information compliance configuration and ongoing maintenance\nBest List SEO: Purchase low-cost placement on ranking websites\nReputation Management: Create and publish 1–2 top list articles (e.g., \"2026 Best XX Platform\"), published at the start of the campaign and optimized for large language model retrieval and citation\nPR: None (not included)",
-        "features": [
-          "Basic GEO Coverage",
-          "Adapt to indexing standards for major overseas models",
-          "Purchase low-cost placement on ranking websites",
-          "Create and publish 1–2 top list articles"
-        ],
-        "button": "Learn More"
-      },
-      {
-        "title": "Scale",
-        "price": "$8,000–$12,000",
-        "description": "Basic GEO Coverage: $8,000–$12,000\nPaid Listings: Full-channel overseas model GEO indexing rules, customized completion of transaction product core usage scenarios, information verification and ongoing maintenance\nBest List SEO: Monitor placement costs on ranking websites, determine the most cost-effective placement budget\nReputation Management: Write and publish 3-5 best list articles monthly, with supporting data articles, backlinks and verification page support\nPR: Can cooperate with internal corporate teams or dedicated PR agencies to help obtain media coverage",
-        "features": [
-          "Full-channel overseas model GEO indexing rules",
-          "Monitor placement costs on ranking websites",
-          "Write and publish 3-5 best list articles monthly",
-          "Can cooperate with internal teams or PR agencies"
-        ],
-        "button": "Learn More"
-      }
-    ],
     "contact": {
       "getCustomPlan": "Get Custom Plan",
       "name": "Name",
@@ -240,6 +362,77 @@
       "contactText": "Whether you need to learn more about our services or have any questions, we are always ready to help. Please contact us through the following methods, and our expert team will get in touch with you as soon as possible.",
       "emailLabel": "Email",
       "phoneLabel": "Phone"
+    }
+  },
+  "aboutPage": {
+    "title": "About Us",
+    "description": "GEO AI is dedicated to helping businesses and individuals optimize their websites for AI-powered search engines and assistants.",
+    "story": {
+      "title": "Our Story",
+      "subtitle": "How We Started",
+      "paragraph1": "GEO AI was founded in 2024 by a group of professionals passionate about artificial intelligence and search engine optimization. We observed that as large language models (LLMs) rapidly evolve, traditional SEO methods are no longer sufficient for the new search paradigm.",
+      "paragraph2": "Our team comes from top tech companies and research institutions worldwide, bringing extensive AI and web technology expertise. We believe the future of search engines will go beyond keyword matching to semantic understanding and context-aware intelligent systems.",
+      "paragraph3": "Driven by this vision, we developed the GEO AI Checker to help website owners understand how AI engines work and provide actionable optimization recommendations, enabling their websites to stand out in the AI era."
+    },
+    "mission": {
+      "title": "Our Mission",
+      "innovation": {
+        "title": "Innovation Driven",
+        "description": "We continuously explore the latest advances in AI and machine learning, applying cutting-edge technologies to the GEO optimization field to provide users with the most advanced tools and services."
+      },
+      "value": {
+        "title": "Customer First",
+        "description": "We always center on customer needs, providing customized solutions and professional consulting services to help customers achieve business growth in the AI era."
+      },
+      "leadership": {
+        "title": "Industry Leadership",
+        "description": "Our team consists of experts in AI and SEO, committed to shaping industry standards and leading the future development of GEO optimization."
+      }
+    },
+    "team": {
+      "title": "Our Team",
+      "ceo": {
+        "name": "Wei Zhang",
+        "title": "Founder & CEO",
+        "description": "15 years of internet industry experience, former product director at a well-known tech company, AI technology expert."
+      },
+      "cto": {
+        "name": "Na Li",
+        "title": "Chief Technology Officer",
+        "description": "Ph.D. in Artificial Intelligence, 10 years of experience in machine learning and natural language processing, published multiple papers in top academic journals."
+      },
+      "marketing": {
+        "name": "Qiang Wang",
+        "title": "Marketing Director",
+        "description": "12 years of digital marketing experience, successfully helped multiple enterprises achieve brand growth and market expansion."
+      },
+      "design": {
+        "name": "Jing Chen",
+        "title": "Design Director",
+        "description": "10 years of user experience and interface design experience, has won multiple international design awards."
+      }
+    },
+    "contact": {
+      "title": "Contact Us",
+      "info": {
+        "title": "Contact Information",
+        "address": "Address",
+        "addressValue": "Room 1001, Building A, SOHO Modern Center, 88 Jianguo Road, Chaoyang District, Beijing",
+        "email": "Email",
+        "emailValue": "contact@zen7geo.com",
+        "phone": "Phone",
+        "phoneValue": "+86 10 12345 6789"
+      },
+      "form": {
+        "title": "Send Message",
+        "name": "Name",
+        "email": "Email",
+        "message": "Message",
+        "namePlaceholder": "Your name",
+        "emailPlaceholder": "Your email",
+        "messagePlaceholder": "Tell us about your needs",
+        "button": "Send Message"
+      }
     }
   }
 }

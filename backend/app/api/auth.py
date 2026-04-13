@@ -12,7 +12,11 @@ router = APIRouter()
 # Security configuration
 SECRET_KEY = "your-secret-key-here"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# 7 days. Short TTLs (30m) silently convert every long-idle tab into a
+# "zombie login" — UI still shows the email (read from localStorage.user)
+# while every authed API call 401s. Proper refresh-token rotation is a
+# later phase; 7d is a reasonable stop-gap for a SaaS dashboard.
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 RESET_TOKEN_EXPIRE_MINUTES = 15
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")

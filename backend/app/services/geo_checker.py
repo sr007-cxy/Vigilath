@@ -13,29 +13,46 @@ _cache: Dict[str, tuple[GeoTestResult, float]] = {}
 _CACHE_TTL = 3600  # 1 hour cache time
 
 class GeoChecker:
-    def run_geo_check(self, url: str, include_fix: bool) -> GeoTestResult:
-        return run_geo_check(url, include_fix)
+    def run_geo_check(
+        self,
+        url: str,
+        include_fix: bool,
+        allowed_categories: Optional[List[str]] = None,
+    ) -> GeoTestResult:
+        return run_geo_check(url, include_fix, allowed_categories=allowed_categories)
 
 geo_checker = GeoChecker()
 
-def run_geo_check(url: str, include_fix: bool, progress_callback=None) -> GeoTestResult:
-    """Run GEO readiness check and return structured result"""
+def run_geo_check(
+    url: str,
+    include_fix: bool,
+    progress_callback=None,
+    allowed_categories: Optional[List[str]] = None,
+) -> GeoTestResult:
+    """Run GEO readiness check and return structured result.
+
+    allowed_categories: optional whitelist of category labels (e.g. the 5 free-tier
+    checks). When None, all 23 categories are run.
+    """
     print(f"Starting run_geo_check for {url}")
-    # Check cache first
-    cache_key = f"{url}_{include_fix}"
+    # Check cache first — cache key must include the category filter so that a
+    # free-tier 5-check run doesn't serve a cached 23-check result to a pro user
+    # or vice versa.
+    categories_key = ",".join(sorted(allowed_categories)) if allowed_categories else "all"
+    cache_key = f"{url}_{include_fix}_{categories_key}"
     cached_result = get_cached_result(cache_key)
     if cached_result:
         print(f"Cache hit for {url}")
         if progress_callback:
             progress_callback(100)
         return cached_result
-    
-    # Get the project root directory (parent of backend directory)
+
+    # backend/ is the CWD used for subprocess (the geo_checker package lives there)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backend_dir = os.path.dirname(os.path.dirname(current_dir))
-    project_root = os.path.dirname(backend_dir)
+    project_root = backend_dir
     print(f"Project root: {project_root}")
-    
+
     # Run the geo_checker script
     cmd = [
         sys.executable,
@@ -43,9 +60,11 @@ def run_geo_check(url: str, include_fix: bool, progress_callback=None) -> GeoTes
         "geo_checker",
         url
     ]
-    
+
     if include_fix:
         cmd.append("--fix")
+    if allowed_categories:
+        cmd.extend(["--categories", ",".join(allowed_categories)])
     print(f"Running command: {cmd}")
     
     try:

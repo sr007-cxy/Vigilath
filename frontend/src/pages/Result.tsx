@@ -1,20 +1,89 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { PaymentModal } from '../components/PaymentModal';
 import { useMembership } from '../hooks/useMembership';
+import { geoApi } from '../services/geoApi';
+import { resolveCategoryVisual } from '../components/result/CategoryVisual';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
-const FREE_CHECKS_PER_TAB = 2;
-const FREE_TOP_ISSUES = 2;
-
+// 23 categories split into 7 tabs (2 free + 5 paid) aligned with
+// docs/会员功能免费与付费功能项目列表.md §检测大项分组. Free and paid
+// groups do not cross over, so a whole paid tab can show 🔒 for non-members
+// while free tabs are always visible.
+// Labels MUST match the `--- X ---` section headers emitted by geo_checker.py —
+// the backend parser sets `checks[].category` from those headers.
 const categoryGroups: Record<string, string[]> = {
-  websiteBasic: ['HTTPS', 'robots.txt', 'Sitemap', 'URL Normalization'],
-  aiOptimization: ['llms.txt', 'AI Crawl Readiness', 'AI Optimization', 'AI Answer Formats'],
-  contentQuality: ['Content Accessibility', 'Content Quality', 'Meta Tags', 'Structured Data'],
-  technicalPerformance: ['Technical Crawlability', 'Mobile & Weight', '.well-known Discovery', '.well-known'],
-  externalFactors: ['Authority & Trust', 'Social Signals', 'Cross-Platform', 'Platform Registration'],
+  // 🆓 基础协议与可抓取性
+  infraProtocols: [
+    'HTTPS',
+    'robots.txt',
+    'sitemap.xml',
+  ],
+  // 🆓 页面基础与移动体验
+  pageBasics: [
+    'Meta Tags',
+    'Mobile-Friendliness & Page Weight',
+  ],
+  // 💎 AI 专属协议与抓取
+  aiProtocols: [
+    'llms.txt',
+    '.well-known Discovery',
+    'AI Crawl Readiness',
+  ],
+  // 💎 结构化与语义
+  structuredSemantic: [
+    'Structured Data',
+    'Schema Breadcrumbs & Knowledge Panel',
+    'URL Normalization',
+  ],
+  // 💎 内容质量与可读性
+  contentQuality: [
+    'Content Accessibility',
+    'Content Quality for AI',
+    'AI-Specific Optimization',
+    'AI Answer Format Optimization',
+  ],
+  // 💎 技术健壮性与媒体
+  techRobustness: [
+    'Technical Crawlability',
+    'Outbound Links & Media',
+    'Multilingual Content Depth',
+    'Multi-Page Sampling',
+  ],
+  // 💎 权威与外部信号
+  authorityExternal: [
+    'Search Engine & AI Platform Registration',
+    'Authority & Trust Signals',
+    'Social Signals',
+    'Cross-Platform Content Distribution',
+  ],
+};
+
+// Tabs in FREE_GROUPS render for everyone; all others are paid and show 🔒
+// on the tab for non-members (i.e. when any of their categories are in the
+// backend-provided `locked_categories` set).
+const FREE_GROUPS = new Set(['infraProtocols', 'pageBasics']);
+
+// Advanced modes surfaced in the rerun dropdown for logged-in users.
+// Each entry maps to a geo_checker CLI sub-mode; route target is /advanced/{key}.
+// `minTier` is compared to result.tier to decide if a 🔒 icon shows.
+type AdvancedMode = 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
+const ADVANCED_MODES: { key: AdvancedMode; minTier: 'pro' | 'starter' }[] = [
+  { key: 'compare', minTier: 'pro' },
+  { key: 'crawlTest', minTier: 'pro' },
+  { key: 'authority', minTier: 'pro' },
+  { key: 'citation', minTier: 'pro' },
+  { key: 'visibility', minTier: 'starter' },
+  { key: 'entity', minTier: 'starter' },
+];
+
+const TIER_RANK: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  starter: 2,
+  growth: 3,
+  scale: 4,
 };
 
 const STATUS_ORDER: Record<string, number> = { FAIL: 0, WARN: 1, INFO: 2, PASS: 3 };
@@ -102,9 +171,33 @@ export function Result() {
   const location = useLocation();
   const navigate = useNavigate();
   const result = location.state?.result as GeoTestResult;
-  const { token, isLoggedIn, isUnlocked, refresh } = useMembership();
+  const { token, isLoggedIn, refresh } = useMembership();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('websiteBasic');
+  const [activeTab, setActiveTab] = useState<string>('infraProtocols');
+
+  // Rerun bar state — title-row URL input + optional advanced mode dropdown.
+  const [rerunUrl, setRerunUrl] = useState<string>(result?.url || '');
+  const [rerunMode, setRerunMode] = useState<'default' | AdvancedMode>('default');
+  const [rerunLoading, setRerunLoading] = useState(false);
+  const [rerunError, setRerunError] = useState<string>('');
+
+  const effectiveTier = result?.tier || 'free';
+  const effectiveRank = TIER_RANK[effectiveTier] ?? 0;
+  const isModeLocked = (mode: AdvancedMode): boolean => {
+    const entry = ADVANCED_MODES.find((m) => m.key === mode);
+    if (!entry) return true;
+    return effectiveRank < TIER_RANK[entry.minTier];
+  };
+
+  // The backend tells us which categories were locked for this check run.
+  // Deriving from the response (rather than from the membership hook) means
+  // anonymous free users and logged-in free users behave identically, and a
+  // tier change on the server is reflected without a client reload.
+  const lockedCategorySet = useMemo(
+    () => new Set(result?.locked_categories ?? []),
+    [result],
+  );
+  const isUnlocked = lockedCategorySet.size === 0;
 
   const handleUnlockClick = () => {
     if (!isLoggedIn) {
@@ -158,20 +251,59 @@ export function Result() {
       const failed = checks.filter((c) => c.status === 'FAIL').length;
       const warned = checks.filter((c) => c.status === 'WARN').length;
       const passRate = total === 0 ? 0 : Math.round((passed / total) * 100);
-      return { tab, total, passed, failed, warned, passRate };
+      const lockedInTab = cats.filter((c) => lockedCategorySet.has(c)).length;
+      // Paid tab is "locked" if not in FREE_GROUPS and any category is
+      // in the backend-provided locked set. Free tabs are never locked.
+      const isPaid = !FREE_GROUPS.has(tab) && tab !== 'other';
+      const isTabLocked = isPaid && lockedInTab > 0;
+      return { tab, total, passed, failed, warned, passRate, lockedInTab, isPaid, isTabLocked };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTabs, checksByCategory]);
+  }, [allTabs, checksByCategory, lockedCategorySet]);
 
-  const allTopIssues = useMemo(() => {
-    if (!result?.checks) return [];
-    return [...result.checks]
-      .filter((c) => c.status === 'FAIL' || c.status === 'WARN')
-      .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
-  }, [result]);
+  const handleRerunSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = rerunUrl.trim();
+    setRerunError('');
+    if (!trimmed) {
+      setRerunError(t('home.error.empty'));
+      return;
+    }
+    try {
+      new URL(trimmed);
+    } catch {
+      setRerunError(t('home.error.invalid'));
+      return;
+    }
 
-  const topIssues = isUnlocked ? allTopIssues : allTopIssues.slice(0, FREE_TOP_ISSUES);
-  const lockedTopIssuesCount = isUnlocked ? 0 : Math.max(0, allTopIssues.length - FREE_TOP_ISSUES);
+    // Advanced mode → delegate to dedicated page (built in later phase).
+    if (rerunMode !== 'default') {
+      if (isModeLocked(rerunMode)) {
+        if (!isLoggedIn) {
+          navigate('/login');
+          return;
+        }
+        setShowPaymentModal(true);
+        return;
+      }
+      navigate(`/advanced/${rerunMode}`, { state: { url: trimmed } });
+      return;
+    }
+
+    // Default mode → same call the homepage makes, then replace this page.
+    setRerunLoading(true);
+    geoApi
+      .checkGeo({ url: trimmed })
+      .then((freshResult) => {
+        navigate('/result', { state: { result: freshResult }, replace: true });
+      })
+      .catch(() => {
+        setRerunError(t('home.error.failed'));
+      })
+      .finally(() => {
+        setRerunLoading(false);
+      });
+  };
 
   if (!result) {
     return (
@@ -235,9 +367,9 @@ export function Result() {
 
       <main className="flex-1 px-4 py-5 hero-gradient relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
-          {/* Top bar: title + URL + lang switch */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div className="min-w-0">
+          {/* Top bar: title + rerun input (center) + export buttons (right) */}
+          <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 lg:shrink-0">
               <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1.5">
                 {t('result.title')}
               </h1>
@@ -253,6 +385,76 @@ export function Result() {
                 </a>
               </div>
             </div>
+
+            {/* Rerun bar — matches the homepage capsule but one size tighter. */}
+            <form
+              onSubmit={handleRerunSubmit}
+              className="flex-1 min-w-0 lg:max-w-xl w-full"
+            >
+              <div className="flex items-center bg-card border border-[#3f4143] rounded-full p-1 shadow-glow">
+                {isLoggedIn && (
+                  <div className="relative shrink-0">
+                    <select
+                      value={rerunMode}
+                      onChange={(e) => setRerunMode(e.target.value as 'default' | AdvancedMode)}
+                      className="appearance-none bg-transparent text-xs text-primary pl-3 pr-7 py-2 rounded-full border-r border-[#3f4143] focus:outline-none cursor-pointer"
+                      title={t('result.header.modeLabel')}
+                    >
+                      <option value="default" className="bg-card text-primary">
+                        {t('result.header.modeDefault')}
+                      </option>
+                      {ADVANCED_MODES.map((m) => {
+                        const locked = isModeLocked(m.key);
+                        return (
+                          <option key={m.key} value={m.key} className="bg-card text-primary">
+                            {locked ? '🔒 ' : ''}
+                            {t(`home.advanced.cards.${m.key}.title`)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-secondary pointer-events-none"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={rerunUrl}
+                  onChange={(e) => setRerunUrl(e.target.value)}
+                  placeholder={t('result.header.rerunPlaceholder')}
+                  className="flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted"
+                  disabled={rerunLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={rerunLoading}
+                  title={t('result.header.rerun')}
+                  className="gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60"
+                >
+                  {rerunLoading ? (
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {rerunError && (
+                <p className="mt-2 text-[11px] text-rose-400 px-3">{rerunError}</p>
+              )}
+            </form>
+
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleCopyLink}
@@ -281,7 +483,6 @@ export function Result() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-10a2 2 0 00-2-2H9a2 2 0 00-2 2v10a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </button>
-              {/* <LanguageSwitcher /> */}
             </div>
           </div>
 
@@ -318,7 +519,7 @@ export function Result() {
                     </h3>
                   </div>
                   <div className="space-y-1.5">
-                    {groupStats.filter((g) => g.total > 0).map((g) => (
+                    {groupStats.map((g) => (
                       <button
                         key={g.tab}
                         onClick={() => setActiveTab(g.tab)}
@@ -345,70 +546,10 @@ export function Result() {
             </div>
           </div>
 
-          {/* Top critical issues */}
-          <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-5 sm:p-6 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-4 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></span>
-                <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">
-                  {t('result.topIssues.title')}
-                </h3>
-              </div>
-              {allTopIssues.length > 0 && (
-                <span className="text-[10px] font-mono text-[#d5d5dc]">
-                  {topIssues.length}/{allTopIssues.length}
-                </span>
-              )}
-            </div>
-            {topIssues.length === 0 ? (
-              <p className="text-xs text-secondary py-2">{t('result.topIssues.empty')}</p>
-            ) : (
-              <div className="space-y-2">
-                {topIssues.map((issue, i) => {
-                  const theme = statusTheme(issue.status);
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-tertiary/30 border border-[#3f4143] border-border hover:border-accent-primary/30 transition-colors"
-                    >
-                      <span className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${theme.dot}`}></span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-mono text-[#d5d5dc] uppercase">{issue.category}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] ${theme.badge}`}>
-                            {issue.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-primary leading-relaxed">{issue.message}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-                {lockedTopIssuesCount > 0 && (
-                  <button
-                    onClick={handleUnlockClick}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 border border-[#3f4143] border-cyan-500/15 transition-colors group"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span className="text-xs font-semibold text-accent-primary group-hover:text-primary transition-colors">
-                      {t('result.paywall.lockedCount', { count: lockedTopIssuesCount })}
-                    </span>
-                    <span className="text-[10px] text-[#d5d5dc]">·</span>
-                    <span className="text-[10px] text-[#d5d5dc] group-hover:text-accent-primary transition-colors">
-                      {t('result.paywall.viewAll')} →
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Tab navigation — underline style */}
           <div className="border-b border-border mb-5">
             <div role="tablist" className="flex gap-1 sm:gap-2 overflow-x-auto -mb-px">
-              {groupStats.filter((g) => g.total > 0).map((g) => {
+              {groupStats.map((g) => {
                 const isActive = activeTab === g.tab;
                 return (
                   <button
@@ -416,11 +557,25 @@ export function Result() {
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setActiveTab(g.tab)}
+                    title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
                     className={`px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-all flex items-center gap-2 ${isActive
                       ? 'border-cyan-400 text-accent-primary'
-                      : 'border-transparent text-secondary hover:text-primary'
+                      : g.isTabLocked
+                        ? 'border-transparent text-[#d5d5dc] hover:text-primary'
+                        : 'border-transparent text-secondary hover:text-primary'
                       }`}
                   >
+                    {g.isTabLocked && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-accent-primary shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    )}
                     <span>{tabLabel(g.tab)}</span>
                     <span
                       className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-cyan-500/10 text-accent-primary' : 'bg-white/5 text-[#d5d5dc]'
@@ -457,17 +612,28 @@ export function Result() {
 
               const renderCategoryBlock = (
                 categoryKey: string,
+                checksForCategory: CheckResult[],
                 rows: ReactNode,
                 visibleCount: number,
                 totalCount: number,
               ) => {
                 const lockedInCat = totalCount - visibleCount;
+                // Try the rich visual first. resolveCategoryVisual is a plain
+                // function — it returns a React element or null. If null, we
+                // fall back to the plain row list so every category always
+                // renders *something*. (This was previously a <Component/> ref
+                // which made `visual` always truthy and silently broke the
+                // fallback — the list never rendered for un-visualized
+                // categories like HTTPS / sitemap.xml / Mobile & Weight.)
+                const visual = resolveCategoryVisual(categoryKey, checksForCategory);
                 return (
                   <div key={categoryKey}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="w-1 h-4 gradient-bg rounded-full"></span>
-                        <h3 className="text-sm font-semibold text-primary">{categoryKey}</h3>
+                        <h3 className="text-sm font-semibold text-primary">
+                          {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                        </h3>
                       </div>
                       <div className="flex items-center gap-2">
                         {lockedInCat > 0 && (
@@ -483,34 +649,49 @@ export function Result() {
                         </span>
                       </div>
                     </div>
-                    <div className="bg-card border border-[#3f4143] border-border rounded-xl overflow-hidden">
-                      <div className="divide-y divide-border">{rows}</div>
-                    </div>
+                    {visual ? (
+                      visual
+                    ) : (
+                      <div className="bg-card border border-[#3f4143] border-border rounded-xl overflow-hidden">
+                        <div className="divide-y divide-border">{rows}</div>
+                      </div>
+                    )}
                   </div>
                 );
               };
 
-              const lockedCta = (lockedCount: number) =>
-                lockedCount > 0 ? (
+              const renderLockedPlaceholder = (categoryKey: string) => (
+                <div key={`locked-${categoryKey}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-4 bg-gradient-to-b from-cyan-400/60 via-purple-500/60 to-pink-500/60 rounded-full"></span>
+                      <h3 className="text-sm font-semibold text-secondary">
+                        {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                      </h3>
+                    </div>
+                    <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      {t('result.paywall.locked')}
+                    </span>
+                  </div>
                   <button
                     onClick={handleUnlockClick}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-[#3f4143] border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 transition-colors group"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 transition-colors group"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
-                    <span className="text-xs font-semibold text-accent-primary group-hover:text-primary transition-colors">
-                      {t('result.paywall.lockedCount', { count: lockedCount })}
-                    </span>
-                    <span className="text-[10px] text-[#d5d5dc]">·</span>
-                    <span className="text-[10px] text-[#d5d5dc] group-hover:text-accent-primary transition-colors">
-                      {t('result.paywall.viewAll')} →
+                    <span className="text-xs text-secondary group-hover:text-primary transition-colors">
+                      {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
                     </span>
                   </button>
-                ) : null;
+                </div>
+              );
 
               const presentCategories = activeCategories.filter(
-                (c) => (checksByCategory[c]?.length ?? 0) > 0,
+                (c) => (checksByCategory[c]?.length ?? 0) > 0 || lockedCategorySet.has(c),
               );
 
               if (presentCategories.length === 0) {
@@ -521,50 +702,22 @@ export function Result() {
                 );
               }
 
-              // UNLOCKED: full content, grouped by big category, no row expand
-              if (isUnlocked) {
-                return presentCategories.map((categoryKey) => {
-                  const checks = checksByCategory[categoryKey];
-                  return renderCategoryBlock(
-                    categoryKey,
-                    checks.map((check, idx) => renderRow(check, `${categoryKey}-${idx}`)),
-                    checks.length,
-                    checks.length,
-                  );
-                });
-              }
-
-              // FREE: 2 items total across the whole tab, but still grouped under big-category headings.
-              // Distribute the budget by walking categories in order; categories that get 0 items are skipped
-              // entirely (their counts roll up into the bottom unlock CTA so we don't clutter every block).
-              let remaining = FREE_CHECKS_PER_TAB;
-              const totalInTab = presentCategories.reduce(
-                (sum, c) => sum + (checksByCategory[c]?.length ?? 0),
-                0,
-              );
-              let totalShown = 0;
-
-              const blocks: ReactNode[] = [];
-              for (const categoryKey of presentCategories) {
-                const checks = checksByCategory[categoryKey];
-                const take = Math.min(remaining, checks.length);
-                if (take === 0) continue;
-                remaining -= take;
-                totalShown += take;
-                const rows = checks
-                  .slice(0, take)
-                  .map((check, idx) => renderRow(check, `${categoryKey}-${idx}`));
-                blocks.push(renderCategoryBlock(categoryKey, rows, take, checks.length));
-              }
-
-              const lockedTotal = Math.max(0, totalInTab - totalShown);
-
-              return (
-                <>
-                  {blocks}
-                  {lockedCta(lockedTotal)}
-                </>
-              );
+              // Render each category either as a full block (unlocked / has data)
+              // or as a 🔒 placeholder card (belongs to the tab but is in the
+              // locked set for this tier).
+              return presentCategories.map((categoryKey) => {
+                if (lockedCategorySet.has(categoryKey)) {
+                  return renderLockedPlaceholder(categoryKey);
+                }
+                const checks = checksByCategory[categoryKey] || [];
+                return renderCategoryBlock(
+                  categoryKey,
+                  checks,
+                  checks.map((check, idx) => renderRow(check, `${categoryKey}-${idx}`)),
+                  checks.length,
+                  checks.length,
+                );
+              });
             })()}
           </div>
 

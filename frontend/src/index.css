@@ -206,6 +206,50 @@
     color: var(--text-muted);
   }
 
+  select {
+    font-family: inherit;
+    font-size: 1em;
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    transition: all 0.5s ease;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+  }
+
+  select:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  select option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+  }
+
+  textarea {
+    font-family: inherit;
+    font-size: 1em;
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    transition: all 0.5s ease;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    resize: vertical;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  textarea::placeholder {
+    color: var(--text-muted);
+  }
+
   /* 响应式容器 */
   .responsive-container {
     width: 100%;

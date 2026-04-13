@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoApi } from '../services/geoApi';
@@ -7,7 +7,7 @@ import { useMembership } from '../hooks/useMembership';
 
 type AdvancedKey = 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
-const advancedCards: { key: AdvancedKey; icon: JSX.Element }[] = [
+const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
   {
     key: 'compare',
     icon: (
@@ -248,7 +248,7 @@ export function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {advancedCards.map(({ key, icon }) => (
                 <div
-                  type="button"
+                  role="button"
                   key={key}
                   onClick={() => handleAdvancedClick(key)}
                   className="group flex gap-4 relative text-left bg-gray-900 border border-gray-700 rounded-2xl p-6 transition-all duration-300 hover:border-primary/60 hover:-translate-y-1"

@@ -37,31 +37,28 @@ export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
           alignItems: 'center',
           gap: '8px',
           padding: '8px 16px',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          border: '1px solid #e2e8f0',
+          backgroundColor: 'var(--bg-tertiary)',
+          border: '1px solid var(--border-color)',
           borderRadius: '9999px',
-          color: '#1e293b',
+          color: 'var(--text-secondary)',
           fontSize: '0.875rem',
           fontWeight: '500',
           cursor: 'pointer',
           transition: 'all 0.3s',
-          boxShadow: '0 2px 8px rgba(59, 130, 246, 0.1)',
         }}
         onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = 'white';
-          e.currentTarget.style.borderColor = '#3b82f6';
-          e.currentTarget.style.transform = 'translateY(-1px)';
+          e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+          e.currentTarget.style.borderColor = 'var(--accent-primary)';
         }}
         onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-          e.currentTarget.style.borderColor = '#e2e8f0';
-          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+          e.currentTarget.style.borderColor = 'var(--border-color)';
         }}
       >
         {getLanguageName(i18n.language)}
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          style={{ height: '16px', width: '16px' }}
+          style={{ height: '16px', width: '16px', color: 'var(--text-secondary)' }}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -82,12 +79,13 @@ export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
             top: '100%',
             right: 0,
             marginTop: '8px',
-            backgroundColor: 'white',
-            border: '1px solid #e2e8f0',
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
             borderRadius: '12px',
-            boxShadow: '0 4px 16px rgba(59, 130, 246, 0.15)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
             zIndex: 1000,
             minWidth: '120px',
+            overflow: 'hidden',
           }}
         >
           {languages.map((lang) => (
@@ -99,8 +97,8 @@ export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
                 width: '100%',
                 padding: '10px 16px',
                 textAlign: 'left' as const,
-                backgroundColor: lang.code === i18n.language ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                color: lang.code === i18n.language ? '#3b82f6' : '#1e293b',
+                backgroundColor: lang.code === i18n.language ? 'rgba(0, 240, 255, 0.1)' : 'transparent',
+                color: lang.code === i18n.language ? 'var(--accent-primary)' : 'var(--text-secondary)',
                 border: 'none',
                 borderRadius: lang.code === i18n.language ? '8px' : '0',
                 fontSize: '0.875rem',
@@ -110,12 +108,14 @@ export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
               }}
               onMouseOver={(e) => {
                 if (lang.code !== i18n.language) {
-                  e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.05)';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
                 }
               }}
               onMouseOut={(e) => {
                 if (lang.code !== i18n.language) {
                   e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
                 }
               }}
             >

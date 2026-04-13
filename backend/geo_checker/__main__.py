@@ -2182,7 +2182,66 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
 # ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
-def generate_score(base_url):
+# Ordered (section_header_label, check_callable) for every check.
+# The label strings MUST match the `--- X ---` section headers printed by the
+# corresponding check_* function, because the backend parser derives
+# `checks[].category` from those headers. This means filter labels, response
+# labels, and the DB `allowed_check_categories` column all share the same
+# vocabulary — no translation layer needed.
+CHECK_REGISTRY = [
+    ("HTTPS",                                          lambda url, sitemap_urls: check_https(url)),
+    ("robots.txt",                                     lambda url, sitemap_urls: check_robots_txt(url)),
+    ("llms.txt",                                       lambda url, sitemap_urls: check_llms_txt(url)),
+    (".well-known Discovery",                          lambda url, sitemap_urls: check_well_known(url)),
+    ("sitemap.xml",                                    "__sitemap__"),  # sentinel: check_sitemap, captures return
+    ("Search Engine & AI Platform Registration",       lambda url, sitemap_urls: check_search_engine_registration(url)),
+    ("Structured Data",                                lambda url, sitemap_urls: check_structured_data(url)),
+    ("Meta Tags",                                      lambda url, sitemap_urls: check_meta_tags(url)),
+    ("Content Accessibility",                          lambda url, sitemap_urls: check_content_accessibility(url)),
+    ("AI Crawl Readiness",                             lambda url, sitemap_urls: check_ai_crawl_readiness(url)),
+    ("Content Quality for AI",                         lambda url, sitemap_urls: check_content_quality(url)),
+    ("Technical Crawlability",                         lambda url, sitemap_urls: check_technical_crawlability(url)),
+    ("Authority & Trust Signals",                      lambda url, sitemap_urls: check_authority_trust(url)),
+    ("AI-Specific Optimization",                       lambda url, sitemap_urls: check_ai_optimization(url)),
+    ("Social Signals",                                 lambda url, sitemap_urls: check_social_signals(url)),
+    ("AI Answer Format Optimization",                  lambda url, sitemap_urls: check_ai_answer_formats(url)),
+    ("Schema Breadcrumbs & Knowledge Panel",           lambda url, sitemap_urls: check_schema_knowledge(url)),
+    ("Mobile-Friendliness & Page Weight",              lambda url, sitemap_urls: check_mobile_and_weight(url)),
+    ("URL Normalization",                              lambda url, sitemap_urls: check_url_normalization(url)),
+    ("Outbound Links & Media",                         lambda url, sitemap_urls: check_outbound_and_media(url)),
+    ("Multilingual Content Depth",                     lambda url, sitemap_urls: check_multilingual_depth(url)),
+    ("Cross-Platform Content Distribution",            lambda url, sitemap_urls: check_cross_platform(url)),
+    ("Multi-Page Sampling",                            lambda url, sitemap_urls: check_multi_page(url, sitemap_urls)),
+]
+
+ALL_CATEGORIES = [label for label, _ in CHECK_REGISTRY]
+
+# Free-tier categories (5 checks / 17 sub-items). The SaaS /api/check/anonymous
+# endpoint passes this list. `--categories` on the CLI does the same thing.
+FREE_CATEGORIES = [
+    "HTTPS",
+    "robots.txt",
+    "sitemap.xml",
+    "Meta Tags",
+    "Mobile-Friendliness & Page Weight",
+]
+
+
+def _run_checks(base_url, allowed_categories=None):
+    """Execute registered checks, optionally restricted by category whitelist."""
+    sitemap_urls = []
+    allowed_set = set(allowed_categories) if allowed_categories else None
+    for label, check_fn in CHECK_REGISTRY:
+        if allowed_set is not None and label not in allowed_set:
+            continue
+        if check_fn == "__sitemap__":
+            sitemap_urls = check_sitemap(base_url)
+        else:
+            check_fn(base_url, sitemap_urls)
+    return sitemap_urls
+
+
+def generate_score(base_url, allowed_categories=None):
     reset_state()
     parsed = urlparse(base_url)
     if not parsed.scheme:
@@ -2194,31 +2253,11 @@ def generate_score(base_url):
     print(f"{'='*60}")
     print(f"  GEO Readiness Report for: {base_url}")
     print(f"  Mode: {mode}")
+    if allowed_categories:
+        print(f"  Restricted to {len(allowed_categories)} categories: {', '.join(allowed_categories)}")
     print(f"{'='*60}")
 
-    check_https(base_url)
-    check_robots_txt(base_url)
-    check_llms_txt(base_url)
-    check_well_known(base_url)
-    sitemap_urls = check_sitemap(base_url)
-    check_search_engine_registration(base_url)
-    check_structured_data(base_url)
-    check_meta_tags(base_url)
-    check_content_accessibility(base_url)
-    check_ai_crawl_readiness(base_url)
-    check_content_quality(base_url)
-    check_technical_crawlability(base_url)
-    check_authority_trust(base_url)
-    check_ai_optimization(base_url)
-    check_social_signals(base_url)
-    check_ai_answer_formats(base_url)
-    check_schema_knowledge(base_url)
-    check_mobile_and_weight(base_url)
-    check_url_normalization(base_url)
-    check_outbound_and_media(base_url)
-    check_multilingual_depth(base_url)
-    check_cross_platform(base_url)
-    check_multi_page(base_url, sitemap_urls)
+    _run_checks(base_url, allowed_categories=allowed_categories)
 
     # --- AI Visibility Score ---
     score = get_ai_visibility_score()
@@ -3282,6 +3321,11 @@ def main():
     parser.add_argument("--authority-audit", metavar="URL",
                         help="Audit off-page authority signals: online reviews, awards/accreditations, "
                              "Google authority, and authoritative list mentions.")
+    parser.add_argument("--categories", metavar="LIST",
+                        help="Comma-separated category whitelist (e.g. "
+                             "'HTTPS,robots.txt,Sitemap,Meta Tags,Mobile & Weight'). "
+                             "When set, only the listed categories are run. Used by the SaaS backend "
+                             "to implement the free-tier 5-check subset.")
     args = parser.parse_args()
 
     SHOW_FIX = args.fix
@@ -3315,7 +3359,10 @@ def main():
             display = " ".join(args.crawl_check)
             crawl_check_files(unique_files, display)
     elif args.url:
-        generate_score(args.url)
+        allowed_categories = None
+        if args.categories:
+            allowed_categories = [c.strip() for c in args.categories.split(",") if c.strip()]
+        generate_score(args.url, allowed_categories=allowed_categories)
     else:
         parser.error("Either provide a URL, --compare URL1 URL2, --crawl-check LOG_PATTERN, or --crawl-test URL")
 

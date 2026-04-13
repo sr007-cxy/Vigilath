@@ -37,6 +37,40 @@
 
 - `PYTHONUNBUFFERED`：设置为 1 以确保日志正确输出
 
+## 数据库迁移
+
+### 001 — 会员体系 v2（5 档统一阶梯）
+
+本迁移把旧的 4 档 SaaS 会员（¥0 / ¥99 / ¥299 / ¥999）重构为 5 档统一阶梯（免费会员 / 检测会员 / Starter / Growth / Scale），并为检测分级、配额、人工服务咨询等能力建立表结构。
+
+**影响**：
+
+- `memberships` 表新增 5 列：`slug`、`tier_type`、`monthly_check_quota`、`allowed_check_categories`、`features_json`、`display_order`
+- 新建 `user_check_usage` 表（按用户 + 年月追踪每月检测次数）
+- 新建 `sales_leads` 表（人工服务咨询表单落库）
+- **清空** `memberships` 和 `user_memberships` 表并重新种子化 5 档（开发环境行为；生产环境执行前请确认数据影响）
+
+**运行**：
+
+```bash
+cd backend
+python -m migrations.001_membership_v2
+```
+
+脚本是幂等的：`ALTER TABLE ADD COLUMN` 会跳过已存在的列，`CREATE TABLE` 会跳过已存在的表。**但重新种子 `memberships` 的步骤会重置**——生产环境上线前建议先 `sqlite3 geo_checker.db .dump > backup.sql` 再执行。
+
+**新增的 API 端点**：
+
+| 端点 | 鉴权 | 行为 |
+|---|---|---|
+| `POST /api/check/anonymous` | 无 | 只跑 5 项免费检测，返回 `tier='free'`，本期无限流 |
+| `POST /api/check` | Bearer（可选） | 登录用户按档位跑对应类别并记录配额；无 token 等同于 anonymous |
+| `GET /api/users/me/usage` | Bearer | 返回 `{quota, used, remaining, year_month}` |
+| `POST /api/contact-sales` | 无 | 提交人工服务咨询表单，写入 `sales_leads` 表 |
+| `POST /api/subscribe` | Bearer | **stub**：返回 pending 状态，后续接入真实支付 provider 时替换 |
+
+旧 `POST /api/geo` 作为 `/api/check/anonymous` 的别名保留（向下兼容），行为改为只跑 5 项。
+
 ## 开发流程
 
 ### 前端开发

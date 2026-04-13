@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
@@ -8,27 +8,51 @@ from app.database import Base
 # SQLAlchemy ORM Models
 class MembershipORM(Base):
     __tablename__ = "memberships"
-    
+
     id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     period = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     popular = Column(Boolean, default=False)
-    features = Column(String, nullable=False)  # Store as JSON string
-    not_included = Column(String, nullable=False)  # Store as JSON string
+    features = Column(String, nullable=False)          # JSON string (展示用特性列表)
+    not_included = Column(String, nullable=False)      # JSON string
+    tier_type = Column(String, nullable=False, default="saas")          # 'saas' | 'service'
+    monthly_check_quota = Column(Integer, nullable=False, default=3)    # 0 = 无限
+    allowed_check_categories = Column(Text, nullable=True)              # JSON array, NULL = 全部 23 项
+    features_json = Column(Text, nullable=True)                         # 人工服务 18 项结构化权益 JSON (service 档用)
+    display_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class UserMembershipORM(Base):
     __tablename__ = "user_memberships"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     membership_id = Column(Integer, ForeignKey("memberships.id"), nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
     is_active = Column(Boolean, default=True)
+
+class UserCheckUsageORM(Base):
+    __tablename__ = "user_check_usage"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    year_month = Column(String, primary_key=True)  # '2026-04'
+    used_count = Column(Integer, nullable=False, default=0)
+
+class SalesLeadORM(Base):
+    __tablename__ = "sales_leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    website = Column(String, nullable=True)
+    tier_slug = Column(String, nullable=True)
+    message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 # Pydantic Models
 class MembershipBase(BaseModel):
@@ -39,18 +63,46 @@ class MembershipBase(BaseModel):
     popular: bool = False
 
 class MembershipCreate(MembershipBase):
+    slug: str
     features: List[str]
     not_included: List[str]
+    tier_type: str = "saas"
+    monthly_check_quota: int = 3
+    allowed_check_categories: Optional[List[str]] = None
+    features_json: Optional[Dict[str, Any]] = None
+    display_order: int = 0
 
 class Membership(MembershipBase):
     id: int
+    slug: str
     features: List[str]
     not_included: List[str]
+    tier_type: str = "saas"
+    monthly_check_quota: int = 3
+    allowed_check_categories: Optional[List[str]] = None
+    features_json: Optional[Dict[str, Any]] = None
+    display_order: int = 0
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
+
+class ContactSalesRequest(BaseModel):
+    name: str
+    email: str
+    website: Optional[str] = None
+    tier_slug: Optional[str] = None
+    message: Optional[str] = None
+
+class UsageResponse(BaseModel):
+    quota: int        # 0 = 无限
+    used: int
+    remaining: int    # -1 = 无限
+    year_month: str
+
+class SubscribeRequest(BaseModel):
+    slug: str
 
 class UserMembership(BaseModel):
     id: int

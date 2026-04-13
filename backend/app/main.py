@@ -10,13 +10,27 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Configure CORS
+# CORS. IMPORTANT: do not combine `allow_origins=["*"]` with
+# `allow_credentials=True` — starlette's CORSMiddleware silently drops the
+# Access-Control-Allow-Origin header in that case (the CORS spec forbids
+# wildcard + credentials). Symptom: browser fetch gets "No
+# 'Access-Control-Allow-Origin' header is present" even though the endpoint
+# itself works fine from curl. Fix: enumerate the dev origins explicitly,
+# and use `allow_origin_regex` as a safety net for LAN IPs during testing.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+    ],
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # 添加全局异常处理器

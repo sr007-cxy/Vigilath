@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from './ThemeToggle';
+import { AuthModal } from './AuthModal';
 
 export function Header() {
   const { t, i18n } = useTranslation();
-  
-  // 使用 useState 钩子的初始化函数来从本地存储中读取用户信息
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const [user, setUser] = useState<string | null>(() => {
     try {
       const storedUser = localStorage.getItem('user');
@@ -23,12 +24,15 @@ export function Header() {
     return null;
   });
 
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'zh' : 'en';
     i18n.changeLanguage(newLang);
   };
 
-  // 从本地存储中读取用户信息
   const loadUserFromLocalStorage = () => {
     try {
       const storedUser = localStorage.getItem('user');
@@ -43,21 +47,48 @@ export function Header() {
     } catch (error) {
       console.error('Error parsing user from localStorage:', error);
       localStorage.removeItem('user');
+      localStorage.removeItem('token');
       setUser(null);
     }
   };
 
-  // 使用 setInterval 来定期检查本地存储的变化，每1000毫秒检查一次
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    setIsDropdownOpen(false);
+    console.log('User logged out');
+  };
+
+  const toggleAuthModal = (tab: 'login' | 'register' = 'login') => {
+    setAuthModalTab(tab);
+    setIsAuthModalOpen(!isAuthModalOpen);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
   useEffect(() => {
     const intervalId = setInterval(loadUserFromLocalStorage, 1000);
 
     return () => {
-      // 清除定时器
       clearInterval(intervalId);
     };
   }, []);
 
-  // 输出 user 状态的值
   console.log('Header user state:', user);
 
   return (
@@ -99,12 +130,12 @@ export function Header() {
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          
+
           <button
             onClick={toggleLanguage}
             className="h-10 px-3 flex items-center gap-1 rounded-full border text-sm font-semibold transition"
-            style={{ 
-              background: 'var(--bg-tertiary)', 
+            style={{
+              background: 'var(--bg-tertiary)',
               borderColor: 'var(--border-color)',
               color: 'var(--text-secondary)'
             }}
@@ -115,19 +146,71 @@ export function Header() {
           </button>
 
           {user ? (
-            <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-              {user}
+            <div
+              className="relative"
+              ref={dropdownRef}
+              onMouseEnter={() => setIsDropdownOpen(true)}
+              onMouseLeave={() => setIsDropdownOpen(false)}
+            >
+              <button
+                className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200"
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  borderColor: 'var(--border-color)',
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  {user}
+                </span>
+                <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {isDropdownOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-48 rounded-xl shadow-2xl overflow-hidden z-[61] animate-fade-in"
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderColor: 'var(--border-color)'
+                  }}
+                >
+                  <div className="px-4 py-3 border-b border-gray-700/50">
+                    <p className="text-sm text-gray-400">{t('nav.signedInAs')}</p>
+                    <p className="text-sm font-medium text-primary truncate">{user}</p>
+                  </div>
+                  <div className="py-2">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <Link 
-              to="/login" 
+            <button
+              onClick={() => toggleAuthModal('login')}
               className="btn-primary text-sm px-6 py-2"
             >
               {t('nav.login')}
-            </Link>
+            </button>
           )}
         </div>
       </div>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={toggleAuthModal}
+        defaultTab={authModalTab}
+      />
     </header>
   );
 }

@@ -18,12 +18,15 @@ if (!i18n.isInitialized) {
             "data": "Insights",
             "contact": "Contact",
             "langSwitch": "中文",
-            "login": "Log in"
+            "login": "Log in",
+            "signedInAs": "Signed in as"
           },
           "common": {
             "error": "Error",
             "loading": "Loading...",
-            "contact": "Login"
+            "contact": "Login",
+            "cancel": "Logout",
+            "success": "Success"
           },
           "hero": {
             "title": "Get AI to Recommend Your Brand",
@@ -296,16 +299,72 @@ if (!i18n.isInitialized) {
             "groupProgress": {
               "title": "Category Progress"
             },
-            "topIssues": {
-              "title": "Top Issues"
-            },
             "categories": {
-              "websiteBasic": "Website Basics",
-              "aiOptimization": "AI Optimization",
-              "contentQuality": "Content Quality",
-              "technicalPerformance": "Technical Performance",
-              "externalFactors": "External Factors",
+              "infraSecurity": "Infrastructure & Security",
+              "aiCrawl": "AI Crawler & Standards",
+              "metadataStructured": "Metadata & Structured Data",
+              "contentReadability": "Content Readability & Quality",
+              "authorityExternal": "Authority & External Signals",
               "other": "Other"
+            },
+            "categoryLabels": {
+              "HTTPS": "HTTPS",
+              "robots.txt": "robots.txt",
+              "llms.txt": "llms.txt",
+              ".well-known Discovery": ".well-known Discovery",
+              "sitemap.xml": "Sitemap (sitemap.xml)",
+              "Search Engine & AI Platform Registration": "Search Engine & AI Platform Registration",
+              "Structured Data": "Structured Data (JSON-LD)",
+              "Meta Tags": "Meta Tags",
+              "Content Accessibility": "Content Accessibility",
+              "AI Crawl Readiness": "AI Crawl Readiness",
+              "Content Quality for AI": "Content Quality for AI",
+              "Technical Crawlability": "Technical Crawlability",
+              "Authority & Trust Signals": "Authority & Trust Signals",
+              "AI-Specific Optimization": "AI-Specific Optimization",
+              "Social Signals": "Social Signals",
+              "AI Answer Format Optimization": "AI Answer Format Optimization",
+              "Schema Breadcrumbs & Knowledge Panel": "Schema Breadcrumbs & Knowledge Panel",
+              "Mobile-Friendliness & Page Weight": "Mobile-Friendliness & Page Weight",
+              "URL Normalization": "URL Normalization",
+              "Outbound Links & Media": "Outbound Links & Media",
+              "Multilingual Content Depth": "Multilingual Content Depth",
+              "Cross-Platform Content Distribution": "Cross-Platform Content Distribution",
+              "Multi-Page Sampling": "Multi-Page Sampling"
+            },
+            "header": {
+              "rerunPlaceholder": "Enter a URL to re-run the check",
+              "rerun": "Re-run check",
+              "modeLabel": "Detection mode",
+              "modeDefault": "Standard check (5 / 23 categories)",
+              "modeLockedHint": "Upgrade your plan to unlock this mode"
+            },
+            "visuals": {
+              "robots": {
+                "title": "AI Crawler Permissions",
+                "filePresent": "robots.txt · file present",
+                "fileMissing": "robots.txt · file missing",
+                "sitemapRef": "sitemap ref ✓",
+                "noSitemapRef": "no sitemap ref",
+                "wildcardWarning": "Wildcard rule User-agent: * blocks every crawler. Bots shown as \"inherit\" below are effectively blocked until you override them.",
+                "legend": {
+                  "allowed": "Allowed",
+                  "blocked": "Blocked",
+                  "inherited": "Inherits wildcard",
+                  "unknown": "Unknown"
+                }
+              },
+              "meta": {
+                "title": "Meta Tag Coverage",
+                "subtitle": "6 signals AI engines rely on for summaries",
+                "passCount": "{{pass}}/{{total}} pass"
+              },
+              "platform": {
+                "titleCross": "Cross-Platform Presence",
+                "titleSocial": "Social Signal Coverage",
+                "subtitle": "Platforms AI engines train on",
+                "notDetected": "{{name}} not detected"
+              }
             },
             "shareExport": {
               "title": "Share & Export",
@@ -319,45 +378,50 @@ if (!i18n.isInitialized) {
           },
           "login": {
             "title": "Login",
-            "subtitle": "or",
+            "subtitle": "Welcome back! Please log in to your account",
             "createAccount": "Create New Account",
             "email": "Email",
-            "emailPlaceholder": "Your email",
+            "emailPlaceholder": "Enter your email",
             "password": "Password",
-            "passwordPlaceholder": "Your password",
+            "passwordPlaceholder": "Enter your password",
             "rememberMe": "Remember me",
             "forgotPassword": "Forgot password?",
-            "button": "Login",
+            "button": "Log in",
             "loading": "Logging in...",
+            "noAccount": "Don't have an account?",
+            "register": "Sign up now",
+            "failed": "Login failed. Please check your email and password",
             "error": "Invalid email or password"
           },
           "register": {
-            "title": "Create Account",
-            "subtitle": "or",
+            "title": "Sign up",
+            "subtitle": "Join us and start your GEO optimization journey",
             "loginAccount": "Login to Existing Account",
             "name": "Name",
             "namePlaceholder": "Your name",
             "email": "Email",
-            "emailPlaceholder": "Your email",
+            "emailPlaceholder": "Enter your email",
             "password": "Password",
-            "passwordPlaceholder": "Your password",
+            "passwordPlaceholder": "Enter your password",
             "confirmPassword": "Confirm Password",
-            "confirmPasswordPlaceholder": "Confirm your password",
+            "confirmPasswordPlaceholder": "Enter your password again",
             "terms": "I agree to the terms of service and privacy policy",
-            "button": "Register",
-            "loading": "Registering...",
+            "button": "Sign up",
+            "loading": "Signing up...",
+            "passwordMismatch": "Passwords do not match",
+            "failed": "Registration failed",
+            "hasAccount": "Already have an account?",
+            "login": "Log in now",
+            "passwordHint": "Password must be at least 6 characters",
             "error": "Passwords do not match"
           },
           "forgotPassword": {
-            "title": "Forgot Password",
-            "description": "Enter your email to receive a password reset link",
+            "title": "Reset Password",
+            "subtitle": "Enter your email and we'll send you a reset link",
             "button": "Send Reset Link",
             "loading": "Sending...",
-            "success": {
-              "emailSent": "Password reset email sent. Check your inbox for instructions.",
-              "token": "Reset token",
-              "resetSuccess": "Password reset successfully. You can now login with your new password."
-            },
+            "success": "Reset link sent to your email. Please check your inbox",
+            "failed": "Failed to send. Please check if the email is correct",
             "error": {
               "sendFailed": "Failed to send password reset email",
               "resetFailed": "Failed to reset password"
@@ -565,7 +629,9 @@ if (!i18n.isInitialized) {
             "pricing": "価格設定",
             "data": "インサイト",
             "contact": "お問い合わせ",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "ログイン",
+            "signedInAs": "ログイン中:"
           },
           "common": {
             "error": "エラー",
@@ -650,7 +716,9 @@ if (!i18n.isInitialized) {
             "pricing": "가격 설정",
             "data": "인사이트",
             "contact": "연락처",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "로그인",
+            "signedInAs": "로그인 중:"
           },
           "common": {
             "error": "오류",
@@ -735,7 +803,9 @@ if (!i18n.isInitialized) {
             "pricing": "Preise",
             "data": "Einblicke",
             "contact": "Kontakt",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "Anmelden",
+            "signedInAs": "Angemeldet als"
           },
           "common": {
             "error": "Fehler",
@@ -820,7 +890,9 @@ if (!i18n.isInitialized) {
             "pricing": "Tarification",
             "data": "Insights",
             "contact": "Contact",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "Connexion",
+            "signedInAs": "Connecté en tant que"
           },
           "common": {
             "error": "Erreur",
@@ -905,7 +977,9 @@ if (!i18n.isInitialized) {
             "pricing": "Precios",
             "data": "Informes",
             "contact": "Contacto",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "Iniciar sesión",
+            "signedInAs": "Sesión iniciada como"
           },
           "common": {
             "error": "Error",
@@ -991,12 +1065,15 @@ if (!i18n.isInitialized) {
             "data": "数据洞察",
             "contact": "联系我们",
             "langSwitch": "EN",
-            "login": "登录"
+            "login": "登录",
+            "signedInAs": "已登录为"
           },
           "common": {
             "error": "错误",
             "loading": "加载中...",
-            "contact": "登录"
+            "contact": "登录",
+            "cancel": "退出",
+            "success": "成功"
           },
           "hero": {
             "title": "让 AI 推荐您的品牌",
@@ -1269,16 +1346,72 @@ if (!i18n.isInitialized) {
             "groupProgress": {
               "title": "分类进度"
             },
-            "topIssues": {
-              "title": "主要问题"
-            },
             "categories": {
-              "websiteBasic": "网站基础",
-              "aiOptimization": "AI优化",
-              "contentQuality": "内容质量",
-              "technicalPerformance": "技术性能",
-              "externalFactors": "外部因素",
-              "other": "其他"
+              "infraSecurity": "基础设施与安全",
+              "aiCrawl": "AI 爬虫与抓取规范",
+              "metadataStructured": "元数据与结构化",
+              "contentReadability": "内容可读性与质量",
+              "authorityExternal": "权威与外部信号",
+              "other": "其它"
+            },
+            "categoryLabels": {
+              "HTTPS": "HTTPS 安全协议",
+              "robots.txt": "robots.txt",
+              "llms.txt": "llms.txt",
+              ".well-known Discovery": ".well-known 发现",
+              "sitemap.xml": "sitemap.xml 站点地图",
+              "Search Engine & AI Platform Registration": "搜索引擎 / AI 平台收录",
+              "Structured Data": "结构化数据（JSON-LD）",
+              "Meta Tags": "Meta 标签",
+              "Content Accessibility": "内容可读性",
+              "AI Crawl Readiness": "AI 爬虫可访问性",
+              "Content Quality for AI": "内容质量（面向 AI）",
+              "Technical Crawlability": "技术抓取能力",
+              "Authority & Trust Signals": "权威与信任信号",
+              "AI-Specific Optimization": "AI 专项优化",
+              "Social Signals": "社交信号",
+              "AI Answer Format Optimization": "AI 答案格式优化",
+              "Schema Breadcrumbs & Knowledge Panel": "Schema / 知识面板",
+              "Mobile-Friendliness & Page Weight": "移动端友好性与页面体积",
+              "URL Normalization": "URL 规范化",
+              "Outbound Links & Media": "出站链接与媒体",
+              "Multilingual Content Depth": "多语言内容深度",
+              "Cross-Platform Content Distribution": "跨平台内容分发",
+              "Multi-Page Sampling": "多页面采样"
+            },
+            "header": {
+              "rerunPlaceholder": "输入新的 URL 重新检测",
+              "rerun": "重新检测",
+              "modeLabel": "检测模式",
+              "modeDefault": "标准检测（5 / 23 类）",
+              "modeLockedHint": "升级会员解锁此模式"
+            },
+            "visuals": {
+              "robots": {
+                "title": "AI 爬虫许可矩阵",
+                "filePresent": "robots.txt · 文件存在",
+                "fileMissing": "robots.txt · 文件缺失",
+                "sitemapRef": "sitemap 引用 ✓",
+                "noSitemapRef": "缺少 sitemap 引用",
+                "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。下方标为「继承通配符」的机器人在你覆盖之前实际上都是被屏蔽的。",
+                "legend": {
+                  "allowed": "已允许",
+                  "blocked": "已屏蔽",
+                  "inherited": "继承通配符",
+                  "unknown": "未知"
+                }
+              },
+              "meta": {
+                "title": "Meta 标签覆盖",
+                "subtitle": "AI 引擎用于生成摘要的 6 个信号",
+                "passCount": "{{pass}}/{{total}} 通过"
+              },
+              "platform": {
+                "titleCross": "跨平台存在度",
+                "titleSocial": "社交信号覆盖",
+                "subtitle": "AI 引擎会训练的平台来源",
+                "notDetected": "{{name}} 未检测到"
+              }
             },
             "shareExport": {
               "title": "分享和导出",
@@ -1292,45 +1425,50 @@ if (!i18n.isInitialized) {
           },
           "login": {
             "title": "登录",
-            "subtitle": "或",
+            "subtitle": "欢迎回来！请登录您的账户",
             "createAccount": "创建新账号",
             "email": "邮箱",
-            "emailPlaceholder": "您的邮箱",
+            "emailPlaceholder": "请输入邮箱",
             "password": "密码",
-            "passwordPlaceholder": "您的密码",
+            "passwordPlaceholder": "请输入密码",
             "rememberMe": "记住我",
             "forgotPassword": "忘记密码？",
             "button": "登录",
             "loading": "登录中...",
+            "noAccount": "没有账户？",
+            "register": "立即注册",
+            "failed": "登录失败，请检查您的邮箱和密码",
             "error": "邮箱或密码错误"
           },
           "register": {
-            "title": "创建账号",
-            "subtitle": "或",
+            "title": "注册账户",
+            "subtitle": "加入我们，开始您的 GEO 优化之旅",
             "loginAccount": "登录现有账号",
             "name": "姓名",
             "namePlaceholder": "您的姓名",
             "email": "邮箱",
-            "emailPlaceholder": "您的邮箱",
+            "emailPlaceholder": "请输入邮箱",
             "password": "密码",
-            "passwordPlaceholder": "您的密码",
+            "passwordPlaceholder": "请输入密码",
             "confirmPassword": "确认密码",
-            "confirmPasswordPlaceholder": "确认您的密码",
+            "confirmPasswordPlaceholder": "请再次输入密码",
             "terms": "我同意服务条款和隐私政策",
             "button": "注册",
             "loading": "注册中...",
+            "passwordMismatch": "两次输入的密码不一致",
+            "failed": "注册失败",
+            "hasAccount": "已有账户？",
+            "login": "立即登录",
+            "passwordHint": "密码长度至少 6 位",
             "error": "密码不匹配"
           },
           "forgotPassword": {
-            "title": "忘记密码",
-            "description": "输入您的邮箱以获取密码重置链接",
+            "title": "重置密码",
+            "subtitle": "请输入您的邮箱，我们将向您发送重置链接",
             "button": "发送重置链接",
             "loading": "发送中...",
-            "success": {
-              "emailSent": "密码重置邮件已发送。请检查您的收件箱获取操作指南。",
-              "token": "重置令牌",
-              "resetSuccess": "密码重置成功。您现在可以使用新密码登录。"
-            },
+            "success": "重置链接已发送到您的邮箱，请查收",
+            "failed": "发送失败，请检查邮箱是否正确",
             "error": {
               "sendFailed": "发送密码重置邮件失败",
               "resetFailed": "重置密码失败"

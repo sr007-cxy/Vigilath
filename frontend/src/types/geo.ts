@@ -22,4 +22,8 @@ export interface GeoTestResult {
     info_count: number;
     total_checks: number;
   };
+  /** Membership slug under which this check ran ('free' | 'pro' | 'starter' | 'growth' | 'scale'). */
+  tier?: string | null;
+  /** Category labels that were NOT executed for this tier. Empty for unlocked tiers. */
+  locked_categories?: string[] | null;
 }

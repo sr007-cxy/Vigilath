@@ -20,3 +20,5 @@ class GeoTestResult(BaseModel):
     grade: str
     checks: List[CheckResult]
     summary: Dict[str, Any]
+    tier: Optional[str] = None  # 'free' | 'pro' | 'starter' | 'growth' | 'scale'
+    locked_categories: Optional[List[str]] = None  # categories hidden from this tier

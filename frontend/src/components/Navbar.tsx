@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { useTranslation } from 'react-i18next';
+import { AuthModal } from './AuthModal';
 
 interface NavLink {
   href: string;
@@ -13,8 +14,8 @@ export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const { t } = useTranslation();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 使用 useState 钩子的初始化函数来从本地存储中读取用户信息
   const [user, setUser] = useState<string | null>(() => {
     try {
       const storedUser = localStorage.getItem('user');
@@ -31,9 +32,11 @@ export function Navbar() {
     return null;
   });
 
-  // 在组件挂载时，使用 setInterval 来定期检查本地存储的变化
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
   useEffect(() => {
-    // 从本地存储中读取用户信息
     const loadUserFromLocalStorage = () => {
       try {
         const storedUser = localStorage.getItem('user');
@@ -48,23 +51,35 @@ export function Navbar() {
       } catch (error) {
         console.error('Error parsing user from localStorage:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
         setUser(null);
       }
     };
 
-    // 初始加载用户信息
     loadUserFromLocalStorage();
 
-    // 使用 setInterval 来定期检查本地存储的变化，每1000毫秒检查一次
     const intervalId = setInterval(loadUserFromLocalStorage, 1000);
 
     return () => {
-      // 清除定时器
       clearInterval(intervalId);
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
 
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   const navLinks: NavLink[] = [
     { href: '/', label: t('nav.home') },
@@ -75,6 +90,20 @@ export function Navbar() {
 
   const isActive = (href: string) => {
     return location.pathname === href;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    setIsMenuOpen(false);
+    setIsDropdownOpen(false);
+    console.log('User logged out');
+  };
+
+  const toggleAuthModal = (tab: 'login' | 'register' = 'login') => {
+    setAuthModalTab(tab);
+    setIsAuthModalOpen(!isAuthModalOpen);
   };
 
   return (
@@ -104,11 +133,10 @@ export function Navbar() {
             <Link
               key={link.href}
               to={link.href}
-              className={`text-sm font-medium transition-colors duration-300 ${
-                isActive(link.href)
+              className={`text-sm font-medium transition-colors duration-300 ${isActive(link.href)
                   ? 'text-white'
                   : 'hover:text-white'
-              }`}
+                }`}
               style={{ color: isActive(link.href) ? 'var(--text-primary)' : 'var(--text-secondary)' }}
             >
               {link.label}
@@ -119,29 +147,61 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <LanguageSwitcher />
-          
+
           {user ? (
-            <div className="hidden md:flex items-center gap-3">
-              <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                {user}
-              </span>
+            <div className="hidden md:flex relative" ref={dropdownRef} onMouseEnter={() => setIsDropdownOpen(true)} onMouseLeave={() => setIsDropdownOpen(false)}>
               <button
-                onClick={() => {
-                  localStorage.removeItem('user');
-                  setUser(null);
-                  console.log('User logged out');
+                className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200"
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  borderColor: 'var(--border-color)',
+                  color: 'var(--text-secondary)'
                 }}
-                className="text-sm font-medium transition-colors duration-300 hover:text-white" style={{ color: 'var(--text-secondary)' }}
               >
-                退出
+                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  {user}
+                </span>
+                <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
+
+              {isDropdownOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-48 rounded-xl shadow-2xl overflow-hidden z-[61] animate-fade-in"
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderColor: 'var(--border-color)'
+                  }}
+                >
+                  <div className="px-4 py-3 border-b border-gray-700/50">
+                    <p className="text-sm text-gray-400">{t('nav.signedInAs')}</p>
+                    <p className="text-sm font-medium text-primary truncate">{user}</p>
+                  </div>
+                  <div className="py-2">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <Link to="/login" className="hidden md:block text-sm font-medium transition-colors duration-300 hover:text-white" style={{ color: 'var(--text-secondary)' }}>
+            <button
+              onClick={() => toggleAuthModal('login')}
+              className="hidden md:block text-sm font-medium transition-colors duration-300 hover:text-white" style={{ color: 'var(--text-secondary)' }}
+            >
               {t('nav.login')}
-            </Link>
+            </button>
           )}
-          
+
           <div className="md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -178,38 +238,41 @@ export function Navbar() {
                 </Link>
               ))
             }
-            
+
             {user ? (
               <div className="space-y-2">
                 <div className="px-4 py-2 rounded-lg text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                   {user}
                 </div>
                 <button
-                  onClick={() => {
-                    localStorage.removeItem('user');
-                    setUser(null);
-                    setIsMenuOpen(false);
-                    console.log('User logged out');
-                  }}
+                  onClick={handleLogout}
                   className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-left"
                   style={{ color: 'var(--text-secondary)' }}
                 >
-                  退出
+                  {t('common.cancel')}
                 </button>
               </div>
             ) : (
-              <Link
-                to="/login"
-                onClick={() => setIsMenuOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              <button
+                onClick={() => {
+                  toggleAuthModal('login');
+                  setIsMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 {t('nav.login')}
-              </Link>
+              </button>
             )}
           </div>
         </div>
       )}
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={toggleAuthModal}
+        defaultTab={authModalTab}
+      />
     </nav>
   );
 }
