@@ -17,7 +17,8 @@ if (!i18n.isInitialized) {
             "pricing": "Pricing",
             "data": "Insights",
             "contact": "Contact",
-            "langSwitch": "中文"
+            "langSwitch": "中文",
+            "login": "Log in"
           },
           "common": {
             "error": "Error",
@@ -221,6 +222,39 @@ if (!i18n.isInitialized) {
             },
             "poweredBy": "Powered by GEO AI",
             "contactLink": "Need expert optimization help?",
+            "advanced": {
+              "badge": "Members Only",
+              "title": "Advanced Detection",
+              "subtitle": "Unlock professional GEO tools to measure how AI engines see your brand across the web.",
+              "upgrade": "Upgrade to unlock",
+              "comingSoon": "Coming soon",
+              "cards": {
+                "compare": {
+                  "title": "Competitive Comparison",
+                  "desc": "Benchmark multiple sites side-by-side across all GEO categories."
+                },
+                "crawlTest": {
+                  "title": "AI Crawler Test",
+                  "desc": "Verify that GPTBot, ClaudeBot and others can actually reach your pages."
+                },
+                "authority": {
+                  "title": "Authority Audit",
+                  "desc": "Evaluate reviews, mentions, and third-party signals AI engines trust."
+                },
+                "citation": {
+                  "title": "AI Citation Check",
+                  "desc": "See whether AI engines cite your site when asked brand-relevant questions."
+                },
+                "visibility": {
+                  "title": "AI Visibility Audit",
+                  "desc": "Full multi-engine visibility report across Perplexity, ChatGPT and Claude."
+                },
+                "entity": {
+                  "title": "Entity GEO Audit",
+                  "desc": "Audit how AI recognizes a brand, product, or person — no URL required."
+                }
+              }
+            },
             "buttons": {
               "geoKnowledge": "Learn about GEO Knowledge",
               "services": "View Service Packages"
@@ -252,6 +286,26 @@ if (!i18n.isInitialized) {
             "loginToView": "Login to View Full Results",
             "loginToViewDesc": "Log in to see all detailed results and recommendations",
             "loginButton": "Log In",
+            "paywall": {
+              "lockedCount": "{{count}} more checks locked",
+              "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
+              "viewAll": "View all →",
+              "perCategoryHint": "View 2 of {{total}} checks (membership unlocks all)"
+            },
+            "groupProgress": {
+              "title": "Category Progress"
+            },
+            "topIssues": {
+              "title": "Top Issues"
+            },
+            "categories": {
+              "websiteBasic": "Website Basics",
+              "aiOptimization": "AI Optimization",
+              "contentQuality": "Content Quality",
+              "technicalPerformance": "Technical Performance",
+              "externalFactors": "External Factors",
+              "other": "Other"
+            },
             "shareExport": {
               "title": "Share & Export",
               "copied": "Link copied to clipboard!",
@@ -319,7 +373,7 @@ if (!i18n.isInitialized) {
               "loading": "Resetting..."
             }
           },
-          "about": {
+          "aboutUs": {
             "title": "About Us",
             "description": "A technology service provider specializing in GEO (Generative Engine Optimization), helping websites perform better in the generative AI era.",
             "story": {
@@ -438,37 +492,37 @@ if (!i18n.isInitialized) {
             "services": [
               {
                 "title": "Starter",
-                "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
+                "description": "Basic GEO Coverage: $2,000–$3,000\nPaid Listings: Complete indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product information compliance configuration and ongoing maintenance\nBest List SEO: None (not included)\nReputation Management: None (not included)\nPR: None (not included)",
                 "price": "$2,000–$3,000",
                 "features": [
-                  "基础 GEO 覆盖",
-                  "完成海外主流大模型收录规范",
-                  "网站文案建设和优化",
-                  "核心产品信息合规配置及持续维护"
+                  "Basic GEO Coverage",
+                  "Complete indexing standards for major overseas models",
+                  "Website copy creation and optimization",
+                  "Core product information compliance configuration and maintenance"
                 ],
                 "button": "Learn More"
               },
               {
                 "title": "Growth",
-                "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如“2026最佳XX平台”），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+                "description": "Basic GEO Coverage: $4,000–$7,000\nPaid Listings: Adapt to indexing standards for major overseas models (OpenAI/Gemini/Anthropic), website copy creation and optimization, core product usage scenario information compliance configuration and ongoing maintenance\nBest List SEO: Purchase low-cost placement on ranking websites\nReputation Management: Create and publish 1–2 top list articles (e.g., \"2026 Best XX Platform\"), published at the start of the campaign and optimized for large language model retrieval and citation\nPR: None (not included)",
                 "price": "$4,000–$7,000",
                 "features": [
-                  "基础 GEO 覆盖",
-                  "适配海外主流大模型收录规范",
-                  "在排名类网站采购低成本投放位",
-                  "创建并发布1–2篇顶级榜单文章"
+                  "Basic GEO Coverage",
+                  "Adapt to indexing standards for major overseas models",
+                  "Purchase low-cost placement on ranking websites",
+                  "Create and publish 1–2 top list articles"
                 ],
                 "button": "Learn More"
               },
               {
                 "title": "Scale",
-                "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
+                "description": "Basic GEO Coverage: $8,000–$12,000\nPaid Listings: Full-channel overseas model GEO indexing rules, customized completion of transaction product core usage scenarios, information verification and ongoing maintenance\nBest List SEO: Monitor placement costs on ranking websites, determine the most cost-effective placement budget\nReputation Management: Write and publish 3-5 best list articles monthly, with supporting data articles, backlinks and verification page support\nPR: Can cooperate with internal corporate teams or dedicated PR agencies to help obtain media coverage",
                 "price": "$8,000–$12,000",
                 "features": [
-                  "全渠道海外大模型 GEO 收录规则",
-                  "监测排名类网站的投放成本",
-                  "每月撰写并发布 3-5 篇最佳榜单类文章",
-                  "可配合企业内部团队或专属公关机构"
+                  "Full-channel overseas model GEO indexing rules",
+                  "Monitor placement costs on ranking websites",
+                  "Write and publish 3-5 best list articles monthly",
+                  "Can cooperate with internal teams or PR agencies"
                 ],
                 "button": "Learn More"
               }
@@ -935,7 +989,8 @@ if (!i18n.isInitialized) {
             "pricing": "定价方案",
             "data": "数据洞察",
             "contact": "联系我们",
-            "langSwitch": "EN"
+            "langSwitch": "EN",
+            "login": "登录"
           },
           "common": {
             "error": "错误",
@@ -1124,14 +1179,14 @@ if (!i18n.isInitialized) {
           },
           "geoTool": {
             "title": "想要检查您网站的 GEO 就绪状态？",
-            "description": "使用我们的免费 GEO 就绪检查器来分析您的网站。",
+            "description": "使用我们的免费 GEO 检查器来分析您的网站。",
             "cta": "检查您的网站"
           },
           "home": {
-            "title": "GEO 就绪检查器",
+            "title": "GEO 检测",
             "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
             "placeholder": "https://example.com",
-            "button": "检查 GEO 就绪性",
+            "button": "检测 GEO",
             "analyzing": "分析中...",
             "error": {
               "empty": "请输入 URL",
@@ -1139,13 +1194,46 @@ if (!i18n.isInitialized) {
             },
             "poweredBy": "由 GEO AI 提供支持",
             "contactLink": "需要专家优化帮助？",
+            "advanced": {
+              "badge": "会员专享",
+              "title": "高级检测能力",
+              "subtitle": "开通会员，解锁专业 GEO 检测工具，全面洞察 AI 引擎对你的网站的认知。",
+              "upgrade": "升级解锁",
+              "comingSoon": "功能即将上线",
+              "cards": {
+                "compare": {
+                  "title": "竞争对比检测",
+                  "desc": "多站点并排对比全部 GEO 类目的得分差距。"
+                },
+                "crawlTest": {
+                  "title": "AI 爬虫测试",
+                  "desc": "验证 GPTBot、ClaudeBot 等 AI 爬虫能否真正抓取你的页面。"
+                },
+                "authority": {
+                  "title": "权威信号审计",
+                  "desc": "评估外部评价、提及和 AI 信任的第三方信号。"
+                },
+                "citation": {
+                  "title": "AI 引用检测",
+                  "desc": "检测 AI 引擎在品牌相关问题中是否会引用你的网站。"
+                },
+                "visibility": {
+                  "title": "AI 可见性审计",
+                  "desc": "跨 Perplexity、ChatGPT、Claude 的多引擎可见性全面报告。"
+                },
+                "entity": {
+                  "title": "实体 GEO 审计",
+                  "desc": "无需 URL，审计 AI 对品牌/产品/人物的认知度。"
+                }
+              }
+            },
             "buttons": {
               "geoKnowledge": "了解 GEO 知识",
               "services": "查看服务套餐"
             }
           },
           "result": {
-            "title": "GEO 就绪检查结果",
+            "title": "GEO 检测结果",
             "resultsFor": "检查结果：",
             "scoreCard": {
               "title": "AI 可见性得分",
@@ -1170,6 +1258,26 @@ if (!i18n.isInitialized) {
             "loginToView": "登录查看完整结果",
             "loginToViewDesc": "登录以查看所有详细结果和建议",
             "loginButton": "登录",
+            "paywall": {
+              "lockedCount": "还有 {{count}} 项检测结果已锁定",
+              "subtitle": "开通会员即可解锁所有检测详情与优化建议",
+              "viewAll": "查看全部 →",
+              "perCategoryHint": "查看 {{total}} 项检查中的 2 项（会员可查看全部）"
+            },
+            "groupProgress": {
+              "title": "分类进度"
+            },
+            "topIssues": {
+              "title": "主要问题"
+            },
+            "categories": {
+              "websiteBasic": "网站基础",
+              "aiOptimization": "AI优化",
+              "contentQuality": "内容质量",
+              "technicalPerformance": "技术性能",
+              "externalFactors": "外部因素",
+              "other": "其他"
+            },
             "shareExport": {
               "title": "分享和导出",
               "copied": "链接已复制到剪贴板！",
@@ -1217,7 +1325,7 @@ if (!i18n.isInitialized) {
             "button": "发送重置链接",
             "loading": "发送中...",
             "success": {
-              "emailSent": "密码重置邮件已发送。请检查您的收件箱获取 instructions。",
+              "emailSent": "密码重置邮件已发送。请检查您的收件箱获取操作指南。",
               "token": "重置令牌",
               "resetSuccess": "密码重置成功。您现在可以使用新密码登录。"
             },
@@ -1237,7 +1345,7 @@ if (!i18n.isInitialized) {
               "loading": "重置中..."
             }
           },
-          "about": {
+          "aboutUs": {
             "title": "关于我们",
             "description": "专注于GEO（生成式引擎优化）的技术服务提供商，帮助网站在生成式AI时代获得更好的表现。",
             "story": {

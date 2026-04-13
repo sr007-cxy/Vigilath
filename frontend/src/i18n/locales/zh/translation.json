@@ -17,28 +17,91 @@
     "title": "GEO 检查器",
     "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
     "placeholder": "https://example.com",
-    "button": "检查 GEO 就绪性",
+    "button": "开始检测",
     "analyzing": "分析中...",
     "error": {
       "empty": "请输入 URL",
-      "invalid": "请输入有效的 URL"
+      "invalid": "请输入有效的 URL",
+      "failed": "检测失败，请稍后重试"
     },
     "poweredBy": "由 GEO AI 提供支持",
-    "contactLink": "需要专家优化帮助？"
+    "contactLink": "需要专家优化帮助？",
+    "advanced": {
+      "badge": "会员专享",
+      "title": "高级检测能力",
+      "subtitle": "开通会员，解锁专业 GEO 检测工具，全面洞察 AI 引擎对你的网站的认知。",
+      "upgrade": "升级解锁",
+      "comingSoon": "功能即将上线",
+      "cards": {
+        "compare": {
+          "title": "竞争对比检测",
+          "desc": "多站点并排对比全部 GEO 类目的得分差距。"
+        },
+        "crawlTest": {
+          "title": "AI 爬虫测试",
+          "desc": "验证 GPTBot、ClaudeBot 等 AI 爬虫能否真正抓取你的页面。"
+        },
+        "authority": {
+          "title": "权威信号审计",
+          "desc": "评估外部评价、提及和 AI 信任的第三方信号。"
+        },
+        "citation": {
+          "title": "AI 引用检测",
+          "desc": "检测 AI 引擎在品牌相关问题中是否会引用你的网站。"
+        },
+        "visibility": {
+          "title": "AI 可见性审计",
+          "desc": "跨 Perplexity、ChatGPT、Claude 的多引擎可见性全面报告。"
+        },
+        "entity": {
+          "title": "实体 GEO 审计",
+          "desc": "无需 URL，审计 AI 对品牌/产品/人物的认知度。"
+        }
+      }
+    }
   },
   "result": {
-    "title": "GEO 就绪检查结果",
-    "resultsFor": "结果：",
+    "title": "GEO 就绪检测报告",
+    "resultsFor": "目标网站",
     "scoreCard": {
       "title": "AI 可见性得分",
-      "description": "您的网站对 AI 搜索的优化程度"
+      "description": "您的网站对 AI 搜索引擎的优化程度",
+      "grade": "评级"
     },
     "summary": {
       "passed": "通过",
       "warnings": "警告",
       "failed": "失败",
       "info": "信息",
-      "totalChecks": "总检查项"
+      "totalChecks": "总计"
+    },
+    "categories": {
+      "websiteBasic": "网站基础",
+      "aiOptimization": "AI 优化",
+      "contentQuality": "内容质量",
+      "technicalPerformance": "技术与性能",
+      "externalFactors": "外部信号",
+      "other": "其它"
+    },
+    "groupProgress": {
+      "title": "分组得分概览",
+      "passRate": "通过率 {{rate}}%"
+    },
+    "topIssues": {
+      "title": "关键问题",
+      "empty": "没有发现关键问题，做得不错。",
+      "viewAll": "查看全部"
+    },
+    "table": {
+      "category": "检测项",
+      "status": "状态",
+      "message": "详情",
+      "action": "操作",
+      "expand": "展开",
+      "collapse": "收起",
+      "fix": "修复建议",
+      "noFix": "暂未提供具体的修复建议。",
+      "lockedRow": "已锁定 — 解锁后可查看"
     },
     "detailedResults": "详细结果",
     "fix": "修复方案：",
@@ -46,7 +109,7 @@
       "noData": "没有找到检查结果，请重新检查网站"
     },
     "shareExport": {
-      "title": "分享和导出",
+      "title": "分享与导出",
       "copyLink": "复制链接",
       "exportPDF": "导出 PDF",
       "exportCSV": "导出 CSV",
@@ -59,9 +122,16 @@
     "loginButton": "登录",
     "unlock": "解锁",
     "unlockCta": "查看更多",
+    "paywall": {
+      "lockedCount": "还有 {{count}} 项检测结果已锁定",
+      "subtitle": "开通会员即可解锁所有检测详情与优化建议",
+      "viewAll": "解锁全部检测",
+      "perCategoryHint": "免费预览：每个分类仅展示 2 项，解锁后查看全部"
+    },
     "buttons": {
       "checkAnother": "检查另一个网站",
-      "getHelp": "获取优化帮助"
+      "getHelp": "获取优化帮助",
+      "rerun": "重新检测"
     }
   },
   "contact": {
@@ -132,7 +202,7 @@
       {
         "title": "Growth",
         "price": "$4,000–$7,000",
-        "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如"2026最佳XX平台"），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+        "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如\"2026最佳XX平台\"），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
         "features": [
           "基础 GEO 覆盖",
           "适配海外主流大模型收录规范",

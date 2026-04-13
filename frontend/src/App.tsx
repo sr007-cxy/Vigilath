@@ -22,7 +22,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Header />
-        <div className="">
+        <div className="pt-20">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/checker" element={<Home />} />
