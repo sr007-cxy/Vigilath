@@ -265,7 +265,8 @@ if (!i18n.isInitialized) {
             "resultsFor": "Results for:",
             "scoreCard": {
               "title": "AI Visibility Score",
-              "description": "How well your website is optimized for AI search"
+              "description": "How well your website is optimized for AI search",
+              "grade": "Grade"
             },
             "summary": {
               "passed": "Passed",
@@ -1237,7 +1238,8 @@ if (!i18n.isInitialized) {
             "resultsFor": "检查结果：",
             "scoreCard": {
               "title": "AI 可见性得分",
-              "description": "您的网站对 AI 搜索的优化程度"
+              "description": "您的网站对 AI 搜索的优化程度",
+              "grade": "等级"
             },
             "summary": {
               "passed": "通过",
