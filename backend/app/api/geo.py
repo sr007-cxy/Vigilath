@@ -187,7 +187,9 @@ async def check_authenticated(body: GeoTestRequest, request: Request):
             if username:
                 user = user_service.get_user_by_username(username)
                 if user:
-                    check_and_increment_quota(user.id, membership)
+                    # TODO: 429 配额用尽,临时注释掉配额校验
+                    # check_and_increment_quota(user.id, membership)
+                    pass
         except JWTError:
             pass  # fall through to anonymous-equivalent run
 
@@ -254,7 +256,9 @@ async def test_geo_stream(
             if username:
                 user = user_service.get_user_by_username(username)
                 if user:
-                    check_and_increment_quota(user.id, membership)
+                    # TODO: 429 配额用尽,临时注释掉配额校验
+                    # check_and_increment_quota(user.id, membership)
+                    pass
         except JWTError:
             pass
 

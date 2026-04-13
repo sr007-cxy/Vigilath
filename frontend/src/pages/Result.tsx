@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PaymentModal } from '../components/PaymentModal';
@@ -121,51 +121,6 @@ const statusTheme = (status: string) => {
   }
 };
 
-function ScoreRing({ score }: { score: number }) {
-  const radius = 70;
-  const stroke = 10;
-  const normalized = Math.max(0, Math.min(100, score));
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (normalized / 100) * circumference;
-  return (
-    <div className="relative w-[180px] h-[180px] flex items-center justify-center shrink-0">
-      <svg width="180" height="180" className="-rotate-90">
-        <defs>
-          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#00f0ff" />
-            <stop offset="50%" stopColor="#7b61ff" />
-            <stop offset="100%" stopColor="#ff006e" />
-          </linearGradient>
-        </defs>
-        <circle
-          cx="90"
-          cy="90"
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx="90"
-          cy="90"
-          r={radius}
-          fill="none"
-          stroke="url(#ringGrad)"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ filter: 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.5))', transition: 'stroke-dashoffset 1s ease-out' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-bold gradient-text leading-none">{normalized}</span>
-        <span className="text-[11px] text-secondary uppercase tracking-[0.15em] mt-1">/ 100</span>
-      </div>
-    </div>
-  );
-}
-
 export function Result() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -250,18 +205,19 @@ export function Result() {
       const passed = checks.filter((c) => c.status === 'PASS').length;
       const failed = checks.filter((c) => c.status === 'FAIL').length;
       const warned = checks.filter((c) => c.status === 'WARN').length;
+      const info = checks.filter((c) => c.status === 'INFO').length;
       const passRate = total === 0 ? 0 : Math.round((passed / total) * 100);
       const lockedInTab = cats.filter((c) => lockedCategorySet.has(c)).length;
       // Paid tab is "locked" if not in FREE_GROUPS and any category is
       // in the backend-provided locked set. Free tabs are never locked.
       const isPaid = !FREE_GROUPS.has(tab) && tab !== 'other';
       const isTabLocked = isPaid && lockedInTab > 0;
-      return { tab, total, passed, failed, warned, passRate, lockedInTab, isPaid, isTabLocked };
+      return { tab, total, passed, failed, warned, info, passRate, lockedInTab, isPaid, isTabLocked };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory, lockedCategorySet]);
 
-  const handleRerunSubmit = (e: React.FormEvent) => {
+  const handleRerunSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = rerunUrl.trim();
     setRerunError('');
@@ -327,7 +283,6 @@ export function Result() {
     );
   }
 
-  const summary = result.summary || { pass_count: 0, warn_count: 0, fail_count: 0, info_count: 0, total_checks: 0 };
   const score = result.score || 0;
   const grade = result.grade || 'F';
 
@@ -373,7 +328,7 @@ export function Result() {
               <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1.5">
                 {t('result.title')}
               </h1>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0">
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
                 <span className="uppercase tracking-[0.15em] text-[#d5d5dc] text-[10px]">{t('result.resultsFor')}</span>
                 <a
                   href={result.url}
@@ -383,6 +338,17 @@ export function Result() {
                 >
                   {result.url}
                 </a>
+              </div>
+              {/* Compact overall score + grade chip — replaces the deleted top card. */}
+              <div className="inline-flex items-center gap-2 pl-2 pr-1 py-1 rounded-full border border-[#3f4143] border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-[#d5d5dc] font-semibold">
+                  {t('result.scoreCard.title', { defaultValue: 'Score' })}
+                </span>
+                <span className="text-base font-bold gradient-text tabular-nums leading-none">{score}</span>
+                <span className="text-[10px] text-[#8a8a94] font-mono">/100</span>
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-accent-primary border border-[#3f4143] border-cyan-500/30">
+                  {grade}
+                </span>
               </div>
             </div>
 
@@ -486,108 +452,135 @@ export function Result() {
             </div>
           </div>
 
-          {/* Score + summary + group breakdown — single dense card */}
-          <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-5 sm:p-6 mb-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6 lg:gap-8 items-center">
-              {/* Ring */}
-              <div className="flex flex-col items-center gap-2">
-                <ScoreRing score={score} />
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-[#d5d5dc]">{t('result.scoreCard.grade')}</span>
-                  <span className="text-sm font-bold gradient-text px-2.5 py-0.5 rounded border border-[#3f4143] border-cyan-500/30 bg-cyan-500/5">
-                    {grade}
-                  </span>
-                </div>
-              </div>
-
-              {/* Stats + group bars */}
-              <div className="flex flex-col gap-5 min-w-0">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  <StatPill color="emerald" value={summary.pass_count} label={t('result.summary.passed')} />
-                  <StatPill color="amber" value={summary.warn_count} label={t('result.summary.warnings')} />
-                  <StatPill color="rose" value={summary.fail_count} label={t('result.summary.failed')} />
-                  <StatPill color="cyan" value={summary.info_count} label={t('result.summary.info')} />
-                  <StatPill color="muted" value={summary.total_checks} label={t('result.summary.totalChecks')} />
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <span className="w-1 h-3.5 gradient-bg rounded-full"></span>
-                    <h3 className="text-[11px] uppercase tracking-[0.18em] text-secondary font-semibold">
-                      {t('result.groupProgress.title')}
-                    </h3>
-                  </div>
-                  <div className="space-y-1.5">
-                    {groupStats.map((g) => (
-                      <button
-                        key={g.tab}
-                        onClick={() => setActiveTab(g.tab)}
-                        className={`w-full grid grid-cols-[110px_1fr_auto] sm:grid-cols-[140px_1fr_auto] items-center gap-3 py-1.5 px-2 -mx-2 rounded-md transition-colors ${activeTab === g.tab ? 'bg-cyan-500/5' : 'hover:bg-tertiary/30'
+          {/* Tab navigation — card style (active tab glows with gradient border + bg). */}
+          <div
+            role="tablist"
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 mb-5 mt-2"
+          >
+            {groupStats.map((g) => {
+              const isActive = activeTab === g.tab;
+              return (
+                <button
+                  key={g.tab}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(g.tab)}
+                  title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
+                  className={`relative group px-3 py-2.5 rounded-xl border text-left transition-all overflow-hidden ${isActive
+                    ? 'border-cyan-400/60 bg-gradient-to-br from-cyan-500/15 via-purple-500/10 to-pink-500/10 shadow-[0_0_0_1px_rgba(0,240,255,0.25),0_0_20px_rgba(0,240,255,0.15)]'
+                    : g.isTabLocked
+                      ? 'border-[#3f4143] bg-card/40 hover:border-cyan-500/30 hover:bg-card'
+                      : 'border-[#3f4143] bg-card/60 hover:border-cyan-500/40 hover:bg-card'
+                    }`}
+                >
+                  {isActive && (
+                    <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/80 to-transparent"></span>
+                  )}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {g.isTabLocked && (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3 w-3 text-accent-primary shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      )}
+                      <span
+                        className={`text-xs font-semibold truncate ${isActive
+                          ? 'text-primary'
+                          : g.isTabLocked
+                            ? 'text-[#d5d5dc]'
+                            : 'text-secondary group-hover:text-primary'
                           }`}
                       >
-                        <span className={`text-xs font-medium truncate text-left ${activeTab === g.tab ? 'text-accent-primary' : 'text-secondary'}`}>
-                          {tabLabel(g.tab)}
-                        </span>
-                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 transition-all duration-700"
-                            style={{ width: `${g.passRate}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-[10px] font-mono text-[#d5d5dc] tabular-nums w-12 text-right">
-                          {g.passed}/{g.total}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tab navigation — underline style */}
-          <div className="border-b border-border mb-5">
-            <div role="tablist" className="flex gap-1 sm:gap-2 overflow-x-auto -mb-px">
-              {groupStats.map((g) => {
-                const isActive = activeTab === g.tab;
-                return (
-                  <button
-                    key={g.tab}
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setActiveTab(g.tab)}
-                    title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
-                    className={`px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-all flex items-center gap-2 ${isActive
-                      ? 'border-cyan-400 text-accent-primary'
-                      : g.isTabLocked
-                        ? 'border-transparent text-[#d5d5dc] hover:text-primary'
-                        : 'border-transparent text-secondary hover:text-primary'
-                      }`}
-                  >
-                    {g.isTabLocked && (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-3 w-3 text-accent-primary shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                    )}
-                    <span>{tabLabel(g.tab)}</span>
+                        {tabLabel(g.tab)}
+                      </span>
+                    </div>
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-cyan-500/10 text-accent-primary' : 'bg-white/5 text-[#d5d5dc]'
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
+                        ? 'bg-cyan-500/20 text-accent-primary border border-[#3f4143] border-cyan-500/30'
+                        : 'bg-white/5 text-[#d5d5dc]'
                         }`}
                     >
                       {g.total}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  {/* Thin pass-rate bar gives a secondary visual cue per card. */}
+                  <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-700 ${isActive
+                        ? 'bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500'
+                        : 'bg-gradient-to-r from-cyan-400/60 via-purple-500/60 to-pink-500/60'
+                        }`}
+                      style={{ width: `${g.passRate}%` }}
+                    ></div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {/* Per-tab header card — scoped stats, pass-rate bar, optional unlock CTA. */}
+          {(() => {
+            const stat = groupStats.find((g) => g.tab === activeTab);
+            if (!stat) return null;
+            return (
+              <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-4 sm:p-5 mb-5 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent"></div>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-1 h-5 gradient-bg rounded-full shrink-0"></span>
+                    <h2 className="text-sm sm:text-base font-bold text-primary truncate">
+                      {tabLabel(activeTab)}
+                    </h2>
+                    {stat.isTabLocked && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-accent-primary border border-[#3f4143] border-cyan-500/30 shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        {t('result.paywall.locked', { defaultValue: 'Locked' })}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-mono text-[#d5d5dc] tabular-nums shrink-0">
+                    {stat.passed}/{stat.total} · {stat.passRate}%
+                  </span>
+                </div>
+                {/* Pass-rate bar */}
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-4">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 transition-all duration-700"
+                    style={{ width: `${stat.passRate}%` }}
+                  ></div>
+                </div>
+                {/* Group-scoped stat pills */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} />
+                  <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} />
+                  <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} />
+                  <StatPill color="cyan" value={stat.info} label={t('result.summary.info')} />
+                  <StatPill color="muted" value={stat.total} label={t('result.summary.totalChecks')} />
+                </div>
+                {stat.isTabLocked && (
+                  <button
+                    onClick={handleUnlockClick}
+                    className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 hover:from-cyan-500/20 hover:via-purple-500/20 hover:to-pink-500/20 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-accent-primary">
+                      {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                    </span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Detailed table */}
           <div className="space-y-5 mb-8">

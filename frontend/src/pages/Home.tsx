@@ -54,7 +54,6 @@ export function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [comingSoonKey, setComingSoonKey] = useState<AdvancedKey | null>(null);
 
   const validateUrl = (input: string): boolean => {
     try {
@@ -101,8 +100,10 @@ export function Home() {
       setShowPaymentModal(true);
       return;
     }
-    setComingSoonKey(key);
-    window.setTimeout(() => setComingSoonKey(null), 2500);
+    // Member — jump straight to the per-mode page with the current URL as
+    // the initial input.
+    const initialUrl = url && validateUrl(url) ? url : undefined;
+    navigate(`/advanced/${key}`, { state: initialUrl ? { url: initialUrl } : undefined });
   };
 
   return (
@@ -290,13 +291,6 @@ export function Home() {
                       {t(`home.advanced.cards.${key}.desc`)}
                     </p>
                   </div>
-                  {comingSoonKey === key && (
-                    <div className="absolute inset-0 rounded-2xl bg-card/95 flex items-center justify-center animate-fade-in">
-                      <span className="text-sm font-semibold text-accent-primary">
-                        {t('home.advanced.comingSoon')}
-                      </span>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

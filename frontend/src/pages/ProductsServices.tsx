@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { membershipApi, type Membership } from '../services/membershipApi';
+import { paymentApi, shouldUseStripe } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 
 type ContactFormState = {
@@ -22,8 +23,8 @@ const INITIAL_FORM: ContactFormState = {
 
 function formatPrice(tier: Membership): string {
   if (tier.tier_type === 'saas') {
-    if (tier.price === 0) return '¥0';
-    return `¥${tier.price}`;
+    if (tier.price === 0) return '$0';
+    return `$${tier.price}`;
   }
   // Service tiers: prefer the price_range_usd from features_json if present.
   const range = tier.features_json?.price_range_usd;
@@ -31,7 +32,7 @@ function formatPrice(tier: Membership): string {
 }
 
 export function ProductsServices() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { token, isLoggedIn } = useMembership();
   const [memberships, setMemberships] = useState<Membership[]>([]);
@@ -74,12 +75,21 @@ export function ProductsServices() {
       return;
     }
     if (tier.tier_type === 'saas') {
-      // pro: attempt stub subscribe
       if (!isLoggedIn || !token) {
         navigate('/login', { state: { from: '/products-services' } });
         return;
       }
       try {
+        if (shouldUseStripe(i18n.language)) {
+          const { checkout_url } = await paymentApi.createStripeCheckoutSession(
+            token,
+            tier.slug,
+            i18n.language,
+          );
+          window.location.href = checkout_url;
+          return;
+        }
+        // Domestic fallback — stub until WeChat/Alipay ships.
         const resp = await membershipApi.subscribe(token, tier.slug);
         alert(resp.message);
       } catch (err) {
@@ -119,7 +129,7 @@ export function ProductsServices() {
 
   const ctaLabelFor = (tier: Membership) => {
     if (tier.slug === 'free') return '立即试用';
-    if (tier.tier_type === 'saas') return `立即订阅 ¥${tier.price}${tier.period}`;
+    if (tier.tier_type === 'saas') return `立即订阅 $${tier.price}${tier.period}`;
     return '联系销售';
   };
 
@@ -173,8 +183,8 @@ export function ProductsServices() {
                     <tr className="border-b border-border">
                       <td className="px-4 py-3 text-sm text-secondary"></td>
                       <td className="px-4 py-3 text-sm font-medium">价格</td>
-                      <td className="px-4 py-3 text-center text-sm">¥0/月</td>
-                      <td className="px-4 py-3 text-center text-sm">¥19.9/月</td>
+                      <td className="px-4 py-3 text-center text-sm">$0/月</td>
+                      <td className="px-4 py-3 text-center text-sm">$19.9/月</td>
                       <td className="px-4 py-3 text-center text-sm">$2K–3K</td>
                       <td className="px-4 py-3 text-center text-sm">$4K–7K</td>
                       <td className="px-4 py-3 text-center text-sm">$8K–12K</td>

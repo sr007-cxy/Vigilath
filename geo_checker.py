@@ -2302,8 +2302,12 @@ def run_silent(url):
     return score, scores_copy, url
 
 
-def compare_urls(urls):
-    """Compare GEO readiness across multiple URLs side-by-side."""
+def compare_urls(urls, return_data=False):
+    """Compare GEO readiness across multiple URLs side-by-side.
+
+    When return_data=True, skips CLI formatting and returns a JSON-serialisable
+    dict with per-URL scores, per-category breakdown, and the computed winner.
+    """
     results = []
 
     for url in urls:
@@ -2388,6 +2392,36 @@ def compare_urls(urls):
                 print(f"    {cat:<25} → {scores_per_url[0][0]} ({scores_per_url[0][1]:.0f}% vs {scores_per_url[1][1]:.0f}%)")
 
     print(f"\n{'='*60}\n")
+
+    if return_data:
+        # Build per-category advantage map used by the API consumer.
+        advantages = []
+        for cat in all_categories:
+            per_url = []
+            for r in results:
+                vals = r["categories"].get(cat, {"earned": 0, "max": 0})
+                mx = vals["max"]
+                pct = (vals["earned"] / mx * 100) if mx > 0 else 0
+                per_url.append({"domain": r["domain"], "percent": round(pct, 1)})
+            per_url.sort(key=lambda x: x["percent"], reverse=True)
+            advantages.append({"category": cat, "ranked": per_url})
+
+        sorted_results = sorted(results, key=lambda x: x["score"], reverse=True)
+        winner = None
+        if sorted_results:
+            top = sorted_results[0]
+            lead = 0
+            if len(sorted_results) > 1:
+                lead = top["score"] - sorted_results[1]["score"]
+            winner = {"domain": top["domain"], "score": top["score"], "grade": top["grade"], "lead": lead}
+
+        return {
+            "urls": [r["url"] for r in results],
+            "results": results,
+            "categories": all_categories,
+            "advantages": advantages,
+            "winner": winner,
+        }
 
 
 def parse_log_line(line):
@@ -2602,10 +2636,13 @@ def crawl_check_files(log_files, display_pattern=""):
     print(f"{'='*60}\n")
 
 
-def crawl_test(url):
+def crawl_test(url, return_data=False):
     """Test if a site is accessible to AI crawlers by simulating requests with their user agents.
     Also checks robots.txt rules and external indexes (Common Crawl).
     Useful when you don't have access to server logs.
+
+    When return_data=True, returns a dict describing robots.txt rules, per-bot
+    simulated access results, and the Common Crawl index lookup.
     """
     from urllib.parse import urlparse
 
@@ -2615,6 +2652,10 @@ def crawl_test(url):
         parsed = urlparse(url)
     base_url = f"{parsed.scheme}://{parsed.netloc}"
     domain = parsed.netloc
+
+    robots_bots_data = []
+    waf_bots_data = []
+    common_crawl_data = {"found": False, "count": 0, "samples": [], "status": None, "error": None}
 
     print(f"\n{'='*60}")
     print(f"  AI Crawl Accessibility Test")
@@ -2704,6 +2745,7 @@ def crawl_test(url):
             blocked_bots.append(display_name)
         else:
             print(f"  [{PASS}] {display_name} — allowed")
+        robots_bots_data.append({"bot": display_name, "ua": ua_name, "status": status})
 
     if blocked_bots:
         fix("The following bots are blocked by robots.txt: " + ", ".join(blocked_bots) + "\n"
@@ -2743,26 +2785,35 @@ def crawl_test(url):
 
     waf_blocked = []
     for bot_name, ua_string in test_bots.items():
+        bot_entry = {"bot": bot_name, "status_code": None, "size": 0, "result": "unknown", "error": None}
         try:
             resp = requests.get(base_url + "/", timeout=15, headers={
                 "User-Agent": ua_string
             })
             status = resp.status_code
             size = len(resp.content)
+            bot_entry["status_code"] = status
+            bot_entry["size"] = size
 
             # Detect blocking: 403/406/429, or dramatically smaller response (likely a block page)
             if status in (403, 406, 429, 451):
                 print(f"  [{FAIL}] {bot_name:<18} status={status} — BLOCKED by server/WAF")
                 waf_blocked.append(bot_name)
+                bot_entry["result"] = "blocked"
             elif baseline_len > 0 and size < baseline_len * 0.3:
                 print(f"  [{WARN}] {bot_name:<18} status={status}, size={size:,} bytes — "
                       f"suspiciously small vs baseline ({baseline_len:,})")
                 waf_blocked.append(bot_name)
+                bot_entry["result"] = "suspicious"
             else:
                 print(f"  [{PASS}] {bot_name:<18} status={status}, size={size:,} bytes")
+                bot_entry["result"] = "allowed"
         except requests.RequestException as e:
             print(f"  [{FAIL}] {bot_name:<18} request failed: {e}")
             waf_blocked.append(bot_name)
+            bot_entry["result"] = "error"
+            bot_entry["error"] = str(e)
+        waf_bots_data.append(bot_entry)
 
     if waf_blocked:
         fix("Some AI bots are being blocked by your server, CDN, or WAF.\n"
@@ -2779,13 +2830,17 @@ def crawl_test(url):
     cc_url = f"https://index.commoncrawl.org/CC-MAIN-2025-51-index?url={domain}&output=json"
     try:
         cc_resp = requests.get(cc_url, timeout=30)
+        common_crawl_data["status"] = cc_resp.status_code
         if cc_resp.status_code == 200 and cc_resp.text.strip():
             cc_lines = [l for l in cc_resp.text.strip().splitlines() if l.strip()]
             print(f"  [{PASS}] Found {len(cc_lines)} page(s) in Common Crawl index")
+            common_crawl_data["found"] = True
+            common_crawl_data["count"] = len(cc_lines)
             for line in cc_lines[:5]:
                 try:
                     data = json.loads(line)
                     print(f"         {data.get('url', 'unknown')}")
+                    common_crawl_data["samples"].append(data.get("url", ""))
                 except json.JSONDecodeError:
                     pass
             if len(cc_lines) > 5:
@@ -2796,8 +2851,9 @@ def crawl_test(url):
                 "This is normal for newer/smaller sites. Build inbound links to increase discovery.")
         else:
             print(f"  [{INFO}] Common Crawl index returned status {cc_resp.status_code} — try again later")
-    except requests.RequestException:
+    except requests.RequestException as e:
         print(f"  [{INFO}] Could not reach Common Crawl index — their servers may be slow, try again later")
+        common_crawl_data["error"] = str(e)
 
     # ── Summary ──
     total_issues = len(blocked_bots) + len(waf_blocked)
@@ -2810,9 +2866,32 @@ def crawl_test(url):
               f"{len(waf_blocked)} bot(s) blocked by server/WAF")
     print(f"{'='*60}\n")
 
+    if return_data:
+        return {
+            "url": base_url,
+            "domain": domain,
+            "robots": {
+                "found": bool(robots_text),
+                "bots": robots_bots_data,
+                "blocked": blocked_bots,
+            },
+            "waf": {
+                "baseline_status": baseline_status,
+                "baseline_size": baseline_len,
+                "bots": waf_bots_data,
+                "blocked": waf_blocked,
+            },
+            "common_crawl": common_crawl_data,
+            "total_issues": total_issues,
+        }
 
-def authority_audit(url):
-    """Audit off-page authority signals: reviews, awards, Google authority, authoritative mentions."""
+
+def authority_audit(url, return_data=False):
+    """Audit off-page authority signals: reviews, awards, Google authority, authoritative mentions.
+
+    When return_data=True, returns a dict with section-by-section signals and a
+    composite authority score + grade.
+    """
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
@@ -3260,12 +3339,47 @@ def authority_audit(url):
     print(f"    Authoritative Mentions: {'checked' :>10}")
     print(f"{'='*60}\n")
 
+    if return_data:
+        return {
+            "url": base_url,
+            "domain": domain,
+            "brand": brand,
+            "score": authority_score,
+            "max_score": max_score,
+            "percent": round(pct, 1),
+            "grade": grade,
+            "reviews": {
+                "platforms": list(dict.fromkeys(found_platforms)),
+                "has_schema": has_review_schema,
+            },
+            "awards": {
+                "keywords": list(set(found_awards)),
+                "has_schema": found_award_schema,
+                "badges": badge_images[:10],
+                "signal_count": award_signals,
+            },
+            "google": {
+                "indexed_pages": google_indexed,
+                "kg_schema_fields": kg_signals,
+                "wikipedia_or_wikidata": wiki_found,
+                "score": google_score,
+            },
+            "mentions": {
+                "platforms": found_mentions,
+            },
+        }
+
 
 # ---------------------------------------------------------------------------
 # AI Citation Check (PAID feature — requires PERPLEXITY_API_KEY)
 # ---------------------------------------------------------------------------
-def citation_check(url):
-    """Check if a site is being cited by AI engines using the Perplexity API."""
+def citation_check(url, return_data=False):
+    """Check if a site is being cited by AI engines using the Perplexity API.
+
+    When return_data=True, returns a dict with per-query citation results +
+    overall citation rate. Raises RuntimeError on missing/invalid API key
+    instead of sys.exit.
+    """
     import os
 
     parsed = urlparse(url)
@@ -3278,6 +3392,8 @@ def citation_check(url):
 
     api_key = os.environ.get("PERPLEXITY_API_KEY", "").strip()
     if not api_key:
+        if return_data:
+            raise RuntimeError("PERPLEXITY_API_KEY not set")
         print(f"\n  [{FAIL}] PERPLEXITY_API_KEY environment variable not set.")
         print(f"  This is a paid feature. Set your API key to use it:")
         print(f"    export PERPLEXITY_API_KEY='pplx-...'")
@@ -3335,6 +3451,8 @@ def citation_check(url):
         try:
             r = requests.post(api_url, json=payload, headers=headers, timeout=30)
             if r.status_code == 401:
+                if return_data:
+                    raise RuntimeError("Invalid PERPLEXITY_API_KEY")
                 print(f"  [{FAIL}] Invalid API key. Check your PERPLEXITY_API_KEY.")
                 sys.exit(1)
             elif r.status_code == 429:
@@ -3456,6 +3574,31 @@ def citation_check(url):
     print(f"\n  Note: Results reflect Perplexity AI's current knowledge. Other AI engines")
     print(f"  (ChatGPT, Gemini, Claude) may differ. Run periodically to track changes.")
     print(f"{'='*60}\n")
+
+    if return_data:
+        if citation_rate >= 80:
+            grade_letter = "A"
+        elif citation_rate >= 60:
+            grade_letter = "B"
+        elif citation_rate >= 40:
+            grade_letter = "C"
+        elif citation_rate >= 20:
+            grade_letter = "D"
+        else:
+            grade_letter = "F"
+        return {
+            "url": base_url,
+            "domain": domain,
+            "brand": brand,
+            "engine": "Perplexity",
+            "total_queries": total_queries,
+            "valid_queries": valid_count,
+            "cited_queries": cited_count,
+            "citation_rate": round(citation_rate, 1),
+            "total_citations": total_citations,
+            "grade": grade_letter,
+            "queries": results,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -3666,8 +3809,13 @@ def _classify_framing(answer, brand):
     return "mentioned"
 
 
-def ai_visibility(url, custom_queries=None):
-    """Comprehensive AI Visibility Audit — checks if AI would recommend the brand."""
+def ai_visibility(url, custom_queries=None, return_data=False):
+    """Comprehensive AI Visibility Audit — checks if AI would recommend the brand.
+
+    When return_data=True, returns a dict with scorecard + per-engine visibility
+    rates, top competitors, framings, and content gaps. Raises RuntimeError on
+    missing API keys instead of sys.exit.
+    """
     import os
 
     parsed = urlparse(url)
@@ -3692,6 +3840,8 @@ def ai_visibility(url, custom_queries=None):
         engines["Claude"] = ("anthropic", anthropic_key)
 
     if not engines:
+        if return_data:
+            raise RuntimeError("No AI API keys configured (PERPLEXITY_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY)")
         print(f"\n  [{FAIL}] No AI API keys found. Set at least one:")
         print(f"    export PERPLEXITY_API_KEY='pplx-...'   (recommended)")
         print(f"    export OPENAI_API_KEY='sk-...'")
@@ -4175,6 +4325,32 @@ def ai_visibility(url, custom_queries=None):
     print(f"  Tip: Use --queries to test your specific category prompts.")
     print(f"{'='*60}\n")
 
+    if return_data:
+        top_competitors = sorted(global_competitors.items(), key=lambda x: -x[1])[:10]
+        return {
+            "url": base_url,
+            "domain": domain,
+            "brand": brand,
+            "engines": list(engines.keys()),
+            "scores": {
+                "visibility": visibility_score,
+                "entity": entity_score,
+                "competitor": comp_score,
+                "stability": stability_score,
+                "content_gap": gap_score,
+            },
+            "total_score": total_score,
+            "max_score": total_max,
+            "grade": grade.split(" — ")[0] if " — " in grade else grade,
+            "grade_label": grade,
+            "per_engine_rates": {k: round(v, 1) for k, v in per_engine_rates.items()},
+            "top_competitors": [{"domain": d, "mentions": c} for d, c in top_competitors],
+            "framings": framing_counts,
+            "content_gaps": unique_gaps[:20],
+            "query_count": len(all_queries),
+            "stability_runs": STABILITY_RUNS,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Entity GEO Audit  (--entity)
@@ -4350,12 +4526,19 @@ def _check_cross_platform_footprint(entity_name, entity_type):
     return min(20, score), {"found": found, "not_found": not_found}
 
 
-def entity_audit(entity_name, entity_type="brand"):
-    """Audit GEO readiness of a brand, product, or person via AI engine queries."""
+def entity_audit(entity_name, entity_type="brand", return_data=False):
+    """Audit GEO readiness of a brand, product, or person via AI engine queries.
+
+    When return_data=True, returns a dict with full scorecard, key findings,
+    and content gaps. Raises RuntimeError on missing/invalid API key instead
+    of sys.exit.
+    """
     import os
 
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
+        if return_data:
+            raise RuntimeError("OPENAI_API_KEY not set")
         print(f"\n  [{FAIL}] OPENAI_API_KEY environment variable not set.")
         print(f"  This feature requires an OpenAI API key.")
         print(f"  Set it with: export OPENAI_API_KEY='sk-...'")
@@ -4363,6 +4546,8 @@ def entity_audit(entity_name, entity_type="brand"):
 
     entity_type = entity_type.lower()
     if entity_type not in ("brand", "product", "person"):
+        if return_data:
+            raise ValueError("entity_type must be one of: brand, product, person")
         print(f"\n  [{FAIL}] --entity-type must be one of: brand, product, person")
         sys.exit(1)
 
@@ -4466,6 +4651,8 @@ def entity_audit(entity_name, entity_type="brand"):
             for run in range(STABILITY_RUNS):
                 answer, citations, error = _query_openai(q, api_key)
                 if error == "invalid_key":
+                    if return_data:
+                        raise RuntimeError("Invalid OPENAI_API_KEY")
                     print(f"  [{FAIL}] Invalid OpenAI API key. Check your OPENAI_API_KEY.")
                     sys.exit(1)
                 if error:
@@ -4946,6 +5133,33 @@ def entity_audit(entity_name, entity_type="brand"):
         print(f"    [{PASS}] No content gaps detected — entity appears across all tested queries")
 
     print(f"\n{'='*60}\n")
+
+    if return_data:
+        return {
+            "entity": entity_name,
+            "entity_type": entity_type,
+            "scores": scores,
+            "total_score": total_score,
+            "max_score": max_score,
+            "percent": pct,
+            "grade": grade,
+            "knowledge_graph": {
+                "wikipedia": kg_details["wikipedia"],
+                "wikidata": kg_details["wikidata"],
+                "wikidata_id": kg_details["wikidata_id"],
+                "google_kg": kg_details["google_kg"],
+                "platforms_found": kg_details["platforms_found"],
+            },
+            "platforms": {
+                "found": plat_details["found"],
+                "not_found": plat_details["not_found"],
+            },
+            "sentiment": sentiment_label,
+            "best_framing": best_framing_label,
+            "content_gaps": content_gaps,
+            "recognition_rate": round(recognition_score / 20 * 100, 1),
+            "stability_runs": STABILITY_RUNS,
+        }
 
 
 def main():

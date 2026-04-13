@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { membershipApi } from '../services/membershipApi';
+import { paymentApi, shouldUseStripe } from '../services/paymentApi';
 
 interface Membership {
   id: number;
+  slug: string;
   name: string;
   price: number;
   period: string;
   description: string;
   popular: boolean;
+  tier_type: 'saas' | 'service';
   features: string[];
   not_included: string[];
   created_at: string;
@@ -23,7 +26,7 @@ interface PaymentModalProps {
 }
 
 export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,8 +37,10 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
     (async () => {
       try {
         const data = await membershipApi.getMemberships();
-        const paid = data.filter((m) => m.price > 0);
-        setMemberships(paid);
+        const paid = data.filter(
+          (m) => m.price > 0 && (m as Membership).tier_type === 'saas',
+        );
+        setMemberships(paid as Membership[]);
         const popular = paid.find((m) => m.popular);
         setSelectedId((popular ?? paid[0])?.id ?? null);
       } catch (err) {
@@ -48,9 +53,22 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
 
   const handlePay = async () => {
     if (selectedId == null) return;
+    const tier = memberships.find((m) => m.id === selectedId);
+    if (!tier) return;
     setIsPaying(true);
     setError('');
     try {
+      if (shouldUseStripe(i18n.language)) {
+        // Overseas / English locale → redirect to Stripe Checkout.
+        const { checkout_url } = await paymentApi.createStripeCheckoutSession(
+          token,
+          tier.slug,
+          i18n.language,
+        );
+        window.location.href = checkout_url;
+        return; // navigation will unmount the modal
+      }
+      // Domestic fallback — existing behavior (stub upgrade until WeChat/Alipay ship).
       await membershipApi.upgradeMembership(token, selectedId);
       onSuccess();
     } catch (err) {
@@ -120,7 +138,7 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
                       )}
                       <h3 className="font-bold text-primary text-lg mb-1">{tier.name}</h3>
                       <div className="mb-3">
-                        <span className="text-2xl font-bold text-primary">¥{tier.price}</span>
+                        <span className="text-2xl font-bold text-primary">${tier.price}</span>
                         <span className="text-sm text-secondary">{tier.period}</span>
                       </div>
                       <ul className="space-y-1.5">

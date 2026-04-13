@@ -148,7 +148,7 @@ export function Membership() {
                   <span className="text-2xl font-bold text-gray-900">{membershipDetails.name}</span>
                   <span className="text-sm text-gray-500">
                     {membershipDetails.tier_type === 'saas'
-                      ? `¥${membershipDetails.price}${membershipDetails.period}`
+                      ? `$${membershipDetails.price}${membershipDetails.period}`
                       : '人工服务'}
                   </span>
                 </div>

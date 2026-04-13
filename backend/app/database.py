@@ -15,9 +15,17 @@ class Settings(BaseSettings):
     SMTP_USER: str = "your-email@gmail.com"
     SMTP_PASSWORD: str = "your-app-password"
     SENDER_EMAIL: str = "your-email@gmail.com"
-    
+
+    # Stripe (used for overseas / English-locale credit card subscriptions)
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_URL: str = "http://localhost:5173/checkout/success"
+    STRIPE_CANCEL_URL: str = "http://localhost:5173/checkout/cancel"
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
 

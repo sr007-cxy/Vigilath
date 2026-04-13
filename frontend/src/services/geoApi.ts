@@ -1,5 +1,10 @@
 import axios from 'axios';
 import type { GeoTestResult } from '../types/geo';
+import type {
+  AdvancedMode,
+  AdvancedRequestBody,
+  AdvancedResponseOf,
+} from '../types/advanced';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -10,6 +15,17 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Route-path segment for each advanced mode. Keep in sync with backend
+// backend/app/api/advanced.py paths.
+const ADVANCED_PATH: Record<AdvancedMode, string> = {
+  compare: '/check/advanced/compare',
+  crawlTest: '/check/advanced/crawl-test',
+  authority: '/check/advanced/authority',
+  citation: '/check/advanced/citation',
+  visibility: '/check/advanced/visibility',
+  entity: '/check/advanced/entity',
+};
 
 /**
  * Pick the check endpoint + headers based on whether the caller is logged in.
@@ -45,6 +61,28 @@ export const geoApi = {
         throw new Error(error.response?.data?.detail || error.response?.data?.message || 'Failed to run GEO check');
       }
       throw new Error('Failed to run GEO check');
+    }
+  },
+
+  async runAdvancedCheck<M extends AdvancedMode>(
+    mode: M,
+    body: AdvancedRequestBody<M>,
+  ): Promise<AdvancedResponseOf<M>> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      const response = await apiClient.post(ADVANCED_PATH[mode], body, { headers });
+      return response.data as AdvancedResponseOf<M>;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.error?.message ||
+            error.response?.data?.detail ||
+            error.response?.data?.message ||
+            'Failed to run advanced check',
+        );
+      }
+      throw new Error('Failed to run advanced check');
     }
   },
 

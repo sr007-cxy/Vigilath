@@ -300,10 +300,12 @@ if (!i18n.isInitialized) {
               "title": "Category Progress"
             },
             "categories": {
-              "infraSecurity": "Infrastructure & Security",
-              "aiCrawl": "AI Crawler & Standards",
-              "metadataStructured": "Metadata & Structured Data",
-              "contentReadability": "Content Readability & Quality",
+              "infraProtocols": "Protocols & Crawlability",
+              "pageBasics": "Page Basics & Mobile",
+              "aiProtocols": "AI-Specific Protocols",
+              "structuredSemantic": "Structured & Semantic Data",
+              "contentQuality": "Content Quality & Readability",
+              "techRobustness": "Technical Robustness & Media",
               "authorityExternal": "Authority & External Signals",
               "other": "Other"
             },
@@ -1347,10 +1349,12 @@ if (!i18n.isInitialized) {
               "title": "分类进度"
             },
             "categories": {
-              "infraSecurity": "基础设施与安全",
-              "aiCrawl": "AI 爬虫与抓取规范",
-              "metadataStructured": "元数据与结构化",
-              "contentReadability": "内容可读性与质量",
+              "infraProtocols": "基础协议与可抓取性",
+              "pageBasics": "页面基础与移动体验",
+              "aiProtocols": "AI 专属协议与抓取",
+              "structuredSemantic": "结构化与语义",
+              "contentQuality": "内容质量与可读性",
+              "techRobustness": "技术健壮性与媒体",
               "authorityExternal": "权威与外部信号",
               "other": "其它"
             },

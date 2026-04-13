@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from app.api import geo, auth, membership, oauth, contact
-from app.utils.error_handler import global_exception_handler
+from jose import JWTError
+from app.api import geo, auth, membership, oauth, contact, payment, advanced
+from app.utils.error_handler import global_exception_handler, AppException
 
 app = FastAPI(
     title="GEO Readiness Checker API",
@@ -33,9 +34,16 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# 添加全局异常处理器
-app.add_exception_handler(Exception, global_exception_handler)
+# 全局异常处理器。注意:在 Starlette 里 `Exception` 基类会被 ServerErrorMiddleware
+# 拦截并在调用 handler 之后仍然 `raise exc`,导致 uvicorn 把 AppException(例如 429
+# 配额用尽、402 会员门槛)当作"未捕获异常"记录为 ERROR 栈。业务异常的正确归宿
+# 是 ExceptionMiddleware —— 这一层只会处理**显式注册**的异常类,并且成功处理后
+# 不会 re-raise。所以下面每个业务异常都要单独注册。
+app.add_exception_handler(AppException, global_exception_handler)
 app.add_exception_handler(RequestValidationError, global_exception_handler)
+app.add_exception_handler(JWTError, global_exception_handler)
+# `Exception` 基类作为最后兜底,只有真正没预料到的错误才会走到这里。
+app.add_exception_handler(Exception, global_exception_handler)
 
 # Include API routes
 app.include_router(geo.router, prefix="/api", tags=["geo"])
@@ -43,6 +51,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(membership.router, prefix="/api", tags=["membership"])
 app.include_router(oauth.router, prefix="/api/oauth", tags=["oauth"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
+app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
+app.include_router(advanced.router, prefix="/api", tags=["advanced"])
 
 @app.get("/")
 async def root():

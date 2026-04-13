@@ -1,0 +1,265 @@
+"""Pydantic request + response models for the 6 advanced GEO check modes.
+
+Each mode gets its own request + response type. Responses are intentionally
+flat so the frontend can render them with minimal transformation.
+"""
+
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+
+
+# ---------------------------------------------------------------------------
+# Requests
+# ---------------------------------------------------------------------------
+
+class CompareRequest(BaseModel):
+    """--compare: 2+ URLs, returns side-by-side category breakdown."""
+    urls: List[str] = Field(..., min_length=2, max_length=5)
+
+
+class CrawlTestRequest(BaseModel):
+    """--crawl-test: one URL, simulates AI bot access + Common Crawl lookup."""
+    url: str
+
+
+class AuthorityAuditRequest(BaseModel):
+    """--authority-audit: one URL, off-page authority signals."""
+    url: str
+
+
+class CitationCheckRequest(BaseModel):
+    """--citation-check: one URL, queries Perplexity for brand citations."""
+    url: str
+
+
+class AiVisibilityRequest(BaseModel):
+    """--ai-visibility: one URL, optional custom queries for the audit."""
+    url: str
+    custom_queries: Optional[List[str]] = None
+
+
+class EntityAuditRequest(BaseModel):
+    """--entity: entity name + type (brand|product|person)."""
+    entity_name: str = Field(..., min_length=1)
+    entity_type: str = Field(default="brand")
+
+
+# ---------------------------------------------------------------------------
+# Responses
+# ---------------------------------------------------------------------------
+
+class CompareUrlResult(BaseModel):
+    url: str
+    domain: str
+    score: int
+    grade: str
+    categories: Dict[str, Any]
+
+
+class CompareAdvantage(BaseModel):
+    category: str
+    ranked: List[Dict[str, Any]]
+
+
+class CompareWinner(BaseModel):
+    domain: str
+    score: int
+    grade: str
+    lead: int
+
+
+class CompareResponse(BaseModel):
+    urls: List[str]
+    results: List[CompareUrlResult]
+    categories: List[str]
+    advantages: List[CompareAdvantage]
+    winner: Optional[CompareWinner] = None
+
+
+class CrawlTestRobotEntry(BaseModel):
+    bot: str
+    ua: str
+    status: str  # allowed | blocked
+
+
+class CrawlTestWafEntry(BaseModel):
+    bot: str
+    status_code: Optional[int] = None
+    size: int = 0
+    result: str  # allowed | blocked | suspicious | error | unknown
+    error: Optional[str] = None
+
+
+class CrawlTestRobotsBlock(BaseModel):
+    found: bool
+    bots: List[CrawlTestRobotEntry]
+    blocked: List[str]
+
+
+class CrawlTestWafBlock(BaseModel):
+    baseline_status: Optional[int] = None
+    baseline_size: int = 0
+    bots: List[CrawlTestWafEntry]
+    blocked: List[str]
+
+
+class CrawlTestCommonCrawl(BaseModel):
+    found: bool = False
+    count: int = 0
+    samples: List[str] = Field(default_factory=list)
+    status: Optional[int] = None
+    error: Optional[str] = None
+
+
+class CrawlTestResponse(BaseModel):
+    url: str
+    domain: str
+    robots: CrawlTestRobotsBlock
+    waf: CrawlTestWafBlock
+    common_crawl: CrawlTestCommonCrawl
+    total_issues: int
+
+
+class AuthorityReviewsBlock(BaseModel):
+    platforms: List[str]
+    has_schema: bool
+
+
+class AuthorityAwardsBlock(BaseModel):
+    keywords: List[str]
+    has_schema: bool
+    badges: List[str]
+    signal_count: int
+
+
+class AuthorityGoogleBlock(BaseModel):
+    indexed_pages: Optional[int] = None
+    kg_schema_fields: int
+    wikipedia_or_wikidata: bool
+    score: int
+
+
+class AuthorityMentionsBlock(BaseModel):
+    platforms: List[str]
+
+
+class AuthorityAuditResponse(BaseModel):
+    url: str
+    domain: str
+    brand: str
+    score: int
+    max_score: int
+    percent: float
+    grade: str
+    reviews: AuthorityReviewsBlock
+    awards: AuthorityAwardsBlock
+    google: AuthorityGoogleBlock
+    mentions: AuthorityMentionsBlock
+
+
+class CitationQueryResult(BaseModel):
+    query: str
+    cited: bool
+    citations: List[str] = Field(default_factory=list)
+    mentioned: bool = False
+    total_sources: int = 0
+    error: bool = False
+
+
+class CitationCheckResponse(BaseModel):
+    url: str
+    domain: str
+    brand: str
+    engine: str
+    total_queries: int
+    valid_queries: int
+    cited_queries: int
+    citation_rate: float
+    total_citations: int
+    grade: str
+    queries: List[CitationQueryResult]
+
+
+class AiVisibilityScores(BaseModel):
+    visibility: int
+    entity: int
+    competitor: int
+    stability: int
+    content_gap: int
+
+
+class AiVisibilityCompetitor(BaseModel):
+    domain: str
+    mentions: int
+
+
+class AiVisibilityResponse(BaseModel):
+    url: str
+    domain: str
+    brand: str
+    engines: List[str]
+    scores: AiVisibilityScores
+    total_score: int
+    max_score: int
+    grade: str
+    grade_label: str
+    per_engine_rates: Dict[str, float]
+    top_competitors: List[AiVisibilityCompetitor]
+    framings: Dict[str, int]
+    content_gaps: List[str]
+    query_count: int
+    stability_runs: int
+
+
+class EntityKnowledgeGraph(BaseModel):
+    wikipedia: bool
+    wikidata: bool
+    wikidata_id: Optional[str] = None
+    google_kg: bool
+    platforms_found: List[str]
+
+
+class EntityPlatforms(BaseModel):
+    found: List[str]
+    not_found: List[str]
+
+
+class EntityAuditResponse(BaseModel):
+    entity: str
+    entity_type: str
+    scores: Dict[str, int]
+    total_score: int
+    max_score: int
+    percent: int
+    grade: str
+    knowledge_graph: EntityKnowledgeGraph
+    platforms: EntityPlatforms
+    sentiment: str
+    best_framing: str
+    content_gaps: List[str]
+    recognition_rate: float
+    stability_runs: int
+
+
+# ---------------------------------------------------------------------------
+# Tier gating — mirrors frontend ADVANCED_MODES in Result.tsx. Keep in sync.
+# ---------------------------------------------------------------------------
+
+TIER_RANK: Dict[str, int] = {
+    "free": 0,
+    "pro": 1,
+    "starter": 2,
+    "growth": 3,
+    "scale": 4,
+}
+
+# Each advanced mode's minimum paid tier. These match Result.tsx ADVANCED_MODES
+# so frontend and backend agree on what's locked.
+MODE_MIN_TIER: Dict[str, str] = {
+    "compare": "pro",
+    "crawlTest": "pro",
+    "authority": "pro",
+    "citation": "pro",
+    "visibility": "starter",
+    "entity": "starter",
+}

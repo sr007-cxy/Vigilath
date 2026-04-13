@@ -37,9 +37,15 @@ class AppException(Exception):
 
 # 全局异常处理
 async def global_exception_handler(request: Request, exc: Exception):
-    # 记录异常信息
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    
+    # 日志级别按异常类型区分:
+    # - AppException / RequestValidationError / JWTError 是预期的业务/校验失败,
+    #   info 记录即可,避免每次 402/429/401 都把整栈刷进日志引起误判。
+    # - 其他一切都是真正的未知异常,err + exc_info 留给运维排障。
+    if isinstance(exc, (AppException, RequestValidationError, JWTError)):
+        logger.info(f"Handled business exception: {type(exc).__name__}: {exc}")
+    else:
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
     # 处理不同类型的异常
     if isinstance(exc, AppException):
         return JSONResponse(
