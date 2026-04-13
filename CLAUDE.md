@@ -9,15 +9,23 @@ Python CLI tool that checks a website's GEO (Generative Engine Optimization) rea
 - **Dependencies**: `requests`, `beautifulsoup4` only
 
 ## CLI Modes
+
+### Free (no API key required)
+All free modes work by fetching the target site and querying public APIs (Wikipedia, npm registry, GitHub search, etc.).
+
 - Default: 23-category site analysis with 0-100 AI Visibility Score
 - `--fix`: Show actionable fix recommendations
 - `--compare`: Side-by-side multi-site comparison
 - `--crawl-check`: Server log analysis for AI crawler activity
 - `--crawl-test`: AI crawler accessibility test (no logs needed)
-- `--authority-audit`: Off-page authority signals (free)
-- `--citation-check`: AI citation check via Perplexity (paid, needs PERPLEXITY_API_KEY)
-- `--ai-visibility`: Full multi-engine AI visibility audit (paid, needs any AI API key)
-- `--entity`: Entity GEO audit for brand/product/person (paid, needs OPENAI_API_KEY)
+- `--authority-audit`: Off-page authority signals (GitHub, npm, PyPI, Wikipedia, etc.)
+
+### Paid (require AI API keys)
+All paid modes call real AI engines to measure what they actually say about the target.
+
+- `--citation-check`: AI citation check via Perplexity. Requires `PERPLEXITY_API_KEY`.
+- `--ai-visibility`: Full multi-engine AI visibility audit. Requires at least one of `PERPLEXITY_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
+- `--entity`: Entity GEO audit for brand/product/person (8 dimensions, 2 of which are free Wikipedia/Wikidata/platform checks). Requires `OPENAI_API_KEY`.
 
 ## Key Patterns
 - `track_score(category, earned, max_points)` accumulates per-category scores
