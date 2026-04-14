@@ -31,7 +31,7 @@ class AuthApi {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = 'http://localhost:8070/api/auth';
+    this.baseUrl = '/api/auth';
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
