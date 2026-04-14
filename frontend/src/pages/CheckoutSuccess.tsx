@@ -19,12 +19,12 @@ export function CheckoutSuccess() {
     const token = localStorage.getItem('token');
     if (!sessionId) {
       setState('error');
-      setError('Missing session_id');
+      setError(t('checkout.missingSession', 'Missing session_id'));
       return;
     }
     if (!token) {
       setState('error');
-      setError('You must be logged in');
+      setError(t('checkout.mustLogin', 'You must be logged in'));
       return;
     }
     let cancelled = false;
@@ -41,7 +41,11 @@ export function CheckoutSuccess() {
         }
         if (resp.status === 'expired' || resp.status === 'failed') {
           setState('error');
-          setError(`Payment ${resp.status}`);
+          setError(
+            resp.status === 'expired'
+              ? t('checkout.expired', 'Payment expired')
+              : t('checkout.failed', 'Payment failed'),
+          );
           return;
         }
         // Still pending — Stripe webhook may not have arrived yet.
@@ -54,7 +58,11 @@ export function CheckoutSuccess() {
       } catch (err) {
         if (cancelled) return;
         setState('error');
-        setError(err instanceof Error ? err.message : 'Failed to verify payment');
+        setError(
+          err instanceof Error
+            ? err.message
+            : t('checkout.verifyFailed', 'Failed to verify payment'),
+        );
       }
     };
 
@@ -62,7 +70,7 @@ export function CheckoutSuccess() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6">
@@ -158,7 +166,8 @@ export function CheckoutSuccess() {
 
         {status?.payment_status && state !== 'loading' && (
           <p className="mt-6 text-xs text-muted">
-            Stripe status: <span className="font-mono">{status.payment_status}</span>
+            {t('checkout.stripeStatus', 'Stripe status')}:{' '}
+            <span className="font-mono">{status.payment_status}</span>
           </p>
         )}
       </div>

@@ -392,7 +392,7 @@ export function Result() {
               className="flex-1 min-w-0 lg:max-w-xl w-full"
             >
               <div className="flex items-center bg-card border border-[#3f4143] rounded-full p-1 shadow-glow">
-                {isLoggedIn && (
+                {/* {isLoggedIn && (
                   <div className="relative shrink-0">
                     <select
                       value={rerunMode}
@@ -423,7 +423,7 @@ export function Result() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
-                )}
+                )} */}
                 <input
                   type="text"
                   value={rerunUrl}

@@ -441,6 +441,26 @@ if (!i18n.isInitialized) {
               "loading": "Resetting..."
             }
           },
+          "checkoutPending": {
+            "title": "Pending Order",
+            "subtitle": "Please confirm your order details before payment",
+            "loading": "Loading order...",
+            "missingSlug": "Missing plan identifier",
+            "notFound": "Plan not found",
+            "notSubscribable": "This plan is not directly subscribable. Please contact sales.",
+            "domesticPending": "WeChat / Alipay payment is coming soon. Please contact sales to complete your subscription.",
+            "payError": "Failed to start payment",
+            "backToPlans": "Back to plans",
+            "planLabel": "Subscription Plan",
+            "popular": "Popular",
+            "totalLabel": "Total Amount",
+            "methodLabel": "Payment Method",
+            "methodStripe": "You will be redirected to Stripe to complete the payment securely.",
+            "methodDomestic": "Click \"Pay Now\" to create your order. WeChat / Alipay payment is coming soon.",
+            "submitting": "Redirecting to payment...",
+            "payNow": "Pay Now",
+            "cancel": "Cancel"
+          },
           "aboutUs": {
             "title": "About Us",
             "description": "A technology service provider specializing in GEO (Generative Engine Optimization), helping websites perform better in the generative AI era.",
@@ -1705,6 +1725,26 @@ if (!i18n.isInitialized) {
               "loading": "重置中..."
             }
           },
+          "checkoutPending": {
+            "title": "待支付订单",
+            "subtitle": "请确认订单信息后完成支付",
+            "loading": "加载订单中…",
+            "missingSlug": "缺少套餐标识",
+            "notFound": "未找到对应套餐",
+            "notSubscribable": "该套餐不支持自助订阅，请联系销售。",
+            "backToPlans": "返回套餐列表",
+            "planLabel": "订阅套餐",
+            "popular": "热门",
+            "totalLabel": "应付金额",
+            "methodLabel": "支付方式",
+            "methodStripe": "点击后将跳转到 Stripe 安全完成支付。",
+            "methodDomestic": "点击\"立即支付\"后将为您创建订单，微信 / 支付宝渠道即将上线。",
+            "domesticPending": "微信 / 支付宝支付即将上线，请联系销售完成订阅。",
+            "submitting": "正在跳转支付…",
+            "payNow": "立即支付",
+            "cancel": "取消",
+            "payError": "支付发起失败"
+          },
           "aboutUs": {
             "title": "关于我们",
             "description": "专注于GEO（生成式引擎优化）的技术服务提供商，帮助网站在生成式AI时代获得更好的表现。",
@@ -2112,7 +2152,7 @@ if (!i18n.isInitialized) {
         }
       }
     },
-    lng: 'zh',
+    lng: localStorage.getItem('i18nextLng') || 'zh',
     fallbackLng: 'en',
     defaultNS: 'translation',
     interpolation: {

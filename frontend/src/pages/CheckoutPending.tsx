@@ -23,6 +23,26 @@ export function CheckoutPending() {
   const slug = params.get('slug') ?? '';
   const useStripe = shouldUseStripe(i18n.language);
 
+  const tierText = (tier: Membership) => {
+    const slugToCardKey: Record<string, string> = { pro: 'detector' };
+    const cardKey = slugToCardKey[tier.slug] ?? tier.slug;
+    const base = `productsServices.cards.${cardKey}`;
+    const name = i18n.exists(`${base}.name`) ? (t(`${base}.name`) as string) : tier.name;
+    const description = i18n.exists(`${base}.description`)
+      ? (t(`${base}.description`) as string)
+      : tier.description;
+    const period = i18n.exists(`${base}.period`)
+      ? (t(`${base}.period`) as string)
+      : tier.period;
+    const translatedFeatures = i18n.exists(`${base}.features`)
+      ? (t(`${base}.features`, { returnObjects: true }) as unknown)
+      : null;
+    const features = Array.isArray(translatedFeatures)
+      ? (translatedFeatures as string[])
+      : tier.features;
+    return { name, description, period, features };
+  };
+
   const [tier, setTier] = useState<Membership | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +93,8 @@ export function CheckoutPending() {
     };
   }, [slug, isLoggedIn, navigate, t]);
 
-  const features = useMemo(() => tier?.features.slice(0, 6) ?? [], [tier]);
+  const tierInfo = useMemo(() => tier ? tierText(tier) : null, [tier, i18n.language]);
+  const features = useMemo(() => tierInfo?.features.slice(0, 6) ?? [], [tierInfo]);
 
   const handlePay = async () => {
     if (!tier || !token || submitting) return;
@@ -98,7 +119,11 @@ export function CheckoutPending() {
           ),
       );
     } catch (err) {
-      setPayError(err instanceof Error ? err.message : '支付发起失败');
+      setPayError(
+        err instanceof Error
+          ? err.message
+          : t('checkoutPending.payError', 'Failed to start payment'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -160,7 +185,7 @@ export function CheckoutPending() {
                   <div className="text-sm text-secondary">
                     {t('checkoutPending.planLabel', '订阅套餐')}
                   </div>
-                  <div className="text-lg font-bold text-primary mt-0.5">{tier.name}</div>
+                  <div className="text-lg font-bold text-primary mt-0.5">{tierInfo?.name || tier.name}</div>
                 </div>
                 {tier.popular && (
                   <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary text-[10px] font-semibold uppercase tracking-wider">
@@ -168,7 +193,7 @@ export function CheckoutPending() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-secondary leading-relaxed mb-4">{tier.description}</p>
+              <p className="text-xs text-secondary leading-relaxed mb-4">{tierInfo?.description || tier.description}</p>
               {features.length > 0 && (
                 <ul className="space-y-2 mb-4">
                   {features.map((f, i) => (
@@ -197,7 +222,7 @@ export function CheckoutPending() {
                 </span>
                 <span className="text-2xl font-bold text-accent-primary">
                   {formatPrice(tier, useStripe)}
-                  <span className="text-sm text-secondary font-medium ml-1">{tier.period}</span>
+                  <span className="text-sm text-secondary font-medium ml-1">{tierInfo?.period || tier.period}</span>
                 </span>
               </div>
             </div>

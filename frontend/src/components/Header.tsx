@@ -225,7 +225,7 @@ export function Header() {
                 </svg>
                 {t('nav.login')}
               </button>
-              <button
+              {/* <button
                 onClick={() => toggleAuthModal('register')}
                 className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg text-sm font-semibold text-white transition-all duration-300 hover:-translate-y-0.5"
                 style={{
@@ -238,7 +238,7 @@ export function Header() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
                 {t('nav.register')}
-              </button>
+              </button> */}
             </div>
           )}
         </div>

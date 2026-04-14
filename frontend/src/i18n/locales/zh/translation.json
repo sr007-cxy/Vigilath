@@ -664,5 +664,46 @@
         "button": "发送消息"
       }
     }
+  },
+  "checkoutPending": {
+    "title": "待支付订单",
+    "subtitle": "请确认订单信息后完成支付",
+    "loading": "加载订单中…",
+    "missingSlug": "缺少套餐标识",
+    "notFound": "未找到对应套餐",
+    "notSubscribable": "该套餐不支持自助订阅，请联系销售。",
+    "backToPlans": "返回套餐列表",
+    "planLabel": "订阅套餐",
+    "popular": "热门",
+    "totalLabel": "应付金额",
+    "methodLabel": "支付方式",
+    "methodStripe": "点击后将跳转到 Stripe 安全完成支付。",
+    "methodDomestic": "点击\"立即支付\"后将为您创建订单，微信 / 支付宝渠道即将上线。",
+    "domesticPending": "微信 / 支付宝支付即将上线，请联系销售完成订阅。",
+    "submitting": "正在跳转支付…",
+    "payNow": "立即支付",
+    "cancel": "取消",
+    "payError": "支付发起失败"
+  },
+  "checkout": {
+    "verifying": "正在确认您的支付…",
+    "verifyingHint": "通常只需几秒钟。",
+    "successTitle": "订阅已激活",
+    "successBody": "感谢您的订阅！会员权益已生效，您现在可以使用完整的 GEO 检测功能。",
+    "viewMembership": "查看会员",
+    "runCheck": "立即检测",
+    "pendingTitle": "已收到支付，正在激活…",
+    "pendingBody": "Stripe 仍在确认本次支付，会员权益预计 1 分钟内生效。您可以刷新本页面或前往会员中心查看。",
+    "errorTitle": "支付校验失败",
+    "missingSession": "缺少 session_id 参数",
+    "mustLogin": "请先登录后再继续",
+    "expired": "支付已过期",
+    "failed": "支付失败",
+    "verifyFailed": "支付校验失败，请稍后重试",
+    "backToPlans": "返回套餐列表",
+    "cancelTitle": "已取消支付",
+    "cancelBody": "本次未发生扣款。您可以随时返回套餐页面再次尝试。",
+    "goHome": "返回首页",
+    "stripeStatus": "Stripe 状态"
   }
 }

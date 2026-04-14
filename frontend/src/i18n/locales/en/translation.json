@@ -519,5 +519,46 @@
         "button": "Send Message"
       }
     }
+  },
+  "checkoutPending": {
+    "title": "Pending order",
+    "subtitle": "Review your order details before paying",
+    "loading": "Loading order…",
+    "missingSlug": "Missing plan identifier",
+    "notFound": "Plan not found",
+    "notSubscribable": "This plan is not directly subscribable. Please contact sales.",
+    "backToPlans": "Back to plans",
+    "planLabel": "Subscription plan",
+    "popular": "Popular",
+    "totalLabel": "Total due",
+    "methodLabel": "Payment method",
+    "methodStripe": "You will be redirected to Stripe to complete the payment securely.",
+    "methodDomestic": "After clicking \"Pay now\" we will create your order. WeChat Pay / Alipay support is coming soon.",
+    "domesticPending": "WeChat Pay / Alipay are coming soon. Please contact sales to complete the subscription.",
+    "submitting": "Redirecting to payment…",
+    "payNow": "Pay now",
+    "cancel": "Cancel",
+    "payError": "Failed to start payment"
+  },
+  "checkout": {
+    "verifying": "Verifying your payment…",
+    "verifyingHint": "This usually takes a few seconds.",
+    "successTitle": "Subscription activated",
+    "successBody": "Thanks! Your membership is now active. You can start running full GEO checks right away.",
+    "viewMembership": "View membership",
+    "runCheck": "Run a check",
+    "pendingTitle": "Payment received — activating…",
+    "pendingBody": "Stripe is still confirming the charge. Your membership will activate within a minute. Refresh this page or check the membership dashboard.",
+    "errorTitle": "Payment verification failed",
+    "missingSession": "Missing session_id",
+    "mustLogin": "You must be logged in",
+    "expired": "Payment expired",
+    "failed": "Payment failed",
+    "verifyFailed": "Failed to verify payment",
+    "backToPlans": "Back to plans",
+    "cancelTitle": "Checkout cancelled",
+    "cancelBody": "You were not charged. You can pick a plan and try again whenever you\u2019re ready.",
+    "goHome": "Go home",
+    "stripeStatus": "Stripe status"
   }
 }
