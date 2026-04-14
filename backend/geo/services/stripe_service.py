@@ -82,7 +82,7 @@ class StripeService:
                     message="Free tier does not require payment",
                 )
 
-            currency = "usd"
+            currency = (membership.currency or "usd").lower()
             amount_cents = _to_smallest_unit(float(membership.price), currency)
 
             # Stripe only accepts a fixed enum of locales; fall back to 'auto'

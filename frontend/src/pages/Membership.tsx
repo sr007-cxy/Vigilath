@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { membershipApi, type Membership as MembershipType, type UsageResponse } from '../services/membershipApi';
+import { membershipApi, type Membership as MembershipType, type UsageResponse, formatTierPrice } from '../services/membershipApi';
 import { authApi } from '../services/authApi';
 
 interface UserMembership {
@@ -148,7 +148,7 @@ export function Membership() {
                   <span className="text-2xl font-bold text-gray-900">{membershipDetails.name}</span>
                   <span className="text-sm text-gray-500">
                     {membershipDetails.tier_type === 'saas'
-                      ? `$${membershipDetails.price}${membershipDetails.period}`
+                      ? `${formatTierPrice(membershipDetails)}${membershipDetails.period}`
                       : '人工服务'}
                   </span>
                 </div>

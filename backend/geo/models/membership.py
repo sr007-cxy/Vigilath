@@ -13,6 +13,9 @@ class MembershipORM(Base):
     slug = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
+    # ISO 4217 lowercased — drives the currency passed to Stripe Checkout.
+    # 'cny' for domestic SaaS tiers, 'usd' for overseas service tiers.
+    currency = Column(String(3), nullable=False, default="usd", server_default="usd")
     period = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     popular = Column(Boolean, default=False)
@@ -58,6 +61,7 @@ class SalesLeadORM(Base):
 class MembershipBase(BaseModel):
     name: str
     price: float
+    currency: str = "usd"
     period: str
     description: str
     popular: bool = False

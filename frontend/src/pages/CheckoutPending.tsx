@@ -1,18 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { membershipApi, type Membership } from '../services/membershipApi';
+import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi, shouldUseStripe } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
-
-function formatPrice(tier: Membership, useStripe: boolean): string {
-  if (tier.tier_type === 'saas') {
-    if (tier.price === 0) return useStripe ? '$0' : '¥0';
-    return useStripe ? `$${tier.price}` : `¥${tier.price}`;
-  }
-  const range = tier.features_json?.price_range_usd;
-  return range ?? `$${Math.round(tier.price).toLocaleString()}+`;
-}
 
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
@@ -221,7 +212,7 @@ export function CheckoutPending() {
                   {t('checkoutPending.totalLabel', '应付金额')}
                 </span>
                 <span className="text-2xl font-bold text-accent-primary">
-                  {formatPrice(tier, useStripe)}
+                  {formatTierPrice(tier)}
                   <span className="text-sm text-secondary font-medium ml-1">{tierInfo?.period || tier.period}</span>
                 </span>
               </div>

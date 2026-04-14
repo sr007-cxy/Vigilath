@@ -96,6 +96,7 @@ DEFAULT_MEMBERSHIPS = [
         "description": "个人用户和小型网站的基础检测尝鲜，无需注册即可使用",
         "popular": False,
         "tier_type": "saas",
+        "currency": "cny",
         "monthly_check_quota": 0,
         "allowed_check_categories": FREE_CHECK_CATEGORIES,
         "display_order": 1,
@@ -122,6 +123,7 @@ DEFAULT_MEMBERSHIPS = [
         "description": "需要完整自助检测结果的网站管理员和个人开发者",
         "popular": True,
         "tier_type": "saas",
+        "currency": "cny",
         "monthly_check_quota": 10,
         "allowed_check_categories": None,  # 全部 23 项
         "display_order": 2,
@@ -150,6 +152,7 @@ DEFAULT_MEMBERSHIPS = [
         "description": "首次进入海外市场的初阶 GEO 覆盖",
         "popular": False,
         "tier_type": "service",
+        "currency": "usd",
         "monthly_check_quota": 50,
         "allowed_check_categories": None,
         "display_order": 3,
@@ -181,6 +184,7 @@ DEFAULT_MEMBERSHIPS = [
         "description": "增长期品牌的全面 GEO 覆盖 + 榜单投放",
         "popular": False,
         "tier_type": "service",
+        "currency": "usd",
         "monthly_check_quota": 200,
         "allowed_check_categories": None,
         "display_order": 4,
@@ -211,6 +215,7 @@ DEFAULT_MEMBERSHIPS = [
         "description": "大型企业的全渠道 GEO 解决方案 + PR",
         "popular": False,
         "tier_type": "service",
+        "currency": "usd",
         "monthly_check_quota": 0,  # 无限
         "allowed_check_categories": None,
         "display_order": 5,
@@ -242,6 +247,7 @@ def _orm_to_model(db_membership: MembershipORM) -> Membership:
         slug=db_membership.slug,
         name=db_membership.name,
         price=db_membership.price,
+        currency=(db_membership.currency or "usd").lower(),
         period=db_membership.period,
         description=db_membership.description,
         popular=db_membership.popular,
@@ -262,6 +268,7 @@ def _seed_membership(db, data: dict) -> MembershipORM:
         slug=data["slug"],
         name=data["name"],
         price=data["price"],
+        currency=data.get("currency", "usd"),
         period=data["period"],
         description=data["description"],
         popular=data["popular"],
@@ -322,6 +329,7 @@ class MembershipService:
                 slug=membership.slug,
                 name=membership.name,
                 price=membership.price,
+                currency=membership.currency,
                 period=membership.period,
                 description=membership.description,
                 popular=membership.popular,
@@ -385,6 +393,7 @@ class MembershipService:
             db_membership.slug = membership_update.slug
             db_membership.name = membership_update.name
             db_membership.price = membership_update.price
+            db_membership.currency = membership_update.currency
             db_membership.period = membership_update.period
             db_membership.description = membership_update.description
             db_membership.popular = membership_update.popular

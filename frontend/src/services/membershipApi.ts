@@ -6,6 +6,7 @@ export interface Membership {
   slug: string;
   name: string;
   price: number;
+  currency: string;
   period: string;
   description: string;
   popular: boolean;
@@ -50,6 +51,38 @@ export interface SubscribeResponse {
   status: 'pending' | 'active';
   message: string;
   tier_slug: string;
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  cny: '¥',
+  usd: '$',
+  eur: '€',
+  gbp: '£',
+  jpy: '¥',
+  hkd: 'HK$',
+};
+
+/** Best-effort symbol lookup; falls back to upper-cased ISO code + space. */
+export function currencySymbol(currency: string | undefined): string {
+  if (!currency) return '';
+  const key = currency.toLowerCase();
+  return CURRENCY_SYMBOLS[key] ?? `${currency.toUpperCase()} `;
+}
+
+/**
+ * Render a tier price with the right currency symbol.
+ *
+ * - SaaS tiers: read `tier.currency` (e.g. ¥19.9 for pro, ¥0 for free).
+ * - Service tiers: prefer the human-curated `price_range_usd` from
+ *   `features_json` if present; otherwise fall back to "$<rounded>+".
+ */
+export function formatTierPrice(tier: Membership): string {
+  if (tier.tier_type === 'service') {
+    const range = (tier.features_json as Record<string, unknown> | null)?.price_range_usd;
+    if (typeof range === 'string' && range.length > 0) return range;
+    return `$${Math.round(tier.price).toLocaleString()}+`;
+  }
+  return `${currencySymbol(tier.currency)}${tier.price}`;
 }
 
 /**

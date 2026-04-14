@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { membershipApi } from '../services/membershipApi';
+import { membershipApi, currencySymbol } from '../services/membershipApi';
 import { paymentApi, shouldUseStripe } from '../services/paymentApi';
 
 interface Membership {
@@ -8,6 +8,7 @@ interface Membership {
   slug: string;
   name: string;
   price: number;
+  currency: string;
   period: string;
   description: string;
   popular: boolean;
@@ -138,7 +139,7 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
                       )}
                       <h3 className="font-bold text-primary text-lg mb-1">{tier.name}</h3>
                       <div className="mb-3">
-                        <span className="text-2xl font-bold text-primary">${tier.price}</span>
+                        <span className="text-2xl font-bold text-primary">{currencySymbol(tier.currency)}{tier.price}</span>
                         <span className="text-sm text-secondary">{tier.period}</span>
                       </div>
                       <ul className="space-y-1.5">

@@ -60,10 +60,10 @@ export const paymentApi = {
 };
 
 /**
- * Returns true if the current UI language should route subscriptions through
- * Stripe (i.e. the user is an English-locale / overseas visitor).
+ * All SaaS-tier subscriptions are currently routed through Stripe Checkout
+ * regardless of UI language. Domestic providers (Alipay / WeChat Pay) are
+ * not yet integrated, so the legacy English-only gating has been removed.
  */
-export function shouldUseStripe(lang: string | undefined): boolean {
-  if (!lang) return false;
-  return lang.toLowerCase().startsWith('en');
+export function shouldUseStripe(_lang: string | undefined): boolean {
+  return true;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { membershipApi, type Membership } from '../services/membershipApi';
+import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { useMembership } from '../hooks/useMembership';
 import { AuthModal } from '../components/AuthModal';
 
@@ -21,15 +21,7 @@ const INITIAL_FORM: ContactFormState = {
   message: '',
 };
 
-function formatPrice(tier: Membership): string {
-  if (tier.tier_type === 'saas') {
-    if (tier.price === 0) return '¥0';
-    return `¥${tier.price}`;
-  }
-  // Service tiers: prefer the price_range_usd from features_json if present.
-  const range = tier.features_json?.price_range_usd;
-  return range ?? `$${Math.round(tier.price).toLocaleString()}+`;
-}
+// Use the shared formatter so currency symbols stay in lockstep with backend.
 
 export function ProductsServices() {
   const { t, i18n } = useTranslation();
@@ -209,7 +201,7 @@ export function ProductsServices() {
                       <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
                       <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
                         <span className="text-3xl font-bold text-accent-primary">
-                          {formatPrice(tier)}
+                          {formatTierPrice(tier)}
                         </span>
                         {tier.tier_type === 'saas' && (
                           <span className="text-sm text-secondary font-medium">{text.period}</span>
@@ -572,7 +564,7 @@ export function ProductsServices() {
                   <option value="">{t('productsServices.selectPlaceholder')}</option>
                   {serviceTiers.map((tier) => (
                     <option key={tier.slug} value={tier.slug}>
-                      {tierText(tier).name} · {formatPrice(tier)}
+                      {tierText(tier).name} · {formatTierPrice(tier)}
                     </option>
                   ))}
                 </select>
