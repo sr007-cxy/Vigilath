@@ -21,7 +21,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables — all .env files are local-only.
+# Use .env.example as the canonical template that ships with the repo.
 .env
 .env.local
 .env.development.local
