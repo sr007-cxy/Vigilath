@@ -13,7 +13,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
   const [tab, setTab] = useState<'login' | 'register'>(defaultTab);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -80,7 +79,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     }
 
     try {
-      await authApi.register(name, email, password);
+      await authApi.register(email, password);
       const loginRes = await authApi.login(email, password);
       localStorage.setItem('token', loginRes.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
@@ -115,7 +114,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
       setTab(defaultTab);
       setEmail('');
       setPassword('');
-      setName('');
       setConfirmPassword('');
       setError('');
       setShowForgotPassword(false);

@@ -11,7 +11,10 @@
     "geoKnowledge": "GEO知识",
     "productsServices": "产品&服务",
     "aboutUs": "关于我们",
-    "login": "登录"
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出登录",
+    "signedInAs": "已登录账号"
   },
   "geoKnowledge": {
     "title": "GEO 知识库",
@@ -269,7 +272,9 @@
       "viewAll": "解锁全部检测",
       "perCategoryHint": "免费预览：每个分组仅展示 2 项，解锁后查看全部",
       "locked": "已锁定",
-      "unlockCategory": "升级检测会员解锁本项检测 →"
+      "unlockCategory": "升级检测会员解锁本项检测 →",
+      "memberOnly": "此检测项需要开通会员",
+      "upgradePro": "升级 Pro"
     },
     "buttons": {
       "checkAnother": "检查另一个网站",
@@ -416,12 +421,10 @@
       "title": "联系我们",
       "info": {
         "title": "联系信息",
-        "address": "地址",
-        "addressValue": "北京市朝阳区建国路 88 号 SOHO 现代中心 A 座 1001 室",
         "email": "邮箱",
-        "emailValue": "contact@zen7geo.com",
+        "emailValue": "contact@lingjiyiwu.com",
         "phone": "电话",
-        "phoneValue": "+86 10 12345 6789"
+        "phoneValue": "18611296871"
       },
       "form": {
         "title": "发送消息",

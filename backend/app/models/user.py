@@ -16,7 +16,7 @@ class UserORM(Base):
 # Pydantic Models
 class UserBase(BaseModel):
     email: EmailStr
-    name: str
+    name: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str

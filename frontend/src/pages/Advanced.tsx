@@ -33,6 +33,83 @@ const VALID_MODES: AdvancedMode[] = [
   'entity',
 ];
 
+interface ModeVisual {
+  gradient: string;
+  label: string;
+  icon: ReactNode;
+}
+
+const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
+  compare: {
+    gradient: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+    label: 'Competitive',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="10" width="5" height="11" rx="1" />
+        <rect x="10" y="4" width="5" height="17" rx="1" />
+        <rect x="17" y="7" width="5" height="14" rx="1" />
+      </svg>
+    ),
+  },
+  crawlTest: {
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+    label: 'Crawlability',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3a14 14 0 0 1 0 18" />
+        <path d="M12 3a14 14 0 0 0 0 18" />
+      </svg>
+    ),
+  },
+  authority: {
+    gradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
+    label: 'Authority',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+    ),
+  },
+  citation: {
+    gradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+    label: 'AI Citations',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 7h3v3H7z" />
+        <path d="M14 7h3v3h-3z" />
+        <path d="M10 10c0 3-1.5 5-4 6" />
+        <path d="M17 10c0 3-1.5 5-4 6" />
+      </svg>
+    ),
+  },
+  visibility: {
+    gradient: 'linear-gradient(135deg, #06b6d4 0%, #a855f7 50%, #ec4899 100%)',
+    label: 'AI Visibility',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
+  entity: {
+    gradient: 'linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)',
+    label: 'Entity GEO',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <circle cx="5" cy="5" r="2" />
+        <circle cx="19" cy="5" r="2" />
+        <circle cx="5" cy="19" r="2" />
+        <circle cx="19" cy="19" r="2" />
+        <path d="M7 7l2.8 2.8M17 7l-2.8 2.8M7 17l2.8-2.8M17 17l-2.8-2.8" />
+      </svg>
+    ),
+  },
+};
+
 function isValidUrl(s: string): boolean {
   try {
     new URL(s);
@@ -193,14 +270,38 @@ export function Advanced() {
             ← {t('result.buttons.checkAnother', { defaultValue: 'Back' })}
           </button>
 
-          <div className="mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-primary/10 border border-accent-primary/20 mb-3">
-              <span className="text-xs font-semibold text-accent-primary">
-                {t('home.advanced.badge')} · {MODE_MIN_TIER[mode].toUpperCase()}+
-              </span>
+          <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-3xl p-6 sm:p-7 mb-8">
+            <div
+              className="absolute -top-28 -right-24 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
+              style={{ background: MODE_VISUALS[mode].gradient }}
+            />
+            <div className="relative flex items-start gap-4 sm:gap-5">
+              <div
+                className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-2xl flex items-center justify-center text-white shadow-lg"
+                style={{ background: MODE_VISUALS[mode].gradient }}
+              >
+                {MODE_VISUALS[mode].icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-accent-primary/10 border border-accent-primary/30 text-[10px] font-bold text-accent-primary uppercase tracking-[0.12em]">
+                    {t('home.advanced.badge')}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#3f4143] text-[10px] font-bold text-secondary uppercase tracking-[0.12em]">
+                    {MODE_MIN_TIER[mode]}+
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#3f4143] text-[10px] font-mono text-secondary">
+                    {MODE_VISUALS[mode].label}
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-2 leading-tight">
+                  {modeTitle}
+                </h1>
+                <p className="text-secondary text-sm sm:text-[15px] leading-relaxed max-w-3xl">
+                  {modeDesc}
+                </p>
+              </div>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-2">{modeTitle}</h1>
-            <p className="text-secondary text-sm sm:text-base max-w-2xl">{modeDesc}</p>
           </div>
 
           {!isUnlocked && (
@@ -425,10 +526,24 @@ function ResultPanel({ mode, result }: { mode: AdvancedMode; result: AnyAdvanced
   }
 }
 
-function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="bg-card border border-[#3f4143] rounded-2xl p-6 mb-6">
-      <h3 className="text-lg font-bold text-primary mb-4">{title}</h3>
+    <div className="bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+      <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-[#2a2a2e]">
+        <span className="w-1 h-4 rounded-full gradient-bg" />
+        <h3 className="text-base font-bold text-primary leading-tight">{title}</h3>
+        {subtitle && (
+          <span className="text-[11px] text-secondary ml-auto font-mono">{subtitle}</span>
+        )}
+      </div>
       {children}
     </div>
   );
@@ -436,15 +551,102 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 
 function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  const color = pct >= 60 ? 'bg-emerald-500' : pct >= 30 ? 'bg-amber-500' : 'bg-rose-500';
+  const color =
+    pct >= 60
+      ? 'from-emerald-400 to-emerald-500'
+      : pct >= 30
+      ? 'from-amber-400 to-amber-500'
+      : 'from-rose-400 to-rose-500';
   return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs text-secondary mb-1">
-        <span>{label}</span>
-        <span className="font-mono">{value}/{max}</span>
+    <div className="mb-3 last:mb-0">
+      <div className="flex justify-between text-xs mb-1.5">
+        <span className="text-secondary">{label}</span>
+        <span className="font-mono tabular-nums text-primary">
+          {value}
+          <span className="text-secondary">/{max}</span>
+        </span>
       </div>
       <div className="h-2 bg-[#1a1a1e] rounded-full overflow-hidden">
-        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full bg-gradient-to-r ${color} transition-all duration-700`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+type StatAccent = 'default' | 'good' | 'warn' | 'bad' | 'gradient';
+
+function StatTile({
+  label,
+  value,
+  accent = 'default',
+  hint,
+}: {
+  label: string;
+  value: ReactNode;
+  accent?: StatAccent;
+  hint?: string;
+}) {
+  const accentClass =
+    accent === 'good'
+      ? 'text-emerald-400'
+      : accent === 'warn'
+      ? 'text-amber-400'
+      : accent === 'bad'
+      ? 'text-rose-400'
+      : accent === 'gradient'
+      ? 'gradient-text'
+      : 'text-primary';
+  return (
+    <div className="bg-[#141416] border border-[#2a2a2e] rounded-xl p-4 hover:border-[#3f4143] transition-colors">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-secondary mb-1.5 font-semibold">
+        {label}
+      </div>
+      <div className={`text-2xl font-bold tabular-nums leading-none ${accentClass}`}>{value}</div>
+      {hint && <div className="text-[10px] text-secondary mt-1.5">{hint}</div>}
+    </div>
+  );
+}
+
+function MetricRing({
+  value,
+  max,
+  suffix,
+}: {
+  value: number;
+  max: number;
+  suffix?: string;
+}) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const color = pct >= 70 ? '#34d399' : pct >= 40 ? '#fbbf24' : '#fb7185';
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  return (
+    <div className="relative w-28 h-28 shrink-0">
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="#1f1f24" strokeWidth="9" />
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-2xl font-bold gradient-text leading-none tabular-nums">{value}</div>
+        <div className="text-[10px] text-secondary mt-1">
+          / {max}
+          {suffix}
+        </div>
       </div>
     </div>
   );
@@ -453,128 +655,296 @@ function ScoreBar({ label, value, max }: { label: string; value: number; max: nu
 // --- Compare ---
 function CompareResult({ data }: { data: CompareResponse }) {
   return (
-    <SectionCard title="Competitive Comparison">
+    <>
       {data.winner && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-sm">
-          <strong className="text-emerald-400">{data.winner.domain}</strong> wins with{' '}
-          {data.winner.score}/100 (Grade {data.winner.grade})
-          {data.winner.lead > 0 && <span className="text-secondary"> · +{data.winner.lead} over runner-up</span>}
+        <div className="relative overflow-hidden bg-card border border-emerald-500/30 rounded-2xl p-5 mb-6">
+          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-emerald-500/10 blur-3xl" />
+          <div className="relative flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-emerald-400 font-bold mb-1">
+                Winner
+              </div>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-lg sm:text-xl font-bold text-primary truncate">
+                  {data.winner.domain}
+                </span>
+                <span className="text-2xl font-bold gradient-text tabular-nums">
+                  {data.winner.score}
+                  <span className="text-base text-secondary">/100</span>
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                  Grade {data.winner.grade}
+                </span>
+                {data.winner.lead > 0 && (
+                  <span className="text-xs text-secondary">+{data.winner.lead} 领先</span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left border-b border-[#3f4143]">
-              <th className="py-2 pr-4 text-secondary font-medium">Category</th>
-              {data.results.map((r) => (
-                <th key={r.url} className="py-2 px-2 text-primary font-semibold">{r.domain}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.categories.map((cat) => {
-              const cells = data.results.map((r) => {
-                const v = r.categories?.[cat];
-                const earned = v?.earned ?? 0;
-                const max = v?.max ?? 0;
-                const pct = max > 0 ? Math.round((earned / max) * 100) : 0;
-                return { domain: r.domain, earned, max, pct };
-              });
-              const topPct = Math.max(...cells.map((c) => c.pct));
-              return (
-                <tr key={cat} className="border-b border-[#2a2a2e]">
-                  <td className="py-2 pr-4 text-secondary">{cat}</td>
-                  {cells.map((c, i) => (
-                    <td
-                      key={i}
-                      className={`py-2 px-2 tabular-nums ${c.pct === topPct && topPct > 0 ? 'text-emerald-400 font-semibold' : 'text-primary'}`}
-                    >
-                      {c.earned}/{c.max} ({c.pct}%)
+      <SectionCard title="类目得分对比" subtitle={`${data.results.length} 站点 · ${data.categories.length} 类目`}>
+        <div className="overflow-x-auto -mx-5 px-5 sm:-mx-6 sm:px-6">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[520px]">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-card text-left py-2 pr-4 text-[10px] uppercase tracking-wider text-secondary font-semibold border-b border-[#3f4143]">
+                  类目
+                </th>
+                {data.results.map((r) => (
+                  <th
+                    key={r.url}
+                    className="py-2 px-3 text-primary font-semibold text-xs text-left border-b border-[#3f4143] whitespace-nowrap max-w-[180px] truncate"
+                    title={r.domain}
+                  >
+                    {r.domain}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.categories.map((cat) => {
+                const cells = data.results.map((r) => {
+                  const v = r.categories?.[cat];
+                  const earned = v?.earned ?? 0;
+                  const max = v?.max ?? 0;
+                  const pct = max > 0 ? Math.round((earned / max) * 100) : 0;
+                  return { domain: r.domain, earned, max, pct };
+                });
+                const topPct = Math.max(...cells.map((c) => c.pct));
+                return (
+                  <tr key={cat} className="group">
+                    <td className="sticky left-0 z-10 bg-card group-hover:bg-[#17171c] py-3 pr-4 text-secondary text-xs border-b border-[#2a2a2e] transition-colors">
+                      {cat}
                     </td>
-                  ))}
-                </tr>
-              );
-            })}
-            <tr className="border-t-2 border-[#3f4143]">
-              <td className="py-3 pr-4 font-bold text-primary">TOTAL</td>
-              {data.results.map((r) => (
-                <td key={r.url} className="py-3 px-2 font-bold gradient-text">
-                  {r.score}/100 ({r.grade})
+                    {cells.map((c, i) => {
+                      const isWinner = c.pct === topPct && topPct > 0;
+                      const barColor =
+                        c.pct >= 60
+                          ? 'bg-emerald-500/70'
+                          : c.pct >= 30
+                          ? 'bg-amber-500/70'
+                          : 'bg-rose-500/70';
+                      return (
+                        <td
+                          key={i}
+                          className="py-3 px-3 border-b border-[#2a2a2e] group-hover:bg-[#17171c] transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-[#1a1a1e] rounded-full overflow-hidden min-w-[40px]">
+                              <div
+                                className={`h-full ${barColor} transition-all duration-700`}
+                                style={{ width: `${c.pct}%` }}
+                              />
+                            </div>
+                            <span
+                              className={`tabular-nums text-xs whitespace-nowrap ${
+                                isWinner ? 'text-emerald-400 font-bold' : 'text-primary'
+                              }`}
+                            >
+                              {c.pct}%
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              <tr>
+                <td className="sticky left-0 z-10 bg-card py-4 pr-4 font-bold text-primary text-[10px] uppercase tracking-wider border-t-2 border-[#3f4143]">
+                  总分
                 </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
+                {data.results.map((r) => (
+                  <td key={r.url} className="py-4 px-3 border-t-2 border-[#3f4143]">
+                    <div className="flex items-baseline gap-1 flex-wrap">
+                      <span className="text-xl font-bold gradient-text tabular-nums">
+                        {r.score}
+                      </span>
+                      <span className="text-xs text-secondary">/100</span>
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-bold">
+                        {r.grade}
+                      </span>
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+    </>
   );
 }
 
 // --- Crawl test ---
 function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
+  const robotsAllowed = data.robots.bots.filter((b) => b.status !== 'blocked').length;
+  const robotsTotal = data.robots.bots.length;
+  const wafAllowed = data.waf.bots.filter((b) => b.result === 'allowed').length;
+  const wafTotal = data.waf.bots.length;
   return (
     <>
-      <SectionCard title={`Summary — ${data.domain}`}>
-        <p className="text-sm">
-          <span className="text-secondary">Total issues detected: </span>
-          <span className={data.total_issues === 0 ? 'text-emerald-400' : 'text-rose-400'}>
-            {data.total_issues}
-          </span>
-        </p>
-      </SectionCard>
-      <SectionCard title="robots.txt rules">
-        {!data.robots.found && (
-          <p className="text-sm text-amber-400 mb-2">robots.txt not found — all bots allowed by default.</p>
-        )}
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-          {data.robots.bots.map((b) => (
-            <li key={b.bot} className="flex justify-between">
-              <span className="text-secondary">{b.bot}</span>
-              <span className={b.status === 'blocked' ? 'text-rose-400' : 'text-emerald-400'}>
-                {b.status}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </SectionCard>
-      <SectionCard title="Simulated bot access (WAF/CDN test)">
-        <p className="text-xs text-secondary mb-3">
-          Baseline: status {data.waf.baseline_status ?? 'n/a'}, size {data.waf.baseline_size.toLocaleString()} bytes
-        </p>
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-          {data.waf.bots.map((b) => {
-            const color =
-              b.result === 'allowed'
-                ? 'text-emerald-400'
-                : b.result === 'suspicious'
-                ? 'text-amber-400'
-                : 'text-rose-400';
-            return (
-              <li key={b.bot} className="flex justify-between">
-                <span className="text-secondary">{b.bot}</span>
-                <span className={color}>
-                  {b.result}
-                  {b.status_code ? ` (${b.status_code})` : ''}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </SectionCard>
-      <SectionCard title="Common Crawl index">
-        {data.common_crawl.found ? (
-          <p className="text-sm text-emerald-400">
-            Found {data.common_crawl.count} page(s) in Common Crawl.
-          </p>
-        ) : (
-          <p className="text-sm text-amber-400">
-            Not found in Common Crawl{data.common_crawl.error ? ` — ${data.common_crawl.error}` : ''}.
-          </p>
-        )}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatTile
+          label="目标域名"
+          value={<span className="text-base font-mono truncate block">{data.domain}</span>}
+          hint={data.common_crawl.found ? 'Common Crawl 已收录' : 'Common Crawl 未收录'}
+        />
+        <StatTile
+          label="问题总数"
+          value={data.total_issues}
+          accent={data.total_issues === 0 ? 'good' : 'bad'}
+          hint={data.total_issues === 0 ? '一切正常' : '需要修复'}
+        />
+        <StatTile
+          label="robots 放行"
+          value={`${robotsAllowed}/${robotsTotal}`}
+          accent={robotsAllowed === robotsTotal ? 'good' : 'warn'}
+          hint="爬虫许可"
+        />
+        <StatTile
+          label="WAF 放行"
+          value={`${wafAllowed}/${wafTotal}`}
+          accent={wafAllowed === wafTotal ? 'good' : wafAllowed > 0 ? 'warn' : 'bad'}
+          hint="实测访问"
+        />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard
+          title="robots.txt 规则"
+          subtitle={data.robots.found ? '已检测' : '未找到'}
+        >
+          {!data.robots.found && (
+            <p className="text-xs text-amber-400 mb-3 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              未找到 robots.txt — 默认所有爬虫被允许
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {data.robots.bots.map((b) => {
+              const blocked = b.status === 'blocked';
+              return (
+                <li
+                  key={b.bot}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e]"
+                >
+                  <span className="text-sm text-primary font-mono">{b.bot}</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      blocked
+                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    }`}
+                  >
+                    {blocked ? 'Blocked' : 'Allowed'}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </SectionCard>
+        <SectionCard
+          title="WAF / CDN 实测"
+          subtitle={`基线 ${data.waf.baseline_status ?? 'n/a'} · ${(data.waf.baseline_size / 1024).toFixed(1)}KB`}
+        >
+          <ul className="space-y-1.5">
+            {data.waf.bots.map((b) => {
+              const tone =
+                b.result === 'allowed'
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : b.result === 'suspicious'
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+              return (
+                <li
+                  key={b.bot}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e]"
+                >
+                  <span className="text-sm text-primary font-mono">{b.bot}</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap ${tone}`}
+                  >
+                    {b.result}
+                    {b.status_code ? ` · ${b.status_code}` : ''}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </SectionCard>
+      </div>
+      <SectionCard
+        title="Common Crawl 索引"
+        subtitle={data.common_crawl.found ? `${data.common_crawl.count} 页` : '未收录'}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              data.common_crawl.found
+                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                : 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
+            }`}
+          >
+            {data.common_crawl.found ? (
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            )}
+          </div>
+          {data.common_crawl.found ? (
+            <p className="text-sm text-emerald-400">
+              已在 Common Crawl 中找到 <span className="font-bold">{data.common_crawl.count}</span> 页
+            </p>
+          ) : (
+            <p className="text-sm text-amber-400">
+              未收录{data.common_crawl.error ? ` · ${data.common_crawl.error}` : ''}
+            </p>
+          )}
+        </div>
         {data.common_crawl.samples.length > 0 && (
-          <ul className="mt-2 space-y-1 text-xs text-secondary">
+          <ul className="space-y-1 text-xs text-secondary pt-3 border-t border-[#2a2a2e]">
             {data.common_crawl.samples.map((s, i) => (
-              <li key={i}>{s}</li>
+              <li key={i} className="font-mono truncate" title={s}>
+                → {s}
+              </li>
             ))}
           </ul>
         )}
@@ -660,42 +1030,68 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
 function CitationResult({ data }: { data: CitationCheckResponse }) {
   return (
     <>
-      <SectionCard title={`${data.engine} citations for ${data.domain}`}>
-        <div className="flex items-end gap-4 mb-3">
-          <div className="text-4xl font-bold gradient-text">{data.citation_rate.toFixed(0)}%</div>
-          <div className="text-sm text-secondary pb-1">
-            {data.cited_queries}/{data.valid_queries} queries cited · Grade {data.grade}
+      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+        <div className="absolute -top-20 -right-20 w-56 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6">
+          <MetricRing value={Math.round(data.citation_rate)} max={100} suffix="%" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
+              Citation Rate · {data.engine}
+            </div>
+            <h3 className="text-xl font-bold text-primary mb-3 truncate">{data.domain}</h3>
+            <div className="grid grid-cols-3 gap-2.5">
+              <StatTile
+                label="已引用"
+                value={`${data.cited_queries}/${data.valid_queries}`}
+                accent="good"
+                hint="查询数量"
+              />
+              <StatTile label="引用次数" value={data.total_citations} hint="直接引用" />
+              <StatTile label="评级" value={data.grade} accent="gradient" hint="综合评分" />
+            </div>
           </div>
         </div>
-        <p className="text-xs text-secondary">Direct citations: {data.total_citations}</p>
-      </SectionCard>
-      <SectionCard title="Query-by-query breakdown">
-        <ul className="space-y-2 text-sm">
-          {data.queries.map((q, i) => (
-            <li key={i} className="border-b border-[#2a2a2e] pb-2">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-primary">"{q.query}"</span>
-                <span
-                  className={
-                    q.error
-                      ? 'text-amber-400 text-xs'
-                      : q.cited
-                      ? 'text-emerald-400 text-xs'
-                      : 'text-rose-400 text-xs'
-                  }
-                >
-                  {q.error ? 'ERROR' : q.cited ? 'CITED' : 'NOT CITED'}
-                </span>
-              </div>
-              {q.citations.length > 0 && (
-                <ul className="mt-1 ml-3 text-xs text-secondary">
-                  {q.citations.slice(0, 3).map((c, j) => (
-                    <li key={j}>→ {c}</li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
+      </div>
+      <SectionCard title="逐条查询结果" subtitle={`${data.queries.length} 条`}>
+        <ul className="space-y-2">
+          {data.queries.map((q, i) => {
+            const status = q.error ? 'error' : q.cited ? 'cited' : 'not';
+            const statusClass =
+              status === 'cited'
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : status === 'error'
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+            const statusLabel = status === 'cited' ? 'CITED' : status === 'error' ? 'ERROR' : 'NOT CITED';
+            return (
+              <li
+                key={i}
+                className="bg-[#141416] border border-[#2a2a2e] rounded-xl p-3.5 hover:border-[#3f4143] transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 mb-1.5">
+                  <span className="text-sm text-primary flex-1 leading-snug">"{q.query}"</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border whitespace-nowrap ${statusClass}`}
+                  >
+                    {statusLabel}
+                  </span>
+                </div>
+                {q.citations.length > 0 && (
+                  <ul className="mt-2 pl-3 border-l-2 border-emerald-500/30 space-y-0.5">
+                    {q.citations.slice(0, 3).map((c, j) => (
+                      <li
+                        key={j}
+                        className="text-xs text-secondary font-mono truncate"
+                        title={c}
+                      >
+                        → {c}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </SectionCard>
     </>
@@ -714,71 +1110,137 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
     ],
     [data.scores],
   );
+  const framingTotal = Object.values(data.framings).reduce((a, b) => a + b, 0);
   return (
     <>
-      <SectionCard title={`AI Visibility — ${data.brand}`}>
-        <div className="flex items-end gap-4 mb-4">
-          <div>
-            <div className="text-4xl font-bold gradient-text">
-              {data.total_score}/{data.max_score}
+      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+        <div
+          className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 blur-3xl"
+          style={{ background: 'linear-gradient(135deg, #06b6d4, #a855f7, #ec4899)' }}
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 mb-6">
+          <MetricRing value={data.total_score} max={data.max_score} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
+              AI Visibility
             </div>
-            <div className="text-sm text-secondary">{data.grade_label}</div>
-          </div>
-          <div className="text-xs text-secondary pb-1">
-            {data.engines.join(' · ')} · {data.query_count} queries × {data.stability_runs} runs
+            <h3 className="text-xl font-bold text-primary mb-2 truncate">{data.brand}</h3>
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full gradient-bg text-white uppercase tracking-wider">
+                {data.grade_label}
+              </span>
+              {data.engines.map((e) => (
+                <span
+                  key={e}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#141416] border border-[#3f4143] text-secondary"
+                >
+                  {e}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-secondary">
+              {data.query_count} 个查询 × {data.stability_runs} 次稳定性运行
+            </p>
           </div>
         </div>
-        {categories.map((c) => (
-          <ScoreBar key={c.label} label={c.label} value={c.value} max={20} />
-        ))}
-      </SectionCard>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SectionCard title="Per-engine visibility">
-          <ul className="text-sm space-y-2">
+        <div className="relative border-t border-[#2a2a2e] pt-4">
+          {categories.map((c) => (
+            <ScoreBar key={c.label} label={c.label} value={c.value} max={20} />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard title="各引擎可见率">
+          <ul className="space-y-3">
             {Object.entries(data.per_engine_rates).map(([eng, rate]) => (
               <li key={eng}>
-                <div className="flex justify-between mb-1">
-                  <span className="text-secondary">{eng}</span>
-                  <span className="text-primary font-mono">{rate.toFixed(0)}%</span>
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-sm text-primary capitalize font-medium">{eng}</span>
+                  <span className="text-sm text-primary font-mono tabular-nums">
+                    {rate.toFixed(0)}%
+                  </span>
                 </div>
-                <div className="h-1.5 bg-[#1a1a1e] rounded-full overflow-hidden">
-                  <div className="h-full bg-accent-primary" style={{ width: `${rate}%` }} />
+                <div className="h-2 bg-[#1a1a1e] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 transition-all duration-700"
+                    style={{ width: `${rate}%` }}
+                  />
                 </div>
               </li>
             ))}
           </ul>
         </SectionCard>
-        <SectionCard title="Top competitors cited alongside">
+        <SectionCard title="同时被提及的竞品">
           {data.top_competitors.length === 0 ? (
-            <p className="text-sm text-secondary">No competitors extracted.</p>
+            <p className="text-sm text-secondary">未提取到竞品。</p>
           ) : (
-            <ul className="text-sm space-y-1">
-              {data.top_competitors.slice(0, 10).map((c) => (
-                <li key={c.domain} className="flex justify-between">
-                  <span className="text-primary">{c.domain}</span>
-                  <span className="text-secondary">{c.mentions}×</span>
+            <ul className="space-y-1.5">
+              {data.top_competitors.slice(0, 10).map((c, i) => (
+                <li
+                  key={c.domain}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e] hover:border-[#3f4143] transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] font-mono text-secondary w-5">#{i + 1}</span>
+                    <span className="text-sm text-primary truncate font-mono">{c.domain}</span>
+                  </div>
+                  <span className="text-xs text-accent-primary font-bold tabular-nums whitespace-nowrap">
+                    {c.mentions}×
+                  </span>
                 </li>
               ))}
             </ul>
           )}
         </SectionCard>
-        <SectionCard title="Brand framing">
-          <ul className="text-sm space-y-1">
-            {Object.entries(data.framings).map(([f, n]) => (
-              <li key={f} className="flex justify-between">
-                <span className="text-secondary capitalize">{f.replace('_', ' ')}</span>
-                <span className="text-primary">{n}</span>
-              </li>
-            ))}
+        <SectionCard title="品牌情感框架">
+          <ul className="space-y-2.5">
+            {Object.entries(data.framings).map(([f, n]) => {
+              const pct = framingTotal > 0 ? (n / framingTotal) * 100 : 0;
+              return (
+                <li key={f}>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs text-secondary capitalize">
+                      {f.replace('_', ' ')}
+                    </span>
+                    <span className="text-xs text-primary font-mono tabular-nums">{n}</span>
+                  </div>
+                  <div className="h-1.5 bg-[#1a1a1e] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-accent-primary/70 transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </SectionCard>
-        <SectionCard title="Content gaps">
+        <SectionCard title="内容缺口">
           {data.content_gaps.length === 0 ? (
-            <p className="text-sm text-emerald-400">No major gaps.</p>
+            <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              没有重大缺口
+            </div>
           ) : (
-            <ul className="text-xs space-y-1">
+            <ul className="space-y-1.5">
               {data.content_gaps.slice(0, 10).map((g, i) => (
-                <li key={i} className="text-amber-400">• {g}</li>
+                <li
+                  key={i}
+                  className="text-xs text-amber-400 px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20"
+                >
+                  • {g}
+                </li>
               ))}
             </ul>
           )}
@@ -790,82 +1252,186 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
 
 // --- Entity ---
 function EntityResult({ data }: { data: EntityAuditResponse }) {
+  const totalPlatforms = data.platforms.found.length + data.platforms.not_found.length;
+  const kgItems = [
+    { key: 'Wikipedia', found: data.knowledge_graph.wikipedia, sub: '' },
+    {
+      key: 'Wikidata',
+      found: data.knowledge_graph.wikidata,
+      sub: data.knowledge_graph.wikidata_id || '',
+    },
+    { key: 'Google KG', found: data.knowledge_graph.google_kg, sub: '' },
+  ];
   return (
     <>
-      <SectionCard title={`Entity GEO — ${data.entity} (${data.entity_type})`}>
-        <div className="flex items-end gap-4 mb-4">
-          <div>
-            <div className="text-4xl font-bold gradient-text">
-              {data.total_score}/{data.max_score}
+      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+        <div
+          className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 blur-3xl"
+          style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 mb-6">
+          <MetricRing value={data.total_score} max={data.max_score} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
+              Entity GEO
             </div>
-            <div className="text-sm text-secondary">Grade {data.grade} · {data.percent}%</div>
+            <h3 className="text-xl font-bold text-primary mb-2 truncate">{data.entity}</h3>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 border border-pink-500/30">
+                {data.entity_type}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full gradient-bg text-white uppercase tracking-wider">
+                Grade {data.grade}
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[#3f4143] text-secondary">
+                {data.percent}%
+              </span>
+            </div>
           </div>
         </div>
-        {Object.entries(data.scores).map(([name, v]) => (
-          <ScoreBar key={name} label={name} value={v} max={20} />
-        ))}
-      </SectionCard>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SectionCard title="Knowledge graph">
-          <ul className="text-sm space-y-1">
-            <li>
-              Wikipedia:{' '}
-              <span className={data.knowledge_graph.wikipedia ? 'text-emerald-400' : 'text-rose-400'}>
-                {data.knowledge_graph.wikipedia ? 'found' : 'not found'}
-              </span>
-            </li>
-            <li>
-              Wikidata:{' '}
-              <span className={data.knowledge_graph.wikidata ? 'text-emerald-400' : 'text-rose-400'}>
-                {data.knowledge_graph.wikidata ? `found (${data.knowledge_graph.wikidata_id})` : 'not found'}
-              </span>
-            </li>
-            <li>
-              Google KG:{' '}
-              <span className={data.knowledge_graph.google_kg ? 'text-emerald-400' : 'text-rose-400'}>
-                {data.knowledge_graph.google_kg ? 'inferred' : 'not found'}
-              </span>
-            </li>
+        <div className="relative border-t border-[#2a2a2e] pt-4">
+          {Object.entries(data.scores).map(([name, v]) => (
+            <ScoreBar key={name} label={name} value={v} max={20} />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard title="知识图谱覆盖">
+          <ul className="space-y-2">
+            {kgItems.map((kg) => (
+              <li
+                key={kg.key}
+                className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#141416] border border-[#2a2a2e]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      kg.found
+                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
+                    }`}
+                  >
+                    {kg.found ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm text-primary font-medium">{kg.key}</div>
+                    {kg.sub && (
+                      <div className="text-[10px] text-secondary font-mono truncate">
+                        {kg.sub}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                    kg.found ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {kg.found ? 'Found' : 'Missing'}
+                </span>
+              </li>
+            ))}
           </ul>
         </SectionCard>
-        <SectionCard title="Platform footprint">
-          <p className="text-sm text-secondary mb-2">
-            {data.platforms.found.length}/{data.platforms.found.length + data.platforms.not_found.length} platforms
-          </p>
-          <div className="flex flex-wrap gap-1">
+        <SectionCard title="平台覆盖" subtitle={`${data.platforms.found.length}/${totalPlatforms}`}>
+          <div className="flex flex-wrap gap-1.5">
             {data.platforms.found.map((p) => (
-              <span key={p} className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full px-2 py-0.5">
-                {p}
+              <span
+                key={p}
+                className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full px-2.5 py-1 font-medium"
+              >
+                ✓ {p}
               </span>
             ))}
             {data.platforms.not_found.map((p) => (
-              <span key={p} className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full px-2 py-0.5">
-                {p}
+              <span
+                key={p}
+                className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full px-2.5 py-1 font-medium"
+              >
+                ✕ {p}
               </span>
             ))}
           </div>
         </SectionCard>
-        <SectionCard title="Sentiment & framing">
-          <p className="text-sm">
-            <span className="text-secondary">Overall sentiment: </span>
-            <span className="text-primary capitalize">{data.sentiment}</span>
-          </p>
-          <p className="text-sm">
-            <span className="text-secondary">Best framing: </span>
-            <span className="text-primary capitalize">{data.best_framing.replace('_', ' ')}</span>
-          </p>
-          <p className="text-sm">
-            <span className="text-secondary">Recognition rate: </span>
-            <span className="text-primary">{data.recognition_rate}%</span>
-          </p>
+        <SectionCard title="情感与框架">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+              <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
+                整体情感
+              </span>
+              <span className="text-sm text-primary capitalize font-bold">{data.sentiment}</span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+              <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
+                最佳框架
+              </span>
+              <span className="text-sm text-primary capitalize font-bold">
+                {data.best_framing.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+              <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
+                识别率
+              </span>
+              <span className="text-sm gradient-text font-bold tabular-nums">
+                {data.recognition_rate}%
+              </span>
+            </div>
+          </div>
         </SectionCard>
-        <SectionCard title="Content gaps">
+        <SectionCard title="内容缺口">
           {data.content_gaps.length === 0 ? (
-            <p className="text-sm text-emerald-400">No gaps detected.</p>
+            <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              未发现缺口
+            </div>
           ) : (
-            <ul className="text-xs space-y-1">
+            <ul className="space-y-1.5">
               {data.content_gaps.map((g, i) => (
-                <li key={i} className="text-amber-400">• {g}</li>
+                <li
+                  key={i}
+                  className="text-xs text-amber-400 px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20"
+                >
+                  • {g}
+                </li>
               ))}
             </ul>
           )}

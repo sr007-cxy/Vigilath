@@ -260,6 +260,6 @@ MODE_MIN_TIER: Dict[str, str] = {
     "crawlTest": "pro",
     "authority": "pro",
     "citation": "pro",
-    "visibility": "starter",
-    "entity": "starter",
+    "visibility": "pro",
+    "entity": "pro",
 }

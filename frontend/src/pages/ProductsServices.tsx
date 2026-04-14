@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { membershipApi, type Membership } from '../services/membershipApi';
-import { paymentApi, shouldUseStripe } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 
 type ContactFormState = {
@@ -23,8 +22,8 @@ const INITIAL_FORM: ContactFormState = {
 
 function formatPrice(tier: Membership): string {
   if (tier.tier_type === 'saas') {
-    if (tier.price === 0) return '$0';
-    return `$${tier.price}`;
+    if (tier.price === 0) return '¥0';
+    return `¥${tier.price}`;
   }
   // Service tiers: prefer the price_range_usd from features_json if present.
   const range = tier.features_json?.price_range_usd;
@@ -32,9 +31,9 @@ function formatPrice(tier: Membership): string {
 }
 
 export function ProductsServices() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { token, isLoggedIn } = useMembership();
+  const { isLoggedIn } = useMembership();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,32 +68,19 @@ export function ProductsServices() {
     [memberships],
   );
 
-  const handleCTA = async (tier: Membership) => {
+  const handleCTA = (tier: Membership) => {
     if (tier.slug === 'free') {
       navigate('/');
       return;
     }
     if (tier.tier_type === 'saas') {
-      if (!isLoggedIn || !token) {
-        navigate('/login', { state: { from: '/products-services' } });
+      if (!isLoggedIn) {
+        navigate('/login', {
+          state: { from: `/checkout/pending?slug=${encodeURIComponent(tier.slug)}` },
+        });
         return;
       }
-      try {
-        if (shouldUseStripe(i18n.language)) {
-          const { checkout_url } = await paymentApi.createStripeCheckoutSession(
-            token,
-            tier.slug,
-            i18n.language,
-          );
-          window.location.href = checkout_url;
-          return;
-        }
-        // Domestic fallback — stub until WeChat/Alipay ships.
-        const resp = await membershipApi.subscribe(token, tier.slug);
-        alert(resp.message);
-      } catch (err) {
-        alert(err instanceof Error ? err.message : '订阅失败');
-      }
+      navigate(`/checkout/pending?slug=${encodeURIComponent(tier.slug)}`);
       return;
     }
     // service tier: scroll form into view + preselect the tier
@@ -129,7 +115,7 @@ export function ProductsServices() {
 
   const ctaLabelFor = (tier: Membership) => {
     if (tier.slug === 'free') return '立即试用';
-    if (tier.tier_type === 'saas') return `立即订阅 $${tier.price}${tier.period}`;
+    if (tier.tier_type === 'saas') return `立即订阅`;
     return '联系销售';
   };
 
@@ -165,253 +151,295 @@ export function ProductsServices() {
             )}
 
             {!isLoading && !loadError && (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-card border-b border-border">
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">#</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">权益项</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">免费会员</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">检测会员</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Starter</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Growth</th>
-                      <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Scale</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* 价格行 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary"></td>
-                      <td className="px-4 py-3 text-sm font-medium">价格</td>
-                      <td className="px-4 py-3 text-center text-sm">$0/月</td>
-                      <td className="px-4 py-3 text-center text-sm">$19.9/月</td>
-                      <td className="px-4 py-3 text-center text-sm">$2K–3K</td>
-                      <td className="px-4 py-3 text-center text-sm">$4K–7K</td>
-                      <td className="px-4 py-3 text-center text-sm">$8K–12K</td>
-                    </tr>
-                    {/* 形态行 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary"></td>
-                      <td className="px-4 py-3 text-sm font-medium">形态</td>
-                      <td className="px-4 py-3 text-center text-sm">自助 SaaS</td>
-                      <td className="px-4 py-3 text-center text-sm">自助 SaaS</td>
-                      <td className="px-4 py-3 text-center text-sm">人工服务</td>
-                      <td className="px-4 py-3 text-center text-sm">人工服务</td>
-                      <td className="px-4 py-3 text-center text-sm">人工服务</td>
-                    </tr>
-                    {/* 权益项1 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">1</td>
-                      <td className="px-4 py-3 text-sm">是否需要注册登录</td>
-                      <td className="px-4 py-3 text-center text-sm">❌ 无需</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
-                    </tr>
-                    {/* 权益项2 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">2</td>
-                      <td className="px-4 py-3 text-sm">检测大项数量</td>
-                      <td className="px-4 py-3 text-center text-sm">5 项</td>
-                      <td className="px-4 py-3 text-center text-sm">23 项</td>
-                      <td className="px-4 py-3 text-center text-sm">23 项</td>
-                      <td className="px-4 py-3 text-center text-sm">23 项</td>
-                      <td className="px-4 py-3 text-center text-sm">23 项</td>
-                    </tr>
-                    {/* 权益项3 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">3</td>
-                      <td className="px-4 py-3 text-sm">子检测点数量</td>
-                      <td className="px-4 py-3 text-center text-sm">17 个</td>
-                      <td className="px-4 py-3 text-center text-sm">全部子项</td>
-                      <td className="px-4 py-3 text-center text-sm">全部子项</td>
-                      <td className="px-4 py-3 text-center text-sm">全部子项</td>
-                      <td className="px-4 py-3 text-center text-sm">全部子项</td>
-                    </tr>
-                    {/* 权益项4 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">4</td>
-                      <td className="px-4 py-3 text-sm">每月检测次数</td>
-                      <td className="px-4 py-3 text-center text-sm">3 次</td>
-                      <td className="px-4 py-3 text-center text-sm">10 次</td>
-                      <td className="px-4 py-3 text-center text-sm font-medium">50 次</td>
-                      <td className="px-4 py-3 text-center text-sm font-medium">200 次</td>
-                      <td className="px-4 py-3 text-center text-sm font-medium">无限</td>
-                    </tr>
-                    {/* 权益项5 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">5</td>
-                      <td className="px-4 py-3 text-sm">优化建议（修复方案）详细度</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
-                    </tr>
-                    {/* 权益项6 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">6</td>
-                      <td className="px-4 py-3 text-sm">检测项优先级排序</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                    </tr>
-                    {/* 权益项7 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">7</td>
-                      <td className="px-4 py-3 text-sm">完整报告（23 类全量）</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                    </tr>
-                    {/* 权益项8 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">8</td>
-                      <td className="px-4 py-3 text-sm">检测历史记录</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                    </tr>
-                    {/* 权益项9 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">9</td>
-                      <td className="px-4 py-3 text-sm">技术支持</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
-                      <td className="px-4 py-3 text-center text-sm">基础工单</td>
-                      <td className="px-4 py-3 text-center text-sm font-medium">优先响应 &lt; 24h</td>
-                      <td className="px-4 py-3 text-center text-sm font-medium">24/7 + 专属顾问</td>
-                    </tr>
-                    {/* 权益项10 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">10</td>
-                      <td className="px-4 py-3 text-sm">基础 GEO 覆盖</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 全渠道定制化</td>
-                    </tr>
-                    {/* 权益项11 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">11</td>
-                      <td className="px-4 py-3 text-sm">海外主流 LLM 收录规范</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 完成</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 适配</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 全渠道</td>
-                    </tr>
-                    {/* 权益项12 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">12</td>
-                      <td className="px-4 py-3 text-sm">网站文案建设与优化</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 全面</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 含使用场景</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 定制化交易场景</td>
-                    </tr>
-                    {/* 权益项13 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">13</td>
-                      <td className="px-4 py-3 text-sm">核心产品信息合规配置</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">✅</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 使用场景级</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 定制化 + 校验</td>
-                    </tr>
-                    {/* 权益项14 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">14</td>
-                      <td className="px-4 py-3 text-sm">持续维护</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 项目内</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 项目内</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 长期</td>
-                    </tr>
-                    {/* 权益项15 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">15</td>
-                      <td className="px-4 py-3 text-sm">付费榜单 SEO 投放</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 低成本投放位</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 性价比监测</td>
-                    </tr>
-                    {/* 权益项16 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">16</td>
-                      <td className="px-4 py-3 text-sm">声誉管理</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 3–5 篇/月 + 反向链接</td>
-                    </tr>
-                    {/* 权益项17 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">17</td>
-                      <td className="px-4 py-3 text-sm">公关（PR）支持</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">❌</td>
-                      <td className="px-4 py-3 text-center text-sm">✅ 媒体报道</td>
-                    </tr>
-                    {/* 权益项18 */}
-                    <tr className="border-b border-border">
-                      <td className="px-4 py-3 text-sm text-secondary">18</td>
-                      <td className="px-4 py-3 text-sm">服务周期 / 输出节奏</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">—</td>
-                      <td className="px-4 py-3 text-center text-sm">一次性项目</td>
-                      <td className="px-4 py-3 text-center text-sm">一次性 + 榜单期</td>
-                      <td className="px-4 py-3 text-center text-sm">月度持续输出</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                  {memberships.map((tier) => {
-                    return (
-                      <div
-                        key={tier.id}
-                        className={`bg-card border border-border rounded-2xl p-6 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col items-center ${tier.popular ? 'border-accent-primary/60 shadow-accent-primary/10' : ''
-                          }`}
-                      >
-                        {tier.popular && (
-                          <div className="text-[10px] uppercase tracking-[0.2em] text-accent-primary font-semibold mb-3">
-                            推荐
-                          </div>
-                        )}
-                        <h3 className="text-lg font-bold mb-2">{tier.name}</h3>
-                        <div className="text-2xl font-bold text-accent-primary mb-3">
-                          {formatPrice(tier)}
-                          {tier.tier_type === 'saas' && (
-                            <span className="text-sm text-secondary font-medium ml-1">{tier.period}</span>
-                          )}
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12 items-stretch">
+                  {memberships.map((tier) => (
+                    <div
+                      key={tier.id}
+                      className={`relative h-full bg-card border rounded-2xl p-6 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col ${tier.popular
+                        ? 'border-accent-primary shadow-lg shadow-accent-primary/20'
+                        : 'border-border'
+                        }`}
+                    >
+                      {tier.popular && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-accent-primary text-white text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
+                          热门推荐
                         </div>
+                      )}
+                      <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{tier.name}</h3>
+                      <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
+                        <span className="text-3xl font-bold text-accent-primary">
+                          {formatPrice(tier)}
+                        </span>
+                        {tier.tier_type === 'saas' && (
+                          <span className="text-sm text-secondary font-medium">{tier.period}</span>
+                        )}
+                        {tier.tier_type === 'service' && (
+                          <span className="text-xs text-secondary font-medium ml-1">起 / 项目</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
+                        {tier.description}
+                      </p>
+                      <ul className="space-y-2 mb-6 flex-1">
+                        {tier.features.slice(0, 5).map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-xs text-primary">
+                            <svg
+                              className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2.5"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            <span className="leading-snug">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-auto">
                         <button
                           onClick={() => handleCTA(tier)}
-                          className="w-full py-2.5 rounded-lg bg-accent-primary text-white font-semibold text-sm hover:bg-accent-primary/80 transition-colors duration-300 mt-4"
+                          className="w-full justify-center !py-3 text-sm btn-primary"
+                          style={
+                            tier.popular
+                              ? undefined
+                              : {
+                                  background: '#ffffff',
+                                  border: '1px solid #ffffff',
+                                  color: '#0a0a0f',
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                                }
+                          }
                         >
                           {ctaLabelFor(tier)}
                         </button>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
-              </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-card border-b border-border">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">#</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">权益项</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">免费会员</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">检测会员</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Starter</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Growth</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">Scale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* 价格行 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary"></td>
+                        <td className="px-4 py-3 text-sm font-medium">价格</td>
+                        <td className="px-4 py-3 text-center text-sm">¥0/月</td>
+                        <td className="px-4 py-3 text-center text-sm">¥19.9/月</td>
+                        <td className="px-4 py-3 text-center text-sm">$2K–3K</td>
+                        <td className="px-4 py-3 text-center text-sm">$4K–7K</td>
+                        <td className="px-4 py-3 text-center text-sm">$8K–12K</td>
+                      </tr>
+                      {/* 形态行 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary"></td>
+                        <td className="px-4 py-3 text-sm font-medium">形态</td>
+                        <td className="px-4 py-3 text-center text-sm">自助 SaaS</td>
+                        <td className="px-4 py-3 text-center text-sm">自助 SaaS</td>
+                        <td className="px-4 py-3 text-center text-sm">人工服务</td>
+                        <td className="px-4 py-3 text-center text-sm">人工服务</td>
+                        <td className="px-4 py-3 text-center text-sm">人工服务</td>
+                      </tr>
+                      {/* 权益项1 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">1</td>
+                        <td className="px-4 py-3 text-sm">是否需要注册登录</td>
+                        <td className="px-4 py-3 text-center text-sm">❌ 无需</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 需登录</td>
+                      </tr>
+                      {/* 权益项2 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">2</td>
+                        <td className="px-4 py-3 text-sm">检测大项数量</td>
+                        <td className="px-4 py-3 text-center text-sm">5 项</td>
+                        <td className="px-4 py-3 text-center text-sm">23 项</td>
+                        <td className="px-4 py-3 text-center text-sm">23 项</td>
+                        <td className="px-4 py-3 text-center text-sm">23 项</td>
+                        <td className="px-4 py-3 text-center text-sm">23 项</td>
+                      </tr>
+                      {/* 权益项3 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">3</td>
+                        <td className="px-4 py-3 text-sm">子检测点数量</td>
+                        <td className="px-4 py-3 text-center text-sm">17 个</td>
+                        <td className="px-4 py-3 text-center text-sm">全部子项</td>
+                        <td className="px-4 py-3 text-center text-sm">全部子项</td>
+                        <td className="px-4 py-3 text-center text-sm">全部子项</td>
+                        <td className="px-4 py-3 text-center text-sm">全部子项</td>
+                      </tr>
+                      {/* 权益项4 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">4</td>
+                        <td className="px-4 py-3 text-sm">每月检测次数</td>
+                        <td className="px-4 py-3 text-center text-sm">3 次</td>
+                        <td className="px-4 py-3 text-center text-sm">10 次</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">50 次</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">200 次</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">无限</td>
+                      </tr>
+                      {/* 权益项5 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">5</td>
+                        <td className="px-4 py-3 text-sm">优化建议（修复方案）详细度</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 人工交付</td>
+                      </tr>
+                      {/* 权益项6 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">6</td>
+                        <td className="px-4 py-3 text-sm">检测项优先级排序</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                      </tr>
+                      {/* 权益项7 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">7</td>
+                        <td className="px-4 py-3 text-sm">完整报告（23 类全量）</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                      </tr>
+                      {/* 权益项8 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">8</td>
+                        <td className="px-4 py-3 text-sm">检测历史记录</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                      </tr>
+                      {/* 权益项9 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">9</td>
+                        <td className="px-4 py-3 text-sm">技术支持</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
+                        <td className="px-4 py-3 text-center text-sm">基础工单</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">优先响应 &lt; 24h</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">24/7 + 专属顾问</td>
+                      </tr>
+                      {/* 权益项10 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">10</td>
+                        <td className="px-4 py-3 text-sm">基础 GEO 覆盖</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 基础</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 全渠道定制化</td>
+                      </tr>
+                      {/* 权益项11 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">11</td>
+                        <td className="px-4 py-3 text-sm">海外主流 LLM 收录规范</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 完成</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 适配</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 全渠道</td>
+                      </tr>
+                      {/* 权益项12 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">12</td>
+                        <td className="px-4 py-3 text-sm">网站文案建设与优化</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 全面</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 含使用场景</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 定制化交易场景</td>
+                      </tr>
+                      {/* 权益项13 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">13</td>
+                        <td className="px-4 py-3 text-sm">核心产品信息合规配置</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">✅</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 使用场景级</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 定制化 + 校验</td>
+                      </tr>
+                      {/* 权益项14 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">14</td>
+                        <td className="px-4 py-3 text-sm">持续维护</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 项目内</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 项目内</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 长期</td>
+                      </tr>
+                      {/* 权益项15 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">15</td>
+                        <td className="px-4 py-3 text-sm">付费榜单 SEO 投放</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 低成本投放位</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 性价比监测</td>
+                      </tr>
+                      {/* 权益项16 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">16</td>
+                        <td className="px-4 py-3 text-sm">声誉管理</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 3–5 篇/月 + 反向链接</td>
+                      </tr>
+                      {/* 权益项17 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">17</td>
+                        <td className="px-4 py-3 text-sm">公关（PR）支持</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">❌</td>
+                        <td className="px-4 py-3 text-center text-sm">✅ 媒体报道</td>
+                      </tr>
+                      {/* 权益项18 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">18</td>
+                        <td className="px-4 py-3 text-sm">服务周期 / 输出节奏</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">—</td>
+                        <td className="px-4 py-3 text-center text-sm">一次性项目</td>
+                        <td className="px-4 py-3 text-center text-sm">一次性 + 榜单期</td>
+                        <td className="px-4 py-3 text-center text-sm">月度持续输出</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
 
@@ -419,7 +447,7 @@ export function ProductsServices() {
             <h2 className="text-3xl font-bold mb-12 text-center">
               <span className="gradient-text">{t('productsServices.sections.contactConsultation')}</span>
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="max-w-2xl mx-auto">
               <div className="bg-card border border-border rounded-2xl p-8">
                 <h3 className="text-xl font-bold mb-6">{t('productsServices.contact.getCustomPlan')}</h3>
                 <form className="space-y-6" onSubmit={handleSubmit}>
@@ -513,45 +541,11 @@ export function ProductsServices() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-3.5 rounded-lg bg-accent-primary text-white font-semibold shadow-lg shadow-accent-primary/25 hover:shadow-xl hover:shadow-accent-primary/30 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full justify-center btn-primary !py-3.5 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {submitting ? '提交中…' : t('productsServices.contact.submit')}
                   </button>
                 </form>
-              </div>
-              <div className="flex flex-col justify-center">
-                <h3 className="text-xl font-bold mb-6">{t('productsServices.contact.contactUs')}</h3>
-                <p className="text-secondary mb-8 leading-relaxed">
-                  {t('productsServices.contact.contactText')}
-                </p>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-accent-primary/20 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted mb-1">{t('productsServices.contact.emailLabel')}</p>
-                      <a href="mailto:contact@zen7geo.com" className="text-primary font-semibold hover:text-accent-primary transition-colors duration-200">
-                        contact@zen7geo.com
-                      </a>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-accent-primary/20 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted mb-1">{t('productsServices.contact.phoneLabel')}</p>
-                      <a href="tel:+8610123456789" className="text-primary font-semibold hover:text-accent-primary transition-colors duration-200">
-                        +86 10 12345 6789
-                      </a>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </section>

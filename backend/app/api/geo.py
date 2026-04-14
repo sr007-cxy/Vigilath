@@ -91,14 +91,17 @@ async def geo_check_task(
                 tasks[task_id]["progress"] = progress
                 print(f"Task {task_id} progress updated to {progress}%")
         
-        # Run GEO check with progress callback
+        # Run GEO check with progress callback. The checker is synchronous and
+        # does blocking IO (HTTP fetches), so offload to a worker thread so the
+        # event loop keeps serving other requests.
         print(f"Calling run_geo_check for {url}")
         try:
-            result = run_geo_check(
+            result = await asyncio.to_thread(
+                run_geo_check,
                 url,
                 include_fix,
-                progress_callback=progress_callback,
-                allowed_categories=allowed_categories,
+                progress_callback,
+                allowed_categories,
             )
             if tier is not None:
                 result.tier = tier
@@ -150,10 +153,12 @@ async def check_anonymous(body: GeoTestRequest):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
 
-    result = run_geo_check(
+    result = await asyncio.to_thread(
+        run_geo_check,
         sanitized_url,
         body.include_fix,
-        allowed_categories=FREE_CHECK_CATEGORIES,
+        None,
+        FREE_CHECK_CATEGORIES,
     )
     result.tier = "free"
     result.locked_categories = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
@@ -194,10 +199,12 @@ async def check_authenticated(body: GeoTestRequest, request: Request):
             pass  # fall through to anonymous-equivalent run
 
     allowed = membership.allowed_check_categories  # None = all 23
-    result = run_geo_check(
+    result = await asyncio.to_thread(
+        run_geo_check,
         sanitized_url,
         body.include_fix,
-        allowed_categories=allowed,
+        None,
+        allowed,
     )
     result.tier = membership.slug
     result.locked_categories = _locked_for(membership)
@@ -215,10 +222,12 @@ async def test_geo(body: GeoTestRequest):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
 
-    result = run_geo_check(
+    result = await asyncio.to_thread(
+        run_geo_check,
         sanitized_url,
         body.include_fix,
-        allowed_categories=FREE_CHECK_CATEGORIES,
+        None,
+        FREE_CHECK_CATEGORIES,
     )
     result.tier = "free"
     result.locked_categories = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]

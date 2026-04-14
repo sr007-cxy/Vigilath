@@ -272,7 +272,7 @@ export function Login() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold py-3 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary w-full justify-center !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -302,7 +302,12 @@ export function Login() {
                 <button
                   onClick={() => handleGoogleLogin()}
                   disabled={isLoading}
-                  className="flex items-center justify-center gap-2 px-4 py-3 border border-border rounded-lg bg-card hover:bg-muted transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)'
+                  }}
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-8.653 0-3.44-1.68-6.453-4.08-8.573l-2.053 2.053c1.907 2.107 2.96 4.907 2.96 8.04s-1.053 5.933-2.96 8.04c-1.907 2.107-4.613 3.467-8.04 3.467-5.893 0-10.667-4.773-10.667-10.667S6.587 1.333 12.48 1.333c3.653 0 6.813 1.44 8.84 3.84l2.813-2.813C21.267 2.413 17.52 0 12.48 0c-7.733 0-14 6.267-14 14s6.267 14 14 14c3.52 0 6.607-1.173 9.093-3.36 2.4-2.187 3.907-5.147 3.907-8.64s-1.507-6.453-3.907-8.64c-2.507-2.187-5.607-3.36-9.12-3.36z" />
@@ -312,7 +317,12 @@ export function Login() {
                 <button
                   onClick={() => handleFacebookLogin()}
                   disabled={isLoading}
-                  className="flex items-center justify-center gap-2 px-4 py-3 border border-border rounded-lg bg-card hover:bg-muted transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)'
+                  }}
                 >
                   <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z" />

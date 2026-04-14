@@ -14,6 +14,7 @@ import { About } from './pages/About';
 import { Advanced } from './pages/Advanced';
 import { CheckoutSuccess } from './pages/CheckoutSuccess';
 import { CheckoutCancel } from './pages/CheckoutCancel';
+import { CheckoutPending } from './pages/CheckoutPending';
 import { Header } from './components/Header';
 import './i18n'; // 导入 i18n 配置
 
@@ -42,6 +43,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/checkout/pending" element={<CheckoutPending />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
           </Routes>

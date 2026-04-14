@@ -452,10 +452,14 @@ export function Result() {
             </div>
           </div>
 
-          {/* Tab navigation — card style (active tab glows with gradient border + bg). */}
+          {/* Tab navigation — card-style tabs. Inactive tabs carry their own
+              border-b; the active tab drops its bottom border so it visually
+              merges with the content panel below. Doing the bottom line
+              per-tab (instead of a container border-b + cover hack) renders
+              identically across Chrome / Safari / Firefox. */}
           <div
             role="tablist"
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 mb-5 mt-2"
+            className="flex flex-wrap items-end gap-1.5 mt-2"
           >
             {groupStats.map((g) => {
               const isActive = activeTab === g.tab;
@@ -466,58 +470,44 @@ export function Result() {
                   aria-selected={isActive}
                   onClick={() => setActiveTab(g.tab)}
                   title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
-                  className={`relative group px-3 py-2.5 rounded-xl border text-left transition-all overflow-hidden ${isActive
-                    ? 'border-cyan-400/60 bg-gradient-to-br from-cyan-500/15 via-purple-500/10 to-pink-500/10 shadow-[0_0_0_1px_rgba(0,240,255,0.25),0_0_20px_rgba(0,240,255,0.15)]'
-                    : g.isTabLocked
-                      ? 'border-[#3f4143] bg-card/40 hover:border-cyan-500/30 hover:bg-card'
-                      : 'border-[#3f4143] bg-card/60 hover:border-cyan-500/40 hover:bg-card'
+                  className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
+                    ? 'border-cyan-400/60 border-b-transparent bg-gradient-to-b from-cyan-500/15 via-purple-500/10 to-transparent shadow-[0_-1px_0_0_rgba(0,240,255,0.25),-1px_0_0_0_rgba(0,240,255,0.1),1px_0_0_0_rgba(0,240,255,0.1)] z-10'
+                    : 'border-transparent border-b-[#3f4143] bg-card/40 hover:border-b-cyan-500/30 hover:bg-card/60'
                     }`}
                 >
                   {isActive && (
                     <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/80 to-transparent"></span>
                   )}
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {g.isTabLocked && (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3 text-accent-primary shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      )}
-                      <span
-                        className={`text-xs font-semibold truncate ${isActive
-                          ? 'text-primary'
-                          : g.isTabLocked
-                            ? 'text-[#d5d5dc]'
-                            : 'text-secondary group-hover:text-primary'
-                          }`}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {g.isTabLocked && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-accent-primary shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                       >
-                        {tabLabel(g.tab)}
-                      </span>
-                    </div>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    )}
+                    <span
+                      className={`text-xs font-semibold truncate ${isActive
+                        ? 'text-primary'
+                        : g.isTabLocked
+                          ? 'text-[#d5d5dc]'
+                          : 'text-secondary hover:text-primary'
+                        }`}
+                    >
+                      {tabLabel(g.tab)}
+                    </span>
                     <span
                       className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
-                        ? 'bg-cyan-500/20 text-accent-primary border border-[#3f4143] border-cyan-500/30'
+                        ? 'bg-cyan-500/20 text-accent-primary border border-cyan-500/30'
                         : 'bg-white/5 text-[#d5d5dc]'
                         }`}
                     >
                       {g.total}
                     </span>
-                  </div>
-                  {/* Thin pass-rate bar gives a secondary visual cue per card. */}
-                  <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-700 ${isActive
-                        ? 'bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500'
-                        : 'bg-gradient-to-r from-cyan-400/60 via-purple-500/60 to-pink-500/60'
-                        }`}
-                      style={{ width: `${g.passRate}%` }}
-                    ></div>
                   </div>
                 </button>
               );
@@ -528,8 +518,53 @@ export function Result() {
           {(() => {
             const stat = groupStats.find((g) => g.tab === activeTab);
             if (!stat) return null;
+            // Locked (member) tabs: the entire body is replaced with a frosted
+            // glass overlay. The user cannot preview any data — they must upgrade.
+            if (stat.isTabLocked) {
+              return (
+                <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-[#3f4143] border-t-0 bg-card overflow-hidden">
+                  {/* Blurred skeleton placeholder so the glass effect has something to stand on */}
+                  <div className="p-6 sm:p-8 blur-sm select-none pointer-events-none space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400/40"></span>
+                        <span className="w-12 h-4 rounded bg-white/10"></span>
+                        <span className="flex-1 h-3 rounded bg-white/10"></span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Frosted glass overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-md bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5">
+                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_24px_rgba(0,240,255,0.25)]">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-primary">
+                          {t('result.paywall.memberOnly', { defaultValue: '此检测项需要开通会员' })}
+                        </p>
+                        <p className="text-xs text-secondary">
+                          {t('result.paywall.subtitle')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => navigate('/products-services')}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all shadow-glow"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        {t('result.paywall.upgradePro', { defaultValue: '升级 Pro' })}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             return (
-              <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-4 sm:p-5 mb-5 relative overflow-hidden">
+              <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-4 sm:p-5 mt-5 mb-5 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent"></div>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
@@ -582,9 +617,12 @@ export function Result() {
             );
           })()}
 
-          {/* Detailed table */}
+          {/* Detailed table — skipped for locked tabs (the frosted overlay above
+              already covers the full body for member-only tabs). */}
           <div className="space-y-5 mb-8">
             {(() => {
+              const activeStat = groupStats.find((g) => g.tab === activeTab);
+              if (activeStat?.isTabLocked) return null;
               const renderRow = (check: CheckResult, rowKey: string) => {
                 const theme = statusTheme(check.status);
                 return (

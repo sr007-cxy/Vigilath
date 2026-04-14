@@ -95,94 +95,17 @@ export function About() {
             </div>
           </section>
 
-          {/* Our Team Section */}
-          <section className="mb-20 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-            <h2 className="text-3xl font-bold mb-12 text-center gradient-text">
-              {t('aboutUs.team.title')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 hover:-translate-y-1">
-                <img
-                  src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20asian%20male%20CEO%20headshot%2C%20confident%20expression%2C%20business%20attire&image_size=square"
-                  alt="CEO"
-                  className="w-full h-64 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2 gradient-text">{t('aboutUs.team.ceo.name')}</h3>
-                  <p className="text-accent-primary font-semibold mb-4">{t('aboutUs.team.ceo.title')}</p>
-                  <p className="text-secondary">
-                    {t('aboutUs.team.ceo.description')}
-                  </p>
-                </div>
-              </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 hover:-translate-y-1">
-                <img
-                  src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20asian%20female%20CTO%20headshot%2C%20smart%20expression%2C%20business%20attire&image_size=square"
-                  alt="CTO"
-                  className="w-full h-64 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2 gradient-text">{t('aboutUs.team.cto.name')}</h3>
-                  <p className="text-accent-primary font-semibold mb-4">{t('aboutUs.team.cto.title')}</p>
-                  <p className="text-secondary">
-                    {t('aboutUs.team.cto.description')}
-                  </p>
-                </div>
-              </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 hover:-translate-y-1">
-                <img
-                  src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20asian%20male%20marketing%20director%20headshot%2C%20friendly%20expression%2C%20business%20attire&image_size=square"
-                  alt="Marketing Director"
-                  className="w-full h-64 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2 gradient-text">{t('aboutUs.team.marketing.name')}</h3>
-                  <p className="text-accent-primary font-semibold mb-4">{t('aboutUs.team.marketing.title')}</p>
-                  <p className="text-secondary">
-                    {t('aboutUs.team.marketing.description')}
-                  </p>
-                </div>
-              </div>
-              <div className="bg-card border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 hover:-translate-y-1">
-                <img
-                  src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20asian%20female%20designer%20headshot%2C%20creative%20expression%2C%20business%20attire&image_size=square"
-                  alt="Design Director"
-                  className="w-full h-64 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2 gradient-text">{t('aboutUs.team.design.name')}</h3>
-                  <p className="text-accent-primary font-semibold mb-4">{t('aboutUs.team.design.title')}</p>
-                  <p className="text-secondary">
-                    {t('aboutUs.team.design.description')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* Contact Section */}
           <section id="contact-form" className="animate-fade-in" style={{ animationDelay: '0.5s' }}>
             <h2 className="text-3xl font-bold mb-12 text-center gradient-text">
               {t('aboutUs.contact.title')}
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="max-w-2xl mx-auto">
               <div className="bg-card border border-border rounded-2xl p-8">
                 <h3 className="text-xl font-bold mb-6 gradient-text">
                   {t('aboutUs.contact.info.title')}
                 </h3>
                 <div className="space-y-6">
-                  <div className="flex items-start gap-4">
-                    <svg className="w-6 h-6 text-accent-primary shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    <div>
-                      <h4 className="text-lg font-semibold mb-2 gradient-text">{t('aboutUs.contact.info.address')}</h4>
-                      <p className="text-secondary">
-                        {t('aboutUs.contact.info.addressValue')}
-                      </p>
-                    </div>
-                  </div>
                   <div className="flex items-start gap-4">
                     <svg className="w-6 h-6 text-accent-primary shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
@@ -206,52 +129,6 @@ export function About() {
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="bg-card border border-border rounded-2xl p-8">
-                <h3 className="text-xl font-bold mb-6 gradient-text">
-                  {t('aboutUs.contact.form.title')}
-                </h3>
-                <form className="space-y-6">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-semibold mb-2">
-                      {t('aboutUs.contact.form.name')}
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      className="w-full input-field"
-                      placeholder={t('aboutUs.contact.form.namePlaceholder')}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-semibold mb-2">
-                      {t('aboutUs.contact.form.email')}
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      className="w-full input-field"
-                      placeholder={t('aboutUs.contact.form.emailPlaceholder')}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="message" className="block text-sm font-semibold mb-2">
-                      {t('aboutUs.contact.form.message')}
-                    </label>
-                    <textarea
-                      id="message"
-                      rows={5}
-                      className="w-full input-field resize-none"
-                      placeholder={t('aboutUs.contact.form.messagePlaceholder')}
-                    ></textarea>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full btn-primary"
-                  >
-                    {t('aboutUs.contact.form.button')}
-                  </button>
-                </form>
               </div>
             </div>
           </section>

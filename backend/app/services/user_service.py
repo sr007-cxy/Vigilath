@@ -17,10 +17,11 @@ class UserService:
             # Hash the password
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
-            # Create ORM instance
+            # Create ORM instance. Name is optional at the API boundary;
+            # fall back to the email so the non-null DB column stays satisfied.
             db_user = UserORM(
                 email=user.email,
-                name=user.name,
+                name=user.name or user.email,
                 password_hash=password_hash
             )
             
@@ -96,7 +97,8 @@ class UserService:
                 password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 
                 db_user.email = user_update.email
-                db_user.name = user_update.name
+                if user_update.name is not None:
+                    db_user.name = user_update.name
                 db_user.password_hash = password_hash
                 
                 db.commit()

@@ -2,7 +2,7 @@
 interface User {
   id: number;
   email: string;
-  name: string;
+  name?: string | null;
   is_active: boolean;
 }
 
@@ -14,7 +14,7 @@ interface LoginResponse {
 interface RegisterResponse {
   id: number;
   email: string;
-  name: string;
+  name?: string | null;
   is_active: boolean;
 }
 
@@ -54,13 +54,13 @@ class AuthApi {
     return response.json();
   }
 
-  async register(name: string, email: string, password: string): Promise<RegisterResponse> {
+  async register(email: string, password: string): Promise<RegisterResponse> {
     const response = await fetch(`${this.baseUrl}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (!response.ok) {

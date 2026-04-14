@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoApi } from '../services/geoApi';
 import { PaymentModal } from '../components/PaymentModal';
@@ -194,12 +194,12 @@ export function Home() {
               <div className="mt-8 text-center">
                 <p className="text-sm text-muted font-medium">{t('home.poweredBy')}</p>
                 <p className="mt-2">
-                  <a
-                    href="/contact"
+                  <Link
+                    to="/products-services"
                     className="text-sm text-accent-primary font-medium hover:text-primary transition-colors duration-300"
                   >
                     {t('home.contactLink')}
-                  </a>
+                  </Link>
                 </p>
               </div>
             </div>

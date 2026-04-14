@@ -5,7 +5,6 @@ import { authApi } from '../services/authApi';
 import { PaymentModal } from '../components/PaymentModal';
 
 export function Register() {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,7 +35,7 @@ export function Register() {
     }
 
     try {
-      await authApi.register(name, email, password);
+      await authApi.register(email, password);
       // 注册成功后自动登录以获取 token，然后弹出支付框
       const loginRes = await authApi.login(email, password);
       localStorage.setItem('token', loginRes.access_token);
@@ -91,21 +90,6 @@ export function Register() {
               )}
 
               <div className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-secondary mb-1">
-                    {t('register.name')}
-                  </label>
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-card text-primary placeholder-muted focus:outline-none transition-colors duration-200"
-                    placeholder={t('register.namePlaceholder')}
-                  />
-                </div>
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-secondary mb-1">
                     {t('register.email')}
@@ -172,7 +156,7 @@ export function Register() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold py-3 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary w-full justify-center !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -191,7 +175,6 @@ export function Register() {
       {paymentToken && (
         <PaymentModal
           token={paymentToken}
-          userName={name}
           onClose={handlePaymentClose}
           onSuccess={handlePaymentSuccess}
         />

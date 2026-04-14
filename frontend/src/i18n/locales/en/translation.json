@@ -11,7 +11,10 @@
     "geoKnowledge": "GEO Knowledge",
     "productsServices": "Products & Services",
     "aboutUs": "About Us",
-    "login": "Log in"
+    "login": "Log in",
+    "register": "Sign up",
+    "logout": "Sign out",
+    "signedInAs": "Signed in as"
   },
   "geoKnowledge": {
     "title": "GEO Knowledge Base",
@@ -269,7 +272,9 @@
       "viewAll": "Unlock all checks",
       "perCategoryHint": "Free preview shows 2 items per tab. Unlock to see everything.",
       "locked": "Locked",
-      "unlockCategory": "Upgrade to unlock this category →"
+      "unlockCategory": "Upgrade to unlock this category →",
+      "memberOnly": "This category requires a membership",
+      "upgradePro": "Upgrade to Pro"
     },
     "buttons": {
       "checkAnother": "Check another site",
@@ -416,12 +421,10 @@
       "title": "Contact Us",
       "info": {
         "title": "Contact Information",
-        "address": "Address",
-        "addressValue": "Room 1001, Building A, SOHO Modern Center, 88 Jianguo Road, Chaoyang District, Beijing",
         "email": "Email",
-        "emailValue": "contact@zen7geo.com",
+        "emailValue": "contact@lingjiyiwu.com",
         "phone": "Phone",
-        "phoneValue": "+86 10 12345 6789"
+        "phoneValue": "18611296871"
       },
       "form": {
         "title": "Send Message",
