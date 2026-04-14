@@ -3,7 +3,7 @@ name = "geo-checker-backend"
 version = "0.1.0"
 description = "GEO Readiness Checker Backend API"
 authors = ["Your Name <your.email@example.com>"]
-packages = [{ include = "app" }]
+packages = [{ include = "geo" }]
 
 [tool.poetry.dependencies]
 python = "^3.9"

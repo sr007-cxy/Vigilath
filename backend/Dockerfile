@@ -13,7 +13,7 @@ COPY . /app
 RUN poetry install
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8070
 
 # Command to run the application
-CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "geo.main:app", "--host", "0.0.0.0", "--port", "8070"]

@@ -34,7 +34,7 @@ MEMBERSHIP_NEW_COLUMNS = [
 
 def alter_memberships_table_raw():
     """Run ALTER TABLE via a raw sqlite3 connection, before importing the ORM."""
-    from app.database import settings
+    from geo.database import settings
 
     db_url = settings.DATABASE_URL
     if not db_url.startswith("sqlite:///"):
@@ -78,9 +78,9 @@ def alter_memberships_table_raw():
 
 def create_new_tables():
     """Create any tables that don't yet exist (user_check_usage, sales_leads, etc.)."""
-    from app.database import Base, engine
-    from app.models import membership as _m  # noqa: F401  (register ORM)
-    from app.models import user as _u  # noqa: F401
+    from geo.database import Base, engine
+    from geo.models import membership as _m  # noqa: F401  (register ORM)
+    from geo.models import user as _u  # noqa: F401
 
     print("[migrate] create_all() — user_check_usage, sales_leads, etc.")
     Base.metadata.create_all(bind=engine)
@@ -88,8 +88,8 @@ def create_new_tables():
 
 def wipe_and_reseed():
     from sqlalchemy import text
-    from app.database import SessionLocal
-    from app.services.membership_service import MembershipService, DEFAULT_MEMBERSHIPS
+    from geo.database import SessionLocal
+    from geo.services.membership_service import MembershipService, DEFAULT_MEMBERSHIPS
 
     print("[migrate] wiping user_memberships + memberships")
     db = SessionLocal()

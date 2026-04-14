@@ -31,7 +31,7 @@
 
 #### 前端环境变量
 
-- `VITE_API_URL`：后端 API 的 URL，默认为 `http://localhost:8000/api`
+- `VITE_API_URL`：后端 API 的 URL，默认为 `http://localhost:8070/api`
 
 #### 后端环境变量
 
@@ -116,7 +116,7 @@ python -m migrations.001_membership_v2
 3. **启动开发服务器**
 
    ```bash
-   poetry run uvicorn app.main:app --reload
+   poetry run uvicorn geo.main:app --reload
    ```
 
 ## 维护指南
