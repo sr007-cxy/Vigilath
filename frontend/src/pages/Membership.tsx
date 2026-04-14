@@ -15,7 +15,7 @@ interface UserMembership {
 interface User {
   id: number;
   email: string;
-  name: string;
+  name?: string | null;
   is_active: boolean;
 }
 
