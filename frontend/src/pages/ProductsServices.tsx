@@ -186,74 +186,74 @@ export function ProductsServices() {
                   {memberships.map((tier) => {
                     const text = tierText(tier);
                     return (
-                    <div
-                      key={tier.id}
-                      className={`relative h-full bg-card border rounded-2xl p-6 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col ${tier.popular
-                        ? 'border-accent-primary shadow-lg shadow-accent-primary/20'
-                        : 'border-border'
-                        }`}
-                    >
-                      {tier.popular && (
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white bg-accent-primary text-[#000] text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
-                          {t('productsServices.cta.popular')}
+                      <div
+                        key={tier.id}
+                        className={`relative h-full bg-card border rounded-2xl p-6 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col ${tier.popular
+                          ? 'border-accent-primary shadow-lg shadow-accent-primary/20'
+                          : 'border-border'
+                          }`}
+                      >
+                        {tier.popular && (
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white bg-accent-primary text-[#000] text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
+                            {t('productsServices.cta.popular')}
+                          </div>
+                        )}
+                        <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
+                        <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
+                          <span className="text-3xl font-bold text-accent-primary">
+                            {tier.slug === 'scale'
+                              ? t('productsServices.cards.scale.getDemoPrice')
+                              : formatTierPrice(tier)}
+                          </span>
+                          {tier.slug !== 'scale' && tier.tier_type === 'saas' && text.period && (
+                            <span className="text-sm text-secondary font-medium">{text.period}</span>
+                          )}
+                          {tier.slug !== 'scale' && tier.tier_type === 'service' && (
+                            <span className="text-xs text-secondary font-medium ml-1">{t('productsServices.perProject')}</span>
+                          )}
                         </div>
-                      )}
-                      <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
-                      <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
-                        <span className="text-3xl font-bold text-accent-primary">
-                          {tier.slug === 'scale'
-                            ? t('productsServices.cards.scale.getDemoPrice')
-                            : formatTierPrice(tier)}
-                        </span>
-                        {tier.slug !== 'scale' && tier.tier_type === 'saas' && text.period && (
-                          <span className="text-sm text-secondary font-medium">{text.period}</span>
-                        )}
-                        {tier.slug !== 'scale' && tier.tier_type === 'service' && (
-                          <span className="text-xs text-secondary font-medium ml-1">{t('productsServices.perProject')}</span>
-                        )}
+                        <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
+                          {text.description}
+                        </p>
+                        <ul className="space-y-2 mb-6 flex-1">
+                          {text.features.slice(0, 5).map((feature, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-xs text-primary">
+                              <svg
+                                className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2.5"
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                              <span className="leading-snug">{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-auto">
+                          <button
+                            onClick={() => handleCTA(tier)}
+                            className="w-full justify-center !py-3 text-sm btn-primary"
+                            style={
+                              tier.popular
+                                ? undefined
+                                : {
+                                  background: '#ffffff',
+                                  border: '1px solid #ffffff',
+                                  color: '#0a0a0f',
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                                }
+                            }
+                          >
+                            {ctaLabelFor(tier)}
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
-                        {text.description}
-                      </p>
-                      <ul className="space-y-2 mb-6 flex-1">
-                        {text.features.slice(0, 5).map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-xs text-primary">
-                            <svg
-                              className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2.5"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                            <span className="leading-snug">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-auto">
-                        <button
-                          onClick={() => handleCTA(tier)}
-                          className="w-full justify-center !py-3 text-sm btn-primary"
-                          style={
-                            tier.popular
-                              ? undefined
-                              : {
-                                background: '#ffffff',
-                                border: '1px solid #ffffff',
-                                color: '#0a0a0f',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-                              }
-                          }
-                        >
-                          {ctaLabelFor(tier)}
-                        </button>
-                      </div>
-                    </div>
                     );
                   })}
                 </div>

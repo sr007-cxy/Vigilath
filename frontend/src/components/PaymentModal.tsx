@@ -137,7 +137,7 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
                           {t('payment.popular')}
                         </div>
                       )}
-                      <h3 className="font-bold text-primary text-lg mb-1">{tier.name}</h3>
+
                       <div className="mb-3">
                         <span className="text-2xl font-bold text-primary">{currencySymbol(tier.currency)}{tier.price}</span>
                         <span className="text-sm text-secondary">{tier.period}</span>

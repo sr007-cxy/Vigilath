@@ -3371,10 +3371,10 @@ def authority_audit(url, return_data=False):
 
 
 # ---------------------------------------------------------------------------
-# AI Citation Check (PAID feature — requires PERPLEXITY_API_KEY)
+# AI Citation Check (PAID feature — requires OPENROUTER_API_KEY)
 # ---------------------------------------------------------------------------
 def citation_check(url, return_data=False):
-    """Check if a site is being cited by AI engines using the Perplexity API.
+    """Check if a site is being cited by AI engines using the OpenRouter API.
 
     When return_data=True, returns a dict with per-query citation results +
     overall citation rate. Raises RuntimeError on missing/invalid API key
@@ -3390,22 +3390,22 @@ def citation_check(url, return_data=False):
     domain = parsed.netloc.replace("www.", "")
     brand = domain.split(".")[0]
 
-    api_key = os.environ.get("PERPLEXITY_API_KEY", "").strip()
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
         if return_data:
-            raise RuntimeError("PERPLEXITY_API_KEY not set")
-        print(f"\n  [{FAIL}] PERPLEXITY_API_KEY environment variable not set.")
+            raise RuntimeError("OPENROUTER_API_KEY not set")
+        print(f"\n  [{FAIL}] OPENROUTER_API_KEY environment variable not set.")
         print(f"  This is a paid feature. Set your API key to use it:")
-        print(f"    export PERPLEXITY_API_KEY='pplx-...'")
-        print(f"  Get an API key at: https://www.perplexity.ai/settings/api")
+        print(f"    export OPENROUTER_API_KEY='your-openrouter-api-key'")
+        print(f"  Get an API key at: https://openrouter.ai/")
         sys.exit(1)
 
     print(f"\n{'='*60}")
-    print(f"  AI Citation Check (Powered by Perplexity)")
+    print(f"  AI Citation Check (Powered by OpenRouter)")
     print(f"  Target: {base_url}")
     print(f"  Domain: {domain} | Brand: {brand}")
     print(f"{'='*60}")
-    print(f"\n  Sending brand-relevant queries to Perplexity AI...")
+    print(f"\n  Sending brand-relevant queries to Perplexity AI via OpenRouter...")
     print(f"  Checking if {domain} appears in AI-generated citations...\n")
 
     # Build queries that should surface the brand if AI engines know about it
@@ -3431,7 +3431,7 @@ def citation_check(url, return_data=False):
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    api_url = "https://api.perplexity.ai/chat/completions"
+    api_url = "https://openrouter.ai/api/v1/chat/completions"
 
     total_queries = len(queries)
     cited_count = 0
@@ -3442,7 +3442,7 @@ def citation_check(url, return_data=False):
         print(f"  [{INFO}] Query {i}/{total_queries}: \"{query}\"")
 
         payload = {
-            "model": "sonar",
+            "model": "perplexity/sonar",
             "messages": [
                 {"role": "user", "content": query}
             ],
@@ -3452,8 +3452,8 @@ def citation_check(url, return_data=False):
             r = requests.post(api_url, json=payload, headers=headers, timeout=30)
             if r.status_code == 401:
                 if return_data:
-                    raise RuntimeError("Invalid PERPLEXITY_API_KEY")
-                print(f"  [{FAIL}] Invalid API key. Check your PERPLEXITY_API_KEY.")
+                    raise RuntimeError("Invalid OPENROUTER_API_KEY")
+                print(f"  [{FAIL}] Invalid API key. Check your OPENROUTER_API_KEY.")
                 sys.exit(1)
             elif r.status_code == 429:
                 print(f"  [{WARN}] Rate limited. Waiting before next query...")
@@ -3465,7 +3465,8 @@ def citation_check(url, return_data=False):
                 continue
 
             data = r.json()
-            citations = data.get("citations", [])
+            # Extract citations from the response
+            citations = []
             # Also check the answer text for domain mentions
             answer = ""
             choices = data.get("choices", [])
@@ -3473,7 +3474,15 @@ def citation_check(url, return_data=False):
                 answer = choices[0].get("message", {}).get("content", "")
 
             # Check if our domain appears in citations
-            domain_citations = [c for c in citations if domain in c]
+            domain_citations = []
+            # Extract citations from the answer text
+            import re
+            url_pattern = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
+            found_urls = url_pattern.findall(answer)
+            for url in found_urls:
+                if domain in url:
+                    domain_citations.append(url)
+
             domain_in_text = domain in answer.lower() or brand.lower() in answer.lower()
 
             if domain_citations:
@@ -3486,19 +3495,19 @@ def citation_check(url, return_data=False):
                 cited_count += 1
                 print(f"    [{PASS}] MENTIONED in answer (no direct citation link)")
             else:
-                print(f"    [{WARN}] Not cited. {len(citations)} other source(s) cited instead.")
-                if citations:
-                    for c in citations[:3]:
+                print(f"    [{WARN}] Not cited. Found {len(found_urls)} other source(s) instead.")
+                if found_urls:
+                    for c in found_urls[:3]:
                         print(f"           → {c}")
-                    if len(citations) > 3:
-                        print(f"           ... and {len(citations) - 3} more")
+                    if len(found_urls) > 3:
+                        print(f"           ... and {len(found_urls) - 3} more")
 
             results.append({
                 "query": query,
                 "cited": bool(domain_citations or domain_in_text),
                 "citations": domain_citations,
                 "mentioned": domain_in_text,
-                "total_sources": len(citations),
+                "total_sources": len(found_urls),
                 "error": False,
             })
 
@@ -3632,39 +3641,35 @@ def _query_perplexity(query, api_key):
 
 
 def _query_openai(query, api_key):
-    """Send a query to OpenAI Responses API with web search. Returns (answer, citations, error)."""
+    """Send a query to OpenAI API via OpenRouter with web search. Returns (answer, citations, error)."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
-        "model": "gpt-4o-mini",
-        "input": query,
-        "tools": [{"type": "web_search_preview"}],
+        "model": "openai/gpt-4o-mini",
+        "messages": [
+            {"role": "user", "content": query}
+        ],
     }
     try:
-        r = requests.post("https://api.openai.com/v1/responses",
+        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
                           json=payload, headers=headers, timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
         if r.status_code == 429:
             time.sleep(5)
-            r = requests.post("https://api.openai.com/v1/responses",
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
                               json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
         answer = ""
         citations = []
-        # Parse Responses API output
-        for block in data.get("output", []):
-            if block.get("type") == "message":
-                for content in block.get("content", []):
-                    if content.get("type") == "output_text":
-                        answer += content.get("text", "")
-                        # Extract citations from annotations
-                        for ann in content.get("annotations", []):
-                            if ann.get("type") == "url_citation":
-                                url_val = ann.get("url", "")
-                                if url_val:
-                                    citations.append(url_val)
+        choices = data.get("choices", [])
+        if choices:
+            answer = choices[0].get("message", {}).get("content", "")
+            # Extract citations from the answer text
+            import re
+            url_pattern = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
+            citations = url_pattern.findall(answer)
         citations = list(dict.fromkeys(citations))  # dedupe preserving order
         # Fallback: extract URLs from answer text
         if not citations:
@@ -3676,46 +3681,37 @@ def _query_openai(query, api_key):
 
 
 def _query_anthropic(query, api_key):
-    """Send a query to Anthropic Claude API with web search. Returns (answer, citations, error)."""
+    """Send a query to Anthropic Claude API via OpenRouter with web search. Returns (answer, citations, error)."""
     headers = {
-        "x-api-key": api_key,
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
     }
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "anthropic/claude-sonnet-4",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": query}],
-        "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
     }
     try:
-        r = requests.post("https://api.anthropic.com/v1/messages",
+        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
                           json=payload, headers=headers, timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
         if r.status_code == 429:
             time.sleep(5)
-            r = requests.post("https://api.anthropic.com/v1/messages",
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
                               json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
         answer = ""
         citations = []
-        for block in data.get("content", []):
-            if block.get("type") == "text":
-                answer += block.get("text", "")
-                # Extract citations from text block annotations
-                for cit in block.get("citations", []):
-                    url_val = cit.get("url", "")
-                    if url_val:
-                        citations.append(url_val)
-            elif block.get("type") == "web_search_tool_result":
-                for item in block.get("content", []):
-                    if item.get("type") == "web_search_result":
-                        url_val = item.get("url", "")
-                        if url_val:
-                            citations.append(url_val)
+        choices = data.get("choices", [])
+        if choices:
+            answer = choices[0].get("message", {}).get("content", "")
+            # Extract citations from the answer text
+            import re
+            url_pattern = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
+            citations = url_pattern.findall(answer)
         citations = list(dict.fromkeys(citations))  # dedupe preserving order
         return answer, citations, None
     except requests.RequestException as e:
@@ -3826,27 +3822,23 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     domain = parsed.netloc.replace("www.", "")
     brand = domain.split(".")[0]
 
-    # Detect available AI engines
+    # Detect available AI engines (using OpenRouter)
     engines = {}
-    pplx_key = os.environ.get("PERPLEXITY_API_KEY", "").strip()
-    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
-    if pplx_key:
-        engines["Perplexity"] = ("perplexity", pplx_key)
-    if openai_key:
-        engines["ChatGPT"] = ("openai", openai_key)
-    if anthropic_key:
-        engines["Claude"] = ("anthropic", anthropic_key)
+    if openrouter_key:
+        engines["Perplexity"] = ("perplexity", openrouter_key)
+        engines["ChatGPT"] = ("openai", openrouter_key)
+        engines["Claude"] = ("anthropic", openrouter_key)
 
     if not engines:
         if return_data:
-            raise RuntimeError("No AI API keys configured (PERPLEXITY_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY)")
-        print(f"\n  [{FAIL}] No AI API keys found. Set at least one:")
-        print(f"    export PERPLEXITY_API_KEY='pplx-...'   (recommended)")
-        print(f"    export OPENAI_API_KEY='sk-...'")
-        print(f"    export ANTHROPIC_API_KEY='sk-ant-...'")
-        print(f"\n  This is a paid feature requiring AI API access.")
+            raise RuntimeError("OPENROUTER_API_KEY not set")
+        print(f"\n  [{FAIL}] OPENROUTER_API_KEY environment variable not set.")
+        print(f"  This is a paid feature. Set your API key to use it:")
+        print(f"    export OPENROUTER_API_KEY='your-openrouter-api-key'")
+        print(f"  Get an API key at: https://openrouter.ai/")
+        print(f"\n  This is a paid feature requiring OpenRouter API access.")
         sys.exit(1)
 
     engine_names = ", ".join(engines.keys())
@@ -4535,13 +4527,14 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     """
     import os
 
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
         if return_data:
-            raise RuntimeError("OPENAI_API_KEY not set")
-        print(f"\n  [{FAIL}] OPENAI_API_KEY environment variable not set.")
-        print(f"  This feature requires an OpenAI API key.")
-        print(f"  Set it with: export OPENAI_API_KEY='sk-...'")
+            raise RuntimeError("OPENROUTER_API_KEY not set")
+        print(f"\n  [{FAIL}] OPENROUTER_API_KEY environment variable not set.")
+        print(f"  This feature requires an OpenRouter API key.")
+        print(f"  Set it with: export OPENROUTER_API_KEY='your-openrouter-api-key'")
+        print(f"  Get an API key at: https://openrouter.ai/")
         sys.exit(1)
 
     entity_type = entity_type.lower()
@@ -4652,8 +4645,8 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                 answer, citations, error = _query_openai(q, api_key)
                 if error == "invalid_key":
                     if return_data:
-                        raise RuntimeError("Invalid OPENAI_API_KEY")
-                    print(f"  [{FAIL}] Invalid OpenAI API key. Check your OPENAI_API_KEY.")
+                        raise RuntimeError("Invalid OPENROUTER_API_KEY")
+                    print(f"  [{FAIL}] Invalid OpenRouter API key. Check your OPENROUTER_API_KEY.")
                     sys.exit(1)
                 if error:
                     answers.append("")
@@ -5187,20 +5180,19 @@ def main():
                         help="[PAID] Check if a site is being cited by AI engines. "
                              "Sends brand-relevant queries to Perplexity and checks if your domain "
                              "appears in AI-generated answer citations. "
-                             "Requires PERPLEXITY_API_KEY environment variable.")
+                             "Requires OPENROUTER_API_KEY environment variable.")
     parser.add_argument("--ai-visibility", metavar="URL",
                         help="[PAID] Comprehensive AI Visibility Audit. Checks if AI engines would "
                              "recommend your brand for relevant queries. Tests entity clarity, "
                              "competitor positioning, answer stability, and content gaps across "
-                             "multiple AI engines. Requires at least one of: PERPLEXITY_API_KEY, "
-                             "OPENAI_API_KEY, ANTHROPIC_API_KEY.")
+                             "multiple AI engines. Requires OPENROUTER_API_KEY environment variable.")
     parser.add_argument("--queries", metavar="QUERY", nargs="+",
                         help="Custom queries for --ai-visibility. Test specific prompts relevant "
                              "to your niche. Example: --queries 'best AI payment tools' 'x402 tools'")
     parser.add_argument("--entity", metavar="NAME",
                         help="[PAID] Audit GEO readiness of a brand, product, or person by name. "
                              "Queries AI engines to assess entity recognition, clarity, competitive "
-                             "position, sentiment, and content gaps. Requires OPENAI_API_KEY.")
+                             "position, sentiment, and content gaps. Requires OPENROUTER_API_KEY environment variable.")
     parser.add_argument("--entity-type", metavar="TYPE", default="brand",
                         choices=["brand", "product", "person"],
                         help="Entity type for --entity audit: brand, product, or person (default: brand)")

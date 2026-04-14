@@ -477,7 +477,7 @@
         ]
       },
       "scale": {
-        "name": "Scale",
+        "name": "旗舰版",
         "period": "USD / 项目",
         "description": "大型企业的全渠道 GEO 解决方案 + PR",
         "features": [
@@ -500,7 +500,7 @@
         "detector": "检测会员",
         "starter": "Starter",
         "growth": "Growth",
-        "scale": "Scale"
+        "scale": "旗舰版"
       },
       "rows": {
         "price": "价格",
