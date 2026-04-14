@@ -191,14 +191,13 @@
     border-radius: 8px;
     padding: 0.75rem 1.25rem;
     transition: all 0.5s ease;
-    border: 1px solid var(--border-color);
+    border: none;
     background-color: var(--bg-card);
     color: var(--text-primary);
   }
 
   input:focus {
     outline: none;
-    border-color: transparent;
     box-shadow: none;
   }
 
@@ -388,15 +387,14 @@
     border-radius: 8px;
     font-size: 1em;
     transition: all 0.3s ease;
-    border: 1px solid var(--border-color);
+    border: none;
     background-color: var(--bg-card);
     color: var(--text-primary);
   }
 
   .input-field:focus {
     outline: none;
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.2);
+    box-shadow: none;
   }
 
   .badge {

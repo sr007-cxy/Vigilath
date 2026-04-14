@@ -141,10 +141,10 @@ export function Advanced() {
   const initialUrl = (location.state as { url?: string } | null)?.url || '';
 
   // Per-mode form state
-  const [urlInput, setUrlInput] = useState<string>(initialUrl || 'https://example.com');
+  const [urlInput, setUrlInput] = useState<string>(initialUrl || 'moltspay.com');
   const [compareUrls, setCompareUrls] = useState<string[]>(() => {
     if (initialUrl) return [initialUrl, 'https://example.org'];
-    return ['https://example.com', 'https://example.org'];
+    return ['moltspay.com', 'https://example.org'];
   });
   const [customQueries, setCustomQueries] = useState<string>('');
   const [entityName, setEntityName] = useState<string>('');
@@ -413,7 +413,7 @@ function ModeForm(props: ModeFormProps) {
                 next[i] = e.target.value;
                 setCompareUrls(next);
               }}
-              placeholder="https://example.com"
+              placeholder="moltspay.com"
               disabled={loading}
               className={inputClass}
             />
@@ -481,7 +481,7 @@ function ModeForm(props: ModeFormProps) {
           type="text"
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="https://example.com"
+          placeholder="moltspay.com"
           disabled={loading}
           className={inputClass}
         />
@@ -555,8 +555,8 @@ function ScoreBar({ label, value, max }: { label: string; value: number; max: nu
     pct >= 60
       ? 'from-emerald-400 to-emerald-500'
       : pct >= 30
-      ? 'from-amber-400 to-amber-500'
-      : 'from-rose-400 to-rose-500';
+        ? 'from-amber-400 to-amber-500'
+        : 'from-rose-400 to-rose-500';
   return (
     <div className="mb-3 last:mb-0">
       <div className="flex justify-between text-xs mb-1.5">
@@ -593,12 +593,12 @@ function StatTile({
     accent === 'good'
       ? 'text-emerald-400'
       : accent === 'warn'
-      ? 'text-amber-400'
-      : accent === 'bad'
-      ? 'text-rose-400'
-      : accent === 'gradient'
-      ? 'gradient-text'
-      : 'text-primary';
+        ? 'text-amber-400'
+        : accent === 'bad'
+          ? 'text-rose-400'
+          : accent === 'gradient'
+            ? 'gradient-text'
+            : 'text-primary';
   return (
     <div className="bg-[#141416] border border-[#2a2a2e] rounded-xl p-4 hover:border-[#3f4143] transition-colors">
       <div className="text-[10px] uppercase tracking-[0.12em] text-secondary mb-1.5 font-semibold">
@@ -737,8 +737,8 @@ function CompareResult({ data }: { data: CompareResponse }) {
                         c.pct >= 60
                           ? 'bg-emerald-500/70'
                           : c.pct >= 30
-                          ? 'bg-amber-500/70'
-                          : 'bg-rose-500/70';
+                            ? 'bg-amber-500/70'
+                            : 'bg-rose-500/70';
                       return (
                         <td
                           key={i}
@@ -752,9 +752,8 @@ function CompareResult({ data }: { data: CompareResponse }) {
                               />
                             </div>
                             <span
-                              className={`tabular-nums text-xs whitespace-nowrap ${
-                                isWinner ? 'text-emerald-400 font-bold' : 'text-primary'
-                              }`}
+                              className={`tabular-nums text-xs whitespace-nowrap ${isWinner ? 'text-emerald-400 font-bold' : 'text-primary'
+                                }`}
                             >
                               {c.pct}%
                             </span>
@@ -844,11 +843,10 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
                 >
                   <span className="text-sm text-primary font-mono">{b.bot}</span>
                   <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      blocked
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${blocked
                         ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                         : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    }`}
+                      }`}
                   >
                     {blocked ? 'Blocked' : 'Allowed'}
                   </span>
@@ -867,8 +865,8 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
                 b.result === 'allowed'
                   ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                   : b.result === 'suspicious'
-                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
               return (
                 <li
                   key={b.bot}
@@ -893,11 +891,10 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
       >
         <div className="flex items-center gap-3 mb-3">
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              data.common_crawl.found
+            className={`w-10 h-10 rounded-xl flex items-center justify-center ${data.common_crawl.found
                 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                 : 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
-            }`}
+              }`}
           >
             {data.common_crawl.found ? (
               <svg
@@ -1060,8 +1057,8 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
               status === 'cited'
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                 : status === 'error'
-                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
             const statusLabel = status === 'cited' ? 'CITED' : status === 'error' ? 'ERROR' : 'NOT CITED';
             return (
               <li
@@ -1305,11 +1302,10 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      kg.found
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${kg.found
                         ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                         : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
-                    }`}
+                      }`}
                   >
                     {kg.found ? (
                       <svg
@@ -1350,9 +1346,8 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
-                    kg.found ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wider ${kg.found ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
                 >
                   {kg.found ? 'Found' : 'Missing'}
                 </span>

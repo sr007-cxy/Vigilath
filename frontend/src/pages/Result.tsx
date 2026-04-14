@@ -5,6 +5,7 @@ import { PaymentModal } from '../components/PaymentModal';
 import { useMembership } from '../hooks/useMembership';
 import { geoApi } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
+import { exportPdfReport } from '../utils/exportPdfReport';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
 // 23 categories split into 7 tabs (2 free + 5 paid) aligned with
@@ -122,7 +123,8 @@ const statusTheme = (status: string) => {
 };
 
 export function Result() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [exportingPdf, setExportingPdf] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const result = location.state?.result as GeoTestResult;
@@ -325,24 +327,26 @@ export function Result() {
     navigator.clipboard.writeText(url).then(() => alert(t('result.shareExport.copied')));
   };
 
-  const handleExportCSV = () => {
-    const csvContent = `data:text/csv;charset=utf-8,${encodeURIComponent(
-      [
-        ['Category', 'Status', 'Message', 'Fix'],
-        ...result.checks.map((c) => [c.category, c.status, c.message, c.fix || '']),
-      ]
-        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-        .join('\n'),
-    )}`;
-    const link = document.createElement('a');
-    link.setAttribute('href', csvContent);
-    link.setAttribute('download', `geo-result-${result.url.replace(/[^a-zA-Z0-9]/g, '-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportPDF = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await exportPdfReport({
+        result,
+        t,
+        language: i18n.language || 'en',
+        groupStats,
+        categoryGroups,
+        checksByCategory,
+        otherCategories,
+      });
+    } catch (err) {
+      console.error('PDF export failed', err);
+      alert(t('result.error.noData'));
+    } finally {
+      setExportingPdf(false);
+    }
   };
-
-  const handleExportPDF = () => window.print();
 
   const tabLabel = (tab: string) => t(`result.categories.${tab}`);
 
@@ -466,22 +470,24 @@ export function Result() {
                 </svg>
               </button>
               <button
-                onClick={handleExportCSV}
-                title={t('result.shareExport.exportCSV')}
-                className="w-9 h-9 rounded-lg bg-card border border-[#3f4143] border-border text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors flex items-center justify-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </button>
-              <button
                 onClick={handleExportPDF}
-                title={t('result.shareExport.exportPDF')}
-                className="w-9 h-9 rounded-lg bg-card border border-[#3f4143] border-border text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors flex items-center justify-center"
+                disabled={exportingPdf}
+                title={exportingPdf ? t('result.shareExport.exportPDFLoading') : t('result.shareExport.exportPDF')}
+                className="h-9 px-3 rounded-lg bg-card border border-[#3f4143] border-border text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors flex items-center gap-2 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-10a2 2 0 00-2-2H9a2 2 0 00-2 2v10a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
+                {exportingPdf ? (
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                )}
+                <span className="hidden sm:inline">
+                  {exportingPdf ? t('result.shareExport.exportPDFLoading') : t('result.shareExport.exportPDF')}
+                </span>
               </button>
             </div>
           </div>
@@ -534,14 +540,16 @@ export function Result() {
                     >
                       {tabLabel(g.tab)}
                     </span>
-                    <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
-                        ? 'bg-cyan-500/20 text-accent-primary border border-cyan-500/30'
-                        : 'bg-white/5 text-[#d5d5dc]'
-                        }`}
-                    >
-                      {g.total}
-                    </span>
+                    {g.total > 0 && (
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
+                          ? 'bg-cyan-500/20 text-accent-primary border border-cyan-500/30'
+                          : 'bg-white/5 text-[#d5d5dc]'
+                          }`}
+                      >
+                        {g.total}
+                      </span>
+                    )}
                   </div>
                 </button>
               );

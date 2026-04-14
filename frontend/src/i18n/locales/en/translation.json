@@ -104,7 +104,7 @@
   "home": {
     "title": "GEO Readiness Checker",
     "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
-    "placeholder": "https://example.com",
+    "placeholder": "moltspay.com",
     "button": "Check GEO Readiness",
     "analyzing": "Analyzing...",
     "error": {
@@ -198,6 +198,31 @@
       "Cross-Platform Content Distribution": "Cross-Platform Content Distribution",
       "Multi-Page Sampling": "Multi-Page Sampling"
     },
+    "categoryDescriptions": {
+      "HTTPS": "Verifies HTTPS is enabled, the certificate is valid, and HTTP traffic redirects to HTTPS. AI engines preferentially trust encrypted resources; unencrypted sites lose visibility in citations and ranking.",
+      "robots.txt": "Parses allow/block rules in robots.txt for AI crawlers such as GPTBot, ClaudeBot and PerplexityBot, and flags configurations where a wildcard (User-agent: *) accidentally blocks AI access.",
+      "sitemap.xml": "Confirms sitemap.xml exists, is referenced from robots.txt, and reports URL count and freshness, helping AI engines discover and revisit content efficiently.",
+      "llms.txt": "Detects whether llms.txt (the LLM-friendly crawling protocol) is published and whether it points at the canonical content. This emerging standard materially improves citation odds.",
+      ".well-known Discovery": "Inspects /.well-known/ for metadata files such as ai-plugin.json and security.txt so AI platforms can auto-discover capabilities and contact endpoints.",
+      "AI Crawl Readiness": "Comprehensively checks whether AI crawler agents can reach the site: status codes, redirect chains, timeouts, CDN gating and UA blocking are evaluated.",
+      "Structured Data": "Scans JSON-LD / Microdata / RDFa structured data and reports coverage of Organization, Article, Product, FAQ and HowTo schemas with field-level validation.",
+      "Schema Breadcrumbs & Knowledge Panel": "Checks BreadcrumbList, Organization and Person schemas that feed knowledge panels and influence whether AI engines treat the entity as authoritative.",
+      "URL Normalization": "Verifies URL normalization: trailing slash consistency, canonical tags, parameter hygiene and duplicate paths to prevent crawl waste and authority dilution.",
+      "Meta Tags": "Audits coverage of title, meta description, Open Graph, Twitter Card, canonical and viewport — the signals AI summaries rely on most heavily.",
+      "Mobile-Friendliness & Page Weight": "Assesses mobile readability, viewport configuration, font and tap-target sizing, and measures HTML payload weight. Heavy pages get truncated by AI crawlers.",
+      "Content Accessibility": "Checks alt text, heading hierarchy and ARIA labels. Accessible content is consistently easier for AI engines to parse and extract.",
+      "Content Quality for AI": "AI-oriented content quality scoring: originality, information density, sectioning, citations and freshness — all gates for whether content is worth quoting.",
+      "AI-Specific Optimization": "Dedicated AI-engine optimization: FAQ schema, structured answers, explicit factual statements and source attribution measurably increase citation probability.",
+      "AI Answer Format Optimization": "Evaluates whether the page uses Q&A headings, bullet lists, tables and definition blocks that AI engines prefer when extracting answer snippets.",
+      "Technical Crawlability": "Inspects status codes, redirect chain length, JS-render dependence, slow responses and error pages — the typical crawl blockers.",
+      "Outbound Links & Media": "Assesses outbound link quality, nofollow ratio and accessibility of images and video. AI engines use outbound citations as authority signals.",
+      "Multilingual Content Depth": "Checks hreflang, language tagging and multilingual page coverage — directly affecting how often AI answers in other languages cite the site.",
+      "Multi-Page Sampling": "Samples multiple inner pages to confirm site-wide consistency, so optimization is not concentrated on the homepage at the expense of landing pages.",
+      "Search Engine & AI Platform Registration": "Checks indexing across Google, Bing, Brave, Perplexity and other AI platforms, including Search Console / Bing Webmaster registration status.",
+      "Authority & Trust Signals": "Evaluates off-site authority: backlinks, brand mentions, Wikipedia / Wikidata records and press coverage — the strongest inputs to AI citation ranking.",
+      "Social Signals": "Measures presence and activity on LinkedIn, Twitter / X, YouTube and Reddit. AI training data weights these sources heavily.",
+      "Cross-Platform Content Distribution": "Checks coverage on GitHub, npm, PyPI, Stack Overflow, Medium and similar platforms to expand the AI training-data surface area."
+    },
     "header": {
       "rerunPlaceholder": "Enter a URL to re-run the check",
       "rerun": "Re-run check",
@@ -255,11 +280,51 @@
     "shareExport": {
       "title": "Share & Export",
       "copyLink": "Copy link",
-      "exportPDF": "Export PDF",
-      "exportCSV": "Export CSV",
+      "exportPDF": "Export PDF report",
+      "exportPDFLoading": "Generating PDF…",
       "share": "Share",
       "copied": "Link copied to clipboard",
       "shareSocial": "Share to social media"
+    },
+    "pdfReport": {
+      "title": "GEO Readiness Report",
+      "subtitle": "Professional analysis of your site's visibility to AI search engines",
+      "generatedAt": "Generated at",
+      "targetSite": "Target site",
+      "tier": "Plan",
+      "overallScore": "Overall AI Visibility Score",
+      "grade": "Grade",
+      "scoreInterpretation": "Score interpretation",
+      "scoreLevels": {
+        "excellent": "Excellent — your site already has strong visibility to mainstream AI search engines. Maintain coverage and keep building authority signals.",
+        "good": "Good — solid overall, with several optimizations that can meaningfully improve AI citation rate.",
+        "average": "Average — key AI protocols and structured data are partially missing. Prioritize closing the foundational gaps.",
+        "poor": "Weak — multiple core checks failed; AI engines will struggle to crawl or cite your content as it stands.",
+        "critical": "Critical — the site lacks the foundations of AI visibility and needs a systematic remediation pass."
+      },
+      "summarySection": "1. Executive Summary",
+      "groupSection": "2. Category Breakdown",
+      "detailSection": "3. Detailed Findings",
+      "recommendationsSection": "4. Priority Fixes",
+      "appendixSection": "Appendix: How to read this report",
+      "appendixBody": "This report is generated automatically by GEO Checker. Every check is grounded in publicly verifiable signals. Status meanings: Pass = meets AI-friendly standards; Warn = does not block access but lowers ranking weight; Fail = directly blocks AI crawling or citation; Info = neutral data, FYI only. Address Fail items first, then Warn items.",
+      "table": {
+        "no": "#",
+        "category": "Check",
+        "status": "Status",
+        "score": "Score"
+      },
+      "checkLabel": "Check",
+      "groupLabel": "Group",
+      "descriptionLabel": "What this checks",
+      "findingLabel": "Finding",
+      "fixLabel": "Recommended fix",
+      "noFix": "No fix needed, or no specific recommendation available.",
+      "topFixesIntro": "The following items are ordered by severity. Start with the failures.",
+      "noFailItems": "No failing items. Focus on the warnings below to push the score higher.",
+      "lockedNotice": "{{count}} checks are locked under the current plan and excluded from this report.",
+      "footer": "© GEO Checker · {{year}} · For reference only",
+      "fileName": "GEO-Readiness-Report"
     },
     "loginToView": "Unlock full results",
     "loginToViewDesc": "Sign in and activate a plan to see all check results and detailed optimization suggestions",
@@ -293,7 +358,7 @@
       "placeholders": {
         "name": "Your name",
         "email": "Your email",
-        "website": "https://example.com",
+        "website": "https://moltspay.com/",
         "message": "Tell us about your optimization needs"
       },
       "errors": {
@@ -442,7 +507,7 @@
       "message": "Message",
       "namePlaceholder": "Your name",
       "emailPlaceholder": "Your email",
-      "websitePlaceholder": "https://example.com",
+      "websitePlaceholder": "https://moltspay.com/",
       "messagePlaceholder": "Tell us about your needs",
       "submit": "Submit",
       "contactUs": "Contact Us",

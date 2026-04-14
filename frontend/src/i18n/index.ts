@@ -217,7 +217,7 @@ if (!i18n.isInitialized) {
           "home": {
             "title": "GEO Readiness Checker",
             "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
-            "placeholder": "https://example.com",
+            "placeholder": "moltspay.com",
             "button": "Check GEO Readiness",
             "analyzing": "Analyzing...",
             "error": {
@@ -374,6 +374,7 @@ if (!i18n.isInitialized) {
               "copied": "Link copied to clipboard!",
               "copyLink": "Copy Link",
               "exportPDF": "Export PDF",
+              "exportPDFLoading": "Exporting PDF...",
               "exportCSV": "Export CSV",
               "shareSocial": "Share to social media",
               "share": "Share"
@@ -585,34 +586,35 @@ if (!i18n.isInitialized) {
             },
             "cards": {
               "free": {
-                "name": "Free",
-                "description": "Basic detection for personal users and small websites, no registration required",
-                "period": "/month",
+                "name": "Registered",
+                "description": "Sign up to try GEO basic checks — great for individuals getting started",
+                "period": "/mo",
                 "features": [
-                  "No registration required, test directly on the homepage",
+                  "Account registration required",
                   "5 basic checks (17 sub-checks)",
-                  "3 tests per month",
-                  "Instant results display"
+                  "3 checks per month",
+                  "Instant results"
                 ]
               },
               "detector": {
                 "name": "Detector",
-                "description": "Complete self-service detection results for website administrators and individual developers",
-                "period": "/month",
+                "description": "Full self-service checks for webmasters and indie developers",
+                "period": "/mo",
                 "features": [
                   "Account login required",
                   "23 complete checks (all sub-items)",
-                  "10 tests per month",
+                  "20 checks per month",
                   "Check item priority sorting",
                   "Complete 23-category report (AI Visibility Score + letter grade + visualization)"
                 ]
               },
               "starter": {
                 "name": "Starter",
-                "description": "Entry-level GEO coverage for brands entering overseas markets",
+                "period": "/mo",
+                "description": "Unlimited checks plus optimization suggestions for early-stage teams",
                 "features": [
-                  "23 complete checks + 50 monthly quota",
-                  "Manual delivery of optimization plan (project report)",
+                  "Unlimited checks",
+                  "23 complete checks + detailed optimization suggestions",
                   "Basic GEO coverage",
                   "OpenAI / Gemini / Anthropic indexing standards",
                   "Website copy creation and optimization"
@@ -620,10 +622,11 @@ if (!i18n.isInitialized) {
               },
               "growth": {
                 "name": "Growth",
-                "description": "Comprehensive GEO coverage + ranking placement for growing brands",
+                "period": "/mo",
+                "description": "Unlimited checks + optimization + paid ranking placement for growth-stage brands",
                 "features": [
-                  "23 complete checks + 200 monthly quota",
-                  "Manual delivery of optimization plan (project report)",
+                  "Unlimited checks",
+                  "23 complete checks + detailed optimization suggestions",
                   "Overseas mainstream LLM indexing standard adaptation",
                   "Usage scenario-level copy and compliance configuration",
                   "Paid list SEO low-cost placement"
@@ -631,13 +634,15 @@ if (!i18n.isInitialized) {
               },
               "scale": {
                 "name": "Scale",
-                "description": "Full-channel GEO solution + PR for large enterprises",
+                "period": "",
+                "description": "Full-channel GEO solution + PR for large enterprises — contact sales for a custom plan",
+                "getDemoPrice": "Get a Demo",
                 "features": [
-                  "23 complete checks + unlimited tests",
-                  "Manual delivery of optimization plan (project report)",
+                  "Unlimited checks + detailed optimization suggestions",
                   "Full-channel customized GEO coverage",
                   "Full-channel overseas LLM indexing rules",
-                  "Reputation management: 3-5 ranking articles per month + backlinks"
+                  "Reputation management: 3-5 ranking articles per month + backlinks",
+                  "PR support (media coverage outreach)"
                 ]
               }
             },
@@ -651,7 +656,7 @@ if (!i18n.isInitialized) {
               "headers": {
                 "number": "#",
                 "feature": "Features",
-                "free": "Free",
+                "free": "Registered",
                 "detector": "Detector",
                 "starter": "Starter",
                 "growth": "Growth",
@@ -681,12 +686,12 @@ if (!i18n.isInitialized) {
               },
               "values": {
                 "free": {
-                  "price": "¥0/month",
+                  "price": "$0/mo",
                   "type": "Self-service SaaS",
-                  "loginRequired": "❌ No",
+                  "loginRequired": "✅ Yes",
                   "checkItems": "5 items",
                   "subCheckItems": "17 items",
-                  "monthlyChecks": "3 times",
+                  "monthlyChecks": "3",
                   "optimizationDetails": "❌",
                   "prioritySorting": "❌",
                   "fullReport": "❌",
@@ -703,12 +708,12 @@ if (!i18n.isInitialized) {
                   "serviceCycle": "—"
                 },
                 "detector": {
-                  "price": "¥19.9/month",
+                  "price": "$9.99/mo",
                   "type": "Self-service SaaS",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",
                   "subCheckItems": "All items",
-                  "monthlyChecks": "10 times",
+                  "monthlyChecks": "20",
                   "optimizationDetails": "❌",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
@@ -725,13 +730,13 @@ if (!i18n.isInitialized) {
                   "serviceCycle": "—"
                 },
                 "starter": {
-                  "price": "$2K–3K",
-                  "type": "Manual Service",
+                  "price": "$999/mo",
+                  "type": "SaaS subscription",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",
                   "subCheckItems": "All items",
-                  "monthlyChecks": "50 times",
-                  "optimizationDetails": "✅ Manual Delivery",
+                  "monthlyChecks": "Unlimited",
+                  "optimizationDetails": "✅ Detailed suggestions",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -740,20 +745,20 @@ if (!i18n.isInitialized) {
                   "llmStandards": "✅ Completed",
                   "websiteCopy": "✅ Comprehensive",
                   "productInfo": "✅",
-                  "maintenance": "✅ Within Project",
+                  "maintenance": "✅ Ongoing",
                   "seoPlacement": "❌",
                   "reputation": "❌",
                   "prSupport": "❌",
-                  "serviceCycle": "One-time Project"
+                  "serviceCycle": "Monthly subscription"
                 },
                 "growth": {
-                  "price": "$4K–7K",
-                  "type": "Manual Service",
+                  "price": "$2,500/mo",
+                  "type": "SaaS subscription",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",
                   "subCheckItems": "All items",
-                  "monthlyChecks": "200 times",
-                  "optimizationDetails": "✅ Manual Delivery",
+                  "monthlyChecks": "Unlimited",
+                  "optimizationDetails": "✅ Detailed suggestions",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -762,20 +767,20 @@ if (!i18n.isInitialized) {
                   "llmStandards": "✅ Adapted",
                   "websiteCopy": "✅ With Usage Scenarios",
                   "productInfo": "✅ Usage Scenario Level",
-                  "maintenance": "✅ Within Project",
+                  "maintenance": "✅ Ongoing",
                   "seoPlacement": "✅ Low-cost Placement",
                   "reputation": "❌",
                   "prSupport": "❌",
-                  "serviceCycle": "One-time + Ranking Period"
+                  "serviceCycle": "Monthly subscription"
                 },
                 "scale": {
-                  "price": "$8K–12K",
-                  "type": "Manual Service",
+                  "price": "Get a Demo",
+                  "type": "Managed service",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",
                   "subCheckItems": "All items",
                   "monthlyChecks": "Unlimited",
-                  "optimizationDetails": "✅ Manual Delivery",
+                  "optimizationDetails": "✅ Detailed suggestions",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -837,7 +842,7 @@ if (!i18n.isInitialized) {
               "email": "Email",
               "emailPlaceholder": "Your email",
               "website": "Website",
-              "websitePlaceholder": "https://example.com",
+              "websitePlaceholder": "moltspay.com",
               "service": "Interested Service",
               "serviceOptions": [
                 "Basic Detection Service",
@@ -857,6 +862,11 @@ if (!i18n.isInitialized) {
       },
       ja: {
         translation: {
+          "result": {
+            "shareExport": {
+              "exportPDFLoading": "PDFをエクスポート中..."
+            }
+          },
           "nav": {
             "home": "ホーム",
             "geoKnowledge": "GEO 知識",
@@ -944,6 +954,11 @@ if (!i18n.isInitialized) {
       },
       ko: {
         translation: {
+          "result": {
+            "shareExport": {
+              "exportPDFLoading": "PDF 내보내는 중..."
+            }
+          },
           "nav": {
             "home": "홈",
             "geoKnowledge": "GEO 지식",
@@ -1031,6 +1046,11 @@ if (!i18n.isInitialized) {
       },
       de: {
         translation: {
+          "result": {
+            "shareExport": {
+              "exportPDFLoading": "PDF wird exportiert..."
+            }
+          },
           "nav": {
             "home": "Startseite",
             "geoKnowledge": "GEO Wissen",
@@ -1118,6 +1138,11 @@ if (!i18n.isInitialized) {
       },
       fr: {
         translation: {
+          "result": {
+            "shareExport": {
+              "exportPDFLoading": "Export PDF en cours..."
+            }
+          },
           "nav": {
             "home": "Accueil",
             "geoKnowledge": "Connaissances GEO",
@@ -1205,6 +1230,11 @@ if (!i18n.isInitialized) {
       },
       es: {
         translation: {
+          "result": {
+            "shareExport": {
+              "exportPDFLoading": "Exportando PDF..."
+            }
+          },
           "nav": {
             "home": "Inicio",
             "geoKnowledge": "Conocimientos GEO",
@@ -1501,7 +1531,7 @@ if (!i18n.isInitialized) {
           "home": {
             "title": "GEO 检测",
             "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
-            "placeholder": "https://example.com",
+            "placeholder": "moltspay.com",
             "button": "检测 GEO",
             "analyzing": "分析中...",
             "error": {
@@ -1658,6 +1688,7 @@ if (!i18n.isInitialized) {
               "copied": "链接已复制到剪贴板！",
               "copyLink": "复制链接",
               "exportPDF": "导出 PDF",
+              "exportPDFLoading": "导出 PDF 中...",
               "exportCSV": "导出 CSV",
               "shareSocial": "分享到社交媒体",
               "share": "分享"
@@ -1869,11 +1900,11 @@ if (!i18n.isInitialized) {
             },
             "cards": {
               "free": {
-                "name": "免费会员",
+                "name": "注册会员",
                 "period": "/月",
-                "description": "个人用户和小型网站的基础检测尝鲜，无需注册即可使用",
+                "description": "注册即可体验 GEO 基础检测，适合个人用户初步尝鲜",
                 "features": [
-                  "无需注册，访问首页即可检测",
+                  "注册即可使用",
                   "5 项基础检测（17 个子检测点）",
                   "每月 3 次检测",
                   "即时结果展示"
@@ -1886,7 +1917,7 @@ if (!i18n.isInitialized) {
                 "features": [
                   "需登录账号",
                   "23 项完整检测（全部子项）",
-                  "每月 10 次检测",
+                  "每月 20 次检测",
                   "检测项优先级排序",
                   "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
                   "检测历史记录（可回看）",
@@ -1895,45 +1926,43 @@ if (!i18n.isInitialized) {
               },
               "starter": {
                 "name": "Starter",
-                "period": "USD / 项目",
-                "description": "首次进入海外市场的初阶 GEO 覆盖",
+                "period": "/月",
+                "description": "初阶团队的无限检测与优化建议",
                 "features": [
-                  "23 项完整检测 + 每月 50 次配额",
-                  "人工交付优化方案（项目报告）",
+                  "无限检测次数",
+                  "23 项完整检测 + 详细优化建议",
                   "基础 GEO 覆盖",
                   "OpenAI / Gemini / Anthropic 收录规范",
                   "网站文案建设与优化",
                   "核心产品信息合规配置",
-                  "项目周期内持续维护"
+                  "按月持续交付"
                 ]
               },
               "growth": {
                 "name": "Growth",
-                "period": "USD / 项目",
-                "description": "增长期品牌的全面 GEO 覆盖 + 榜单投放",
+                "period": "/月",
+                "description": "增长期品牌的无限检测 + 优化建议 + 榜单投放",
                 "features": [
-                  "23 项完整检测 + 每月 200 次配额",
-                  "人工交付优化方案（项目报告）",
+                  "无限检测次数",
+                  "23 项完整检测 + 详细优化建议",
                   "海外主流 LLM 收录规范适配",
                   "含使用场景级文案与合规配置",
                   "付费榜单 SEO 低成本投放位",
                   "优先技术支持（< 24h 响应）",
-                  "一次性项目交付 + 榜单期发布"
+                  "按月持续交付"
                 ]
               },
               "scale": {
                 "name": "Scale",
-                "period": "USD / 项目",
-                "description": "大型企业的全渠道 GEO 解决方案 + PR",
+                "period": "",
+                "description": "大型企业的全渠道 GEO 解决方案 + PR，联系销售定制",
+                "getDemoPrice": "Get a Demo",
                 "features": [
-                  "23 项完整检测 + 无限检测次数",
-                  "人工交付优化方案（项目报告）",
+                  "无限检测次数 + 详细优化建议",
                   "全渠道定制化 GEO 覆盖",
                   "全渠道海外 LLM 收录规则",
                   "声誉管理：每月 3–5 篇榜单文章 + 反向链接",
-                  "PR 支持（媒体报道对接）",
-                  "24/7 + 专属顾问对接",
-                  "月度持续输出"
+                  "PR 支持（媒体报道对接）"
                 ]
               }
             },
@@ -1947,7 +1976,7 @@ if (!i18n.isInitialized) {
               "headers": {
                 "number": "#",
                 "feature": "权益项",
-                "free": "免费会员",
+                "free": "注册会员",
                 "detector": "检测会员",
                 "starter": "Starter",
                 "growth": "Growth",
@@ -1977,9 +2006,9 @@ if (!i18n.isInitialized) {
               },
               "values": {
                 "free": {
-                  "price": "¥0/月",
+                  "price": "$0/月",
                   "type": "自助 SaaS",
-                  "loginRequired": "❌ 无需",
+                  "loginRequired": "✅ 需登录",
                   "checkItems": "5 项",
                   "subCheckItems": "17 个",
                   "monthlyChecks": "3 次",
@@ -1999,12 +2028,12 @@ if (!i18n.isInitialized) {
                   "serviceCycle": "—"
                 },
                 "detector": {
-                  "price": "¥19.9/月",
+                  "price": "$9.99/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
                   "subCheckItems": "全部子项",
-                  "monthlyChecks": "10 次",
+                  "monthlyChecks": "20 次",
                   "optimizationDetails": "❌",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
@@ -2021,13 +2050,13 @@ if (!i18n.isInitialized) {
                   "serviceCycle": "—"
                 },
                 "starter": {
-                  "price": "$2K–3K",
-                  "type": "人工服务",
+                  "price": "$999/月",
+                  "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
                   "subCheckItems": "全部子项",
-                  "monthlyChecks": "50 次",
-                  "optimizationDetails": "✅ 人工交付",
+                  "monthlyChecks": "无限",
+                  "optimizationDetails": "✅ 详细优化建议",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -2036,20 +2065,20 @@ if (!i18n.isInitialized) {
                   "llmStandards": "✅ 完成",
                   "websiteCopy": "✅ 全面",
                   "productInfo": "✅",
-                  "maintenance": "✅ 项目内",
+                  "maintenance": "✅ 持续",
                   "seoPlacement": "❌",
                   "reputation": "❌",
                   "prSupport": "❌",
-                  "serviceCycle": "一次性项目"
+                  "serviceCycle": "按月订阅"
                 },
                 "growth": {
-                  "price": "$4K–7K",
-                  "type": "人工服务",
+                  "price": "$2,500/月",
+                  "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
                   "subCheckItems": "全部子项",
-                  "monthlyChecks": "200 次",
-                  "optimizationDetails": "✅ 人工交付",
+                  "monthlyChecks": "无限",
+                  "optimizationDetails": "✅ 详细优化建议",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -2058,20 +2087,20 @@ if (!i18n.isInitialized) {
                   "llmStandards": "✅ 适配",
                   "websiteCopy": "✅ 含使用场景",
                   "productInfo": "✅ 使用场景级",
-                  "maintenance": "✅ 项目内",
+                  "maintenance": "✅ 持续",
                   "seoPlacement": "✅ 低成本投放位",
                   "reputation": "❌",
                   "prSupport": "❌",
-                  "serviceCycle": "一次性 + 榜单期"
+                  "serviceCycle": "按月订阅"
                 },
                 "scale": {
-                  "price": "$8K–12K",
-                  "type": "人工服务",
+                  "price": "Get a Demo",
+                  "type": "定制企业服务",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
                   "subCheckItems": "全部子项",
                   "monthlyChecks": "无限",
-                  "optimizationDetails": "✅ 人工交付",
+                  "optimizationDetails": "✅ 详细优化建议",
                   "prioritySorting": "✅",
                   "fullReport": "✅",
                   "history": "✅",
@@ -2133,7 +2162,7 @@ if (!i18n.isInitialized) {
               "email": "邮箱",
               "emailPlaceholder": "您的邮箱",
               "website": "网站",
-              "websitePlaceholder": "https://example.com",
+              "websitePlaceholder": "moltspay.com",
               "service": "感兴趣的服务",
               "serviceOptions": [
                 "基础检测服务",

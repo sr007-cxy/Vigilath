@@ -82,7 +82,12 @@ export function formatTierPrice(tier: Membership): string {
     if (typeof range === 'string' && range.length > 0) return range;
     return `$${Math.round(tier.price).toLocaleString()}+`;
   }
-  return `${currencySymbol(tier.currency)}${tier.price}`;
+  // Use thousand separators for whole-dollar prices (e.g. 2500 → "2,500"),
+  // but preserve decimals for fractional prices (e.g. 9.99).
+  const priceStr = Number.isInteger(tier.price)
+    ? tier.price.toLocaleString('en-US')
+    : String(tier.price);
+  return `${currencySymbol(tier.currency)}${priceStr}`;
 }
 
 /**

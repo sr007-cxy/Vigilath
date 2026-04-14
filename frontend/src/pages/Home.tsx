@@ -50,14 +50,16 @@ export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token, isLoggedIn, isUnlocked, refresh } = useMembership();
-  const [url, setUrl] = useState('https://example.com');
+  const [url, setUrl] = useState('moltspay.com');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const validateUrl = (input: string): boolean => {
     try {
-      new URL(input);
+      // 如果输入没有http/https前缀，自动添加https://
+      const url = input.startsWith('http://') || input.startsWith('https://') ? input : `https://${input}`;
+      new URL(url);
       return true;
     } catch {
       return false;
@@ -78,8 +80,11 @@ export function Home() {
     setIsLoading(true);
     setError('');
 
+    // 处理URL前缀，确保API调用时使用正确的URL格式
+    const formattedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+
     geoApi
-      .checkGeo({ url })
+      .checkGeo({ url: formattedUrl })
       .then((result) => {
         navigate('/result', { state: { result } });
       })
@@ -102,7 +107,11 @@ export function Home() {
     }
     // Member — jump straight to the per-mode page with the current URL as
     // the initial input.
-    const initialUrl = url && validateUrl(url) ? url : undefined;
+    let initialUrl = undefined;
+    if (url && validateUrl(url)) {
+      // 处理URL前缀，确保传递正确的URL格式
+      initialUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+    }
     navigate(`/advanced/${key}`, { state: initialUrl ? { url: initialUrl } : undefined });
   };
 
@@ -128,14 +137,14 @@ export function Home() {
 
             <div className="transition-all duration-300 animate-scale-in max-w-2xl mx-auto mt-10">
               <form id="geo-form" onSubmit={handleSubmit}>
-                <div className="url-input-wrapper flex items-center bg-card border border-border rounded-full p-1.5 shadow-glow">
+                <div className="url-input-wrapper flex items-center bg-card rounded-full p-1.5 shadow-glow">
                   <input
                     type="text"
                     id="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder={t('home.placeholder')}
-                    className="flex-1 py-3 px-4 text-base bg-transparent focus:outline-none text-primary placeholder-muted"
+                    className="flex-1 py-3 px-4 text-base bg-transparent focus:outline-none text-primary placeholder-muted border-none"
                     disabled={isLoading}
                   />
                   <button

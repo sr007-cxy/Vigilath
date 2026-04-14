@@ -104,7 +104,7 @@
   "home": {
     "title": "GEO 检查器",
     "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
-    "placeholder": "https://example.com",
+    "placeholder": "https://moltspay.com/",
     "button": "开始检测",
     "analyzing": "分析中...",
     "error": {
@@ -198,6 +198,31 @@
       "Cross-Platform Content Distribution": "跨平台内容分发",
       "Multi-Page Sampling": "多页面采样"
     },
+    "categoryDescriptions": {
+      "HTTPS": "检测站点是否启用 HTTPS、证书是否有效、是否将 HTTP 自动跳转到 HTTPS。AI 引擎会优先信任 HTTPS 资源，未加密站点在引用与排序中明显处于劣势。",
+      "robots.txt": "解析 robots.txt 中针对 GPTBot、ClaudeBot、PerplexityBot 等 AI 抓取代理的允许 / 屏蔽规则，识别因通配符 (User-agent: *) 误伤 AI 抓取的常见配置。",
+      "sitemap.xml": "确认 sitemap.xml 是否存在、是否在 robots.txt 中正确引用、URL 数量与最近更新时间，确保 AI 引擎能高效发现与回访站点页面。",
+      "llms.txt": "检测 llms.txt（LLM 友好抓取协议）是否存在并是否声明了核心内容入口；这是面向大语言模型的新兴标准，可显著提升被引用机率。",
+      ".well-known Discovery": "检查 /.well-known/ 目录下是否提供 ai-plugin.json、security.txt 等元数据文件，让 AI 平台能自动发现站点能力与联系入口。",
+      "AI Crawl Readiness": "综合评估 AI 抓取代理是否能稳定访问站点：包含状态码、跳转链、超时、CDN 拦截、UA 屏蔽等典型阻断点。",
+      "Structured Data": "扫描 JSON-LD / Microdata / RDFa 结构化数据，识别 Organization、Article、Product、FAQ、HowTo 等 schema 是否齐全且字段合规。",
+      "Schema Breadcrumbs & Knowledge Panel": "检查 BreadcrumbList、Organization、Person 等知识面板相关的结构化数据，影响 AI 在回答中是否引用为权威实体。",
+      "URL Normalization": "检测 URL 规范化情况：是否带尾斜杠、是否有 canonical 标签、参数是否清洁、是否存在重复内容路径，避免抓取浪费与权重稀释。",
+      "Meta Tags": "审计 title、meta description、Open Graph、Twitter Card、canonical、viewport 等关键标签的覆盖度，AI 摘要严重依赖这些信号。",
+      "Mobile-Friendliness & Page Weight": "评估移动端可读性、视口配置、字号与点击目标，并测量首屏 HTML 体积。过重的页面会被 AI 抓取截断。",
+      "Content Accessibility": "检查 alt 文本、heading 层级、ARIA 标签等可访问性指标，可访问性高的内容也更利于 AI 理解与提取。",
+      "Content Quality for AI": "面向 AI 的内容质量评估：原创度、信息密度、章节结构、外部引用、最后更新时间等指标，决定内容是否值得被引用。",
+      "AI-Specific Optimization": "针对 AI 引擎的专项优化：FAQ 模式、结构化答案、明确的事实陈述、来源标注等可显著提升被引用概率。",
+      "AI Answer Format Optimization": "评估页面是否使用问答式标题、要点列表、表格、定义段等 AI 友好的回答格式，提升直接被引用为答案片段的概率。",
+      "Technical Crawlability": "检查 HTTP 状态码、跳转链长度、JS 渲染依赖、慢响应、错误页面等技术抓取障碍。",
+      "Outbound Links & Media": "评估出站链接质量、nofollow 比例、图片与视频的可访问性，AI 通过出站引用判断站点权威性。",
+      "Multilingual Content Depth": "检测 hreflang、语言标记、多语言页面覆盖度，影响多语言 AI 回答中的命中概率。",
+      "Multi-Page Sampling": "对多个内页抽样检测，确认整站质量是否一致，避免只优化首页而忽略落地页。",
+      "Search Engine & AI Platform Registration": "检查站点是否被 Google、Bing、必应站长、Search Console、Brave、Perplexity 等收录及索引情况。",
+      "Authority & Trust Signals": "评估外链权威、品牌提及、维基百科 / Wikidata 记录、媒体报道等离线权威信号，是 AI 引用排序的核心依据。",
+      "Social Signals": "统计 LinkedIn、Twitter / X、YouTube、Reddit 等社交平台的存在度与活跃度，AI 训练语料对这些来源高度敏感。",
+      "Cross-Platform Content Distribution": "检查 GitHub、npm、PyPI、Stack Overflow、Medium、知乎等内容分发平台的覆盖，扩展 AI 训练语料的抓取面。"
+    },
     "header": {
       "rerunPlaceholder": "输入新的 URL 重新检测",
       "rerun": "重新检测",
@@ -217,7 +242,7 @@
           "allowed": "已允许",
           "blocked": "已屏蔽",
           "inherited": "继承通配符",
-          "unknown": "未知"
+          "unknown": "未设置"
         }
       },
       "meta": {
@@ -255,11 +280,51 @@
     "shareExport": {
       "title": "分享与导出",
       "copyLink": "复制链接",
-      "exportPDF": "导出 PDF",
-      "exportCSV": "导出 CSV",
+      "exportPDF": "导出 PDF 报告",
+      "exportPDFLoading": "正在生成 PDF…",
       "share": "分享",
       "copied": "链接已复制到剪贴板",
       "shareSocial": "分享到社交媒体"
+    },
+    "pdfReport": {
+      "title": "GEO 就绪检测报告",
+      "subtitle": "面向 AI 搜索引擎的网站可见性专业分析",
+      "generatedAt": "生成时间",
+      "targetSite": "目标站点",
+      "tier": "检测套餐",
+      "overallScore": "AI 可见性综合得分",
+      "grade": "评级",
+      "scoreInterpretation": "得分解读",
+      "scoreLevels": {
+        "excellent": "优秀 — 您的网站对主流 AI 搜索引擎已具备良好可见性，可重点维护并扩大权威信号。",
+        "good": "良好 — 整体表现稳健，仍有若干优化点可显著提升 AI 引用率。",
+        "average": "中等 — 关键 AI 协议与结构化数据存在缺失，建议尽快补齐基础项。",
+        "poor": "薄弱 — 多项核心检测未通过，AI 引擎将很难抓取或引用您的内容。",
+        "critical": "严重 — 站点几乎不具备 AI 可见性基础，需要进行系统性整改。"
+      },
+      "summarySection": "一、检测概览",
+      "groupSection": "二、分组得分",
+      "detailSection": "三、检测项详情",
+      "recommendationsSection": "四、优先修复建议",
+      "appendixSection": "附录：检测说明",
+      "appendixBody": "本报告由 GEO Checker 自动生成，每一项检测均基于公开可验证的指标。状态含义：通过 = 已达到 AI 引擎友好标准；警告 = 存在不影响访问但拖低权重的问题；失败 = 直接阻塞 AI 抓取或引用；信息 = 仅作参考的中性数据。请优先处理失败项，再处理警告项。",
+      "table": {
+        "no": "#",
+        "category": "检测项",
+        "status": "状态",
+        "score": "得分"
+      },
+      "checkLabel": "检测项",
+      "groupLabel": "分组",
+      "descriptionLabel": "检测说明",
+      "findingLabel": "检测结果",
+      "fixLabel": "修复建议",
+      "noFix": "无需修复或暂未提供具体建议。",
+      "topFixesIntro": "以下是按严重度排序的优先修复事项；建议从失败项开始处理。",
+      "noFailItems": "未发现失败项，建议关注下方警告项以进一步提升得分。",
+      "lockedNotice": "{{count}} 项检测因当前套餐未解锁，未包含在本报告中。",
+      "footer": "© GEO Checker · {{year}} · 本报告仅供参考",
+      "fileName": "GEO检测报告"
     },
     "loginToView": "解锁完整结果",
     "loginToViewDesc": "登录并开通会员即可查看完整的检查结果和详细的优化建议",
@@ -293,7 +358,7 @@
       "placeholders": {
         "name": "您的姓名",
         "email": "您的邮箱",
-        "website": "https://example.com",
+        "website": "https://moltspay.com/",
         "message": "告诉我们您的优化需求"
       },
       "errors": {
@@ -581,7 +646,7 @@
       "message": "留言",
       "namePlaceholder": "您的姓名",
       "emailPlaceholder": "您的邮箱",
-      "websitePlaceholder": "https://example.com",
+      "websitePlaceholder": "moltspay.com",
       "messagePlaceholder": "告诉我们您的需求",
       "submit": "提交",
       "contactUs": "联系我们",

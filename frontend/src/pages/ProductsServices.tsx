@@ -201,12 +201,14 @@ export function ProductsServices() {
                       <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
                       <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
                         <span className="text-3xl font-bold text-accent-primary">
-                          {formatTierPrice(tier)}
+                          {tier.slug === 'scale'
+                            ? t('productsServices.cards.scale.getDemoPrice')
+                            : formatTierPrice(tier)}
                         </span>
-                        {tier.tier_type === 'saas' && (
+                        {tier.slug !== 'scale' && tier.tier_type === 'saas' && text.period && (
                           <span className="text-sm text-secondary font-medium">{text.period}</span>
                         )}
-                        {tier.tier_type === 'service' && (
+                        {tier.slug !== 'scale' && tier.tier_type === 'service' && (
                           <span className="text-xs text-secondary font-medium ml-1">{t('productsServices.perProject')}</span>
                         )}
                       </div>

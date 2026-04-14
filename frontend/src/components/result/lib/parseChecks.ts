@@ -94,7 +94,7 @@ export function parseRobotsTxt(checks: CheckResult[]): RobotsParsed | null {
     if (inheritedSet.has(name)) {
       return {
         name,
-        state: (wildcardBlocksAll ? 'blocked' : 'inherited') as BotState,
+        state: (wildcardBlocksAll ? 'blocked' : 'allowed') as BotState,
       };
     }
     return { name, state: 'unknown' as BotState };

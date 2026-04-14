@@ -166,9 +166,6 @@ export function RobotsBotMatrix({ checks }: Props) {
           <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> {t('result.visuals.robots.legend.blocked')}
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" /> {t('result.visuals.robots.legend.inherited')}
-        </span>
-        <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-white/40" /> {t('result.visuals.robots.legend.unknown')}
         </span>
       </div>
