@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8070/api';
+const API_BASE = '/api';
 
 export interface CreateCheckoutSessionResponse {
   session_id: string;

@@ -4,7 +4,7 @@ class OAuthApi {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = 'http://localhost:8070/api/oauth';
+    this.baseUrl = '/api/oauth';
   }
 
   async googleLogin(googleToken: string) {

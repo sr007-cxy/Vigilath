@@ -79,7 +79,7 @@ class MembershipApi {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = 'http://localhost:8070/api';
+    this.baseUrl = '/api';
   }
 
   async getMemberships(): Promise<Membership[]> {

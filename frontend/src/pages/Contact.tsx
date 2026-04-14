@@ -83,7 +83,7 @@ export function Contact() {
       };
 
       // Send data to backend API
-      const response = await fetch('http://localhost:8070/api/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
