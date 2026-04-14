@@ -351,6 +351,88 @@
       "ourServices": "Our Services",
       "contactConsultation": "Contact Consultation"
     },
+    "cta": {
+      "tryNow": "Try Now",
+      "subscribeNow": "Subscribe",
+      "contactSales": "Contact Sales",
+      "popular": "Popular"
+    },
+    "perProject": "/ project",
+    "loadingMemberships": "Loading plans...",
+    "submitting": "Submitting...",
+    "submitError": "Submission failed. Please try again later.",
+    "closeAria": "Close",
+    "selectPlaceholder": "Select a plan",
+    "cards": {
+      "free": {
+        "name": "Free",
+        "period": "/mo",
+        "description": "Entry-level checks for individuals and small sites. No sign-up required.",
+        "features": [
+          "No sign-up — check straight from the homepage",
+          "5 core checks (17 sub-checks)",
+          "3 checks per month",
+          "Instant results"
+        ]
+      },
+      "detector": {
+        "name": "Detector",
+        "period": "/mo",
+        "description": "For webmasters and indie developers who need full self-serve check results.",
+        "features": [
+          "Account login required",
+          "Full 23-category check (all sub-items)",
+          "10 checks per month",
+          "Prioritized check ordering",
+          "Full 23-category report (AI Visibility Score + letter grade + visuals)",
+          "Check history (revisit past runs)",
+          "Basic support (tickets / email)"
+        ]
+      },
+      "starter": {
+        "name": "Starter",
+        "period": "USD / project",
+        "description": "Entry-level GEO coverage for brands entering overseas markets for the first time.",
+        "features": [
+          "Full 23-category check + 50 runs/month quota",
+          "Human-delivered optimization plan (project report)",
+          "Basic GEO coverage",
+          "OpenAI / Gemini / Anthropic inclusion spec",
+          "Website copywriting & optimization",
+          "Core product info compliance setup",
+          "Ongoing maintenance during the project"
+        ]
+      },
+      "growth": {
+        "name": "Growth",
+        "period": "USD / project",
+        "description": "Full GEO coverage plus paid ranking placement for growth-stage brands.",
+        "features": [
+          "Full 23-category check + 200 runs/month quota",
+          "Human-delivered optimization plan (project report)",
+          "Overseas mainstream LLM inclusion adaptation",
+          "Use-case-level copywriting & compliance setup",
+          "Low-cost paid ranking SEO placements",
+          "Priority support (< 24h response)",
+          "One-time delivery + ranking-period release"
+        ]
+      },
+      "scale": {
+        "name": "Scale",
+        "period": "USD / project",
+        "description": "Full-channel GEO solution plus PR for large enterprises.",
+        "features": [
+          "Full 23-category check + unlimited runs",
+          "Human-delivered optimization plan (project report)",
+          "Fully customized omnichannel GEO coverage",
+          "Omnichannel overseas LLM inclusion rules",
+          "Reputation management: 3–5 ranking articles/month + backlinks",
+          "PR support (media coverage outreach)",
+          "24/7 + dedicated advisor",
+          "Continuous monthly output"
+        ]
+      }
+    },
     "contact": {
       "getCustomPlan": "Get Custom Plan",
       "name": "Name",

@@ -19,6 +19,7 @@ if (!i18n.isInitialized) {
             "contact": "Contact",
             "langSwitch": "中文",
             "login": "Log in",
+            "register": "Sign up",
             "signedInAs": "Signed in as"
           },
           "common": {
@@ -555,6 +556,221 @@ if (!i18n.isInitialized) {
             "sections": {
               "ourServices": "Our Services",
               "contactConsultation": "Contact & Consultation"
+            },
+            "cta": {
+              "tryNow": "Try Now",
+              "subscribeNow": "Subscribe",
+              "contactSales": "Contact Sales",
+              "popular": "Popular"
+            },
+            "cards": {
+              "free": {
+                "name": "Free",
+                "description": "Basic detection for personal users and small websites, no registration required",
+                "period": "/month",
+                "features": [
+                  "No registration required, test directly on the homepage",
+                  "5 basic checks (17 sub-checks)",
+                  "3 tests per month",
+                  "Instant results display"
+                ]
+              },
+              "detector": {
+                "name": "Detector",
+                "description": "Complete self-service detection results for website administrators and individual developers",
+                "period": "/month",
+                "features": [
+                  "Account login required",
+                  "23 complete checks (all sub-items)",
+                  "10 tests per month",
+                  "Check item priority sorting",
+                  "Complete 23-category report (AI Visibility Score + letter grade + visualization)"
+                ]
+              },
+              "starter": {
+                "name": "Starter",
+                "description": "Entry-level GEO coverage for brands entering overseas markets",
+                "features": [
+                  "23 complete checks + 50 monthly quota",
+                  "Manual delivery of optimization plan (project report)",
+                  "Basic GEO coverage",
+                  "OpenAI / Gemini / Anthropic indexing standards",
+                  "Website copy creation and optimization"
+                ]
+              },
+              "growth": {
+                "name": "Growth",
+                "description": "Comprehensive GEO coverage + ranking placement for growing brands",
+                "features": [
+                  "23 complete checks + 200 monthly quota",
+                  "Manual delivery of optimization plan (project report)",
+                  "Overseas mainstream LLM indexing standard adaptation",
+                  "Usage scenario-level copy and compliance configuration",
+                  "Paid list SEO low-cost placement"
+                ]
+              },
+              "scale": {
+                "name": "Scale",
+                "description": "Full-channel GEO solution + PR for large enterprises",
+                "features": [
+                  "23 complete checks + unlimited tests",
+                  "Manual delivery of optimization plan (project report)",
+                  "Full-channel customized GEO coverage",
+                  "Full-channel overseas LLM indexing rules",
+                  "Reputation management: 3-5 ranking articles per month + backlinks"
+                ]
+              }
+            },
+            "loadingMemberships": "Loading plans…",
+            "perProject": "starting / project",
+            "selectPlaceholder": "Select a plan",
+            "submitting": "Submitting…",
+            "submitError": "Submission failed, please try again later",
+            "closeAria": "Close",
+            "table": {
+              "headers": {
+                "number": "#",
+                "feature": "Features",
+                "free": "Free",
+                "detector": "Detector",
+                "starter": "Starter",
+                "growth": "Growth",
+                "scale": "Scale"
+              },
+              "rows": {
+                "price": "Price",
+                "type": "Type",
+                "loginRequired": "Login Required",
+                "checkItems": "Number of Check Items",
+                "subCheckItems": "Number of Sub-check Items",
+                "monthlyChecks": "Monthly Checks",
+                "optimizationDetails": "Optimization Suggestions Detail",
+                "prioritySorting": "Check Item Priority Sorting",
+                "fullReport": "Full Report (23 Categories)",
+                "history": "Check History",
+                "support": "Technical Support",
+                "basicGeo": "Basic GEO Coverage",
+                "llmStandards": "Overseas LLM Indexing Standards",
+                "websiteCopy": "Website Copy Creation & Optimization",
+                "productInfo": "Core Product Information Compliance",
+                "maintenance": "Ongoing Maintenance",
+                "seoPlacement": "Paid List SEO Placement",
+                "reputation": "Reputation Management",
+                "prSupport": "PR Support",
+                "serviceCycle": "Service Cycle / Output Rhythm"
+              },
+              "values": {
+                "free": {
+                  "price": "¥0/month",
+                  "type": "Self-service SaaS",
+                  "loginRequired": "❌ No",
+                  "checkItems": "5 items",
+                  "subCheckItems": "17 items",
+                  "monthlyChecks": "3 times",
+                  "optimizationDetails": "❌",
+                  "prioritySorting": "❌",
+                  "fullReport": "❌",
+                  "history": "❌",
+                  "support": "❌",
+                  "basicGeo": "—",
+                  "llmStandards": "—",
+                  "websiteCopy": "—",
+                  "productInfo": "—",
+                  "maintenance": "—",
+                  "seoPlacement": "—",
+                  "reputation": "—",
+                  "prSupport": "—",
+                  "serviceCycle": "—"
+                },
+                "detector": {
+                  "price": "¥19.9/month",
+                  "type": "Self-service SaaS",
+                  "loginRequired": "✅ Yes",
+                  "checkItems": "23 items",
+                  "subCheckItems": "All items",
+                  "monthlyChecks": "10 times",
+                  "optimizationDetails": "❌",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "✅ Basic",
+                  "basicGeo": "—",
+                  "llmStandards": "—",
+                  "websiteCopy": "—",
+                  "productInfo": "—",
+                  "maintenance": "—",
+                  "seoPlacement": "—",
+                  "reputation": "—",
+                  "prSupport": "—",
+                  "serviceCycle": "—"
+                },
+                "starter": {
+                  "price": "$2K–3K",
+                  "type": "Manual Service",
+                  "loginRequired": "✅ Yes",
+                  "checkItems": "23 items",
+                  "subCheckItems": "All items",
+                  "monthlyChecks": "50 times",
+                  "optimizationDetails": "✅ Manual Delivery",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "Basic Ticket",
+                  "basicGeo": "✅ Basic",
+                  "llmStandards": "✅ Completed",
+                  "websiteCopy": "✅ Comprehensive",
+                  "productInfo": "✅",
+                  "maintenance": "✅ Within Project",
+                  "seoPlacement": "❌",
+                  "reputation": "❌",
+                  "prSupport": "❌",
+                  "serviceCycle": "One-time Project"
+                },
+                "growth": {
+                  "price": "$4K–7K",
+                  "type": "Manual Service",
+                  "loginRequired": "✅ Yes",
+                  "checkItems": "23 items",
+                  "subCheckItems": "All items",
+                  "monthlyChecks": "200 times",
+                  "optimizationDetails": "✅ Manual Delivery",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "Priority Response < 24h",
+                  "basicGeo": "✅ Basic",
+                  "llmStandards": "✅ Adapted",
+                  "websiteCopy": "✅ With Usage Scenarios",
+                  "productInfo": "✅ Usage Scenario Level",
+                  "maintenance": "✅ Within Project",
+                  "seoPlacement": "✅ Low-cost Placement",
+                  "reputation": "❌",
+                  "prSupport": "❌",
+                  "serviceCycle": "One-time + Ranking Period"
+                },
+                "scale": {
+                  "price": "$8K–12K",
+                  "type": "Manual Service",
+                  "loginRequired": "✅ Yes",
+                  "checkItems": "23 items",
+                  "subCheckItems": "All items",
+                  "monthlyChecks": "Unlimited",
+                  "optimizationDetails": "✅ Manual Delivery",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "24/7 + Dedicated Consultant",
+                  "basicGeo": "✅ Full-channel Customization",
+                  "llmStandards": "✅ Full-channel",
+                  "websiteCopy": "✅ Customized Transaction Scenarios",
+                  "productInfo": "✅ Customization + Verification",
+                  "maintenance": "✅ Long-term",
+                  "seoPlacement": "✅ Cost-effectiveness Monitoring",
+                  "reputation": "✅ 3–5 articles/month + Backlinks",
+                  "prSupport": "✅ Media Coverage",
+                  "serviceCycle": "Monthly Continuous Output"
+                }
+              }
             },
             "services": [
               {
@@ -1604,6 +1820,233 @@ if (!i18n.isInitialized) {
             "sections": {
               "ourServices": "我们的服务",
               "contactConsultation": "联系咨询"
+            },
+            "cta": {
+              "tryNow": "立即试用",
+              "subscribeNow": "立即订阅",
+              "contactSales": "联系销售",
+              "popular": "热门推荐"
+            },
+            "cards": {
+              "free": {
+                "name": "免费会员",
+                "period": "/月",
+                "description": "个人用户和小型网站的基础检测尝鲜，无需注册即可使用",
+                "features": [
+                  "无需注册，访问首页即可检测",
+                  "5 项基础检测（17 个子检测点）",
+                  "每月 3 次检测",
+                  "即时结果展示"
+                ]
+              },
+              "detector": {
+                "name": "检测会员",
+                "period": "/月",
+                "description": "需要完整自助检测结果的网站管理员和个人开发者",
+                "features": [
+                  "需登录账号",
+                  "23 项完整检测（全部子项）",
+                  "每月 10 次检测",
+                  "检测项优先级排序",
+                  "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
+                  "检测历史记录（可回看）",
+                  "基础技术支持（工单 / 邮件）"
+                ]
+              },
+              "starter": {
+                "name": "Starter",
+                "period": "USD / 项目",
+                "description": "首次进入海外市场的初阶 GEO 覆盖",
+                "features": [
+                  "23 项完整检测 + 每月 50 次配额",
+                  "人工交付优化方案（项目报告）",
+                  "基础 GEO 覆盖",
+                  "OpenAI / Gemini / Anthropic 收录规范",
+                  "网站文案建设与优化",
+                  "核心产品信息合规配置",
+                  "项目周期内持续维护"
+                ]
+              },
+              "growth": {
+                "name": "Growth",
+                "period": "USD / 项目",
+                "description": "增长期品牌的全面 GEO 覆盖 + 榜单投放",
+                "features": [
+                  "23 项完整检测 + 每月 200 次配额",
+                  "人工交付优化方案（项目报告）",
+                  "海外主流 LLM 收录规范适配",
+                  "含使用场景级文案与合规配置",
+                  "付费榜单 SEO 低成本投放位",
+                  "优先技术支持（< 24h 响应）",
+                  "一次性项目交付 + 榜单期发布"
+                ]
+              },
+              "scale": {
+                "name": "Scale",
+                "period": "USD / 项目",
+                "description": "大型企业的全渠道 GEO 解决方案 + PR",
+                "features": [
+                  "23 项完整检测 + 无限检测次数",
+                  "人工交付优化方案（项目报告）",
+                  "全渠道定制化 GEO 覆盖",
+                  "全渠道海外 LLM 收录规则",
+                  "声誉管理：每月 3–5 篇榜单文章 + 反向链接",
+                  "PR 支持（媒体报道对接）",
+                  "24/7 + 专属顾问对接",
+                  "月度持续输出"
+                ]
+              }
+            },
+            "loadingMemberships": "加载套餐中…",
+            "perProject": "起 / 项目",
+            "selectPlaceholder": "请选择套餐",
+            "submitting": "提交中…",
+            "submitError": "提交失败，请稍后再试",
+            "closeAria": "关闭",
+            "table": {
+              "headers": {
+                "number": "#",
+                "feature": "权益项",
+                "free": "免费会员",
+                "detector": "检测会员",
+                "starter": "Starter",
+                "growth": "Growth",
+                "scale": "Scale"
+              },
+              "rows": {
+                "price": "价格",
+                "type": "形态",
+                "loginRequired": "是否需要注册登录",
+                "checkItems": "检测大项数量",
+                "subCheckItems": "子检测点数量",
+                "monthlyChecks": "每月检测次数",
+                "optimizationDetails": "优化建议（修复方案）详细度",
+                "prioritySorting": "检测项优先级排序",
+                "fullReport": "完整报告（23 类全量）",
+                "history": "检测历史记录",
+                "support": "技术支持",
+                "basicGeo": "基础 GEO 覆盖",
+                "llmStandards": "海外主流 LLM 收录规范",
+                "websiteCopy": "网站文案建设与优化",
+                "productInfo": "核心产品信息合规配置",
+                "maintenance": "持续维护",
+                "seoPlacement": "付费榜单 SEO 投放",
+                "reputation": "声誉管理",
+                "prSupport": "公关（PR）支持",
+                "serviceCycle": "服务周期 / 输出节奏"
+              },
+              "values": {
+                "free": {
+                  "price": "¥0/月",
+                  "type": "自助 SaaS",
+                  "loginRequired": "❌ 无需",
+                  "checkItems": "5 项",
+                  "subCheckItems": "17 个",
+                  "monthlyChecks": "3 次",
+                  "optimizationDetails": "❌",
+                  "prioritySorting": "❌",
+                  "fullReport": "❌",
+                  "history": "❌",
+                  "support": "❌",
+                  "basicGeo": "—",
+                  "llmStandards": "—",
+                  "websiteCopy": "—",
+                  "productInfo": "—",
+                  "maintenance": "—",
+                  "seoPlacement": "—",
+                  "reputation": "—",
+                  "prSupport": "—",
+                  "serviceCycle": "—"
+                },
+                "detector": {
+                  "price": "¥19.9/月",
+                  "type": "自助 SaaS",
+                  "loginRequired": "✅ 需登录",
+                  "checkItems": "23 项",
+                  "subCheckItems": "全部子项",
+                  "monthlyChecks": "10 次",
+                  "optimizationDetails": "❌",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "✅ 基础",
+                  "basicGeo": "—",
+                  "llmStandards": "—",
+                  "websiteCopy": "—",
+                  "productInfo": "—",
+                  "maintenance": "—",
+                  "seoPlacement": "—",
+                  "reputation": "—",
+                  "prSupport": "—",
+                  "serviceCycle": "—"
+                },
+                "starter": {
+                  "price": "$2K–3K",
+                  "type": "人工服务",
+                  "loginRequired": "✅ 需登录",
+                  "checkItems": "23 项",
+                  "subCheckItems": "全部子项",
+                  "monthlyChecks": "50 次",
+                  "optimizationDetails": "✅ 人工交付",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "基础工单",
+                  "basicGeo": "✅ 基础",
+                  "llmStandards": "✅ 完成",
+                  "websiteCopy": "✅ 全面",
+                  "productInfo": "✅",
+                  "maintenance": "✅ 项目内",
+                  "seoPlacement": "❌",
+                  "reputation": "❌",
+                  "prSupport": "❌",
+                  "serviceCycle": "一次性项目"
+                },
+                "growth": {
+                  "price": "$4K–7K",
+                  "type": "人工服务",
+                  "loginRequired": "✅ 需登录",
+                  "checkItems": "23 项",
+                  "subCheckItems": "全部子项",
+                  "monthlyChecks": "200 次",
+                  "optimizationDetails": "✅ 人工交付",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "优先响应 < 24h",
+                  "basicGeo": "✅ 基础",
+                  "llmStandards": "✅ 适配",
+                  "websiteCopy": "✅ 含使用场景",
+                  "productInfo": "✅ 使用场景级",
+                  "maintenance": "✅ 项目内",
+                  "seoPlacement": "✅ 低成本投放位",
+                  "reputation": "❌",
+                  "prSupport": "❌",
+                  "serviceCycle": "一次性 + 榜单期"
+                },
+                "scale": {
+                  "price": "$8K–12K",
+                  "type": "人工服务",
+                  "loginRequired": "✅ 需登录",
+                  "checkItems": "23 项",
+                  "subCheckItems": "全部子项",
+                  "monthlyChecks": "无限",
+                  "optimizationDetails": "✅ 人工交付",
+                  "prioritySorting": "✅",
+                  "fullReport": "✅",
+                  "history": "✅",
+                  "support": "24/7 + 专属顾问",
+                  "basicGeo": "✅ 全渠道定制化",
+                  "llmStandards": "✅ 全渠道",
+                  "websiteCopy": "✅ 定制化交易场景",
+                  "productInfo": "✅ 定制化 + 校验",
+                  "maintenance": "✅ 长期",
+                  "seoPlacement": "✅ 性价比监测",
+                  "reputation": "✅ 3–5 篇/月 + 反向链接",
+                  "prSupport": "✅ 媒体报道",
+                  "serviceCycle": "月度持续输出"
+                }
+              }
             },
             "services": [
               {

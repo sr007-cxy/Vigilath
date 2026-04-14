@@ -274,7 +274,7 @@
       "locked": "已锁定",
       "unlockCategory": "升级检测会员解锁本项检测 →",
       "memberOnly": "此检测项需要开通会员",
-      "upgradePro": "升级 Pro"
+      "upgradePro": "订阅会员"
     },
     "buttons": {
       "checkAnother": "检查另一个网站",
@@ -351,6 +351,227 @@
       "ourServices": "我们的服务",
       "contactConsultation": "联系咨询"
     },
+    "cta": {
+      "tryNow": "立即试用",
+      "subscribeNow": "立即订阅",
+      "contactSales": "联系销售",
+      "popular": "热门推荐"
+    },
+    "cards": {
+      "free": {
+        "name": "免费会员",
+        "period": "/月",
+        "description": "个人用户和小型网站的基础检测尝鲜，无需注册即可使用",
+        "features": [
+          "无需注册，访问首页即可检测",
+          "5 项基础检测（17 个子检测点）",
+          "每月 3 次检测",
+          "即时结果展示"
+        ]
+      },
+      "detector": {
+        "name": "检测会员",
+        "period": "/月",
+        "description": "需要完整自助检测结果的网站管理员和个人开发者",
+        "features": [
+          "需登录账号",
+          "23 项完整检测（全部子项）",
+          "每月 10 次检测",
+          "检测项优先级排序",
+          "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
+          "检测历史记录（可回看）",
+          "基础技术支持（工单 / 邮件）"
+        ]
+      },
+      "starter": {
+        "name": "Starter",
+        "period": "USD / 项目",
+        "description": "首次进入海外市场的初阶 GEO 覆盖",
+        "features": [
+          "23 项完整检测 + 每月 50 次配额",
+          "人工交付优化方案（项目报告）",
+          "基础 GEO 覆盖",
+          "OpenAI / Gemini / Anthropic 收录规范",
+          "网站文案建设与优化",
+          "核心产品信息合规配置",
+          "项目周期内持续维护"
+        ]
+      },
+      "growth": {
+        "name": "Growth",
+        "period": "USD / 项目",
+        "description": "增长期品牌的全面 GEO 覆盖 + 榜单投放",
+        "features": [
+          "23 项完整检测 + 每月 200 次配额",
+          "人工交付优化方案（项目报告）",
+          "海外主流 LLM 收录规范适配",
+          "含使用场景级文案与合规配置",
+          "付费榜单 SEO 低成本投放位",
+          "优先技术支持（< 24h 响应）",
+          "一次性项目交付 + 榜单期发布"
+        ]
+      },
+      "scale": {
+        "name": "Scale",
+        "period": "USD / 项目",
+        "description": "大型企业的全渠道 GEO 解决方案 + PR",
+        "features": [
+          "23 项完整检测 + 无限检测次数",
+          "人工交付优化方案（项目报告）",
+          "全渠道定制化 GEO 覆盖",
+          "全渠道海外 LLM 收录规则",
+          "声誉管理：每月 3–5 篇榜单文章 + 反向链接",
+          "PR 支持（媒体报道对接）",
+          "24/7 + 专属顾问对接",
+          "月度持续输出"
+        ]
+      }
+    },
+    "table": {
+      "headers": {
+        "number": "#",
+        "feature": "权益项",
+        "free": "免费会员",
+        "detector": "检测会员",
+        "starter": "Starter",
+        "growth": "Growth",
+        "scale": "Scale"
+      },
+      "rows": {
+        "price": "价格",
+        "type": "形态",
+        "loginRequired": "是否需要注册登录",
+        "checkItems": "检测大项数量",
+        "subCheckItems": "子检测点数量",
+        "monthlyChecks": "每月检测次数",
+        "optimizationDetails": "优化建议（修复方案）详细度",
+        "prioritySorting": "检测项优先级排序",
+        "fullReport": "完整报告（23 类全量）",
+        "history": "检测历史记录",
+        "support": "技术支持",
+        "basicGeo": "基础 GEO 覆盖",
+        "llmStandards": "海外主流 LLM 收录规范",
+        "websiteCopy": "网站文案建设与优化",
+        "productInfo": "核心产品信息合规配置",
+        "maintenance": "持续维护",
+        "seoPlacement": "付费榜单 SEO 投放",
+        "reputation": "声誉管理",
+        "prSupport": "公关（PR）支持",
+        "serviceCycle": "服务周期 / 输出节奏"
+      },
+      "values": {
+        "free": {
+          "price": "¥0/月",
+          "type": "自助 SaaS",
+          "loginRequired": "❌ 无需",
+          "checkItems": "5 项",
+          "subCheckItems": "17 个",
+          "monthlyChecks": "3 次",
+          "optimizationDetails": "❌",
+          "prioritySorting": "❌",
+          "fullReport": "❌",
+          "history": "❌",
+          "support": "❌",
+          "basicGeo": "—",
+          "llmStandards": "—",
+          "websiteCopy": "—",
+          "productInfo": "—",
+          "maintenance": "—",
+          "seoPlacement": "—",
+          "reputation": "—",
+          "prSupport": "—",
+          "serviceCycle": "—"
+        },
+        "detector": {
+          "price": "¥19.9/月",
+          "type": "自助 SaaS",
+          "loginRequired": "✅ 需登录",
+          "checkItems": "23 项",
+          "subCheckItems": "全部子项",
+          "monthlyChecks": "10 次",
+          "optimizationDetails": "❌",
+          "prioritySorting": "✅",
+          "fullReport": "✅",
+          "history": "✅",
+          "support": "✅ 基础",
+          "basicGeo": "—",
+          "llmStandards": "—",
+          "websiteCopy": "—",
+          "productInfo": "—",
+          "maintenance": "—",
+          "seoPlacement": "—",
+          "reputation": "—",
+          "prSupport": "—",
+          "serviceCycle": "—"
+        },
+        "starter": {
+          "price": "$2K–3K",
+          "type": "人工服务",
+          "loginRequired": "✅ 需登录",
+          "checkItems": "23 项",
+          "subCheckItems": "全部子项",
+          "monthlyChecks": "50 次",
+          "optimizationDetails": "✅ 人工交付",
+          "prioritySorting": "✅",
+          "fullReport": "✅",
+          "history": "✅",
+          "support": "基础工单",
+          "basicGeo": "✅ 基础",
+          "llmStandards": "✅ 完成",
+          "websiteCopy": "✅ 全面",
+          "productInfo": "✅",
+          "maintenance": "✅ 项目内",
+          "seoPlacement": "❌",
+          "reputation": "❌",
+          "prSupport": "❌",
+          "serviceCycle": "一次性项目"
+        },
+        "growth": {
+          "price": "$4K–7K",
+          "type": "人工服务",
+          "loginRequired": "✅ 需登录",
+          "checkItems": "23 项",
+          "subCheckItems": "全部子项",
+          "monthlyChecks": "200 次",
+          "optimizationDetails": "✅ 人工交付",
+          "prioritySorting": "✅",
+          "fullReport": "✅",
+          "history": "✅",
+          "support": "优先响应 < 24h",
+          "basicGeo": "✅ 基础",
+          "llmStandards": "✅ 适配",
+          "websiteCopy": "✅ 含使用场景",
+          "productInfo": "✅ 使用场景级",
+          "maintenance": "✅ 项目内",
+          "seoPlacement": "✅ 低成本投放位",
+          "reputation": "❌",
+          "prSupport": "❌",
+          "serviceCycle": "一次性 + 榜单期"
+        },
+        "scale": {
+          "price": "$8K–12K",
+          "type": "人工服务",
+          "loginRequired": "✅ 需登录",
+          "checkItems": "23 项",
+          "subCheckItems": "全部子项",
+          "monthlyChecks": "无限",
+          "optimizationDetails": "✅ 人工交付",
+          "prioritySorting": "✅",
+          "fullReport": "✅",
+          "history": "✅",
+          "support": "24/7 + 专属顾问",
+          "basicGeo": "✅ 全渠道定制化",
+          "llmStandards": "✅ 全渠道",
+          "websiteCopy": "✅ 定制化交易场景",
+          "productInfo": "✅ 定制化 + 校验",
+          "maintenance": "✅ 长期",
+          "seoPlacement": "✅ 性价比监测",
+          "reputation": "✅ 3–5 篇/月 + 反向链接",
+          "prSupport": "✅ 媒体报道",
+          "serviceCycle": "月度持续输出"
+        }
+      }
+    },
     "contact": {
       "getCustomPlan": "获取定制方案",
       "name": "姓名",
@@ -367,7 +588,13 @@
       "contactText": "无论您是需要了解更多关于我们的服务，还是有任何问题，我们都随时准备为您提供帮助。请通过以下方式联系我们，我们的专家团队将尽快与您取得联系。",
       "emailLabel": "邮箱",
       "phoneLabel": "电话"
-    }
+    },
+    "perProject": "/ 项目",
+    "loadingMemberships": "套餐加载中...",
+    "selectPlaceholder": "请选择套餐",
+    "submitting": "提交中...",
+    "submitError": "提交失败，请稍后再试",
+    "closeAria": "关闭"
   },
   "aboutPage": {
     "title": "关于我们",

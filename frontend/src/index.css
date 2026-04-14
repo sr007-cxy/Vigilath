@@ -21,7 +21,7 @@
     --text-primary: #ffffff;
     --text-secondary: #a0a0b0;
     --text-muted: #606070;
-    --border-color: rgba(255, 255, 255, 0.05);
+    --border-color: rgba(255, 255, 255, 0.08);
     --glow-primary: 0 0 40px rgba(0, 240, 255, 0.3);
     --success: #00ff9d;
     --warning: #ffb800;
@@ -830,6 +830,27 @@
 
   .theme-toggle:hover {
     transform: rotate(15deg);
+  }
+
+  /* 自定义divide-y边框颜色 */
+  .divide-y > :not([hidden]) ~ :not([hidden]) {
+    --tw-divide-y-reverse: 0;
+    border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
+    border-bottom-width: calc(1px * var(--tw-divide-y-reverse));
+    border-color: var(--border-color);
+  }
+
+  /* 表格边框颜色 */
+  table.border-collapse {
+    border-color: var(--border-color);
+  }
+
+  table.border-collapse tr {
+    border-color: var(--border-color);
+  }
+
+  table.border-collapse tr.border-b {
+    border-color: var(--border-color);
   }
 
   /* Moltspay 特有工具类 */

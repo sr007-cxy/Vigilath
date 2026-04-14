@@ -71,6 +71,33 @@ export function RobotsBotMatrix({ checks }: Props) {
   if (parsed.hasSitemapRef === true) subtitleParts.push(t('result.visuals.robots.sitemapRef'));
   if (parsed.hasSitemapRef === false) subtitleParts.push(t('result.visuals.robots.noSitemapRef'));
 
+  // When robots.txt is missing there is nothing to classify — the bot grid,
+  // counts, and legend would all be noise (all 15 bots as "unknown" is a
+  // misleading label). Render the header alone so the user sees the missing
+  // state clearly without the ambiguous downstream rows.
+  if (!parsed.fileFound) {
+    return (
+      <div className="bg-card border border-[#3f4143] rounded-xl p-4 sm:p-5 overflow-hidden relative">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-rose-400/50 to-transparent" />
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-xs font-semibold text-primary">
+              {t('result.visuals.robots.title')}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider text-rose-300">
+              {t('result.visuals.robots.fileMissing')}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-card border border-[#3f4143] rounded-xl p-4 sm:p-5 overflow-hidden relative">
       {/* Gradient accent line */}

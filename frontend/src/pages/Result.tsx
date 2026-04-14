@@ -129,6 +129,11 @@ export function Result() {
   const { token, isLoggedIn, refresh } = useMembership();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('infraProtocols');
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', website: '', service: '', message: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackKind, setFeedbackKind] = useState<'success' | 'error' | null>(null);
 
   // Rerun bar state — title-row URL input + optional advanced mode dropdown.
   const [rerunUrl, setRerunUrl] = useState<string>(result?.url || '');
@@ -160,6 +165,35 @@ export function Result() {
       return;
     }
     setShowPaymentModal(true);
+  };
+
+  const handleContactClick = () => {
+    setShowContactModal(true);
+  };
+
+  const closeContactModal = () => {
+    if (submitting) return;
+    setShowContactModal(false);
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setFeedback(null);
+    setFeedbackKind(null);
+    try {
+      // 这里可以添加表单提交逻辑
+      // 暂时模拟成功
+      setFeedback('Your message has been sent successfully! We will contact you soon.');
+      setFeedbackKind('success');
+      setForm({ name: '', email: '', website: '', service: '', message: '' });
+    } catch (err) {
+      setFeedback('Failed to send message. Please try again later.');
+      setFeedbackKind('error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handlePaymentSuccess = () => {
@@ -521,21 +555,37 @@ export function Result() {
             // Locked (member) tabs: the entire body is replaced with a frosted
             // glass overlay. The user cannot preview any data — they must upgrade.
             if (stat.isTabLocked) {
+              const lockedCategories = categoriesForTab(activeTab);
               return (
                 <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-[#3f4143] border-t-0 bg-card overflow-hidden">
-                  {/* Blurred skeleton placeholder so the glass effect has something to stand on */}
-                  <div className="p-6 sm:p-8 blur-sm select-none pointer-events-none space-y-3">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400/40"></span>
-                        <span className="w-12 h-4 rounded bg-white/10"></span>
-                        <span className="flex-1 h-3 rounded bg-white/10"></span>
+                  {/* Blurred preview of the actual category list in this tab,
+                      so non-members can see *what* they would get rather than
+                      generic skeleton bars. */}
+                  <div className="p-6 sm:p-8 blur-[6px] select-none pointer-events-none space-y-4">
+                    {lockedCategories.map((cat) => (
+                      <div key={cat}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="w-1 h-4 gradient-bg rounded-full"></span>
+                          <h3 className="text-sm font-semibold text-primary">
+                            {t(`result.categoryLabels.${cat}`, { defaultValue: cat })}
+                          </h3>
+                        </div>
+                        <div className="bg-card/60 border border-[#3f4143] rounded-xl divide-y divide-border">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400/40"></span>
+                              <span className="w-12 h-3 rounded bg-white/10"></span>
+                              <span className="flex-1 h-2.5 rounded bg-white/10"></span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
-                  {/* Frosted glass overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-md bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5">
-                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center">
+                  {/* Frosted glass overlay sits above the blurred content,
+                      letting users still perceive the category list underneath. */}
+                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px] bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5">
+                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center rounded-2xl bg-card/70 border border-cyan-500/20 shadow-[0_0_48px_rgba(0,240,255,0.12)]">
                       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_24px_rgba(0,240,255,0.25)]">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -556,7 +606,7 @@ export function Result() {
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                         </svg>
-                        {t('result.paywall.upgradePro', { defaultValue: '升级 Pro' })}
+                        {t('result.paywall.upgradePro', { defaultValue: '订阅会员' })}
                       </button>
                     </div>
                   </div>
@@ -754,7 +804,7 @@ export function Result() {
 
           {/* Footer actions */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <button
+            {/* <button
               onClick={() => navigate('/')}
               className="flex-1 bg-card border border-[#3f4143] border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-accent-primary/40 transition-all flex items-center justify-center gap-2"
             >
@@ -762,7 +812,7 @@ export function Result() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
               </svg>
               {t('result.buttons.checkAnother')}
-            </button>
+            </button> */}
             {!isUnlocked && (
               <button
                 onClick={handleUnlockClick}
@@ -774,15 +824,15 @@ export function Result() {
                 {t('result.paywall.viewAll')}
               </button>
             )}
-            <a
-              href="/contact"
+            <button
+              onClick={handleContactClick}
               className="flex-1 bg-card border border-[#3f4143] border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-accent-primary/40 transition-all flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
               </svg>
               {t('result.buttons.getHelp')}
-            </a>
+            </button>
           </div>
         </div>
       </main>
@@ -793,6 +843,128 @@ export function Result() {
           onClose={() => setShowPaymentModal(false)}
           onSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {showContactModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fade-in"
+          onClick={closeContactModal}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeContactModal}
+              disabled={submitting}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-white/5 transition-colors disabled:opacity-50"
+              aria-label="关闭"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h2 className="text-2xl font-bold mb-2 pr-10">
+              <span className="gradient-text">{t('productsServices.sections.contactConsultation')}</span>
+            </h2>
+            <p className="text-sm text-secondary mb-6">{t('productsServices.contact.getCustomPlan')}</p>
+            {feedback && (
+              <div className={`mb-6 p-4 rounded-lg ${feedbackKind === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                {feedback}
+              </div>
+            )}
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="name" className="block text-sm font-semibold mb-2">
+                  {t('productsServices.contact.name')}
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  placeholder={t('productsServices.contact.namePlaceholder')}
+                />
+              </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-semibold mb-2">
+                  {t('productsServices.contact.email')}
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  placeholder={t('productsServices.contact.emailPlaceholder')}
+                />
+              </div>
+              <div>
+                <label htmlFor="website" className="block text-sm font-semibold mb-2">
+                  {t('productsServices.contact.website')}
+                </label>
+                <input
+                  type="url"
+                  id="website"
+                  name="website"
+                  required
+                  value={form.website}
+                  onChange={(e) => setForm({ ...form, website: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  placeholder={t('productsServices.contact.websitePlaceholder')}
+                />
+              </div>
+              <div>
+                <label htmlFor="service" className="block text-sm font-semibold mb-2">
+                  {t('productsServices.contact.service')}
+                </label>
+                <select
+                  id="service"
+                  name="service"
+                  required
+                  value={form.service}
+                  onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                >
+                  <option value="">{t('productsServices.contact.service')}</option>
+                  <option value="Basic Detection Service">{t('productsServices.contact.serviceOptions.0')}</option>
+                  <option value="Advanced Detection Service">{t('productsServices.contact.serviceOptions.1')}</option>
+                  <option value="Custom GEO Optimization Service">{t('productsServices.contact.serviceOptions.2')}</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="message" className="block text-sm font-semibold mb-2">
+                  {t('productsServices.contact.message')}
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  required
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  placeholder={t('productsServices.contact.messagePlaceholder')}
+                ></textarea>
+              </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-3 px-4 bg-gradient text-white rounded-lg font-semibold hover:opacity-90 transition-all shadow-glow disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Sending...' : t('productsServices.contact.submit')}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

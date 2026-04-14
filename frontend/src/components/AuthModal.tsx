@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
@@ -7,9 +8,10 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultTab?: 'login' | 'register';
+  onSuccess?: () => void;
 }
 
-export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: AuthModalProps) {
   const [tab, setTab] = useState<'login' | 'register'>(defaultTab);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,7 +61,11 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
       localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
       onClose();
-      navigate('/');
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('login.failed'));
     } finally {
@@ -84,7 +90,11 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
       localStorage.setItem('token', loginRes.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
       onClose();
-      navigate('/membership');
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate('/membership');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('register.failed'));
     } finally {
@@ -124,8 +134,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-x-0 top-16 z-[60] flex items-center justify-center p-4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={closeAll}
@@ -426,6 +436,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

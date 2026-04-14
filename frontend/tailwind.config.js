@@ -6,7 +6,19 @@ export default {
   ],
   theme: {
     extend: {
+      // Make the default border AND divide color follow the CSS variable,
+      // so elements using plain `border`, `divide-y`, `border-b` etc. pick
+      // up a soft grey instead of Tailwind's library default (gray-200,
+      // which renders as a harsh white line on the dark theme).
+      borderColor: {
+        DEFAULT: 'var(--border-color)',
+      },
+      divideColor: {
+        DEFAULT: 'var(--border-color)',
+      },
       colors: {
+        // Named token for `border-border` / `divide-border` utilities.
+        border: 'var(--border-color)',
         primary: {
           50: '#eef2ff',
           100: '#e0e7ff',
