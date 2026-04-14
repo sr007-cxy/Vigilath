@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     STRIPE_SUCCESS_URL: str = "http://localhost:5173/checkout/success"
     STRIPE_CANCEL_URL: str = "http://localhost:5173/checkout/cancel"
 
+    # AI engine keys (paid detection modes — entity / ai-visibility / citation-check).
+    # Read by both the backend `geo` package and the standalone CLI tool spawned
+    # as a subprocess; declared here so pydantic-settings won't drop them as
+    # `extra` and so callers can use either `settings.OPENAI_API_KEY` or
+    # `os.environ.get('OPENAI_API_KEY')` (systemd EnvironmentFile injects them
+    # into the process environment).
+    OPENAI_API_KEY: str = ""
+    PERPLEXITY_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -137,7 +137,7 @@ export function Result() {
 
   // Rerun bar state — title-row URL input + optional advanced mode dropdown.
   const [rerunUrl, setRerunUrl] = useState<string>(result?.url || '');
-  const [rerunMode, setRerunMode] = useState<'default' | AdvancedMode>('default');
+  const [rerunMode] = useState<'default' | AdvancedMode>('default');
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunError, setRerunError] = useState<string>('');
 
