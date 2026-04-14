@@ -1641,7 +1641,7 @@ if (!i18n.isInitialized) {
             "detailedResults": "详细结果",
             "fix": "修复建议：",
             "buttons": {
-              "checkAnother": "检查另一个网站",
+              "checkAnother": "返回",
               "getHelp": "获取优化帮助"
             },
             "error": {
@@ -1777,7 +1777,7 @@ if (!i18n.isInitialized) {
                 "pro": "检测会员",
                 "starter": "Starter",
                 "growth": "Growth",
-                "scale": "Scale"
+                "scale": "旗舰版"
               },
               "pageOf": "第 {{current}} 页 / 共 {{total}} 页",
               "coverBadge": "GEO 就绪度检测报告",
@@ -2043,7 +2043,7 @@ if (!i18n.isInitialized) {
                 ]
               },
               "scale": {
-                "name": "Scale",
+                "name": "旗舰版",
                 "period": "",
                 "description": "大型企业的全渠道 GEO 解决方案 + PR，联系销售定制",
                 "getDemoPrice": "专属定制",
@@ -2070,7 +2070,7 @@ if (!i18n.isInitialized) {
                 "detector": "检测会员",
                 "starter": "基础版",
                 "growth": "进阶版",
-                "scale": "Scale"
+                "scale": "旗舰版"
               },
               "rows": {
                 "price": "价格",
