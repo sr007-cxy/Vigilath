@@ -9,7 +9,9 @@ class UserORM(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=False)
+    # Kept for legacy rows, but registration no longer collects a name —
+    # user_service.create_user falls back to the email when absent.
+    name = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 

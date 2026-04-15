@@ -14,7 +14,87 @@
     "login": "Log in",
     "register": "Sign up",
     "logout": "Sign out",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "account": "Account"
+  },
+  "account": {
+    "layout": {
+      "subtitle": "Account",
+      "logout": "Sign out"
+    },
+    "menu": {
+      "profile": "Profile",
+      "membership": "Membership",
+      "usage": "Usage",
+      "history": "History"
+    },
+    "common": {
+      "needLogin": "Please sign in first"
+    },
+    "profile": {
+      "accountInfo": "Account info",
+      "email": "Email",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Disabled",
+      "userId": "User ID",
+      "changePassword": "Change password",
+      "oldPassword": "Current password",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password",
+      "submit": "Update password",
+      "submitting": "Submitting...",
+      "success": "Password updated successfully",
+      "failed": "Update failed",
+      "minLength": "New password must be at least 6 characters",
+      "mismatch": "New passwords do not match"
+    },
+    "membership": {
+      "currentPlan": "Current plan",
+      "service": "Service",
+      "contactSales": "Contact sales",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "permanent": "Lifetime",
+      "daysLeft": "Days left",
+      "days": "days",
+      "upgrade": "Upgrade plan",
+      "browse": "Browse plans",
+      "renew": "Renew",
+      "cancel": "Cancel plan",
+      "cancelConfirm": "Are you sure you want to cancel this plan?",
+      "renewHint": "Payment will be available soon — please contact support.",
+      "features": "What's included"
+    },
+    "usage": {
+      "monthlyUsage": "This month's checks",
+      "times": "checks",
+      "unlimited": "Your plan has no monthly check limit.",
+      "remaining": "{{n}} left. Resets at the start of next month.",
+      "unlockedCategories": "Unlocked categories",
+      "allUnlocked": "All 23 detection categories unlocked.",
+      "partialUnlocked": "Upgrade to unlock more categories."
+    },
+    "history": {
+      "title": "Detection history",
+      "total": "{{n}} records",
+      "empty": "No detection records yet",
+      "goCheck": "Run a check",
+      "time": "Time",
+      "url": "URL",
+      "score": "Score",
+      "mode": "Mode",
+      "modeFree": "Standard",
+      "modeAdvanced": "Advanced",
+      "actions": "Actions",
+      "view": "View",
+      "loading": "Loading...",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this record?",
+      "prev": "Prev",
+      "next": "Next",
+      "pageOf": "Page {{page}} / {{pages}}"
+    }
   },
   "geoKnowledge": {
     "title": "GEO Knowledge Base",

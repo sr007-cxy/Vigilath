@@ -49,7 +49,7 @@ export function Register() {
 
   const handlePaymentSuccess = () => {
     setPaymentToken(null);
-    navigate('/membership');
+    navigate('/account/membership');
   };
 
   const handlePaymentClose = () => {

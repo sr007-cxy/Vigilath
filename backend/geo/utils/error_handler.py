@@ -5,9 +5,25 @@ from jose import JWTError
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 
+from geo.utils.error_i18n import localize
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _request_lang(request: Request) -> str:
+    """Best-effort language pick for outgoing error messages.
+
+    Prefers an explicit `X-Locale` header (set by the frontend API clients)
+    and falls back to the browser's `Accept-Language`. The value is passed
+    verbatim to `localize()`, which handles normalization and unknown locales.
+    """
+    return (
+        request.headers.get("x-locale")
+        or request.headers.get("accept-language")
+        or "en"
+    )
 
 # 统一错误响应模型
 class ErrorResponse:
@@ -46,13 +62,15 @@ async def global_exception_handler(request: Request, exc: Exception):
     else:
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
+    lang = _request_lang(request)
+
     # 处理不同类型的异常
     if isinstance(exc, AppException):
         return JSONResponse(
             status_code=exc.status_code,
             content=ErrorResponse(
                 code=exc.status_code,
-                message=exc.message,
+                message=localize(exc.message, lang),
                 details=exc.details
             ).dict()
         )
@@ -69,7 +87,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=ErrorResponse(
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                message="Validation error",
+                message=localize("Validation error", lang),
                 details=details
             ).dict()
         )
@@ -79,7 +97,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             status_code=status.HTTP_401_UNAUTHORIZED,
             content=ErrorResponse(
                 code=status.HTTP_401_UNAUTHORIZED,
-                message="Invalid or expired token"
+                message=localize("Invalid or expired token", lang)
             ).dict(),
             headers={"WWW-Authenticate": "Bearer"}
         )
@@ -89,7 +107,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="Database error"
+                message=localize("Database error", lang)
             ).dict()
         )
     else:
@@ -98,6 +116,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="Internal server error"
+                message=localize("Internal server error", lang)
             ).dict()
         )

@@ -1,3 +1,5 @@
+import { readApiError, localizedHeaders } from './apiError';
+
 const API_BASE = '/api';
 
 export interface CreateCheckoutSessionResponse {
@@ -13,15 +15,6 @@ export interface StripeSessionStatus {
   fulfilled_now: boolean;
 }
 
-async function readError(response: Response, fallback: string): Promise<string> {
-  try {
-    const body = await response.json();
-    return body?.detail || body?.message || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export const paymentApi = {
   async createStripeCheckoutSession(
     token: string,
@@ -30,14 +23,14 @@ export const paymentApi = {
   ): Promise<CreateCheckoutSessionResponse> {
     const response = await fetch(`${API_BASE}/payment/stripe/create-checkout-session`, {
       method: 'POST',
-      headers: {
+      headers: localizedHeaders({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-      },
+      }),
       body: JSON.stringify({ slug, locale }),
     });
     if (!response.ok) {
-      throw new Error(await readError(response, 'Failed to create checkout session'));
+      throw new Error(await readApiError(response, 'Failed to create checkout session'));
     }
     return response.json();
   },
@@ -49,11 +42,11 @@ export const paymentApi = {
     const response = await fetch(
       `${API_BASE}/payment/stripe/session/${encodeURIComponent(sessionId)}`,
       {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
       },
     );
     if (!response.ok) {
-      throw new Error(await readError(response, 'Failed to read checkout status'));
+      throw new Error(await readApiError(response, 'Failed to read checkout status'));
     }
     return response.json();
   },

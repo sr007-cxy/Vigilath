@@ -93,7 +93,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
       if (onSuccess) {
         onSuccess();
       } else {
-        navigate('/membership');
+        navigate('/account/membership');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('register.failed'));

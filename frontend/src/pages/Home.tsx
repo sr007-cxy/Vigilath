@@ -1,9 +1,14 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoApi, ApiError } from '../services/geoApi';
-import { PaymentModal } from '../components/PaymentModal';
+import { AuthModal } from '../components/AuthModal';
 import { useMembership } from '../hooks/useMembership';
+import {
+  membershipApi,
+  type Membership,
+  formatTierPrice,
+} from '../services/membershipApi';
 
 type AdvancedKey = 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
@@ -47,14 +52,96 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
 ];
 
 export function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { token, isLoggedIn, isUnlocked, refresh } = useMembership();
+  const { isLoggedIn, isUnlocked, refresh } = useMembership();
   const [url, setUrl] = useState('moltspay.com');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingTierSlug, setPendingTierSlug] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+  const [tiersError, setTiersError] = useState<string | null>(null);
+
+  const tierText = (tier: Membership) => {
+    const slugToCardKey: Record<string, string> = { pro: 'detector' };
+    const cardKey = slugToCardKey[tier.slug] ?? tier.slug;
+    const base = `productsServices.cards.${cardKey}`;
+    const name = i18n.exists(`${base}.name`) ? (t(`${base}.name`) as string) : tier.name;
+    const description = i18n.exists(`${base}.description`)
+      ? (t(`${base}.description`) as string)
+      : tier.description;
+    const period = i18n.exists(`${base}.period`)
+      ? (t(`${base}.period`) as string)
+      : tier.period;
+    const translatedFeatures = i18n.exists(`${base}.features`)
+      ? (t(`${base}.features`, { returnObjects: true }) as unknown)
+      : null;
+    const features = Array.isArray(translatedFeatures)
+      ? (translatedFeatures as string[])
+      : tier.features;
+    return { name, description, period, features };
+  };
+
+  const ctaLabelFor = (tier: Membership) => {
+    if (tier.slug === 'free') return t('productsServices.cta.tryNow');
+    if (tier.tier_type === 'saas') return t('productsServices.cta.subscribeNow');
+    return t('productsServices.cta.contactSales');
+  };
+
+  const openTierModal = () => {
+    if (memberships.length === 0 && !tiersLoading) {
+      setTiersLoading(true);
+      setTiersError(null);
+      membershipApi
+        .getMemberships()
+        .then((data) => setMemberships(data))
+        .catch((err) =>
+          setTiersError(err instanceof Error ? err.message : 'Failed to load plans'),
+        )
+        .finally(() => setTiersLoading(false));
+    }
+    setShowTierModal(true);
+  };
+
+  const handleTierCTA = (tier: Membership) => {
+    if (tier.slug === 'free') {
+      setShowTierModal(false);
+      return;
+    }
+    if (tier.tier_type === 'saas') {
+      if (!isLoggedIn) {
+        setPendingTierSlug(tier.slug);
+        setShowTierModal(false);
+        setAuthModalOpen(true);
+        return;
+      }
+      navigate(`/checkout/pending?slug=${encodeURIComponent(tier.slug)}`);
+      return;
+    }
+    // Service tier — redirect to the products-services page for contact sales flow.
+    setShowTierModal(false);
+    navigate('/products-services');
+  };
+
+  const handleAuthSuccess = () => {
+    refresh();
+    if (pendingTierSlug) {
+      navigate(`/checkout/pending?slug=${encodeURIComponent(pendingTierSlug)}`);
+      setPendingTierSlug(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!showTierModal) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showTierModal]);
 
   const validateUrl = (input: string): boolean => {
     try {
@@ -93,9 +180,9 @@ export function Home() {
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 429) {
           setQuotaExceeded(true);
-          setError(t('home.error.quotaExceeded'));
+          setError(err.message || t('home.error.quotaExceeded'));
         } else {
-          setError(t('home.error.failed'));
+          setError(err instanceof Error ? err.message : t('home.error.failed'));
         }
       })
       .finally(() => {
@@ -104,12 +191,8 @@ export function Home() {
   };
 
   const handleAdvancedClick = (key: AdvancedKey) => {
-    if (!isLoggedIn) {
-      navigate('/login');
-      return;
-    }
-    if (!isUnlocked) {
-      setShowPaymentModal(true);
+    if (!isLoggedIn || !isUnlocked) {
+      openTierModal();
       return;
     }
     // Member — jump straight to the per-mode page with the current URL as
@@ -278,7 +361,7 @@ export function Home() {
               {!isUnlocked && (
                 <button
                   type="button"
-                  onClick={() => (isLoggedIn ? setShowPaymentModal(true) : navigate('/login'))}
+                  onClick={openTierModal}
                   className="self-start sm:self-end gradient-bg text-white rounded-full py-2.5 px-5 text-sm font-semibold hover:opacity-90 transition-all duration-300 shadow-glow whitespace-nowrap"
                 >
                   {t('home.advanced.upgrade')}
@@ -338,16 +421,146 @@ export function Home() {
         </div>
       </main>
 
-      {showPaymentModal && token && (
-        <PaymentModal
-          token={token}
-          onClose={() => setShowPaymentModal(false)}
-          onSuccess={() => {
-            setShowPaymentModal(false);
-            refresh();
-          }}
-        />
+      {showTierModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowTierModal(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowTierModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-white/5 transition-colors"
+              aria-label={t('productsServices.closeAria')}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="text-center mb-8 pr-10">
+              <h2 className="text-2xl md:text-3xl font-bold mb-2">
+                <span className="gradient-text">{t('home.advanced.tierModal.title')}</span>
+              </h2>
+              <p className="text-sm text-secondary">
+                {t('home.advanced.tierModal.subtitle')}
+              </p>
+            </div>
+
+            {tiersLoading && (
+              <div className="py-12 text-center text-secondary">
+                {t('productsServices.loadingMemberships')}
+              </div>
+            )}
+            {tiersError && (
+              <div className="py-12 text-center text-rose-400">{tiersError}</div>
+            )}
+
+            {!tiersLoading && !tiersError && memberships.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
+                {memberships.map((tier) => {
+                  const text = tierText(tier);
+                  return (
+                    <div
+                      key={tier.id}
+                      className={`relative h-full bg-card border rounded-2xl p-5 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col ${
+                        tier.popular
+                          ? 'border-accent-primary shadow-lg shadow-accent-primary/20'
+                          : 'border-border'
+                      }`}
+                    >
+                      {tier.popular && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-accent-primary text-[#000] text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
+                          {t('productsServices.cta.popular')}
+                        </div>
+                      )}
+                      <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
+                      <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
+                        <span className="text-3xl font-bold text-accent-primary">
+                          {tier.slug === 'scale'
+                            ? t('productsServices.cards.scale.getDemoPrice')
+                            : formatTierPrice(tier)}
+                        </span>
+                        {tier.slug !== 'scale' && tier.tier_type === 'saas' && text.period && (
+                          <span className="text-sm text-secondary font-medium">{text.period}</span>
+                        )}
+                        {tier.slug !== 'scale' && tier.tier_type === 'service' && (
+                          <span className="text-xs text-secondary font-medium ml-1">
+                            {t('productsServices.perProject')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
+                        {text.description}
+                      </p>
+                      <ul className="space-y-2 mb-6 flex-1">
+                        {text.features.slice(0, 5).map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-xs text-primary">
+                            <svg
+                              className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2.5"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            <span className="leading-snug">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-auto">
+                        <button
+                          type="button"
+                          onClick={() => handleTierCTA(tier)}
+                          className="w-full justify-center !py-3 text-sm btn-primary"
+                          style={
+                            tier.popular
+                              ? undefined
+                              : {
+                                  background: '#ffffff',
+                                  border: '1px solid #ffffff',
+                                  color: '#0a0a0f',
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                                }
+                          }
+                        >
+                          {ctaLabelFor(tier)}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setPendingTierSlug(null);
+        }}
+        defaultTab="login"
+        onSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }

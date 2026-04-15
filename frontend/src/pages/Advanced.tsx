@@ -188,18 +188,18 @@ export function Advanced() {
     if (mode === 'compare') {
       const cleaned = compareUrls.map((u) => u.trim()).filter(Boolean);
       if (cleaned.length < 2) {
-        setError('Enter at least 2 URLs to compare.');
+        setError(t('home.advanced.validation.minUrls'));
         return;
       }
       for (const u of cleaned) {
         if (!isValidUrl(u)) {
-          setError(`Invalid URL: ${u}`);
+          setError(t('home.advanced.validation.invalidUrl', { url: u }));
           return;
         }
       }
     } else if (mode === 'entity') {
       if (!entityName.trim()) {
-        setError('Entity name is required.');
+        setError(t('home.advanced.validation.entityRequired'));
         return;
       }
     } else {
@@ -245,7 +245,7 @@ export function Advanced() {
       }
       setResult(data);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unexpected error';
+      const msg = err instanceof Error ? err.message : t('home.advanced.validation.unexpected');
       setError(msg);
     } finally {
       setLoading(false);

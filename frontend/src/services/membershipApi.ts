@@ -1,3 +1,5 @@
+import { readApiError, localizedHeaders } from './apiError';
+
 // Define types locally to avoid import issues
 export type TierType = 'saas' | 'service';
 
@@ -104,15 +106,6 @@ export class ApiError extends Error {
   }
 }
 
-async function readErrorMessage(response: Response, fallback: string): Promise<string> {
-  try {
-    const body = await response.json();
-    return body?.detail || body?.message || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 class MembershipApi {
   private baseUrl: string;
 
@@ -121,24 +114,23 @@ class MembershipApi {
   }
 
   async getMemberships(): Promise<Membership[]> {
-    const response = await fetch(`${this.baseUrl}/memberships`);
+    const response = await fetch(`${this.baseUrl}/memberships`, {
+      headers: localizedHeaders(),
+    });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to get memberships');
+      throw new Error(await readApiError(response, 'Failed to get memberships'));
     }
     return response.json();
   }
 
   async getUserMembership(token: string): Promise<UserMembership> {
     const response = await fetch(`${this.baseUrl}/user-membership`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
     });
     if (!response.ok) {
       throw new ApiError(
         response.status,
-        await readErrorMessage(response, 'Failed to get user membership'),
+        await readApiError(response, 'Failed to get user membership'),
       );
     }
     return response.json();
@@ -147,15 +139,14 @@ class MembershipApi {
   async upgradeMembership(token: string, newMembershipId: number): Promise<MembershipUpgradeResponse> {
     const response = await fetch(`${this.baseUrl}/upgrade-membership`, {
       method: 'POST',
-      headers: {
+      headers: localizedHeaders({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-      },
+      }),
       body: JSON.stringify({ new_membership_id: newMembershipId }),
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to upgrade membership');
+      throw new Error(await readApiError(response, 'Failed to upgrade membership'));
     }
     return response.json();
   }
@@ -163,26 +154,20 @@ class MembershipApi {
   async cancelMembership(token: string): Promise<{ message: string }> {
     const response = await fetch(`${this.baseUrl}/cancel-membership`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to cancel membership');
+      throw new Error(await readApiError(response, 'Failed to cancel membership'));
     }
     return response.json();
   }
 
   async getUsage(token: string): Promise<UsageResponse> {
     const response = await fetch(`${this.baseUrl}/users/me/usage`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to get usage');
+      throw new Error(await readApiError(response, 'Failed to get usage'));
     }
     return response.json();
   }
@@ -190,14 +175,11 @@ class MembershipApi {
   async submitContactForm(payload: ContactSalesPayload): Promise<{ message: string; lead_id: number }> {
     const response = await fetch(`${this.baseUrl}/contact-sales`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: localizedHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to submit contact form');
+      throw new Error(await readApiError(response, 'Failed to submit contact form'));
     }
     return response.json();
   }
@@ -205,15 +187,14 @@ class MembershipApi {
   async subscribe(token: string, slug: string): Promise<SubscribeResponse> {
     const response = await fetch(`${this.baseUrl}/subscribe`, {
       method: 'POST',
-      headers: {
+      headers: localizedHeaders({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-      },
+      }),
       body: JSON.stringify({ slug }),
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || 'Failed to subscribe');
+      throw new Error(await readApiError(response, 'Failed to subscribe'));
     }
     return response.json();
   }

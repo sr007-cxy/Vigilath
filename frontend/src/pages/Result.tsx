@@ -298,9 +298,9 @@ export function Result() {
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 429) {
           setRerunQuotaExceeded(true);
-          setRerunError(t('home.error.quotaExceeded'));
+          setRerunError(err.message || t('home.error.quotaExceeded'));
         } else {
-          setRerunError(t('home.error.failed'));
+          setRerunError(err instanceof Error ? err.message : t('home.error.failed'));
         }
       })
       .finally(() => {

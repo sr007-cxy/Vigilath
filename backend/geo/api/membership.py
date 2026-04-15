@@ -163,7 +163,7 @@ async def subscribe(body: SubscribeRequest, current_user: User = Depends(get_cur
     if membership.tier_type != "saas":
         raise AppException(
             status_code=400,
-            message=f"{membership.name} 需联系销售开通，不支持自助订阅",
+            message=f"{membership.name} is a managed service — contact sales, not self-serve",
         )
     return {
         "status": "pending",

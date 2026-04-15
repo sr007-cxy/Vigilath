@@ -7,6 +7,7 @@ from geo.models.membership import (
     UserMembershipORM,
 )
 from geo.models.payment import PaymentSessionORM  # noqa: F401 (register ORM)
+from geo.models.detection import DetectionRecordORM  # noqa: F401 (register ORM)
 
 # Create all tables
 Base.metadata.create_all(bind=engine)

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, advanced
+from geo.api import geo, auth, membership, oauth, contact, payment, advanced, account
 from geo.utils.error_handler import global_exception_handler, AppException
 
 app = FastAPI(
@@ -53,6 +53,7 @@ app.include_router(oauth.router, prefix="/api/oauth", tags=["oauth"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
 app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
 app.include_router(advanced.router, prefix="/api", tags=["advanced"])
+app.include_router(account.router, prefix="/api/account", tags=["account"])
 
 @app.get("/")
 async def root():

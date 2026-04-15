@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal } from './AuthModal';
@@ -7,6 +7,7 @@ import { AuthModal } from './AuthModal';
 export function Header() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
@@ -68,7 +69,7 @@ export function Header() {
     localStorage.removeItem('token');
     setUser(null);
     setIsDropdownOpen(false);
-    console.log('User logged out');
+    navigate('/');
   };
 
   const toggleAuthModal = (tab: 'login' | 'register' = 'login') => {
@@ -194,6 +195,17 @@ export function Header() {
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{user}</p>
                     </div>
                     <div className="py-2">
+                      <Link
+                        to="/account"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 hover:bg-white/5"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {t('nav.account', '账户中心')}
+                      </Link>
                       <button
                         onClick={handleLogout}
                         className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 hover:bg-white/5"

@@ -9,6 +9,7 @@ from geo.services.quota_service import (
     check_and_increment_anonymous_quota,
     check_and_increment_quota,
 )
+from geo.services.detection_service import save_detection
 from geo.models.geo import GeoTestRequest, GeoTestResult
 from geo.models.membership import Membership
 from geo.utils.validator import validate_url, sanitize_url
@@ -113,6 +114,8 @@ async def geo_check_task(
     allowed_categories: Optional[List[str]] = None,
     tier: Optional[str] = None,
     locked_categories: Optional[List[str]] = None,
+    user_id: Optional[int] = None,
+    mode: str = "free",
 ):
     """Background task to run GEO check and store results"""
     print(f"Starting GEO check for {url}")
@@ -176,6 +179,14 @@ async def geo_check_task(
         tasks[task_id]["result"] = result.model_dump()
         print(f"Task {task_id} status updated to completed")
         print(f"Task {task_id} result: {result}")
+
+        # Persist for logged-in users so the personal center history can
+        # display and replay this run. Best-effort — never fail the task.
+        if user_id is not None:
+            try:
+                save_detection(user_id=user_id, result=result, mode=mode)
+            except Exception as persist_err:  # pragma: no cover
+                print(f"[sse] save_detection failed: {persist_err}")
     except Exception as e:
         # Check if task still exists
         if task_id in tasks:
@@ -247,6 +258,14 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
     )
     result.tier = membership.slug
     result.locked_categories = _locked_for(membership)
+
+    # Persist history for logged-in users only — anonymous runs have no
+    # owner to file them under. Best-effort; failures do not affect the
+    # response.
+    if user_id is not None:
+        mode = "advanced" if effective_include_fix else "free"
+        save_detection(user_id=user_id, result=result, mode=mode)
+
     return result
 
 
@@ -343,6 +362,8 @@ async def test_geo_stream(
             allowed_categories=allowed,
             tier=membership.slug,
             locked_categories=locked,
+            user_id=user_id,
+            mode="advanced" if effective_include_fix else "free",
         )
     )
     print(f"Background task started for {sanitized_url}")

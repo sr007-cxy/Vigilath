@@ -111,7 +111,7 @@ export function CheckoutSuccess() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 type="button"
-                onClick={() => navigate('/membership')}
+                onClick={() => navigate('/account/membership')}
                 className="px-5 py-2.5 rounded-lg bg-accent-primary text-white font-semibold hover:bg-accent-primary/80 transition-colors"
               >
                 {t('checkout.viewMembership', 'View membership')}
@@ -140,7 +140,7 @@ export function CheckoutSuccess() {
             </p>
             <button
               type="button"
-              onClick={() => navigate('/membership')}
+              onClick={() => navigate('/account/membership')}
               className="px-5 py-2.5 rounded-lg bg-accent-primary text-white font-semibold hover:bg-accent-primary/80 transition-colors"
             >
               {t('checkout.viewMembership', 'View membership')}

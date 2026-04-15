@@ -5,6 +5,7 @@ import type {
   AdvancedRequestBody,
   AdvancedResponseOf,
 } from '../types/advanced';
+import { extractAxiosErrorMessage, currentLocale } from './apiError';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -14,6 +15,14 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Stamp every outgoing request with the current UI locale so the backend
+// error handler can return localized error messages.
+apiClient.interceptors.request.use((config) => {
+  config.headers = config.headers || {};
+  config.headers['X-Locale'] = currentLocale();
+  return config;
 });
 
 /** Error thrown by geoApi calls with the HTTP status attached so callers can
@@ -30,14 +39,7 @@ export class ApiError extends Error {
 
 function throwApiError(error: unknown, fallback: string): never {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data;
-    // Backend's global_exception_handler wraps errors as
-    // { error: { code, message } }. Fall through to older shapes just in case.
-    const message =
-      data?.error?.message ||
-      data?.detail ||
-      data?.message ||
-      fallback;
+    const message = extractAxiosErrorMessage(error, fallback);
     throw new ApiError(message, error.response?.status);
   }
   throw new ApiError(fallback);

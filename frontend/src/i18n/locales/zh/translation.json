@@ -14,7 +14,87 @@
     "login": "登录",
     "register": "注册",
     "logout": "退出登录",
-    "signedInAs": "已登录账号"
+    "signedInAs": "已登录账号",
+    "account": "账户中心"
+  },
+  "account": {
+    "layout": {
+      "subtitle": "账户信息",
+      "logout": "退出登录"
+    },
+    "menu": {
+      "profile": "个人资料",
+      "membership": "会员信息",
+      "usage": "使用情况",
+      "history": "检测记录"
+    },
+    "common": {
+      "needLogin": "请先登录"
+    },
+    "profile": {
+      "accountInfo": "账号信息",
+      "email": "邮箱",
+      "status": "账号状态",
+      "active": "正常",
+      "inactive": "已停用",
+      "userId": "用户 ID",
+      "changePassword": "修改密码",
+      "oldPassword": "当前密码",
+      "newPassword": "新密码",
+      "confirmPassword": "确认新密码",
+      "submit": "更新密码",
+      "submitting": "提交中...",
+      "success": "密码修改成功",
+      "failed": "修改失败",
+      "minLength": "新密码至少 6 位",
+      "mismatch": "两次输入的新密码不一致"
+    },
+    "membership": {
+      "currentPlan": "当前套餐",
+      "service": "人工服务",
+      "contactSales": "联系销售定制",
+      "startDate": "开始时间",
+      "endDate": "到期时间",
+      "permanent": "长期有效",
+      "daysLeft": "剩余天数",
+      "days": "天",
+      "upgrade": "升级套餐",
+      "browse": "浏览套餐",
+      "renew": "续费",
+      "cancel": "取消会员",
+      "cancelConfirm": "确定要取消会员吗？",
+      "renewHint": "支付功能即将上线，请稍后再试或联系客服。",
+      "features": "套餐权益"
+    },
+    "usage": {
+      "monthlyUsage": "本月检测用量",
+      "times": "次",
+      "unlimited": "您当前套餐无检测次数限制。",
+      "remaining": "剩余 {{n}} 次，月初自动重置。",
+      "unlockedCategories": "已解锁检测类目",
+      "allUnlocked": "您已解锁全部 23 项检测能力。",
+      "partialUnlocked": "升级套餐可解锁更多检测类目。"
+    },
+    "history": {
+      "title": "检测记录",
+      "total": "共 {{n}} 条",
+      "empty": "还没有检测记录",
+      "goCheck": "去检测一下",
+      "time": "时间",
+      "url": "网址",
+      "score": "得分",
+      "mode": "模式",
+      "modeFree": "标准",
+      "modeAdvanced": "高级",
+      "actions": "操作",
+      "view": "查看",
+      "loading": "加载中...",
+      "delete": "删除",
+      "deleteConfirm": "确定删除这条检测记录吗？",
+      "prev": "上一页",
+      "next": "下一页",
+      "pageOf": "第 {{page}} / {{pages}} 页"
+    }
   },
   "geoKnowledge": {
     "title": "GEO 知识库",

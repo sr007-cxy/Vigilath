@@ -235,6 +235,16 @@ if (!i18n.isInitialized) {
               "subtitle": "Unlock professional GEO tools to measure how AI engines see your brand across the web.",
               "upgrade": "Upgrade to unlock",
               "comingSoon": "Coming soon",
+              "tierModal": {
+                "title": "Choose Your Plan",
+                "subtitle": "Unlock advanced detection features by selecting a membership plan."
+              },
+              "validation": {
+                "minUrls": "Enter at least 2 URLs to compare.",
+                "invalidUrl": "Invalid URL: {{url}}",
+                "entityRequired": "Entity name is required.",
+                "unexpected": "Unexpected error, please try again later."
+              },
               "cards": {
                 "compare": {
                   "title": "Competitive Comparison",
@@ -904,6 +914,85 @@ if (!i18n.isInitialized) {
               "contactText": "If you have any questions or need more information, please contact us through the following methods. Our professional team will reply to you as soon as possible.",
               "emailLabel": "Email",
               "phoneLabel": "Phone"
+            }
+          },
+          "account": {
+            "layout": {
+              "subtitle": "Account",
+              "logout": "Sign out"
+            },
+            "menu": {
+              "profile": "Profile",
+              "membership": "Membership",
+              "usage": "Usage",
+              "history": "Detection history"
+            },
+            "common": {
+              "needLogin": "Please sign in first"
+            },
+            "profile": {
+              "accountInfo": "Account information",
+              "email": "Email",
+              "status": "Status",
+              "active": "Active",
+              "inactive": "Disabled",
+              "userId": "User ID",
+              "changePassword": "Change password",
+              "oldPassword": "Current password",
+              "newPassword": "New password",
+              "confirmPassword": "Confirm new password",
+              "submit": "Update password",
+              "submitting": "Submitting...",
+              "success": "Password updated successfully",
+              "failed": "Password update failed",
+              "minLength": "New password must be at least 6 characters",
+              "mismatch": "New passwords do not match"
+            },
+            "membership": {
+              "currentPlan": "Current plan",
+              "service": "Managed service",
+              "contactSales": "Contact sales",
+              "startDate": "Start date",
+              "endDate": "End date",
+              "permanent": "Lifetime",
+              "daysLeft": "Days left",
+              "days": "days",
+              "upgrade": "Upgrade plan",
+              "browse": "Browse plans",
+              "renew": "Renew",
+              "cancel": "Cancel membership",
+              "cancelConfirm": "Are you sure you want to cancel your membership?",
+              "renewHint": "Payment will be available soon. Please contact support.",
+              "features": "What's included"
+            },
+            "usage": {
+              "monthlyUsage": "This month's usage",
+              "times": "checks",
+              "unlimited": "Your plan has no monthly check limit.",
+              "remaining": "{{n}} left. Resets at the start of next month.",
+              "unlockedCategories": "Unlocked categories",
+              "allUnlocked": "All 23 detection categories unlocked.",
+              "partialUnlocked": "Upgrade your plan to unlock more categories."
+            },
+            "history": {
+              "title": "Detection history",
+              "total": "{{n}} records",
+              "empty": "No detection records yet",
+              "goCheck": "Run a check",
+              "time": "Time",
+              "url": "URL",
+              "score": "Score",
+              "mode": "Mode",
+              "modeFree": "Standard",
+              "modeAdvanced": "Advanced",
+              "actions": "Actions",
+              "view": "View",
+              "loading": "Loading...",
+              "delete": "Delete",
+              "deleteConfirm": "Delete this detection record?",
+              "prev": "Prev",
+              "next": "Next",
+              "pageOf": "Page {{page}} of {{pages}}"
             }
           }
         }
@@ -1597,6 +1686,16 @@ if (!i18n.isInitialized) {
               "subtitle": "开通会员，解锁专业 GEO 检测工具，全面洞察 AI 引擎对你的网站的认知。",
               "upgrade": "升级解锁",
               "comingSoon": "功能即将上线",
+              "tierModal": {
+                "title": "选择你的会员等级",
+                "subtitle": "开通会员套餐即可解锁高级检测能力。"
+              },
+              "validation": {
+                "minUrls": "请至少输入 2 个要对比的 URL",
+                "invalidUrl": "URL 格式无效：{{url}}",
+                "entityRequired": "请输入实体名称",
+                "unexpected": "发生未知错误，请稍后重试"
+              },
               "cards": {
                 "compare": {
                   "title": "竞争对比检测",
@@ -2272,6 +2371,85 @@ if (!i18n.isInitialized) {
               "contactText": "如有任何疑问或需要更多信息，请通过以下方式联系我们。我们的专业团队将尽快回复您。",
               "emailLabel": "邮箱",
               "phoneLabel": "电话"
+            }
+          },
+          "account": {
+            "layout": {
+              "subtitle": "账户信息",
+              "logout": "退出登录"
+            },
+            "menu": {
+              "profile": "个人资料",
+              "membership": "会员信息",
+              "usage": "使用情况",
+              "history": "检测记录"
+            },
+            "common": {
+              "needLogin": "请先登录"
+            },
+            "profile": {
+              "accountInfo": "账号信息",
+              "email": "邮箱",
+              "status": "账号状态",
+              "active": "正常",
+              "inactive": "已停用",
+              "userId": "用户 ID",
+              "changePassword": "修改密码",
+              "oldPassword": "当前密码",
+              "newPassword": "新密码",
+              "confirmPassword": "确认新密码",
+              "submit": "更新密码",
+              "submitting": "提交中...",
+              "success": "密码修改成功",
+              "failed": "修改失败",
+              "minLength": "新密码至少 6 位",
+              "mismatch": "两次输入的新密码不一致"
+            },
+            "membership": {
+              "currentPlan": "当前套餐",
+              "service": "人工服务",
+              "contactSales": "联系销售定制",
+              "startDate": "开始时间",
+              "endDate": "到期时间",
+              "permanent": "长期有效",
+              "daysLeft": "剩余天数",
+              "days": "天",
+              "upgrade": "升级套餐",
+              "browse": "浏览套餐",
+              "renew": "续费",
+              "cancel": "取消会员",
+              "cancelConfirm": "确定要取消会员吗？",
+              "renewHint": "支付功能即将上线，请稍后再试或联系客服。",
+              "features": "套餐权益"
+            },
+            "usage": {
+              "monthlyUsage": "本月检测用量",
+              "times": "次",
+              "unlimited": "您当前套餐无检测次数限制。",
+              "remaining": "剩余 {{n}} 次，月初自动重置。",
+              "unlockedCategories": "已解锁检测类目",
+              "allUnlocked": "您已解锁全部 23 项检测能力。",
+              "partialUnlocked": "升级套餐可解锁更多检测类目。"
+            },
+            "history": {
+              "title": "检测记录",
+              "total": "共 {{n}} 条",
+              "empty": "还没有检测记录",
+              "goCheck": "去检测一下",
+              "time": "时间",
+              "url": "网址",
+              "score": "得分",
+              "mode": "模式",
+              "modeFree": "标准",
+              "modeAdvanced": "高级",
+              "actions": "操作",
+              "view": "查看",
+              "loading": "加载中...",
+              "delete": "删除",
+              "deleteConfirm": "确定删除这条检测记录吗？",
+              "prev": "上一页",
+              "next": "下一页",
+              "pageOf": "第 {{page}} / {{pages}} 页"
             }
           }
         }

@@ -137,8 +137,9 @@ def check_and_increment_anonymous_quota(client_id: str) -> None:
             raise AppException(
                 status_code=429,
                 message=(
-                    f"未注册用户每月最多检测 {ANONYMOUS_MONTHLY_QUOTA} 次"
-                    f"({used}/{ANONYMOUS_MONTHLY_QUOTA})。请注册或登录以继续使用。"
+                    f"Anonymous monthly quota exceeded "
+                    f"({used}/{ANONYMOUS_MONTHLY_QUOTA}). "
+                    f"Please sign up or log in to continue."
                 ),
             )
         if row is None:
