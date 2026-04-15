@@ -123,3 +123,78 @@ grep -rL "useTranslation" frontend/src/pages frontend/src/components \
 
 - **2026-04-15 · v1.0**：首次建档，基线审计（commit `cf91519`）。
 - **2026-04-15 · v1.1**：删除孤儿文件 `src/i18n/locales/{en,zh}/translation.json`，并在 `i18n/index.ts` 顶部加防御性注释。起因：上游 `5099ef1` 往孤儿 JSON 里加 `result.shareExport.downloadReport` key，线上直接显示原始占位符（`a586871` 之后由 `5dc3d7b` 补到真实源修复）。根治方案：从此只有一个 i18n 源。
+- **2026-04-15 · v1.2**：后端 `check.message` 双语大迁移启动（commit `4c38e4b` 开始）。详见第七节。
+
+---
+
+## 七、check.message 结构化 i18n 架构
+
+用户在 `/result` 页面看到的每条检查结果的文案（`CheckResult.message`）原本是 `geo_checker.py` 里 `print(f"  [{PASS}] ...")` 直接打印的英文字符串，由后端正则 parser 抓成 `CheckResult` 对象。这批字符串过去**无法跟随 zh/en 切换**——后端只知道一种英文原文。
+
+### 方案 C：后端混合 emit（已实施）
+引入一个 helper `emit_check(status_tag, key, message, params)` 同时做两件事：
+1. `print()` 原来的英文字符串（CLI 行为保持不变）
+2. 在字符串末尾追加一段 ASCII-invisible 的 `\x01GK\x01{json}\x01GE\x01` marker，包含 `{k: "i18n key", p: {...params}}`
+
+只有当 `GEO_EMIT_STRUCTURED=1` 环境变量存在时才追加 marker。后端 `services/geo_checker.py` 在 import `geo_checker.__main__` **之前**把这个 env var 设好；CLI 用户不设，终端输出保持干净。
+
+后端 parser `parse_geo_output` 扩展了一个 `_extract_key_marker()` 函数，从 message 末尾剥离 marker 并把 `message_key` / `message_params` attach 到 `CheckResult`。前端 `Result.tsx` 的 `renderCheckMessage(check, t)` helper：有 key 则 `t(key, params)`，无 key 则回落 `message`。
+
+### 关键文件
+| 文件 | 作用 |
+|---|---|
+| `backend/geo_checker/__main__.py` | **生产 check 真源**（backend 实际 import）。emit_check helper + 23 个 check 函数 |
+| `geo_checker/__main__.py` | Standalone CLI 副本，与 backend 版本**已分叉**。emit_check 已同步但其它检查函数不保证同步 |
+| `geo_checker.py` | Root 标量文件版本，advanced modes 额外用这个。emit_check 已同步 |
+| `backend/geo/services/geo_checker.py` | `parse_geo_output` + marker 抽取逻辑 + `os.environ["GEO_EMIT_STRUCTURED"] = "1"` |
+| `backend/geo/models/geo.py` | `CheckResult` 加 `message_key` / `message_params` 可选字段 |
+| `frontend/src/types/geo.ts` | 对应的 TS 接口字段 |
+| `frontend/src/pages/Result.tsx` | `renderCheckMessage()` helper + 渲染路径 |
+| `frontend/src/i18n/index.ts` | `result.checks.{category}.{message_slug}` 子树 |
+
+### 迁移进度（截至 commit `c1e8344`）
+**已完成** (8 / 23 类):
+- ✅ HTTPS
+- ✅ robots.txt
+- ✅ llms.txt
+- ✅ .well-known Discovery
+- ✅ sitemap.xml
+- ✅ Meta Tags
+- ✅ Mobile-Friendliness & Page Weight
+- ✅ Structured Data
+
+**匿名/免费档 (`FREE_CHECK_CATEGORIES` 的 5 个) 已全部覆盖**——example.com anonymous check 的 14/14 条 message 都带 i18n key。
+
+**待迁移** (15 / 23 类):
+- Search Engine & AI Platform Registration
+- Content Accessibility
+- AI Crawl Readiness
+- Content Quality for AI
+- Technical Crawlability
+- Authority & Trust Signals
+- AI-Specific Optimization
+- Social Signals
+- AI Answer Format Optimization
+- Schema Breadcrumbs & Knowledge Panel
+- URL Normalization
+- Outbound Links & Media
+- Multilingual Content Depth
+- Cross-Platform Content Distribution
+- Multi-Page Sampling
+
+### 迁移模板
+每个 check 函数里的每条 `print(f"  [{STATUS}] ...")` 替换为：
+
+```python
+emit_check(STATUS, "result.checks.{category_slug}.{message_slug}", "English fallback", {"param_name": value})
+```
+
+对应地在 `frontend/src/i18n/index.ts` 的 en 和 zh 两个 `result.checks.{category_slug}` 子树下添加 key，使用 `{{param_name}}` 插值。每次改完跑一次 key parity 校验脚本，确保 en/zh 数量相等。
+
+### 向后兼容保证
+任何还未迁移的 check 函数继续走 legacy 英文 print 路径。parser 找不到 marker 时 `message_key=None`、`message_params=None`，前端回落到 raw `message` 字符串（英文）。所以**迁移可以按类目独立推进，每次提交都是完整可部署状态**。
+
+### 待办
+1. **剩余 15 类 check 迁移**（每类 0.5–1 小时）
+2. **两份 geo_checker 源的合并**：`backend/geo_checker/__main__.py` 和 `geo_checker/__main__.py` 现在已经分叉（CHECK_REGISTRY 只在 backend 版有，--citation-check CLI 只在 root 版有）。长期需要合并成一份
+3. **Standalone CLI 同步**：迁移后 CLI 用户仍然看英文（marker 被 env var 关掉）——这是预期行为，但 CLI 自带 i18n 是另一个话题
