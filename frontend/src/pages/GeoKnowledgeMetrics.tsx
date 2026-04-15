@@ -11,6 +11,22 @@ const CATEGORIES: Category[] = [
     id: 'crawlability',
     items: ['https', 'robots', 'sitemap', 'llms', 'aiCrawlerAccess'],
   },
+  {
+    id: 'structuredData',
+    items: ['jsonld', 'metaTags', 'breadcrumbs', 'answerFormat'],
+  },
+  {
+    id: 'authority',
+    items: ['commonCrawl', 'wikipedia', 'knowledgeGraph', 'reviews', 'mentions'],
+  },
+  {
+    id: 'visibility',
+    items: ['citationRate', 'answerInclusion', 'shareOfVoice', 'sentimentFraming', 'contentGaps'],
+  },
+  {
+    id: 'entity',
+    items: ['entityClarity', 'categoryAssociation', 'platformCoverage', 'recognitionRate', 'stability'],
+  },
 ];
 
 function MetricCard({ ns }: { ns: string }) {

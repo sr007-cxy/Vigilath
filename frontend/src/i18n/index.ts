@@ -778,6 +778,258 @@ if (!i18n.isInitialized) {
                       ]
                     }
                   }
+                },
+                "structuredData": {
+                  "title": "2. Structured Data",
+                  "description": "Machine-readable signals that let large language models verify what you are, what you sell, and how the page is organized — without guessing from prose.",
+                  "items": {
+                    "jsonld": {
+                      "name": "JSON-LD Schema Markup",
+                      "measures": "Checks for JSON-LD blocks on the homepage and whether they describe an Organization, Product, WebSite, or similar schema.org type, with the key fields filled in.",
+                      "why": "Structured data is the most machine-readable signal you can give an LLM. ChatGPT, Perplexity, and Google AI Overviews all rely on schema.org markup to verify entity identity and extract facts — without it you force models to infer everything from prose, which is error-prone and gets hedged.",
+                      "scoring": "Organization + one of {Product, WebSite, FAQ} blocks present with core fields → PASS. A single thin block → WARN. No JSON-LD → FAIL.",
+                      "howto": [
+                        "Add an Organization block with `name`, `url`, `logo`, and `sameAs` pointing to Wikipedia, LinkedIn, Crunchbase, GitHub.",
+                        "Add Product / SoftwareApplication / Service JSON-LD depending on what you sell.",
+                        "Validate at https://validator.schema.org before shipping any change.",
+                        "Keep @type consistent across pages — drifting types confuse extraction."
+                      ]
+                    },
+                    "metaTags": {
+                      "name": "Meta Tag Coverage",
+                      "measures": "Checks the homepage for title, meta description, canonical, viewport, Open Graph (og:title / og:description / og:image), and Twitter card tags.",
+                      "why": "Meta tags are the 2-line summary AI uses when deciding whether a page is relevant. A missing description forces models to generate one themselves — or skip the page entirely. og:image is what AI-powered link previews render in chat answers.",
+                      "scoring": "All 6 core signals present → PASS. 4–5 present → WARN. Fewer than 4 → FAIL.",
+                      "howto": [
+                        "Write a unique title (50–60 chars) and description (150–160 chars) for every page.",
+                        "Add `og:image` at 1200×630 and `og:type` on every page that can be shared.",
+                        "Set a canonical URL to avoid duplicate-content penalties.",
+                        "Test previews with https://metatags.io before shipping."
+                      ]
+                    },
+                    "breadcrumbs": {
+                      "name": "Breadcrumbs & Knowledge Panel Markup",
+                      "measures": "Looks for BreadcrumbList JSON-LD, visible breadcrumb navigation, and knowledge-panel-friendly markup such as `sameAs`, `logo`, and `SearchAction`.",
+                      "why": "Breadcrumbs help AI models understand your site hierarchy — where a page sits inside the category tree. Knowledge panel markup is what Google and Perplexity use to construct the summary box next to a query. Both compound over time.",
+                      "scoring": "Both signals present → PASS. One present → WARN. Neither → FAIL.",
+                      "howto": [
+                        "Add BreadcrumbList JSON-LD that matches the visible breadcrumb nav.",
+                        "Use `sameAs` to link Wikipedia, LinkedIn, Crunchbase, GitHub in your Organization schema.",
+                        "Add `SearchAction` on the homepage to enable Google sitelinks search box.",
+                        "Keep breadcrumb depth to 3–4 levels at most for clean hierarchy."
+                      ]
+                    },
+                    "answerFormat": {
+                      "name": "AI Answer Format Optimization",
+                      "measures": "Checks whether content is written in a format LLMs can quote cleanly — FAQ schema, Q&A patterns, definition-style opening paragraphs, short direct answers.",
+                      "why": "LLMs prefer to cite sources that give them a quotable, self-contained sentence. `\"X is a [category] that [value prop]\"` is vastly more citable than a marketing paragraph burying the answer. FAQ schema explicitly flags Q&A pairs for extraction.",
+                      "scoring": "FAQ schema + clear definition openings → PASS. Partial → WARN. No quotable structure → FAIL.",
+                      "howto": [
+                        "Add FAQPage JSON-LD with 3–5 high-intent questions.",
+                        "Open key pages with a one-sentence definition: `X is a [category] that [unique value].`",
+                        "Use H2 / H3 as actual questions real users ask, not marketing phrases.",
+                        "Avoid clickbait headlines — they're invisible to extraction."
+                      ]
+                    }
+                  }
+                },
+                "authority": {
+                  "title": "3. Authority Signals",
+                  "description": "The off-page evidence LLMs rely on to decide whether you are a real entity worth recommending — presence in training corpora, encyclopedias, review platforms, and the press.",
+                  "items": {
+                    "commonCrawl": {
+                      "name": "AI Training Data Indexing (Common Crawl)",
+                      "measures": "Looks up your domain in the latest Common Crawl index snapshot and counts how many of your pages have been captured into this public web corpus.",
+                      "why": "Common Crawl is training data for ChatGPT, Claude, LLaMA and almost every open LLM. If you are not in Common Crawl, these models never saw you during training — they have zero memory of your brand when users ask and will hedge or omit you entirely.",
+                      "scoring": "Pages found → PASS. Not found but domain is under 60 days old → INFO (normal for new sites). Not found on an older site → WARN. Not found and CCBot is blocked in robots.txt → FAIL.",
+                      "howto": [
+                        "Confirm robots.txt does NOT disallow `CCBot`.",
+                        "Serve server-rendered HTML so the crawler can actually extract text — pure JS SPAs get skipped.",
+                        "Build inbound links from Hacker News, Reddit, GitHub, Product Hunt — CC crawlers follow links.",
+                        "For new domains, wait 1–2 monthly snapshots; Common Crawl publishes one dump per month."
+                      ]
+                    },
+                    "wikipedia": {
+                      "name": "Wikipedia / Wikidata Entity",
+                      "measures": "Checks whether your brand or product has an entry on Wikipedia (English and/or Chinese) and a Wikidata Q-item.",
+                      "why": "Wikipedia and Wikidata are the single most authoritative structured sources LLMs use to verify entities. If ChatGPT can look you up on Wikidata, it treats you as a real entity; if not, you get the `I'm not sure about this brand` hedge that kills recommendations.",
+                      "scoring": "Wikipedia article + Wikidata Q-item → PASS. One of the two → WARN. Neither → FAIL.",
+                      "howto": [
+                        "Don't write your own Wikipedia page — get written about in reliable sources first (press, academic, books).",
+                        "Create a Wikidata Q-item manually at https://www.wikidata.org — the gatekeeping is far lighter than Wikipedia.",
+                        "Link your Wikidata item to your site's Organization schema via `sameAs`.",
+                        "Keep LinkedIn, GitHub, and Crunchbase profiles current — Wikidata editors source from them."
+                      ]
+                    },
+                    "knowledgeGraph": {
+                      "name": "Google Knowledge Graph Presence",
+                      "measures": "Checks for a Google Knowledge Graph entity — the sidebar box that shows up in Google results for recognized brands — via schema.org markup and Google's Knowledge Graph API.",
+                      "why": "Google's Knowledge Graph feeds directly into Google AI Overviews, SGE, and Gemini. An entity that is in the graph gets cited; one that is not, does not. It also seeds the brand fact table for every other LLM that crawls Google results as a reference.",
+                      "scoring": "Entity found with rich fields → PASS. Partial coverage → WARN. Not found → FAIL.",
+                      "howto": [
+                        "Publish Organization JSON-LD with `name`, `url`, `logo`, `sameAs`, `foundingDate`, `founder`.",
+                        "Get listed on Crunchbase, LinkedIn Company Page, and Bloomberg company database.",
+                        "Claim your Google Business Profile even for pure SaaS companies.",
+                        "Encourage branded search volume — Google uses it as a primary entity signal."
+                      ]
+                    },
+                    "reviews": {
+                      "name": "Third-party Reviews & Ratings",
+                      "measures": "Checks for a brand presence on the review platforms that matter in your category — G2, Capterra, Trustpilot, Glassdoor, Yelp, TripAdvisor, CNET, Product Hunt, and similar.",
+                      "why": "AI engines weigh user reviews heavily when comparing competitors. A brand with 100 reviews at 4.5 stars on G2 gets recommended; a brand with none gets skipped in favor of one that has been vetted by real users. The platforms LLMs read are different per category.",
+                      "scoring": "Presence on 3+ category-relevant platforms → PASS. 1–2 platforms → WARN. None → FAIL.",
+                      "howto": [
+                        "Claim and populate your G2 / Capterra / Trustpilot profile with current logos and descriptions.",
+                        "Run a quarterly review-ask campaign with your happiest customers.",
+                        "Respond to negative reviews publicly — LLMs learn from the response pattern too.",
+                        "Add Review JSON-LD on your own site showing aggregated ratings from these platforms."
+                      ]
+                    },
+                    "mentions": {
+                      "name": "Authoritative Press & Media Mentions",
+                      "measures": "Searches for mentions of your brand on high-authority news and trade publications — WSJ, NYT, TechCrunch, Forbes, Bloomberg, industry analyst reports.",
+                      "why": "Authority compounds. One TechCrunch article is worth more than a hundred backlinks from random blogs. LLMs trained on news datasets (GDELT, CCNews, RSS dumps) treat these mentions as ground truth when building a brand's entity profile.",
+                      "scoring": "3+ high-authority mentions → PASS. 1–2 → WARN. None → FAIL.",
+                      "howto": [
+                        "Run traditional PR — pitch product launches to trade press first, tier-1 press second.",
+                        "Publish original research or data — journalists love numbers no one else has.",
+                        "Get quoted as an expert in industry articles via HARO / Qwoted.",
+                        "Keep old quality mentions alive — a 2018 TechCrunch article still carries weight."
+                      ]
+                    }
+                  }
+                },
+                "visibility": {
+                  "title": "4. Direct AI Visibility",
+                  "description": "The lagging-indicator metrics that measure whether real AI engines actually name and cite you when users ask questions in your category. Everything above is a leading indicator; this is what actually matters.",
+                  "items": {
+                    "citationRate": {
+                      "name": "AI Citation Rate",
+                      "measures": "Sends a fixed set of brand- and category-relevant questions to Perplexity (via OpenRouter) and counts how often your domain appears as a cited source.",
+                      "why": "The ultimate test: are real AI engines pointing to you when users ask questions in your category? Everything else in this glossary is a leading indicator; citation rate is the lagging indicator that actually moves revenue.",
+                      "scoring": "≥80% citation rate → A (excellent). 60–79% → B. 40–59% → C. 20–39% → D. <20% → F.",
+                      "howto": [
+                        "Fix everything above in this glossary first — citation rate is the output, not a lever you pull directly.",
+                        "Publish evergreen reference content your competitors don't have.",
+                        "Build entity signals (Wikipedia, Wikidata, Knowledge Graph) so AI engines can verify who you are.",
+                        "Re-run this check monthly to track progress — citation rate moves in ~30-day cycles."
+                      ]
+                    },
+                    "answerInclusion": {
+                      "name": "Answer Inclusion Rate",
+                      "measures": "Similar to citation rate but softer — checks whether your brand name appears in the AI-generated answer text, even without a clickable citation link.",
+                      "why": "Being named without a citation still earns mindshare. Users who read `Brands like X, Y, Z all do this` remember the names even without clicking. Answer inclusion is a leading indicator of citation rate — mentions come first, citations follow.",
+                      "scoring": "≥60% of relevant queries name your brand → PASS. 30–59% → WARN. <30% → FAIL.",
+                      "howto": [
+                        "Use consistent brand name phrasing everywhere (`Foo` not `Foo Inc.` one place and `foo.com` another).",
+                        "Pick a distinctive brand name — avoid generic dictionary words that AI can't disambiguate.",
+                        "Seed the brand name in authoritative sources; the Wikipedia first sentence is disproportionately valuable.",
+                        "Build a robust `sameAs` graph so LLMs can resolve brand name → entity reliably."
+                      ]
+                    },
+                    "shareOfVoice": {
+                      "name": "Competitor Share of Voice",
+                      "measures": "Across the same set of category queries, counts which competitor brands are mentioned alongside yours and how often.",
+                      "why": "You don't just want to be mentioned — you want to be mentioned before your main competitors and more often than them. This metric shows whether AI perceives you as the category leader, a challenger, or an also-ran.",
+                      "scoring": "Your brand in the top-3 most-mentioned → PASS. In top-10 → WARN. Not mentioned → FAIL.",
+                      "howto": [
+                        "Study which competitors get cited and reverse-engineer their authority signals.",
+                        "Publish `X vs Y` comparison pages for your top 3 competitors — own the comparison query.",
+                        "Sponsor or publish category-defining content (benchmark reports, buyer's guides).",
+                        "Don't compete on generic terms — own a specific sub-category first, then expand."
+                      ]
+                    },
+                    "sentimentFraming": {
+                      "name": "Brand Sentiment & Framing",
+                      "measures": "Analyzes the emotional tone and narrative framing AI uses when describing your brand — innovator, challenger, niche player, has-had-issues, controversial.",
+                      "why": "The frame AI picks up during training sticks for years. A brand framed as `innovator` in training data gets recommended proactively; a brand framed as `has had issues` gets hedged with disclaimers even when the situation has improved long ago.",
+                      "scoring": "≥60% positive or neutral framing → PASS. 30–59% → WARN. <30% or frequent hedging → FAIL.",
+                      "howto": [
+                        "Monitor press coverage tone quarterly and push back on recurring negative frames.",
+                        "Seed positive case studies in places LLMs read — your blog, Medium, LinkedIn articles.",
+                        "Counter-balance old negative coverage with a steady stream of positive news, not a single rebuttal.",
+                        "Be careful with any single-incident PR — it can anchor the frame for years in training data."
+                      ]
+                    },
+                    "contentGaps": {
+                      "name": "Content Gaps",
+                      "measures": "Identifies questions in your category where AI engines cannot find a good answer from your site — topics where a competitor wrote the definitive piece and you did not.",
+                      "why": "Every unfilled content gap is a user journey your competitor owns. Filling the gap is the single most direct way to move citation rate, because AI will immediately start pointing to the new page once it's crawled.",
+                      "scoring": "0 major gaps → PASS. 1–3 gaps → WARN. 4+ gaps → FAIL.",
+                      "howto": [
+                        "Write the piece nobody has written — sub-category deep dives beat broad overview posts.",
+                        "Answer the beginner questions properly — AI loves beginner content because it's quotable.",
+                        "Publish original data or research your competitors can't match.",
+                        "Re-check quarterly; gaps move as the category evolves and new questions emerge."
+                      ]
+                    }
+                  }
+                },
+                "entity": {
+                  "title": "5. Entity Recognition",
+                  "description": "Whether large language models perceive your brand as a real, distinct entity they can confidently describe — the foundation that everything else in AI visibility rests on.",
+                  "items": {
+                    "entityClarity": {
+                      "name": "Entity Clarity",
+                      "measures": "Asks AI models to describe your brand, then scores how accurate, specific, and complete the description is. Does the model know what you do, for whom, and how you're different?",
+                      "why": "If AI can't crisply describe what you are, it can't recommend you. `I think they do something with AI` is a failure state — users re-ask and competitors jump the queue while the model is hedging on you.",
+                      "scoring": "Accurate and specific description → PASS. Vague or partially wrong → WARN. Confused or unknown → FAIL.",
+                      "howto": [
+                        "Use a one-sentence `X is a [category] that [unique value] for [audience]` on every high-traffic page.",
+                        "Repeat the same positioning across About, homepage, LinkedIn, and Wikipedia with near-identical wording.",
+                        "Avoid changing taglines — consistency over 6–12 months is what LLMs encode during training.",
+                        "Audit AI's description of you quarterly and fix the sources of any drift."
+                      ]
+                    },
+                    "categoryAssociation": {
+                      "name": "Category Association",
+                      "measures": "Checks whether AI places your brand in the right mental bucket when users ask category questions. Ask `best tools for X` — do you appear? Asked about the wrong category — are you absent?",
+                      "why": "Most buyer searches go through category intent. If AI classifies you in the wrong category (or none at all) you're invisible to people who are actively shopping — they'll never see your name.",
+                      "scoring": "Correctly placed in the right category for ≥70% of queries → PASS. 30–69% → WARN. <30% → FAIL.",
+                      "howto": [
+                        "Pick one primary category and defend it relentlessly across all messaging.",
+                        "Get listed in category directories (G2 category leaders, Capterra categories, industry lists).",
+                        "Use category keywords in page titles, meta descriptions, and H1s.",
+                        "Write `best [category] tools` lists and place yourself first with honest justification."
+                      ]
+                    },
+                    "platformCoverage": {
+                      "name": "Multi-platform Presence",
+                      "measures": "Checks whether your brand has a verified presence on the platforms AI models train on most heavily: Wikipedia, Wikidata, Crunchbase, LinkedIn, GitHub, Reddit, Product Hunt, Hacker News, industry directories.",
+                      "why": "Every additional high-authority platform is another corroborating source that AI uses to build your entity profile. Brands with 6+ platform presences get recommended confidently; those with only a website get treated as unverified and hedged.",
+                      "scoring": "Presence on ≥6 of 10 key platforms → PASS. 3–5 → WARN. <3 → FAIL.",
+                      "howto": [
+                        "Claim your Wikidata Q-item first — lowest barrier, highest training-data weight.",
+                        "Complete LinkedIn Company Page, Crunchbase, and AngelList profiles with rich fields.",
+                        "Launch once on Product Hunt — one-time effort, high permanent weight.",
+                        "Participate visibly in category-relevant subreddits and Hacker News discussions."
+                      ]
+                    },
+                    "recognitionRate": {
+                      "name": "Recognition Rate",
+                      "measures": "The share of AI queries — across multiple engines and prompt variations — where the model recognizes your brand name without needing a URL or disambiguation.",
+                      "why": "Recognition is the precursor to recommendation. If AI has to ask `which X do you mean?` every time, you lose the user to a brand the model already knows by name.",
+                      "scoring": "≥80% recognition → PASS. 50–79% → WARN. <50% → FAIL.",
+                      "howto": [
+                        "Pick a distinctive name — verify it doesn't collide with existing brands or common dictionary words.",
+                        "Enforce consistent name usage across every channel — even subtle variants dilute recognition.",
+                        "Seed the brand name in as many high-authority sources as possible before the next model cutoff.",
+                        "Be patient — recognition lags training cutoffs by months, sometimes a full model generation."
+                      ]
+                    },
+                    "stability": {
+                      "name": "Answer Stability",
+                      "measures": "Runs the same query multiple times against the same AI engine and checks whether the answer is consistent across runs. Unstable answers signal weak training grounding.",
+                      "why": "If the same question gives `X is a great tool` one time and `I've never heard of X` the next, users will trust the uncertain run and pass. Stability equals trust, and trust equals the recommendation.",
+                      "scoring": "≥90% consistent answers → PASS. 70–89% → WARN. <70% → FAIL.",
+                      "howto": [
+                        "Everything that builds recognition also builds stability — the same fixes apply.",
+                        "Avoid conflicting descriptions across your own channels — one positioning, everywhere.",
+                        "Fix factual errors in Wikipedia, Wikidata, and Crunchbase — those errors propagate into training.",
+                        "Stability takes time; the next model generation usually locks it in for you."
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -1920,6 +2172,258 @@ if (!i18n.isInitialized) {
                         "在 Cloudflare Bot Fight / Super Bot Fight 的白名单里显式放行 GPTBot、ClaudeBot、PerplexityBot、Google-Extended",
                         "AWS WAF 或同类规则里加一条 Allow 匹配这些 User-Agent",
                         "本地验证：`curl -A 'GPTBot' https://yoursite.com` 看是否返回 200"
+                      ]
+                    }
+                  }
+                },
+                "structuredData": {
+                  "title": "二、结构化数据",
+                  "description": "让大语言模型不用从散文里猜你是谁、你卖什么——这些是机器可读的信号。",
+                  "items": {
+                    "jsonld": {
+                      "name": "JSON-LD 结构化数据",
+                      "measures": "检测首页是否有 JSON-LD 代码块，以及是否描述了 Organization、Product、WebSite 等 schema.org 类型，核心字段是否填齐。",
+                      "why": "结构化数据是你能给 LLM 的最机器可读的信号。ChatGPT、Perplexity、Google AI Overviews 都依赖 schema.org 标记来确认实体身份和抽取事实——缺了它，模型只能从散文里猜，猜错的代价就是被加免责声明或干脆忽略。",
+                      "scoring": "Organization + Product / WebSite / FAQ 中任一，且核心字段齐全 → PASS；只有单个瘦身块 → WARN；完全没有 → FAIL。",
+                      "howto": [
+                        "添加 Organization 块，包含 `name`、`url`、`logo`、以及指向 Wikipedia / LinkedIn / Crunchbase / GitHub 的 `sameAs`",
+                        "按你卖什么，加上 Product / SoftwareApplication / Service JSON-LD",
+                        "每次改动前先在 https://validator.schema.org 验证",
+                        "各页面的 @type 保持一致，类型漂移会破坏抽取"
+                      ]
+                    },
+                    "metaTags": {
+                      "name": "Meta 标签覆盖",
+                      "measures": "检测首页的 title、meta description、canonical、viewport、Open Graph（og:title / og:description / og:image）、以及 Twitter Card 标签。",
+                      "why": "Meta 标签是 AI 决定页面是否相关时看的那两行摘要。描述缺失意味着模型得自己生成一段——或者干脆跳过这个页面。og:image 也是 AI 聊天答案里链接预览卡片渲染的底图。",
+                      "scoring": "6 条核心信号全都有 → PASS；4–5 条 → WARN；少于 4 条 → FAIL。",
+                      "howto": [
+                        "每个页面写独特的 title（50–60 字符）和 description（150–160 字符）",
+                        "为可分享页面添加 1200×630 的 `og:image` 和 `og:type`",
+                        "设置 canonical URL 避免重复内容惩罚",
+                        "发布前用 https://metatags.io 预览效果"
+                      ]
+                    },
+                    "breadcrumbs": {
+                      "name": "面包屑与知识面板标记",
+                      "measures": "检查 BreadcrumbList JSON-LD、可见的面包屑导航，以及知识面板友好的标记（`sameAs`、`logo`、`SearchAction`）。",
+                      "why": "面包屑帮 AI 理解你的站点结构——一个页面在品类树的什么位置。知识面板标记是 Google 和 Perplexity 构造查询旁那个「摘要框」的原料。两者都会随时间累积发挥作用。",
+                      "scoring": "两类信号都有 → PASS；只有其中一类 → WARN；都没有 → FAIL。",
+                      "howto": [
+                        "BreadcrumbList JSON-LD 和页面上可见的面包屑要一一对应",
+                        "在 Organization schema 的 `sameAs` 里链接 Wikipedia、LinkedIn、Crunchbase、GitHub",
+                        "首页加 `SearchAction` 以启用 Google 站内搜索框",
+                        "面包屑深度控制在 3–4 层以内，层级过深影响解析"
+                      ]
+                    },
+                    "answerFormat": {
+                      "name": "AI 答案格式优化",
+                      "measures": "检测内容是否以 LLM 容易直接引用的格式撰写——FAQ schema、问答模式、定义式开头段落、简洁直接的答案。",
+                      "why": "LLM 偏好可以直接引用、自成一句的源。`「X 是一种 [品类]，它 [价值主张]」` 比把答案埋在营销段落里好得多。FAQ schema 明确标记了问答对，告诉 AI 这些是可抽取的答案。",
+                      "scoring": "有 FAQ schema + 清晰的定义式开头 → PASS；部分具备 → WARN；完全没有可引用结构 → FAIL。",
+                      "howto": [
+                        "添加 FAQPage JSON-LD，覆盖 3–5 个高意图问题",
+                        "关键页面用一句定义开头：`X 是一种 [品类]，它为 [受众] 提供 [独特价值]`",
+                        "H2 / H3 用真实用户会问的问题，而不是营销短语",
+                        "避免标题党——对抽取完全不可见"
+                      ]
+                    }
+                  }
+                },
+                "authority": {
+                  "title": "三、权威信号",
+                  "description": "LLM 用来判断你是否值得被推荐的站外证据——在训练语料里、百科里、评论平台里、媒体里的存在感。",
+                  "items": {
+                    "commonCrawl": {
+                      "name": "AI 训练数据收录 (Common Crawl)",
+                      "measures": "在 Common Crawl 最新一期全网快照里查你的域名，统计有多少页面被采入这个公开网页语料库。",
+                      "why": "Common Crawl 是 ChatGPT、Claude、LLaMA 以及几乎所有开源 LLM 的训练数据。如果你没进 Common Crawl，这些模型在训练时从没见过你——用户问到品牌相关问题时，它们对你零记忆，结果要么加免责声明要么直接忽略。",
+                      "scoring": "找到页面 → PASS；未收录但域名 < 60 天 → INFO（新站正常）；未收录且老站 → WARN；未收录 + robots.txt 屏蔽了 CCBot → FAIL。",
+                      "howto": [
+                        "确认 robots.txt 没有 Disallow CCBot",
+                        "提供服务端渲染 HTML，让爬虫能真实抽到文字——纯 JS SPA 会被跳过",
+                        "从 Hacker News、Reddit、GitHub、Product Hunt 建立入链，CC 爬虫沿链接发现新站",
+                        "新域名等 1–2 期快照，Common Crawl 每月发布一次"
+                      ]
+                    },
+                    "wikipedia": {
+                      "name": "Wikipedia / Wikidata 实体",
+                      "measures": "检测你的品牌或产品是否在 Wikipedia（中英文）有词条，以及是否有 Wikidata Q-item。",
+                      "why": "Wikipedia 和 Wikidata 是 LLM 用来验证实体的最权威结构化源。如果 ChatGPT 能在 Wikidata 上查到你，它就把你当真实实体对待；否则你会得到 `我对这个品牌不太确定` 的免责声明——这基本等于把推荐机会让出去。",
+                      "scoring": "Wikipedia 词条 + Wikidata Q-item 都有 → PASS；只有其一 → WARN；都没有 → FAIL。",
+                      "howto": [
+                        "不要自己写 Wikipedia 页面——先让可信源（新闻、学术、图书）写你",
+                        "直接在 https://www.wikidata.org 手工创建 Q-item，审核比 Wikipedia 宽松得多",
+                        "把 Wikidata 条目通过 `sameAs` 关联到你站点的 Organization schema",
+                        "LinkedIn、GitHub、Crunchbase 保持更新——Wikidata 编辑会从这些地方找信息"
+                      ]
+                    },
+                    "knowledgeGraph": {
+                      "name": "Google 知识图谱收录",
+                      "measures": "通过 schema.org 标记和 Google Knowledge Graph API 查询你的品牌是否在 Google 知识图谱里——就是那个出现在 Google 搜索右侧的实体侧栏。",
+                      "why": "Google 的知识图谱直接喂给 Google AI Overviews、SGE 和 Gemini。在图谱里的实体会被引用，不在的就不会。同时它也为其他把 Google 结果作为参考的 LLM 播下了品牌事实种子。",
+                      "scoring": "实体被找到且字段丰富 → PASS；部分覆盖 → WARN；未找到 → FAIL。",
+                      "howto": [
+                        "发布 Organization JSON-LD，包含 `name`、`url`、`logo`、`sameAs`、`foundingDate`、`founder`",
+                        "在 Crunchbase、LinkedIn Company Page、Bloomberg 公司数据库登记",
+                        "即使是纯 SaaS 也去认领 Google Business Profile",
+                        "引导品牌词搜索量增长——Google 把它作为关键的实体信号"
+                      ]
+                    },
+                    "reviews": {
+                      "name": "第三方评论与评分",
+                      "measures": "检测你在所在品类的主流评论平台上是否有存在感——G2、Capterra、Trustpilot、Glassdoor、Yelp、TripAdvisor、CNET、Product Hunt 等。",
+                      "why": "AI 引擎比较竞品时会给用户评论很高权重。G2 上有 100 条 4.5 星评论的品牌会被推荐，没有任何评论的会被跳过换成一个 `被真实用户验证过` 的品牌。LLM 在不同品类读的平台也不同。",
+                      "scoring": "在 3+ 个品类相关平台有存在 → PASS；1–2 个 → WARN；都没有 → FAIL。",
+                      "howto": [
+                        "认领并完善 G2 / Capterra / Trustpilot 资料页，保证 logo 和介绍是最新的",
+                        "每季度对最满意的客户跑一次评论征集",
+                        "公开回复负面评论——LLM 也在学习你的回应模式",
+                        "在自己站点加 Review JSON-LD 显示这些平台的聚合评分"
+                      ]
+                    },
+                    "mentions": {
+                      "name": "权威媒体与新闻提及",
+                      "measures": "搜索高权重新闻和行业媒体中对你品牌的提及——WSJ、NYT、TechCrunch、Forbes、Bloomberg、行业分析师报告。",
+                      "why": "权威性会复利累积。一篇 TechCrunch 文章的分量大于一百个随机博客的反链。训练在新闻数据集（GDELT、CCNews、RSS dumps）上的 LLM 把这些提及当作构建品牌实体画像的事实基准。",
+                      "scoring": "3+ 条高权重提及 → PASS；1–2 条 → WARN；都没有 → FAIL。",
+                      "howto": [
+                        "做传统 PR——产品发布先推行业媒体，再推一线媒体",
+                        "发布原创研究或数据——记者最爱别人没有的数字",
+                        "通过 HARO / Qwoted 作为专家在行业文章里被引用",
+                        "保留老的高质量提及——2018 年的一篇 TechCrunch 依然有权重"
+                      ]
+                    }
+                  }
+                },
+                "visibility": {
+                  "title": "四、AI 直接可见性",
+                  "description": "滞后指标——衡量真实 AI 引擎在回答品类问题时是否真的提到并引用你。上面所有项都是先行指标，这一层才是真正决定生意的数字。",
+                  "items": {
+                    "citationRate": {
+                      "name": "AI 引用率",
+                      "measures": "通过 OpenRouter 把一组品牌相关和品类相关的问题发给 Perplexity，统计你的域名作为引用来源出现的频率。",
+                      "why": "最终考试：用户在品类问题里问 AI，AI 会不会指向你？词典里其它所有项都是先行指标，引用率才是真正驱动收入的滞后指标。",
+                      "scoring": "≥80% 引用率 → A（优秀）；60–79% → B；40–59% → C；20–39% → D；<20% → F。",
+                      "howto": [
+                        "先把词典里上面每一项都修好——引用率是结果，不是能直接拉动的杠杆",
+                        "发布竞品没有的长青参考型内容",
+                        "建设实体信号（Wikipedia、Wikidata、Knowledge Graph）让 AI 能验证你是谁",
+                        "每月重跑一次这项检测——引用率大致以 30 天为周期波动"
+                      ]
+                    },
+                    "answerInclusion": {
+                      "name": "答案提及率",
+                      "measures": "比引用率更柔和的指标——统计你的品牌名字是否在 AI 生成的答案里出现，无论是否带可点击的引用链接。",
+                      "why": "没带引用链接的提及照样能赢心智。用户读到 `像 X、Y、Z 这样的品牌都…` 即使不点击也会记住名字。提及率是引用率的先行指标——先被提起，后被引用。",
+                      "scoring": "≥60% 相关查询里被提及 → PASS；30–59% → WARN；<30% → FAIL。",
+                      "howto": [
+                        "品牌名在所有渠道用一致的写法（别一会儿 `Foo`、一会儿 `Foo Inc.`、一会儿 `foo.com`）",
+                        "取一个有辨识度的品牌名——避免 AI 难以消歧的通用词",
+                        "把品牌名埋在权威源里，Wikipedia 第一句的价值不成比例地大",
+                        "建设结实的 `sameAs` 图，让 LLM 可以可靠地把品牌名解析到实体"
+                      ]
+                    },
+                    "shareOfVoice": {
+                      "name": "竞品声量占比",
+                      "measures": "在同一批品类查询里，统计哪些竞品品牌和你一起被提及、各自出现频率如何。",
+                      "why": "你不只想被提及——你想在主要竞品**之前**被提及、**比他们更频繁**被提及。这个指标告诉你：AI 把你感知成品类领导者、挑战者、还是陪跑？",
+                      "scoring": "你的品牌在被提及频率前 3 → PASS；在前 10 → WARN；没被提及 → FAIL。",
+                      "howto": [
+                        "研究哪些竞品被引用，反推他们的权威信号组合",
+                        "为你的前 3 竞品写 `X vs Y` 对比页——抢下对比类查询",
+                        "赞助或发布品类级的内容（评测报告、采购指南）",
+                        "不要在泛品类词上硬拼——先拿下一个细分，再向外扩"
+                      ]
+                    },
+                    "sentimentFraming": {
+                      "name": "品牌情感与框架",
+                      "measures": "分析 AI 描述你品牌时的情感基调和叙事框架——是 `创新领导者`、`挑战者`、`小众玩家`、`曾出过问题`、还是 `有争议`？",
+                      "why": "AI 在训练期捕捉到的品牌框架会固定好几年。训练数据里被框为 `创新者` 的品牌会被主动推荐；被框为 `曾出过问题` 的品牌即使情况早已改善，也会被加免责声明。",
+                      "scoring": "≥60% 正面或中性框架 → PASS；30–59% → WARN；<30% 或频繁被加免责声明 → FAIL。",
+                      "howto": [
+                        "每季度监控媒体报道基调，对反复出现的负面框架主动回击",
+                        "在 LLM 会读到的地方（自家博客、Medium、LinkedIn 文章）持续放出正面案例",
+                        "用持续的正面新闻抵消旧负面报道，而不是一次性反驳",
+                        "单次危机 PR 要格外小心——可能在训练数据里定格多年"
+                      ]
+                    },
+                    "contentGaps": {
+                      "name": "内容缺口",
+                      "measures": "识别你品类里 AI 找不到好答案的那些问题——这些是竞品写了权威内容而你没有的地方。",
+                      "why": "每一个未填的内容缺口都是竞品占掉的用户旅程。填补缺口是最直接的提升引用率方式——新页面被抓取后 AI 会立刻开始指向它。",
+                      "scoring": "0 个重大缺口 → PASS；1–3 个 → WARN；4+ → FAIL。",
+                      "howto": [
+                        "写没人写过的那篇——细分深度文比泛品类综述更有杀伤力",
+                        "把入门问题答好——AI 特别喜欢入门内容，因为好引用",
+                        "发布竞品给不出的原创数据或研究",
+                        "每季度重跑——缺口会随品类演进移动"
+                      ]
+                    }
+                  }
+                },
+                "entity": {
+                  "title": "五、实体识别度",
+                  "description": "大语言模型是否把你品牌当作一个真实、独立、能被自信描述的实体——这是 AI 可见性所有其它层面的地基。",
+                  "items": {
+                    "entityClarity": {
+                      "name": "实体清晰度",
+                      "measures": "让 AI 描述你的品牌，然后打分看描述是否准确、具体、完整。模型知道你做什么、服务谁、和别人有什么不同吗？",
+                      "why": "如果 AI 无法简洁地描述你是什么，它就无法推荐你。`我觉得他们做一些和 AI 相关的东西` 属于失败状态——用户会重新提问，而竞品在 AI 犹豫的这几秒里就插队了。",
+                      "scoring": "描述准确且具体 → PASS；模糊或部分错误 → WARN；困惑或完全不知道 → FAIL。",
+                      "howto": [
+                        "在所有高流量页面上用一句 `X 是一种 [品类]，它为 [受众] 提供 [独特价值]`",
+                        "About、首页、LinkedIn、Wikipedia 用几乎相同的表述反复重复",
+                        "不要频繁换 tagline——6–12 个月的稳定一致才是 LLM 训练时编码的内容",
+                        "每季度审计 AI 对你的描述，修复任何漂移的源头"
+                      ]
+                    },
+                    "categoryAssociation": {
+                      "name": "品类关联度",
+                      "measures": "检测用户问品类问题时，AI 是否把你的品牌放进正确的心智格子。问 `最好的 X 工具` 时你会出现吗？问到错误品类时你是否缺席？",
+                      "why": "大部分购买决策走的是品类意图。如果 AI 把你归到错误品类（或根本没品类归属），你对正在做调研的用户就是隐形的——他们永远看不到你的名字。",
+                      "scoring": "≥70% 查询里被放进正确品类 → PASS；30–69% → WARN；<30% → FAIL。",
+                      "howto": [
+                        "选一个主品类并在所有表达里死守它",
+                        "进品类目录（G2 品类榜、Capterra 品类、行业清单）",
+                        "品类关键词进 title、meta description、H1",
+                        "写 `最好的 [品类] 工具` 清单文章，把自己诚实地放在前面"
+                      ]
+                    },
+                    "platformCoverage": {
+                      "name": "多平台覆盖",
+                      "measures": "检测你在 LLM 训练最密集的平台上是否有经过验证的存在：Wikipedia、Wikidata、Crunchbase、LinkedIn、GitHub、Reddit、Product Hunt、Hacker News、行业目录。",
+                      "why": "每多一个高权重平台都是 AI 用来构建你实体画像的一份交叉证据。覆盖 6+ 个平台的品牌会被自信地推荐；只有一个官网的会被当作未验证，推荐时会被加免责声明。",
+                      "scoring": "覆盖 ≥6 / 10 个关键平台 → PASS；3–5 个 → WARN；<3 → FAIL。",
+                      "howto": [
+                        "先拿下 Wikidata Q-item——门槛最低，训练数据权重最高",
+                        "把 LinkedIn Company Page、Crunchbase、AngelList 资料填满",
+                        "上一次 Product Hunt——一次性投入，永久高权重",
+                        "在品类相关的 subreddit 和 Hacker News 讨论里积极参与"
+                      ]
+                    },
+                    "recognitionRate": {
+                      "name": "识别率",
+                      "measures": "跨多个 AI 引擎和多种提问变体，统计模型能在不需要 URL 或额外消歧的情况下直接认出你品牌名的比例。",
+                      "why": "识别是推荐的前提。如果 AI 每次都要反问 `你说的是哪个 X？`，用户就会流失到一个模型已经直接知道名字的品牌那里。",
+                      "scoring": "≥80% 识别率 → PASS；50–79% → WARN；<50% → FAIL。",
+                      "howto": [
+                        "选一个有辨识度的名字——先核对不要和现有品牌或常用词冲突",
+                        "在所有渠道强制统一的名字写法——微小变体也会稀释识别度",
+                        "在下一代模型训练截止前，尽量在多个权威源里播种品牌名",
+                        "要有耐心——识别度落后训练截止时间几个月，有时要等整整一代模型"
+                      ]
+                    },
+                    "stability": {
+                      "name": "答案稳定性",
+                      "measures": "在同一个 AI 引擎上多次跑相同查询，检测答案是否一致。不稳定的答案说明训练期的 grounding 很薄弱。",
+                      "why": "同一个问题一次给出 `X 是个好工具`、下一次给出 `没听说过 X`——用户会相信不确定的那次并流失。稳定即信任，信任才能换来推荐。",
+                      "scoring": "≥90% 答案一致 → PASS；70–89% → WARN；<70% → FAIL。",
+                      "howto": [
+                        "所有提升识别度的动作同样会提升稳定性——同一套打法",
+                        "自己渠道之间不要有互相矛盾的描述——一套定位走到底",
+                        "修正 Wikipedia、Wikidata、Crunchbase 上的事实错误——这些错误会进训练数据",
+                        "稳定性需要时间——下一代模型通常会帮你锁定"
                       ]
                     }
                   }
