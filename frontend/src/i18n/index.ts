@@ -668,41 +668,41 @@ if (!i18n.isInitialized) {
           },
           "geoKnowledge": {
             "title": "GEO Knowledge Center",
-            "description": "Learn about the core concepts and best practices of GEO strategy to optimize your website for AI-powered search engines.",
+            "description": "Learn what Generative Engine Optimization is, why it replaces traditional SEO in the AI era, and how to get your brand recommended by ChatGPT, Perplexity, Google AI Overviews, Gemini, Claude and Copilot.",
             "sections": {
               "about": "About GEO",
               "whatIsGeo": "What is GEO?",
-              "whatIsGeoBody": "GEO (Geographic Optimization) is a website optimization strategy that ensures a site achieves the best search visibility across different geographies and languages. With the rise of AI-powered search engines and assistants, GEO optimization is becoming increasingly important.",
+              "whatIsGeoBody": "GEO — Generative Engine Optimization — is the practice of optimizing your website, brand and content so that AI search engines and assistants (ChatGPT, Perplexity, Google AI Overviews, Gemini, Claude, Copilot) recognize, trust and recommend you when users ask for products, services or expert information. Where classic SEO targets the blue links on a search results page, GEO targets the generated answer itself.",
               "whyGeoImportant": "Why is GEO important?",
               "whyGeoPoints": [
-                "Improve search visibility for global users",
-                "Adapt to different regional search algorithm preferences",
-                "Enhance user experience and conversion rates",
-                "Strengthen brand's global influence"
+                "Traditional search traffic is being replaced by AI-generated answers — if you are not in the answer, you are invisible",
+                "AI engines cite only a handful of trusted sources per query; appearing in that set captures category-defining mindshare",
+                "Once an AI model learns your brand as an entity, it recommends you across many related queries — the effect compounds",
+                "Early GEO movers lock in category authority before competitors catch up"
               ],
               "strategies": "GEO Strategies",
-              "contentLocalization": "Content Localization",
-              "contentLocalizationDesc": "Provide localized content for users in different regions, including language, cultural references, and region-specific information.",
+              "contentLocalization": "Authoritative Content & Entity Clarity",
+              "contentLocalizationDesc": "AI engines cite sources they can verify. Build comprehensive first-party content about your brand, products and category with clear entity signals that large language models can parse and trust.",
               "contentLocalizationPoints": [
-                "Translate and localize content",
-                "Use region-specific keywords",
-                "Adapt to regional cultural differences"
+                "Publish in-depth, expert-grade content on your core topics — avoid thin marketing copy",
+                "Add Organization / Product structured data (JSON-LD) and an llms.txt file",
+                "Establish brand presence on Wikipedia, Wikidata, Reddit, GitHub and authoritative directories"
               ],
-              "technicalOptimization": "Technical Optimization",
-              "technicalOptimizationDesc": "Ensure your website technically supports GEO optimization, including site structure, loading speed, and mobile-friendliness.",
+              "technicalOptimization": "Technical Foundations & AI Crawlability",
+              "technicalOptimizationDesc": "If AI crawlers cannot reach your content, they cannot cite you. Make sure GPTBot, ClaudeBot, PerplexityBot and Google-Extended can actually fetch and render your pages.",
               "technicalOptimizationPoints": [
-                "Use hreflang tags",
-                "Optimize website loading speed",
-                "Ensure mobile-friendliness"
+                "Allow AI crawlers in robots.txt (GPTBot, ClaudeBot, PerplexityBot, Google-Extended)",
+                "Serve fast, server-rendered HTML — avoid JS-only pages that AI bots cannot execute",
+                "Use semantic HTML and clean markup so LLMs can parse your pages into structured facts"
               ],
-              "keyData": "GEO Key Data",
-              "importantMetrics": "Important GEO Metrics",
-              "regionalTraffic": "Regional Traffic Distribution",
-              "regionalTrafficDesc": "Understand user access patterns from different regions to optimize targeted content.",
-              "languagePreference": "Language Preference",
-              "languagePreferenceDesc": "Analyze user language preferences to provide corresponding localized content.",
-              "searchTrends": "Search Trends",
-              "searchTrendsDesc": "Track search trends in different regions to adjust keyword strategies."
+              "keyData": "Key GEO Metrics",
+              "importantMetrics": "What to measure",
+              "regionalTraffic": "AI Citation Rate",
+              "regionalTrafficDesc": "How often your site is linked as a source when AI engines answer brand- or category-relevant queries.",
+              "languagePreference": "Answer Inclusion Rate",
+              "languagePreferenceDesc": "The share of relevant queries where your brand is actually named in the AI-generated answer, with or without a direct citation link.",
+              "searchTrends": "Competitor Share of Voice",
+              "searchTrendsDesc": "Which competitors AI models name alongside you and how often — the real benchmark for category mindshare."
             }
           },
           "productsServices": {
@@ -1736,41 +1736,41 @@ if (!i18n.isInitialized) {
           },
           "geoKnowledge": {
             "title": "GEO 知识中心",
-            "description": "了解 GEO 策略的核心概念和最佳实践，优化您的网站以适应 AI 驱动的搜索引擎。",
+            "description": "了解什么是生成式引擎优化（Generative Engine Optimization），它为何会在 AI 时代取代传统 SEO，以及如何让 ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等 AI 引擎优先推荐你的品牌。",
             "sections": {
               "about": "关于 GEO",
               "whatIsGeo": "什么是 GEO？",
-              "whatIsGeoBody": "GEO（Geographic Optimization）是一种网站优化策略，旨在确保网站在不同地理位置和语言环境下都能获得最佳的搜索可见性。随着 AI 驱动的搜索引擎和助手的兴起，GEO 优化变得越来越重要。",
+              "whatIsGeoBody": "GEO 即 Generative Engine Optimization（生成式引擎优化），是一套针对 AI 搜索引擎和 AI 助手（ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等）的优化实践，目的是让 AI 在回答用户关于产品、服务或专家咨询的问题时，能够识别、信任并推荐你的品牌。传统 SEO 优化的是搜索结果页上的蓝色链接，而 GEO 优化的是 AI 直接生成的那段答案本身。",
               "whyGeoImportant": "为什么 GEO 很重要？",
               "whyGeoPoints": [
-                "提高全球用户的搜索可见性",
-                "适应不同地区的搜索算法偏好",
-                "提升用户体验和转化率",
-                "增强品牌的全球影响力"
+                "传统搜索流量正在被 AI 生成的答案取代——如果你不在答案里，就是彻底隐形",
+                "AI 引擎每个查询只会引用极少量的可信来源，进入这个名单就锁定了品类心智",
+                "一旦 AI 模型把你识别为品牌实体，它会在大量相关查询中反复推荐你，效果会复利放大",
+                "GEO 的先行者能在竞争对手反应过来之前锁定品类权威地位"
               ],
               "strategies": "GEO 策略",
-              "contentLocalization": "内容本地化",
-              "contentLocalizationDesc": "为不同地区的用户提供本地化的内容，包括语言、文化参考和地区特定信息。",
+              "contentLocalization": "权威内容与实体清晰度",
+              "contentLocalizationDesc": "AI 引擎只引用它能够验证的内容。围绕品牌、产品和所在品类建立深度第一方内容，提供清晰的实体信号，让大模型能够解析并信任。",
               "contentLocalizationPoints": [
-                "翻译和本地化内容",
-                "使用地区特定的关键词",
-                "适应地区文化差异"
+                "围绕核心话题产出深度、专家级的原创内容，拒绝稀薄营销文案",
+                "添加 Organization / Product 结构化数据（JSON-LD）与 llms.txt 文件",
+                "在 Wikipedia、Wikidata、Reddit、GitHub 及权威目录站建立品牌存在"
               ],
-              "technicalOptimization": "技术优化",
-              "technicalOptimizationDesc": "确保网站在技术层面支持 GEO 优化，包括网站结构、加载速度和移动友好性。",
+              "technicalOptimization": "技术基础与 AI 可抓取性",
+              "technicalOptimizationDesc": "AI 爬虫拿不到你的内容就无法引用你。确保 GPTBot、ClaudeBot、PerplexityBot、Google-Extended 能够真实抓取并渲染你的页面。",
               "technicalOptimizationPoints": [
-                "使用hreflang标签",
-                "优化网站加载速度",
-                "确保移动友好性"
+                "在 robots.txt 中放行 AI 爬虫（GPTBot、ClaudeBot、PerplexityBot、Google-Extended）",
+                "提供快速的服务端渲染 HTML，避免纯 JS 页面——AI 爬虫不会执行 JavaScript",
+                "使用语义化 HTML 与干净的标记，让大模型能把页面解析成结构化事实"
               ],
-              "keyData": "GEO 关键数据",
-              "importantMetrics": "重要的 GEO 指标",
-              "regionalTraffic": "地区流量分布",
-              "regionalTrafficDesc": "了解不同地区的用户访问情况，优化针对性内容。",
-              "languagePreference": "语言偏好",
-              "languagePreferenceDesc": "分析用户语言偏好，提供相应的本地化内容。",
-              "searchTrends": "搜索趋势",
-              "searchTrendsDesc": "跟踪不同地区的搜索趋势，调整关键词策略。"
+              "keyData": "GEO 关键指标",
+              "importantMetrics": "该衡量什么",
+              "regionalTraffic": "AI 引用率",
+              "regionalTrafficDesc": "当 AI 引擎回答品牌相关或品类相关问题时，把你的站点作为来源引用的频率。",
+              "languagePreference": "答案提及率",
+              "languagePreferenceDesc": "在相关查询中，你的品牌实际出现在 AI 生成答案里的比例——无论是否附带直接引用链接。",
+              "searchTrends": "竞品声量占比",
+              "searchTrendsDesc": "AI 模型会和你一起提到哪些竞品、出现频率如何——这才是品类心智的真实基准。"
             }
           },
           "productsServices": {
