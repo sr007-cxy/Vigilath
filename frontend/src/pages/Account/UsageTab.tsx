@@ -37,7 +37,7 @@ export function UsageTab() {
         const found = all.find((m) => m.id === (um as UserMembership).membership_id) ?? null;
         setDetails(found);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load usage');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }

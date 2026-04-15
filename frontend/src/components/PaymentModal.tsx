@@ -45,7 +45,7 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
         const popular = paid.find((m) => m.popular);
         setSelectedId((popular ?? paid[0])?.id ?? null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load plans');
+        setError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
       } finally {
         setIsLoading(false);
       }
@@ -73,7 +73,7 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
       await membershipApi.upgradeMembership(token, selectedId);
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed');
+      setError(err instanceof Error ? err.message : t('common.errors.paymentFailed'));
     } finally {
       setIsPaying(false);
     }

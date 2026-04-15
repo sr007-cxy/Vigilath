@@ -35,7 +35,7 @@ export function GeoKnowledge() {
               <div className="bg-card border border-border rounded-2xl p-8">
                 <h3 className="text-xl font-bold mb-4">{t('geoKnowledge.sections.whatIsGeo')}</h3>
                 <p className="text-secondary mb-6 leading-relaxed">
-                  GEO（Geographic Optimization）是一种网站优化策略，旨在确保网站在不同地理位置和语言环境下都能获得最佳的搜索可见性。随着 AI 驱动的搜索引擎和助手的兴起，GEO 优化变得越来越重要。
+                  {t('geoKnowledge.sections.whatIsGeoBody')}
                 </p>
                 <h3 className="text-xl font-bold mb-4">{t('geoKnowledge.sections.whyGeoImportant')}</h3>
                 <ul className="space-y-3 text-secondary">

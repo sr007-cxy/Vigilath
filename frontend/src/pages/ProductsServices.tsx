@@ -69,7 +69,7 @@ export function ProductsServices() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : 'Failed to load memberships');
+        setLoadError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

@@ -12,11 +12,6 @@ export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
   const languages = [
     { code: 'en', name: 'English' },
     { code: 'zh', name: '中文' },
-    { code: 'ja', name: '日本語' },
-    { code: 'ko', name: '한국어' },
-    { code: 'de', name: 'Deutsch' },
-    { code: 'fr', name: 'Français' },
-    { code: 'es', name: 'Español' },
   ];
 
   const handleLanguageChange = (lang: string) => {

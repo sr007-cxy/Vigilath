@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 // 初始化时获取主题状态
 const getInitialTheme = () => {
@@ -11,6 +12,7 @@ const getInitialTheme = () => {
 };
 
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const [isDark, setIsDark] = useState(getInitialTheme);
 
   const toggleTheme = () => {
@@ -30,7 +32,7 @@ export function ThemeToggle() {
     <button
       onClick={toggleTheme}
       className="toggle-btn"
-      title={isDark ? '切换到亮色模式' : '切换到暗色模式'}
+      title={isDark ? t('common.theme.switchToLight') : t('common.theme.switchToDark')}
     >
       {isDark ? (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

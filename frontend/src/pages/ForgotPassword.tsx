@@ -24,12 +24,8 @@ export function ForgotPassword() {
     setSuccess('');
 
     try {
-      const response = await authApi.forgotPassword(email);
+      await authApi.forgotPassword(email);
       setSuccess(t('forgotPassword.success.emailSent'));
-      // For testing, show the reset token
-      if (response.reset_token) {
-        setSuccess(`${t('forgotPassword.success.emailSent')} ${t('forgotPassword.success.token')}: ${response.reset_token}`);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('forgotPassword.error.sendFailed'));
     } finally {

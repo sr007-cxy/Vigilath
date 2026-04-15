@@ -38,7 +38,7 @@ export function MembershipTab() {
       setUserMembership(um);
       setDetails(all.find((m) => m.id === um.membership_id) ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load membership');
+      setError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
     } finally {
       setLoading(false);
     }

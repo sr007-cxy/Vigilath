@@ -334,11 +334,6 @@ export function Result() {
   const score = result.score || 0;
   const grade = result.grade || 'F';
 
-  const handleCopyLink = () => {
-    const url = `${window.location.origin}/result?url=${encodeURIComponent(result.url || '')}`;
-    navigator.clipboard.writeText(url).then(() => alert(t('result.shareExport.copied')));
-  };
-
   const handleExportPDF = async () => {
     if (exportingPdf) return;
     setExportingPdf(true);

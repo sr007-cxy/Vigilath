@@ -29,7 +29,18 @@ if (!i18n.isInitialized) {
             "loading": "Loading...",
             "contact": "Login",
             "cancel": "Logout",
-            "success": "Success"
+            "success": "Success",
+            "theme": {
+              "switchToLight": "Switch to light mode",
+              "switchToDark": "Switch to dark mode"
+            },
+            "errors": {
+              "loadFailed": "Failed to load content",
+              "loadFailedWith": "Failed to load {{entity}}",
+              "deleteFailed": "Failed to delete",
+              "paymentFailed": "Payment failed",
+              "genericFailed": "Operation failed"
+            }
           },
           "hero": {
             "title": "Get AI to Recommend Your Brand",
@@ -272,6 +283,67 @@ if (!i18n.isInitialized) {
                   "title": "Entity GEO Audit",
                   "desc": "Audit how AI recognizes a brand, product, or person — no URL required."
                 }
+              },
+              "result": {
+                "lead": "lead",
+                "compare": {
+                  "categoryCompare": "Category score comparison",
+                  "sitesCategories": "{{sites}} sites · {{categories}} categories",
+                  "category": "Category",
+                  "total": "Total"
+                },
+                "crawl": {
+                  "targetDomain": "Target domain",
+                  "ccFound": "Indexed by Common Crawl",
+                  "ccNotFound": "Not in Common Crawl",
+                  "totalIssues": "Total issues",
+                  "allClear": "All clear",
+                  "needsFix": "Needs fixes",
+                  "robotsAllowed": "robots allowed",
+                  "crawlerPermission": "Crawler permission",
+                  "wafAllowed": "WAF allowed",
+                  "liveAccess": "Live access",
+                  "robotsTitle": "robots.txt rules",
+                  "detected": "Found",
+                  "notFound": "Not found",
+                  "robotsMissingWarning": "robots.txt missing — all crawlers are allowed by default",
+                  "wafTitle": "WAF / CDN live test",
+                  "wafBaseline": "baseline {{status}} · {{size}}KB",
+                  "commonCrawlTitle": "Common Crawl index",
+                  "pagesSuffix": "{{count}} pages",
+                  "notIndexed": "Not indexed",
+                  "foundInCcPrefix": "Found ",
+                  "foundInCcSuffix": " pages in Common Crawl"
+                },
+                "citation": {
+                  "cited": "Cited",
+                  "queries": "Queries",
+                  "citationCount": "Citation count",
+                  "directCitations": "Direct citations",
+                  "grade": "Grade",
+                  "overallScore": "Overall score",
+                  "perQuery": "Per-query results",
+                  "queriesSuffix": "{{count}} queries"
+                },
+                "visibility": {
+                  "queryBreakdown": "{{count}} queries × {{runs}} stability runs",
+                  "perEngineRate": "Per-engine visibility",
+                  "competitors": "Co-mentioned competitors",
+                  "noCompetitors": "No competitors detected.",
+                  "framings": "Brand sentiment framings",
+                  "contentGaps": "Content gaps",
+                  "noGaps": "No major gaps"
+                },
+                "entity": {
+                  "kgTitle": "Knowledge graph coverage",
+                  "platforms": "Platform coverage",
+                  "sentimentTitle": "Sentiment & framing",
+                  "overallSentiment": "Overall sentiment",
+                  "bestFraming": "Best framing",
+                  "recognitionRate": "Recognition rate",
+                  "contentGaps": "Content gaps",
+                  "noGaps": "No gaps found"
+                }
               }
             },
             "buttons": {
@@ -470,6 +542,7 @@ if (!i18n.isInitialized) {
             "confirmPassword": "Confirm Password",
             "confirmPasswordPlaceholder": "Enter your password again",
             "terms": "I agree to the terms of service and privacy policy",
+            "termsRequired": "Please agree to the terms of service and privacy policy",
             "button": "Sign up",
             "loading": "Signing up...",
             "passwordMismatch": "Passwords do not match",
@@ -599,6 +672,7 @@ if (!i18n.isInitialized) {
             "sections": {
               "about": "About GEO",
               "whatIsGeo": "What is GEO?",
+              "whatIsGeoBody": "GEO (Geographic Optimization) is a website optimization strategy that ensures a site achieves the best search visibility across different geographies and languages. With the rise of AI-powered search engines and assistants, GEO optimization is becoming increasingly important.",
               "whyGeoImportant": "Why is GEO important?",
               "whyGeoPoints": [
                 "Improve search visibility for global users",
@@ -999,476 +1073,6 @@ if (!i18n.isInitialized) {
           }
         }
       },
-      ja: {
-        translation: {
-          "result": {
-            "shareExport": {
-              "exportPDFLoading": "PDFをエクスポート中..."
-            }
-          },
-          "nav": {
-            "home": "ホーム",
-            "geoKnowledge": "GEO 知識",
-            "productsServices": "製品とサービス",
-            "aboutUs": "会社概要",
-            "about": "GEO について",
-            "process": "プロセス",
-            "pricing": "価格設定",
-            "data": "インサイト",
-            "contact": "お問い合わせ",
-            "langSwitch": "中文",
-            "login": "ログイン",
-            "signedInAs": "ログイン中:",
-            "account": "アカウント",
-            "logout": "ログアウト"
-          },
-          "common": {
-            "error": "エラー",
-            "loading": "読み込み中...",
-            "contact": "ログイン"
-          },
-          "hero": {
-            "title": "AI にあなたのブランドを推奨させよう",
-            "subtitle": "生成エンジン最適化 (GEO)",
-            "description": "潜在顧客が ChatGPT、Gemini、Perplexity などの AI アシスタントに製品やサービスの推奨を求めたときに、あなたの企業が最初に推奨されるようにしましょう。",
-            "cta": "詳しく知る",
-            "ctaSecondary": "お問い合わせ"
-          },
-          "login": {
-            "title": "ログイン",
-            "subtitle": "または",
-            "createAccount": "新規アカウントを作成",
-            "email": "メールアドレス",
-            "emailPlaceholder": "あなたのメールアドレス",
-            "password": "パスワード",
-            "passwordPlaceholder": "あなたのパスワード",
-            "rememberMe": "ログイン状態を保持",
-            "forgotPassword": "パスワードを忘れましたか？",
-            "button": "ログイン",
-            "loading": "ログイン中...",
-            "error": "メールアドレスまたはパスワードが正しくありません"
-          },
-          "register": {
-            "title": "アカウント作成",
-            "subtitle": "または",
-            "loginAccount": "既存のアカウントにログイン",
-            "name": "名前",
-            "namePlaceholder": "あなたの名前",
-            "email": "メールアドレス",
-            "emailPlaceholder": "あなたのメールアドレス",
-            "password": "パスワード",
-            "passwordPlaceholder": "あなたのパスワード",
-            "confirmPassword": "パスワードの確認",
-            "confirmPasswordPlaceholder": "パスワードを確認してください",
-            "terms": "利用規約とプライバシーポリシーに同意します",
-            "button": "登録",
-            "loading": "登録中...",
-            "error": "パスワードが一致しません"
-          },
-          "forgotPassword": {
-            "title": "パスワードを忘れた",
-            "description": "パスワードリセットリンクを受け取るためにメールアドレスを入力してください",
-            "button": "リセットリンクを送信",
-            "loading": "送信中...",
-            "success": {
-              "emailSent": "パスワードリセットメールを送信しました。指示に従うには受信トレイを確認してください。",
-              "token": "リセットトークン",
-              "resetSuccess": "パスワードのリセットに成功しました。新しいパスワードでログインできます。"
-            },
-            "error": {
-              "sendFailed": "パスワードリセットメールの送信に失敗しました",
-              "resetFailed": "パスワードのリセットに失敗しました"
-            },
-            "backToLogin": "ログインに戻る",
-            "reset": {
-              "title": "パスワードをリセット",
-              "description": "以下に新しいパスワードを入力してください",
-              "newPassword": "新しいパスワード",
-              "newPasswordPlaceholder": "新しいパスワードを入力してください",
-              "confirmPassword": "パスワードの確認",
-              "confirmPasswordPlaceholder": "パスワードを確認してください",
-              "button": "パスワードをリセット",
-              "loading": "リセット中..."
-            }
-          }
-        }
-      },
-      ko: {
-        translation: {
-          "result": {
-            "shareExport": {
-              "exportPDFLoading": "PDF 내보내는 중..."
-            }
-          },
-          "nav": {
-            "home": "홈",
-            "geoKnowledge": "GEO 지식",
-            "productsServices": "제품 및 서비스",
-            "aboutUs": "회사 소개",
-            "about": "GEO 소개",
-            "process": "프로세스",
-            "pricing": "가격 설정",
-            "data": "인사이트",
-            "contact": "연락처",
-            "langSwitch": "中文",
-            "login": "로그인",
-            "signedInAs": "로그인 중:",
-            "account": "계정",
-            "logout": "로그아웃"
-          },
-          "common": {
-            "error": "오류",
-            "loading": "로딩 중...",
-            "contact": "로그인"
-          },
-          "hero": {
-            "title": "AI가 귀하의 브랜드를 추천하도록 하세요",
-            "subtitle": "생성형 엔진 최적화 (GEO)",
-            "description": "잠재 고객이 ChatGPT, Gemini, Perplexity 등 AI 어시스턴트에게 제품이나 서비스 추천을 요청할 때 귀하의 비즈니스가 처음으로 추천되도록 보장하세요.",
-            "cta": "자세히 알아보기",
-            "ctaSecondary": "연락하기"
-          },
-          "login": {
-            "title": "로그인",
-            "subtitle": "또는",
-            "createAccount": "새 계정 만들기",
-            "email": "이메일",
-            "emailPlaceholder": "귀하의 이메일",
-            "password": "비밀번호",
-            "passwordPlaceholder": "귀하의 비밀번호",
-            "rememberMe": "로그인 상태 유지",
-            "forgotPassword": "비밀번호를 잊으셨나요?",
-            "button": "로그인",
-            "loading": "로그인 중...",
-            "error": "이메일 또는 비밀번호가 잘못되었습니다"
-          },
-          "register": {
-            "title": "계정 생성",
-            "subtitle": "또는",
-            "loginAccount": "기존 계정에 로그인",
-            "name": "이름",
-            "namePlaceholder": "귀하의 이름",
-            "email": "이메일",
-            "emailPlaceholder": "귀하의 이메일",
-            "password": "비밀번호",
-            "passwordPlaceholder": "귀하의 비밀번호",
-            "confirmPassword": "비밀번호 확인",
-            "confirmPasswordPlaceholder": "비밀번호를 확인하세요",
-            "terms": "서비스 약관 및 개인 정보 보호 정책에 동의합니다",
-            "button": "등록",
-            "loading": "등록 중...",
-            "error": "비밀번호가 일치하지 않습니다"
-          },
-          "forgotPassword": {
-            "title": "비밀번호를 잊으셨나요",
-            "description": "비밀번호 재설정 링크를 받기 위해 이메일을 입력하세요",
-            "button": "재설정 링크 보내기",
-            "loading": "전송 중...",
-            "success": {
-              "emailSent": "비밀번호 재설정 이메일을 보냈습니다. 지침을 따르려면 받은 편지를 확인하세요.",
-              "token": "재설정 토큰",
-              "resetSuccess": "비밀번호 재설정에 성공했습니다. 이제 새 비밀번호로 로그인할 수 있습니다."
-            },
-            "error": {
-              "sendFailed": "비밀번호 재설정 이메일 전송에 실패했습니다",
-              "resetFailed": "비밀번호 재설정에 실패했습니다"
-            },
-            "backToLogin": "로그인으로 돌아가기",
-            "reset": {
-              "title": "비밀번호 재설정",
-              "description": "아래에 새 비밀번호를 입력하세요",
-              "newPassword": "새 비밀번호",
-              "newPasswordPlaceholder": "새 비밀번호를 입력하세요",
-              "confirmPassword": "비밀번호 확인",
-              "confirmPasswordPlaceholder": "비밀번호를 확인하세요",
-              "button": "비밀번호 재설정",
-              "loading": "재설정 중..."
-            }
-          }
-        }
-      },
-      de: {
-        translation: {
-          "result": {
-            "shareExport": {
-              "exportPDFLoading": "PDF wird exportiert..."
-            }
-          },
-          "nav": {
-            "home": "Startseite",
-            "geoKnowledge": "GEO Wissen",
-            "productsServices": "Produkte & Dienstleistungen",
-            "aboutUs": "Über uns",
-            "about": "Über GEO",
-            "process": "Prozess",
-            "pricing": "Preise",
-            "data": "Einblicke",
-            "contact": "Kontakt",
-            "langSwitch": "中文",
-            "login": "Anmelden",
-            "signedInAs": "Angemeldet als",
-            "account": "Konto",
-            "logout": "Abmelden"
-          },
-          "common": {
-            "error": "Fehler",
-            "loading": "Laden...",
-            "contact": "Anmelden"
-          },
-          "hero": {
-            "title": "Lassen Sie AI Ihre Marke empfehlen",
-            "subtitle": "Generative Engine Optimization (GEO)",
-            "description": "Stellen Sie sicher, dass Ihr Unternehmen als erstes empfohlen wird, wenn potenzielle Kunden ChatGPT, Gemini, Perplexity und andere KI-Assistenten nach Produkt- oder Dienstleistungsempfehlungen fragen.",
-            "cta": "Mehr erfahren",
-            "ctaSecondary": "Kontaktieren Sie uns"
-          },
-          "login": {
-            "title": "Anmelden",
-            "subtitle": "oder",
-            "createAccount": "Neues Konto erstellen",
-            "email": "E-Mail",
-            "emailPlaceholder": "Ihre E-Mail",
-            "password": "Passwort",
-            "passwordPlaceholder": "Ihr Passwort",
-            "rememberMe": "Angemeldet bleiben",
-            "forgotPassword": "Passwort vergessen?",
-            "button": "Anmelden",
-            "loading": "Anmelden...",
-            "error": "Ungültige E-Mail oder Passwort"
-          },
-          "register": {
-            "title": "Konto erstellen",
-            "subtitle": "oder",
-            "loginAccount": "Bei vorhandenen Konto anmelden",
-            "name": "Name",
-            "namePlaceholder": "Ihr Name",
-            "email": "E-Mail",
-            "emailPlaceholder": "Ihre E-Mail",
-            "password": "Passwort",
-            "passwordPlaceholder": "Ihr Passwort",
-            "confirmPassword": "Passwort bestätigen",
-            "confirmPasswordPlaceholder": "Bestätigen Sie Ihr Passwort",
-            "terms": "Ich stimme den Nutzungsbedingungen und der Datenschutzrichtlinie zu",
-            "button": "Registrieren",
-            "loading": "Registrieren...",
-            "error": "Passwörter stimmen nicht überein"
-          },
-          "forgotPassword": {
-            "title": "Passwort vergessen",
-            "description": "Geben Sie Ihre E-Mail ein, um einen Passwort-Zurücksetzungslink zu erhalten",
-            "button": "Zurücksetzungslink senden",
-            "loading": "Senden...",
-            "success": {
-              "emailSent": "Passwort-Zurücksetzungs-E-Mail gesendet. Überprüfen Sie Ihren Posteingang für Anweisungen.",
-              "token": "Zurücksetzungs-Token",
-              "resetSuccess": "Passwort erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
-            },
-            "error": {
-              "sendFailed": "Fehler beim Senden der Passwort-Zurücksetzungs-E-Mail",
-              "resetFailed": "Fehler beim Zurücksetzen des Passworts"
-            },
-            "backToLogin": "Zurück zur Anmeldung",
-            "reset": {
-              "title": "Passwort zurücksetzen",
-              "description": "Geben Sie unten Ihr neues Passwort ein",
-              "newPassword": "Neues Passwort",
-              "newPasswordPlaceholder": "Geben Sie Ihr neues Passwort ein",
-              "confirmPassword": "Passwort bestätigen",
-              "confirmPasswordPlaceholder": "Bestätigen Sie Ihr Passwort",
-              "button": "Passwort zurücksetzen",
-              "loading": "Zurücksetzen..."
-            }
-          }
-        }
-      },
-      fr: {
-        translation: {
-          "result": {
-            "shareExport": {
-              "exportPDFLoading": "Export PDF en cours..."
-            }
-          },
-          "nav": {
-            "home": "Accueil",
-            "geoKnowledge": "Connaissances GEO",
-            "productsServices": "Produits & Services",
-            "aboutUs": "À propos de nous",
-            "about": "À propos de GEO",
-            "process": "Processus",
-            "pricing": "Tarification",
-            "data": "Insights",
-            "contact": "Contact",
-            "langSwitch": "中文",
-            "login": "Connexion",
-            "signedInAs": "Connecté en tant que",
-            "account": "Compte",
-            "logout": "Déconnexion"
-          },
-          "common": {
-            "error": "Erreur",
-            "loading": "Chargement...",
-            "contact": "Connexion"
-          },
-          "hero": {
-            "title": "Faites recommander votre marque par l'IA",
-            "subtitle": "Optimisation de Moteur Génératif (GEO)",
-            "description": "Assurez-vous que votre entreprise soit recommandée en premier lorsque des clients potentiels demandent des recommandations de produits ou services à ChatGPT, Gemini, Perplexity et autres assistants IA.",
-            "cta": "En savoir plus",
-            "ctaSecondary": "Contactez-nous"
-          },
-          "login": {
-            "title": "Connexion",
-            "subtitle": "ou",
-            "createAccount": "Créer un nouveau compte",
-            "email": "Email",
-            "emailPlaceholder": "Votre email",
-            "password": "Mot de passe",
-            "passwordPlaceholder": "Votre mot de passe",
-            "rememberMe": "Se souvenir de moi",
-            "forgotPassword": "Mot de passe oublié ?",
-            "button": "Connexion",
-            "loading": "Connexion...",
-            "error": "Email ou mot de passe invalide"
-          },
-          "register": {
-            "title": "Créer un compte",
-            "subtitle": "ou",
-            "loginAccount": "Se connecter à un compte existant",
-            "name": "Nom",
-            "namePlaceholder": "Votre nom",
-            "email": "Email",
-            "emailPlaceholder": "Votre email",
-            "password": "Mot de passe",
-            "passwordPlaceholder": "Votre mot de passe",
-            "confirmPassword": "Confirmer le mot de passe",
-            "confirmPasswordPlaceholder": "Confirmez votre mot de passe",
-            "terms": "J'accepte les conditions d'utilisation et la politique de confidentialité",
-            "button": "S'inscrire",
-            "loading": "Inscription...",
-            "error": "Les mots de passe ne correspondent pas"
-          },
-          "forgotPassword": {
-            "title": "Mot de passe oublié",
-            "description": "Entrez votre email pour recevoir un lien de réinitialisation de mot de passe",
-            "button": "Envoyer le lien de réinitialisation",
-            "loading": "Envoi...",
-            "success": {
-              "emailSent": "Email de réinitialisation de mot de passe envoyé. Vérifiez votre boîte de réception pour les instructions.",
-              "token": "Jeton de réinitialisation",
-              "resetSuccess": "Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe."
-            },
-            "error": {
-              "sendFailed": "Échec de l'envoi de l'email de réinitialisation de mot de passe",
-              "resetFailed": "Échec de la réinitialisation du mot de passe"
-            },
-            "backToLogin": "Retour à la connexion",
-            "reset": {
-              "title": "Réinitialiser le mot de passe",
-              "description": "Entrez votre nouveau mot de passe ci-dessous",
-              "newPassword": "Nouveau mot de passe",
-              "newPasswordPlaceholder": "Entrez votre nouveau mot de passe",
-              "confirmPassword": "Confirmer le mot de passe",
-              "confirmPasswordPlaceholder": "Confirmez votre mot de passe",
-              "button": "Réinitialiser le mot de passe",
-              "loading": "Réinitialisation..."
-            }
-          }
-        }
-      },
-      es: {
-        translation: {
-          "result": {
-            "shareExport": {
-              "exportPDFLoading": "Exportando PDF..."
-            }
-          },
-          "nav": {
-            "home": "Inicio",
-            "geoKnowledge": "Conocimientos GEO",
-            "productsServices": "Productos & Servicios",
-            "aboutUs": "Sobre nosotros",
-            "about": "Sobre GEO",
-            "process": "Proceso",
-            "pricing": "Precios",
-            "data": "Informes",
-            "contact": "Contacto",
-            "langSwitch": "中文",
-            "login": "Iniciar sesión",
-            "signedInAs": "Sesión iniciada como",
-            "account": "Cuenta",
-            "logout": "Cerrar sesión"
-          },
-          "common": {
-            "error": "Error",
-            "loading": "Cargando...",
-            "contact": "Iniciar sesión"
-          },
-          "hero": {
-            "title": "Haz que la IA recomiende tu marca",
-            "subtitle": "Optimización de Motor Generativo (GEO)",
-            "description": "Asegúrate de que tu negocio sea recomendado primero cuando los clientes potenciales soliciten recomendaciones de productos o servicios a ChatGPT, Gemini, Perplexity y otros asistentes de IA.",
-            "cta": "Más información",
-            "ctaSecondary": "Contáctanos"
-          },
-          "login": {
-            "title": "Iniciar sesión",
-            "subtitle": "o",
-            "createAccount": "Crear una nueva cuenta",
-            "email": "Correo electrónico",
-            "emailPlaceholder": "Tu correo electrónico",
-            "password": "Contraseña",
-            "passwordPlaceholder": "Tu contraseña",
-            "rememberMe": "Recordarme",
-            "forgotPassword": "¿Olvidaste tu contraseña?",
-            "button": "Iniciar sesión",
-            "loading": "Iniciando sesión...",
-            "error": "Correo electrónico o contraseña inválidos"
-          },
-          "register": {
-            "title": "Crear cuenta",
-            "subtitle": "o",
-            "loginAccount": "Iniciar sesión en una cuenta existente",
-            "name": "Nombre",
-            "namePlaceholder": "Tu nombre",
-            "email": "Correo electrónico",
-            "emailPlaceholder": "Tu correo electrónico",
-            "password": "Contraseña",
-            "passwordPlaceholder": "Tu contraseña",
-            "confirmPassword": "Confirmar contraseña",
-            "confirmPasswordPlaceholder": "Confirma tu contraseña",
-            "terms": "Acepto los términos de servicio y la política de privacidad",
-            "button": "Registrarse",
-            "loading": "Registrando...",
-            "error": "Las contraseñas no coinciden"
-          },
-          "forgotPassword": {
-            "title": "Olvidé mi contraseña",
-            "description": "Ingresa tu correo electrónico para recibir un enlace de restablecimiento de contraseña",
-            "button": "Enviar enlace de restablecimiento",
-            "loading": "Enviando...",
-            "success": {
-              "emailSent": "Correo electrónico de restablecimiento de contraseña enviado. Verifica tu bandeja de entrada para instrucciones.",
-              "token": "Token de restablecimiento",
-              "resetSuccess": "Contraseña restablecida con éxito. Ahora puedes iniciar sesión con tu nueva contraseña."
-            },
-            "error": {
-              "sendFailed": "Error al enviar el correo electrónico de restablecimiento de contraseña",
-              "resetFailed": "Error al restablecer la contraseña"
-            },
-            "backToLogin": "Volver al inicio de sesión",
-            "reset": {
-              "title": "Restablecer contraseña",
-              "description": "Ingresa tu nueva contraseña a continuación",
-              "newPassword": "Nueva contraseña",
-              "newPasswordPlaceholder": "Ingresa tu nueva contraseña",
-              "confirmPassword": "Confirmar contraseña",
-              "confirmPasswordPlaceholder": "Confirma tu contraseña",
-              "button": "Restablecer contraseña",
-              "loading": "Restableciendo..."
-            }
-          }
-        }
-      },
       zh: {
         translation: {
           "nav": {
@@ -1483,6 +1087,7 @@ if (!i18n.isInitialized) {
             "contact": "联系我们",
             "langSwitch": "EN",
             "login": "登录",
+            "register": "注册",
             "signedInAs": "已登录为",
             "account": "账户中心",
             "logout": "退出登录"
@@ -1492,7 +1097,18 @@ if (!i18n.isInitialized) {
             "loading": "加载中...",
             "contact": "登录",
             "cancel": "退出",
-            "success": "成功"
+            "success": "成功",
+            "theme": {
+              "switchToLight": "切换到亮色模式",
+              "switchToDark": "切换到暗色模式"
+            },
+            "errors": {
+              "loadFailed": "加载失败",
+              "loadFailedWith": "加载{{entity}}失败",
+              "deleteFailed": "删除失败",
+              "paymentFailed": "支付失败",
+              "genericFailed": "操作失败"
+            }
           },
           "hero": {
             "title": "让 AI 推荐您的品牌",
@@ -1735,6 +1351,67 @@ if (!i18n.isInitialized) {
                   "title": "实体 GEO 审计",
                   "desc": "无需 URL，审计 AI 对品牌/产品/人物的认知度。"
                 }
+              },
+              "result": {
+                "lead": "领先",
+                "compare": {
+                  "categoryCompare": "类目得分对比",
+                  "sitesCategories": "{{sites}} 站点 · {{categories}} 类目",
+                  "category": "类目",
+                  "total": "总分"
+                },
+                "crawl": {
+                  "targetDomain": "目标域名",
+                  "ccFound": "Common Crawl 已收录",
+                  "ccNotFound": "Common Crawl 未收录",
+                  "totalIssues": "问题总数",
+                  "allClear": "一切正常",
+                  "needsFix": "需要修复",
+                  "robotsAllowed": "robots 放行",
+                  "crawlerPermission": "爬虫许可",
+                  "wafAllowed": "WAF 放行",
+                  "liveAccess": "实测访问",
+                  "robotsTitle": "robots.txt 规则",
+                  "detected": "已检测",
+                  "notFound": "未找到",
+                  "robotsMissingWarning": "未找到 robots.txt — 默认所有爬虫被允许",
+                  "wafTitle": "WAF / CDN 实测",
+                  "wafBaseline": "基线 {{status}} · {{size}}KB",
+                  "commonCrawlTitle": "Common Crawl 索引",
+                  "pagesSuffix": "{{count}} 页",
+                  "notIndexed": "未收录",
+                  "foundInCcPrefix": "已在 Common Crawl 中找到 ",
+                  "foundInCcSuffix": " 页"
+                },
+                "citation": {
+                  "cited": "已引用",
+                  "queries": "查询数量",
+                  "citationCount": "引用次数",
+                  "directCitations": "直接引用",
+                  "grade": "评级",
+                  "overallScore": "综合评分",
+                  "perQuery": "逐条查询结果",
+                  "queriesSuffix": "{{count}} 条"
+                },
+                "visibility": {
+                  "queryBreakdown": "{{count}} 个查询 × {{runs}} 次稳定性运行",
+                  "perEngineRate": "各引擎可见率",
+                  "competitors": "同时被提及的竞品",
+                  "noCompetitors": "未提取到竞品。",
+                  "framings": "品牌情感框架",
+                  "contentGaps": "内容缺口",
+                  "noGaps": "没有重大缺口"
+                },
+                "entity": {
+                  "kgTitle": "知识图谱覆盖",
+                  "platforms": "平台覆盖",
+                  "sentimentTitle": "情感与框架",
+                  "overallSentiment": "整体情感",
+                  "bestFraming": "最佳框架",
+                  "recognitionRate": "识别率",
+                  "contentGaps": "内容缺口",
+                  "noGaps": "未发现缺口"
+                }
               }
             },
             "buttons": {
@@ -1933,6 +1610,7 @@ if (!i18n.isInitialized) {
             "confirmPassword": "确认密码",
             "confirmPasswordPlaceholder": "请再次输入密码",
             "terms": "我同意服务条款和隐私政策",
+            "termsRequired": "请同意服务条款和隐私政策",
             "button": "注册",
             "loading": "注册中...",
             "passwordMismatch": "两次输入的密码不一致",
@@ -2062,6 +1740,7 @@ if (!i18n.isInitialized) {
             "sections": {
               "about": "关于 GEO",
               "whatIsGeo": "什么是 GEO？",
+              "whatIsGeoBody": "GEO（Geographic Optimization）是一种网站优化策略，旨在确保网站在不同地理位置和语言环境下都能获得最佳的搜索可见性。随着 AI 驱动的搜索引擎和助手的兴起，GEO 优化变得越来越重要。",
               "whyGeoImportant": "为什么 GEO 很重要？",
               "whyGeoPoints": [
                 "提高全球用户的搜索可见性",

@@ -654,6 +654,7 @@ function MetricRing({
 
 // --- Compare ---
 function CompareResult({ data }: { data: CompareResponse }) {
+  const { t } = useTranslation();
   return (
     <>
       {data.winner && (
@@ -690,20 +691,23 @@ function CompareResult({ data }: { data: CompareResponse }) {
                   Grade {data.winner.grade}
                 </span>
                 {data.winner.lead > 0 && (
-                  <span className="text-xs text-secondary">+{data.winner.lead} 领先</span>
+                  <span className="text-xs text-secondary">+{data.winner.lead} {t('home.advanced.result.lead')}</span>
                 )}
               </div>
             </div>
           </div>
         </div>
       )}
-      <SectionCard title="类目得分对比" subtitle={`${data.results.length} 站点 · ${data.categories.length} 类目`}>
+      <SectionCard
+        title={t('home.advanced.result.compare.categoryCompare')}
+        subtitle={t('home.advanced.result.compare.sitesCategories', { sites: data.results.length, categories: data.categories.length })}
+      >
         <div className="overflow-x-auto -mx-5 px-5 sm:-mx-6 sm:px-6">
           <table className="w-full text-sm border-separate border-spacing-0 min-w-[520px]">
             <thead>
               <tr>
                 <th className="sticky left-0 z-10 bg-card text-left py-2 pr-4 text-[10px] uppercase tracking-wider text-secondary font-semibold border-b border-[#3f4143]">
-                  类目
+                  {t('home.advanced.result.compare.category')}
                 </th>
                 {data.results.map((r) => (
                   <th
@@ -766,7 +770,7 @@ function CompareResult({ data }: { data: CompareResponse }) {
               })}
               <tr>
                 <td className="sticky left-0 z-10 bg-card py-4 pr-4 font-bold text-primary text-[10px] uppercase tracking-wider border-t-2 border-[#3f4143]">
-                  总分
+                  {t('home.advanced.result.compare.total')}
                 </td>
                 {data.results.map((r) => (
                   <td key={r.url} className="py-4 px-3 border-t-2 border-[#3f4143]">
@@ -792,6 +796,7 @@ function CompareResult({ data }: { data: CompareResponse }) {
 
 // --- Crawl test ---
 function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
+  const { t } = useTranslation();
   const robotsAllowed = data.robots.bots.filter((b) => b.status !== 'blocked').length;
   const robotsTotal = data.robots.bots.length;
   const wafAllowed = data.waf.bots.filter((b) => b.result === 'allowed').length;
@@ -800,37 +805,37 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatTile
-          label="目标域名"
+          label={t('home.advanced.result.crawl.targetDomain')}
           value={<span className="text-base font-mono truncate block">{data.domain}</span>}
-          hint={data.common_crawl.found ? 'Common Crawl 已收录' : 'Common Crawl 未收录'}
+          hint={t(data.common_crawl.found ? 'home.advanced.result.crawl.ccFound' : 'home.advanced.result.crawl.ccNotFound')}
         />
         <StatTile
-          label="问题总数"
+          label={t('home.advanced.result.crawl.totalIssues')}
           value={data.total_issues}
           accent={data.total_issues === 0 ? 'good' : 'bad'}
-          hint={data.total_issues === 0 ? '一切正常' : '需要修复'}
+          hint={t(data.total_issues === 0 ? 'home.advanced.result.crawl.allClear' : 'home.advanced.result.crawl.needsFix')}
         />
         <StatTile
-          label="robots 放行"
+          label={t('home.advanced.result.crawl.robotsAllowed')}
           value={`${robotsAllowed}/${robotsTotal}`}
           accent={robotsAllowed === robotsTotal ? 'good' : 'warn'}
-          hint="爬虫许可"
+          hint={t('home.advanced.result.crawl.crawlerPermission')}
         />
         <StatTile
-          label="WAF 放行"
+          label={t('home.advanced.result.crawl.wafAllowed')}
           value={`${wafAllowed}/${wafTotal}`}
           accent={wafAllowed === wafTotal ? 'good' : wafAllowed > 0 ? 'warn' : 'bad'}
-          hint="实测访问"
+          hint={t('home.advanced.result.crawl.liveAccess')}
         />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectionCard
-          title="robots.txt 规则"
-          subtitle={data.robots.found ? '已检测' : '未找到'}
+          title={t('home.advanced.result.crawl.robotsTitle')}
+          subtitle={t(data.robots.found ? 'home.advanced.result.crawl.detected' : 'home.advanced.result.crawl.notFound')}
         >
           {!data.robots.found && (
             <p className="text-xs text-amber-400 mb-3 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-              未找到 robots.txt — 默认所有爬虫被允许
+              {t('home.advanced.result.crawl.robotsMissingWarning')}
             </p>
           )}
           <ul className="space-y-1.5">
@@ -856,8 +861,8 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
           </ul>
         </SectionCard>
         <SectionCard
-          title="WAF / CDN 实测"
-          subtitle={`基线 ${data.waf.baseline_status ?? 'n/a'} · ${(data.waf.baseline_size / 1024).toFixed(1)}KB`}
+          title={t('home.advanced.result.crawl.wafTitle')}
+          subtitle={t('home.advanced.result.crawl.wafBaseline', { status: data.waf.baseline_status ?? 'n/a', size: (data.waf.baseline_size / 1024).toFixed(1) })}
         >
           <ul className="space-y-1.5">
             {data.waf.bots.map((b) => {
@@ -886,8 +891,8 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
         </SectionCard>
       </div>
       <SectionCard
-        title="Common Crawl 索引"
-        subtitle={data.common_crawl.found ? `${data.common_crawl.count} 页` : '未收录'}
+        title={t('home.advanced.result.crawl.commonCrawlTitle')}
+        subtitle={data.common_crawl.found ? t('home.advanced.result.crawl.pagesSuffix', { count: data.common_crawl.count }) : t('home.advanced.result.crawl.notIndexed')}
       >
         <div className="flex items-center gap-3 mb-3">
           <div
@@ -928,11 +933,13 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
           </div>
           {data.common_crawl.found ? (
             <p className="text-sm text-emerald-400">
-              已在 Common Crawl 中找到 <span className="font-bold">{data.common_crawl.count}</span> 页
+              {t('home.advanced.result.crawl.foundInCcPrefix')}
+              <span className="font-bold">{data.common_crawl.count}</span>
+              {t('home.advanced.result.crawl.foundInCcSuffix')}
             </p>
           ) : (
             <p className="text-sm text-amber-400">
-              未收录{data.common_crawl.error ? ` · ${data.common_crawl.error}` : ''}
+              {t('home.advanced.result.crawl.notIndexed')}{data.common_crawl.error ? ` · ${data.common_crawl.error}` : ''}
             </p>
           )}
         </div>
@@ -1025,6 +1032,7 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
 
 // --- Citation ---
 function CitationResult({ data }: { data: CitationCheckResponse }) {
+  const { t } = useTranslation();
   return (
     <>
       <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
@@ -1038,18 +1046,30 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
             <h3 className="text-xl font-bold text-primary mb-3 truncate">{data.domain}</h3>
             <div className="grid grid-cols-3 gap-2.5">
               <StatTile
-                label="已引用"
+                label={t('home.advanced.result.citation.cited')}
                 value={`${data.cited_queries}/${data.valid_queries}`}
                 accent="good"
-                hint="查询数量"
+                hint={t('home.advanced.result.citation.queries')}
               />
-              <StatTile label="引用次数" value={data.total_citations} hint="直接引用" />
-              <StatTile label="评级" value={data.grade} accent="gradient" hint="综合评分" />
+              <StatTile
+                label={t('home.advanced.result.citation.citationCount')}
+                value={data.total_citations}
+                hint={t('home.advanced.result.citation.directCitations')}
+              />
+              <StatTile
+                label={t('home.advanced.result.citation.grade')}
+                value={data.grade}
+                accent="gradient"
+                hint={t('home.advanced.result.citation.overallScore')}
+              />
             </div>
           </div>
         </div>
       </div>
-      <SectionCard title="逐条查询结果" subtitle={`${data.queries.length} 条`}>
+      <SectionCard
+        title={t('home.advanced.result.citation.perQuery')}
+        subtitle={t('home.advanced.result.citation.queriesSuffix', { count: data.queries.length })}
+      >
         <ul className="space-y-2">
           {data.queries.map((q, i) => {
             const status = q.error ? 'error' : q.cited ? 'cited' : 'not';
@@ -1097,6 +1117,7 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
 
 // --- Visibility ---
 function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
+  const { t } = useTranslation();
   const categories = useMemo(
     () => [
       { label: 'Prompt Visibility', value: data.scores.visibility },
@@ -1136,7 +1157,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
               ))}
             </div>
             <p className="text-xs text-secondary">
-              {data.query_count} 个查询 × {data.stability_runs} 次稳定性运行
+              {t('home.advanced.result.visibility.queryBreakdown', { count: data.query_count, runs: data.stability_runs })}
             </p>
           </div>
         </div>
@@ -1147,7 +1168,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="各引擎可见率">
+        <SectionCard title={t('home.advanced.result.visibility.perEngineRate')}>
           <ul className="space-y-3">
             {Object.entries(data.per_engine_rates).map(([eng, rate]) => (
               <li key={eng}>
@@ -1167,9 +1188,9 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
             ))}
           </ul>
         </SectionCard>
-        <SectionCard title="同时被提及的竞品">
+        <SectionCard title={t('home.advanced.result.visibility.competitors')}>
           {data.top_competitors.length === 0 ? (
-            <p className="text-sm text-secondary">未提取到竞品。</p>
+            <p className="text-sm text-secondary">{t('home.advanced.result.visibility.noCompetitors')}</p>
           ) : (
             <ul className="space-y-1.5">
               {data.top_competitors.slice(0, 10).map((c, i) => (
@@ -1189,7 +1210,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
             </ul>
           )}
         </SectionCard>
-        <SectionCard title="品牌情感框架">
+        <SectionCard title={t('home.advanced.result.visibility.framings')}>
           <ul className="space-y-2.5">
             {Object.entries(data.framings).map(([f, n]) => {
               const pct = framingTotal > 0 ? (n / framingTotal) * 100 : 0;
@@ -1212,7 +1233,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
             })}
           </ul>
         </SectionCard>
-        <SectionCard title="内容缺口">
+        <SectionCard title={t('home.advanced.result.visibility.contentGaps')}>
           {data.content_gaps.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-emerald-400">
               <svg
@@ -1227,7 +1248,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
               >
                 <path d="M20 6L9 17l-5-5" />
               </svg>
-              没有重大缺口
+              {t('home.advanced.result.visibility.noGaps')}
             </div>
           ) : (
             <ul className="space-y-1.5">
@@ -1249,6 +1270,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
 
 // --- Entity ---
 function EntityResult({ data }: { data: EntityAuditResponse }) {
+  const { t } = useTranslation();
   const totalPlatforms = data.platforms.found.length + data.platforms.not_found.length;
   const kgItems = [
     { key: 'Wikipedia', found: data.knowledge_graph.wikipedia, sub: '' },
@@ -1293,7 +1315,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="知识图谱覆盖">
+        <SectionCard title={t('home.advanced.result.entity.kgTitle')}>
           <ul className="space-y-2">
             {kgItems.map((kg) => (
               <li
@@ -1355,7 +1377,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             ))}
           </ul>
         </SectionCard>
-        <SectionCard title="平台覆盖" subtitle={`${data.platforms.found.length}/${totalPlatforms}`}>
+        <SectionCard title={t('home.advanced.result.entity.platforms')} subtitle={`${data.platforms.found.length}/${totalPlatforms}`}>
           <div className="flex flex-wrap gap-1.5">
             {data.platforms.found.map((p) => (
               <span
@@ -1375,17 +1397,17 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             ))}
           </div>
         </SectionCard>
-        <SectionCard title="情感与框架">
+        <SectionCard title={t('home.advanced.result.entity.sentimentTitle')}>
           <div className="space-y-2">
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
-                整体情感
+                {t('home.advanced.result.entity.overallSentiment')}
               </span>
               <span className="text-sm text-primary capitalize font-bold">{data.sentiment}</span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
-                最佳框架
+                {t('home.advanced.result.entity.bestFraming')}
               </span>
               <span className="text-sm text-primary capitalize font-bold">
                 {data.best_framing.replace('_', ' ')}
@@ -1393,7 +1415,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
-                识别率
+                {t('home.advanced.result.entity.recognitionRate')}
               </span>
               <span className="text-sm gradient-text font-bold tabular-nums">
                 {data.recognition_rate}%
@@ -1401,7 +1423,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             </div>
           </div>
         </SectionCard>
-        <SectionCard title="内容缺口">
+        <SectionCard title={t('home.advanced.result.entity.contentGaps')}>
           {data.content_gaps.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-emerald-400">
               <svg
@@ -1416,7 +1438,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
               >
                 <path d="M20 6L9 17l-5-5" />
               </svg>
-              未发现缺口
+              {t('home.advanced.result.entity.noGaps')}
             </div>
           ) : (
             <ul className="space-y-1.5">

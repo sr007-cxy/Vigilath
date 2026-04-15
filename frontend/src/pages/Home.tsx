@@ -100,7 +100,7 @@ export function Home() {
         .getMemberships()
         .then((data) => setMemberships(data))
         .catch((err) =>
-          setTiersError(err instanceof Error ? err.message : 'Failed to load plans'),
+          setTiersError(err instanceof Error ? err.message : t('common.errors.loadFailed')),
         )
         .finally(() => setTiersLoading(false));
     }

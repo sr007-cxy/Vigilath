@@ -74,7 +74,7 @@ export function CheckoutPending() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : 'Failed to load plan');
+        setLoadError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

@@ -20,28 +20,25 @@ export function Register() {
     setIsLoading(true);
     setError('');
 
-    // 验证密码
     if (password !== confirmPassword) {
       setIsLoading(false);
       setError(t('register.error'));
       return;
     }
 
-    // 验证是否同意服务条款
     if (!terms) {
       setIsLoading(false);
-      setError('请同意服务条款和隐私政策');
+      setError(t('register.termsRequired'));
       return;
     }
 
     try {
       await authApi.register(email, password);
-      // 注册成功后自动登录以获取 token，然后弹出支付框
       const loginRes = await authApi.login(email, password);
       localStorage.setItem('token', loginRes.access_token);
       setPaymentToken(loginRes.access_token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(err instanceof Error ? err.message : t('register.failed'));
     } finally {
       setIsLoading(false);
     }

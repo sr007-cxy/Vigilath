@@ -35,7 +35,7 @@ export function HistoryTab() {
       setTotal(data.total);
       setPage(data.page);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load history');
+      setError(err instanceof Error ? err.message : t('common.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +53,7 @@ export function HistoryTab() {
       const detail = await accountApi.getDetection(token, id);
       navigate('/result', { state: { result: detail.result, fromHistory: true } });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to load record');
+      alert(err instanceof Error ? err.message : t('common.errors.loadFailed'));
     } finally {
       setViewingId(null);
     }
@@ -68,7 +68,7 @@ export function HistoryTab() {
       const nextPage = items.length === 1 && page > 1 ? page - 1 : page;
       await load(nextPage);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete');
+      alert(err instanceof Error ? err.message : t('common.errors.deleteFailed'));
     }
   };
 
