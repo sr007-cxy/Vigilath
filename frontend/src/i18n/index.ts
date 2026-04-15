@@ -481,6 +481,23 @@ if (!i18n.isInitialized) {
                 "response_fast": "Response time: {{seconds}}s",
                 "response_slow": "Response time: {{seconds}}s — slow responses may cause AI crawlers to skip pages",
                 "response_timeout": "Response time: {{seconds}}s — too slow for reliable AI crawling"
+              },
+              "content_quality": {
+                "fetch_failed": "Could not fetch homepage",
+                "readability_good": "Readability: Flesch-Kincaid grade {{grade}} (accessible)",
+                "readability_simple": "Readability: Flesch-Kincaid grade {{grade}} (very simple)",
+                "readability_complex": "Readability: Flesch-Kincaid grade {{grade}} (complex) — simpler text ranks better in AI answers",
+                "faq_detected": "FAQ content detected — strong signal for AI-generated answers",
+                "faq_partial": "Possible FAQ-like content — consider adding FAQPage structured data",
+                "faq_missing": "No FAQ content detected — FAQ pages rank well in AI-generated answers",
+                "stats_good": "{{count}} quotable statistics found — good for AI citations",
+                "stats_few": "{{count}} statistic(s) found — more specific data improves AI citation likelihood",
+                "stats_missing": "No quotable statistics found — specific numbers/data help AI engines cite your content",
+                "sources_cited": "{{count}} source attribution(s) found — increases trust for AI engines",
+                "sources_missing": "No explicit source attributions — citing sources increases AI trust in your content",
+                "lists_good": "Structured lists found ({{lists}} lists, {{items}} items)",
+                "lists_few": "Some list content ({{items}} items) — structured lists help AI extract key points",
+                "lists_missing": "No list elements — structured lists help AI engines extract key points"
               }
             },
             "scoreCard": {
@@ -1872,6 +1889,23 @@ if (!i18n.isInitialized) {
                 "response_fast": "响应时间：{{seconds}}s",
                 "response_slow": "响应时间：{{seconds}}s——响应慢会让 AI 爬虫跳过页面",
                 "response_timeout": "响应时间：{{seconds}}s——对可靠爬取而言太慢"
+              },
+              "content_quality": {
+                "fetch_failed": "无法抓取首页",
+                "readability_good": "可读性：Flesch-Kincaid 等级 {{grade}}（易读）",
+                "readability_simple": "可读性：Flesch-Kincaid 等级 {{grade}}（非常简单）",
+                "readability_complex": "可读性：Flesch-Kincaid 等级 {{grade}}（复杂）——更简单的文本在 AI 答案中排名更好",
+                "faq_detected": "检测到 FAQ 内容——对 AI 生成答案是强信号",
+                "faq_partial": "疑似 FAQ 内容——建议添加 FAQPage 结构化数据",
+                "faq_missing": "未检测到 FAQ 内容——FAQ 页面在 AI 答案中排名很好",
+                "stats_good": "找到 {{count}} 条可引用的统计数据——有利于 AI 引用",
+                "stats_few": "找到 {{count}} 条统计数据——更多具体数据会提升被 AI 引用的可能性",
+                "stats_missing": "没有可引用的统计数据——具体数字/数据有助于 AI 引用你的内容",
+                "sources_cited": "找到 {{count}} 处来源引用——增加 AI 引擎的信任",
+                "sources_missing": "没有明确的来源引用——引用来源会增加 AI 对内容的信任",
+                "lists_good": "找到结构化列表（{{lists}} 个列表，{{items}} 项）",
+                "lists_few": "列表内容较少（{{items}} 项）——结构化列表有助于 AI 提取要点",
+                "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点"
               }
             },
             "scoreCard": {

@@ -876,7 +876,7 @@ def check_content_quality(base_url):
     print("\n--- Content Quality for AI ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.content_quality.fetch_failed", "Could not fetch homepage")
         track_score("Content Quality", 0, 7)
         return
 
@@ -885,14 +885,15 @@ def check_content_quality(base_url):
 
     grade = flesch_kincaid_grade(text)
     if grade is not None:
+        grade_str = f"{grade:.1f}"
         if 6 <= grade <= 12:
-            print(f"  [{PASS}] Readability: Flesch-Kincaid grade {grade:.1f} (accessible)")
+            emit_check(PASS, "result.checks.content_quality.readability_good", f"Readability: Flesch-Kincaid grade {grade_str} (accessible)", {"grade": grade_str})
             cq_score += 2
         elif grade < 6:
-            print(f"  [{INFO}] Readability: Flesch-Kincaid grade {grade:.1f} (very simple)")
+            emit_check(INFO, "result.checks.content_quality.readability_simple", f"Readability: Flesch-Kincaid grade {grade_str} (very simple)", {"grade": grade_str})
             cq_score += 1.5
         else:
-            print(f"  [{WARN}] Readability: Flesch-Kincaid grade {grade:.1f} (complex) — simpler text ranks better in AI answers")
+            emit_check(WARN, "result.checks.content_quality.readability_complex", f"Readability: Flesch-Kincaid grade {grade_str} (complex) — simpler text ranks better in AI answers", {"grade": grade_str})
             fix("Simplify your content for better AI readability:\n  1. Use shorter sentences (under 20 words)\n  2. Replace jargon with plain language\n  3. Break complex ideas into bullet points\n  4. Use active voice instead of passive\n  5. Target a grade 8-10 reading level")
 
     # FAQ detection
@@ -920,24 +921,24 @@ def check_content_quality(base_url):
         faq_indicators += 1
 
     if faq_indicators >= 2:
-        print(f"  [{PASS}] FAQ content detected — strong signal for AI-generated answers")
+        emit_check(PASS, "result.checks.content_quality.faq_detected", "FAQ content detected — strong signal for AI-generated answers")
         cq_score += 2
     elif faq_indicators == 1:
-        print(f"  [{INFO}] Possible FAQ-like content — consider adding FAQPage structured data")
+        emit_check(INFO, "result.checks.content_quality.faq_partial", "Possible FAQ-like content — consider adding FAQPage structured data")
         cq_score += 1
         fix("Add FAQPage schema to boost AI answer ranking:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"FAQPage\",\n    \"mainEntity\": [{\n      \"@type\": \"Question\",\n      \"name\": \"What is your product?\",\n      \"acceptedAnswer\": {\n        \"@type\": \"Answer\",\n        \"text\": \"Our product is...\"\n      }\n    }]\n  }\n  </script>")
     else:
-        print(f"  [{INFO}] No FAQ content detected — FAQ pages rank well in AI-generated answers")
+        emit_check(INFO, "result.checks.content_quality.faq_missing", "No FAQ content detected — FAQ pages rank well in AI-generated answers")
         fix("Consider adding an FAQ section to your page. Format questions as headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\nThen add FAQPage structured data (JSON-LD) for each Q&A pair.")
 
     stat_patterns = re.findall(r'\d+(?:\.\d+)?%|\$\d+|\d+(?:,\d{3})+', text)
     if len(stat_patterns) >= 3:
-        print(f"  [{PASS}] {len(stat_patterns)} quotable statistics found — good for AI citations")
+        emit_check(PASS, "result.checks.content_quality.stats_good", f"{len(stat_patterns)} quotable statistics found — good for AI citations", {"count": len(stat_patterns)})
         cq_score += 1
     elif stat_patterns:
-        print(f"  [{INFO}] {len(stat_patterns)} statistic(s) found — more specific data improves AI citation likelihood")
+        emit_check(INFO, "result.checks.content_quality.stats_few", f"{len(stat_patterns)} statistic(s) found — more specific data improves AI citation likelihood", {"count": len(stat_patterns)})
     else:
-        print(f"  [{WARN}] No quotable statistics found — specific numbers/data help AI engines cite your content")
+        emit_check(WARN, "result.checks.content_quality.stats_missing", "No quotable statistics found — specific numbers/data help AI engines cite your content")
         fix("Add concrete, quotable statistics to your content:\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI engines prefer citing specific data points over vague claims.")
 
     source_patterns = re.findall(
@@ -945,21 +946,21 @@ def check_content_quality(base_url):
         text, re.IGNORECASE
     )
     if source_patterns:
-        print(f"  [{PASS}] {len(source_patterns)} source attribution(s) found — increases trust for AI engines")
+        emit_check(PASS, "result.checks.content_quality.sources_cited", f"{len(source_patterns)} source attribution(s) found — increases trust for AI engines", {"count": len(source_patterns)})
         cq_score += 1
     else:
-        print(f"  [{INFO}] No explicit source attributions — citing sources increases AI trust in your content")
+        emit_check(INFO, "result.checks.content_quality.sources_missing", "No explicit source attributions — citing sources increases AI trust in your content")
         fix("Add source attributions to increase credibility:\n  'According to [Source Name], ...'\n  'Data from our 2025 industry report shows...'\n  'A study by [Institution] found...'\nAI engines weight attributed claims higher than unattributed ones.")
 
     lists = soup.find_all(["ul", "ol"])
     list_items = soup.find_all("li")
     if len(list_items) >= 5:
-        print(f"  [{PASS}] Structured lists found ({len(lists)} lists, {len(list_items)} items)")
+        emit_check(PASS, "result.checks.content_quality.lists_good", f"Structured lists found ({len(lists)} lists, {len(list_items)} items)", {"lists": len(lists), "items": len(list_items)})
         cq_score += 1
     elif list_items:
-        print(f"  [{INFO}] Some list content ({len(list_items)} items) — structured lists help AI extract key points")
+        emit_check(INFO, "result.checks.content_quality.lists_few", f"Some list content ({len(list_items)} items) — structured lists help AI extract key points", {"items": len(list_items)})
     else:
-        print(f"  [{WARN}] No list elements — structured lists help AI engines extract key points")
+        emit_check(WARN, "result.checks.content_quality.lists_missing", "No list elements — structured lists help AI engines extract key points")
         fix("Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.")
 
     track_score("Content Quality", min(cq_score, 7), 7)
