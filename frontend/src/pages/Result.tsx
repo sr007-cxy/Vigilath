@@ -9,6 +9,21 @@ import { resolveCategoryVisual } from '../components/result/CategoryVisual';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
+/**
+ * Render a check's user-facing message. Prefers i18n key + params (emitted
+ * via geo_checker.emit_check), falls back to the raw English `message`
+ * for legacy un-migrated checks.
+ */
+function renderCheckMessage(
+  check: CheckResult,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (check.message_key) {
+    return t(check.message_key, (check.message_params || {}) as Record<string, unknown>);
+  }
+  return check.message;
+}
+
 // 23 categories split into 7 tabs (2 free + 5 paid) aligned with
 // docs/会员功能免费与付费功能项目列表.md §检测大项分组. Free and paid
 // groups do not cross over, so a whole paid tab can show 🔒 for non-members
@@ -244,13 +259,14 @@ export function Result() {
       const cats = categoriesForTab(tab);
       const checks = cats.flatMap((c) => checksByCategory[c] || []);
       const total = checks.length;
+      const nameOf = (c: CheckResult) => renderCheckMessage(c, t);
       const namesByStatus = (status: string) =>
-        checks.filter((c) => c.status === status).map((c) => c.message);
+        checks.filter((c) => c.status === status).map(nameOf);
       const passedNames = namesByStatus('PASS');
       const failedNames = namesByStatus('FAIL');
       const warnedNames = namesByStatus('WARN');
       const infoNames = namesByStatus('INFO');
-      const allNames = checks.map((c) => c.message);
+      const allNames = checks.map(nameOf);
       const passed = passedNames.length;
       const failed = failedNames.length;
       const warned = warnedNames.length;
@@ -280,7 +296,7 @@ export function Result() {
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTabs, checksByCategory, lockedCategorySet]);
+  }, [allTabs, checksByCategory, lockedCategorySet, i18n.language]);
 
   const handleRerunSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -727,6 +743,7 @@ export function Result() {
                 const theme = statusTheme(check.status);
                 const fixText = check.fix?.trim();
                 const showFix = canShowFix && !!fixText && check.status !== 'PASS';
+                const displayMessage = renderCheckMessage(check, t);
                 return (
                   <div
                     key={rowKey}
@@ -737,8 +754,8 @@ export function Result() {
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
                         {check.status}
                       </span>
-                      <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
-                        {check.message}
+                      <p className="flex-1 min-w-0 text-xs text-primary truncate" title={displayMessage}>
+                        {displayMessage}
                       </p>
                     </div>
                     {showFix && (

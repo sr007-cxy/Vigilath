@@ -365,6 +365,12 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO Readiness Results",
             "resultsFor": "Results for:",
+            "checks": {
+              "https": {
+                "uses_https": "Site uses HTTPS",
+                "not_https": "Site does not use HTTPS — AI engines prefer secure sites"
+              }
+            },
             "scoreCard": {
               "title": "AI Visibility Score",
               "description": "How well your website is optimized for AI search",
@@ -1638,6 +1644,12 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO 检测结果",
             "resultsFor": "检查结果：",
+            "checks": {
+              "https": {
+                "uses_https": "站点已启用 HTTPS",
+                "not_https": "站点未使用 HTTPS——AI 引擎更偏好安全站点"
+              }
+            },
             "scoreCard": {
               "title": "AI 可见性得分",
               "description": "您的网站对 AI 搜索的优化程度",

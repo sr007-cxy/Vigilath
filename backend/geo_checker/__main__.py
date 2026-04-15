@@ -68,6 +68,42 @@ FIX  = "\033[96m FIX\033[0m"
 _page_cache = {}
 
 # ---------------------------------------------------------------------------
+# i18n-ready check emitter
+# ---------------------------------------------------------------------------
+# When the backend imports us, it sets GEO_EMIT_STRUCTURED=1 in the env
+# BEFORE importing. Each emit_check() call then embeds a machine-parseable
+# marker at the end of the printed line carrying the i18n key + params.
+# The backend's parse_geo_output extracts the marker to attach message_key
+# + message_params fields to CheckResult, enabling frontend t(key, params)
+# rendering. Standalone CLI users don't set the env var and see clean
+# English output, exactly as before.
+#
+# Backwards compatibility: legacy print(f"  [{PASS}] ...") calls that have
+# NOT yet been migrated to emit_check() still work — the parser falls back
+# to treating the raw English text as the display message (no message_key).
+import os as _os
+
+_EMIT_STRUCTURED = _os.environ.get("GEO_EMIT_STRUCTURED") == "1"
+_KEY_MARKER_START = "\x01GK\x01"
+_KEY_MARKER_END = "\x01GE\x01"
+
+
+def emit_check(status_tag, key, message, params=None):
+    """Print a check result line and (optionally) embed i18n metadata.
+
+    status_tag: one of PASS / WARN / FAIL / INFO (the ANSI-wrapped constants)
+    key:        i18n key path under result.checks.* on the frontend
+    message:    human-readable English fallback (also drives CLI output)
+    params:     dict of interpolation values (e.g. {"count": 12})
+    """
+    line = f"  [{status_tag}] {message}"
+    if _EMIT_STRUCTURED and key:
+        meta = json.dumps({"k": key, "p": params or {}}, ensure_ascii=False)
+        line += f"{_KEY_MARKER_START}{meta}{_KEY_MARKER_END}"
+    print(line)
+
+
+# ---------------------------------------------------------------------------
 # Score tracking
 # ---------------------------------------------------------------------------
 _scores = {}  # category -> {"earned": float, "max": float}
@@ -157,11 +193,15 @@ def check_https(url):
     print("\n--- HTTPS ---")
     parsed = urlparse(url)
     if parsed.scheme == "https":
-        print(f"  [{PASS}] Site uses HTTPS")
+        emit_check(PASS, "result.checks.https.uses_https", "Site uses HTTPS")
         track_score("HTTPS", 5, 5)
         return True
     else:
-        print(f"  [{FAIL}] Site does not use HTTPS — AI engines prefer secure sites")
+        emit_check(
+            FAIL,
+            "result.checks.https.not_https",
+            "Site does not use HTTPS — AI engines prefer secure sites",
+        )
         fix("Install an SSL/TLS certificate (free via Let's Encrypt) and redirect all HTTP traffic to HTTPS.\nExample nginx: return 301 https://$host$request_uri;")
         track_score("HTTPS", 0, 5)
         return False

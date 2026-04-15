@@ -12,6 +12,11 @@ class CheckResult(BaseModel):
     status: str  # PASS, WARN, FAIL, INFO
     message: str
     fix: Optional[str] = None
+    # i18n key + params emitted by geo_checker.emit_check(). When present,
+    # the frontend renders t(message_key, message_params); when absent
+    # (legacy un-migrated checks), the frontend falls back to `message`.
+    message_key: Optional[str] = None
+    message_params: Optional[Dict[str, Any]] = None
 
 class GeoTestResult(BaseModel):
     """Response model for GEO test result"""

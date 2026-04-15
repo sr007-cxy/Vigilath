@@ -3,6 +3,11 @@ export interface CheckResult {
   status: string; // PASS, WARN, FAIL, INFO
   message: string;
   fix?: string;
+  /** i18n key path under result.checks.* when the check was emitted
+   *  via geo_checker.emit_check(). Absent for un-migrated legacy checks. */
+  message_key?: string | null;
+  /** Interpolation params for message_key (e.g. {count: 12, url: "..."}). */
+  message_params?: Record<string, unknown> | null;
 }
 
 export interface GeoTestRequest {
