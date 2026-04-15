@@ -404,6 +404,36 @@ if (!i18n.isInitialized) {
                 "lastmod_present": "Sitemap includes <lastmod> timestamps",
                 "lastmod_missing": "Sitemap missing <lastmod> timestamps — helps AI engines know content freshness",
                 "not_found": "No sitemap.xml found"
+              },
+              "meta": {
+                "fetch_failed": "Could not fetch homepage",
+                "title_found": "<title> found: \"{{title}}\"",
+                "title_missing": "Missing <title> tag",
+                "description_found": "Meta description found ({{chars}} chars)",
+                "description_too_short": "Meta description is very short — aim for 120-160 characters",
+                "description_missing": "Missing meta description",
+                "canonical_found": "Canonical URL set: {{url}}",
+                "canonical_missing": "No canonical URL — can cause duplicate content issues for AI engines",
+                "og_tags_found": "Open Graph tags found: {{tags}}",
+                "og_tags_missing": "No Open Graph tags — used by AI engines for content summarization",
+                "lang_declared": "Language declared: {{lang}}",
+                "lang_missing": "No lang attribute on <html> — helps AI engines understand content language",
+                "hreflang_found": "Hreflang tags found for: {{langs}}",
+                "hreflang_missing": "No hreflang tags — add these if your site supports multiple languages"
+              },
+              "mobile": {
+                "fetch_failed": "Could not fetch homepage",
+                "viewport_found": "Viewport meta tag found: {{viewport}}",
+                "viewport_responsive": "Uses width=device-width (responsive)",
+                "viewport_not_responsive": "Viewport doesn't use width=device-width",
+                "viewport_missing": "No viewport meta tag — page won't render properly on mobile",
+                "weight_light": "HTML page weight: {{kb}} KB (lightweight)",
+                "weight_medium": "HTML page weight: {{kb}} KB — consider reducing inline CSS/JS",
+                "weight_heavy": "HTML page weight: {{kb}} KB — very heavy, may slow AI crawlers",
+                "inline_heavy": "Heavy inline resources: {{styles}} <style> blocks, {{scripts}} large <script> blocks",
+                "inline_ok": "Inline resources within acceptable range",
+                "cache_headers_found": "Cache headers found: {{signals}}",
+                "cache_headers_missing": "No cache headers (Cache-Control, ETag, Last-Modified)"
               }
             },
             "scoreCard": {
@@ -1718,6 +1748,36 @@ if (!i18n.isInitialized) {
                 "lastmod_present": "sitemap 带 <lastmod> 时间戳",
                 "lastmod_missing": "sitemap 缺少 <lastmod> 时间戳——有助于 AI 引擎判断内容新鲜度",
                 "not_found": "没有找到 sitemap.xml"
+              },
+              "meta": {
+                "fetch_failed": "无法抓取首页",
+                "title_found": "找到 <title>：\"{{title}}\"",
+                "title_missing": "缺少 <title> 标签",
+                "description_found": "找到 meta description（{{chars}} 字符）",
+                "description_too_short": "meta description 太短——建议 120–160 字符",
+                "description_missing": "缺少 meta description",
+                "canonical_found": "已设置 canonical URL：{{url}}",
+                "canonical_missing": "没有 canonical URL——会让 AI 引擎产生重复内容问题",
+                "og_tags_found": "找到 Open Graph 标签：{{tags}}",
+                "og_tags_missing": "没有 Open Graph 标签——AI 引擎用它生成内容摘要",
+                "lang_declared": "已声明语言：{{lang}}",
+                "lang_missing": "<html> 没有 lang 属性——有助于 AI 引擎判断内容语言",
+                "hreflang_found": "找到 hreflang 标签：{{langs}}",
+                "hreflang_missing": "没有 hreflang 标签——如果是多语言站点请补上"
+              },
+              "mobile": {
+                "fetch_failed": "无法抓取首页",
+                "viewport_found": "找到 viewport meta 标签：{{viewport}}",
+                "viewport_responsive": "使用了 width=device-width（响应式）",
+                "viewport_not_responsive": "viewport 没有使用 width=device-width",
+                "viewport_missing": "缺少 viewport meta 标签——页面在移动端无法正常渲染",
+                "weight_light": "HTML 页面大小：{{kb}} KB（轻量）",
+                "weight_medium": "HTML 页面大小：{{kb}} KB——建议减少内联 CSS/JS",
+                "weight_heavy": "HTML 页面大小：{{kb}} KB——过重，可能拖慢 AI 爬虫",
+                "inline_heavy": "内联资源过多：{{styles}} 个 <style> 块、{{scripts}} 个大型 <script> 块",
+                "inline_ok": "内联资源在可接受范围",
+                "cache_headers_found": "找到缓存头：{{signals}}",
+                "cache_headers_missing": "没有缓存头（Cache-Control、ETag、Last-Modified）"
               }
             },
             "scoreCard": {

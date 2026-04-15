@@ -586,63 +586,64 @@ def check_meta_tags(base_url):
     print("\n--- Meta Tags ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.meta.fetch_failed", "Could not fetch homepage")
         track_score("Meta Tags", 0, 7)
         return
 
     meta_score = 0
     title = soup.find("title")
     if title and title.string and title.string.strip():
-        print(f"  [{PASS}] <title> found: \"{title.string.strip()[:80]}\"")
+        title_text = title.string.strip()[:80]
+        emit_check(PASS, "result.checks.meta.title_found", f"<title> found: \"{title_text}\"", {"title": title_text})
         meta_score += 1.5
     else:
-        print(f"  [{FAIL}] Missing <title> tag")
+        emit_check(FAIL, "result.checks.meta.title_missing", "Missing <title> tag")
         fix("Add a <title> tag in your <head>:\n  <title>Your Page Title — Your Brand</title>\nKeep it under 60 characters and include your primary keyword.")
 
     desc = soup.find("meta", attrs={"name": "description"})
     if desc and desc.get("content", "").strip():
         content = desc["content"].strip()
-        print(f"  [{PASS}] Meta description found ({len(content)} chars)")
+        emit_check(PASS, "result.checks.meta.description_found", f"Meta description found ({len(content)} chars)", {"chars": len(content)})
         meta_score += 1.5
         if len(content) < 50:
-            print(f"  [{WARN}] Meta description is very short — aim for 120-160 characters")
+            emit_check(WARN, "result.checks.meta.description_too_short", "Meta description is very short — aim for 120-160 characters")
             fix("Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords.")
     else:
-        print(f"  [{FAIL}] Missing meta description")
+        emit_check(FAIL, "result.checks.meta.description_missing", "Missing meta description")
         fix("Add a meta description in your <head>:\n  <meta name=\"description\" content=\"A 120-160 character summary of your page content, including key topics and value proposition.\">\nThis is often what AI engines use when summarizing your site.")
 
     canonical = soup.find("link", rel="canonical")
     if canonical and canonical.get("href"):
-        print(f"  [{PASS}] Canonical URL set: {canonical['href']}")
+        emit_check(PASS, "result.checks.meta.canonical_found", f"Canonical URL set: {canonical['href']}", {"url": canonical['href']})
         meta_score += 1
     else:
-        print(f"  [{WARN}] No canonical URL — can cause duplicate content issues for AI engines")
+        emit_check(WARN, "result.checks.meta.canonical_missing", "No canonical URL — can cause duplicate content issues for AI engines")
         fix("Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.")
 
     og_tags = soup.find_all("meta", property=re.compile(r"^og:"))
     if og_tags:
         og_types = [tag.get("property") for tag in og_tags]
-        print(f"  [{PASS}] Open Graph tags found: {', '.join(og_types)}")
+        emit_check(PASS, "result.checks.meta.og_tags_found", f"Open Graph tags found: {', '.join(og_types)}", {"tags": ", ".join(og_types)})
         meta_score += 1
     else:
-        print(f"  [{WARN}] No Open Graph tags — used by AI engines for content summarization")
+        emit_check(WARN, "result.checks.meta.og_tags_missing", "No Open Graph tags — used by AI engines for content summarization")
         fix("Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     html_tag = soup.find("html")
     if html_tag and html_tag.get("lang"):
-        print(f"  [{PASS}] Language declared: {html_tag['lang']}")
+        emit_check(PASS, "result.checks.meta.lang_declared", f"Language declared: {html_tag['lang']}", {"lang": html_tag['lang']})
         meta_score += 1
     else:
-        print(f"  [{WARN}] No lang attribute on <html> — helps AI engines understand content language")
+        emit_check(WARN, "result.checks.meta.lang_missing", "No lang attribute on <html> — helps AI engines understand content language")
         fix("Add a lang attribute to your <html> tag:\n  <html lang=\"en\">")
 
     hreflangs = soup.find_all("link", rel="alternate", hreflang=True)
     if hreflangs:
         langs = [tag.get("hreflang") for tag in hreflangs]
-        print(f"  [{PASS}] Hreflang tags found for: {', '.join(langs)}")
+        emit_check(PASS, "result.checks.meta.hreflang_found", f"Hreflang tags found for: {', '.join(langs)}", {"langs": ", ".join(langs)})
         meta_score += 1
     else:
-        print(f"  [{INFO}] No hreflang tags — add these if your site supports multiple languages")
+        emit_check(INFO, "result.checks.meta.hreflang_missing", "No hreflang tags — add these if your site supports multiple languages")
         fix("If your site is multilingual, add hreflang tags:\n  <link rel=\"alternate\" hreflang=\"en\" href=\"https://yoursite.com/en/page\" />\n  <link rel=\"alternate\" hreflang=\"es\" href=\"https://yoursite.com/es/page\" />\n  <link rel=\"alternate\" hreflang=\"x-default\" href=\"https://yoursite.com/page\" />")
 
     track_score("Meta Tags", meta_score, 7)
@@ -1514,7 +1515,7 @@ def check_mobile_and_weight(base_url):
     print("\n--- Mobile-Friendliness & Page Weight ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.mobile.fetch_failed", "Could not fetch homepage")
         track_score("Mobile & Weight", 0, 4)
         return
 
@@ -1524,28 +1525,29 @@ def check_mobile_and_weight(base_url):
     viewport = soup.find("meta", attrs={"name": "viewport"})
     if viewport and viewport.get("content"):
         content = viewport["content"]
-        print(f"  [{PASS}] Viewport meta tag found: {content[:80]}")
+        preview = content[:80]
+        emit_check(PASS, "result.checks.mobile.viewport_found", f"Viewport meta tag found: {preview}", {"viewport": preview})
         if "width=device-width" in content:
-            print(f"  [{PASS}] Uses width=device-width (responsive)")
+            emit_check(PASS, "result.checks.mobile.viewport_responsive", "Uses width=device-width (responsive)")
             mw_score += 1
         else:
-            print(f"  [{WARN}] Viewport doesn't use width=device-width")
+            emit_check(WARN, "result.checks.mobile.viewport_not_responsive", "Viewport doesn't use width=device-width")
             fix("Set viewport to responsive:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />")
     else:
-        print(f"  [{FAIL}] No viewport meta tag — page won't render properly on mobile")
+        emit_check(FAIL, "result.checks.mobile.viewport_missing", "No viewport meta tag — page won't render properly on mobile")
         fix("Add a viewport meta tag to your <head>:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\nMobile-first indexing means AI crawlers expect mobile-friendly pages.")
 
     # Page weight
     html_size = len(resp.text.encode("utf-8"))
     html_kb = html_size / 1024
     if html_kb < 100:
-        print(f"  [{PASS}] HTML page weight: {html_kb:.0f} KB (lightweight)")
+        emit_check(PASS, "result.checks.mobile.weight_light", f"HTML page weight: {html_kb:.0f} KB (lightweight)", {"kb": int(html_kb)})
         mw_score += 1
     elif html_kb < 500:
-        print(f"  [{WARN}] HTML page weight: {html_kb:.0f} KB — consider reducing inline CSS/JS")
+        emit_check(WARN, "result.checks.mobile.weight_medium", f"HTML page weight: {html_kb:.0f} KB — consider reducing inline CSS/JS", {"kb": int(html_kb)})
         fix("Reduce page weight:\n  1. Move inline CSS to external stylesheets\n  2. Move inline JS to external scripts with defer/async\n  3. Remove unused HTML/comments\n  4. Enable server-side compression (gzip/brotli)")
     else:
-        print(f"  [{FAIL}] HTML page weight: {html_kb:.0f} KB — very heavy, may slow AI crawlers")
+        emit_check(FAIL, "result.checks.mobile.weight_heavy", f"HTML page weight: {html_kb:.0f} KB — very heavy, may slow AI crawlers", {"kb": int(html_kb)})
         fix("Page is too heavy for efficient crawling. Actions:\n  1. Externalize all inline CSS and JavaScript\n  2. Remove inline SVGs and base64 images — use external files\n  3. Enable gzip/brotli compression on your server\n  4. Consider code-splitting for JavaScript-heavy pages")
 
     # Count inline resources
@@ -1554,10 +1556,10 @@ def check_mobile_and_weight(base_url):
     inline_scripts = [s for s in inline_scripts if s.string and len(s.string.strip()) > 100 and s.get("type") != "application/ld+json"]
 
     if len(inline_styles) > 3 or len(inline_scripts) > 5:
-        print(f"  [{WARN}] Heavy inline resources: {len(inline_styles)} <style> blocks, {len(inline_scripts)} large <script> blocks")
+        emit_check(WARN, "result.checks.mobile.inline_heavy", f"Heavy inline resources: {len(inline_styles)} <style> blocks, {len(inline_scripts)} large <script> blocks", {"styles": len(inline_styles), "scripts": len(inline_scripts)})
         fix("Move inline styles and scripts to external files to reduce HTML weight\nand improve caching for repeat crawls.")
     else:
-        print(f"  [{PASS}] Inline resources within acceptable range")
+        emit_check(PASS, "result.checks.mobile.inline_ok", "Inline resources within acceptable range")
         mw_score += 1
 
     # Cache headers
@@ -1574,10 +1576,11 @@ def check_mobile_and_weight(base_url):
         cache_signals.append(f"Last-Modified: {last_modified}")
 
     if cache_signals:
-        print(f"  [{PASS}] Cache headers found: {'; '.join(cache_signals[:2])}")
+        signals_text = "; ".join(cache_signals[:2])
+        emit_check(PASS, "result.checks.mobile.cache_headers_found", f"Cache headers found: {signals_text}", {"signals": signals_text})
         mw_score += 1
     else:
-        print(f"  [{WARN}] No cache headers (Cache-Control, ETag, Last-Modified)")
+        emit_check(WARN, "result.checks.mobile.cache_headers_missing", "No cache headers (Cache-Control, ETag, Last-Modified)")
         fix("Add cache headers for efficient re-crawling:\n  Cache-Control: public, max-age=3600\n  ETag: (auto-generated by most servers)\nThis allows AI crawlers to use conditional requests (If-None-Match)\nand avoid re-downloading unchanged pages.")
 
     track_score("Mobile & Weight", mw_score, 4)
