@@ -54,9 +54,9 @@ if (!i18n.isInitialized) {
             }
           },
           "hero": {
-            "title": "Get AI to Recommend Your Brand",
-            "subtitle": "Generative Engine Optimization (GEO)",
-            "description": "Ensure your business is recommended first when potential customers ask ChatGPT, Gemini, Perplexity, and other AI assistants for product or service recommendations.",
+            "title": "GApex・Unified GEO+AEO for Global AI Visibility",
+            "subtitle": "GEO + AEO, Unified at Apex",
+            "description": "GApex・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
             "cta": "Learn More",
             "ctaSecondary": "Contact Us"
           },
@@ -1623,9 +1623,9 @@ if (!i18n.isInitialized) {
             }
           },
           "hero": {
-            "title": "让 AI 推荐您的品牌",
-            "subtitle": "生成式引擎优化（GEO）",
-            "description": "当潜在客户向 ChatGPT、Gemini、Perplexity 等 AI 助手寻求产品或服务推荐时，确保您的企业被优先推荐。",
+            "title": "GApex・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
+            "subtitle": "GEO + AEO, Unified at Apex",
+            "description": "GApex・Unified GEO+AEO for Global AI Visibility",
             "cta": "了解更多",
             "ctaSecondary": "联系我们"
           },

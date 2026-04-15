@@ -181,7 +181,7 @@ export const makeStandardHeaderFooter = (
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(120, 120, 130);
     pdf.setFontSize(9);
-    pdf.text('GEO Checker', MARGIN_X_PT, 24);
+    pdf.text('GApex', MARGIN_X_PT, 24);
 
     const maxWidth = CONTENT_W_PT - 100;
     const truncated =
@@ -201,7 +201,7 @@ export const makeStandardHeaderFooter = (
     pdf.setFontSize(9);
     pdf.setTextColor(148, 163, 184);
     const year = new Date().getFullYear();
-    pdf.text(`GEO Checker · © ${year}`, MARGIN_X_PT, PAGE_H_PT - 14);
+    pdf.text(`GApex · © ${year}`, MARGIN_X_PT, PAGE_H_PT - 14);
     const pageText = t('result.pdfReport.pageOf', { current: pageNum, total: totalPages });
     pdf.text(pageText, PAGE_W_PT - MARGIN_X_PT, PAGE_H_PT - 14, { align: 'right' });
   };

@@ -115,7 +115,7 @@ export function Header() {
               <path d="M30 50 L45 65 L70 35" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-primary)' }} />
             </svg>
             <span className="text-xl font-bold tracking-tight gradient-text">
-              GEO Checker
+              GApex
             </span>
           </Link>
         </div>
