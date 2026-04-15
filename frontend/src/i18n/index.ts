@@ -464,7 +464,9 @@ if (!i18n.isInitialized) {
               "exportPDFLoading": "Exporting PDF...",
               "exportCSV": "Export CSV",
               "shareSocial": "Share to social media",
-              "share": "Share"
+              "share": "Share",
+              "downloadReport": "Download Report",
+              "downloadReportLoading": "Generating report…"
             },
             "pdfReport": {
               "title": "GEO Readiness Report",
@@ -1721,7 +1723,9 @@ if (!i18n.isInitialized) {
               "exportPDFLoading": "导出 PDF 中...",
               "exportCSV": "导出 CSV",
               "shareSocial": "分享到社交媒体",
-              "share": "分享"
+              "share": "分享",
+              "downloadReport": "下载报告",
+              "downloadReportLoading": "正在生成报告…"
             },
             "pdfReport": {
               "title": "GEO 就绪度检测报告",
