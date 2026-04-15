@@ -10,11 +10,11 @@ class Settings(BaseSettings):
     FACEBOOK_APP_ID: str = "test-facebook-app-id"
     FACEBOOK_APP_SECRET: str = "test-facebook-app-secret"
     SECRET_KEY: str = "your-secret-key-for-jwt"
-    SMTP_SERVER: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = "your-email@gmail.com"
-    SMTP_PASSWORD: str = "your-app-password"
-    SENDER_EMAIL: str = "your-email@gmail.com"
+
+    # Resend transactional email (password reset, consultation ack, etc.)
+    RESEND_API_KEY: str = ""
+    FROM_EMAIL: str = "GEO Readiness Checker <noreply@vigilath.com>"
+    FRONTEND_URL: str = "https://www.vigilath.com"
 
     # Stripe (used for overseas / English-locale credit card subscriptions)
     STRIPE_SECRET_KEY: str = ""

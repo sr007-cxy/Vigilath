@@ -1,139 +1,153 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional
-import os
-from dotenv import load_dotenv
+"""Resend transactional email client.
 
-# Load environment variables
-load_dotenv()
+All outgoing mail (password reset, consultation acknowledgement, etc.) goes
+through Resend's HTTP API. We talk to it with `requests` directly so no new
+dependency is needed.
+
+Secrets come from `backend/.env`:
+    RESEND_API_KEY=re_xxx
+    FROM_EMAIL="GEO Readiness Checker <noreply@vigilath.com>"
+    FRONTEND_URL=https://www.vigilath.com
+"""
+
+import logging
+from typing import Optional
+
+import requests
+
+from geo.database import settings
+
+logger = logging.getLogger(__name__)
+
+RESEND_API_URL = "https://api.resend.com/emails"
+
 
 class EmailService:
     def __init__(self):
-        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        self.smtp_user = os.getenv('SMTP_USER')
-        self.smtp_password = os.getenv('SMTP_PASSWORD')
-        self.sender_email = os.getenv('SENDER_EMAIL', self.smtp_user)
-    
-    def send_password_reset_email(self, recipient_email: str, reset_token: str) -> bool:
-        """Send password reset email"""
-        try:
-            # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'Password Reset Request'
-            msg['From'] = self.sender_email
-            msg['To'] = recipient_email
-            
-            # Create reset link
-            reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
-            
-            # HTML email body
-            html = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <h2>Password Reset Request</h2>
-                <p>Hello,</p>
-                <p>You requested a password reset for your account. Please click the link below to reset your password:</p>
-                <p><a href="{reset_link}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
-                <p>If you did not request this reset, please ignore this email.</p>
-                <p>This link will expire in 15 minutes.</p>
-                <p>Best regards,<br>GEO Readiness Checker Team</p>
-              </body>
-            </html>
-            """
-            
-            # Plain text email body
-            text = f"""
-            Password Reset Request
-            
-            Hello,
-            
-            You requested a password reset for your account. Please use the following link to reset your password:
-            {reset_link}
-            
-            If you did not request this reset, please ignore this email.
-            
-            This link will expire in 15 minutes.
-            
-            Best regards,
-            GEO Readiness Checker Team
-            """
-            
-            # Attach both versions
-            part1 = MIMEText(text, 'plain')
-            part2 = MIMEText(html, 'html')
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
-            
-            return True
-        except Exception as e:
-            print(f"Error sending password reset email: {e}")
-            return False
-    
-    def send_consultation_confirmation_email(self, recipient_email: str, name: str, message: str) -> bool:
-        """Send consultation confirmation email"""
-        try:
-            # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = 'Consultation Request Received'
-            msg['From'] = self.sender_email
-            msg['To'] = recipient_email
-            
-            # HTML email body
-            html = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <h2>Consultation Request Received</h2>
-                <p>Hello {name},</p>
-                <p>Thank you for reaching out to us. We have received your consultation request and will get back to you shortly.</p>
-                <p><strong>Your message:</strong></p>
-                <p>{message}</p>
-                <p>We appreciate your interest in GEO Readiness Checker and will respond to your inquiry as soon as possible.</p>
-                <p>Best regards,<br>GEO Readiness Checker Team</p>
-              </body>
-            </html>
-            """
-            
-            # Plain text email body
-            text = f"""
-            Consultation Request Received
-            
-            Hello {name},
-            
-            Thank you for reaching out to us. We have received your consultation request and will get back to you shortly.
-            
-            Your message:
-            {message}
-            
-            We appreciate your interest in GEO Readiness Checker and will respond to your inquiry as soon as possible.
-            
-            Best regards,
-            GEO Readiness Checker Team
-            """
-            
-            # Attach both versions
-            part1 = MIMEText(text, 'plain')
-            part2 = MIMEText(html, 'html')
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
-            
-            return True
-        except Exception as e:
-            print(f"Error sending consultation confirmation email: {e}")
+        self.api_key = settings.RESEND_API_KEY
+        self.from_email = settings.FROM_EMAIL
+        self.frontend_url = settings.FRONTEND_URL.rstrip("/")
+
+    def _send(
+        self,
+        to: str,
+        subject: str,
+        html: str,
+        text: Optional[str] = None,
+    ) -> bool:
+        if not self.api_key:
+            logger.error("RESEND_API_KEY is not configured; cannot send email to %s", to)
             return False
 
-# Create singleton instance
+        payload = {
+            "from": self.from_email,
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        }
+        if text:
+            payload["text"] = text
+
+        try:
+            resp = requests.post(
+                RESEND_API_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+        except requests.RequestException as e:
+            logger.exception("Resend request failed for %s: %s", to, e)
+            return False
+
+        if resp.status_code >= 400:
+            logger.error(
+                "Resend rejected message to %s (%s): %s",
+                to,
+                resp.status_code,
+                resp.text,
+            )
+            return False
+
+        logger.info("Resend accepted message to %s: %s", to, resp.json().get("id"))
+        return True
+
+    def send_password_reset_email(self, recipient_email: str, reset_token: str) -> bool:
+        reset_link = f"{self.frontend_url}/forgot-password?token={reset_token}"
+
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+            <h2 style="color: #111827;">Password Reset Request</h2>
+            <p>Hello,</p>
+            <p>You requested a password reset for your GEO Readiness Checker account. Click the button below to choose a new password:</p>
+            <p>
+              <a href="{reset_link}"
+                 style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Reset Password
+              </a>
+            </p>
+            <p>Or copy and paste this URL into your browser:</p>
+            <p style="word-break: break-all; color: #4b5563;">{reset_link}</p>
+            <p>This link will expire in 15 minutes. If you did not request a reset, you can safely ignore this email.</p>
+            <p>— GEO Readiness Checker Team</p>
+          </body>
+        </html>
+        """
+
+        text = (
+            "Password Reset Request\n\n"
+            "You requested a password reset for your GEO Readiness Checker account.\n"
+            f"Open this link to choose a new password: {reset_link}\n\n"
+            "This link will expire in 15 minutes. If you did not request a reset, ignore this email.\n\n"
+            "— GEO Readiness Checker Team"
+        )
+
+        return self._send(
+            to=recipient_email,
+            subject="Reset your GEO Readiness Checker password",
+            html=html,
+            text=text,
+        )
+
+    def send_consultation_confirmation_email(
+        self, recipient_email: str, name: str, message: str
+    ) -> bool:
+        safe_message = (message or "").replace("\n", "<br>")
+
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+            <h2 style="color: #111827;">Consultation Request Received</h2>
+            <p>Hello {name},</p>
+            <p>Thanks for reaching out to the GEO Readiness Checker team. We have received your consultation request and will get back to you shortly.</p>
+            <p><strong>Your message:</strong></p>
+            <blockquote style="margin: 0; padding: 12px 16px; background: #f3f4f6; border-left: 4px solid #2563eb;">
+              {safe_message}
+            </blockquote>
+            <p>We appreciate your interest and will respond as soon as possible.</p>
+            <p>— GEO Readiness Checker Team</p>
+          </body>
+        </html>
+        """
+
+        text = (
+            f"Hello {name},\n\n"
+            "Thanks for reaching out to the GEO Readiness Checker team. "
+            "We have received your consultation request and will get back to you shortly.\n\n"
+            "Your message:\n"
+            f"{message}\n\n"
+            "— GEO Readiness Checker Team"
+        )
+
+        return self._send(
+            to=recipient_email,
+            subject="We received your consultation request",
+            html=html,
+            text=text,
+        )
+
+
 email_service = EmailService()
