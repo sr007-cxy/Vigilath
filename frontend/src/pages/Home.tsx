@@ -211,15 +211,22 @@ export function Home() {
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
 
-      <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
+      <main className="flex-1 px-4 py-20 sm:py-28 relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
-          <section className="hero">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up text-center">
+          <section className="hero text-center">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-soft shadow-glow mb-8 animate-slide-up">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              <span className="text-xs font-medium text-secondary">
+                {t('home.advanced.badge')}
+              </span>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up text-center">
               <span className="gradient-text">{t('home.title')}</span>
             </h1>
 
             <p
-              className="text-lg sm:text-xl text-secondary max-w-3xl mx-auto leading-relaxed animate-slide-up text-center"
+              className="text-base sm:text-lg text-secondary max-w-2xl mx-auto leading-relaxed animate-slide-up text-center"
               style={{ animationDelay: '0.1s' }}
             >
               {t('home.description')}
@@ -227,20 +234,21 @@ export function Home() {
 
             <div className="transition-all duration-300 animate-scale-in max-w-2xl mx-auto mt-10">
               <form id="geo-form" onSubmit={handleSubmit}>
-                <div className="url-input-wrapper flex items-center bg-card rounded-full p-1.5 shadow-glow">
+                <div className="flex items-center bg-surface border border-soft rounded-full p-1.5 shadow-glow transition-shadow">
                   <input
                     type="text"
                     id="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder={t('home.placeholder')}
-                    className="flex-1 py-3 px-4 text-base bg-transparent focus:outline-none text-primary placeholder-muted border-none"
+                    className="flex-1 py-3 px-5 text-base bg-transparent focus:outline-none text-primary border-none"
+                    style={{ color: 'var(--text-primary)' }}
                     disabled={isLoading}
                   />
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="gradient-bg text-white px-6 py-2.5 font-semibold hover:opacity-90 transition-all duration-300 flex items-center justify-center rounded-full disabled:opacity-60"
+                    className="btn-solid px-6 py-3 font-semibold flex items-center justify-center rounded-full disabled:opacity-60"
                   >
                     {isLoading ? (
                       <svg
@@ -270,11 +278,17 @@ export function Home() {
                 </div>
 
                 {error && (
-                  <div className="mt-4 bg-red-900/40 border border-red-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in">
+                  <div
+                    className="mt-4 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in"
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                    }}
+                  >
                     <div className="flex items-start gap-3 flex-1">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5"
+                        className="h-5 w-5 text-rose-500 flex-shrink-0 mt-0.5"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -286,12 +300,12 @@ export function Home() {
                           d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                         />
                       </svg>
-                      <span className="text-sm text-red-200 font-medium">{error}</span>
+                      <span className="text-sm font-medium" style={{ color: '#ef4444' }}>{error}</span>
                     </div>
                     {quotaExceeded && (
                       <Link
                         to="/products-services"
-                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-red-500/90 hover:bg-red-500 text-white text-sm font-semibold transition-colors duration-200 flex-shrink-0"
+                        className="btn-solid inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors duration-200 flex-shrink-0"
                       >
                         {t('home.error.quotaCta')}
                         <svg
@@ -319,7 +333,8 @@ export function Home() {
                 <p className="mt-2">
                   <Link
                     to="/products-services"
-                    className="text-sm text-accent-primary font-medium hover:text-primary transition-colors duration-300"
+                    className="text-sm font-medium underline underline-offset-4 transition-colors duration-200"
+                    style={{ color: 'var(--text-primary)', textDecorationColor: 'var(--border-strong)' }}
                   >
                     {t('home.contactLink')}
                   </Link>
@@ -332,10 +347,10 @@ export function Home() {
           <section className="mt-24 sm:mt-32">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-primary/10 border border-accent-primary/20 mb-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-3.5 w-3.5 text-accent-primary"
+                    className="h-3.5 w-3.5 text-secondary"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -347,12 +362,12 @@ export function Home() {
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     />
                   </svg>
-                  <span className="text-xs font-semibold text-accent-primary">
+                  <span className="text-xs font-semibold text-secondary">
                     {t('home.advanced.badge')}
                   </span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-bold gradient-text mb-2">
-                  {t('home.advanced.title')}
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                  <span className="gradient-text">{t('home.advanced.title')}</span>
                 </h2>
                 <p className="text-secondary text-sm sm:text-base max-w-2xl">
                   {t('home.advanced.subtitle')}
@@ -362,7 +377,7 @@ export function Home() {
                 <button
                   type="button"
                   onClick={openTierModal}
-                  className="self-start sm:self-end gradient-bg text-white rounded-full py-2.5 px-5 text-sm font-semibold hover:opacity-90 transition-all duration-300 shadow-glow whitespace-nowrap"
+                  className="btn-solid self-start sm:self-end rounded-full py-2.5 px-5 text-sm font-semibold transition-all duration-200 whitespace-nowrap"
                 >
                   {t('home.advanced.upgrade')}
                 </button>
@@ -375,13 +390,13 @@ export function Home() {
                   role="button"
                   key={key}
                   onClick={() => handleAdvancedClick(key)}
-                  className="group flex gap-4 relative text-left bg-gray-900 border border-gray-700 rounded-2xl p-6 transition-all duration-300 hover:border-primary/60 hover:-translate-y-1"
+                  className="group flex gap-4 relative text-left card p-6 hover:-translate-y-0.5"
                 >
                   {!isUnlocked && (
-                    <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-accent-primary/10 border border-accent-primary/30 flex items-center justify-center">
+                    <div className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-surface border border-soft">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-accent-primary"
+                        className="h-4 w-4 text-secondary"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -395,10 +410,10 @@ export function Home() {
                       </svg>
                     </div>
                   )}
-                  <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center mb-5 shadow-glow group-hover:scale-110 transition-transform duration-300">
+                  <div className="icon-tile w-12 h-12 rounded-xl flex items-center justify-center mb-5 group-hover:scale-105 transition-transform duration-200 flex-shrink-0">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-6 w-6 text-white"
+                      className="h-6 w-6"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -407,10 +422,10 @@ export function Home() {
                     </svg>
                   </div>
                   <div className='flex-1'>
-                    <h3 className="text-lg font-bold text-primary mb-2">
+                    <h3 className="text-lg font-bold mb-2 text-primary">
                       {t(`home.advanced.cards.${key}.title`)}
                     </h3>
-                    <p className="text-sm text-[#dedede] leading-relaxed m-0">
+                    <p className="text-sm text-secondary leading-relaxed m-0">
                       {t(`home.advanced.cards.${key}.desc`)}
                     </p>
                   </div>
@@ -423,19 +438,21 @@ export function Home() {
 
       {showTierModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
+          style={{ background: 'rgba(0, 0, 0, 0.6)' }}
           onClick={() => setShowTierModal(false)}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-2xl"
+            className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-surface border border-soft rounded-2xl p-6 sm:p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setShowTierModal(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-white/5 transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:bg-surface-hover transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
               aria-label={t('productsServices.closeAria')}
             >
               <svg
@@ -450,7 +467,7 @@ export function Home() {
               </svg>
             </button>
             <div className="text-center mb-8 pr-10">
-              <h2 className="text-2xl md:text-3xl font-bold mb-2">
+              <h2 className="text-2xl md:text-3xl font-bold mb-2 tracking-tight">
                 <span className="gradient-text">{t('home.advanced.tierModal.title')}</span>
               </h2>
               <p className="text-sm text-secondary">
@@ -464,7 +481,7 @@ export function Home() {
               </div>
             )}
             {tiersError && (
-              <div className="py-12 text-center text-rose-400">{tiersError}</div>
+              <div className="py-12 text-center" style={{ color: '#ef4444' }}>{tiersError}</div>
             )}
 
             {!tiersLoading && !tiersError && memberships.length > 0 && (
@@ -474,20 +491,29 @@ export function Home() {
                   return (
                     <div
                       key={tier.id}
-                      className={`relative h-full bg-card border rounded-2xl p-5 hover:shadow-lg hover:shadow-accent-primary/10 transition-all duration-300 flex flex-col ${
-                        tier.popular
-                          ? 'border-accent-primary shadow-lg shadow-accent-primary/20'
-                          : 'border-border'
+                      className={`relative h-full card p-5 flex flex-col ${
+                        tier.popular ? 'shadow-glow' : ''
                       }`}
+                      style={
+                        tier.popular
+                          ? { borderColor: 'var(--accent-primary)' }
+                          : undefined
+                      }
                     >
                       {tier.popular && (
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-accent-primary text-[#000] text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
+                        <div
+                          className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap"
+                          style={{
+                            background: 'var(--solid-btn-bg)',
+                            color: 'var(--solid-btn-text)',
+                          }}
+                        >
                           {t('productsServices.cta.popular')}
                         </div>
                       )}
-                      <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
+                      <h3 className="text-lg font-bold mb-2 min-h-[1.75rem] text-primary">{text.name}</h3>
                       <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
-                        <span className="text-3xl font-bold text-accent-primary">
+                        <span className="text-3xl font-bold text-primary">
                           {tier.slug === 'scale'
                             ? t('productsServices.cards.scale.getDemoPrice')
                             : formatTierPrice(tier)}
@@ -508,10 +534,11 @@ export function Home() {
                         {text.features.slice(0, 5).map((feature, idx) => (
                           <li key={idx} className="flex items-start gap-2 text-xs text-primary">
                             <svg
-                              className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
+                              className="w-4 h-4 shrink-0 mt-0.5"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
+                              style={{ color: 'var(--accent-primary)' }}
                             >
                               <path
                                 strokeLinecap="round"
@@ -528,17 +555,9 @@ export function Home() {
                         <button
                           type="button"
                           onClick={() => handleTierCTA(tier)}
-                          className="w-full justify-center !py-3 text-sm btn-primary"
-                          style={
-                            tier.popular
-                              ? undefined
-                              : {
-                                  background: '#ffffff',
-                                  border: '1px solid #ffffff',
-                                  color: '#0a0a0f',
-                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-                                }
-                          }
+                          className={`w-full justify-center py-3 text-sm font-semibold rounded-lg transition-colors duration-200 ${
+                            tier.popular ? 'btn-solid' : 'btn-secondary'
+                          }`}
                         >
                           {ctaLabelFor(tier)}
                         </button>
