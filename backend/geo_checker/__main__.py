@@ -656,7 +656,7 @@ def check_content_accessibility(base_url):
     print("\n--- Content Accessibility ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.content_access.fetch_failed", "Could not fetch homepage")
         track_score("Content Accessibility", 0, 6)
         return
 
@@ -665,14 +665,14 @@ def check_content_accessibility(base_url):
     word_count = len(text.split())
 
     if word_count > 200:
-        print(f"  [{PASS}] Homepage has {word_count} words in initial HTML")
+        emit_check(PASS, "result.checks.content_access.words_ok", f"Homepage has {word_count} words in initial HTML", {"count": word_count})
         ca_score += 2
     elif word_count > 50:
-        print(f"  [{WARN}] Homepage has only {word_count} words in initial HTML — may rely too heavily on JavaScript rendering")
+        emit_check(WARN, "result.checks.content_access.words_low", f"Homepage has only {word_count} words in initial HTML — may rely too heavily on JavaScript rendering", {"count": word_count})
         fix("Ensure key content is rendered server-side (SSR/SSG) so AI crawlers can read it.\nIf using React/Vue/Angular, switch to Next.js/Nuxt.js/Angular Universal for server-side rendering.")
         ca_score += 1
     else:
-        print(f"  [{FAIL}] Homepage has only {word_count} words — likely JS-rendered, invisible to most AI crawlers")
+        emit_check(FAIL, "result.checks.content_access.words_js_only", f"Homepage has only {word_count} words — likely JS-rendered, invisible to most AI crawlers", {"count": word_count})
         fix("Your page content is likely rendered client-side via JavaScript. AI crawlers cannot execute JS.\nSolutions:\n  1. Use server-side rendering (SSR) — Next.js, Nuxt.js, etc.\n  2. Use static site generation (SSG) — pre-render pages at build time.\n  3. Add a pre-rendering service (e.g., Prerender.io) to serve static HTML to bots.")
 
     html_size = len(resp.text)
@@ -680,14 +680,14 @@ def check_content_accessibility(base_url):
     if html_size > 0:
         ratio = (text_size / html_size) * 100
         if ratio >= 15:
-            print(f"  [{PASS}] Content-to-HTML ratio: {ratio:.1f}% (good)")
+            emit_check(PASS, "result.checks.content_access.ratio_good", f"Content-to-HTML ratio: {ratio:.1f}% (good)", {"ratio": f"{ratio:.1f}"})
             ca_score += 2
         elif ratio >= 5:
-            print(f"  [{WARN}] Content-to-HTML ratio: {ratio:.1f}% — low ratio means lots of boilerplate vs. real content")
+            emit_check(WARN, "result.checks.content_access.ratio_low", f"Content-to-HTML ratio: {ratio:.1f}% — low ratio means lots of boilerplate vs. real content", {"ratio": f"{ratio:.1f}"})
             ca_score += 1
             fix("Reduce HTML bloat: minimize inline CSS/JS, remove unused markup, and move scripts to external files.\nEnsure the page body contains substantive, unique content — not just navigation and footers.")
         else:
-            print(f"  [{FAIL}] Content-to-HTML ratio: {ratio:.1f}% — very low, mostly boilerplate/code")
+            emit_check(FAIL, "result.checks.content_access.ratio_very_low", f"Content-to-HTML ratio: {ratio:.1f}% — very low, mostly boilerplate/code", {"ratio": f"{ratio:.1f}"})
             fix("Extremely low content ratio. Likely causes:\n  1. Heavy inline CSS/JS frameworks — externalize them.\n  2. Client-side rendering — switch to SSR/SSG.\n  3. Content hidden in JavaScript state — ensure HTML contains readable text.")
 
     headings = soup.find_all(re.compile(r"^h[1-6]$"))
@@ -695,13 +695,13 @@ def check_content_accessibility(base_url):
         h_tags = [h.name for h in headings]
         h_summary = {tag: h_tags.count(tag) for tag in sorted(set(h_tags))}
         summary_str = ", ".join(f"{k}: {v}" for k, v in h_summary.items())
-        print(f"  [{PASS}] Heading structure found ({summary_str})")
+        emit_check(PASS, "result.checks.content_access.headings_found", f"Heading structure found ({summary_str})", {"summary": summary_str})
         ca_score += 2
         if headings[0].name != "h1":
-            print(f"  [{WARN}] First heading is <{headings[0].name}>, not <h1> — clear hierarchy helps AI engines")
+            emit_check(WARN, "result.checks.content_access.first_heading_not_h1", f"First heading is <{headings[0].name}>, not <h1> — clear hierarchy helps AI engines", {"tag": headings[0].name})
             fix("Ensure the first heading on the page is an <h1> tag containing the primary topic.\nUse a logical hierarchy: h1 > h2 > h3 (don't skip levels).")
     else:
-        print(f"  [{WARN}] No heading tags found — structured headings help AI engines parse content")
+        emit_check(WARN, "result.checks.content_access.headings_missing", "No heading tags found — structured headings help AI engines parse content")
         fix("Add heading tags to structure your content:\n  <h1>Main Page Topic</h1>\n  <h2>Subtopic</h2>\n  <h3>Detail</h3>\nHeadings help AI engines understand content hierarchy and extract key topics.")
 
     track_score("Content Accessibility", ca_score, 6)
@@ -714,7 +714,7 @@ def check_ai_crawl_readiness(base_url):
     print("\n--- AI Crawl Readiness ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.crawl_ready.fetch_failed", "Could not fetch homepage")
         track_score("AI Crawl Readiness", 0, 8)
         return
 
@@ -728,44 +728,44 @@ def check_ai_crawl_readiness(base_url):
         is_likely_spa = any(ind in div_ids for ind in spa_indicators)
 
         if is_likely_spa and len(body_text.split()) < 100:
-            print(f"  [{FAIL}] Likely a client-side rendered SPA with minimal server-side content")
+            emit_check(FAIL, "result.checks.crawl_ready.spa_empty", "Likely a client-side rendered SPA with minimal server-side content")
             print(f"         AI crawlers cannot execute JavaScript — consider SSR/SSG")
             fix("Enable server-side rendering in your framework:\n  Next.js: use getServerSideProps() or generateStaticParams()\n  Nuxt.js: set ssr: true in nuxt.config\n  React: consider migrating to Next.js or Remix")
         elif is_likely_spa:
-            print(f"  [{PASS}] SPA framework detected but server-side content is present (SSR/SSG)")
+            emit_check(PASS, "result.checks.crawl_ready.spa_with_ssr", "SPA framework detected but server-side content is present (SSR/SSG)")
             acr_score += 2
         else:
-            print(f"  [{PASS}] Content is rendered server-side")
+            emit_check(PASS, "result.checks.crawl_ready.ssr_content", "Content is rendered server-side")
             acr_score += 2
 
     robots_meta = soup.find("meta", attrs={"name": "robots"})
     if robots_meta:
         robots_content = robots_meta.get("content", "").lower()
         if "noindex" in robots_content:
-            print(f"  [{FAIL}] Meta robots contains 'noindex' — page will be excluded from AI training data")
+            emit_check(FAIL, "result.checks.crawl_ready.meta_noindex", "Meta robots contains 'noindex' — page will be excluded from AI training data")
             fix("Remove 'noindex' from the meta robots tag if you want AI engines to index this page:\n  <meta name=\"robots\" content=\"index, follow\" />")
         if "nofollow" in robots_content:
-            print(f"  [{WARN}] Meta robots contains 'nofollow' — AI crawlers won't follow links on this page")
+            emit_check(WARN, "result.checks.crawl_ready.meta_nofollow", "Meta robots contains 'nofollow' — AI crawlers won't follow links on this page")
             fix("Remove 'nofollow' if you want AI crawlers to discover linked pages:\n  <meta name=\"robots\" content=\"index, follow\" />")
         if "noai" in robots_content or "noimageai" in robots_content:
-            print(f"  [{WARN}] Meta robots contains AI-specific opt-out directive: {robots_content}")
+            emit_check(WARN, "result.checks.crawl_ready.meta_noai", f"Meta robots contains AI-specific opt-out directive: {robots_content}", {"content": robots_content})
             fix("The 'noai' / 'noimageai' directive opts your content out of AI training.\nRemove it if you want AI engines to include your content in their responses.")
         if "noindex" not in robots_content and "noai" not in robots_content:
-            print(f"  [{PASS}] Meta robots allows indexing: {robots_content}")
+            emit_check(PASS, "result.checks.crawl_ready.meta_allows_index", f"Meta robots allows indexing: {robots_content}", {"content": robots_content})
             acr_score += 1
     else:
-        print(f"  [{PASS}] No restrictive meta robots tag found")
+        emit_check(PASS, "result.checks.crawl_ready.meta_no_restriction", "No restrictive meta robots tag found")
         acr_score += 1
 
     x_robots = resp.headers.get("X-Robots-Tag", "")
     if x_robots:
         if "noindex" in x_robots.lower() or "noai" in x_robots.lower():
-            print(f"  [{FAIL}] X-Robots-Tag header restricts AI: {x_robots}")
+            emit_check(FAIL, "result.checks.crawl_ready.xrobots_restrict", f"X-Robots-Tag header restricts AI: {x_robots}", {"header": x_robots})
             fix("Remove the restrictive X-Robots-Tag header from your server config.\nNginx: remove 'add_header X-Robots-Tag \"noindex\";'\nApache: remove 'Header set X-Robots-Tag \"noindex\"'")
         else:
-            print(f"  [{INFO}] X-Robots-Tag header present: {x_robots}")
+            emit_check(INFO, "result.checks.crawl_ready.xrobots_present", f"X-Robots-Tag header present: {x_robots}", {"header": x_robots})
     else:
-        print(f"  [{PASS}] No restrictive X-Robots-Tag header")
+        emit_check(PASS, "result.checks.crawl_ready.xrobots_clean", "No restrictive X-Robots-Tag header")
         acr_score += 1
 
     paywall_indicators = [
@@ -780,23 +780,23 @@ def check_ai_crawl_readiness(base_url):
             paywall_classes.append(indicator)
 
     if paywall_classes:
-        print(f"  [{WARN}] Possible gated content detected (classes/ids: {', '.join(paywall_classes)})")
+        emit_check(WARN, "result.checks.crawl_ready.paywall_detected", f"Possible gated content detected (classes/ids: {', '.join(paywall_classes)})", {"classes": ", ".join(paywall_classes)})
         print(f"         Gated content is invisible to AI crawlers")
         fix("AI crawlers cannot see content behind paywalls/login walls.\nConsider:\n  1. Providing a generous free preview or summary above the gate.\n  2. Using 'metered' access so bots see full content on first visit.\n  3. Adding structured data (JSON-LD) with key facts outside the gate.")
     else:
-        print(f"  [{PASS}] No paywall/login-wall indicators detected")
+        emit_check(PASS, "result.checks.crawl_ready.no_paywall", "No paywall/login-wall indicators detected")
         acr_score += 1
 
     semantic_tags = ["article", "main", "section", "nav", "aside", "header", "footer"]
     found_semantic = [tag for tag in semantic_tags if soup.find(tag)]
     if len(found_semantic) >= 3:
-        print(f"  [{PASS}] Good semantic HTML structure ({', '.join(found_semantic)})")
+        emit_check(PASS, "result.checks.crawl_ready.semantic_good", f"Good semantic HTML structure ({', '.join(found_semantic)})", {"tags": ", ".join(found_semantic)})
         acr_score += 1
     elif found_semantic:
-        print(f"  [{WARN}] Limited semantic HTML ({', '.join(found_semantic)}) — more semantic tags help AI parse content")
+        emit_check(WARN, "result.checks.crawl_ready.semantic_limited", f"Limited semantic HTML ({', '.join(found_semantic)}) — more semantic tags help AI parse content", {"tags": ", ".join(found_semantic)})
         fix("Replace generic <div> containers with semantic HTML5 tags:\n  <header> for site header/nav\n  <main> for primary content\n  <article> for self-contained content\n  <section> for thematic groupings\n  <aside> for sidebar/related content\n  <footer> for footer")
     else:
-        print(f"  [{FAIL}] No semantic HTML tags found — AI crawlers rely on semantic structure")
+        emit_check(FAIL, "result.checks.crawl_ready.semantic_missing", "No semantic HTML tags found — AI crawlers rely on semantic structure")
         fix("Your page uses only <div> tags. Replace them with semantic HTML5 elements:\n  <header>, <nav>, <main>, <article>, <section>, <aside>, <footer>\nThis helps AI engines understand the role of each content block.")
 
     images = soup.find_all("img")
@@ -805,16 +805,16 @@ def check_ai_crawl_readiness(base_url):
         total = len(images)
         pct = (with_alt / total * 100) if total > 0 else 0
         if pct >= 80:
-            print(f"  [{PASS}] {with_alt}/{total} images have alt text ({pct:.0f}%)")
+            emit_check(PASS, "result.checks.crawl_ready.alt_good", f"{with_alt}/{total} images have alt text ({pct:.0f}%)", {"with_alt": with_alt, "total": total, "pct": f"{pct:.0f}"})
             acr_score += 1
         elif pct >= 50:
-            print(f"  [{WARN}] {with_alt}/{total} images have alt text ({pct:.0f}%) — aim for >80%")
+            emit_check(WARN, "result.checks.crawl_ready.alt_medium", f"{with_alt}/{total} images have alt text ({pct:.0f}%) — aim for >80%", {"with_alt": with_alt, "total": total, "pct": f"{pct:.0f}"})
             fix("Add descriptive alt text to all <img> tags:\n  <img src=\"photo.jpg\" alt=\"Description of what the image shows\" />\nGood alt text is specific: 'Team meeting in conference room' not 'image1'.")
         else:
-            print(f"  [{FAIL}] Only {with_alt}/{total} images have alt text ({pct:.0f}%) — AI crawlers need alt text")
+            emit_check(FAIL, "result.checks.crawl_ready.alt_poor", f"Only {with_alt}/{total} images have alt text ({pct:.0f}%) — AI crawlers need alt text", {"with_alt": with_alt, "total": total, "pct": f"{pct:.0f}"})
             fix("Most images are missing alt text. Add descriptive alt attributes to every <img>:\n  <img src=\"photo.jpg\" alt=\"Descriptive text about the image content\" />\nFor decorative images, use alt=\"\" (empty but present).")
     else:
-        print(f"  [{INFO}] No images found on homepage")
+        emit_check(INFO, "result.checks.crawl_ready.no_images", "No images found on homepage")
 
     links = soup.find_all("a", href=True)
     parsed_base = urlparse(base_url)
@@ -823,25 +823,25 @@ def check_ai_crawl_readiness(base_url):
         if urlparse(urljoin(base_url, l["href"])).netloc == parsed_base.netloc
     ]
     if len(internal_links) >= 10:
-        print(f"  [{PASS}] {len(internal_links)} internal links — good for AI crawl discovery")
+        emit_check(PASS, "result.checks.crawl_ready.internal_links_good", f"{len(internal_links)} internal links — good for AI crawl discovery", {"count": len(internal_links)})
     elif len(internal_links) >= 3:
-        print(f"  [{WARN}] Only {len(internal_links)} internal links — more internal links help AI engines discover content")
+        emit_check(WARN, "result.checks.crawl_ready.internal_links_few", f"Only {len(internal_links)} internal links — more internal links help AI engines discover content", {"count": len(internal_links)})
         fix("Add more internal links to help AI crawlers discover your content.\nInclude links to key pages in your navigation, footer, and within content body.\nUse descriptive anchor text: 'Read our pricing guide' not 'click here'.")
     else:
-        print(f"  [{FAIL}] Very few internal links ({len(internal_links)}) — AI crawlers rely on links to find content")
+        emit_check(FAIL, "result.checks.crawl_ready.internal_links_none", f"Very few internal links ({len(internal_links)}) — AI crawlers rely on links to find content", {"count": len(internal_links)})
         fix("Your homepage has very few internal links. AI crawlers use links to discover pages.\nAdd:\n  1. A navigation menu linking to key sections\n  2. Featured content links in the body\n  3. A footer with links to important pages\n  4. Contextual links within content")
 
     start = time.time()
     fetch(urljoin(base_url, "/?_geo_timing_check"), timeout=10)
     elapsed = time.time() - start
     if elapsed < 1:
-        print(f"  [{PASS}] Response time: {elapsed:.2f}s")
+        emit_check(PASS, "result.checks.crawl_ready.response_fast", f"Response time: {elapsed:.2f}s", {"seconds": f"{elapsed:.2f}"})
         acr_score += 1
     elif elapsed < 3:
-        print(f"  [{WARN}] Response time: {elapsed:.2f}s — slow responses may cause AI crawlers to skip pages")
+        emit_check(WARN, "result.checks.crawl_ready.response_slow", f"Response time: {elapsed:.2f}s — slow responses may cause AI crawlers to skip pages", {"seconds": f"{elapsed:.2f}"})
         fix("Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN (Cloudflare, Fastly, CloudFront)\n  4. Enable gzip/brotli compression")
     else:
-        print(f"  [{FAIL}] Response time: {elapsed:.2f}s — too slow for reliable AI crawling")
+        emit_check(FAIL, "result.checks.crawl_ready.response_timeout", f"Response time: {elapsed:.2f}s — too slow for reliable AI crawling", {"seconds": f"{elapsed:.2f}"})
         fix("Response time is critically slow. AI crawlers may time out.\nImmediate actions:\n  1. Add a CDN in front of your origin server\n  2. Enable page caching at the server level\n  3. Profile your server-side code for bottlenecks\n  4. Consider static site generation for content pages")
 
     track_score("AI Crawl Readiness", acr_score, 8)
