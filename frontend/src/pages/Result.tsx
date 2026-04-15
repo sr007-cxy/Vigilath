@@ -267,8 +267,9 @@ export function Result() {
       setRerunError(t('home.error.empty'));
       return;
     }
+    const normalized = trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
     try {
-      new URL(trimmed);
+      new URL(normalized);
     } catch {
       setRerunError(t('home.error.invalid'));
       return;
@@ -284,14 +285,14 @@ export function Result() {
         setShowPaymentModal(true);
         return;
       }
-      navigate(`/advanced/${rerunMode}`, { state: { url: trimmed } });
+      navigate(`/advanced/${rerunMode}`, { state: { url: normalized } });
       return;
     }
 
     // Default mode → same call the homepage makes, then replace this page.
     setRerunLoading(true);
     geoApi
-      .checkGeo({ url: trimmed })
+      .checkGeo({ url: normalized })
       .then((freshResult) => {
         navigate('/result', { state: { result: freshResult }, replace: true });
       })

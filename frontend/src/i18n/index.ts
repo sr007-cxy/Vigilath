@@ -20,7 +20,9 @@ if (!i18n.isInitialized) {
             "langSwitch": "中文",
             "login": "Log in",
             "register": "Sign up",
-            "signedInAs": "Signed in as"
+            "signedInAs": "Signed in as",
+            "account": "Account",
+            "logout": "Sign out"
           },
           "common": {
             "error": "Error",
@@ -1016,7 +1018,9 @@ if (!i18n.isInitialized) {
             "contact": "お問い合わせ",
             "langSwitch": "中文",
             "login": "ログイン",
-            "signedInAs": "ログイン中:"
+            "signedInAs": "ログイン中:",
+            "account": "アカウント",
+            "logout": "ログアウト"
           },
           "common": {
             "error": "エラー",
@@ -1108,7 +1112,9 @@ if (!i18n.isInitialized) {
             "contact": "연락처",
             "langSwitch": "中文",
             "login": "로그인",
-            "signedInAs": "로그인 중:"
+            "signedInAs": "로그인 중:",
+            "account": "계정",
+            "logout": "로그아웃"
           },
           "common": {
             "error": "오류",
@@ -1200,7 +1206,9 @@ if (!i18n.isInitialized) {
             "contact": "Kontakt",
             "langSwitch": "中文",
             "login": "Anmelden",
-            "signedInAs": "Angemeldet als"
+            "signedInAs": "Angemeldet als",
+            "account": "Konto",
+            "logout": "Abmelden"
           },
           "common": {
             "error": "Fehler",
@@ -1292,7 +1300,9 @@ if (!i18n.isInitialized) {
             "contact": "Contact",
             "langSwitch": "中文",
             "login": "Connexion",
-            "signedInAs": "Connecté en tant que"
+            "signedInAs": "Connecté en tant que",
+            "account": "Compte",
+            "logout": "Déconnexion"
           },
           "common": {
             "error": "Erreur",
@@ -1384,7 +1394,9 @@ if (!i18n.isInitialized) {
             "contact": "Contacto",
             "langSwitch": "中文",
             "login": "Iniciar sesión",
-            "signedInAs": "Sesión iniciada como"
+            "signedInAs": "Sesión iniciada como",
+            "account": "Cuenta",
+            "logout": "Cerrar sesión"
           },
           "common": {
             "error": "Error",
@@ -1471,7 +1483,9 @@ if (!i18n.isInitialized) {
             "contact": "联系我们",
             "langSwitch": "EN",
             "login": "登录",
-            "signedInAs": "已登录为"
+            "signedInAs": "已登录为",
+            "account": "账户中心",
+            "logout": "退出登录"
           },
           "common": {
             "error": "错误",
