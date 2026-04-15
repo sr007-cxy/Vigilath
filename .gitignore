@@ -103,6 +103,7 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
-backend/data/geo_checker.db.bak
-backend/data/geo_checker.db.broken.202604141506
-backend/data/geo_checker.db.predeploy.202604141447
+geo_checker.db*
+
+# Temp image scratch dirs
+temp_images/
