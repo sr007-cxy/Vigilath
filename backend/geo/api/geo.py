@@ -61,6 +61,16 @@ def _locked_for(membership: Membership) -> List[str]:
     return [c for c in ALL_CATEGORIES if c not in allowed_set]
 
 
+# Fix recommendations are a paid perk: only starter / growth / scale tiers see
+# them. Lower tiers (free, pro) get include_fix forced to False so the fix text
+# never leaves the backend — frontend gating alone would be bypassable.
+_FIX_ALLOWED_TIERS = frozenset({"starter", "growth", "scale"})
+
+
+def _fix_allowed(membership: Membership) -> bool:
+    return membership.slug in _FIX_ALLOWED_TIERS
+
+
 ANON_COOKIE_NAME = "geo_anon_id"
 # 1 year. Long enough that the monthly bucket is the limiting factor, not the
 # cookie lifetime; short enough that it eventually rotates if a browser stays
@@ -193,7 +203,7 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
-        body.include_fix,
+        False,  # anonymous callers are always free tier — no fix text
         None,
         FREE_CHECK_CATEGORIES,
     )
@@ -227,10 +237,11 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
         check_and_increment_anonymous_quota(client_id)
 
     allowed = membership.allowed_check_categories  # None = all 23
+    effective_include_fix = body.include_fix and _fix_allowed(membership)
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
-        body.include_fix,
+        effective_include_fix,
         None,
         allowed,
     )
@@ -256,7 +267,7 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
-        body.include_fix,
+        False,  # legacy anonymous alias — free tier, no fix text
         None,
         FREE_CHECK_CATEGORIES,
     )
@@ -305,6 +316,10 @@ async def test_geo_stream(
 
     allowed = membership.allowed_check_categories  # None = all 23
     locked = _locked_for(membership)
+    # Fix text is a paid perk — force False for any tier below starter so
+    # lower tiers never see fix data over the wire, regardless of what the
+    # client passed.
+    effective_include_fix = include_fix and _fix_allowed(membership)
 
     task_id = str(uuid.uuid4())
     print(f"Created task ID: {task_id}")
@@ -313,7 +328,7 @@ async def test_geo_stream(
         "status": "pending",
         "progress": 0,
         "url": sanitized_url,
-        "include_fix": include_fix,
+        "include_fix": effective_include_fix,
         "tier": membership.slug,
     }
     print(f"Initialized task: {tasks[task_id]}")
@@ -324,7 +339,7 @@ async def test_geo_stream(
         geo_check_task(
             task_id,
             sanitized_url,
-            include_fix,
+            effective_include_fix,
             allowed_categories=allowed,
             tier=membership.slug,
             locked_categories=locked,
@@ -400,7 +415,7 @@ async def test_geo_stream(
             else:
                 print(f"Task {task_id} no longer exists")
                 # Send completed status if task was removed
-                yield f"event: status\ndata: {{\"status\": \"completed\", \"progress\": 100, \"url\": \"{sanitized_url}\", \"include_fix\": {include_fix}}}\n\n"
+                yield f"event: status\ndata: {{\"status\": \"completed\", \"progress\": 100, \"url\": \"{sanitized_url}\", \"include_fix\": {effective_include_fix}}}\n\n"
         except asyncio.CancelledError:
             print(f"Event generator for task {task_id} was cancelled")
             # Clean up task if it still exists
@@ -420,7 +435,7 @@ async def test_geo_stream(
                 del tasks[task_id]
             else:
                 # Send error status if task was removed
-                yield f"event: status\ndata: {{\"status\": \"failed\", \"error\": \"{str(e)}\", \"url\": \"{sanitized_url}\", \"include_fix\": {include_fix}}}\n\n"
+                yield f"event: status\ndata: {{\"status\": \"failed\", \"error\": \"{str(e)}\", \"url\": \"{sanitized_url}\", \"include_fix\": {effective_include_fix}}}\n\n"
         finally:
             print(f"Event generator for task {task_id} completed")
 

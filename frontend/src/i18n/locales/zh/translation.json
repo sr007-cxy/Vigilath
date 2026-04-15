@@ -505,7 +505,6 @@
       "rows": {
         "price": "价格",
         "type": "形态",
-        "loginRequired": "是否需要注册登录",
         "checkItems": "检测大项数量",
         "subCheckItems": "子检测点数量",
         "monthlyChecks": "每月检测次数",
@@ -528,7 +527,6 @@
         "free": {
           "price": "¥0/月",
           "type": "自助 SaaS",
-          "loginRequired": "❌ 无需",
           "checkItems": "5 项",
           "subCheckItems": "17 个",
           "monthlyChecks": "3 次",
@@ -550,7 +548,6 @@
         "detector": {
           "price": "¥19.9/月",
           "type": "自助 SaaS",
-          "loginRequired": "✅ 需登录",
           "checkItems": "23 项",
           "subCheckItems": "全部子项",
           "monthlyChecks": "10 次",
@@ -572,11 +569,10 @@
         "starter": {
           "price": "$2K–3K",
           "type": "人工服务",
-          "loginRequired": "✅ 需登录",
           "checkItems": "23 项",
           "subCheckItems": "全部子项",
           "monthlyChecks": "50 次",
-          "optimizationDetails": "✅ 人工交付",
+          "optimizationDetails": "✅",
           "prioritySorting": "✅",
           "fullReport": "✅",
           "history": "✅",
@@ -594,11 +590,10 @@
         "growth": {
           "price": "$4K–7K",
           "type": "人工服务",
-          "loginRequired": "✅ 需登录",
           "checkItems": "23 项",
           "subCheckItems": "全部子项",
           "monthlyChecks": "200 次",
-          "optimizationDetails": "✅ 人工交付",
+          "optimizationDetails": "✅",
           "prioritySorting": "✅",
           "fullReport": "✅",
           "history": "✅",
@@ -616,11 +611,10 @@
         "scale": {
           "price": "$8K–12K",
           "type": "人工服务",
-          "loginRequired": "✅ 需登录",
           "checkItems": "23 项",
           "subCheckItems": "全部子项",
           "monthlyChecks": "无限",
-          "optimizationDetails": "✅ 人工交付",
+          "optimizationDetails": "✅",
           "prioritySorting": "✅",
           "fullReport": "✅",
           "history": "✅",

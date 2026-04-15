@@ -145,6 +145,10 @@ export function Result() {
 
   const effectiveTier = result?.tier || 'free';
   const effectiveRank = TIER_RANK[effectiveTier] ?? 0;
+  // Fix recommendations are a starter+ perk. Rank 2 = starter; growth/scale
+  // are higher. Backend also force-filters fix text for lower tiers, so this
+  // flag is purely a UI hint — data won't be present for non-eligible tiers.
+  const canShowFix = effectiveRank >= TIER_RANK.starter;
   const isModeLocked = (mode: AdvancedMode): boolean => {
     const entry = ADVANCED_MODES.find((m) => m.key === mode);
     if (!entry) return true;
@@ -683,18 +687,33 @@ export function Result() {
               if (activeStat?.isTabLocked) return null;
               const renderRow = (check: CheckResult, rowKey: string) => {
                 const theme = statusTheme(check.status);
+                const fixText = check.fix?.trim();
+                const showFix = canShowFix && !!fixText && check.status !== 'PASS';
                 return (
                   <div
                     key={rowKey}
-                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-tertiary/20 transition-colors"
+                    className="px-4 py-2.5 hover:bg-tertiary/20 transition-colors"
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
-                      {check.status}
-                    </span>
-                    <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
-                      {check.message}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
+                        {check.status}
+                      </span>
+                      <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
+                        {check.message}
+                      </p>
+                    </div>
+                    {showFix && (
+                      <div className="mt-1.5 ml-[4.25rem] flex items-start gap-1.5 text-[11px] text-secondary leading-snug">
+                        <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
+                        <span>
+                          <span className="font-semibold text-accent-primary mr-1">
+                            {t('result.fix')}
+                          </span>
+                          {fixText}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               };
@@ -707,6 +726,13 @@ export function Result() {
                 totalCount: number,
               ) => {
                 const lockedInCat = totalCount - visibleCount;
+                // For the handful of categories that render as a rich visual
+                // (robots.txt, Meta Tags, Platform grids), the visual itself
+                // doesn't surface check.fix. Collect fix text separately so
+                // starter+ tiers still see actionable recommendations.
+                const visualFixes = checksForCategory
+                  .filter((c) => c.status !== 'PASS' && c.fix && c.fix.trim())
+                  .map((c) => ({ status: c.status, text: (c.fix as string).trim() }));
                 // Try the rich visual first. resolveCategoryVisual is a plain
                 // function — it returns a React element or null. If null, we
                 // fall back to the plain row list so every category always
@@ -743,6 +769,27 @@ export function Result() {
                     ) : (
                       <div className="bg-card border border-[#3f4143] border-border rounded-xl overflow-hidden">
                         <div className="divide-y divide-border">{rows}</div>
+                      </div>
+                    )}
+                    {visual && canShowFix && visualFixes.length > 0 && (
+                      <div className="mt-2 bg-card border border-[#3f4143] border-border rounded-xl p-3 space-y-1.5">
+                        {visualFixes.map((f, idx) => {
+                          const theme = statusTheme(f.status);
+                          return (
+                            <div key={idx} className="flex items-start gap-2 text-[11px] text-secondary leading-snug">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
+                                {f.status}
+                              </span>
+                              <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
+                              <span>
+                                <span className="font-semibold text-accent-primary mr-1">
+                                  {t('result.fix')}
+                                </span>
+                                {f.text}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

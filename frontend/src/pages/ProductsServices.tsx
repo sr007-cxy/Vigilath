@@ -291,19 +291,10 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.type')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.type')}</td>
                       </tr>
+
                       {/* 权益项1 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">1</td>
-                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.loginRequired')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.loginRequired')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.loginRequired')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.loginRequired')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.loginRequired')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.loginRequired')}</td>
-                      </tr>
-                      {/* 权益项2 */}
-                      <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">2</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.checkItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.checkItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.checkItems')}</td>
@@ -311,9 +302,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.checkItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.checkItems')}</td>
                       </tr>
-                      {/* 权益项3 */}
+                      {/* 权益项2 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">3</td>
+                        <td className="px-4 py-3 text-sm text-secondary">2</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.subCheckItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.subCheckItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.subCheckItems')}</td>
@@ -321,9 +312,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.subCheckItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.subCheckItems')}</td>
                       </tr>
-                      {/* 权益项4 */}
+                      {/* 权益项3 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">4</td>
+                        <td className="px-4 py-3 text-sm text-secondary">3</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.monthlyChecks')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.monthlyChecks')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.monthlyChecks')}</td>
@@ -331,19 +322,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.monthlyChecks')}</td>
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.monthlyChecks')}</td>
                       </tr>
-                      {/* 权益项5 */}
+                      {/* 权益项4 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">5</td>
-                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.optimizationDetails')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.optimizationDetails')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.optimizationDetails')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.optimizationDetails')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.optimizationDetails')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.optimizationDetails')}</td>
-                      </tr>
-                      {/* 权益项6 */}
-                      <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">6</td>
+                        <td className="px-4 py-3 text-sm text-secondary">4</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.prioritySorting')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.prioritySorting')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.prioritySorting')}</td>
@@ -351,9 +332,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.prioritySorting')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.prioritySorting')}</td>
                       </tr>
-                      {/* 权益项7 */}
+                      {/* 权益项5 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">7</td>
+                        <td className="px-4 py-3 text-sm text-secondary">5</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.fullReport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.fullReport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.fullReport')}</td>
@@ -361,19 +342,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.fullReport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.fullReport')}</td>
                       </tr>
-                      {/* 权益项8 */}
+                      {/* 权益项6 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">8</td>
-                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.history')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.history')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.history')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.history')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.history')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.history')}</td>
-                      </tr>
-                      {/* 权益项9 */}
-                      <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">9</td>
+                        <td className="px-4 py-3 text-sm text-secondary">6</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.support')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.support')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.support')}</td>
@@ -381,9 +352,29 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.support')}</td>
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.support')}</td>
                       </tr>
-                      {/* 权益项10 */}
+                      {/* 权益项7 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">10</td>
+                        <td className="px-4 py-3 text-sm text-secondary">7</td>
+                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.history')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.history')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.history')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.history')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.history')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.history')}</td>
+                      </tr>
+                      {/* 权益项8 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">8</td>
+                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.optimizationDetails')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.optimizationDetails')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.optimizationDetails')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.optimizationDetails')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.optimizationDetails')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.optimizationDetails')}</td>
+                      </tr>
+                      {/* 权益项9 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">9</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.basicGeo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.basicGeo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.basicGeo')}</td>
@@ -391,9 +382,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.basicGeo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.basicGeo')}</td>
                       </tr>
-                      {/* 权益项11 */}
+                      {/* 权益项10 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">11</td>
+                        <td className="px-4 py-3 text-sm text-secondary">10</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.llmStandards')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.llmStandards')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.llmStandards')}</td>
@@ -401,9 +392,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.llmStandards')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.llmStandards')}</td>
                       </tr>
-                      {/* 权益项12 */}
+                      {/* 权益项11 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">12</td>
+                        <td className="px-4 py-3 text-sm text-secondary">11</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.websiteCopy')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.websiteCopy')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.websiteCopy')}</td>
@@ -411,9 +402,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.websiteCopy')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.websiteCopy')}</td>
                       </tr>
-                      {/* 权益项13 */}
+                      {/* 权益项12 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">13</td>
+                        <td className="px-4 py-3 text-sm text-secondary">12</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.productInfo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.productInfo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.productInfo')}</td>
@@ -421,9 +412,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.productInfo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.productInfo')}</td>
                       </tr>
-                      {/* 权益项14 */}
+                      {/* 权益项13 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">14</td>
+                        <td className="px-4 py-3 text-sm text-secondary">13</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.maintenance')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.maintenance')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.maintenance')}</td>
@@ -431,9 +422,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.maintenance')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.maintenance')}</td>
                       </tr>
-                      {/* 权益项15 */}
+                      {/* 权益项14 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">15</td>
+                        <td className="px-4 py-3 text-sm text-secondary">14</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.seoPlacement')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.seoPlacement')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.seoPlacement')}</td>
@@ -441,9 +432,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.seoPlacement')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.seoPlacement')}</td>
                       </tr>
-                      {/* 权益项16 */}
+                      {/* 权益项15 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">16</td>
+                        <td className="px-4 py-3 text-sm text-secondary">15</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.reputation')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.reputation')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.reputation')}</td>
@@ -451,9 +442,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.reputation')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.reputation')}</td>
                       </tr>
-                      {/* 权益项17 */}
+                      {/* 权益项16 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">17</td>
+                        <td className="px-4 py-3 text-sm text-secondary">16</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.prSupport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.prSupport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.prSupport')}</td>
@@ -461,9 +452,9 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.prSupport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.prSupport')}</td>
                       </tr>
-                      {/* 权益项18 */}
+                      {/* 权益项17 */}
                       <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">18</td>
+                        <td className="px-4 py-3 text-sm text-secondary">17</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.serviceCycle')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.serviceCycle')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.serviceCycle')}</td>

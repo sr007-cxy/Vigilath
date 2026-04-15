@@ -5,7 +5,7 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite:///./geo_checker.db"
+    DATABASE_URL: str = "sqlite:///./data/geo_checker.db"
     GOOGLE_CLIENT_ID: str = "test-google-client-id"
     FACEBOOK_APP_ID: str = "test-facebook-app-id"
     FACEBOOK_APP_SECRET: str = "test-facebook-app-secret"

@@ -57,7 +57,7 @@ cd backend
 python -m migrations.001_membership_v2
 ```
 
-脚本是幂等的：`ALTER TABLE ADD COLUMN` 会跳过已存在的列，`CREATE TABLE` 会跳过已存在的表。**但重新种子 `memberships` 的步骤会重置**——生产环境上线前建议先 `sqlite3 geo_checker.db .dump > backup.sql` 再执行。
+脚本是幂等的：`ALTER TABLE ADD COLUMN` 会跳过已存在的列，`CREATE TABLE` 会跳过已存在的表。**但重新种子 `memberships` 的步骤会重置**——生产环境上线前建议先 `sqlite3 data/geo_checker.db .dump > backup.sql` 再执行。
 
 **新增的 API 端点**：
 

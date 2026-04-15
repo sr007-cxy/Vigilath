@@ -51,6 +51,15 @@ const STATUS_COLOR: Record<string, { bg: string; fg: string; key: 'pass' | 'warn
 
 const STATUS_RANK: Record<string, number> = { FAIL: 0, WARN: 1, INFO: 2, PASS: 3 };
 
+// Fix recommendations in the PDF mirror the on-screen gating: only starter /
+// growth / scale tiers get the "Top Fixes" section and the per-item fix text.
+// Lower tiers (free, pro) get a fix-free report. Backend also strips fix text
+// for those tiers, so this is belt-and-braces — if a fix field slips through
+// we still don't render it.
+const FIX_ALLOWED_TIERS: ReadonlySet<string> = new Set(['starter', 'growth', 'scale']);
+const canIncludeFix = (result: GeoTestResult): boolean =>
+  FIX_ALLOWED_TIERS.has((result.tier || '').toLowerCase());
+
 const escapeHtml = (s: string): string =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -209,7 +218,12 @@ const buildTabHeadingBlock = (tabKey: string, t: TFunction): string =>
   `<div style="font-size:14px;font-weight:800;color:#0ea5e9;border-bottom:2px solid #0ea5e9;padding-bottom:5px;">${escapeHtml(t(`result.categories.${tabKey}`))}</div>` +
   blockWrapClose;
 
-const buildCategoryBlock = (cat: string, checks: CheckResult[], t: TFunction): string => {
+const buildCategoryBlock = (
+  cat: string,
+  checks: CheckResult[],
+  t: TFunction,
+  showFix: boolean,
+): string => {
   const catLabel = t(`result.categoryLabels.${cat}`, { defaultValue: cat });
   const catDesc = t(`result.categoryDescriptions.${cat}`, { defaultValue: '' });
   const itemsHtml = checks
@@ -221,7 +235,7 @@ const buildCategoryBlock = (cat: string, checks: CheckResult[], t: TFunction): s
         `<div style="font-size:12px;font-weight:600;color:#0f172a;flex:1;">${escapeHtml(c.message || '')}</div>` +
         `<div>${statusBadge(c.status, t)}</div>` +
         `</div>` +
-        (c.status !== 'PASS'
+        (showFix && c.status !== 'PASS'
           ? `<div style="font-size:11px;color:#475569;line-height:1.6;"><span style="font-weight:600;color:#0f172a;">${escapeHtml(t('result.pdfReport.fixLabel'))}:</span> ${escapeHtml(fix)}</div>`
           : '') +
         `</div>`
@@ -253,6 +267,7 @@ const buildAppendixBlock = (t: TFunction): string =>
 const buildAllBlocks = (args: ExportArgs): string[] => {
   const { result, t, categoryGroups, checksByCategory, otherCategories } = args;
   const lockedSet = new Set(result.locked_categories || []);
+  const showFix = canIncludeFix(result);
   const blocks: string[] = [];
 
   blocks.push(buildCoverBlock(args));
@@ -262,25 +277,30 @@ const buildAllBlocks = (args: ExportArgs): string[] => {
   blocks.push(buildSectionHeadingBlock(t('result.pdfReport.groupSection'), '#0ea5e9'));
   blocks.push(buildGroupTableBlock(args));
 
-  const failsAndWarns = (result.checks || [])
-    .filter((c) => c.status === 'FAIL' || c.status === 'WARN')
-    .sort((a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9))
-    .slice(0, 12);
+  // Top-Fixes / recommendations block is a paid perk — omit entirely for
+  // tiers that don't see fix recommendations, so the PDF layout matches the
+  // on-screen experience.
+  if (showFix) {
+    const failsAndWarns = (result.checks || [])
+      .filter((c) => c.status === 'FAIL' || c.status === 'WARN')
+      .sort((a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9))
+      .slice(0, 12);
 
-  blocks.push(buildSectionHeadingBlock(t('result.pdfReport.recommendationsSection'), '#ec4899'));
-  blocks.push(
-    blockWrapOpen('padding:2px 0 4px 0;') +
-      `<div style="font-size:11px;color:#475569;">${escapeHtml(t('result.pdfReport.topFixesIntro'))}</div>` +
-      blockWrapClose,
-  );
-  if (failsAndWarns.length === 0) {
+    blocks.push(buildSectionHeadingBlock(t('result.pdfReport.recommendationsSection'), '#ec4899'));
     blocks.push(
-      blockWrapOpen('padding:4px 0;') +
-        `<div style="font-size:11.5px;color:#475569;padding:12px;background:#f1f5f9;border-radius:8px;">${escapeHtml(t('result.pdfReport.noFailItems'))}</div>` +
+      blockWrapOpen('padding:2px 0 4px 0;') +
+        `<div style="font-size:11px;color:#475569;">${escapeHtml(t('result.pdfReport.topFixesIntro'))}</div>` +
         blockWrapClose,
     );
-  } else {
-    failsAndWarns.forEach((c, idx) => blocks.push(buildTopFixBlock(c, idx, t)));
+    if (failsAndWarns.length === 0) {
+      blocks.push(
+        blockWrapOpen('padding:4px 0;') +
+          `<div style="font-size:11.5px;color:#475569;padding:12px;background:#f1f5f9;border-radius:8px;">${escapeHtml(t('result.pdfReport.noFailItems'))}</div>` +
+          blockWrapClose,
+      );
+    } else {
+      failsAndWarns.forEach((c, idx) => blocks.push(buildTopFixBlock(c, idx, t)));
+    }
   }
 
   blocks.push(buildSectionHeadingBlock(t('result.pdfReport.detailSection'), '#8b5cf6'));
@@ -291,7 +311,7 @@ const buildAllBlocks = (args: ExportArgs): string[] => {
     if (visibleCats.length === 0) continue;
     blocks.push(buildTabHeadingBlock(tab, t));
     for (const cat of visibleCats) {
-      blocks.push(buildCategoryBlock(cat, checksByCategory[cat] || [], t));
+      blocks.push(buildCategoryBlock(cat, checksByCategory[cat] || [], t, showFix));
     }
   }
 

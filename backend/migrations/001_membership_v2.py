@@ -41,7 +41,7 @@ def alter_memberships_table_raw():
         print(f"[migrate] non-sqlite URL detected ({db_url}) — skipping raw ALTER")
         return
 
-    # sqlite:///./geo_checker.db → ./geo_checker.db (relative to backend/)
+    # sqlite:///./data/geo_checker.db → ./data/geo_checker.db (relative to backend/)
     db_path_str = db_url.replace("sqlite:///", "", 1)
     db_path = Path(db_path_str)
     if not db_path.is_absolute():
