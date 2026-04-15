@@ -3,13 +3,214 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GEO</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+  <title>Vigilath — GEO Readiness Checker for the AI Search Era</title>
+  <meta name="description" content="Vigilath audits any website for Generative Engine Optimization (GEO) readiness. Get a 0–100 AI Visibility Score, a 23-category breakdown, and an actionable fix list for ChatGPT, Perplexity, Claude, and Google AI Overviews." />
+  <meta name="keywords" content="GEO, Generative Engine Optimization, AI SEO, LLM SEO, ChatGPT visibility, Perplexity SEO, AI search, llms.txt, answer engine optimization" />
+  <meta name="author" content="Vigilath" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="theme-color" content="#0ea5e9" />
+
+  <link rel="canonical" href="https://www.vigilath.com/" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="alternate" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Vigilath" />
+  <meta property="og:title" content="Vigilath — GEO Readiness Checker for the AI Search Era" />
+  <meta property="og:description" content="Audit any website for Generative Engine Optimization readiness. AI Visibility Score, 23-category breakdown, and actionable fixes for ChatGPT, Perplexity, Claude, and Google AI Overviews." />
+  <meta property="og:url" content="https://www.vigilath.com/" />
+  <meta property="og:image" content="https://www.vigilath.com/favicon.svg" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="zh_CN" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@vigilath" />
+  <meta name="twitter:creator" content="@vigilath" />
+  <meta name="twitter:title" content="Vigilath — GEO Readiness Checker for the AI Search Era" />
+  <meta name="twitter:description" content="Audit any website for AI visibility. ChatGPT, Perplexity, Claude, Google AI Overviews — see where you stand." />
+  <meta name="twitter:image" content="https://www.vigilath.com/favicon.svg" />
+
+  <!-- Alternate language -->
+  <link rel="alternate" hreflang="en" href="https://www.vigilath.com/" />
+  <link rel="alternate" hreflang="zh" href="https://www.vigilath.com/" />
+  <link rel="alternate" hreflang="x-default" href="https://www.vigilath.com/" />
+
+  <!-- Structured data: Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Vigilath",
+    "alternateName": "Vigilath GEO Readiness Checker",
+    "url": "https://www.vigilath.com/",
+    "logo": "https://www.vigilath.com/favicon.svg",
+    "description": "Vigilath is a GEO (Generative Engine Optimization) readiness checker that audits any website across 23 categories to measure its visibility to ChatGPT, Perplexity, Claude, and Google AI Overviews.",
+    "sameAs": [
+      "https://x.com/vigilath"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "contact@vigilath.com",
+      "contactType": "customer support",
+      "availableLanguage": ["English", "Chinese"]
+    }
+  }
+  </script>
+
+  <!-- Structured data: WebSite with SearchAction -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Vigilath",
+    "url": "https://www.vigilath.com/",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://www.vigilath.com/checker?url={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is Generative Engine Optimization (GEO)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "GEO is the practice of making a website discoverable and quotable by AI answer engines like ChatGPT, Perplexity, Claude, and Google AI Overviews. Unlike traditional SEO, GEO optimizes for both AI crawl access (explicit robots.txt rules for GPTBot, ClaudeBot, PerplexityBot) and for content formats that LLMs prefer to cite (definitions, lists, tables, FAQs, quotable statistics)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Vigilath audit a website?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Vigilath runs 100+ discrete checks across 23 categories: HTTPS, robots.txt, llms.txt, sitemap.xml, .well-known manifests, meta tags, Open Graph, JSON-LD structured data, semantic HTML, heading structure, content extractability, security headers, authority signals, cross-platform presence, and AI answer-format readiness. The result is a 0–100 AI Visibility Score with a letter grade, a category-by-category breakdown, and an actionable list of fixes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why is server-side content important for AI crawlers?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Most AI crawlers — including GPTBot, ClaudeBot, and PerplexityBot — do not execute JavaScript. A pure client-side-rendered SPA appears almost empty to them, which means LLMs never see the content and cannot cite it. Adding server-side rendering, static-site generation, or a content-rich index.html fixes this."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which AI bots should I allow in robots.txt?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "At minimum: GPTBot and ChatGPT-User (OpenAI), OAI-SearchBot (ChatGPT search), Google-Extended (Gemini + AI Overviews), ClaudeBot and anthropic-ai (Claude), PerplexityBot and Perplexity-User (Perplexity), Applebot-Extended (Apple Intelligence), CCBot (Common Crawl, used as LLM training source), and Meta-ExternalAgent. Explicit allow rules are a stronger signal than relying on wildcard fallback."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 
 <body>
-  <div id="root"></div>
+  <!-- Static SEO skeleton — React replaces this on mount. -->
+  <div id="root">
+    <header>
+      <nav aria-label="Primary">
+        <a href="/" rel="home"><strong>Vigilath</strong></a>
+        <ul>
+          <li><a href="/checker">Run a check</a></li>
+          <li><a href="/geo-knowledge">GEO knowledge</a></li>
+          <li><a href="/products-services">Products &amp; services</a></li>
+          <li><a href="/membership">Membership</a></li>
+          <li><a href="/about">About</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <h1>Vigilath — GEO Readiness Checker for the AI Search Era</h1>
+        <p>
+          <strong>Vigilath</strong> is a Generative Engine Optimization (GEO) readiness checker.
+          Audit any website across 23 categories and 100+ signals to see how visible, quotable,
+          and citable it is to ChatGPT, Perplexity, Claude, Google AI Overviews, and Copilot.
+          You get a 0–100 AI Visibility Score, a letter grade, a category breakdown, and a
+          prioritized fix list.
+        </p>
+
+        <section aria-labelledby="what-is-geo">
+          <h2 id="what-is-geo">What is Generative Engine Optimization?</h2>
+          <p>
+            GEO is the practice of making a website legible and attractive to the retrieval and
+            citation layer of large language models. Unlike traditional SEO — which optimizes
+            for a keyword-based ranking algorithm — GEO optimizes for two things: AI crawl
+            access and quotability by LLMs.
+          </p>
+          <ul>
+            <li><strong>Crawl access</strong> — explicit allow/deny rules for GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and 12 other AI bots in <code>robots.txt</code>; machine-readable manifests in <code>.well-known/</code>; a complete <code>sitemap.xml</code>; the <code>llms.txt</code> convention.</li>
+            <li><strong>Quotability</strong> — semantic HTML, clean heading structure, JSON-LD structured data, canonical URLs, authorship signals, and content shapes LLMs prefer to cite (definitions, lists, comparison tables, step-by-step instructions, FAQ blocks, quotable statistics).</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="what-we-check">
+          <h2 id="what-we-check">What Vigilath checks</h2>
+          <p>Each audit runs through 23 categories grouped into five themes:</p>
+          <ol>
+            <li><strong>Crawl access</strong> — HTTPS, robots.txt, llms.txt, sitemap.xml, .well-known manifests, IndexNow.</li>
+            <li><strong>Content extractability</strong> — SSR vs. client-rendered, content-to-HTML ratio, semantic tags, heading structure, internal links.</li>
+            <li><strong>Meta &amp; structured data</strong> — title, description, canonical, Open Graph, Twitter card, JSON-LD (Organization, WebSite, FAQ, HowTo, Breadcrumbs).</li>
+            <li><strong>Authority &amp; trust</strong> — security headers, author attribution, sameAs profile links, cross-platform presence.</li>
+            <li><strong>Answer-format readiness</strong> — definitions, step-by-step, comparison tables, pros/cons, TL;DR, FAQs, quotable stats.</li>
+          </ol>
+        </section>
+
+        <section aria-labelledby="plans">
+          <h2 id="plans">Membership plans</h2>
+          <p>Pick a tier that matches how you use AI visibility data:</p>
+          <ul>
+            <li><strong>Free</strong> — register and run 3 basic checks per month.</li>
+            <li><strong>Pro ($9.99/mo)</strong> — 20 full 23-category audits per month, check history, prioritized fix list.</li>
+            <li><strong>Starter ($999/mo)</strong> — unlimited checks, managed GEO coverage, OpenAI / Gemini / Anthropic inclusion spec, copywriting and product-info compliance.</li>
+            <li><strong>Growth ($2,500/mo)</strong> — everything in Starter plus paid ranking SEO placements and priority technical support.</li>
+            <li><strong>Scale (Get a Demo)</strong> — enterprise-wide custom GEO coverage, reputation management, PR support, dedicated advisor.</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="cta">
+          <h2 id="cta">Ready to measure your AI visibility?</h2>
+          <p>
+            <a href="/checker">Run a free Vigilath audit</a> on any URL, or
+            <a href="/geo-knowledge">browse the GEO knowledge base</a> to understand what
+            the 23 categories mean and how LLMs actually pick what to cite.
+          </p>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <p>
+        <small>
+          © Vigilath — GEO Readiness Checker.
+          <a href="/sitemap.xml">Sitemap</a> ·
+          <a href="/robots.txt">robots.txt</a> ·
+          <a href="/llms.txt">llms.txt</a> ·
+          <a href="/about">About</a> ·
+          <a href="/contact">Contact</a> ·
+          <a href="https://x.com/vigilath" rel="noopener">X / Twitter</a>
+        </small>
+      </p>
+    </footer>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

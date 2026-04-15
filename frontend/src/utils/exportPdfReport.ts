@@ -251,7 +251,7 @@ const buildAppendixBlock = (t: TFunction): string =>
 // ---------- Compose ----------
 
 const buildAllBlocks = (args: ExportArgs): string[] => {
-  const { result, t, groupStats, categoryGroups, checksByCategory, otherCategories } = args;
+  const { result, t, categoryGroups, checksByCategory, otherCategories } = args;
   const lockedSet = new Set(result.locked_categories || []);
   const blocks: string[] = [];
 
