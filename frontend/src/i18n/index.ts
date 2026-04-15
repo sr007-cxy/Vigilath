@@ -527,6 +527,40 @@ if (!i18n.isInitialized) {
                 "author_meta": "Author information found (meta/link tag)",
                 "author_class_only": "Author class detected in HTML — consider adding schema.org Person markup",
                 "author_missing": "No author attribution found — authorship signals boost AI trust (E-E-A-T)"
+              },
+              "ai_opt": {
+                "fetch_failed": "Could not fetch homepage",
+                "freshness_found": "Content freshness signals found:",
+                "freshness_missing": "No content freshness signals — add dateModified to JSON-LD or <time> elements",
+                "brand_inconsistent": "Inconsistent site name across tags: {{names}}",
+                "brand_consistent": "Brand entity \"{{name}}\" used consistently ({{count}} occurrences)",
+                "brand_sparse": "Brand entity \"{{name}}\" found but used sparingly — consistent naming helps AI entity recognition",
+                "brand_unknown": "Could not determine primary brand/entity name",
+                "api_endpoint_found": "Machine-readable endpoint found: {{path}}",
+                "api_endpoint_missing": "No public API endpoints found — optional, but helps AI systems access structured data"
+              },
+              "social": {
+                "fetch_failed": "Could not fetch homepage",
+                "twitter_found": "Twitter/X card tags found: {{tags}}",
+                "twitter_missing": "No Twitter/X card meta tags found",
+                "sameas_found": "sameAs social links in JSON-LD ({{count}}):",
+                "sameas_missing": "No sameAs social profile links in structured data",
+                "html_links_found": "{{count}} social profile link(s) found in HTML — consider adding them as sameAs in JSON-LD too",
+                "no_social_links": "No social profile links detected on the page"
+              },
+              "answer_format": {
+                "fetch_failed": "Could not fetch homepage",
+                "definitions_found": "{{count}} definition-style sentence(s) found — highly citable by AI",
+                "definitions_missing": "No definition-style sentences detected",
+                "tables_with_headers": "Comparison table(s) with headers found — AI engines extract tabular data",
+                "tables_without_headers": "Tables found but missing <th> headers — add headers for AI extraction",
+                "tables_missing": "No comparison tables — consider adding tables for feature comparisons, pricing, etc.",
+                "steps_found": "Step-by-step instructional content detected — great for 'how to' AI answers",
+                "steps_missing": "No step-by-step instructions found",
+                "proscons_found": "Pros/cons or advantages/disadvantages content detected",
+                "proscons_missing": "No pros/cons pattern detected",
+                "summary_found": "Summary/key takeaways section found — AI engines prefer concise summaries",
+                "summary_missing": "No key takeaways or TL;DR section found"
               }
             },
             "scoreCard": {
@@ -1964,6 +1998,40 @@ if (!i18n.isInitialized) {
                 "author_meta": "meta/link 标签中有作者信息",
                 "author_class_only": "HTML 中检测到 author class——建议添加 schema.org Person 标记",
                 "author_missing": "没有作者署名——作者信号会提升 AI 信任度（E-E-A-T）"
+              },
+              "ai_opt": {
+                "fetch_failed": "无法抓取首页",
+                "freshness_found": "找到内容新鲜度信号：",
+                "freshness_missing": "没有内容新鲜度信号——在 JSON-LD 里加 dateModified 或用 <time> 元素",
+                "brand_inconsistent": "各标签中站点名不一致：{{names}}",
+                "brand_consistent": "品牌实体「{{name}}」使用一致（{{count}} 次）",
+                "brand_sparse": "品牌实体「{{name}}」存在但使用偏少——一致命名有助于 AI 实体识别",
+                "brand_unknown": "无法确定主要品牌/实体名称",
+                "api_endpoint_found": "找到机器可读端点：{{path}}",
+                "api_endpoint_missing": "没有公开 API 端点——可选，但有助于 AI 系统访问结构化数据"
+              },
+              "social": {
+                "fetch_failed": "无法抓取首页",
+                "twitter_found": "找到 Twitter/X card 标签：{{tags}}",
+                "twitter_missing": "没有 Twitter/X card meta 标签",
+                "sameas_found": "JSON-LD 中有 {{count}} 条 sameAs 社交链接：",
+                "sameas_missing": "结构化数据中没有 sameAs 社交档案链接",
+                "html_links_found": "HTML 中找到 {{count}} 个社交档案链接——建议同时加到 JSON-LD 的 sameAs",
+                "no_social_links": "页面上没有检测到社交档案链接"
+              },
+              "answer_format": {
+                "fetch_failed": "无法抓取首页",
+                "definitions_found": "找到 {{count}} 句定义式表述——对 AI 引用非常友好",
+                "definitions_missing": "没有检测到定义式表述",
+                "tables_with_headers": "找到带 header 的对比表格——AI 引擎会提取表格数据",
+                "tables_without_headers": "找到表格但缺少 <th> header——加上 header 方便 AI 提取",
+                "tables_missing": "没有对比表格——建议为功能对比、定价等场景添加",
+                "steps_found": "检测到分步指南内容——对「how to」类 AI 答案非常有利",
+                "steps_missing": "没有找到分步指南",
+                "proscons_found": "检测到优劣 / pros-cons 内容",
+                "proscons_missing": "没有检测到优劣结构",
+                "summary_found": "找到摘要/关键要点区块——AI 引擎偏好简明摘要",
+                "summary_missing": "没有关键要点或 TL;DR 区块"
               }
             },
             "scoreCard": {

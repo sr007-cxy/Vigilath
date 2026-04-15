@@ -1157,7 +1157,7 @@ def check_ai_optimization(base_url):
     print("\n--- AI-Specific Optimization ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.ai_opt.fetch_failed", "Could not fetch homepage")
         track_score("AI Optimization", 0, 5)
         return
 
@@ -1190,12 +1190,12 @@ def check_ai_optimization(base_url):
         freshness_signals.append(f"Last-Modified header: {last_modified}")
 
     if freshness_signals:
-        print(f"  [{PASS}] Content freshness signals found:")
+        emit_check(PASS, "result.checks.ai_opt.freshness_found", "Content freshness signals found:")
         ao_score += 2
         for sig in freshness_signals[:5]:
             print(f"         {sig}")
     else:
-        print(f"  [{WARN}] No content freshness signals — add dateModified to JSON-LD or <time> elements")
+        emit_check(WARN, "result.checks.ai_opt.freshness_missing", "No content freshness signals — add dateModified to JSON-LD or <time> elements")
         fix("Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server")
 
     title = soup.find("title")
@@ -1209,20 +1209,21 @@ def check_ai_optimization(base_url):
         site_names.add(og_site["content"].strip())
 
     if len(site_names) > 1:
-        print(f"  [{WARN}] Inconsistent site name across tags: {', '.join(site_names)}")
+        names_str = ", ".join(site_names)
+        emit_check(WARN, "result.checks.ai_opt.brand_inconsistent", f"Inconsistent site name across tags: {names_str}", {"names": names_str})
         fix(f"Use the same brand name everywhere. Ensure og:site_name, the title tag suffix,\nand JSON-LD Organization name all use the exact same string.\nPick one: {' or '.join(repr(n) for n in site_names)}")
     elif site_names:
         name = list(site_names)[0]
         text = get_text_content(soup)
         occurrences = text.lower().count(name.lower())
         if occurrences >= 2:
-            print(f"  [{PASS}] Brand entity \"{name}\" used consistently ({occurrences} occurrences)")
+            emit_check(PASS, "result.checks.ai_opt.brand_consistent", f"Brand entity \"{name}\" used consistently ({occurrences} occurrences)", {"name": name, "count": occurrences})
             ao_score += 1.5
         else:
-            print(f"  [{INFO}] Brand entity \"{name}\" found but used sparingly — consistent naming helps AI entity recognition")
+            emit_check(INFO, "result.checks.ai_opt.brand_sparse", f"Brand entity \"{name}\" found but used sparingly — consistent naming helps AI entity recognition", {"name": name})
             fix(f"Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition.")
     else:
-        print(f"  [{INFO}] Could not determine primary brand/entity name")
+        emit_check(INFO, "result.checks.ai_opt.brand_unknown", "Could not determine primary brand/entity name")
         fix("Make your brand name discoverable by adding:\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\nAnd use a consistent 'Brand — Page Title' format in your <title> tags.")
 
     api_paths = [
@@ -1234,12 +1235,12 @@ def check_ai_optimization(base_url):
         api_url = urljoin(base_url, path)
         api_resp = fetch(api_url, timeout=5)
         if api_resp and api_resp.status_code == 200:
-            print(f"  [{PASS}] Machine-readable endpoint found: {path}")
+            emit_check(PASS, "result.checks.ai_opt.api_endpoint_found", f"Machine-readable endpoint found: {path}", {"path": path})
             api_found = True
             ao_score += 1.5
             break
     if not api_found:
-        print(f"  [{INFO}] No public API endpoints found — optional, but helps AI systems access structured data")
+        emit_check(INFO, "result.checks.ai_opt.api_endpoint_missing", "No public API endpoints found — optional, but helps AI systems access structured data")
 
     track_score("AI Optimization", min(ao_score, 5), 5)
 
@@ -1252,7 +1253,7 @@ def check_social_signals(base_url):
     print("\n--- Social Signals ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.social.fetch_failed", "Could not fetch homepage")
         track_score("Social Signals", 0, 3)
         return
 
@@ -1264,10 +1265,11 @@ def check_social_signals(base_url):
         twitter_tags = soup.find_all("meta", property=re.compile(r"^twitter:", re.IGNORECASE))
     if twitter_tags:
         tw_types = [t.get("name") or t.get("property") for t in twitter_tags]
-        print(f"  [{PASS}] Twitter/X card tags found: {', '.join(tw_types)}")
+        tw_text = ", ".join(tw_types)
+        emit_check(PASS, "result.checks.social.twitter_found", f"Twitter/X card tags found: {tw_text}", {"tags": tw_text})
         ss_score += 1
     else:
-        print(f"  [{WARN}] No Twitter/X card meta tags found")
+        emit_check(WARN, "result.checks.social.twitter_missing", "No Twitter/X card meta tags found")
         fix("Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     # sameAs links in JSON-LD (social profiles for entity disambiguation)
@@ -1293,12 +1295,12 @@ def check_social_signals(base_url):
             pass
 
     if same_as_links:
-        print(f"  [{PASS}] sameAs social links in JSON-LD ({len(same_as_links)}):")
+        emit_check(PASS, "result.checks.social.sameas_found", f"sameAs social links in JSON-LD ({len(same_as_links)}):", {"count": len(same_as_links)})
         ss_score += 2
         for link in same_as_links[:5]:
             print(f"         {link}")
     else:
-        print(f"  [{WARN}] No sameAs social profile links in structured data")
+        emit_check(WARN, "result.checks.social.sameas_missing", "No sameAs social profile links in structured data")
         fix("Add sameAs to your Organization JSON-LD to connect your social profiles:\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.")
 
     # Check for social profile links in HTML (fallback)
@@ -1313,9 +1315,9 @@ def check_social_signals(base_url):
                     social_links.append(href)
                     break
         if social_links:
-            print(f"  [{INFO}] {len(social_links)} social profile link(s) found in HTML — consider adding them as sameAs in JSON-LD too")
+            emit_check(INFO, "result.checks.social.html_links_found", f"{len(social_links)} social profile link(s) found in HTML — consider adding them as sameAs in JSON-LD too", {"count": len(social_links)})
         else:
-            print(f"  [{INFO}] No social profile links detected on the page")
+            emit_check(INFO, "result.checks.social.no_social_links", "No social profile links detected on the page")
 
     track_score("Social Signals", min(ss_score, 3), 3)
 
@@ -1328,7 +1330,7 @@ def check_ai_answer_formats(base_url):
     print("\n--- AI Answer Format Optimization ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.answer_format.fetch_failed", "Could not fetch homepage")
         track_score("AI Answer Formats", 0, 5)
         return
 
@@ -1343,9 +1345,9 @@ def check_ai_answer_formats(base_url):
     )
     if definition_patterns:
         score += 1
-        print(f"  [{PASS}] {len(definition_patterns)} definition-style sentence(s) found — highly citable by AI")
+        emit_check(PASS, "result.checks.answer_format.definitions_found", f"{len(definition_patterns)} definition-style sentence(s) found — highly citable by AI", {"count": len(definition_patterns)})
     else:
-        print(f"  [{WARN}] No definition-style sentences detected")
+        emit_check(WARN, "result.checks.answer_format.definitions_missing", "No definition-style sentences detected")
         fix("Add clear definition sentences that AI engines can directly quote:\n  'Generative Engine Optimization (GEO) is the practice of optimizing web content...'\n  'A sitemap refers to a file that lists all pages on a website...'\nPattern: '[Term] is/are [clear definition].'")
 
     # 2. Comparison tables
@@ -1358,13 +1360,13 @@ def check_ai_answer_formats(base_url):
             break
     if has_comparison_table:
         score += 1
-        print(f"  [{PASS}] Comparison table(s) with headers found — AI engines extract tabular data")
+        emit_check(PASS, "result.checks.answer_format.tables_with_headers", "Comparison table(s) with headers found — AI engines extract tabular data")
     else:
         if tables:
-            print(f"  [{WARN}] Tables found but missing <th> headers — add headers for AI extraction")
+            emit_check(WARN, "result.checks.answer_format.tables_without_headers", "Tables found but missing <th> headers — add headers for AI extraction")
             fix("Add proper headers to your tables:\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI engines extract well-structured tables for comparison answers.")
         else:
-            print(f"  [{INFO}] No comparison tables — consider adding tables for feature comparisons, pricing, etc.")
+            emit_check(INFO, "result.checks.answer_format.tables_missing", "No comparison tables — consider adding tables for feature comparisons, pricing, etc.")
             fix("Add comparison tables where applicable (pricing, features, vs. competitors):\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI engines frequently cite tabular data in comparison answers.")
 
     # 3. Numbered step-by-step instructions
@@ -1380,9 +1382,9 @@ def check_ai_answer_formats(base_url):
                      if re.search(r'step\s+\d|^\d+[\.\)]\s', h.get_text(strip=True), re.IGNORECASE)]
     if has_steps or step_headings:
         score += 1
-        print(f"  [{PASS}] Step-by-step instructional content detected — great for 'how to' AI answers")
+        emit_check(PASS, "result.checks.answer_format.steps_found", "Step-by-step instructional content detected — great for 'how to' AI answers")
     else:
-        print(f"  [{INFO}] No step-by-step instructions found")
+        emit_check(INFO, "result.checks.answer_format.steps_missing", "No step-by-step instructions found")
         fix("Add numbered how-to instructions where relevant:\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI engines surface step-by-step content for 'how to' queries.")
 
     # 4. Pros and cons / advantages and disadvantages
@@ -1393,9 +1395,9 @@ def check_ai_answer_formats(base_url):
     pros_cons_elements = soup.find_all(class_=re.compile(r"pros?|cons?|advantage|disadvantage", re.IGNORECASE))
     if pros_cons_patterns or pros_cons_elements:
         score += 1
-        print(f"  [{PASS}] Pros/cons or advantages/disadvantages content detected")
+        emit_check(PASS, "result.checks.answer_format.proscons_found", "Pros/cons or advantages/disadvantages content detected")
     else:
-        print(f"  [{INFO}] No pros/cons pattern detected")
+        emit_check(INFO, "result.checks.answer_format.proscons_missing", "No pros/cons pattern detected")
         fix("Add pros and cons sections for products, services, or comparisons:\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI engines frequently cite balanced pros/cons in recommendation answers.")
 
     # 5. Key takeaways / TL;DR / summary sections
@@ -1406,9 +1408,9 @@ def check_ai_answer_formats(base_url):
     summary_classes = soup.find_all(class_=re.compile(r"takeaway|tldr|summary|highlight", re.IGNORECASE))
     if summary_indicators or summary_classes:
         score += 1
-        print(f"  [{PASS}] Summary/key takeaways section found — AI engines prefer concise summaries")
+        emit_check(PASS, "result.checks.answer_format.summary_found", "Summary/key takeaways section found — AI engines prefer concise summaries")
     else:
-        print(f"  [{INFO}] No key takeaways or TL;DR section found")
+        emit_check(INFO, "result.checks.answer_format.summary_missing", "No key takeaways or TL;DR section found")
         fix("Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.")
 
     print(f"\n  AI answer format score: {score}/{total_checks}")
