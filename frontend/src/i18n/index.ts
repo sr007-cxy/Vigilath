@@ -434,6 +434,12 @@ if (!i18n.isInitialized) {
                 "inline_ok": "Inline resources within acceptable range",
                 "cache_headers_found": "Cache headers found: {{signals}}",
                 "cache_headers_missing": "No cache headers (Cache-Control, ETag, Last-Modified)"
+              },
+              "structured_data": {
+                "fetch_failed": "Could not fetch homepage",
+                "jsonld_found": "Found {{count}} JSON-LD block(s)",
+                "jsonld_missing": "No JSON-LD structured data found — helps AI engines understand your content",
+                "schema_ref_only": "schema.org references found (possibly microdata or RDFa)"
               }
             },
             "scoreCard": {
@@ -1778,6 +1784,12 @@ if (!i18n.isInitialized) {
                 "inline_ok": "内联资源在可接受范围",
                 "cache_headers_found": "找到缓存头：{{signals}}",
                 "cache_headers_missing": "没有缓存头（Cache-Control、ETag、Last-Modified）"
+              },
+              "structured_data": {
+                "fetch_failed": "无法抓取首页",
+                "jsonld_found": "找到 {{count}} 个 JSON-LD 结构化数据块",
+                "jsonld_missing": "没有 JSON-LD 结构化数据——有助于 AI 引擎理解你的内容",
+                "schema_ref_only": "找到 schema.org 引用（可能是 microdata 或 RDFa）"
               }
             },
             "scoreCard": {

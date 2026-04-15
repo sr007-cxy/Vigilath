@@ -547,12 +547,12 @@ def check_structured_data(base_url):
     print("\n--- Structured Data ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.structured_data.fetch_failed", "Could not fetch homepage")
         return
 
     json_ld_scripts = soup.find_all("script", type="application/ld+json")
     if json_ld_scripts:
-        print(f"  [{PASS}] Found {len(json_ld_scripts)} JSON-LD block(s)")
+        emit_check(PASS, "result.checks.structured_data.jsonld_found", f"Found {len(json_ld_scripts)} JSON-LD block(s)", {"count": len(json_ld_scripts)})
         track_score("Structured Data", 4, 4)
         parsed_types = 0
         for i, script in enumerate(json_ld_scripts):
@@ -570,13 +570,13 @@ def check_structured_data(base_url):
                 print(f"         Block {i+1}: present but could not parse")
         track_score("Structured Data", min(parsed_types, 3), 3)
     else:
-        print(f"  [{WARN}] No JSON-LD structured data found — helps AI engines understand your content")
+        emit_check(WARN, "result.checks.structured_data.jsonld_missing", "No JSON-LD structured data found — helps AI engines understand your content")
         track_score("Structured Data", 0, 7)
         fix("Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results")
 
     has_schema_ref = 'schema.org' in resp.text
     if has_schema_ref and not json_ld_scripts:
-        print(f"  [{INFO}] schema.org references found (possibly microdata or RDFa)")
+        emit_check(INFO, "result.checks.structured_data.schema_ref_only", "schema.org references found (possibly microdata or RDFa)")
 
 
 # ---------------------------------------------------------------------------
