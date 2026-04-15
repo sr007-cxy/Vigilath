@@ -214,12 +214,7 @@ export function Home() {
       <main className="flex-1 px-4 py-20 sm:py-28 relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero text-center">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-soft shadow-glow mb-8 animate-slide-up">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-              <span className="text-xs font-medium text-secondary">
-                {t('home.advanced.badge')}
-              </span>
-            </div>
+
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up text-center">
               <span className="gradient-text">{t('home.title')}</span>
