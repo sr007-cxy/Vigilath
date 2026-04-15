@@ -3615,26 +3615,31 @@ def citation_check(url, return_data=False):
 # ---------------------------------------------------------------------------
 
 def _query_perplexity(query, api_key):
-    """Send a query to Perplexity Sonar API. Returns (answer, citations, error)."""
+    """Send a query to Perplexity Sonar via OpenRouter. Returns (answer, citations, error)."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"model": "sonar", "messages": [{"role": "user", "content": query}]}
+    payload = {
+        "model": "perplexity/sonar",
+        "messages": [{"role": "user", "content": query}],
+    }
     try:
-        r = requests.post("https://api.perplexity.ai/chat/completions",
-                          json=payload, headers=headers, timeout=30)
+        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                          json=payload, headers=headers, timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
         if r.status_code == 429:
             time.sleep(5)
-            r = requests.post("https://api.perplexity.ai/chat/completions",
-                              json=payload, headers=headers, timeout=30)
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                              json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
-        citations = data.get("citations", [])
         answer = ""
         choices = data.get("choices", [])
         if choices:
             answer = choices[0].get("message", {}).get("content", "")
+        import re
+        url_pattern = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
+        citations = list(dict.fromkeys(url_pattern.findall(answer)))
         return answer, citations, None
     except requests.RequestException as e:
         return "", [], str(e)
@@ -3926,61 +3931,82 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             return _query_anthropic(query, api_key)
         return "", [], "unknown_engine"
 
-    # ── Run all queries across all engines, 3x each for stability ──
+    # ── Run all queries across all engines, 3x each for stability (parallel) ──
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+
     STABILITY_RUNS = 3
-    # results[engine][query] = list of run results
-    all_results = {eng: {} for eng in engines}
-    # Track competitors across all results
+
+    def _make_error_entry():
+        return {
+            "answer": "", "citations": [], "error": True,
+            "brand_result": {"cited": False, "domain_citations": [],
+                             "mentioned_in_text": False, "all_citations": []},
+            "framing": "not_mentioned",
+        }
+
+    # Pre-fill every slot with an error placeholder so downstream scoring can
+    # uniformly read all_results[eng][query][run_idx] even if a task is skipped.
+    all_results = {
+        eng: {q: [_make_error_entry() for _ in range(STABILITY_RUNS)] for q in all_queries}
+        for eng in engines
+    }
     global_competitors = {}
-    # Track all framings
     all_framings = []
 
-    for eng_name, (eng_type, api_key) in engines.items():
+    dead_engines = set()
+    dead_lock = threading.Lock()
+
+    def _run_one(eng_name, eng_type, api_key, query, run_idx):
+        with dead_lock:
+            if eng_name in dead_engines:
+                return eng_name, query, run_idx, None
+        answer, citations, error = query_engine(query, eng_type, api_key)
+        if error == "invalid_key":
+            with dead_lock:
+                dead_engines.add(eng_name)
+            return eng_name, query, run_idx, None
+        if error:
+            return eng_name, query, run_idx, None
+        brand_result = _check_brand_in_result(answer, citations, domain, brand)
+        framing = _classify_framing(answer, brand)
+        competitors = _extract_competitors(citations, answer, domain)
+        return eng_name, query, run_idx, {
+            "answer": answer, "citations": citations, "error": False,
+            "brand_result": brand_result, "framing": framing,
+            "competitors": competitors,
+        }
+
+    tasks = [
+        (eng_name, eng_type, api_key, query, run_idx)
+        for eng_name, (eng_type, api_key) in engines.items()
+        for query in all_queries
+        for run_idx in range(STABILITY_RUNS)
+    ]
+
+    print(f"\n  Running {len(tasks)} API calls in parallel (max 8 concurrent)...")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_run_one, *t) for t in tasks]
+        for fut in as_completed(futures):
+            eng_name, query, run_idx, result = fut.result()
+            if result is None:
+                continue  # keep error placeholder
+            all_results[eng_name][query][run_idx] = result
+            all_framings.append(result["framing"])
+            for comp, count in result.get("competitors", {}).items():
+                global_competitors[comp] = global_competitors.get(comp, 0) + count
+
+    # Per-engine, per-query summary
+    for eng_name in engines:
         print(f"\n--- Engine: {eng_name} ---")
-        for qi, query in enumerate(all_queries, 1):
+        if eng_name in dead_engines:
+            print(f"  [{FAIL}] Invalid {eng_name} API key. Engine skipped.")
+            continue
+        for query in all_queries:
             group = query_group_map[query]
-            print(f"  [{INFO}] [{group}] Query {qi}/{len(all_queries)}: \"{query}\"")
-
-            run_results = []
-            for run in range(STABILITY_RUNS):
-                answer, citations, error = query_engine(query, eng_type, api_key)
-
-                if error == "invalid_key":
-                    print(f"    [{FAIL}] Invalid {eng_name} API key. Skipping this engine.")
-                    # Mark all remaining queries for this engine as errors
-                    for rq in all_queries[qi-1:]:
-                        all_results[eng_name][rq] = [{"error": True}] * STABILITY_RUNS
-                    break
-
-                if error:
-                    run_results.append({
-                        "answer": "", "citations": [], "error": True,
-                        "brand_result": {"cited": False, "domain_citations": [],
-                                         "mentioned_in_text": False, "all_citations": []},
-                        "framing": "not_mentioned",
-                    })
-                else:
-                    brand_result = _check_brand_in_result(answer, citations, domain, brand)
-                    framing = _classify_framing(answer, brand)
-                    competitors = _extract_competitors(citations, answer, domain)
-                    for comp, count in competitors.items():
-                        global_competitors[comp] = global_competitors.get(comp, 0) + count
-
-                    run_results.append({
-                        "answer": answer, "citations": citations, "error": False,
-                        "brand_result": brand_result, "framing": framing,
-                        "competitors": competitors,
-                    })
-                    all_framings.append(framing)
-
-                time.sleep(1)
-
-            if error == "invalid_key":
-                break
-
-            all_results[eng_name][query] = run_results
-
-            # Print stability summary for this query
+            print(f"  [{INFO}] [{group}] \"{query}\"")
+            run_results = all_results[eng_name][query]
             valid_runs = [r for r in run_results if not r.get("error")]
             cited_runs = sum(1 for r in valid_runs if r["brand_result"]["cited"])
             if len(valid_runs) == 0:
@@ -3991,8 +4017,6 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                 print(f"    [{WARN}] UNSTABLE — cited in {cited_runs}/{STABILITY_RUNS} runs")
             else:
                 print(f"    [{FAIL}] NOT CITED in any run")
-
-            # Show framing if mentioned
             framings_this = [r["framing"] for r in valid_runs if r["framing"] != "not_mentioned"]
             if framings_this:
                 primary_framing = max(set(framings_this), key=framings_this.count)

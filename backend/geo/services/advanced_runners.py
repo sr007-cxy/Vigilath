@@ -6,17 +6,19 @@ geo_checker` resolves to the package (which only has `__init__.py` + a CLI
 from the project root as a freshly-named module via importlib.
 
 Each runner:
-  - Redirects stdout so CLI formatting noise doesn't flood FastAPI logs.
+  - Suppresses stdout per-thread so CLI formatting noise doesn't flood logs
+    and concurrent requests don't corrupt each other's output.
   - Calls the patched function with return_data=True to get a dict back.
   - Lets RuntimeError/ValueError propagate so the router can map them to HTTP.
 """
 
 from __future__ import annotations
 
-import contextlib
 import importlib.util
 import io
 import os
+import sys
+import threading
 from typing import Any, Dict, List, Optional
 
 
@@ -37,11 +39,53 @@ def _load_geo_checker_core():
 _geo = _load_geo_checker_core()
 
 
+class _ThreadLocalStdout:
+    """Proxy that routes writes to a thread-local buffer when one is set,
+    else falls back to the real stdout.
+
+    Installed process-wide once at import time. `contextlib.redirect_stdout`
+    is not safe here because FastAPI's threadpool runs multiple runners
+    concurrently and redirect_stdout mutates the global sys.stdout — threads
+    would see each other's buffers mid-execution.
+    """
+
+    _state = threading.local()
+
+    def __init__(self, real):
+        self._real = real
+
+    def _target(self):
+        return getattr(self._state, "buf", None) or self._real
+
+    def write(self, s):
+        return self._target().write(s)
+
+    def flush(self):
+        return self._target().flush()
+
+    def isatty(self):
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._target(), name)
+
+
+_stdout_proxy: _ThreadLocalStdout
+if isinstance(sys.stdout, _ThreadLocalStdout):
+    _stdout_proxy = sys.stdout  # type: ignore[assignment]
+else:
+    _stdout_proxy = _ThreadLocalStdout(sys.stdout)
+    sys.stdout = _stdout_proxy  # type: ignore[assignment]
+
+
 def _silent_call(fn, *args, **kwargs) -> Dict[str, Any]:
-    """Invoke fn with stdout suppressed; return fn's structured dict result."""
+    """Invoke fn with stdout captured into a per-thread buffer."""
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
+    _stdout_proxy._state.buf = buf
+    try:
         result = fn(*args, **kwargs)
+    finally:
+        _stdout_proxy._state.buf = None
     if not isinstance(result, dict):
         raise RuntimeError(
             f"{fn.__name__} did not return structured data — "

@@ -11,6 +11,7 @@ endpoints. Each endpoint:
 """
 
 from fastapi import APIRouter, Request
+from fastapi.concurrency import run_in_threadpool
 from geo.models.advanced import (
     CompareRequest,
     CompareResponse,
@@ -58,9 +59,11 @@ def _check_url(url: str) -> str:
     return sanitize_url(url)
 
 
-def _run_or_raise(fn, *args, **kwargs):
+async def _run_or_raise(fn, *args, **kwargs):
+    # Runners make 10s–minutes of blocking HTTP calls. Offload to FastAPI's
+    # threadpool so the event loop stays free for other requests.
     try:
-        return fn(*args, **kwargs)
+        return await run_in_threadpool(fn, *args, **kwargs)
     except RuntimeError as e:
         # API key missing / invalid. 503 = service unavailable on our side.
         raise AppException(status_code=503, message=str(e))
@@ -74,7 +77,7 @@ def _run_or_raise(fn, *args, **kwargs):
 async def advanced_compare(body: CompareRequest, request: Request):
     _ensure_tier(request, "compare")
     clean_urls = [_check_url(u) for u in body.urls]
-    data = _run_or_raise(advanced_runners.run_compare, clean_urls)
+    data = await _run_or_raise(advanced_runners.run_compare, clean_urls)
     return CompareResponse(**data)
 
 
@@ -82,7 +85,7 @@ async def advanced_compare(body: CompareRequest, request: Request):
 async def advanced_crawl_test(body: CrawlTestRequest, request: Request):
     _ensure_tier(request, "crawlTest")
     clean_url = _check_url(body.url)
-    data = _run_or_raise(advanced_runners.run_crawl_test, clean_url)
+    data = await _run_or_raise(advanced_runners.run_crawl_test, clean_url)
     return CrawlTestResponse(**data)
 
 
@@ -90,7 +93,7 @@ async def advanced_crawl_test(body: CrawlTestRequest, request: Request):
 async def advanced_authority(body: AuthorityAuditRequest, request: Request):
     _ensure_tier(request, "authority")
     clean_url = _check_url(body.url)
-    data = _run_or_raise(advanced_runners.run_authority_audit, clean_url)
+    data = await _run_or_raise(advanced_runners.run_authority_audit, clean_url)
     return AuthorityAuditResponse(**data)
 
 
@@ -98,7 +101,7 @@ async def advanced_authority(body: AuthorityAuditRequest, request: Request):
 async def advanced_citation(body: CitationCheckRequest, request: Request):
     _ensure_tier(request, "citation")
     clean_url = _check_url(body.url)
-    data = _run_or_raise(advanced_runners.run_citation_check, clean_url)
+    data = await _run_or_raise(advanced_runners.run_citation_check, clean_url)
     return CitationCheckResponse(**data)
 
 
@@ -106,7 +109,7 @@ async def advanced_citation(body: CitationCheckRequest, request: Request):
 async def advanced_visibility(body: AiVisibilityRequest, request: Request):
     _ensure_tier(request, "visibility")
     clean_url = _check_url(body.url)
-    data = _run_or_raise(
+    data = await _run_or_raise(
         advanced_runners.run_ai_visibility,
         clean_url,
         body.custom_queries,
@@ -117,7 +120,7 @@ async def advanced_visibility(body: AiVisibilityRequest, request: Request):
 @router.post("/check/advanced/entity", response_model=EntityAuditResponse)
 async def advanced_entity(body: EntityAuditRequest, request: Request):
     _ensure_tier(request, "entity")
-    data = _run_or_raise(
+    data = await _run_or_raise(
         advanced_runners.run_entity_audit,
         body.entity_name.strip(),
         body.entity_type.strip().lower(),
