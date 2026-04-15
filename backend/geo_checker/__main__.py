@@ -1622,16 +1622,16 @@ def check_url_normalization(base_url):
         base_stripped = base_url.rstrip("/")
 
         if final_url == base_stripped or final_url == base_stripped + "/":
-            print(f"  [{PASS}] {alt_host} redirects to {hostname} (consistent)")
+            emit_check(PASS, "result.checks.url_norm.host_redirects", f"{alt_host} redirects to {hostname} (consistent)", {"alt": alt_host, "main": hostname})
             un_score += 1
         elif alt_resp.status_code == 200:
-            print(f"  [{WARN}] Both {hostname} and {alt_host} serve content — duplicate content risk")
+            emit_check(WARN, "result.checks.url_norm.host_duplicate", f"Both {hostname} and {alt_host} serve content — duplicate content risk", {"main": hostname, "alt": alt_host})
             fix(f"Set up a 301 redirect so one version redirects to the other:\n  # Nginx: redirect www to non-www\n  server {{ server_name www.{parsed.netloc.replace('www.', '')}; return 301 https://{parsed.netloc.replace('www.', '')}$request_uri; }}\nThen set the canonical URL to match the preferred version.")
         else:
-            print(f"  [{PASS}] Alternate hostname ({alt_host}) is not accessible")
+            emit_check(PASS, "result.checks.url_norm.host_alt_inaccessible", f"Alternate hostname ({alt_host}) is not accessible", {"alt": alt_host})
             un_score += 1
     except requests.RequestException:
-        print(f"  [{PASS}] Alternate hostname ({alt_host}) is not accessible")
+        emit_check(PASS, "result.checks.url_norm.host_alt_inaccessible", f"Alternate hostname ({alt_host}) is not accessible", {"alt": alt_host})
         un_score += 1
 
     # Trailing slash consistency
@@ -1646,12 +1646,12 @@ def check_url_normalization(base_url):
         })
 
         if resp_no_slash.status_code == resp_slash.status_code == 200:
-            print(f"  [{INFO}] Both trailing slash and non-trailing slash return 200 — ensure canonical is set")
+            emit_check(INFO, "result.checks.url_norm.slash_both_200", "Both trailing slash and non-trailing slash return 200 — ensure canonical is set")
         elif resp_no_slash.is_redirect or resp_slash.is_redirect:
-            print(f"  [{PASS}] Trailing slash consistency handled via redirect")
+            emit_check(PASS, "result.checks.url_norm.slash_redirect", "Trailing slash consistency handled via redirect")
             un_score += 0.5
         else:
-            print(f"  [{PASS}] URL paths are consistent")
+            emit_check(PASS, "result.checks.url_norm.path_consistent", "URL paths are consistent")
             un_score += 0.5
     except requests.RequestException:
         pass
@@ -1664,10 +1664,10 @@ def check_url_normalization(base_url):
                 "User-Agent": "GEO-Readiness-Checker/1.0"
             })
             if upper_resp.status_code == 200 and upper_resp.url.rstrip("/") != base_url.rstrip("/"):
-                print(f"  [{WARN}] Mixed case URLs resolve to different pages — can cause duplicate content")
+                emit_check(WARN, "result.checks.url_norm.case_mixed", "Mixed case URLs resolve to different pages — can cause duplicate content")
                 fix("Ensure your server normalizes URL case (lowercase). In nginx:\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }")
             else:
-                print(f"  [{PASS}] URL case handling is consistent")
+                emit_check(PASS, "result.checks.url_norm.case_consistent", "URL case handling is consistent")
                 un_score += 0.5
         except requests.RequestException:
             pass
@@ -1683,7 +1683,7 @@ def check_outbound_and_media(base_url):
     print("\n--- Outbound Links & Media ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.outbound.fetch_failed", "Could not fetch homepage")
         track_score("Outbound & Media", 0, 3)
         return
 
@@ -1705,16 +1705,17 @@ def check_outbound_and_media(base_url):
             auth in d for auth in [".gov", ".edu", ".org", "wikipedia", "scholar.google",
                                     "nature.com", "ieee.org", "arxiv.org", "ncbi.nlm.nih"]
         )]
-        print(f"  [{PASS}] {len(outbound_links)} outbound link(s) to {len(unique_domains)} unique domain(s)")
+        emit_check(PASS, "result.checks.outbound.links_found", f"{len(outbound_links)} outbound link(s) to {len(unique_domains)} unique domain(s)", {"count": len(outbound_links), "domains": len(unique_domains)})
         om_score += 0.5
         if authoritative_domains:
-            print(f"  [{PASS}] Links to authoritative sources: {', '.join(authoritative_domains[:5])}")
+            auth_text = ", ".join(authoritative_domains[:5])
+            emit_check(PASS, "result.checks.outbound.authoritative_links", f"Links to authoritative sources: {auth_text}", {"domains": auth_text})
             om_score += 0.5
         else:
-            print(f"  [{INFO}] No links to .gov/.edu/.org authoritative sources detected")
+            emit_check(INFO, "result.checks.outbound.no_authoritative", "No links to .gov/.edu/.org authoritative sources detected")
             fix("Link to authoritative external sources where relevant (research papers, .gov/.edu sites,\nindustry standards). Outbound links to reputable sources signal well-researched content to AI engines.")
     else:
-        print(f"  [{INFO}] No outbound links found — linking to authoritative sources increases content trust")
+        emit_check(INFO, "result.checks.outbound.no_outbound_links", "No outbound links found — linking to authoritative sources increases content trust")
         fix("Add outbound links to reputable, authoritative sources that support your claims.\nAI engines see this as a signal of well-researched, trustworthy content.")
 
     # Video / media schema
@@ -1738,22 +1739,22 @@ def check_outbound_and_media(base_url):
                     (v.get("src") and any(p in v.get("src", "") for p in ["youtube", "vimeo", "wistia"]))]
 
     if has_video_schema:
-        print(f"  [{PASS}] VideoObject structured data found")
+        emit_check(PASS, "result.checks.outbound.video_schema_found", "VideoObject structured data found")
         om_score += 0.5
     elif video_embeds:
-        print(f"  [{WARN}] Video content found ({len(video_embeds)} embed(s)) but no VideoObject schema")
+        emit_check(WARN, "result.checks.outbound.video_no_schema", f"Video content found ({len(video_embeds)} embed(s)) but no VideoObject schema", {"count": len(video_embeds)})
         fix("Add VideoObject structured data for your video content:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>")
     else:
-        print(f"  [{INFO}] No video content detected")
+        emit_check(INFO, "result.checks.outbound.no_video", "No video content detected")
 
     # Check for video transcripts
     if video_embeds:
         transcript_indicators = soup.find_all(class_=re.compile(r"transcript", re.IGNORECASE))
         transcript_indicators += soup.find_all(id=re.compile(r"transcript", re.IGNORECASE))
         if transcript_indicators:
-            print(f"  [{PASS}] Video transcript section found — AI engines can index transcript text")
+            emit_check(PASS, "result.checks.outbound.transcript_found", "Video transcript section found — AI engines can index transcript text")
         else:
-            print(f"  [{WARN}] Videos found but no transcript detected")
+            emit_check(WARN, "result.checks.outbound.transcript_missing", "Videos found but no transcript detected")
             fix("Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.")
 
     # Table markup quality
@@ -1766,25 +1767,25 @@ def check_outbound_and_media(base_url):
             if has_thead and has_th:
                 well_formed += 1
         if well_formed == len(tables):
-            print(f"  [{PASS}] {len(tables)} table(s) with proper <thead>/<th> markup")
+            emit_check(PASS, "result.checks.outbound.tables_well_formed", f"{len(tables)} table(s) with proper <thead>/<th> markup", {"count": len(tables)})
             om_score += 0.5
         elif well_formed > 0:
-            print(f"  [{WARN}] {well_formed}/{len(tables)} tables have proper headers — fix the rest")
+            emit_check(WARN, "result.checks.outbound.tables_partial_headers", f"{well_formed}/{len(tables)} tables have proper headers — fix the rest", {"well_formed": well_formed, "total": len(tables)})
             fix("Add <thead> and <th> to all data tables:\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>")
         else:
-            print(f"  [{WARN}] {len(tables)} table(s) but none have proper <thead>/<th> headers")
+            emit_check(WARN, "result.checks.outbound.tables_no_headers", f"{len(tables)} table(s) but none have proper <thead>/<th> headers", {"count": len(tables)})
             fix("Add semantic headers to your tables for AI extraction:\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>")
     else:
-        print(f"  [{INFO}] No tables found on homepage")
+        emit_check(INFO, "result.checks.outbound.no_tables", "No tables found on homepage")
 
     # Definition elements
     dfn_tags = soup.find_all("dfn")
     abbr_tags = soup.find_all("abbr")
     if dfn_tags or abbr_tags:
-        print(f"  [{PASS}] Definition markup found: {len(dfn_tags)} <dfn>, {len(abbr_tags)} <abbr> tags")
+        emit_check(PASS, "result.checks.outbound.definition_markup", f"Definition markup found: {len(dfn_tags)} <dfn>, {len(abbr_tags)} <abbr> tags", {"dfn": len(dfn_tags), "abbr": len(abbr_tags)})
         om_score += 0.5
     else:
-        print(f"  [{INFO}] No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations")
+        emit_check(INFO, "result.checks.outbound.no_definition_markup", "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations")
         fix("Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.")
 
     track_score("Outbound & Media", min(om_score, 3), 3)

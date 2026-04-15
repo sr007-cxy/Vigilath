@@ -588,6 +588,34 @@ if (!i18n.isInitialized) {
                 "optional_present": "Optional fields present: {{fields}}",
                 "optional_missing": "Optional fields missing: {{fields}}",
                 "org_schema_missing": "No Organization/LocalBusiness schema found — needed for knowledge panels"
+              },
+              "url_norm": {
+                "host_redirects": "{{alt}} redirects to {{main}} (consistent)",
+                "host_duplicate": "Both {{main}} and {{alt}} serve content — duplicate content risk",
+                "host_alt_inaccessible": "Alternate hostname ({{alt}}) is not accessible",
+                "slash_both_200": "Both trailing slash and non-trailing slash return 200 — ensure canonical is set",
+                "slash_redirect": "Trailing slash consistency handled via redirect",
+                "path_consistent": "URL paths are consistent",
+                "case_mixed": "Mixed case URLs resolve to different pages — can cause duplicate content",
+                "case_consistent": "URL case handling is consistent"
+              },
+              "outbound": {
+                "fetch_failed": "Could not fetch homepage",
+                "links_found": "{{count}} outbound link(s) to {{domains}} unique domain(s)",
+                "authoritative_links": "Links to authoritative sources: {{domains}}",
+                "no_authoritative": "No links to .gov/.edu/.org authoritative sources detected",
+                "no_outbound_links": "No outbound links found — linking to authoritative sources increases content trust",
+                "video_schema_found": "VideoObject structured data found",
+                "video_no_schema": "Video content found ({{count}} embed(s)) but no VideoObject schema",
+                "no_video": "No video content detected",
+                "transcript_found": "Video transcript section found — AI engines can index transcript text",
+                "transcript_missing": "Videos found but no transcript detected",
+                "tables_well_formed": "{{count}} table(s) with proper <thead>/<th> markup",
+                "tables_partial_headers": "{{well_formed}}/{{total}} tables have proper headers — fix the rest",
+                "tables_no_headers": "{{count}} table(s) but none have proper <thead>/<th> headers",
+                "no_tables": "No tables found on homepage",
+                "definition_markup": "Definition markup found: {{dfn}} <dfn>, {{abbr}} <abbr> tags",
+                "no_definition_markup": "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations"
               }
             },
             "scoreCard": {
@@ -2086,6 +2114,34 @@ if (!i18n.isInitialized) {
                 "optional_present": "可选字段已填：{{fields}}",
                 "optional_missing": "可选字段缺失：{{fields}}",
                 "org_schema_missing": "没有 Organization/LocalBusiness 结构化数据——知识面板需要它"
+              },
+              "url_norm": {
+                "host_redirects": "{{alt}} 重定向到 {{main}}（一致）",
+                "host_duplicate": "{{main}} 和 {{alt}} 都提供内容——存在重复内容风险",
+                "host_alt_inaccessible": "备用主机名（{{alt}}）不可访问",
+                "slash_both_200": "末尾带/不带斜杠都返回 200——请确保设置了 canonical",
+                "slash_redirect": "末尾斜杠一致性通过重定向处理",
+                "path_consistent": "URL 路径一致",
+                "case_mixed": "大小写 URL 解析到不同页面——可能造成重复内容",
+                "case_consistent": "URL 大小写处理一致"
+              },
+              "outbound": {
+                "fetch_failed": "无法抓取首页",
+                "links_found": "找到 {{count}} 条出站链接，覆盖 {{domains}} 个唯一域名",
+                "authoritative_links": "链接到权威来源：{{domains}}",
+                "no_authoritative": "未检测到 .gov/.edu/.org 权威来源链接",
+                "no_outbound_links": "没有出站链接——链接到权威来源能提升内容可信度",
+                "video_schema_found": "找到 VideoObject 结构化数据",
+                "video_no_schema": "找到视频内容（{{count}} 个嵌入）但没有 VideoObject 结构化数据",
+                "no_video": "未检测到视频内容",
+                "transcript_found": "找到视频转写内容——AI 引擎可以索引转写文本",
+                "transcript_missing": "找到视频但未检测到转写内容",
+                "tables_well_formed": "找到 {{count}} 个表格，都有合规的 <thead>/<th> 标记",
+                "tables_partial_headers": "{{well_formed}}/{{total}} 个表格有合规的 header——其余需补齐",
+                "tables_no_headers": "找到 {{count}} 个表格但都缺少 <thead>/<th> header",
+                "no_tables": "首页没有表格",
+                "definition_markup": "找到定义标记：{{dfn}} 个 <dfn>、{{abbr}} 个 <abbr>",
+                "no_definition_markup": "没有 <dfn> 或 <abbr>——建议用它们标记技术术语和缩写"
               }
             },
             "scoreCard": {
