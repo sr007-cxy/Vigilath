@@ -345,22 +345,22 @@ export function ProductsServices() {
                       {/* 权益项6 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">6</td>
-                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.support')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.support')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.support')}</td>
-                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.support')}</td>
-                        <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.support')}</td>
-                        <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.support')}</td>
-                      </tr>
-                      {/* 权益项7 */}
-                      <tr className="border-b border-border">
-                        <td className="px-4 py-3 text-sm text-secondary">7</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.history')}</td>
+                      </tr>
+                      {/* 权益项7 */}
+                      <tr className="border-b border-border">
+                        <td className="px-4 py-3 text-sm text-secondary">7</td>
+                        <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.support')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.free.support')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.detector.support')}</td>
+                        <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.starter.support')}</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.support')}</td>
+                        <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.support')}</td>
                       </tr>
                       {/* 权益项8 */}
                       <tr className="border-b border-border">

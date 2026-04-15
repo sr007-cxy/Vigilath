@@ -118,11 +118,18 @@
     ]
   }
   </script>
+
+  <style>
+    /* 隐藏静态 SEO 骨架,避免 React 挂载前出现 FOUC。
+       AI 爬虫(GPTBot/ClaudeBot/PerplexityBot 等)不执行 CSS,仍可抓到 #seo-skeleton 内容。 */
+    #seo-skeleton { display: none; }
+  </style>
 </head>
 
 <body>
   <!-- Static SEO skeleton — React replaces this on mount. -->
   <div id="root">
+    <div id="seo-skeleton">
     <header>
       <nav aria-label="Primary">
         <a href="/" rel="home"><strong>Vigilath</strong></a>
@@ -210,6 +217,7 @@
         </small>
       </p>
     </footer>
+    </div>
   </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
