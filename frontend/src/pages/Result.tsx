@@ -75,8 +75,8 @@ const ADVANCED_MODES: { key: AdvancedMode; minTier: 'pro' | 'starter' }[] = [
   { key: 'crawlTest', minTier: 'pro' },
   { key: 'authority', minTier: 'pro' },
   { key: 'citation', minTier: 'pro' },
-  { key: 'visibility', minTier: 'starter' },
-  { key: 'entity', minTier: 'starter' },
+  { key: 'visibility', minTier: 'pro' },
+  { key: 'entity', minTier: 'pro' },
 ];
 
 const TIER_RANK: Record<string, number> = {

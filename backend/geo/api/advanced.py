@@ -42,7 +42,7 @@ def _ensure_tier(request: Request, mode_key: str) -> None:
     min_tier = MODE_MIN_TIER.get(mode_key)
     if not min_tier:
         raise AppException(status_code=500, message=f"unknown mode {mode_key}")
-    membership = _resolve_membership_from_request(request)
+    membership, _user_id = _resolve_membership_from_request(request)
     caller_rank = TIER_RANK.get(membership.slug, 0)
     needed_rank = TIER_RANK.get(min_tier, 99)
     if caller_rank < needed_rank:

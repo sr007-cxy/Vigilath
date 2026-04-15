@@ -57,11 +57,28 @@ async def delete_membership(membership_id: int):
 
 @router.get("/user-membership", response_model=UserMembership)
 async def get_user_membership(current_user: User = Depends(get_current_user)):
-    """Get current user's membership"""
+    """Return the logged-in user's effective membership.
+
+    `user_memberships` only stores paid subscription rows — free users have no
+    row at all. The old behaviour of 404'ing in that case was wrong: a logged-in
+    user should always have at least the free tier (login is not the gate, the
+    monthly check quota is). Fall back to `get_effective_membership` (which
+    resolves to the free tier when no active paid row exists) and synthesize a
+    pseudo `UserMembership` with `id=0` so the response shape stays stable.
+    """
     user_membership = membership_service.get_user_membership(current_user.id)
-    if not user_membership:
-        raise AppException(status_code=404, message="User membership not found")
-    return user_membership
+    if user_membership:
+        return user_membership
+    effective = membership_service.get_effective_membership(current_user.id)
+    now = datetime.now()
+    return UserMembership(
+        id=0,
+        user_id=current_user.id,
+        membership_id=effective.id,
+        start_date=now,
+        end_date=datetime(9999, 12, 31),
+        is_active=True,
+    )
 
 @router.post("/user-membership", response_model=UserMembership)
 async def create_user_membership(user_membership: UserMembershipCreate, current_user: User = Depends(get_current_user)):

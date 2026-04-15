@@ -66,7 +66,11 @@ export function useMembership() {
   return {
     token,
     isLoggedIn: !!token,
-    isUnlocked: !!(data && data.is_active),
+    // `id === 0` is the backend's sentinel for a synthesized free-tier row
+    // (no real `user_memberships` record exists — logged-in free users always
+    // get one of these). A real paid subscription has a positive PK. Treating
+    // the sentinel as "unlocked" would let free users bypass the paywall.
+    isUnlocked: !!(data && data.is_active && data.id > 0),
     isLoading,
     refresh,
   };
