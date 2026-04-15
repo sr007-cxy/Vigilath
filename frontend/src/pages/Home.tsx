@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { geoApi } from '../services/geoApi';
+import { geoApi, ApiError } from '../services/geoApi';
 import { PaymentModal } from '../components/PaymentModal';
 import { useMembership } from '../hooks/useMembership';
 
@@ -53,6 +53,7 @@ export function Home() {
   const [url, setUrl] = useState('moltspay.com');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const validateUrl = (input: string): boolean => {
@@ -68,6 +69,7 @@ export function Home() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setQuotaExceeded(false);
     if (!url.trim()) {
       setError(t('home.error.empty'));
       return;
@@ -88,8 +90,13 @@ export function Home() {
       .then((result) => {
         navigate('/result', { state: { result } });
       })
-      .catch(() => {
-        setError(t('home.error.failed'));
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 429) {
+          setQuotaExceeded(true);
+          setError(t('home.error.quotaExceeded'));
+        } else {
+          setError(t('home.error.failed'));
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -180,22 +187,46 @@ export function Home() {
                 </div>
 
                 {error && (
-                  <div className="mt-4 bg-red-900/40 border border-red-800 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-red-400 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                      />
-                    </svg>
-                    <span className="text-sm text-red-300 font-medium">{error}</span>
+                  <div className="mt-4 bg-red-900/40 border border-red-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in">
+                    <div className="flex items-start gap-3 flex-1">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                      <span className="text-sm text-red-200 font-medium">{error}</span>
+                    </div>
+                    {quotaExceeded && (
+                      <Link
+                        to="/products-services"
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-red-500/90 hover:bg-red-500 text-white text-sm font-semibold transition-colors duration-200 flex-shrink-0"
+                      >
+                        {t('home.error.quotaCta')}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 8l4 4m0 0l-4 4m4-4H3"
+                          />
+                        </svg>
+                      </Link>
+                    )}
                   </div>
                 )}
               </form>

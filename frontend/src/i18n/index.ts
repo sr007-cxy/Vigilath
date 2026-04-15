@@ -222,7 +222,10 @@ if (!i18n.isInitialized) {
             "analyzing": "Analyzing...",
             "error": {
               "empty": "Please enter a URL",
-              "invalid": "Please enter a valid URL"
+              "invalid": "Please enter a valid URL",
+              "failed": "Check failed. Please try again.",
+              "quotaExceeded": "You've used all your free checks this month. Upgrade a plan to keep checking.",
+              "quotaCta": "View plans"
             },
             "poweredBy": "Powered by GEO AI",
             "contactLink": "Need expert optimization help?",
@@ -1581,7 +1584,10 @@ if (!i18n.isInitialized) {
             "analyzing": "分析中...",
             "error": {
               "empty": "请输入 URL",
-              "invalid": "请输入有效的 URL"
+              "invalid": "请输入有效的 URL",
+              "failed": "检测失败，请稍后重试",
+              "quotaExceeded": "本月的免费检测次数已用完，升级会员方案后可继续检测。",
+              "quotaCta": "查看会员方案"
             },
             "poweredBy": "由 GEO AI 提供支持",
             "contactLink": "需要专家优化帮助？",

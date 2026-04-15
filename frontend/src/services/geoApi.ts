@@ -16,6 +16,33 @@ const apiClient = axios.create({
   },
 });
 
+/** Error thrown by geoApi calls with the HTTP status attached so callers can
+ *  branch on specific cases (e.g. 429 quota exceeded). Message is the
+ *  backend-supplied string when available, otherwise a generic fallback. */
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+function throwApiError(error: unknown, fallback: string): never {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    // Backend's global_exception_handler wraps errors as
+    // { error: { code, message } }. Fall through to older shapes just in case.
+    const message =
+      data?.error?.message ||
+      data?.detail ||
+      data?.message ||
+      fallback;
+    throw new ApiError(message, error.response?.status);
+  }
+  throw new ApiError(fallback);
+}
+
 // Route-path segment for each advanced mode. Keep in sync with backend
 // backend/app/api/advanced.py paths.
 const ADVANCED_PATH: Record<AdvancedMode, string> = {
@@ -57,10 +84,7 @@ export const geoApi = {
       const response = await apiClient.post(path, request, { headers });
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || error.response?.data?.message || 'Failed to run GEO check');
-      }
-      throw new Error('Failed to run GEO check');
+      throwApiError(error, 'Failed to run GEO check');
     }
   },
 
@@ -74,15 +98,7 @@ export const geoApi = {
       const response = await apiClient.post(ADVANCED_PATH[mode], body, { headers });
       return response.data as AdvancedResponseOf<M>;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new Error(
-          error.response?.data?.error?.message ||
-            error.response?.data?.detail ||
-            error.response?.data?.message ||
-            'Failed to run advanced check',
-        );
-      }
-      throw new Error('Failed to run advanced check');
+      throwApiError(error, 'Failed to run advanced check');
     }
   },
 
@@ -92,10 +108,7 @@ export const geoApi = {
       const response = await apiClient.post(path, data, { headers });
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.detail || error.response?.data?.message || 'Failed to run GEO check');
-      }
-      throw new Error('Failed to run GEO check');
+      throwApiError(error, 'Failed to run GEO check');
     }
   },
 

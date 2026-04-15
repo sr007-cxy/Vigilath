@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PaymentModal } from '../components/PaymentModal';
 import { useMembership } from '../hooks/useMembership';
-import { geoApi } from '../services/geoApi';
+import { geoApi, ApiError } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import type { GeoTestResult, CheckResult } from '../types/geo';
@@ -142,6 +142,7 @@ export function Result() {
   const [rerunMode] = useState<'default' | AdvancedMode>('default');
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunError, setRerunError] = useState<string>('');
+  const [rerunQuotaExceeded, setRerunQuotaExceeded] = useState(false);
 
   const effectiveTier = result?.tier || 'free';
   const effectiveRank = TIER_RANK[effectiveTier] ?? 0;
@@ -261,6 +262,7 @@ export function Result() {
     e.preventDefault();
     const trimmed = rerunUrl.trim();
     setRerunError('');
+    setRerunQuotaExceeded(false);
     if (!trimmed) {
       setRerunError(t('home.error.empty'));
       return;
@@ -293,8 +295,13 @@ export function Result() {
       .then((freshResult) => {
         navigate('/result', { state: { result: freshResult }, replace: true });
       })
-      .catch(() => {
-        setRerunError(t('home.error.failed'));
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 429) {
+          setRerunQuotaExceeded(true);
+          setRerunError(t('home.error.quotaExceeded'));
+        } else {
+          setRerunError(t('home.error.failed'));
+        }
       })
       .finally(() => {
         setRerunLoading(false);
@@ -459,7 +466,18 @@ export function Result() {
                 </button>
               </div>
               {rerunError && (
-                <p className="mt-2 text-[11px] text-rose-400 px-3">{rerunError}</p>
+                <div className="mt-2 px-3 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] text-rose-400 flex-1 min-w-0">{rerunError}</p>
+                  {rerunQuotaExceeded && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/products-services')}
+                      className="text-[11px] font-semibold text-rose-200 bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded-full transition-colors"
+                    >
+                      {t('home.error.quotaCta')}
+                    </button>
+                  )}
+                </div>
               )}
             </form>
 
