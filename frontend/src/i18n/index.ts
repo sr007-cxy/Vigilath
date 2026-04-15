@@ -37,7 +37,13 @@ if (!i18n.isInitialized) {
             "success": "Success",
             "theme": {
               "switchToLight": "Switch to light mode",
-              "switchToDark": "Switch to dark mode"
+              "switchToDark": "Switch to dark mode",
+              "labels": {
+                "peec": "Minimal",
+                "light": "Light",
+                "dark": "Dark"
+              },
+              "tooltip": "Theme: {{current}} — click for {{next}}"
             },
             "errors": {
               "loadFailed": "Failed to load content",
@@ -452,7 +458,15 @@ if (!i18n.isInitialized) {
               "meta": {
                 "title": "Meta Tag Coverage",
                 "subtitle": "6 signals AI engines rely on for summaries",
-                "passCount": "{{pass}}/{{total}} pass"
+                "passCount": "{{pass}}/{{total}} pass",
+                "items": {
+                  "title": { "help": "Page title tag" },
+                  "description": { "help": "Meta description" },
+                  "canonical": { "help": "Canonical URL" },
+                  "og": { "help": "og:* tags for social and AI summaries" },
+                  "lang": { "help": "Language declaration" },
+                  "hreflang": { "help": "Multilingual alternate versions" }
+                }
               },
               "platform": {
                 "titleCross": "Cross-Platform Presence",
@@ -1296,7 +1310,13 @@ if (!i18n.isInitialized) {
             "success": "成功",
             "theme": {
               "switchToLight": "切换到亮色模式",
-              "switchToDark": "切换到暗色模式"
+              "switchToDark": "切换到暗色模式",
+              "labels": {
+                "peec": "极简",
+                "light": "浅色",
+                "dark": "深色"
+              },
+              "tooltip": "主题：{{current}}——点击切换到 {{next}}"
             },
             "errors": {
               "loadFailed": "加载失败",
@@ -1711,7 +1731,15 @@ if (!i18n.isInitialized) {
               "meta": {
                 "title": "Meta 标签覆盖",
                 "subtitle": "AI 引擎用于生成摘要的 6 个信号",
-                "passCount": "{{pass}}/{{total}} 通过"
+                "passCount": "{{pass}}/{{total}} 通过",
+                "items": {
+                  "title": { "help": "页面标题标签" },
+                  "description": { "help": "Meta 描述" },
+                  "canonical": { "help": "规范 URL" },
+                  "og": { "help": "用于社交和 AI 摘要的 og:* 标签" },
+                  "lang": { "help": "语言声明" },
+                  "hreflang": { "help": "多语言替代版本" }
+                }
               },
               "platform": {
                 "titleCross": "跨平台存在度",
