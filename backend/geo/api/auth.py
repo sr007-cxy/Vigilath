@@ -2,12 +2,22 @@ from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from pydantic import BaseModel, EmailStr
 from geo.models.user import User, UserCreate, UserLogin, Token
 from geo.services.user_service import user_service
 from geo.services.email_service import email_service
 from geo.utils.error_handler import AppException
 
 router = APIRouter()
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 # Security configuration
 SECRET_KEY = "your-secret-key-here"
@@ -91,27 +101,26 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.post("/forgot-password")
-async def forgot_password(email: str):
+async def forgot_password(body: ForgotPasswordRequest):
     """Send password reset email"""
-    # Find user by email
+    email = body.email
     user = user_service.get_user_by_email(email)
     if not user:
         raise AppException(status_code=404, message="Email not found")
-    
-    # Create reset token
+
     reset_token = create_reset_token({"sub": user.email, "type": "reset"})
-    
-    # Send password reset email
+
     email_sent = email_service.send_password_reset_email(email, reset_token)
     if not email_sent:
         raise AppException(status_code=500, message="Failed to send password reset email")
-    
+
     return {"message": "Password reset email sent"}
 
 @router.post("/reset-password")
-async def reset_password(token: str, new_password: str):
+async def reset_password(body: ResetPasswordRequest):
     """Reset password"""
-    # Verify reset token
+    token = body.token
+    new_password = body.new_password
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     email: str = payload.get("sub")
     token_type: str = payload.get("type")
