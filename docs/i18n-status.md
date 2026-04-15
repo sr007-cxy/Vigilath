@@ -1,6 +1,6 @@
 # 前端双语（zh / en）支持现状
 
-> 文档版本：v1.0
+> 文档版本：v1.1
 > 日期：2026-04-15
 > 负责人：Oliver
 > 适用范围：`frontend/` React SPA（vigilath.com）
@@ -10,8 +10,8 @@
 ## 一、基本定位
 
 - **仅支持两种语言**：简体中文（`zh`）、英文（`en`）。
-- **i18n 资源位置**：**`frontend/src/i18n/index.ts`**（约 2467 行，把翻译资源直接 inline 在 `i18n.init({ resources })` 里）。
-- **`frontend/src/i18n/locales/{en,zh}/translation.json` 文件存在但未被任何模块 import**，属于历史遗留 / 孤儿文件，非当前生效源。**增改翻译必须改 `i18n/index.ts`，改 JSON 无效。**
+- **i18n 资源位置**：**`frontend/src/i18n/index.ts`**，所有翻译资源 inline 在 `i18n.init({ resources })` 里，en 和 zh 两个子树，当前约 835 keys × 2 语言对齐。
+- **只有一个真实源**：2026-04-15 已删除历史遗留的孤儿文件 `frontend/src/i18n/locales/{en,zh}/translation.json`，避免"加 key 到 JSON 但不生效"的陷阱。`i18n/index.ts` 顶部已加防御性注释明确这一点。任何新增 key 只能加在 `i18n/index.ts` 的 en / zh 子树里。
 - **默认语言**：看用户浏览器 / localStorage；`Header.tsx` 顶部的切换按钮只在 `zh` / `en` 间来回切。
 
 ---
@@ -122,3 +122,4 @@ grep -rL "useTranslation" frontend/src/pages frontend/src/components \
 ## 六、变更记录
 
 - **2026-04-15 · v1.0**：首次建档，基线审计（commit `cf91519`）。
+- **2026-04-15 · v1.1**：删除孤儿文件 `src/i18n/locales/{en,zh}/translation.json`，并在 `i18n/index.ts` 顶部加防御性注释。起因：上游 `5099ef1` 往孤儿 JSON 里加 `result.shareExport.downloadReport` key，线上直接显示原始占位符（`a586871` 之后由 `5dc3d7b` 补到真实源修复）。根治方案：从此只有一个 i18n 源。

@@ -1,3 +1,8 @@
+// Translation resources are inlined in this file intentionally.
+// Do NOT add src/i18n/locales/*.json — it will NOT be loaded.
+// If you need to add/change translation keys, edit the en/zh resources
+// objects below directly. Full rationale: docs/i18n-status.md §1.
+
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
