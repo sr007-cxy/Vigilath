@@ -703,6 +703,83 @@ if (!i18n.isInitialized) {
               "languagePreferenceDesc": "The share of relevant queries where your brand is actually named in the AI-generated answer, with or without a direct citation link.",
               "searchTrends": "Competitor Share of Voice",
               "searchTrendsDesc": "Which competitors AI models name alongside you and how often — the real benchmark for category mindshare."
+            },
+            "tabs": {
+              "overview": "Overview",
+              "metrics": "Metrics Glossary"
+            },
+            "metrics": {
+              "title": "GEO Metrics Glossary",
+              "description": "Every check in the GEO Readiness report, explained plainly: what it measures, why it matters for AI visibility, and how to improve it.",
+              "field": {
+                "measures": "What it measures",
+                "why": "Why it matters",
+                "scoring": "Scoring logic",
+                "howto": "How to improve"
+              },
+              "categories": {
+                "crawlability": {
+                  "title": "1. Basic Crawlability",
+                  "description": "The baseline signals that decide whether AI crawlers can reach and index your pages at all. If these fail, nothing else matters.",
+                  "items": {
+                    "https": {
+                      "name": "HTTPS",
+                      "measures": "Checks whether your site is served over HTTPS and the TLS certificate is valid.",
+                      "why": "AI engine crawlers (OpenAI GPTBot, Anthropic ClaudeBot, Perplexity, Google-Extended) skip non-HTTPS sites. Plain HTTP pages are downranked or ignored outright during both training and real-time retrieval.",
+                      "scoring": "HTTPS with a valid certificate → PASS. HTTP that redirects to HTTPS is acceptable. Plain HTTP or an expired certificate → FAIL.",
+                      "howto": [
+                        "Use Let's Encrypt to issue a free certificate.",
+                        "Enable HTTPS in one click via Cloudflare or Vercel.",
+                        "Make sure every internal link uses https:// to avoid mixed-content warnings."
+                      ]
+                    },
+                    "robots": {
+                      "name": "robots.txt crawler rules",
+                      "measures": "Checks whether robots.txt exists, parses cleanly, and explicitly allows the major AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot).",
+                      "why": "AI crawlers honor robots.txt by default. A single Disallow: / or a User-agent: GPTBot block makes you invisible to OpenAI — the equivalent of voluntarily disappearing from the AI view of the web.",
+                      "scoring": "File present and all major AI crawlers allowed → PASS. Blocking one or two minor crawlers → WARN. Blocking any of GPTBot, ClaudeBot, or CCBot → FAIL.",
+                      "howto": [
+                        "Explicitly set `User-agent: GPTBot` with `Allow: /`.",
+                        "Do the same for ClaudeBot, PerplexityBot, Google-Extended, and CCBot.",
+                        "Reference your sitemap URL at the top of robots.txt with `Sitemap: https://your-site/sitemap.xml`."
+                      ]
+                    },
+                    "sitemap": {
+                      "name": "sitemap.xml",
+                      "measures": "Checks whether sitemap.xml exists, is well-formed, contains a healthy number of URLs, and is referenced from robots.txt.",
+                      "why": "AI crawlers discover pages through the sitemap rather than link-walking from the homepage. Without one, a crawler may grab only your index page and leave — your deep content stays invisible to LLMs.",
+                      "scoring": "File present and URL count looks right → PASS. Present but very small or malformed → WARN. Missing → FAIL.",
+                      "howto": [
+                        "Static site generators (Next.js, Astro, Hugo) usually emit sitemap.xml automatically.",
+                        "For dynamic content, generate it with a sitemap-generator script or a backend route.",
+                        "Add `Sitemap: https://your-site/sitemap.xml` at the top of robots.txt."
+                      ]
+                    },
+                    "llms": {
+                      "name": "llms.txt",
+                      "measures": "Checks whether llms.txt exists at the site root. This is a 2024 proposal — a Markdown file that tells LLMs what your site is and where its canonical content lives.",
+                      "why": "llms.txt gives AI crawlers a curated tour instead of forcing them to guess which pages matter. Anthropic, Perplexity and others have started to support or reference the format, and early movers own the slot.",
+                      "scoring": "File present → PASS. Missing → INFO (not yet mandatory, but cheap to add and first-mover advantage is real).",
+                      "howto": [
+                        "Create `llms.txt` (not `llms-full.txt`) at your site root.",
+                        "Include a one-line site summary, core page links, and a pointer to product documentation.",
+                        "Follow the spec at https://llmstxt.org."
+                      ]
+                    },
+                    "aiCrawlerAccess": {
+                      "name": "AI crawler live accessibility",
+                      "measures": "Sends real HTTP requests using GPTBot, ClaudeBot, PerplexityBot and other user-agents to see whether your WAF, Cloudflare Bot Fight, or CAPTCHA challenges block them.",
+                      "why": "Allowing a bot in robots.txt is only half the story — Cloudflare Bot Fight or AWS WAF rules often block every non-browser user-agent as malicious, trapping legitimate AI crawlers with the rest. Robots policy and edge policy must agree.",
+                      "scoring": "All AI user-agents return 200 → PASS. Some blocked → WARN. All blocked → FAIL.",
+                      "howto": [
+                        "Explicitly allow GPTBot, ClaudeBot, PerplexityBot and Google-Extended in Cloudflare Bot Fight / Super Bot Fight rules.",
+                        "For AWS WAF or similar, add an Allow rule matching these user-agent strings.",
+                        "Verify locally with `curl -A 'GPTBot' https://yoursite.com` and confirm you get a 200."
+                      ]
+                    }
+                  }
+                }
+              }
             }
           },
           "productsServices": {
@@ -1771,6 +1848,83 @@ if (!i18n.isInitialized) {
               "languagePreferenceDesc": "在相关查询中，你的品牌实际出现在 AI 生成答案里的比例——无论是否附带直接引用链接。",
               "searchTrends": "竞品声量占比",
               "searchTrendsDesc": "AI 模型会和你一起提到哪些竞品、出现频率如何——这才是品类心智的真实基准。"
+            },
+            "tabs": {
+              "overview": "概览",
+              "metrics": "指标词典"
+            },
+            "metrics": {
+              "title": "GEO 检测指标词典",
+              "description": "GEO 就绪度报告里的每一项检测——它在测什么、为什么对 AI 可见性重要、具体怎么改善，逐项讲清楚。",
+              "field": {
+                "measures": "测什么",
+                "why": "为什么重要",
+                "scoring": "评分逻辑",
+                "howto": "怎么改善"
+              },
+              "categories": {
+                "crawlability": {
+                  "title": "一、基础可抓取性",
+                  "description": "决定 AI 爬虫能否到达并索引你页面的底层信号。这一层不过，后面的一切都白搭。",
+                  "items": {
+                    "https": {
+                      "name": "HTTPS 安全协议",
+                      "measures": "检测你的站点是否通过 HTTPS 提供服务、TLS 证书是否合法有效。",
+                      "why": "AI 引擎爬虫（OpenAI GPTBot、Anthropic ClaudeBot、Perplexity、Google-Extended）会直接跳过非 HTTPS 站点。明文 HTTP 页面无论是在训练阶段还是实时检索阶段都会被降权或直接忽略。",
+                      "scoring": "HTTPS 且证书有效 → PASS；HTTP 自动重定向到 HTTPS 可接受；纯 HTTP 或证书过期 → FAIL。",
+                      "howto": [
+                        "使用 Let's Encrypt 免费签发证书",
+                        "通过 Cloudflare / Vercel 一键启用 HTTPS",
+                        "确保所有内部链接都走 https://，避免混合内容警告"
+                      ]
+                    },
+                    "robots": {
+                      "name": "robots.txt 爬虫规则",
+                      "measures": "检测 robots.txt 是否存在、语法是否合法、是否明确放行主流 AI 爬虫（GPTBot、ClaudeBot、PerplexityBot、Google-Extended、CCBot）。",
+                      "why": "AI 爬虫默认尊重 robots.txt。一条 Disallow: / 或 User-agent: GPTBot 的屏蔽就能让 OpenAI 永远看不到你的内容，相当于主动从 AI 视野里消失。",
+                      "scoring": "文件存在且放行所有主流 AI 爬虫 → PASS；屏蔽 1–2 个次要爬虫 → WARN；屏蔽 GPTBot / ClaudeBot / CCBot 中任意一个 → FAIL。",
+                      "howto": [
+                        "显式写 `User-agent: GPTBot` + `Allow: /`",
+                        "对 ClaudeBot、PerplexityBot、Google-Extended、CCBot 做同样配置",
+                        "robots.txt 顶部加 `Sitemap: https://your-site/sitemap.xml`"
+                      ]
+                    },
+                    "sitemap": {
+                      "name": "sitemap.xml 站点地图",
+                      "measures": "检测 sitemap.xml 是否存在、格式合法、URL 数量合理，以及是否在 robots.txt 中被引用。",
+                      "why": "AI 爬虫通过 sitemap 发现你所有页面，而不是从首页顺链接爬。缺失 sitemap 意味着爬虫可能只抓到首页就离开，深度内容对 LLM 完全隐形。",
+                      "scoring": "文件存在且 URL 数量合理 → PASS；存在但 URL 很少或格式异常 → WARN；缺失 → FAIL。",
+                      "howto": [
+                        "Next.js / Astro / Hugo 等静态站生成器通常自带 sitemap 生成",
+                        "动态内容用 sitemap-generator 脚本或后端路由生成",
+                        "在 robots.txt 顶部添加 `Sitemap: https://your-site/sitemap.xml`"
+                      ]
+                    },
+                    "llms": {
+                      "name": "llms.txt LLM 索引文件",
+                      "measures": "检测根目录下是否存在 llms.txt。这是 2024 年提出的新协议，用 Markdown 格式告诉大模型你站点是什么、核心内容在哪里。",
+                      "why": "llms.txt 给 AI 爬虫一份「策划过的导览地图」——它不用猜哪些页面是精华，直接按你列的顺序抓。Anthropic、Perplexity 等已开始支持或参考这个协议，先做先占位。",
+                      "scoring": "文件存在 → PASS；缺失 → INFO（目前非强制，但成本低、先做先赢）。",
+                      "howto": [
+                        "在根目录创建 `llms.txt`（不是 llms-full.txt）",
+                        "包含一句站点摘要、核心页面链接、产品文档入口",
+                        "参考规范：https://llmstxt.org"
+                      ]
+                    },
+                    "aiCrawlerAccess": {
+                      "name": "AI 爬虫实测可访问性",
+                      "measures": "用 GPTBot、ClaudeBot、PerplexityBot 等真实 User-Agent 发 HTTP 请求，检查你的 WAF、Cloudflare Bot Fight、验证码是否把它们挡在门外。",
+                      "why": "robots.txt 放行只是第一层——Cloudflare Bot Fight 或 AWS WAF 常常把所有非浏览器 UA 一律当恶意爬虫拦掉，AI 爬虫也会被误伤。robots 策略和边缘策略必须一致。",
+                      "scoring": "所有 AI UA 返回 200 → PASS；部分被拦 → WARN；全部被拦 → FAIL。",
+                      "howto": [
+                        "在 Cloudflare Bot Fight / Super Bot Fight 的白名单里显式放行 GPTBot、ClaudeBot、PerplexityBot、Google-Extended",
+                        "AWS WAF 或同类规则里加一条 Allow 匹配这些 User-Agent",
+                        "本地验证：`curl -A 'GPTBot' https://yoursite.com` 看是否返回 200"
+                      ]
+                    }
+                  }
+                }
+              }
             }
           },
           "productsServices": {

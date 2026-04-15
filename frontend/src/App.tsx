@@ -5,6 +5,7 @@ import { Home } from './pages/Home';
 import { Result } from './pages/Result';
 import { Contact } from './pages/Contact';
 import { GeoKnowledge } from './pages/GeoKnowledge';
+import { GeoKnowledgeMetrics } from './pages/GeoKnowledgeMetrics';
 import { ProductsServices } from './pages/ProductsServices';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -35,6 +36,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/checker" element={<Home />} />
             <Route path="/geo-knowledge" element={<GeoKnowledge />} />
+            <Route path="/geo-knowledge/metrics" element={<GeoKnowledgeMetrics />} />
             <Route path="/products-services" element={<ProductsServices />} />
             <Route path="/account" element={<AccountLayout />}>
               <Route index element={<Navigate to="profile" replace />} />

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { GeoKnowledgeTabs } from '../components/GeoKnowledgeTabs';
 
 export function GeoKnowledge() {
   const { t } = useTranslation();
@@ -14,7 +15,7 @@ export function GeoKnowledge() {
       <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           {/* Hero Section */}
-          <section className="hero mb-20">
+          <section className="hero mb-10">
             <div className="max-w-3xl mx-auto text-center">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
                 <span className="gradient-text">{t('geoKnowledge.title')}</span>
@@ -24,6 +25,8 @@ export function GeoKnowledge() {
               </p>
             </div>
           </section>
+
+          <GeoKnowledgeTabs />
 
           {/* Content Section */}
           <section className="space-y-20">
