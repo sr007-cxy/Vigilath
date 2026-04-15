@@ -369,6 +369,41 @@ if (!i18n.isInitialized) {
               "https": {
                 "uses_https": "Site uses HTTPS",
                 "not_https": "Site does not use HTTPS — AI engines prefer secure sites"
+              },
+              "robots": {
+                "not_found": "robots.txt not found at {{url}}",
+                "found": "robots.txt found ({{bytes}} bytes)",
+                "sitemap_ref_present": "robots.txt references a sitemap",
+                "sitemap_ref_missing": "robots.txt does not reference a sitemap",
+                "wildcard_blocks_all": "Wildcard user-agent blocks all crawlers (Disallow: /)",
+                "bots_blocked": "AI bots explicitly BLOCKED: {{bots}}",
+                "bots_with_directives": "AI bots with directives (not blocked): {{bots}}",
+                "bots_inherit_wildcard": "AI bots not mentioned (inherit wildcard rules): {{bots}}"
+              },
+              "llms": {
+                "found": "{{filename}} found ({{lines}} lines, {{bytes}} bytes)",
+                "title_present": "Title: {{title}}",
+                "title_missing": "No markdown title (# heading) — recommended by llms.txt spec",
+                "description_present": "Contains descriptive text",
+                "description_missing": "No descriptive text found — should explain what the site/org does",
+                "sections_found": "{{count}} section(s) found (## headings)",
+                "sections_missing": "No sections (## headings) — consider organizing content into sections",
+                "links_found": "{{count}} link(s) to resources found",
+                "links_missing": "No links found — llms.txt should link to key resources",
+                "blockquotes_present": "Blockquote descriptions (>) present",
+                "too_short": "File is very short ({{bytes}} bytes) — may be a placeholder",
+                "file_not_found": "{{filename}} not found"
+              },
+              "well_known": {
+                "file_found": "{{path}} found — {{description}}",
+                "invalid_json": "{{path}} exists but contains invalid JSON",
+                "file_not_found": "{{path}} not found — {{description}}"
+              },
+              "sitemap": {
+                "found": "Sitemap found at {{path}} ({{count}} <loc> entries)",
+                "lastmod_present": "Sitemap includes <lastmod> timestamps",
+                "lastmod_missing": "Sitemap missing <lastmod> timestamps — helps AI engines know content freshness",
+                "not_found": "No sitemap.xml found"
               }
             },
             "scoreCard": {
@@ -1648,6 +1683,41 @@ if (!i18n.isInitialized) {
               "https": {
                 "uses_https": "站点已启用 HTTPS",
                 "not_https": "站点未使用 HTTPS——AI 引擎更偏好安全站点"
+              },
+              "robots": {
+                "not_found": "{{url}} 找不到 robots.txt",
+                "found": "robots.txt 存在（{{bytes}} 字节）",
+                "sitemap_ref_present": "robots.txt 中引用了 sitemap",
+                "sitemap_ref_missing": "robots.txt 中没有引用 sitemap",
+                "wildcard_blocks_all": "通配符 user-agent 阻止了所有爬虫（Disallow: /）",
+                "bots_blocked": "以下 AI 爬虫被显式屏蔽：{{bots}}",
+                "bots_with_directives": "有显式规则（未屏蔽）的 AI 爬虫：{{bots}}",
+                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}"
+              },
+              "llms": {
+                "found": "找到 {{filename}}（{{lines}} 行，{{bytes}} 字节）",
+                "title_present": "标题：{{title}}",
+                "title_missing": "没有 Markdown 标题（# 标题）——llms.txt 规范推荐写一个",
+                "description_present": "包含描述性文字",
+                "description_missing": "没有描述性文字——应该说明站点或组织做什么",
+                "sections_found": "找到 {{count}} 个章节（## 二级标题）",
+                "sections_missing": "没有章节（## 二级标题）——建议把内容按章节组织",
+                "links_found": "找到 {{count}} 个指向资源的链接",
+                "links_missing": "没找到链接——llms.txt 应该链接到关键资源",
+                "blockquotes_present": "包含 blockquote 描述（>）",
+                "too_short": "文件非常短（{{bytes}} 字节）——可能只是占位符",
+                "file_not_found": "找不到 {{filename}}"
+              },
+              "well_known": {
+                "file_found": "找到 {{path}} —— {{description}}",
+                "invalid_json": "{{path}} 存在但 JSON 语法无效",
+                "file_not_found": "找不到 {{path}} —— {{description}}"
+              },
+              "sitemap": {
+                "found": "在 {{path}} 找到 sitemap（{{count}} 条 <loc>）",
+                "lastmod_present": "sitemap 带 <lastmod> 时间戳",
+                "lastmod_missing": "sitemap 缺少 <lastmod> 时间戳——有助于 AI 引擎判断内容新鲜度",
+                "not_found": "没有找到 sitemap.xml"
               }
             },
             "scoreCard": {

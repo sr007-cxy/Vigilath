@@ -216,21 +216,21 @@ def check_robots_txt(base_url):
     resp = fetch(url)
 
     if resp is None or resp.status_code != 200:
-        print(f"  [{FAIL}] robots.txt not found at {url}")
+        emit_check(FAIL, "result.checks.robots.not_found", f"robots.txt not found at {url}", {"url": url})
         fix("Create a robots.txt file at the root of your site.\nMinimal example:\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml")
         track_score("robots.txt", 0, 8)
         return
 
-    print(f"  [{PASS}] robots.txt found ({len(resp.text)} bytes)")
+    emit_check(PASS, "result.checks.robots.found", f"robots.txt found ({len(resp.text)} bytes)", {"bytes": len(resp.text)})
     track_score("robots.txt", 3, 3)
     lines = resp.text.splitlines()
 
     has_sitemap_ref = any(line.strip().lower().startswith("sitemap:") for line in lines)
     if has_sitemap_ref:
-        print(f"  [{PASS}] robots.txt references a sitemap")
+        emit_check(PASS, "result.checks.robots.sitemap_ref_present", "robots.txt references a sitemap")
         track_score("robots.txt", 2, 2)
     else:
-        print(f"  [{WARN}] robots.txt does not reference a sitemap")
+        emit_check(WARN, "result.checks.robots.sitemap_ref_missing", "robots.txt does not reference a sitemap")
         fix("Add a Sitemap directive to your robots.txt:\n  Sitemap: https://yoursite.com/sitemap.xml")
         track_score("robots.txt", 0, 2)
 
@@ -270,15 +270,15 @@ def check_robots_txt(base_url):
                     break
 
     if wildcard_blocks_all:
-        print(f"  [{WARN}] Wildcard user-agent blocks all crawlers (Disallow: /)")
+        emit_check(WARN, "result.checks.robots.wildcard_blocks_all", "Wildcard user-agent blocks all crawlers (Disallow: /)")
         fix("Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others.")
     if blocked:
-        print(f"  [{WARN}] AI bots explicitly BLOCKED: {', '.join(blocked)}")
+        emit_check(WARN, "result.checks.robots.bots_blocked", f"AI bots explicitly BLOCKED: {', '.join(blocked)}", {"bots": ", ".join(blocked)})
         fix(f"To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /")
     if allowed:
-        print(f"  [{PASS}] AI bots with directives (not blocked): {', '.join(allowed)}")
+        emit_check(PASS, "result.checks.robots.bots_with_directives", f"AI bots with directives (not blocked): {', '.join(allowed)}", {"bots": ", ".join(allowed)})
     if not_mentioned:
-        print(f"  [{INFO}] AI bots not mentioned (inherit wildcard rules): {', '.join(not_mentioned)}")
+        emit_check(INFO, "result.checks.robots.bots_inherit_wildcard", f"AI bots not mentioned (inherit wildcard rules): {', '.join(not_mentioned)}", {"bots": ", ".join(not_mentioned)})
 
     # Score: 3 pts for AI bot access
     total_bots = len(AI_BOTS)
@@ -300,7 +300,7 @@ def check_llms_txt(base_url):
         if resp and resp.status_code == 200 and len(resp.text.strip()) > 0:
             text = resp.text.strip()
             lines = text.splitlines()
-            print(f"  [{PASS}] {filename} found ({len(lines)} lines, {len(text)} bytes)")
+            emit_check(PASS, "result.checks.llms.found", f"{filename} found ({len(lines)} lines, {len(text)} bytes)", {"filename": filename, "lines": len(lines), "bytes": len(text)})
 
             has_title = any(line.strip().startswith("# ") for line in lines)
             has_description = len([l for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith(">") and not l.strip().startswith("-")]) > 0
@@ -312,42 +312,42 @@ def check_llms_txt(base_url):
 
             if has_title:
                 title_line = next(l for l in lines if l.strip().startswith("# "))
-                print(f"  [{PASS}] Title: {title_line.strip()}")
+                emit_check(PASS, "result.checks.llms.title_present", f"Title: {title_line.strip()}", {"title": title_line.strip()})
                 llms_score += 0.5
             else:
-                print(f"  [{WARN}] No markdown title (# heading) — recommended by llms.txt spec")
+                emit_check(WARN, "result.checks.llms.title_missing", "No markdown title (# heading) — recommended by llms.txt spec")
                 fix(f"Add a title as the first line of {filename}:\n  # Your Site Name")
 
             if has_description:
-                print(f"  [{PASS}] Contains descriptive text")
+                emit_check(PASS, "result.checks.llms.description_present", "Contains descriptive text")
             else:
-                print(f"  [{WARN}] No descriptive text found — should explain what the site/org does")
+                emit_check(WARN, "result.checks.llms.description_missing", "No descriptive text found — should explain what the site/org does")
                 fix(f"Add a paragraph below the title explaining what your site/org does:\n  # Your Site\n  A brief description of your site and what it offers.")
 
             if has_sections:
                 section_count = sum(1 for l in lines if l.strip().startswith("## "))
-                print(f"  [{PASS}] {section_count} section(s) found (## headings)")
+                emit_check(PASS, "result.checks.llms.sections_found", f"{section_count} section(s) found (## headings)", {"count": section_count})
                 llms_score += 0.5
             else:
-                print(f"  [{WARN}] No sections (## headings) — consider organizing content into sections")
+                emit_check(WARN, "result.checks.llms.sections_missing", "No sections (## headings) — consider organizing content into sections")
                 fix("Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog")
 
             if has_links:
                 link_count = sum(1 for l in lines if "](http" in l or "](/" in l)
-                print(f"  [{PASS}] {link_count} link(s) to resources found")
+                emit_check(PASS, "result.checks.llms.links_found", f"{link_count} link(s) to resources found", {"count": link_count})
                 llms_score += 0.5
             else:
-                print(f"  [{WARN}] No links found — llms.txt should link to key resources")
+                emit_check(WARN, "result.checks.llms.links_missing", "No links found — llms.txt should link to key resources")
                 fix("Add markdown links to your key pages:\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)")
 
             if has_blockquotes:
-                print(f"  [{PASS}] Blockquote descriptions (>) present")
+                emit_check(PASS, "result.checks.llms.blockquotes_present", "Blockquote descriptions (>) present")
 
             if len(text) < 100:
-                print(f"  [{WARN}] File is very short ({len(text)} bytes) — may be a placeholder")
+                emit_check(WARN, "result.checks.llms.too_short", f"File is very short ({len(text)} bytes) — may be a placeholder", {"bytes": len(text)})
                 fix("Expand the file with meaningful content about your site, its purpose, key pages, and resources.")
         else:
-            print(f"  [{FAIL}] {filename} not found")
+            emit_check(FAIL, "result.checks.llms.file_not_found", f"{filename} not found", {"filename": filename})
             if filename == "llms.txt":
                 fix("Create an llms.txt file at your site root. Example structure:\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)")
             elif filename == "llms-full.txt":
@@ -377,7 +377,7 @@ def check_well_known(base_url):
         if resp and resp.status_code == 200 and len(resp.text.strip()) > 0:
             found_any = True
             wk_found += 1
-            print(f"  [{PASS}] {path} found — {description}")
+            emit_check(PASS, "result.checks.well_known.file_found", f"{path} found — {description}", {"path": path, "description": description})
             if path.endswith(".json"):
                 try:
                     data = json.loads(resp.text)
@@ -385,10 +385,10 @@ def check_well_known(base_url):
                         name = data.get("name_for_human", data.get("name", "unknown"))
                         print(f"         Plugin name: {name}")
                 except json.JSONDecodeError:
-                    print(f"  [{WARN}] {path} exists but contains invalid JSON")
+                    emit_check(WARN, "result.checks.well_known.invalid_json", f"{path} exists but contains invalid JSON", {"path": path})
                     fix(f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.")
         else:
-            print(f"  [{INFO}] {path} not found — {description}")
+            emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description}", {"path": path, "description": description})
 
     if not found_any:
         print(f"  [{INFO}] No .well-known AI discovery files found")
@@ -413,15 +413,15 @@ def check_sitemap(base_url):
         if resp and resp.status_code == 200 and ("<?xml" in resp.text or "<urlset" in resp.text or "<sitemapindex" in resp.text):
             found = True
             url_count = resp.text.count("<loc>")
-            print(f"  [{PASS}] Sitemap found at {path} ({url_count} <loc> entries)")
+            emit_check(PASS, "result.checks.sitemap.found", f"Sitemap found at {path} ({url_count} <loc> entries)", {"path": path, "count": url_count})
             track_score("Sitemap", 4, 4)
 
             has_lastmod = "<lastmod>" in resp.text
             if has_lastmod:
-                print(f"  [{PASS}] Sitemap includes <lastmod> timestamps")
+                emit_check(PASS, "result.checks.sitemap.lastmod_present", "Sitemap includes <lastmod> timestamps")
                 track_score("Sitemap", 3, 3)
             else:
-                print(f"  [{WARN}] Sitemap missing <lastmod> timestamps — helps AI engines know content freshness")
+                emit_check(WARN, "result.checks.sitemap.lastmod_missing", "Sitemap missing <lastmod> timestamps — helps AI engines know content freshness")
                 fix("Add <lastmod> to each <url> entry in your sitemap:\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>")
                 track_score("Sitemap", 1, 3)
 
@@ -440,7 +440,7 @@ def check_sitemap(base_url):
             break
 
     if not found:
-        print(f"  [{FAIL}] No sitemap.xml found")
+        emit_check(FAIL, "result.checks.sitemap.not_found", "No sitemap.xml found")
         fix("Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms (WordPress, Next.js, etc.) can auto-generate sitemaps.")
         track_score("Sitemap", 0, 7)
 
