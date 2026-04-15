@@ -431,8 +431,20 @@ if (!i18n.isInitialized) {
               "rerunPlaceholder": "Enter a URL to re-run the check",
               "rerun": "Re-run check",
               "modeLabel": "Detection mode",
-              "modeDefault": "Standard check (5 / 23 categories)",
-              "modeLockedHint": "Upgrade your plan to unlock this mode"
+              "modeDefault": "Standard check",
+              "modeLockedHint": "Upgrade your plan to unlock this mode",
+              "placeholderCompare": "https://a.com, https://b.com, https://c.com",
+              "placeholderKeywords": "Keywords (optional, comma-separated)",
+              "placeholderEntity": "Brand / product / person name",
+              "entityTypeLabel": "Entity type",
+              "entityType": {
+                "brand": "Brand",
+                "product": "Product",
+                "person": "Person"
+              },
+              "compareHint": "Separate 2-5 URLs with commas or spaces",
+              "visibilityHint": "Leave keywords blank to auto-generate; separate multiple with commas",
+              "entityHint": "Enter the brand, product or person you want to audit"
             },
             "visuals": {
               "robots": {
@@ -1690,8 +1702,20 @@ if (!i18n.isInitialized) {
               "rerunPlaceholder": "输入新的 URL 重新检测",
               "rerun": "重新检测",
               "modeLabel": "检测模式",
-              "modeDefault": "标准检测（5 / 23 类）",
-              "modeLockedHint": "升级会员解锁此模式"
+              "modeDefault": "标准检测",
+              "modeLockedHint": "升级会员解锁此模式",
+              "placeholderCompare": "https://a.com, https://b.com, https://c.com",
+              "placeholderKeywords": "关键词（可选，逗号分隔）",
+              "placeholderEntity": "品牌 / 产品 / 人物 名称",
+              "entityTypeLabel": "实体类型",
+              "entityType": {
+                "brand": "品牌",
+                "product": "产品",
+                "person": "人物"
+              },
+              "compareHint": "用逗号或空格分隔 2-5 个网址",
+              "visibilityHint": "关键词留空则自动生成；多个关键词用逗号分隔",
+              "entityHint": "输入要审计的品牌 / 产品 / 人物名称"
             },
             "visuals": {
               "robots": {

@@ -119,7 +119,7 @@ function isValidUrl(s: string): boolean {
   }
 }
 
-type AnyAdvancedResult =
+export type AnyAdvancedResult =
   | CompareResponse
   | CrawlTestResponse
   | AuthorityAuditResponse
@@ -138,7 +138,11 @@ export function Advanced() {
     ? (modeParam as AdvancedMode)
     : null;
 
-  const initialUrl = (location.state as { url?: string } | null)?.url || '';
+  const navState = location.state as
+    | { url?: string; prefilledResult?: AnyAdvancedResult }
+    | null;
+  const initialUrl = navState?.url || '';
+  const prefilledResult = navState?.prefilledResult ?? null;
 
   // Per-mode form state
   const [urlInput, setUrlInput] = useState<string>(initialUrl || 'moltspay.com');
@@ -152,7 +156,7 @@ export function Advanced() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [result, setResult] = useState<AnyAdvancedResult | null>(null);
+  const [result, setResult] = useState<AnyAdvancedResult | null>(prefilledResult);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
@@ -509,7 +513,7 @@ function ModeForm(props: ModeFormProps) {
 // Result per mode
 // ---------------------------------------------------------------------------
 
-function ResultPanel({ mode, result }: { mode: AdvancedMode; result: AnyAdvancedResult }) {
+export function ResultPanel({ mode, result }: { mode: AdvancedMode; result: AnyAdvancedResult }) {
   switch (mode) {
     case 'compare':
       return <CompareResult data={result as CompareResponse} />;

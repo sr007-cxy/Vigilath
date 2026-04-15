@@ -62,6 +62,35 @@ def _locked_for(membership: Membership) -> List[str]:
     return [c for c in ALL_CATEGORIES if c not in allowed_set]
 
 
+def _strip_locked_checks(result: GeoTestResult, locked: List[str]) -> GeoTestResult:
+    """Return a copy of `result` with locked categories hidden from `checks`.
+
+    The full 23 categories always run now — even for free / anonymous callers —
+    so that `score` reflects the real state of the site instead of an
+    artificially high 5-category average. To keep the UI behavior unchanged,
+    we drop the locked categories' check details before handing the response
+    to the client and recompute `summary` counts over the visible checks. The
+    top-level `score` and `grade` are preserved because the whole point is
+    that non-member users see a realistic (usually lower) number.
+
+    Must always copy: `run_geo_check` may return a cached object shared across
+    tiers, and mutating it would poison the cache for a later paid caller.
+    """
+    if not locked:
+        return result
+    locked_set = set(locked)
+    stripped = result.model_copy(deep=True)
+    stripped.checks = [c for c in stripped.checks if c.category not in locked_set]
+    stripped.summary = {
+        "pass_count": sum(1 for c in stripped.checks if c.status == "PASS"),
+        "warn_count": sum(1 for c in stripped.checks if c.status == "WARN"),
+        "fail_count": sum(1 for c in stripped.checks if c.status == "FAIL"),
+        "info_count": sum(1 for c in stripped.checks if c.status == "INFO"),
+        "total_checks": len(stripped.checks),
+    }
+    return stripped
+
+
 # Fix recommendations are a paid perk: only starter / growth / scale tiers see
 # them. Lower tiers (free, pro) get include_fix forced to False so the fix text
 # never leaves the backend — frontend gating alone would be bypassable.
@@ -149,6 +178,12 @@ async def geo_check_task(
                 progress_callback,
                 allowed_categories,
             )
+            # Strip locked categories before we touch `result` again: the
+            # underlying run_geo_check may have returned a cached object
+            # shared across tiers, and _strip_locked_checks deep-copies so
+            # we never mutate that cached instance.
+            if locked_categories:
+                result = _strip_locked_checks(result, locked_categories)
             if tier is not None:
                 result.tier = tier
             if locked_categories is not None:
@@ -199,7 +234,14 @@ async def geo_check_task(
 
 @router.post("/check/anonymous", response_model=GeoTestResult)
 async def check_anonymous(body: GeoTestRequest, request: Request, response: Response):
-    """Anonymous check — always returns only the free-tier 5 categories.
+    """Anonymous check — runs the full 23 categories but only exposes the
+    free-tier 5 in the response.
+
+    The full run is used so that `score` reflects the site's real GEO state
+    (typically lower than the 5-category-only average), which is the whole
+    point of this endpoint as a conversion funnel. The 18 locked categories'
+    check details are stripped server-side before we respond, so the UI only
+    sees what it's allowed to render.
 
     Rate-limited to ANONYMOUS_MONTHLY_QUOTA checks per browser per month
     (tracked via the `geo_anon_id` cookie set on the response).
@@ -216,21 +258,27 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
         sanitized_url,
         False,  # anonymous callers are always free tier — no fix text
         None,
-        FREE_CHECK_CATEGORIES,
+        None,  # run all 23 for a realistic score
     )
+    locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+    result = _strip_locked_checks(result, locked)
     result.tier = "free"
-    result.locked_categories = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+    result.locked_categories = locked
     return result
 
 
 @router.post("/check", response_model=GeoTestResult)
 async def check_authenticated(body: GeoTestRequest, request: Request, response: Response):
-    """Tiered check: uses the caller's membership to decide quota + categories.
+    """Tiered check: uses the caller's membership to decide quota + display
+    gating. Always runs the full 23 categories so the score is tier-independent.
 
     - Bearer token is optional. Without it, falls back to the free tier (same
       behavior as /check/anonymous but without writing any usage rows).
-    - With a valid token, enforces monthly_check_quota and runs the tier's
-      allowed_check_categories (NULL = all 23).
+    - With a valid token, enforces monthly_check_quota.
+    - The 23 checks always run regardless of tier; paid categories are
+      stripped from the response for tiers that aren't allowed to see them,
+      so free / pro callers get a realistic (lower) score but still only see
+      the subset of check details their tier is entitled to.
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
@@ -247,17 +295,18 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
         client_id = _ensure_anon_client_id(request, response)
         check_and_increment_anonymous_quota(client_id)
 
-    allowed = membership.allowed_check_categories  # None = all 23
     effective_include_fix = body.include_fix and _fix_allowed(membership)
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
         effective_include_fix,
         None,
-        allowed,
+        None,  # run all 23 regardless of tier — strip locked details below
     )
+    locked = _locked_for(membership)
+    result = _strip_locked_checks(result, locked)
     result.tier = membership.slug
-    result.locked_categories = _locked_for(membership)
+    result.locked_categories = locked
 
     # Persist history for logged-in users only — anonymous runs have no
     # owner to file them under. Best-effort; failures do not affect the
@@ -271,10 +320,12 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
 
 @router.post("/geo", response_model=GeoTestResult)
 async def test_geo(body: GeoTestRequest, request: Request, response: Response):
-    """Legacy alias — behaves like /check/anonymous (5 free categories).
+    """Legacy alias — behaves like /check/anonymous.
 
-    Kept so existing frontend calls to `geoApi.checkGeo` continue to work
-    during the frontend migration. Same per-cookie anonymous quota applies.
+    Runs the full 23 categories and strips the 18 locked ones before
+    returning (same behavior as /check/anonymous). Kept so existing frontend
+    calls to `geoApi.checkGeo` continue to work during the frontend
+    migration. Same per-cookie anonymous quota applies.
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
@@ -288,10 +339,12 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
         sanitized_url,
         False,  # legacy anonymous alias — free tier, no fix text
         None,
-        FREE_CHECK_CATEGORIES,
+        None,  # run all 23 for a realistic score
     )
+    locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+    result = _strip_locked_checks(result, locked)
     result.tier = "free"
-    result.locked_categories = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+    result.locked_categories = locked
     return result
 
 @router.get("/geo/stream")
@@ -333,7 +386,10 @@ async def test_geo_stream(
             set_anon_cookie_value = client_id
         check_and_increment_anonymous_quota(client_id)
 
-    allowed = membership.allowed_check_categories  # None = all 23
+    # All 23 categories run for every tier now; display gating happens via
+    # `locked_categories`, which the task strips from `checks[]` before the
+    # result is serialized out. This way free / pro callers get a realistic
+    # score without ever seeing the paid categories' check details.
     locked = _locked_for(membership)
     # Fix text is a paid perk — force False for any tier below starter so
     # lower tiers never see fix data over the wire, regardless of what the
@@ -359,7 +415,7 @@ async def test_geo_stream(
             task_id,
             sanitized_url,
             effective_include_fix,
-            allowed_categories=allowed,
+            allowed_categories=None,
             tier=membership.slug,
             locked_categories=locked,
             user_id=user_id,

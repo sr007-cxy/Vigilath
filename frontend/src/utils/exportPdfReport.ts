@@ -1,7 +1,13 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { TFunction } from 'i18next';
 import type { GeoTestResult, CheckResult } from '../types/geo';
+import {
+  blockWrapClose,
+  blockWrapOpen,
+  composeAndSavePdf,
+  escapeHtml,
+  makeStandardHeaderFooter,
+  statusBadge,
+} from './pdfPrimitives';
 
 type GroupStat = {
   tab: string;
@@ -25,30 +31,6 @@ interface ExportArgs {
   otherCategories: string[];
 }
 
-// ----- Page geometry (A4 portrait, pt) -----
-const PAGE_W_PT = 595.28;
-const PAGE_H_PT = 841.89;
-const MARGIN_X_PT = 40;
-const HEADER_H_PT = 44;
-const FOOTER_H_PT = 30;
-const CONTENT_TOP_PT = HEADER_H_PT;
-const CONTENT_BOTTOM_PT = PAGE_H_PT - FOOTER_H_PT;
-const CONTENT_W_PT = PAGE_W_PT - 2 * MARGIN_X_PT;
-const CONTENT_H_PT = CONTENT_BOTTOM_PT - CONTENT_TOP_PT;
-const BLOCK_GAP_PT = 6;
-
-// Offscreen container width in CSS px. 1pt ≈ 1.333 px @ 96dpi → 515pt × 1.333 ≈ 687 px.
-// Rounded slightly up so html2canvas has integer-friendly layout.
-const CONTENT_W_PX = 690;
-const CANVAS_SCALE = 2;
-
-const STATUS_COLOR: Record<string, { bg: string; fg: string; key: 'pass' | 'warn' | 'fail' | 'info' }> = {
-  PASS: { bg: '#dcfce7', fg: '#166534', key: 'pass' },
-  WARN: { bg: '#fef3c7', fg: '#92400e', key: 'warn' },
-  FAIL: { bg: '#fee2e2', fg: '#991b1b', key: 'fail' },
-  INFO: { bg: '#dbeafe', fg: '#1e40af', key: 'info' },
-};
-
 const STATUS_RANK: Record<string, number> = { FAIL: 0, WARN: 1, INFO: 2, PASS: 3 };
 
 // Fix recommendations in the PDF mirror the on-screen gating: only starter /
@@ -60,14 +42,6 @@ const FIX_ALLOWED_TIERS: ReadonlySet<string> = new Set(['starter', 'growth', 'sc
 const canIncludeFix = (result: GeoTestResult): boolean =>
   FIX_ALLOWED_TIERS.has((result.tier || '').toLowerCase());
 
-const escapeHtml = (s: string): string =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
 const interpretScore = (score: number, t: TFunction): string => {
   if (score >= 90) return t('result.pdfReport.scoreLevels.excellent');
   if (score >= 75) return t('result.pdfReport.scoreLevels.good');
@@ -76,25 +50,10 @@ const interpretScore = (score: number, t: TFunction): string => {
   return t('result.pdfReport.scoreLevels.critical');
 };
 
-const statusBadge = (status: string, t: TFunction): string => {
-  const color = STATUS_COLOR[status] || STATUS_COLOR.INFO;
-  const label = t(`result.pdfReport.statusLabels.${color.key}`);
-  return `<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${color.bg};color:${color.fg};">${escapeHtml(label)}</span>`;
-};
-
 const tierLabel = (tier: string | null | undefined, t: TFunction): string => {
   const slug = (tier || 'free').toLowerCase();
   return t(`result.pdfReport.tierLabels.${slug}`, { defaultValue: slug.toUpperCase() });
 };
-
-// Shared font stack — covers CJK + Latin via browser-installed system fonts.
-const FONT_STACK = `-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif`;
-
-// Wrapper applied to every block so html2canvas sees a proper root with
-// identical font metrics and width constraints.
-const blockWrapOpen = (extra = '') =>
-  `<div data-pdf-block style="font-family:${FONT_STACK};color:#0f172a;background:#fff;width:${CONTENT_W_PX}px;box-sizing:border-box;${extra}">`;
-const blockWrapClose = `</div>`;
 
 // ---------- Block builders ----------
 
@@ -319,197 +278,17 @@ const buildAllBlocks = (args: ExportArgs): string[] => {
   return blocks;
 };
 
-// ---------- Capture & pagination ----------
-
-type CapturedBlock = {
-  dataUrl: string;
-  widthPx: number;
-  heightPx: number;
-  widthPt: number;
-  heightPt: number;
-};
-
-const captureBlocks = async (htmlBlocks: string[]): Promise<CapturedBlock[]> => {
-  // Stage all blocks in one offscreen container so they share a layout context.
-  const container = document.createElement('div');
-  container.setAttribute('aria-hidden', 'true');
-  container.style.cssText = `position:fixed;left:-10000px;top:0;width:${CONTENT_W_PX}px;background:#fff;z-index:-1;`;
-  container.innerHTML = htmlBlocks.join('');
-  document.body.appendChild(container);
-
-  try {
-    await new Promise((r) => setTimeout(r, 60));
-    const nodes = Array.from(container.querySelectorAll('[data-pdf-block]')) as HTMLElement[];
-    const captured: CapturedBlock[] = [];
-    for (const node of nodes) {
-      const canvas = await html2canvas(node, {
-        scale: CANVAS_SCALE,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        windowWidth: CONTENT_W_PX,
-      });
-      const widthPx = canvas.width;
-      const heightPx = canvas.height;
-      const widthPt = CONTENT_W_PT;
-      const heightPt = (heightPx * CONTENT_W_PT) / widthPx;
-      captured.push({
-        dataUrl: canvas.toDataURL('image/jpeg', 0.92),
-        widthPx,
-        heightPx,
-        widthPt,
-        heightPt,
-      });
-    }
-    return captured;
-  } finally {
-    document.body.removeChild(container);
-  }
-};
-
-// For oversized blocks (taller than a page's content area), pre-slice the source
-// canvas image vertically into page-sized chunks. We do this by re-rendering the
-// JPEG onto an intermediate canvas, cropping, and exporting.
-const sliceOversizedBlock = async (block: CapturedBlock): Promise<CapturedBlock[]> => {
-  // max chunk height in pt = CONTENT_H_PT; convert to px via block ratio
-  const pxPerPt = block.widthPx / block.widthPt;
-  const maxChunkPx = Math.floor(CONTENT_H_PT * pxPerPt);
-  if (block.heightPx <= maxChunkPx) return [block];
-
-  // Load the jpeg back into an Image for cropping
-  const img = await new Promise<HTMLImageElement>((res, rej) => {
-    const im = new Image();
-    im.onload = () => res(im);
-    im.onerror = rej;
-    im.src = block.dataUrl;
-  });
-
-  const chunks: CapturedBlock[] = [];
-  let y = 0;
-  while (y < block.heightPx) {
-    const chunkHeightPx = Math.min(maxChunkPx, block.heightPx - y);
-    const c = document.createElement('canvas');
-    c.width = block.widthPx;
-    c.height = chunkHeightPx;
-    const ctx = c.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D context unavailable');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(img, 0, -y);
-    chunks.push({
-      dataUrl: c.toDataURL('image/jpeg', 0.92),
-      widthPx: c.width,
-      heightPx: c.height,
-      widthPt: CONTENT_W_PT,
-      heightPt: (chunkHeightPx * CONTENT_W_PT) / block.widthPx,
-    });
-    y += chunkHeightPx;
-  }
-  return chunks;
-};
-
-type PlacedBlock = { block: CapturedBlock; x: number; y: number; pageIndex: number };
-
-const packBlocks = (blocks: CapturedBlock[]): { placed: PlacedBlock[]; pageCount: number } => {
-  const placed: PlacedBlock[] = [];
-  let pageIndex = 0;
-  let cursorY = CONTENT_TOP_PT;
-  for (const b of blocks) {
-    // If block does not fit and we're not at top of page, start a new page.
-    if (cursorY + b.heightPt > CONTENT_BOTTOM_PT && cursorY > CONTENT_TOP_PT) {
-      pageIndex += 1;
-      cursorY = CONTENT_TOP_PT;
-    }
-    // If block still does not fit on a fresh page (shouldn't happen post-slice,
-    // but be defensive), clip to remaining and continue.
-    if (b.heightPt > CONTENT_H_PT) {
-      placed.push({ block: b, x: MARGIN_X_PT, y: cursorY, pageIndex });
-      pageIndex += 1;
-      cursorY = CONTENT_TOP_PT;
-      continue;
-    }
-    placed.push({ block: b, x: MARGIN_X_PT, y: cursorY, pageIndex });
-    cursorY += b.heightPt + BLOCK_GAP_PT;
-  }
-  return { placed, pageCount: pageIndex + 1 };
-};
-
-const drawHeaderFooter = (
-  pdf: jsPDF,
-  pageNum: number,
-  totalPages: number,
-  args: ExportArgs,
-): void => {
-  const { result, t } = args;
-  // Header: brand + site
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(120, 120, 130);
-  pdf.setFontSize(9);
-  pdf.text('GEO Checker', MARGIN_X_PT, 24);
-
-  const siteLabel = `${t('result.pdfReport.headerSite')}: ${result.url || ''}`;
-  const maxWidth = CONTENT_W_PT - 100;
-  const truncated =
-    pdf.getTextWidth(siteLabel) > maxWidth
-      ? siteLabel.slice(0, Math.max(10, Math.floor((maxWidth / pdf.getTextWidth(siteLabel)) * siteLabel.length) - 1)) + '…'
-      : siteLabel;
-  pdf.text(truncated, PAGE_W_PT - MARGIN_X_PT, 24, { align: 'right' });
-
-  // Header rule
-  pdf.setDrawColor(226, 232, 240);
-  pdf.setLineWidth(0.5);
-  pdf.line(MARGIN_X_PT, 32, PAGE_W_PT - MARGIN_X_PT, 32);
-
-  // Footer rule
-  pdf.line(MARGIN_X_PT, PAGE_H_PT - FOOTER_H_PT + 8, PAGE_W_PT - MARGIN_X_PT, PAGE_H_PT - FOOTER_H_PT + 8);
-
-  // Footer text: left brand, right page n/N
-  pdf.setFontSize(9);
-  pdf.setTextColor(148, 163, 184);
-  const year = new Date().getFullYear();
-  pdf.text(`GEO Checker · © ${year}`, MARGIN_X_PT, PAGE_H_PT - 14);
-  const pageText = t('result.pdfReport.pageOf', { current: pageNum, total: totalPages });
-  pdf.text(pageText, PAGE_W_PT - MARGIN_X_PT, PAGE_H_PT - 14, { align: 'right' });
-};
-
 // ---------- Entry point ----------
 
 export async function exportPdfReport(args: ExportArgs): Promise<void> {
+  const { result, t } = args;
   const htmlBlocks = buildAllBlocks(args);
-  const rawCaptured = await captureBlocks(htmlBlocks);
-
-  // Pre-slice any block that would overflow a single page.
-  const captured: CapturedBlock[] = [];
-  for (const b of rawCaptured) {
-    if (b.heightPt > CONTENT_H_PT) {
-      const sliced = await sliceOversizedBlock(b);
-      captured.push(...sliced);
-    } else {
-      captured.push(b);
-    }
-  }
-
-  const { placed, pageCount } = packBlocks(captured);
-
-  const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-
-  for (let p = 0; p < pageCount; p++) {
-    if (p > 0) pdf.addPage();
-    drawHeaderFooter(pdf, p + 1, pageCount, args);
-    for (const item of placed) {
-      if (item.pageIndex !== p) continue;
-      pdf.addImage(
-        item.block.dataUrl,
-        'JPEG',
-        item.x,
-        item.y,
-        item.block.widthPt,
-        item.block.heightPt,
-      );
-    }
-  }
-
-  const safeUrl = (args.result.url || 'site').replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60);
-  const baseName = args.t('result.pdfReport.fileName');
-  pdf.save(`${baseName}-${safeUrl}.pdf`);
+  const safeUrl = (result.url || 'site').replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60);
+  const baseName = t('result.pdfReport.fileName');
+  const headerRight = `${t('result.pdfReport.headerSite')}: ${result.url || ''}`;
+  await composeAndSavePdf(
+    htmlBlocks,
+    makeStandardHeaderFooter({ rightHeaderText: headerRight, t }),
+    `${baseName}-${safeUrl}.pdf`,
+  );
 }

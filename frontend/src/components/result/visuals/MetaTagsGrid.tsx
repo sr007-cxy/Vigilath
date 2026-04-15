@@ -65,11 +65,11 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
 };
 
 const STATUS_THEME: Record<MetaItemStatus, { border: string; bg: string; text: string; dot: string }> = {
-  PASS: { border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-  WARN: { border: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-300', dot: 'bg-amber-400' },
-  FAIL: { border: 'border-rose-500/40', bg: 'bg-rose-500/10', text: 'text-rose-300', dot: 'bg-rose-500' },
-  INFO: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/5', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  UNKNOWN: { border: 'border-[#3f4143]', bg: 'bg-white/5', text: 'text-[#d5d5dc]', dot: 'bg-white/30' },
+  PASS: { border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+  WARN: { border: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-600', dot: 'bg-amber-500' },
+  FAIL: { border: 'border-rose-500/40', bg: 'bg-rose-500/10', text: 'text-rose-600', dot: 'bg-rose-500' },
+  INFO: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/10', text: 'text-cyan-600', dot: 'bg-cyan-500' },
+  UNKNOWN: { border: 'border-border', bg: 'bg-tertiary', text: 'text-muted', dot: 'bg-muted' },
 };
 
 export function MetaTagsGrid({ checks }: Props) {
@@ -81,7 +81,7 @@ export function MetaTagsGrid({ checks }: Props) {
   const totalCount = parsed.items.length;
 
   return (
-    <div className="bg-card border border-[#3f4143] rounded-xl p-4 sm:p-5 relative overflow-hidden">
+    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/50 to-transparent" />
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -95,12 +95,12 @@ export function MetaTagsGrid({ checks }: Props) {
             <span className="text-xs font-semibold text-primary">
               {t('result.visuals.meta.title')}
             </span>
-            <span className="text-[10px] uppercase tracking-wider text-[#d5d5dc]">
+            <span className="text-[10px] uppercase tracking-wider text-muted">
               {t('result.visuals.meta.subtitle')}
             </span>
           </div>
         </div>
-        <span className="text-[10px] font-mono text-[#d5d5dc]">
+        <span className="text-[10px] font-mono text-muted">
           {t('result.visuals.meta.passCount', { pass: passCount, total: totalCount })}
         </span>
       </div>
@@ -122,7 +122,7 @@ export function MetaTagsGrid({ checks }: Props) {
                 </div>
                 <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
               </div>
-              <p className="text-[10px] text-[#d5d5dc] leading-snug line-clamp-2 min-h-[1.5em]">
+              <p className="text-[10px] text-muted leading-snug line-clamp-2 min-h-[1.5em]">
                 {item.status === 'UNKNOWN' ? '—' : item.detail || label.help}
               </p>
             </div>

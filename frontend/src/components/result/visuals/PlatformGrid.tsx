@@ -66,23 +66,23 @@ const PLATFORM_GLYPH: Record<string, ReactNode> = {
 const STATE_THEME: Record<PlatformState, { ring: string; text: string; bg: string }> = {
   linked: {
     ring: 'border-emerald-500/50 ring-1 ring-emerald-400/30',
-    text: 'text-emerald-300',
+    text: 'text-emerald-600',
     bg: 'bg-emerald-500/10',
   },
   probed: {
     ring: 'border-cyan-500/50 ring-1 ring-cyan-400/30',
-    text: 'text-cyan-300',
+    text: 'text-cyan-600',
     bg: 'bg-cyan-500/10',
   },
   notFound: {
-    ring: 'border-[#3f4143]',
-    text: 'text-[#7a7d85]',
-    bg: 'bg-white/3',
+    ring: 'border-border',
+    text: 'text-muted',
+    bg: 'bg-tertiary',
   },
   unknown: {
-    ring: 'border-[#3f4143]',
-    text: 'text-[#7a7d85]',
-    bg: 'bg-white/3',
+    ring: 'border-border',
+    text: 'text-muted',
+    bg: 'bg-tertiary',
   },
 };
 
@@ -110,7 +110,7 @@ export function PlatformGrid({ checks, variant = 'cross-platform' }: Props) {
       : t('result.visuals.platform.titleCross');
 
   return (
-    <div className="bg-card border border-[#3f4143] rounded-xl p-4 sm:p-5 relative overflow-hidden">
+    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-pink-400/50 to-transparent" />
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -122,12 +122,12 @@ export function PlatformGrid({ checks, variant = 'cross-platform' }: Props) {
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-xs font-semibold text-primary">{header}</span>
-            <span className="text-[10px] uppercase tracking-wider text-[#d5d5dc]">
+            <span className="text-[10px] uppercase tracking-wider text-muted">
               {t('result.visuals.platform.subtitle')}
             </span>
           </div>
         </div>
-        <span className="text-[10px] font-mono text-[#d5d5dc]">
+        <span className="text-[10px] font-mono text-muted">
           {parsed.foundCount}/{parsed.totalCount}
         </span>
       </div>
@@ -156,7 +156,7 @@ export function PlatformGrid({ checks, variant = 'cross-platform' }: Props) {
               <div className="flex items-center justify-between">
                 <span className={theme.text}>{glyph}</span>
                 {isFound && (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-emerald-400" strokeWidth={3}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-emerald-600" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -165,7 +165,7 @@ export function PlatformGrid({ checks, variant = 'cross-platform' }: Props) {
                 {p.name}
               </span>
               {trainingHint && (
-                <span className="text-[8px] text-[#8b8e97] leading-tight truncate" title={trainingHint}>
+                <span className="text-[8px] text-muted leading-tight truncate" title={trainingHint}>
                   {trainingHint}
                 </span>
               )}

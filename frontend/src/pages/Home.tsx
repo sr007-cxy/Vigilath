@@ -195,14 +195,14 @@ export function Home() {
       openTierModal();
       return;
     }
-    // Member — jump straight to the per-mode page with the current URL as
-    // the initial input.
-    let initialUrl = undefined;
+    // Member — jump straight to the Result page in "empty advanced" mode:
+    // the rerun bar is centered, the dropdown is pre-selected to `key`, and
+    // running it renders the result inline (no /advanced/{mode} hop).
+    let initialUrl: string | undefined;
     if (url && validateUrl(url)) {
-      // 处理URL前缀，确保传递正确的URL格式
       initialUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
     }
-    navigate(`/advanced/${key}`, { state: initialUrl ? { url: initialUrl } : undefined });
+    navigate('/result', { state: { initialMode: key, initialUrl } });
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PaymentModal } from '../components/PaymentModal';
@@ -6,7 +6,11 @@ import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
 import { geoApi, ApiError } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
+import { RerunModeDropdown } from '../components/result/RerunModeDropdown';
+import { ADVANCED_MODES, type AdvancedMode, type RerunMode } from '../components/result/rerunModes';
+import { ResultPanel as AdvancedResultPanel, type AnyAdvancedResult } from './Advanced';
 import { exportPdfReport } from '../utils/exportPdfReport';
+import { exportAdvancedPdfReport } from '../utils/exportAdvancedPdfReport';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
 // 23 categories split into 7 tabs (2 free + 5 paid) aligned with
@@ -67,19 +71,6 @@ const categoryGroups: Record<string, string[]> = {
 // backend-provided `locked_categories` set).
 const FREE_GROUPS = new Set(['infraProtocols', 'pageBasics']);
 
-// Advanced modes surfaced in the rerun dropdown for logged-in users.
-// Each entry maps to a geo_checker CLI sub-mode; route target is /advanced/{key}.
-// `minTier` is compared to result.tier to decide if a 🔒 icon shows.
-type AdvancedMode = 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
-const ADVANCED_MODES: { key: AdvancedMode; minTier: 'pro' | 'starter' }[] = [
-  { key: 'compare', minTier: 'pro' },
-  { key: 'crawlTest', minTier: 'pro' },
-  { key: 'authority', minTier: 'pro' },
-  { key: 'citation', minTier: 'pro' },
-  { key: 'visibility', minTier: 'pro' },
-  { key: 'entity', minTier: 'pro' },
-];
-
 const TIER_RANK: Record<string, number> = {
   free: 0,
   pro: 1,
@@ -94,30 +85,30 @@ const statusTheme = (status: string) => {
   switch (status) {
     case 'PASS':
       return {
-        dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(0,255,157,0.7)]',
-        text: 'text-emerald-400',
-        badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+        dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]',
+        text: 'text-emerald-500',
+        badge: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/40',
         bar: 'from-emerald-400 to-emerald-500',
       };
     case 'WARN':
       return {
-        dot: 'bg-amber-400 shadow-[0_0_8px_rgba(255,184,0,0.7)]',
-        text: 'text-amber-400',
-        badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+        dot: 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]',
+        text: 'text-amber-500',
+        badge: 'bg-amber-500/10 text-amber-600 border-amber-500/40',
         bar: 'from-amber-400 to-amber-500',
       };
     case 'FAIL':
       return {
-        dot: 'bg-rose-500 shadow-[0_0_8px_rgba(255,0,110,0.8)]',
-        text: 'text-rose-400',
-        badge: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+        dot: 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]',
+        text: 'text-rose-500',
+        badge: 'bg-rose-500/10 text-rose-600 border-rose-500/40',
         bar: 'from-rose-500 to-pink-500',
       };
     default:
       return {
-        dot: 'bg-cyan-400 shadow-[0_0_8px_rgba(0,240,255,0.7)]',
-        text: 'text-cyan-400',
-        badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+        dot: 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]',
+        text: 'text-cyan-500',
+        badge: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/40',
         bar: 'from-cyan-400 to-cyan-500',
       };
   }
@@ -128,7 +119,16 @@ export function Result() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const result = location.state?.result as GeoTestResult;
+  const navState = location.state as
+    | { result?: GeoTestResult; initialMode?: AdvancedMode; initialUrl?: string }
+    | null;
+  const result = navState?.result as GeoTestResult | undefined;
+  // "Empty advanced" entry — user clicked an advanced capability on the
+  // homepage with no prior default check. We skip the score hero and
+  // category tabs, and render a centered hero form pre-set to that mode.
+  const initialAdvancedMode = navState?.initialMode;
+  const initialAdvancedUrl = navState?.initialUrl || '';
+  const isEmptyAdvancedMode = !result && !!initialAdvancedMode;
   const { token, isLoggedIn, refresh } = useMembership();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('infraProtocols');
@@ -139,11 +139,26 @@ export function Result() {
   const [feedbackKind, setFeedbackKind] = useState<'success' | 'error' | null>(null);
 
   // Rerun bar state — title-row URL input + optional advanced mode dropdown.
-  const [rerunUrl, setRerunUrl] = useState<string>(result?.url || '');
-  const [rerunMode] = useState<'default' | AdvancedMode>('default');
+  const [rerunUrl, setRerunUrl] = useState<string>(result?.url || initialAdvancedUrl);
+  const [rerunMode, setRerunMode] = useState<RerunMode>(initialAdvancedMode || 'default');
+  const [rerunKeywords, setRerunKeywords] = useState<string>('');
+  const [rerunEntityName, setRerunEntityName] = useState<string>('');
+  const [rerunEntityType, setRerunEntityType] = useState<'brand' | 'product' | 'person'>('brand');
   const [rerunLoading, setRerunLoading] = useState(false);
   const [rerunError, setRerunError] = useState<string>('');
   const [rerunQuotaExceeded, setRerunQuotaExceeded] = useState(false);
+
+  // Inline advanced-mode result — when user reruns in a non-default mode,
+  // render the result here instead of navigating to /advanced/{mode}.
+  const [advancedResult, setAdvancedResult] = useState<
+    { mode: AdvancedMode; data: AnyAdvancedResult } | null
+  >(null);
+  const advancedResultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (advancedResult && advancedResultRef.current) {
+      advancedResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [advancedResult]);
 
   const effectiveTier = result?.tier || 'free';
   const effectiveRank = TIER_RANK[effectiveTier] ?? 0;
@@ -154,6 +169,10 @@ export function Result() {
   const isModeLocked = (mode: AdvancedMode): boolean => {
     const entry = ADVANCED_MODES.find((m) => m.key === mode);
     if (!entry) return true;
+    // Empty-advanced entry: the user is here because Home already verified
+    // they're an unlocked member. Skip the result-derived tier check; the
+    // backend is the real gate.
+    if (isEmptyAdvancedMode) return false;
     return effectiveRank < TIER_RANK[entry.minTier];
   };
 
@@ -282,61 +301,379 @@ export function Result() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory, lockedCategorySet]);
 
-  const handleRerunSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmed = rerunUrl.trim();
-    setRerunError('');
-    setRerunQuotaExceeded(false);
-    if (!trimmed) {
-      setRerunError(t('home.error.empty'));
-      return;
-    }
-    const normalized = trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
+  const normalizeUrl = (s: string): string =>
+    s.startsWith('http://') || s.startsWith('https://') ? s : `https://${s}`;
+
+  const validateUrl = (s: string): boolean => {
     try {
-      new URL(normalized);
+      new URL(normalizeUrl(s));
+      return true;
     } catch {
-      setRerunError(t('home.error.invalid'));
-      return;
+      return false;
     }
-
-    // Advanced mode → delegate to dedicated page (built in later phase).
-    if (rerunMode !== 'default') {
-      if (isModeLocked(rerunMode)) {
-        if (!isLoggedIn) {
-          navigate('/login');
-          return;
-        }
-        setShowPaymentModal(true);
-        return;
-      }
-      navigate(`/advanced/${rerunMode}`, { state: { url: normalized } });
-      return;
-    }
-
-    // Default mode → same call the homepage makes, then replace this page.
-    setRerunLoading(true);
-    geoApi
-      .checkGeo({ url: normalized })
-      .then((freshResult) => {
-        navigate('/result', { state: { result: freshResult }, replace: true });
-      })
-      .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 429) {
-          setRerunQuotaExceeded(true);
-          setRerunError(err.message || t('home.error.quotaExceeded'));
-        } else {
-          setRerunError(err instanceof Error ? err.message : t('home.error.failed'));
-        }
-      })
-      .finally(() => {
-        setRerunLoading(false);
-      });
   };
 
+  const handleRerunSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setRerunError('');
+    setRerunQuotaExceeded(false);
+
+    // Safety net — dropdown already disables locked modes, but double-check.
+    if (rerunMode !== 'default' && isModeLocked(rerunMode)) {
+      if (!isLoggedIn) {
+        navigate('/login');
+        return;
+      }
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // Per-mode validation
+    if (rerunMode === 'entity') {
+      if (!rerunEntityName.trim()) {
+        setRerunError(t('home.error.empty'));
+        return;
+      }
+    } else if (rerunMode === 'compare') {
+      const parts = rerunUrl.split(/[,\s]+/).map((p) => p.trim()).filter(Boolean);
+      if (parts.length < 2) {
+        setRerunError(t('home.advanced.validation.minUrls'));
+        return;
+      }
+      for (const p of parts) {
+        if (!validateUrl(p)) {
+          setRerunError(t('home.advanced.validation.invalidUrl', { url: p }));
+          return;
+        }
+      }
+    } else {
+      const trimmed = rerunUrl.trim();
+      if (!trimmed) {
+        setRerunError(t('home.error.empty'));
+        return;
+      }
+      if (!validateUrl(trimmed)) {
+        setRerunError(t('home.error.invalid'));
+        return;
+      }
+    }
+
+    setRerunLoading(true);
+    try {
+      if (rerunMode === 'default') {
+        const url = normalizeUrl(rerunUrl.trim());
+        const fresh = await geoApi.checkGeo({ url });
+        navigate('/result', { state: { result: fresh }, replace: true });
+        return;
+      }
+      if (rerunMode === 'compare') {
+        const urls = rerunUrl
+          .split(/[,\s]+/)
+          .map((p) => normalizeUrl(p.trim()))
+          .filter(Boolean);
+        const data = await geoApi.runAdvancedCheck('compare', { urls });
+        setAdvancedResult({ mode: 'compare', data });
+        return;
+      }
+      if (rerunMode === 'visibility') {
+        const url = normalizeUrl(rerunUrl.trim());
+        const queries = rerunKeywords
+          .split(/[,\n]/)
+          .map((q) => q.trim())
+          .filter(Boolean);
+        const data = await geoApi.runAdvancedCheck('visibility', {
+          url,
+          custom_queries: queries.length ? queries : undefined,
+        });
+        setAdvancedResult({ mode: 'visibility', data });
+        return;
+      }
+      if (rerunMode === 'entity') {
+        const data = await geoApi.runAdvancedCheck('entity', {
+          entity_name: rerunEntityName.trim(),
+          entity_type: rerunEntityType,
+        });
+        setAdvancedResult({ mode: 'entity', data });
+        return;
+      }
+      // crawlTest / authority / citation — single-URL advanced modes
+      const url = normalizeUrl(rerunUrl.trim());
+      const data = await geoApi.runAdvancedCheck(rerunMode, { url });
+      setAdvancedResult({ mode: rerunMode, data });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setRerunQuotaExceeded(true);
+        setRerunError(err.message || t('home.error.quotaExceeded'));
+      } else {
+        setRerunError(err instanceof Error ? err.message : t('home.error.failed'));
+      }
+    } finally {
+      setRerunLoading(false);
+    }
+  };
+
+  // Renders the rerun bar in either compact (top-of-page) or hero (centered
+  // empty-state) sizes. Captures all rerun state via closure so the two
+  // call sites stay perfectly in sync.
+  const renderRerunForm = ({ hero }: { hero: boolean }): ReactNode => {
+    const formClass = hero
+      ? 'w-full max-w-2xl mx-auto'
+      : 'flex-1 min-w-0 lg:max-w-xl w-full';
+    const capsuleClass = hero
+      ? 'flex items-center bg-card border border-border rounded-full p-1.5 shadow-glow'
+      : 'flex items-center bg-card border border-border rounded-full p-1 shadow-glow';
+    const inputClass = hero
+      ? 'flex-1 min-w-0 py-3 px-5 text-base bg-transparent focus:outline-none text-primary placeholder-muted'
+      : 'flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted';
+    const buttonClass = hero
+      ? 'gradient-bg text-white w-12 h-12 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60'
+      : 'gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60';
+    const iconSize = hero ? 'h-5 w-5' : 'h-4 w-4';
+    const selectClass = hero
+      ? 'appearance-none bg-transparent text-base text-primary pl-3 pr-2 py-3 focus:outline-none cursor-pointer shrink-0'
+      : 'appearance-none bg-transparent text-xs sm:text-sm text-primary pl-3 pr-2 py-2 focus:outline-none cursor-pointer shrink-0';
+
+    return (
+      <form onSubmit={handleRerunSubmit} className={formClass}>
+        <div className={capsuleClass}>
+          <RerunModeDropdown
+            mode={rerunMode}
+            onSelect={setRerunMode}
+            isModeLocked={isModeLocked}
+          />
+          {rerunMode === 'entity' ? (
+            <>
+              <input
+                type="text"
+                value={rerunEntityName}
+                onChange={(e) => setRerunEntityName(e.target.value)}
+                placeholder={t('result.header.placeholderEntity', { defaultValue: '品牌 / 产品 / 人物 名称' }) as string}
+                className={inputClass}
+                disabled={rerunLoading}
+              />
+              <div className="w-px h-5 bg-border shrink-0" />
+              <select
+                value={rerunEntityType}
+                onChange={(e) => setRerunEntityType(e.target.value as 'brand' | 'product' | 'person')}
+                disabled={rerunLoading}
+                title={t('result.header.entityTypeLabel', { defaultValue: '实体类型' }) as string}
+                className={selectClass}
+              >
+                <option value="brand" className="bg-card">
+                  {t('result.header.entityType.brand', { defaultValue: '品牌' }) as string}
+                </option>
+                <option value="product" className="bg-card">
+                  {t('result.header.entityType.product', { defaultValue: '产品' }) as string}
+                </option>
+                <option value="person" className="bg-card">
+                  {t('result.header.entityType.person', { defaultValue: '人物' }) as string}
+                </option>
+              </select>
+            </>
+          ) : rerunMode === 'visibility' ? (
+            <>
+              <input
+                type="text"
+                value={rerunUrl}
+                onChange={(e) => setRerunUrl(e.target.value)}
+                placeholder={t('result.header.rerunPlaceholder') as string}
+                className={`flex-[2] ${inputClass.replace('flex-1 ', '')}`}
+                disabled={rerunLoading}
+              />
+              <div className="w-px h-5 bg-border shrink-0" />
+              <input
+                type="text"
+                value={rerunKeywords}
+                onChange={(e) => setRerunKeywords(e.target.value)}
+                placeholder={t('result.header.placeholderKeywords', { defaultValue: '关键词（可选，逗号分隔）' }) as string}
+                className={inputClass}
+                disabled={rerunLoading}
+              />
+            </>
+          ) : (
+            <input
+              type="text"
+              value={rerunUrl}
+              onChange={(e) => setRerunUrl(e.target.value)}
+              placeholder={
+                rerunMode === 'compare'
+                  ? (t('result.header.placeholderCompare', { defaultValue: 'https://a.com, https://b.com' }) as string)
+                  : (t('result.header.rerunPlaceholder') as string)
+              }
+              className={inputClass}
+              disabled={rerunLoading}
+            />
+          )}
+          <button
+            type="submit"
+            disabled={rerunLoading}
+            title={t('result.header.rerun')}
+            className={buttonClass}
+          >
+            {rerunLoading ? (
+              <svg className={`animate-spin ${iconSize}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+          </button>
+        </div>
+        {(rerunMode === 'compare' || rerunMode === 'visibility' || rerunMode === 'entity') && (
+          <p className={`mt-1.5 px-4 ${hero ? 'text-xs' : 'text-[11px]'} text-muted ${hero ? 'text-center' : ''}`}>
+            {rerunMode === 'compare' &&
+              (t('result.header.compareHint', {
+                defaultValue: '用逗号或空格分隔 2-5 个网址',
+              }) as string)}
+            {rerunMode === 'visibility' &&
+              (t('result.header.visibilityHint', {
+                defaultValue: '关键词留空则自动生成；多个关键词用逗号分隔',
+              }) as string)}
+            {rerunMode === 'entity' &&
+              (t('result.header.entityHint', {
+                defaultValue: '输入要审计的品牌 / 产品 / 人物名称',
+              }) as string)}
+          </p>
+        )}
+        {rerunError && (
+          <div className={`mt-2 px-3 flex flex-wrap items-center gap-2 ${hero ? 'justify-center' : ''}`}>
+            <p className={`${hero ? 'text-xs' : 'text-[11px]'} text-rose-400 ${hero ? '' : 'flex-1 min-w-0'}`}>{rerunError}</p>
+            {rerunQuotaExceeded && (
+              <button
+                type="button"
+                onClick={() => navigate('/products-services')}
+                className="text-[11px] font-semibold text-rose-200 bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded-full transition-colors"
+              >
+                {t('home.error.quotaCta')}
+              </button>
+            )}
+          </div>
+        )}
+      </form>
+    );
+  };
+
+  const handleExportPDF = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      if (advancedResult) {
+        // Inline advanced result is the "current" report — export it
+        // instead of the underlying default check.
+        await exportAdvancedPdfReport({
+          mode: advancedResult.mode,
+          data: advancedResult.data,
+          t,
+          language: i18n.language || 'en',
+        });
+      } else if (result) {
+        await exportPdfReport({
+          result,
+          t,
+          language: i18n.language || 'en',
+          groupStats,
+          categoryGroups,
+          checksByCategory,
+          otherCategories,
+        });
+      }
+    } catch (err) {
+      console.error('PDF export failed', err);
+      alert(t('result.error.noData'));
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  // ----- Early returns -----
+  // No default check data yet. Either:
+  //  (a) user landed here from a homepage advanced-card click → render the
+  //      centered empty-advanced layout. The inline advanced result panel
+  //      below the form takes over as soon as they hit Run.
+  //  (b) something else — show the standard "no data" error.
   if (!result) {
+    if (isEmptyAdvancedMode) {
+      const modeTitle = t(`home.advanced.cards.${initialAdvancedMode}.title`) as string;
+      const modeDesc = t(`home.advanced.cards.${initialAdvancedMode}.desc`) as string;
+      return (
+        <div className="min-h-screen grid-background">
+          <div className="bg-glow bg-glow-1"></div>
+          <div className="bg-glow bg-glow-2"></div>
+          <div className="bg-glow bg-glow-3"></div>
+
+          <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
+            <div className="w-full max-w-3xl mx-auto animate-fade-in text-center">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="text-xs text-secondary hover:text-primary transition-colors inline-flex items-center gap-1 mb-8"
+              >
+                ← {t('result.buttons.checkAnother', { defaultValue: 'Back' })}
+              </button>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-soft shadow-glow mb-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+                <span className="text-xs font-medium text-secondary">
+                  {t('home.advanced.title', { defaultValue: 'Advanced Detection' })}
+                </span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-5 leading-[1.15] tracking-tight">
+                <span className="gradient-text">{modeTitle}</span>
+              </h1>
+              <p className="text-sm sm:text-base text-secondary max-w-xl mx-auto leading-relaxed mb-10">
+                {modeDesc}
+              </p>
+              <div className="mt-2">{renderRerunForm({ hero: true })}</div>
+            </div>
+
+            {advancedResult && (
+              <div className="w-full max-w-5xl mx-auto mt-12">
+                <section
+                  ref={advancedResultRef}
+                  className="bg-card border border-border rounded-2xl p-5 sm:p-6 animate-fade-in scroll-mt-24"
+                >
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+                    <span className="w-1 h-4 rounded-full gradient-bg" />
+                    <h2 className="text-base font-bold text-primary">
+                      {t(`home.advanced.cards.${advancedResult.mode}.title`)}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={handleExportPDF}
+                      disabled={exportingPdf}
+                      title={t('result.shareExport.downloadReport') as string}
+                      className="ml-auto h-8 px-3 rounded-lg bg-tertiary border border-border text-secondary hover:text-accent-primary hover:border-border-strong transition-colors flex items-center gap-1.5 text-xs font-semibold disabled:opacity-60"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V17a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      </svg>
+                      <span>{t('result.shareExport.downloadReport')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdvancedResult(null)}
+                      title={t('common.close', { defaultValue: '关闭' }) as string}
+                      className="text-secondary hover:text-primary transition-colors p-1 rounded-lg hover:bg-tertiary"
+                      aria-label={t('common.close', { defaultValue: '关闭' }) as string}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <AdvancedResultPanel mode={advancedResult.mode} result={advancedResult.data} />
+                </section>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen grid-background flex items-center justify-center">
-        <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-8 max-w-md w-full text-center">
+        <div className="bg-card border border-border rounded-2xl p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/10 flex items-center justify-center mb-6">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -358,27 +695,6 @@ export function Result() {
   const score = result.score || 0;
   const grade = result.grade || 'F';
 
-  const handleExportPDF = async () => {
-    if (exportingPdf) return;
-    setExportingPdf(true);
-    try {
-      await exportPdfReport({
-        result,
-        t,
-        language: i18n.language || 'en',
-        groupStats,
-        categoryGroups,
-        checksByCategory,
-        otherCategories,
-      });
-    } catch (err) {
-      console.error('PDF export failed', err);
-      alert(t('result.error.noData'));
-    } finally {
-      setExportingPdf(false);
-    }
-  };
-
   const tabLabel = (tab: string) => t(`result.categories.${tab}`);
 
   const activeCategories = categoriesForTab(activeTab);
@@ -393,120 +709,55 @@ export function Result() {
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           {/* Top bar: title + rerun input (center) + export buttons (right) */}
           <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 lg:shrink-0">
-              <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1.5">
-                {t('result.title')}
-              </h1>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
-                <span className="uppercase tracking-[0.15em] text-[#d5d5dc] text-[10px]">{t('result.resultsFor')}</span>
-                <a
-                  href={result.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent-primary hover:text-primary transition-colors font-medium truncate"
-                >
-                  {result.url}
-                </a>
-              </div>
-              {/* Compact overall score + grade chip — replaces the deleted top card. */}
-              <div className="inline-flex items-center gap-2 pl-2 pr-1 py-1 rounded-full border border-[#3f4143] border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5">
-                <span className="text-[10px] uppercase tracking-[0.18em] text-[#d5d5dc] font-semibold">
-                  {t('result.scoreCard.title', { defaultValue: 'Score' })}
-                </span>
-                <span className="text-base font-bold gradient-text tabular-nums leading-none">{score}</span>
-                <span className="text-[10px] text-[#8a8a94] font-mono">/100</span>
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-accent-primary border border-[#3f4143] border-cyan-500/30">
-                  {grade}
-                </span>
-              </div>
+            <div className="min-w-0 lg:shrink-0 lg:max-w-sm">
+              {advancedResult
+                ? renderAdvancedHero(advancedResult, t)
+                : (
+                  <>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
+                      <span className="uppercase tracking-[0.15em] text-muted text-[10px] shrink-0">{t('result.resultsFor')}</span>
+                      <a
+                        href={result.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-primary hover:text-primary transition-colors font-medium truncate"
+                      >
+                        {result.url}
+                      </a>
+                    </div>
+                    {/* Hero score: large gradient number + grade badge + progress bar. */}
+                    <div className="flex items-end gap-3">
+                      <div className="flex items-baseline gap-1 leading-none">
+                        <span className="text-5xl sm:text-6xl font-black gradient-text tabular-nums tracking-tight">{score}</span>
+                        <span className="text-lg text-muted font-mono">/100</span>
+                      </div>
+                      <div className="flex flex-col items-start gap-1 pb-1">
+                        <span className="text-[9px] uppercase tracking-[0.2em] text-muted font-semibold">
+                          {t('result.scoreCard.title', { defaultValue: 'Score' })}
+                        </span>
+                        <span className="text-sm font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none">
+                          {grade}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-tertiary/60 overflow-hidden">
+                      <div
+                        className="h-full gradient-bg rounded-full transition-all duration-700"
+                        style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+                      />
+                    </div>
+                  </>
+                )}
             </div>
 
-            {/* Rerun bar — matches the homepage capsule but one size tighter. */}
-            <form
-              onSubmit={handleRerunSubmit}
-              className="flex-1 min-w-0 lg:max-w-xl w-full"
-            >
-              <div className="flex items-center bg-card border border-[#3f4143] rounded-full p-1 shadow-glow">
-                {/* {isLoggedIn && (
-                  <div className="relative shrink-0">
-                    <select
-                      value={rerunMode}
-                      onChange={(e) => setRerunMode(e.target.value as 'default' | AdvancedMode)}
-                      className="appearance-none bg-transparent text-xs text-primary pl-3 pr-7 py-2 rounded-full border-r border-[#3f4143] focus:outline-none cursor-pointer"
-                      title={t('result.header.modeLabel')}
-                    >
-                      <option value="default" className="bg-card text-primary">
-                        {t('result.header.modeDefault')}
-                      </option>
-                      {ADVANCED_MODES.map((m) => {
-                        const locked = isModeLocked(m.key);
-                        return (
-                          <option key={m.key} value={m.key} className="bg-card text-primary">
-                            {locked ? '🔒 ' : ''}
-                            {t(`home.advanced.cards.${m.key}.title`)}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-secondary pointer-events-none"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                )} */}
-                <input
-                  type="text"
-                  value={rerunUrl}
-                  onChange={(e) => setRerunUrl(e.target.value)}
-                  placeholder={t('result.header.rerunPlaceholder')}
-                  className="flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted"
-                  disabled={rerunLoading}
-                />
-                <button
-                  type="submit"
-                  disabled={rerunLoading}
-                  title={t('result.header.rerun')}
-                  className="gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60"
-                >
-                  {rerunLoading ? (
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              {rerunError && (
-                <div className="mt-2 px-3 flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] text-rose-400 flex-1 min-w-0">{rerunError}</p>
-                  {rerunQuotaExceeded && (
-                    <button
-                      type="button"
-                      onClick={() => navigate('/products-services')}
-                      className="text-[11px] font-semibold text-rose-200 bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded-full transition-colors"
-                    >
-                      {t('home.error.quotaCta')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </form>
+            {renderRerunForm({ hero: false })}
 
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleExportPDF}
                 disabled={exportingPdf}
                 title={exportingPdf ? t('result.shareExport.downloadReportLoading') : t('result.shareExport.downloadReport')}
-                className="h-9 px-3 rounded-lg bg-card border border-[#3f4143] border-border text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors flex items-center gap-2 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
+                className="h-9 px-3 rounded-lg bg-card border border-border text-secondary hover:text-accent-primary hover:border-border-strong transition-colors flex items-center gap-2 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
               >
                 {exportingPdf ? (
                   <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -525,6 +776,33 @@ export function Result() {
             </div>
           </div>
 
+          {advancedResult && (
+            <section
+              ref={advancedResultRef}
+              className="mt-4 mb-6 bg-card border border-border rounded-2xl p-5 sm:p-6 animate-fade-in scroll-mt-24"
+            >
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+                <span className="w-1 h-4 rounded-full gradient-bg" />
+                <h2 className="text-base font-bold text-primary">
+                  {t(`home.advanced.cards.${advancedResult.mode}.title`)}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setAdvancedResult(null)}
+                  title={t('common.close', { defaultValue: '关闭' }) as string}
+                  className="ml-auto text-secondary hover:text-primary transition-colors p-1 rounded-lg hover:bg-tertiary"
+                  aria-label={t('common.close', { defaultValue: '关闭' }) as string}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <AdvancedResultPanel mode={advancedResult.mode} result={advancedResult.data} />
+            </section>
+          )}
+
+          {!advancedResult && (<>
           {/* Tab navigation — card-style tabs. Inactive tabs carry their own
               border-b; the active tab drops its bottom border so it visually
               merges with the content panel below. Doing the bottom line
@@ -544,12 +822,12 @@ export function Result() {
                   onClick={() => setActiveTab(g.tab)}
                   title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
                   className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
-                    ? 'border-cyan-400/60 border-b-transparent bg-gradient-to-b from-cyan-500/15 via-purple-500/10 to-transparent shadow-[0_-1px_0_0_rgba(0,240,255,0.25),-1px_0_0_0_rgba(0,240,255,0.1),1px_0_0_0_rgba(0,240,255,0.1)] z-10'
-                    : 'border-transparent border-b-[#3f4143] bg-card/40 hover:border-b-cyan-500/30 hover:bg-card/60'
+                    ? 'border-border border-b-transparent bg-card shadow-sm z-10'
+                    : 'border-transparent border-b border-b-border bg-transparent hover:bg-tertiary'
                     }`}
                 >
                   {isActive && (
-                    <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/80 to-transparent"></span>
+                    <span className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-accent-primary to-transparent opacity-70"></span>
                   )}
                   <div className="flex items-center gap-2 min-w-0">
                     {g.isTabLocked && (
@@ -567,7 +845,7 @@ export function Result() {
                       className={`text-xs font-semibold truncate ${isActive
                         ? 'text-primary'
                         : g.isTabLocked
-                          ? 'text-[#d5d5dc]'
+                          ? 'text-muted'
                           : 'text-secondary hover:text-primary'
                         }`}
                     >
@@ -576,8 +854,8 @@ export function Result() {
                     {g.total > 0 && (
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
-                          ? 'bg-cyan-500/20 text-accent-primary border border-cyan-500/30'
-                          : 'bg-white/5 text-[#d5d5dc]'
+                          ? 'bg-tertiary text-primary border border-border'
+                          : 'bg-tertiary text-muted'
                           }`}
                       >
                         {g.total}
@@ -598,7 +876,7 @@ export function Result() {
             if (stat.isTabLocked) {
               const lockedCategories = categoriesForTab(activeTab);
               return (
-                <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-[#3f4143] border-t-0 bg-card overflow-hidden">
+                <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-border border-t-0 bg-card overflow-hidden">
                   {/* Blurred preview of the actual category list in this tab,
                       so non-members can see *what* they would get rather than
                       generic skeleton bars. */}
@@ -611,12 +889,12 @@ export function Result() {
                             {t(`result.categoryLabels.${cat}`, { defaultValue: cat })}
                           </h3>
                         </div>
-                        <div className="bg-card/60 border border-[#3f4143] rounded-xl divide-y divide-border">
+                        <div className="bg-card border border-border rounded-xl divide-y divide-border">
                           {Array.from({ length: 3 }).map((_, i) => (
                             <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400/40"></span>
-                              <span className="w-12 h-3 rounded bg-white/10"></span>
-                              <span className="flex-1 h-2.5 rounded bg-white/10"></span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-muted"></span>
+                              <span className="w-12 h-3 rounded bg-tertiary"></span>
+                              <span className="flex-1 h-2.5 rounded bg-tertiary"></span>
                             </div>
                           ))}
                         </div>
@@ -625,10 +903,10 @@ export function Result() {
                   </div>
                   {/* Frosted glass overlay sits above the blurred content,
                       letting users still perceive the category list underneath. */}
-                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px] bg-gradient-to-br from-cyan-500/5 via-purple-500/5 to-pink-500/5">
-                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center rounded-2xl bg-card/70 border border-cyan-500/20 shadow-[0_0_48px_rgba(0,240,255,0.12)]">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_24px_rgba(0,240,255,0.25)]">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center rounded-2xl bg-card border border-border shadow-glow">
+                      <div className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                       </div>
@@ -642,7 +920,7 @@ export function Result() {
                       </div>
                       <button
                         onClick={() => navigate('/products-services')}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all shadow-glow"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -655,8 +933,8 @@ export function Result() {
               );
             }
             return (
-              <div className="bg-card border border-[#3f4143] border-border rounded-2xl p-4 sm:p-5 mt-5 mb-5 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent"></div>
+              <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mt-5 mb-5 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent"></div>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-1 h-5 gradient-bg rounded-full shrink-0"></span>
@@ -664,7 +942,7 @@ export function Result() {
                       {tabLabel(activeTab)}
                     </h2>
                     {stat.isTabLocked && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-accent-primary border border-[#3f4143] border-cyan-500/30 shrink-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-tertiary text-accent-primary border border-border shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
@@ -672,14 +950,14 @@ export function Result() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-mono text-[#d5d5dc] tabular-nums shrink-0">
+                  <span className="text-[11px] font-mono text-muted tabular-nums shrink-0">
                     {stat.passed}/{stat.total} · {stat.passRate}%
                   </span>
                 </div>
                 {/* Pass-rate bar */}
-                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-4">
+                <div className="h-1.5 rounded-full bg-tertiary overflow-hidden mb-4">
                   <div
-                    className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 transition-all duration-700"
+                    className="h-full gradient-bg transition-all duration-700"
                     style={{ width: `${stat.passRate}%` }}
                   ></div>
                 </div>
@@ -694,7 +972,7 @@ export function Result() {
                 {stat.isTabLocked && (
                   <button
                     onClick={handleUnlockClick}
-                    className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 hover:from-cyan-500/20 hover:via-purple-500/20 hover:to-pink-500/20 transition-colors"
+                    className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -721,11 +999,11 @@ export function Result() {
                 return (
                   <div
                     key={rowKey}
-                    className="px-4 py-2.5 hover:bg-tertiary/20 transition-colors"
+                    className="px-4 py-2.5 hover:bg-tertiary transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
                         {check.status}
                       </span>
                       <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
@@ -788,7 +1066,7 @@ export function Result() {
                             +{lockedInCat}
                           </span>
                         )}
-                        <span className="text-[10px] font-mono text-[#d5d5dc]">
+                        <span className="text-[10px] font-mono text-muted">
                           {visibleCount}/{totalCount}
                         </span>
                       </div>
@@ -796,17 +1074,17 @@ export function Result() {
                     {visual ? (
                       visual
                     ) : (
-                      <div className="bg-card border border-[#3f4143] border-border rounded-xl overflow-hidden">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
                         <div className="divide-y divide-border">{rows}</div>
                       </div>
                     )}
                     {visual && canShowFix && visualFixes.length > 0 && (
-                      <div className="mt-2 bg-card border border-[#3f4143] border-border rounded-xl p-3 space-y-1.5">
+                      <div className="mt-2 bg-card border border-border rounded-xl p-3 space-y-1.5">
                         {visualFixes.map((f, idx) => {
                           const theme = statusTheme(f.status);
                           return (
                             <div key={idx} className="flex items-start gap-2 text-[11px] text-secondary leading-snug">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border border-[#3f4143] shrink-0 w-12 text-center ${theme.badge}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
                                 {f.status}
                               </span>
                               <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
@@ -829,7 +1107,7 @@ export function Result() {
                 <div key={`locked-${categoryKey}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-1 h-4 bg-gradient-to-b from-cyan-400/60 via-purple-500/60 to-pink-500/60 rounded-full"></span>
+                      <span className="w-1 h-4 gradient-bg rounded-full opacity-60"></span>
                       <h3 className="text-sm font-semibold text-secondary">
                         {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
                       </h3>
@@ -843,7 +1121,7 @@ export function Result() {
                   </div>
                   <button
                     onClick={handleUnlockClick}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-cyan-500/20 bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 hover:from-cyan-500/10 hover:via-purple-500/10 hover:to-pink-500/10 transition-colors group"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors group"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -861,7 +1139,7 @@ export function Result() {
 
               if (presentCategories.length === 0) {
                 return (
-                  <div className="bg-card border border-[#3f4143] border-border rounded-xl p-8 text-center text-secondary text-xs">
+                  <div className="bg-card border border-border rounded-xl p-8 text-center text-secondary text-xs">
                     {t('result.error.noData')}
                   </div>
                 );
@@ -890,7 +1168,7 @@ export function Result() {
           <div className="flex flex-col sm:flex-row gap-3">
             {/* <button
               onClick={() => navigate('/')}
-              className="flex-1 bg-card border border-[#3f4143] border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-accent-primary/40 transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-card border border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-border-strong transition-all flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -910,7 +1188,7 @@ export function Result() {
             )}
             <button
               onClick={handleContactClick}
-              className="flex-1 bg-card border border-[#3f4143] border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-accent-primary/40 transition-all flex items-center justify-center gap-2"
+              className="flex-1 bg-card border border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-border-strong transition-all flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
@@ -918,6 +1196,7 @@ export function Result() {
               {t('result.buttons.getHelp')}
             </button>
           </div>
+          </>)}
         </div>
       </main>
 
@@ -944,7 +1223,7 @@ export function Result() {
               type="button"
               onClick={closeContactModal}
               disabled={submitting}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-white/5 transition-colors disabled:opacity-50"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-secondary hover:text-primary hover:bg-tertiary transition-colors disabled:opacity-50"
               aria-label="关闭"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -972,7 +1251,7 @@ export function Result() {
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
                   placeholder={t('productsServices.contact.namePlaceholder')}
                 />
               </div>
@@ -987,7 +1266,7 @@ export function Result() {
                   required
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
                   placeholder={t('productsServices.contact.emailPlaceholder')}
                 />
               </div>
@@ -1002,7 +1281,7 @@ export function Result() {
                   required
                   value={form.website}
                   onChange={(e) => setForm({ ...form, website: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
                   placeholder={t('productsServices.contact.websitePlaceholder')}
                 />
               </div>
@@ -1016,7 +1295,7 @@ export function Result() {
                   required
                   value={form.service}
                   onChange={(e) => setForm({ ...form, service: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
                 >
                   <option value="">{t('productsServices.contact.service')}</option>
                   <option value="Basic Detection Service">{t('productsServices.contact.serviceOptions.0')}</option>
@@ -1035,7 +1314,7 @@ export function Result() {
                   value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   rows={4}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
+                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
                   placeholder={t('productsServices.contact.messagePlaceholder')}
                 ></textarea>
               </div>
@@ -1054,6 +1333,154 @@ export function Result() {
   );
 }
 
+// Mode-aware hero for the top-left of the Result page when an advanced
+// check has been run. Each mode picks its own headline number, suffix,
+// grade pill, and progress bar — the layout matches the default hero so
+// nothing else on the page shifts.
+function renderAdvancedHero(
+  state: { mode: AdvancedMode; data: AnyAdvancedResult },
+  t: ReturnType<typeof useTranslation>['t'],
+): ReactNode {
+  const { mode, data } = state;
+  const labelClass =
+    'uppercase tracking-[0.15em] text-muted text-[10px] shrink-0';
+  const subjectClass =
+    'text-accent-primary hover:text-primary transition-colors font-medium truncate';
+
+  // crawlTest is special: no /100 score; the headline is total_issues
+  // colored by severity (0 = good, 1-3 = warn, >3 = bad).
+  if (mode === 'crawlTest') {
+    const d = data as import('../types/advanced').CrawlTestResponse;
+    const issues = d.total_issues;
+    const tone =
+      issues === 0
+        ? 'text-emerald-400'
+        : issues > 3
+          ? 'text-rose-400'
+          : 'text-amber-400';
+    return (
+      <>
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
+          <span className={labelClass}>{t('home.advanced.cards.crawlTest.title')}</span>
+          <a href={d.url} target="_blank" rel="noopener noreferrer" className={subjectClass}>
+            {d.domain || d.url}
+          </a>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="flex items-baseline gap-1 leading-none">
+            <span className={`text-5xl sm:text-6xl font-black tabular-nums tracking-tight ${tone}`}>{issues}</span>
+            <span className="text-lg text-muted font-mono">
+              {issues === 1 ? 'issue' : 'issues'}
+            </span>
+          </div>
+          <div className="flex flex-col items-start gap-1 pb-1">
+            <span className="text-[9px] uppercase tracking-[0.2em] text-muted font-semibold">
+              {t('home.advanced.result.crawl.totalIssues')}
+            </span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none">
+              {issues === 0
+                ? t('home.advanced.result.crawl.allClear')
+                : t('home.advanced.result.crawl.needsFix')}
+            </span>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Score-bearing modes: shared layout, mode-specific fields.
+  let topLabel = '';
+  let subjectText = '';
+  let subjectHref: string | null = null;
+  let bigNum: string | number = '';
+  let bigSuffix = '';
+  let gradeText = '';
+  let progressPct = 0;
+
+  if (mode === 'visibility') {
+    const d = data as import('../types/advanced').AiVisibilityResponse;
+    topLabel = t('home.advanced.cards.visibility.title');
+    subjectText = d.brand || d.domain;
+    subjectHref = d.url;
+    bigNum = d.total_score;
+    bigSuffix = `/${d.max_score}`;
+    gradeText = d.grade_label ? `${d.grade} · ${d.grade_label}` : d.grade;
+    progressPct = d.max_score > 0 ? (d.total_score / d.max_score) * 100 : 0;
+  } else if (mode === 'authority') {
+    const d = data as import('../types/advanced').AuthorityAuditResponse;
+    topLabel = t('home.advanced.cards.authority.title');
+    subjectText = d.brand || d.domain;
+    subjectHref = d.url;
+    bigNum = Math.round(d.percent);
+    bigSuffix = '%';
+    gradeText = d.grade;
+    progressPct = d.percent;
+  } else if (mode === 'entity') {
+    const d = data as import('../types/advanced').EntityAuditResponse;
+    topLabel = t('home.advanced.cards.entity.title');
+    subjectText = d.entity;
+    bigNum = Math.round(d.percent);
+    bigSuffix = '%';
+    gradeText = d.grade;
+    progressPct = d.percent;
+  } else if (mode === 'citation') {
+    const d = data as import('../types/advanced').CitationCheckResponse;
+    topLabel = `${t('home.advanced.cards.citation.title')}${d.engine ? ` · ${d.engine}` : ''}`;
+    subjectText = d.brand || d.domain;
+    subjectHref = d.url;
+    const ratePct = Math.round(d.citation_rate * 100);
+    bigNum = ratePct;
+    bigSuffix = '%';
+    gradeText = d.grade;
+    progressPct = ratePct;
+  } else if (mode === 'compare') {
+    const d = data as import('../types/advanced').CompareResponse;
+    topLabel = t('home.advanced.cards.compare.title');
+    subjectText = d.winner
+      ? `${t('result.advancedHero.winner', { defaultValue: 'Winner' })}: ${d.winner.domain}`
+      : `${d.urls.length} URLs`;
+    bigNum = d.winner?.score ?? 0;
+    bigSuffix = '/100';
+    gradeText = d.winner?.grade ?? '—';
+    progressPct = d.winner?.score ?? 0;
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
+        <span className={labelClass}>{topLabel}</span>
+        {subjectHref ? (
+          <a href={subjectHref} target="_blank" rel="noopener noreferrer" className={subjectClass}>
+            {subjectText}
+          </a>
+        ) : (
+          <span className="font-medium text-primary truncate">{subjectText}</span>
+        )}
+      </div>
+      <div className="flex items-end gap-3">
+        <div className="flex items-baseline gap-1 leading-none">
+          <span className="text-5xl sm:text-6xl font-black gradient-text tabular-nums tracking-tight">{bigNum}</span>
+          <span className="text-lg text-muted font-mono">{bigSuffix}</span>
+        </div>
+        <div className="flex flex-col items-start gap-1 pb-1">
+          <span className="text-[9px] uppercase tracking-[0.2em] text-muted font-semibold">
+            {t('result.scoreCard.title', { defaultValue: 'Score' })}
+          </span>
+          <span className="text-sm font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none">
+            {gradeText}
+          </span>
+        </div>
+      </div>
+      <div className="mt-2 h-1.5 w-full rounded-full bg-tertiary/60 overflow-hidden">
+        <div
+          className="h-full gradient-bg rounded-full transition-all duration-700"
+          style={{ width: `${Math.max(0, Math.min(100, progressPct))}%` }}
+        />
+      </div>
+    </>
+  );
+}
+
 function StatPill({
   color,
   value,
@@ -1066,11 +1493,11 @@ function StatPill({
   items?: string[];
 }) {
   const palette = {
-    emerald: { text: 'text-emerald-400', dot: 'bg-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/5' },
-    amber: { text: 'text-amber-400', dot: 'bg-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/5' },
-    rose: { text: 'text-rose-400', dot: 'bg-rose-500', border: 'border-rose-500/20', bg: 'bg-rose-500/5' },
-    cyan: { text: 'text-cyan-400', dot: 'bg-cyan-400', border: 'border-cyan-500/20', bg: 'bg-cyan-500/5' },
-    muted: { text: 'text-primary', dot: 'bg-white/40', border: 'border-border', bg: 'bg-white/5' },
+    emerald: { text: 'text-emerald-500', dot: 'bg-emerald-500', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10' },
+    amber: { text: 'text-amber-500', dot: 'bg-amber-500', border: 'border-amber-500/30', bg: 'bg-amber-500/10' },
+    rose: { text: 'text-rose-500', dot: 'bg-rose-500', border: 'border-rose-500/30', bg: 'bg-rose-500/10' },
+    cyan: { text: 'text-cyan-500', dot: 'bg-cyan-500', border: 'border-cyan-500/30', bg: 'bg-cyan-500/10' },
+    muted: { text: 'text-primary', dot: 'bg-muted', border: 'border-border', bg: 'bg-tertiary' },
   }[color];
   const hasItems = items.length > 0;
   const pill = (
@@ -1080,7 +1507,7 @@ function StatPill({
       <span className={`w-1.5 h-1.5 rounded-full ${palette.dot}`}></span>
       <div className="flex flex-col leading-tight min-w-0">
         <span className={`text-base font-bold tabular-nums ${palette.text}`}>{value}</span>
-        <span className="text-[9px] uppercase tracking-wider text-[#d5d5dc] truncate">{label}</span>
+        <span className="text-[9px] uppercase tracking-wider text-muted truncate">{label}</span>
       </div>
     </div>
   );

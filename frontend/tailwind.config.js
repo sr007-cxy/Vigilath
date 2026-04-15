@@ -17,8 +17,19 @@ export default {
         DEFAULT: 'var(--border-color)',
       },
       colors: {
-        // Named token for `border-border` / `divide-border` utilities.
+        // Theme-aware tokens backed by CSS variables in index.css. These make
+        // classes like `bg-card`, `bg-tertiary`, `text-accent-primary`,
+        // `border-border`, `placeholder-muted` etc. respect the active theme
+        // (peec / light / dark) instead of resolving to hardcoded shades.
         border: 'var(--border-color)',
+        'border-strong': 'var(--border-strong)',
+        card: 'var(--bg-card)',
+        tertiary: 'var(--bg-tertiary)',
+        surface: 'var(--bg-surface)',
+        'surface-hover': 'var(--bg-surface-hover)',
+        'accent-primary': 'var(--accent-primary)',
+        'accent-secondary': 'var(--accent-secondary)',
+        muted: 'var(--text-muted)',
         primary: {
           50: '#eef2ff',
           100: '#e0e7ff',
