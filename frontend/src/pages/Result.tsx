@@ -13,6 +13,21 @@ import { exportPdfReport } from '../utils/exportPdfReport';
 import { exportAdvancedPdfReport } from '../utils/exportAdvancedPdfReport';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
+/**
+ * Render a check's user-facing message. Prefers i18n key + params (emitted
+ * via geo_checker.emit_check), falls back to the raw English `message`
+ * for legacy un-migrated checks.
+ */
+function renderCheckMessage(
+  check: CheckResult,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (check.message_key) {
+    return t(check.message_key, (check.message_params || {}) as Record<string, unknown>);
+  }
+  return check.message;
+}
+
 // 23 categories split into 7 tabs (2 free + 5 paid) aligned with
 // docs/会员功能免费与付费功能项目列表.md §检测大项分组. Free and paid
 // groups do not cross over, so a whole paid tab can show 🔒 for non-members
@@ -263,13 +278,14 @@ export function Result() {
       const cats = categoriesForTab(tab);
       const checks = cats.flatMap((c) => checksByCategory[c] || []);
       const total = checks.length;
+      const nameOf = (c: CheckResult) => renderCheckMessage(c, t);
       const namesByStatus = (status: string) =>
-        checks.filter((c) => c.status === status).map((c) => c.message);
+        checks.filter((c) => c.status === status).map(nameOf);
       const passedNames = namesByStatus('PASS');
       const failedNames = namesByStatus('FAIL');
       const warnedNames = namesByStatus('WARN');
       const infoNames = namesByStatus('INFO');
-      const allNames = checks.map((c) => c.message);
+      const allNames = checks.map(nameOf);
       const passed = passedNames.length;
       const failed = failedNames.length;
       const warned = warnedNames.length;
@@ -299,7 +315,7 @@ export function Result() {
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTabs, checksByCategory, lockedCategorySet]);
+  }, [allTabs, checksByCategory, lockedCategorySet, i18n.language]);
 
   const normalizeUrl = (s: string): string =>
     s.startsWith('http://') || s.startsWith('https://') ? s : `https://${s}`;
@@ -803,370 +819,379 @@ export function Result() {
           )}
 
           {!advancedResult && (<>
-          {/* Tab navigation — card-style tabs. Inactive tabs carry their own
+            {/* Tab navigation — card-style tabs. Inactive tabs carry their own
               border-b; the active tab drops its bottom border so it visually
               merges with the content panel below. Doing the bottom line
               per-tab (instead of a container border-b + cover hack) renders
               identically across Chrome / Safari / Firefox. */}
-          <div
-            role="tablist"
-            className="flex flex-wrap items-end gap-1.5 mt-2"
-          >
-            {groupStats.map((g) => {
-              const isActive = activeTab === g.tab;
-              return (
-                <button
-                  key={g.tab}
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setActiveTab(g.tab)}
-                  title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
-                  className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
-                    ? 'border-border border-b-transparent bg-card shadow-sm z-10'
-                    : 'border-transparent border-b border-b-border bg-transparent hover:bg-tertiary'
-                    }`}
-                >
-                  {isActive && (
-                    <span className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-accent-primary to-transparent opacity-70"></span>
-                  )}
-                  <div className="flex items-center gap-2 min-w-0">
-                    {g.isTabLocked && (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-3 w-3 text-accent-primary shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
+            <div
+              role="tablist"
+              className="flex flex-wrap items-end gap-1.5 mt-2"
+            >
+              {groupStats.map((g) => {
+                const isActive = activeTab === g.tab;
+                const tabButton = (
+                  <button
+                    key={g.tab}
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveTab(g.tab)}
+                    className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
+                      ? 'border-border border-b-transparent bg-card shadow-sm z-10'
+                      : 'border-transparent border-b border-b-border bg-transparent hover:bg-tertiary'
+                      }`}
+                  >
+                    {isActive && (
+                      <span className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-accent-primary to-transparent opacity-70"></span>
                     )}
-                    <span
-                      className={`text-xs font-semibold truncate ${isActive
-                        ? 'text-primary'
-                        : g.isTabLocked
-                          ? 'text-muted'
-                          : 'text-secondary hover:text-primary'
-                        }`}
-                    >
-                      {tabLabel(g.tab)}
-                    </span>
-                    {g.total > 0 && (
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
-                          ? 'bg-tertiary text-primary border border-border'
-                          : 'bg-tertiary text-muted'
-                          }`}
-                      >
-                        {g.total}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Per-tab header card — scoped stats, pass-rate bar, optional unlock CTA. */}
-          {(() => {
-            const stat = groupStats.find((g) => g.tab === activeTab);
-            if (!stat) return null;
-            // Locked (member) tabs: the entire body is replaced with a frosted
-            // glass overlay. The user cannot preview any data — they must upgrade.
-            if (stat.isTabLocked) {
-              const lockedCategories = categoriesForTab(activeTab);
-              return (
-                <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-border border-t-0 bg-card overflow-hidden">
-                  {/* Blurred preview of the actual category list in this tab,
-                      so non-members can see *what* they would get rather than
-                      generic skeleton bars. */}
-                  <div className="p-6 sm:p-8 blur-[6px] select-none pointer-events-none space-y-4">
-                    {lockedCategories.map((cat) => (
-                      <div key={cat}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="w-1 h-4 gradient-bg rounded-full"></span>
-                          <h3 className="text-sm font-semibold text-primary">
-                            {t(`result.categoryLabels.${cat}`, { defaultValue: cat })}
-                          </h3>
-                        </div>
-                        <div className="bg-card border border-border rounded-xl divide-y divide-border">
-                          {Array.from({ length: 3 }).map((_, i) => (
-                            <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted"></span>
-                              <span className="w-12 h-3 rounded bg-tertiary"></span>
-                              <span className="flex-1 h-2.5 rounded bg-tertiary"></span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Frosted glass overlay sits above the blurred content,
-                      letting users still perceive the category list underneath. */}
-                  <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
-                    <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center rounded-2xl bg-card border border-border shadow-glow">
-                      <div className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-primary">
-                          {t('result.paywall.memberOnly', { defaultValue: '此检测项需要开通会员' })}
-                        </p>
-                        <p className="text-xs text-secondary">
-                          {t('result.paywall.subtitle')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => navigate('/products-services')}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        </svg>
-                        {t('result.paywall.upgradePro', { defaultValue: '订阅会员' })}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mt-5 mb-5 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent"></div>
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-1 h-5 gradient-bg rounded-full shrink-0"></span>
-                    <h2 className="text-sm sm:text-base font-bold text-primary truncate">
-                      {tabLabel(activeTab)}
-                    </h2>
-                    {stat.isTabLocked && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-tertiary text-accent-primary border border-border shrink-0">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {g.isTabLocked && (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3 w-3 text-accent-primary shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
-                        {t('result.paywall.locked', { defaultValue: 'Locked' })}
+                      )}
+                      <span
+                        className={`text-xs font-semibold truncate ${isActive
+                          ? 'text-primary'
+                          : g.isTabLocked
+                            ? 'text-muted'
+                            : 'text-secondary hover:text-primary'
+                          }`}
+                      >
+                        {tabLabel(g.tab)}
                       </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] font-mono text-muted tabular-nums shrink-0">
-                    {stat.passed}/{stat.total} · {stat.passRate}%
-                  </span>
-                </div>
-                {/* Pass-rate bar */}
-                <div className="h-1.5 rounded-full bg-tertiary overflow-hidden mb-4">
-                  <div
-                    className="h-full gradient-bg transition-all duration-700"
-                    style={{ width: `${stat.passRate}%` }}
-                  ></div>
-                </div>
-                {/* Group-scoped stat pills */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} items={stat.passedNames} />
-                  <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} items={stat.warnedNames} />
-                  <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} items={stat.failedNames} />
-                  <StatPill color="cyan" value={stat.info} label={t('result.summary.info')} items={stat.infoNames} />
-                  <StatPill color="muted" value={stat.total} label={t('result.summary.totalChecks')} items={stat.allNames} />
-                </div>
-                {stat.isTabLocked && (
-                  <button
-                    onClick={handleUnlockClick}
-                    className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span className="text-xs font-semibold text-accent-primary">
-                      {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
-                    </span>
+                      {g.total > 0 && (
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${isActive
+                            ? 'bg-tertiary text-primary border border-border'
+                            : 'bg-tertiary text-muted'
+                            }`}
+                        >
+                          {g.total}
+                        </span>
+                      )}
+                    </div>
                   </button>
-                )}
-              </div>
-            );
-          })()}
+                );
+                return (
+                  <Tooltip
+                    key={g.tab}
+                    disabled={!g.isTabLocked}
+                    content={t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                  >
+                    {tabButton}
+                  </Tooltip>
+                );
+              })}
+            </div>
 
-          {/* Detailed table — skipped for locked tabs (the frosted overlay above
-              already covers the full body for member-only tabs). */}
-          <div className="space-y-5 mb-8">
+            {/* Per-tab header card — scoped stats, pass-rate bar, optional unlock CTA. */}
             {(() => {
-              const activeStat = groupStats.find((g) => g.tab === activeTab);
-              if (activeStat?.isTabLocked) return null;
-              const renderRow = (check: CheckResult, rowKey: string) => {
-                const theme = statusTheme(check.status);
-                const fixText = check.fix?.trim();
-                const showFix = canShowFix && !!fixText && check.status !== 'PASS';
+              const stat = groupStats.find((g) => g.tab === activeTab);
+              if (!stat) return null;
+              // Locked (member) tabs: the entire body is replaced with a frosted
+              // glass overlay. The user cannot preview any data — they must upgrade.
+              if (stat.isTabLocked) {
+                const lockedCategories = categoriesForTab(activeTab);
                 return (
-                  <div
-                    key={rowKey}
-                    className="px-4 py-2.5 hover:bg-tertiary transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
-                        {check.status}
-                      </span>
-                      <p className="flex-1 min-w-0 text-xs text-primary truncate" title={check.message}>
-                        {check.message}
-                      </p>
+                  <div className="relative mt-5 mb-5 rounded-b-2xl rounded-tr-2xl border border-border border-t-0 bg-card overflow-hidden">
+                    {/* Blurred preview of the actual category list in this tab,
+                      so non-members can see *what* they would get rather than
+                      generic skeleton bars. */}
+                    <div className="p-6 sm:p-8 blur-[6px] select-none pointer-events-none space-y-4">
+                      {lockedCategories.map((cat) => (
+                        <div key={cat}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="w-1 h-4 gradient-bg rounded-full"></span>
+                            <h3 className="text-sm font-semibold text-primary">
+                              {t(`result.categoryLabels.${cat}`, { defaultValue: cat })}
+                            </h3>
+                          </div>
+                          <div className="bg-card border border-border rounded-xl divide-y divide-border">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                              <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-muted"></span>
+                                <span className="w-12 h-3 rounded bg-tertiary"></span>
+                                <span className="flex-1 h-2.5 rounded bg-tertiary"></span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {showFix && (
-                      <div className="mt-1.5 ml-[4.25rem] flex items-start gap-1.5 text-[11px] text-secondary leading-snug">
-                        <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
-                        <span>
-                          <span className="font-semibold text-accent-primary mr-1">
-                            {t('result.fix')}
-                          </span>
-                          {fixText}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              };
-
-              const renderCategoryBlock = (
-                categoryKey: string,
-                checksForCategory: CheckResult[],
-                rows: ReactNode,
-                visibleCount: number,
-                totalCount: number,
-              ) => {
-                const lockedInCat = totalCount - visibleCount;
-                // For the handful of categories that render as a rich visual
-                // (robots.txt, Meta Tags, Platform grids), the visual itself
-                // doesn't surface check.fix. Collect fix text separately so
-                // starter+ tiers still see actionable recommendations.
-                const visualFixes = checksForCategory
-                  .filter((c) => c.status !== 'PASS' && c.fix && c.fix.trim())
-                  .map((c) => ({ status: c.status, text: (c.fix as string).trim() }));
-                // Try the rich visual first. resolveCategoryVisual is a plain
-                // function — it returns a React element or null. If null, we
-                // fall back to the plain row list so every category always
-                // renders *something*. (This was previously a <Component/> ref
-                // which made `visual` always truthy and silently broke the
-                // fallback — the list never rendered for un-visualized
-                // categories like HTTPS / sitemap.xml / Mobile & Weight.)
-                const visual = resolveCategoryVisual(categoryKey, checksForCategory);
-                return (
-                  <div key={categoryKey}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-1 h-4 gradient-bg rounded-full"></span>
-                        <h3 className="text-sm font-semibold text-primary">
-                          {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {lockedInCat > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                            +{lockedInCat}
-                          </span>
-                        )}
-                        <span className="text-[10px] font-mono text-muted">
-                          {visibleCount}/{totalCount}
-                        </span>
+                    {/* Frosted glass overlay sits above the blurred content,
+                      letting users still perceive the category list underneath. */}
+                    <div className="absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+                      <div className="flex flex-col items-center gap-4 px-6 py-8 max-w-sm text-center rounded-2xl bg-card border border-border shadow-glow">
+                        <div className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-primary">
+                            {t('result.paywall.memberOnly', { defaultValue: '此检测项需要开通会员' })}
+                          </p>
+                          <p className="text-xs text-secondary">
+                            {t('result.paywall.subtitle')}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => navigate('/products-services')}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                          {t('result.paywall.upgradePro', { defaultValue: '订阅会员' })}
+                        </button>
                       </div>
                     </div>
-                    {visual ? (
-                      visual
-                    ) : (
-                      <div className="bg-card border border-border rounded-xl overflow-hidden">
-                        <div className="divide-y divide-border">{rows}</div>
-                      </div>
-                    )}
-                    {visual && canShowFix && visualFixes.length > 0 && (
-                      <div className="mt-2 bg-card border border-border rounded-xl p-3 space-y-1.5">
-                        {visualFixes.map((f, idx) => {
-                          const theme = statusTheme(f.status);
-                          return (
-                            <div key={idx} className="flex items-start gap-2 text-[11px] text-secondary leading-snug">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
-                                {f.status}
-                              </span>
-                              <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
-                              <span>
-                                <span className="font-semibold text-accent-primary mr-1">
-                                  {t('result.fix')}
-                                </span>
-                                {f.text}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              };
-
-              const renderLockedPlaceholder = (categoryKey: string) => (
-                <div key={`locked-${categoryKey}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1 h-4 gradient-bg rounded-full opacity-60"></span>
-                      <h3 className="text-sm font-semibold text-secondary">
-                        {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
-                      </h3>
-                    </div>
-                    <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      {t('result.paywall.locked')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleUnlockClick}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors group"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span className="text-xs text-secondary group-hover:text-primary transition-colors">
-                      {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
-                    </span>
-                  </button>
-                </div>
-              );
-
-              const presentCategories = activeCategories.filter(
-                (c) => (checksByCategory[c]?.length ?? 0) > 0 || lockedCategorySet.has(c),
-              );
-
-              if (presentCategories.length === 0) {
-                return (
-                  <div className="bg-card border border-border rounded-xl p-8 text-center text-secondary text-xs">
-                    {t('result.error.noData')}
                   </div>
                 );
               }
-
-              // Render each category either as a full block (unlocked / has data)
-              // or as a 🔒 placeholder card (belongs to the tab but is in the
-              // locked set for this tier).
-              return presentCategories.map((categoryKey) => {
-                if (lockedCategorySet.has(categoryKey)) {
-                  return renderLockedPlaceholder(categoryKey);
-                }
-                const checks = checksByCategory[categoryKey] || [];
-                return renderCategoryBlock(
-                  categoryKey,
-                  checks,
-                  checks.map((check, idx) => renderRow(check, `${categoryKey}-${idx}`)),
-                  checks.length,
-                  checks.length,
-                );
-              });
+              return (
+                <div className="bg-card border border-border rounded-2xl p-4 sm:p-5 mt-5 mb-5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent"></div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-1 h-5 gradient-bg rounded-full shrink-0"></span>
+                      <h2 className="text-sm sm:text-base font-bold text-primary truncate">
+                        {tabLabel(activeTab)}
+                      </h2>
+                      {stat.isTabLocked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-tertiary text-accent-primary border border-border shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                          {t('result.paywall.locked', { defaultValue: 'Locked' })}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-mono text-muted tabular-nums shrink-0">
+                      {stat.passed}/{stat.total} · {stat.passRate}%
+                    </span>
+                  </div>
+                  {/* Pass-rate bar */}
+                  <div className="h-1.5 rounded-full bg-tertiary overflow-hidden mb-4">
+                    <div
+                      className="h-full gradient-bg transition-all duration-700"
+                      style={{ width: `${stat.passRate}%` }}
+                    ></div>
+                  </div>
+                  {/* Group-scoped stat pills */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} items={stat.passedNames} />
+                    <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} items={stat.warnedNames} />
+                    <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} items={stat.failedNames} />
+                    <StatPill color="cyan" value={stat.info} label={t('result.summary.info')} items={stat.infoNames} />
+                    <StatPill color="muted" value={stat.total} label={t('result.summary.totalChecks')} items={stat.allNames} />
+                  </div>
+                  {stat.isTabLocked && (
+                    <button
+                      onClick={handleUnlockClick}
+                      className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span className="text-xs font-semibold text-accent-primary">
+                        {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              );
             })()}
-          </div>
 
-          {/* Footer actions */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* <button
+            {/* Detailed table — skipped for locked tabs (the frosted overlay above
+              already covers the full body for member-only tabs). */}
+            <div className="space-y-5 mb-8">
+              {(() => {
+                const activeStat = groupStats.find((g) => g.tab === activeTab);
+                if (activeStat?.isTabLocked) return null;
+                const renderRow = (check: CheckResult, rowKey: string) => {
+                  const theme = statusTheme(check.status);
+                  const fixText = check.fix?.trim();
+                  const showFix = canShowFix && !!fixText && check.status !== 'PASS';
+                  const displayMessage = renderCheckMessage(check, t);
+                  return (
+                    <div
+                      key={rowKey}
+                      className="px-4 py-2.5 hover:bg-tertiary transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
+                          {check.status}
+                        </span>
+                        <p className="flex-1 min-w-0 text-xs text-primary truncate" title={displayMessage}>
+                          {displayMessage}
+                        </p>
+                      </div>
+                      {showFix && (
+                        <div className="mt-1.5 ml-[4.25rem] flex items-start gap-1.5 text-[11px] text-secondary leading-snug">
+                          <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
+                          <span>
+                            <span className="font-semibold text-accent-primary mr-1">
+                              {t('result.fix')}
+                            </span>
+                            {fixText}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const renderCategoryBlock = (
+                  categoryKey: string,
+                  checksForCategory: CheckResult[],
+                  rows: ReactNode,
+                  visibleCount: number,
+                  totalCount: number,
+                ) => {
+                  const lockedInCat = totalCount - visibleCount;
+                  // For the handful of categories that render as a rich visual
+                  // (robots.txt, Meta Tags, Platform grids), the visual itself
+                  // doesn't surface check.fix. Collect fix text separately so
+                  // starter+ tiers still see actionable recommendations.
+                  const visualFixes = checksForCategory
+                    .filter((c) => c.status !== 'PASS' && c.fix && c.fix.trim())
+                    .map((c) => ({ status: c.status, text: (c.fix as string).trim() }));
+                  // Try the rich visual first. resolveCategoryVisual is a plain
+                  // function — it returns a React element or null. If null, we
+                  // fall back to the plain row list so every category always
+                  // renders *something*. (This was previously a <Component/> ref
+                  // which made `visual` always truthy and silently broke the
+                  // fallback — the list never rendered for un-visualized
+                  // categories like HTTPS / sitemap.xml / Mobile & Weight.)
+                  const visual = resolveCategoryVisual(categoryKey, checksForCategory);
+                  return (
+                    <div key={categoryKey}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1 h-4 gradient-bg rounded-full"></span>
+                          <h3 className="text-sm font-semibold text-primary">
+                            {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {lockedInCat > 0 && (
+                            <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                              </svg>
+                              +{lockedInCat}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-mono text-muted">
+                            {visibleCount}/{totalCount}
+                          </span>
+                        </div>
+                      </div>
+                      {visual ? (
+                        visual
+                      ) : (
+                        <div className="bg-card border border-border rounded-xl overflow-hidden">
+                          <div className="divide-y divide-border">{rows}</div>
+                        </div>
+                      )}
+                      {visual && canShowFix && visualFixes.length > 0 && (
+                        <div className="mt-2 bg-card border border-border rounded-xl p-3 space-y-1.5">
+                          {visualFixes.map((f, idx) => {
+                            const theme = statusTheme(f.status);
+                            return (
+                              <div key={idx} className="flex items-start gap-2 text-[11px] text-secondary leading-snug">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
+                                  {f.status}
+                                </span>
+                                <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
+                                <span>
+                                  <span className="font-semibold text-accent-primary mr-1">
+                                    {t('result.fix')}
+                                  </span>
+                                  {f.text}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const renderLockedPlaceholder = (categoryKey: string) => (
+                  <div key={`locked-${categoryKey}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-4 gradient-bg rounded-full opacity-60"></span>
+                        <h3 className="text-sm font-semibold text-secondary">
+                          {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                        </h3>
+                      </div>
+                      <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        {t('result.paywall.locked')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleUnlockClick}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-tertiary hover:bg-surface-hover transition-colors group"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span className="text-xs text-secondary group-hover:text-primary transition-colors">
+                        {t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                      </span>
+                    </button>
+                  </div>
+                );
+
+                const presentCategories = activeCategories.filter(
+                  (c) => (checksByCategory[c]?.length ?? 0) > 0 || lockedCategorySet.has(c),
+                );
+
+                if (presentCategories.length === 0) {
+                  return (
+                    <div className="bg-card border border-border rounded-xl p-8 text-center text-secondary text-xs">
+                      {t('result.error.noData')}
+                    </div>
+                  );
+                }
+
+                // Render each category either as a full block (unlocked / has data)
+                // or as a 🔒 placeholder card (belongs to the tab but is in the
+                // locked set for this tier).
+                return presentCategories.map((categoryKey) => {
+                  if (lockedCategorySet.has(categoryKey)) {
+                    return renderLockedPlaceholder(categoryKey);
+                  }
+                  const checks = checksByCategory[categoryKey] || [];
+                  return renderCategoryBlock(
+                    categoryKey,
+                    checks,
+                    checks.map((check, idx) => renderRow(check, `${categoryKey}-${idx}`)),
+                    checks.length,
+                    checks.length,
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* <button
               onClick={() => navigate('/')}
               className="flex-1 bg-card border border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-border-strong transition-all flex items-center justify-center gap-2"
             >
@@ -1175,27 +1200,27 @@ export function Result() {
               </svg>
               {t('result.buttons.checkAnother')}
             </button> */}
-            {!isUnlocked && (
+              {!isUnlocked && (
+                <button
+                  onClick={handleUnlockClick}
+                  className="flex-1 gradient-bg text-white rounded-xl py-3 px-5 text-sm font-semibold hover:opacity-90 transition-all shadow-glow flex items-center justify-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  {t('result.paywall.viewAll')}
+                </button>
+              )}
               <button
-                onClick={handleUnlockClick}
-                className="flex-1 gradient-bg text-white rounded-xl py-3 px-5 text-sm font-semibold hover:opacity-90 transition-all shadow-glow flex items-center justify-center gap-2"
+                onClick={handleContactClick}
+                className="flex-1 bg-card border border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-border-strong transition-all flex items-center justify-center gap-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
                 </svg>
-                {t('result.paywall.viewAll')}
+                {t('result.buttons.getHelp')}
               </button>
-            )}
-            <button
-              onClick={handleContactClick}
-              className="flex-1 bg-card border border-border rounded-xl py-3 px-5 text-sm font-semibold text-primary hover:bg-tertiary hover:border-border-strong transition-all flex items-center justify-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-              </svg>
-              {t('result.buttons.getHelp')}
-            </button>
-          </div>
+            </div>
           </>)}
         </div>
       </main>

@@ -1,9 +1,15 @@
 import io
+import json
+import os
 import re
 import threading
 import time
 from contextlib import redirect_stdout
 from typing import Dict, List, Any, Optional
+
+# Enable i18n-ready structured emit in geo_checker BEFORE importing it.
+# The helper `emit_check()` in geo_checker reads this at module-load time.
+os.environ["GEO_EMIT_STRUCTURED"] = "1"
 
 from geo_checker import __main__ as _gc_module
 from geo.models.geo import GeoTestResult, CheckResult
@@ -116,39 +122,61 @@ def cache_result(key: str, result: GeoTestResult) -> None:
     """Cache the result with timestamp"""
     _cache[key] = (result, time.time())
 
+_KEY_MARKER_RE = re.compile(r"\x01GK\x01(.*?)\x01GE\x01", re.DOTALL)
+
+
+def _extract_key_marker(message: str):
+    """Strip the structured-i18n marker from a check message if present.
+
+    Returns (clean_message, message_key_or_none, message_params_or_none).
+    """
+    m = _KEY_MARKER_RE.search(message)
+    if not m:
+        return message, None, None
+    try:
+        meta = json.loads(m.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return message, None, None
+    clean = (message[: m.start()] + message[m.end() :]).rstrip()
+    return clean, meta.get("k"), meta.get("p")
+
+
 def parse_geo_output(url: str, output: str, include_fix: bool) -> GeoTestResult:
     """Parse the output from geo_checker script into structured format"""
     checks = []
     current_category = None
-    
-    # Remove ANSI color codes from output
+
+    # Remove ANSI color codes from output. IMPORTANT: run this BEFORE the
+    # status_pattern match. The marker chars (\x01) are NOT ANSI and survive.
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     output = ansi_escape.sub('', output)
-    
+
     # Regex patterns to extract information
     category_pattern = re.compile(r"^--- (.*) ---")
     status_pattern = re.compile(r"^\s*\[(PASS|WARN|FAIL|INFO| FIX)\] (.*)")
     score_pattern = re.compile(r"^AI VISIBILITY SCORE:\s*(\d+)/100\s*\(Grade: ([A-F+]+)\)")
-    
+
     score = 0
     grade = "F"
-    
+
     lines = output.split('\n')
     for line in lines:
         line = line.strip()
-        
+
         # Check for category
         category_match = category_pattern.match(line)
         if category_match:
             current_category = category_match.group(1)
             continue
-        
+
         # Check for status line
         status_match = status_pattern.match(line)
         if status_match and current_category:
             status = status_match.group(1)
-            message = status_match.group(2)
-            
+            raw_message = status_match.group(2)
+            # Extract optional i18n key marker embedded by emit_check.
+            message, message_key, message_params = _extract_key_marker(raw_message)
+
             # For FIX lines, we need to handle differently
             if status == " FIX":
                 # This is a fix recommendation for the previous check
@@ -160,10 +188,12 @@ def parse_geo_output(url: str, output: str, include_fix: bool) -> GeoTestResult:
                     category=current_category,
                     status=status,
                     message=message,
-                    fix=None
+                    fix=None,
+                    message_key=message_key,
+                    message_params=message_params,
                 )
                 checks.append(check)
-        
+
         # Check for score
         score_match = score_pattern.match(line)
         if score_match:

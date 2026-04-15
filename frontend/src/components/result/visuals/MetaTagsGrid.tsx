@@ -2,15 +2,18 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseMetaTags, type MetaItemStatus, type MetaItem } from '../lib/parseChecks';
 import type { CheckResult } from '../../../types/geo';
+import { Tooltip } from '../../Tooltip';
 
 interface Props {
   checks: CheckResult[];
 }
 
-const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: ReactNode }> = {
+// Labels are code-facing tags (kept in English because they ARE the HTML tag
+// names the developer sees); icons are presentation-only. The user-visible
+// `help` text lives in i18n at result.visuals.meta.items.<key>.help.
+const ITEM_LABELS: Record<MetaItem['key'], { label: string; icon: ReactNode }> = {
   title: {
     label: '<title>',
-    help: 'Page title tag',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" />
@@ -19,7 +22,6 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
   },
   description: {
     label: 'description',
-    help: 'Meta description',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -28,7 +30,6 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
   },
   canonical: {
     label: 'canonical',
-    help: 'Canonical URL',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -37,7 +38,6 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
   },
   og: {
     label: 'Open Graph',
-    help: 'og:* tags for social/AI summaries',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -46,7 +46,6 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
   },
   lang: {
     label: 'html[lang]',
-    help: 'Language declaration',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
@@ -55,7 +54,6 @@ const ITEM_LABELS: Record<MetaItem['key'], { label: string; help: string; icon: 
   },
   hreflang: {
     label: 'hreflang',
-    help: 'Multilingual alternate versions',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -109,23 +107,24 @@ export function MetaTagsGrid({ checks }: Props) {
         {parsed.items.map((item) => {
           const label = ITEM_LABELS[item.key];
           const theme = STATUS_THEME[item.status];
+          const help = t(`result.visuals.meta.items.${item.key}.help`);
           return (
-            <div
-              key={item.key}
-              className={`flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border ${theme.border} ${theme.bg}`}
-              title={label.help}
-            >
-              <div className="flex items-center justify-between">
-                <div className={`flex items-center gap-1.5 ${theme.text}`}>
-                  {label.icon}
-                  <span className="text-[11px] font-semibold font-mono">{label.label}</span>
+            <Tooltip key={item.key} content={help}>
+              <div
+                className={`flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border cursor-help ${theme.border} ${theme.bg}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className={`flex items-center gap-1.5 ${theme.text}`}>
+                    {label.icon}
+                    <span className="text-[11px] font-semibold font-mono">{label.label}</span>
+                  </div>
+                  <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
                 </div>
-                <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
+                <p className="text-[10px] text-[#d5d5dc] leading-snug line-clamp-2 min-h-[1.5em]">
+                  {item.status === 'UNKNOWN' ? '—' : item.detail || help}
+                </p>
               </div>
-              <p className="text-[10px] text-muted leading-snug line-clamp-2 min-h-[1.5em]">
-                {item.status === 'UNKNOWN' ? '—' : item.detail || label.help}
-              </p>
-            </div>
+            </Tooltip>
           );
         })}
       </div>

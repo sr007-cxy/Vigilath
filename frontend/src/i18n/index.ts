@@ -37,7 +37,13 @@ if (!i18n.isInitialized) {
             "success": "Success",
             "theme": {
               "switchToLight": "Switch to light mode",
-              "switchToDark": "Switch to dark mode"
+              "switchToDark": "Switch to dark mode",
+              "labels": {
+                "peec": "Minimal",
+                "light": "Light",
+                "dark": "Dark"
+              },
+              "tooltip": "Theme: {{current}} — click for {{next}}"
             },
             "errors": {
               "loadFailed": "Failed to load content",
@@ -359,6 +365,259 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO Readiness Results",
             "resultsFor": "Results for:",
+            "checks": {
+              "https": {
+                "uses_https": "Site uses HTTPS",
+                "not_https": "Site does not use HTTPS — AI engines prefer secure sites"
+              },
+              "robots": {
+                "not_found": "robots.txt not found at {{url}}",
+                "found": "robots.txt found ({{bytes}} bytes)",
+                "sitemap_ref_present": "robots.txt references a sitemap",
+                "sitemap_ref_missing": "robots.txt does not reference a sitemap",
+                "wildcard_blocks_all": "Wildcard user-agent blocks all crawlers (Disallow: /)",
+                "bots_blocked": "AI bots explicitly BLOCKED: {{bots}}",
+                "bots_with_directives": "AI bots with directives (not blocked): {{bots}}",
+                "bots_inherit_wildcard": "AI bots not mentioned (inherit wildcard rules): {{bots}}"
+              },
+              "llms": {
+                "found": "{{filename}} found ({{lines}} lines, {{bytes}} bytes)",
+                "title_present": "Title: {{title}}",
+                "title_missing": "No markdown title (# heading) — recommended by llms.txt spec",
+                "description_present": "Contains descriptive text",
+                "description_missing": "No descriptive text found — should explain what the site/org does",
+                "sections_found": "{{count}} section(s) found (## headings)",
+                "sections_missing": "No sections (## headings) — consider organizing content into sections",
+                "links_found": "{{count}} link(s) to resources found",
+                "links_missing": "No links found — llms.txt should link to key resources",
+                "blockquotes_present": "Blockquote descriptions (>) present",
+                "too_short": "File is very short ({{bytes}} bytes) — may be a placeholder",
+                "file_not_found": "{{filename}} not found"
+              },
+              "well_known": {
+                "file_found": "{{path}} found — {{description}}",
+                "invalid_json": "{{path}} exists but contains invalid JSON",
+                "file_not_found": "{{path}} not found — {{description}}"
+              },
+              "sitemap": {
+                "found": "Sitemap found at {{path}} ({{count}} <loc> entries)",
+                "lastmod_present": "Sitemap includes <lastmod> timestamps",
+                "lastmod_missing": "Sitemap missing <lastmod> timestamps — helps AI engines know content freshness",
+                "not_found": "No sitemap.xml found"
+              },
+              "meta": {
+                "fetch_failed": "Could not fetch homepage",
+                "title_found": "<title> found: \"{{title}}\"",
+                "title_missing": "Missing <title> tag",
+                "description_found": "Meta description found ({{chars}} chars)",
+                "description_too_short": "Meta description is very short — aim for 120-160 characters",
+                "description_missing": "Missing meta description",
+                "canonical_found": "Canonical URL set: {{url}}",
+                "canonical_missing": "No canonical URL — can cause duplicate content issues for AI engines",
+                "og_tags_found": "Open Graph tags found: {{tags}}",
+                "og_tags_missing": "No Open Graph tags — used by AI engines for content summarization",
+                "lang_declared": "Language declared: {{lang}}",
+                "lang_missing": "No lang attribute on <html> — helps AI engines understand content language",
+                "hreflang_found": "Hreflang tags found for: {{langs}}",
+                "hreflang_missing": "No hreflang tags — add these if your site supports multiple languages"
+              },
+              "mobile": {
+                "fetch_failed": "Could not fetch homepage",
+                "viewport_found": "Viewport meta tag found: {{viewport}}",
+                "viewport_responsive": "Uses width=device-width (responsive)",
+                "viewport_not_responsive": "Viewport doesn't use width=device-width",
+                "viewport_missing": "No viewport meta tag — page won't render properly on mobile",
+                "weight_light": "HTML page weight: {{kb}} KB (lightweight)",
+                "weight_medium": "HTML page weight: {{kb}} KB — consider reducing inline CSS/JS",
+                "weight_heavy": "HTML page weight: {{kb}} KB — very heavy, may slow AI crawlers",
+                "inline_heavy": "Heavy inline resources: {{styles}} <style> blocks, {{scripts}} large <script> blocks",
+                "inline_ok": "Inline resources within acceptable range",
+                "cache_headers_found": "Cache headers found: {{signals}}",
+                "cache_headers_missing": "No cache headers (Cache-Control, ETag, Last-Modified)"
+              },
+              "structured_data": {
+                "fetch_failed": "Could not fetch homepage",
+                "jsonld_found": "Found {{count}} JSON-LD block(s)",
+                "jsonld_missing": "No JSON-LD structured data found — helps AI engines understand your content",
+                "schema_ref_only": "schema.org references found (possibly microdata or RDFa)"
+              },
+              "content_access": {
+                "fetch_failed": "Could not fetch homepage",
+                "words_ok": "Homepage has {{count}} words in initial HTML",
+                "words_low": "Homepage has only {{count}} words in initial HTML — may rely too heavily on JavaScript rendering",
+                "words_js_only": "Homepage has only {{count}} words — likely JS-rendered, invisible to most AI crawlers",
+                "ratio_good": "Content-to-HTML ratio: {{ratio}}% (good)",
+                "ratio_low": "Content-to-HTML ratio: {{ratio}}% — low ratio means lots of boilerplate vs. real content",
+                "ratio_very_low": "Content-to-HTML ratio: {{ratio}}% — very low, mostly boilerplate/code",
+                "headings_found": "Heading structure found ({{summary}})",
+                "first_heading_not_h1": "First heading is <{{tag}}>, not <h1> — clear hierarchy helps AI engines",
+                "headings_missing": "No heading tags found — structured headings help AI engines parse content"
+              },
+              "crawl_ready": {
+                "fetch_failed": "Could not fetch homepage",
+                "spa_empty": "Likely a client-side rendered SPA with minimal server-side content",
+                "spa_with_ssr": "SPA framework detected but server-side content is present (SSR/SSG)",
+                "ssr_content": "Content is rendered server-side",
+                "meta_noindex": "Meta robots contains 'noindex' — page will be excluded from AI training data",
+                "meta_nofollow": "Meta robots contains 'nofollow' — AI crawlers won't follow links on this page",
+                "meta_noai": "Meta robots contains AI-specific opt-out directive: {{content}}",
+                "meta_allows_index": "Meta robots allows indexing: {{content}}",
+                "meta_no_restriction": "No restrictive meta robots tag found",
+                "xrobots_restrict": "X-Robots-Tag header restricts AI: {{header}}",
+                "xrobots_present": "X-Robots-Tag header present: {{header}}",
+                "xrobots_clean": "No restrictive X-Robots-Tag header",
+                "paywall_detected": "Possible gated content detected (classes/ids: {{classes}})",
+                "no_paywall": "No paywall/login-wall indicators detected",
+                "semantic_good": "Good semantic HTML structure ({{tags}})",
+                "semantic_limited": "Limited semantic HTML ({{tags}}) — more semantic tags help AI parse content",
+                "semantic_missing": "No semantic HTML tags found — AI crawlers rely on semantic structure",
+                "alt_good": "{{with_alt}}/{{total}} images have alt text ({{pct}}%)",
+                "alt_medium": "{{with_alt}}/{{total}} images have alt text ({{pct}}%) — aim for >80%",
+                "alt_poor": "Only {{with_alt}}/{{total}} images have alt text ({{pct}}%) — AI crawlers need alt text",
+                "no_images": "No images found on homepage",
+                "internal_links_good": "{{count}} internal links — good for AI crawl discovery",
+                "internal_links_few": "Only {{count}} internal links — more internal links help AI engines discover content",
+                "internal_links_none": "Very few internal links ({{count}}) — AI crawlers rely on links to find content",
+                "response_fast": "Response time: {{seconds}}s",
+                "response_slow": "Response time: {{seconds}}s — slow responses may cause AI crawlers to skip pages",
+                "response_timeout": "Response time: {{seconds}}s — too slow for reliable AI crawling"
+              },
+              "content_quality": {
+                "fetch_failed": "Could not fetch homepage",
+                "readability_good": "Readability: Flesch-Kincaid grade {{grade}} (accessible)",
+                "readability_simple": "Readability: Flesch-Kincaid grade {{grade}} (very simple)",
+                "readability_complex": "Readability: Flesch-Kincaid grade {{grade}} (complex) — simpler text ranks better in AI answers",
+                "faq_detected": "FAQ content detected — strong signal for AI-generated answers",
+                "faq_partial": "Possible FAQ-like content — consider adding FAQPage structured data",
+                "faq_missing": "No FAQ content detected — FAQ pages rank well in AI-generated answers",
+                "stats_good": "{{count}} quotable statistics found — good for AI citations",
+                "stats_few": "{{count}} statistic(s) found — more specific data improves AI citation likelihood",
+                "stats_missing": "No quotable statistics found — specific numbers/data help AI engines cite your content",
+                "sources_cited": "{{count}} source attribution(s) found — increases trust for AI engines",
+                "sources_missing": "No explicit source attributions — citing sources increases AI trust in your content",
+                "lists_good": "Structured lists found ({{lists}} lists, {{items}} items)",
+                "lists_few": "Some list content ({{items}} items) — structured lists help AI extract key points",
+                "lists_missing": "No list elements — structured lists help AI engines extract key points"
+              },
+              "tech_crawl": {
+                "fetch_failed": "Could not fetch homepage",
+                "canonical_chain": "Canonical chain detected: {{from}} -> {{via}} -> {{to}}",
+                "canonical_resolves": "Canonical URL resolves correctly",
+                "canonical_broken": "Canonical URL {{url}} returns error",
+                "canonical_self": "Canonical URL is self-referencing (correct)",
+                "redirect_chain": "Redirect chain with {{hops}} hops: {{chain}} -> {{final}}",
+                "redirect_ok": "{{count}} redirect(s) — within acceptable range",
+                "no_redirect": "No redirects — direct access",
+                "redirect_test_failed": "Could not test redirect chain",
+                "http2_supported": "HTTP/{{version}} supported — faster crawling",
+                "http1_only": "HTTP/{{version}} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling",
+                "http_unknown": "Could not determine HTTP version",
+                "feed_declared": "RSS/Atom feed(s) found: {{feeds}}",
+                "feed_found_at_path": "Feed found at {{path}}",
+                "feed_missing": "No RSS/Atom feed found — feeds help AI engines monitor content freshness"
+              },
+              "authority": {
+                "fetch_failed": "Could not fetch homepage",
+                "security_headers_strong": "Strong security headers ({{count}}/4): {{headers}}",
+                "security_headers_partial": "Some security headers present ({{count}}/4): {{headers}}",
+                "security_headers_missing": "No security headers found — reduces trust signal for AI engines",
+                "humans_txt_found": "humans.txt found — authorship transparency",
+                "humans_txt_missing": "No humans.txt — optional authorship transparency file",
+                "author_jsonld": "Author markup found in structured data (JSON-LD)",
+                "author_meta": "Author information found (meta/link tag)",
+                "author_class_only": "Author class detected in HTML — consider adding schema.org Person markup",
+                "author_missing": "No author attribution found — authorship signals boost AI trust (E-E-A-T)"
+              },
+              "ai_opt": {
+                "fetch_failed": "Could not fetch homepage",
+                "freshness_found": "Content freshness signals found:",
+                "freshness_missing": "No content freshness signals — add dateModified to JSON-LD or <time> elements",
+                "brand_inconsistent": "Inconsistent site name across tags: {{names}}",
+                "brand_consistent": "Brand entity \"{{name}}\" used consistently ({{count}} occurrences)",
+                "brand_sparse": "Brand entity \"{{name}}\" found but used sparingly — consistent naming helps AI entity recognition",
+                "brand_unknown": "Could not determine primary brand/entity name",
+                "api_endpoint_found": "Machine-readable endpoint found: {{path}}",
+                "api_endpoint_missing": "No public API endpoints found — optional, but helps AI systems access structured data"
+              },
+              "social": {
+                "fetch_failed": "Could not fetch homepage",
+                "twitter_found": "Twitter/X card tags found: {{tags}}",
+                "twitter_missing": "No Twitter/X card meta tags found",
+                "sameas_found": "sameAs social links in JSON-LD ({{count}}):",
+                "sameas_missing": "No sameAs social profile links in structured data",
+                "html_links_found": "{{count}} social profile link(s) found in HTML — consider adding them as sameAs in JSON-LD too",
+                "no_social_links": "No social profile links detected on the page"
+              },
+              "answer_format": {
+                "fetch_failed": "Could not fetch homepage",
+                "definitions_found": "{{count}} definition-style sentence(s) found — highly citable by AI",
+                "definitions_missing": "No definition-style sentences detected",
+                "tables_with_headers": "Comparison table(s) with headers found — AI engines extract tabular data",
+                "tables_without_headers": "Tables found but missing <th> headers — add headers for AI extraction",
+                "tables_missing": "No comparison tables — consider adding tables for feature comparisons, pricing, etc.",
+                "steps_found": "Step-by-step instructional content detected — great for 'how to' AI answers",
+                "steps_missing": "No step-by-step instructions found",
+                "proscons_found": "Pros/cons or advantages/disadvantages content detected",
+                "proscons_missing": "No pros/cons pattern detected",
+                "summary_found": "Summary/key takeaways section found — AI engines prefer concise summaries",
+                "summary_missing": "No key takeaways or TL;DR section found"
+              },
+              "platform_reg": {
+                "fetch_failed": "Could not fetch homepage",
+                "gsc_verified": "Google Search Console verification tag found",
+                "gsc_missing": "No Google Search Console verification tag found",
+                "bing_verified": "Bing Webmaster Tools verification tag found",
+                "bing_missing": "No Bing Webmaster Tools verification tag found",
+                "yandex_verified": "Yandex Webmaster verification tag found",
+                "yandex_missing": "No Yandex Webmaster verification tag — relevant if targeting international AI platforms",
+                "indexnow_endpoint": "IndexNow endpoint found at {{path}} — enables instant index notifications",
+                "indexnow_meta": "IndexNow meta tag found",
+                "indexnow_missing": "No IndexNow integration detected",
+                "pinterest_verified": "Pinterest domain verification found",
+                "summary_registered": "Registered: {{platforms}}",
+                "summary_missing": "Not detected: {{platforms}}"
+              },
+              "schema_kg": {
+                "fetch_failed": "Could not fetch homepage",
+                "breadcrumb_schema": "BreadcrumbList schema found — helps AI engines understand site hierarchy",
+                "breadcrumb_html_only": "HTML breadcrumb navigation found but no BreadcrumbList schema",
+                "breadcrumb_none": "No breadcrumb navigation or schema found",
+                "org_schema_found": "Organization/Business schema found: @type = {{type}}",
+                "org_field_present": "{{label}}: present",
+                "org_field_missing": "{{label}}: missing",
+                "optional_present": "Optional fields present: {{fields}}",
+                "optional_missing": "Optional fields missing: {{fields}}",
+                "org_schema_missing": "No Organization/LocalBusiness schema found — needed for knowledge panels"
+              },
+              "url_norm": {
+                "host_redirects": "{{alt}} redirects to {{main}} (consistent)",
+                "host_duplicate": "Both {{main}} and {{alt}} serve content — duplicate content risk",
+                "host_alt_inaccessible": "Alternate hostname ({{alt}}) is not accessible",
+                "slash_both_200": "Both trailing slash and non-trailing slash return 200 — ensure canonical is set",
+                "slash_redirect": "Trailing slash consistency handled via redirect",
+                "path_consistent": "URL paths are consistent",
+                "case_mixed": "Mixed case URLs resolve to different pages — can cause duplicate content",
+                "case_consistent": "URL case handling is consistent"
+              },
+              "outbound": {
+                "fetch_failed": "Could not fetch homepage",
+                "links_found": "{{count}} outbound link(s) to {{domains}} unique domain(s)",
+                "authoritative_links": "Links to authoritative sources: {{domains}}",
+                "no_authoritative": "No links to .gov/.edu/.org authoritative sources detected",
+                "no_outbound_links": "No outbound links found — linking to authoritative sources increases content trust",
+                "video_schema_found": "VideoObject structured data found",
+                "video_no_schema": "Video content found ({{count}} embed(s)) but no VideoObject schema",
+                "no_video": "No video content detected",
+                "transcript_found": "Video transcript section found — AI engines can index transcript text",
+                "transcript_missing": "Videos found but no transcript detected",
+                "tables_well_formed": "{{count}} table(s) with proper <thead>/<th> markup",
+                "tables_partial_headers": "{{well_formed}}/{{total}} tables have proper headers — fix the rest",
+                "tables_no_headers": "{{count}} table(s) but none have proper <thead>/<th> headers",
+                "no_tables": "No tables found on homepage",
+                "definition_markup": "Definition markup found: {{dfn}} <dfn>, {{abbr}} <abbr> tags",
+                "no_definition_markup": "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations"
+              }
+            },
             "scoreCard": {
               "title": "AI Visibility Score",
               "description": "How well your website is optimized for AI search",
@@ -464,7 +723,15 @@ if (!i18n.isInitialized) {
               "meta": {
                 "title": "Meta Tag Coverage",
                 "subtitle": "6 signals AI engines rely on for summaries",
-                "passCount": "{{pass}}/{{total}} pass"
+                "passCount": "{{pass}}/{{total}} pass",
+                "items": {
+                  "title": { "help": "Page title tag" },
+                  "description": { "help": "Meta description" },
+                  "canonical": { "help": "Canonical URL" },
+                  "og": { "help": "og:* tags for social and AI summaries" },
+                  "lang": { "help": "Language declaration" },
+                  "hreflang": { "help": "Multilingual alternate versions" }
+                }
               },
               "platform": {
                 "titleCross": "Cross-Platform Presence",
@@ -1308,7 +1575,13 @@ if (!i18n.isInitialized) {
             "success": "成功",
             "theme": {
               "switchToLight": "切换到亮色模式",
-              "switchToDark": "切换到暗色模式"
+              "switchToDark": "切换到暗色模式",
+              "labels": {
+                "peec": "极简",
+                "light": "浅色",
+                "dark": "深色"
+              },
+              "tooltip": "主题：{{current}}——点击切换到 {{next}}"
             },
             "errors": {
               "loadFailed": "加载失败",
@@ -1630,6 +1903,259 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO 检测结果",
             "resultsFor": "检查结果：",
+            "checks": {
+              "https": {
+                "uses_https": "站点已启用 HTTPS",
+                "not_https": "站点未使用 HTTPS——AI 引擎更偏好安全站点"
+              },
+              "robots": {
+                "not_found": "{{url}} 找不到 robots.txt",
+                "found": "robots.txt 存在（{{bytes}} 字节）",
+                "sitemap_ref_present": "robots.txt 中引用了 sitemap",
+                "sitemap_ref_missing": "robots.txt 中没有引用 sitemap",
+                "wildcard_blocks_all": "通配符 user-agent 阻止了所有爬虫（Disallow: /）",
+                "bots_blocked": "以下 AI 爬虫被显式屏蔽：{{bots}}",
+                "bots_with_directives": "有显式规则（未屏蔽）的 AI 爬虫：{{bots}}",
+                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}"
+              },
+              "llms": {
+                "found": "找到 {{filename}}（{{lines}} 行，{{bytes}} 字节）",
+                "title_present": "标题：{{title}}",
+                "title_missing": "没有 Markdown 标题（# 标题）——llms.txt 规范推荐写一个",
+                "description_present": "包含描述性文字",
+                "description_missing": "没有描述性文字——应该说明站点或组织做什么",
+                "sections_found": "找到 {{count}} 个章节（## 二级标题）",
+                "sections_missing": "没有章节（## 二级标题）——建议把内容按章节组织",
+                "links_found": "找到 {{count}} 个指向资源的链接",
+                "links_missing": "没找到链接——llms.txt 应该链接到关键资源",
+                "blockquotes_present": "包含 blockquote 描述（>）",
+                "too_short": "文件非常短（{{bytes}} 字节）——可能只是占位符",
+                "file_not_found": "找不到 {{filename}}"
+              },
+              "well_known": {
+                "file_found": "找到 {{path}} —— {{description}}",
+                "invalid_json": "{{path}} 存在但 JSON 语法无效",
+                "file_not_found": "找不到 {{path}} —— {{description}}"
+              },
+              "sitemap": {
+                "found": "在 {{path}} 找到 sitemap（{{count}} 条 <loc>）",
+                "lastmod_present": "sitemap 带 <lastmod> 时间戳",
+                "lastmod_missing": "sitemap 缺少 <lastmod> 时间戳——有助于 AI 引擎判断内容新鲜度",
+                "not_found": "没有找到 sitemap.xml"
+              },
+              "meta": {
+                "fetch_failed": "无法抓取首页",
+                "title_found": "找到 <title>：\"{{title}}\"",
+                "title_missing": "缺少 <title> 标签",
+                "description_found": "找到 meta description（{{chars}} 字符）",
+                "description_too_short": "meta description 太短——建议 120–160 字符",
+                "description_missing": "缺少 meta description",
+                "canonical_found": "已设置 canonical URL：{{url}}",
+                "canonical_missing": "没有 canonical URL——会让 AI 引擎产生重复内容问题",
+                "og_tags_found": "找到 Open Graph 标签：{{tags}}",
+                "og_tags_missing": "没有 Open Graph 标签——AI 引擎用它生成内容摘要",
+                "lang_declared": "已声明语言：{{lang}}",
+                "lang_missing": "<html> 没有 lang 属性——有助于 AI 引擎判断内容语言",
+                "hreflang_found": "找到 hreflang 标签：{{langs}}",
+                "hreflang_missing": "没有 hreflang 标签——如果是多语言站点请补上"
+              },
+              "mobile": {
+                "fetch_failed": "无法抓取首页",
+                "viewport_found": "找到 viewport meta 标签：{{viewport}}",
+                "viewport_responsive": "使用了 width=device-width（响应式）",
+                "viewport_not_responsive": "viewport 没有使用 width=device-width",
+                "viewport_missing": "缺少 viewport meta 标签——页面在移动端无法正常渲染",
+                "weight_light": "HTML 页面大小：{{kb}} KB（轻量）",
+                "weight_medium": "HTML 页面大小：{{kb}} KB——建议减少内联 CSS/JS",
+                "weight_heavy": "HTML 页面大小：{{kb}} KB——过重，可能拖慢 AI 爬虫",
+                "inline_heavy": "内联资源过多：{{styles}} 个 <style> 块、{{scripts}} 个大型 <script> 块",
+                "inline_ok": "内联资源在可接受范围",
+                "cache_headers_found": "找到缓存头：{{signals}}",
+                "cache_headers_missing": "没有缓存头（Cache-Control、ETag、Last-Modified）"
+              },
+              "structured_data": {
+                "fetch_failed": "无法抓取首页",
+                "jsonld_found": "找到 {{count}} 个 JSON-LD 结构化数据块",
+                "jsonld_missing": "没有 JSON-LD 结构化数据——有助于 AI 引擎理解你的内容",
+                "schema_ref_only": "找到 schema.org 引用（可能是 microdata 或 RDFa）"
+              },
+              "content_access": {
+                "fetch_failed": "无法抓取首页",
+                "words_ok": "首页初始 HTML 中含 {{count}} 个词",
+                "words_low": "首页初始 HTML 只有 {{count}} 个词——可能过度依赖 JavaScript 渲染",
+                "words_js_only": "首页只有 {{count}} 个词——可能是纯 JS 渲染，对大多数 AI 爬虫不可见",
+                "ratio_good": "内容/HTML 比例：{{ratio}}%（良好）",
+                "ratio_low": "内容/HTML 比例：{{ratio}}%——占位符/样板代码太多，真实内容太少",
+                "ratio_very_low": "内容/HTML 比例：{{ratio}}%——极低，几乎全是样板代码",
+                "headings_found": "找到标题层级（{{summary}}）",
+                "first_heading_not_h1": "第一个标题是 <{{tag}}>，不是 <h1>——清晰的层级有助于 AI 引擎",
+                "headings_missing": "没有标题标签——结构化标题有助于 AI 引擎解析内容"
+              },
+              "crawl_ready": {
+                "fetch_failed": "无法抓取首页",
+                "spa_empty": "疑似纯客户端渲染 SPA，几乎没有服务端内容",
+                "spa_with_ssr": "检测到 SPA 框架但包含服务端内容（SSR/SSG）",
+                "ssr_content": "内容由服务端渲染",
+                "meta_noindex": "meta robots 包含 noindex——本页面将被排除在 AI 训练数据之外",
+                "meta_nofollow": "meta robots 包含 nofollow——AI 爬虫不会跟随本页链接",
+                "meta_noai": "meta robots 包含 AI 退出指令：{{content}}",
+                "meta_allows_index": "meta robots 允许索引：{{content}}",
+                "meta_no_restriction": "没有限制性 meta robots 标签",
+                "xrobots_restrict": "X-Robots-Tag header 限制 AI：{{header}}",
+                "xrobots_present": "存在 X-Robots-Tag header：{{header}}",
+                "xrobots_clean": "没有限制性 X-Robots-Tag header",
+                "paywall_detected": "检测到可能的付费墙（class/id：{{classes}}）",
+                "no_paywall": "未检测到付费墙或登录墙",
+                "semantic_good": "良好的语义 HTML 结构（{{tags}}）",
+                "semantic_limited": "语义 HTML 使用有限（{{tags}}）——更多语义标签有助于 AI 解析",
+                "semantic_missing": "没有语义 HTML 标签——AI 爬虫依赖语义结构",
+                "alt_good": "{{with_alt}}/{{total}} 张图片有 alt 文本（{{pct}}%）",
+                "alt_medium": "{{with_alt}}/{{total}} 张图片有 alt 文本（{{pct}}%）——目标 >80%",
+                "alt_poor": "只有 {{with_alt}}/{{total}} 张图片有 alt 文本（{{pct}}%）——AI 爬虫需要 alt",
+                "no_images": "首页没有图片",
+                "internal_links_good": "{{count}} 个内链——有利于 AI 爬虫发现",
+                "internal_links_few": "只有 {{count}} 个内链——更多内链有助于 AI 引擎发现内容",
+                "internal_links_none": "内链极少（{{count}}）——AI 爬虫依赖链接发现内容",
+                "response_fast": "响应时间：{{seconds}}s",
+                "response_slow": "响应时间：{{seconds}}s——响应慢会让 AI 爬虫跳过页面",
+                "response_timeout": "响应时间：{{seconds}}s——对可靠爬取而言太慢"
+              },
+              "content_quality": {
+                "fetch_failed": "无法抓取首页",
+                "readability_good": "可读性：Flesch-Kincaid 等级 {{grade}}（易读）",
+                "readability_simple": "可读性：Flesch-Kincaid 等级 {{grade}}（非常简单）",
+                "readability_complex": "可读性：Flesch-Kincaid 等级 {{grade}}（复杂）——更简单的文本在 AI 答案中排名更好",
+                "faq_detected": "检测到 FAQ 内容——对 AI 生成答案是强信号",
+                "faq_partial": "疑似 FAQ 内容——建议添加 FAQPage 结构化数据",
+                "faq_missing": "未检测到 FAQ 内容——FAQ 页面在 AI 答案中排名很好",
+                "stats_good": "找到 {{count}} 条可引用的统计数据——有利于 AI 引用",
+                "stats_few": "找到 {{count}} 条统计数据——更多具体数据会提升被 AI 引用的可能性",
+                "stats_missing": "没有可引用的统计数据——具体数字/数据有助于 AI 引用你的内容",
+                "sources_cited": "找到 {{count}} 处来源引用——增加 AI 引擎的信任",
+                "sources_missing": "没有明确的来源引用——引用来源会增加 AI 对内容的信任",
+                "lists_good": "找到结构化列表（{{lists}} 个列表，{{items}} 项）",
+                "lists_few": "列表内容较少（{{items}} 项）——结构化列表有助于 AI 提取要点",
+                "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点"
+              },
+              "tech_crawl": {
+                "fetch_failed": "无法抓取首页",
+                "canonical_chain": "检测到 canonical 链：{{from}} -> {{via}} -> {{to}}",
+                "canonical_resolves": "Canonical URL 解析正确",
+                "canonical_broken": "Canonical URL {{url}} 返回错误",
+                "canonical_self": "Canonical URL 自引用（正确）",
+                "redirect_chain": "存在 {{hops}} 跳重定向链：{{chain}} -> {{final}}",
+                "redirect_ok": "{{count}} 次重定向——在可接受范围",
+                "no_redirect": "没有重定向——直接访问",
+                "redirect_test_failed": "无法测试重定向链",
+                "http2_supported": "支持 HTTP/{{version}}——爬取更快",
+                "http1_only": "HTTP/{{version}}——建议升级到 HTTP/2 或 HTTP/3 以加快爬取",
+                "http_unknown": "无法确定 HTTP 版本",
+                "feed_declared": "找到 RSS/Atom feed：{{feeds}}",
+                "feed_found_at_path": "在 {{path}} 找到 feed",
+                "feed_missing": "没有找到 RSS/Atom feed——feed 有助于 AI 引擎监控内容更新"
+              },
+              "authority": {
+                "fetch_failed": "无法抓取首页",
+                "security_headers_strong": "安全头齐全（{{count}}/4）：{{headers}}",
+                "security_headers_partial": "部分安全头（{{count}}/4）：{{headers}}",
+                "security_headers_missing": "没有安全头——降低 AI 引擎的信任信号",
+                "humans_txt_found": "找到 humans.txt——展示作者身份",
+                "humans_txt_missing": "没有 humans.txt——可选的作者身份声明文件",
+                "author_jsonld": "结构化数据（JSON-LD）中有作者信息",
+                "author_meta": "meta/link 标签中有作者信息",
+                "author_class_only": "HTML 中检测到 author class——建议添加 schema.org Person 标记",
+                "author_missing": "没有作者署名——作者信号会提升 AI 信任度（E-E-A-T）"
+              },
+              "ai_opt": {
+                "fetch_failed": "无法抓取首页",
+                "freshness_found": "找到内容新鲜度信号：",
+                "freshness_missing": "没有内容新鲜度信号——在 JSON-LD 里加 dateModified 或用 <time> 元素",
+                "brand_inconsistent": "各标签中站点名不一致：{{names}}",
+                "brand_consistent": "品牌实体「{{name}}」使用一致（{{count}} 次）",
+                "brand_sparse": "品牌实体「{{name}}」存在但使用偏少——一致命名有助于 AI 实体识别",
+                "brand_unknown": "无法确定主要品牌/实体名称",
+                "api_endpoint_found": "找到机器可读端点：{{path}}",
+                "api_endpoint_missing": "没有公开 API 端点——可选，但有助于 AI 系统访问结构化数据"
+              },
+              "social": {
+                "fetch_failed": "无法抓取首页",
+                "twitter_found": "找到 Twitter/X card 标签：{{tags}}",
+                "twitter_missing": "没有 Twitter/X card meta 标签",
+                "sameas_found": "JSON-LD 中有 {{count}} 条 sameAs 社交链接：",
+                "sameas_missing": "结构化数据中没有 sameAs 社交档案链接",
+                "html_links_found": "HTML 中找到 {{count}} 个社交档案链接——建议同时加到 JSON-LD 的 sameAs",
+                "no_social_links": "页面上没有检测到社交档案链接"
+              },
+              "answer_format": {
+                "fetch_failed": "无法抓取首页",
+                "definitions_found": "找到 {{count}} 句定义式表述——对 AI 引用非常友好",
+                "definitions_missing": "没有检测到定义式表述",
+                "tables_with_headers": "找到带 header 的对比表格——AI 引擎会提取表格数据",
+                "tables_without_headers": "找到表格但缺少 <th> header——加上 header 方便 AI 提取",
+                "tables_missing": "没有对比表格——建议为功能对比、定价等场景添加",
+                "steps_found": "检测到分步指南内容——对「how to」类 AI 答案非常有利",
+                "steps_missing": "没有找到分步指南",
+                "proscons_found": "检测到优劣 / pros-cons 内容",
+                "proscons_missing": "没有检测到优劣结构",
+                "summary_found": "找到摘要/关键要点区块——AI 引擎偏好简明摘要",
+                "summary_missing": "没有关键要点或 TL;DR 区块"
+              },
+              "platform_reg": {
+                "fetch_failed": "无法抓取首页",
+                "gsc_verified": "找到 Google Search Console 验证标签",
+                "gsc_missing": "没有 Google Search Console 验证标签",
+                "bing_verified": "找到 Bing Webmaster Tools 验证标签",
+                "bing_missing": "没有 Bing Webmaster Tools 验证标签",
+                "yandex_verified": "找到 Yandex Webmaster 验证标签",
+                "yandex_missing": "没有 Yandex Webmaster 验证标签——如面向国际 AI 平台可补充",
+                "indexnow_endpoint": "在 {{path}} 找到 IndexNow 端点——可即时通知索引更新",
+                "indexnow_meta": "找到 IndexNow meta 标签",
+                "indexnow_missing": "未检测到 IndexNow 集成",
+                "pinterest_verified": "找到 Pinterest 域名验证",
+                "summary_registered": "已注册：{{platforms}}",
+                "summary_missing": "未检测到：{{platforms}}"
+              },
+              "schema_kg": {
+                "fetch_failed": "无法抓取首页",
+                "breadcrumb_schema": "找到 BreadcrumbList 结构化数据——有助于 AI 理解站点层级",
+                "breadcrumb_html_only": "HTML 中有面包屑但缺少 BreadcrumbList 结构化数据",
+                "breadcrumb_none": "没有面包屑导航或相应结构化数据",
+                "org_schema_found": "找到 Organization/Business 结构化数据：@type = {{type}}",
+                "org_field_present": "{{label}}：存在",
+                "org_field_missing": "{{label}}：缺失",
+                "optional_present": "可选字段已填：{{fields}}",
+                "optional_missing": "可选字段缺失：{{fields}}",
+                "org_schema_missing": "没有 Organization/LocalBusiness 结构化数据——知识面板需要它"
+              },
+              "url_norm": {
+                "host_redirects": "{{alt}} 重定向到 {{main}}（一致）",
+                "host_duplicate": "{{main}} 和 {{alt}} 都提供内容——存在重复内容风险",
+                "host_alt_inaccessible": "备用主机名（{{alt}}）不可访问",
+                "slash_both_200": "末尾带/不带斜杠都返回 200——请确保设置了 canonical",
+                "slash_redirect": "末尾斜杠一致性通过重定向处理",
+                "path_consistent": "URL 路径一致",
+                "case_mixed": "大小写 URL 解析到不同页面——可能造成重复内容",
+                "case_consistent": "URL 大小写处理一致"
+              },
+              "outbound": {
+                "fetch_failed": "无法抓取首页",
+                "links_found": "找到 {{count}} 条出站链接，覆盖 {{domains}} 个唯一域名",
+                "authoritative_links": "链接到权威来源：{{domains}}",
+                "no_authoritative": "未检测到 .gov/.edu/.org 权威来源链接",
+                "no_outbound_links": "没有出站链接——链接到权威来源能提升内容可信度",
+                "video_schema_found": "找到 VideoObject 结构化数据",
+                "video_no_schema": "找到视频内容（{{count}} 个嵌入）但没有 VideoObject 结构化数据",
+                "no_video": "未检测到视频内容",
+                "transcript_found": "找到视频转写内容——AI 引擎可以索引转写文本",
+                "transcript_missing": "找到视频但未检测到转写内容",
+                "tables_well_formed": "找到 {{count}} 个表格，都有合规的 <thead>/<th> 标记",
+                "tables_partial_headers": "{{well_formed}}/{{total}} 个表格有合规的 header——其余需补齐",
+                "tables_no_headers": "找到 {{count}} 个表格但都缺少 <thead>/<th> header",
+                "no_tables": "首页没有表格",
+                "definition_markup": "找到定义标记：{{dfn}} 个 <dfn>、{{abbr}} 个 <abbr>",
+                "no_definition_markup": "没有 <dfn> 或 <abbr>——建议用它们标记技术术语和缩写"
+              }
+            },
             "scoreCard": {
               "title": "AI 可见性得分",
               "description": "您的网站对 AI 搜索的优化程度",
@@ -1735,7 +2261,15 @@ if (!i18n.isInitialized) {
               "meta": {
                 "title": "Meta 标签覆盖",
                 "subtitle": "AI 引擎用于生成摘要的 6 个信号",
-                "passCount": "{{pass}}/{{total}} 通过"
+                "passCount": "{{pass}}/{{total}} 通过",
+                "items": {
+                  "title": { "help": "页面标题标签" },
+                  "description": { "help": "Meta 描述" },
+                  "canonical": { "help": "规范 URL" },
+                  "og": { "help": "用于社交和 AI 摘要的 og:* 标签" },
+                  "lang": { "help": "语言声明" },
+                  "hreflang": { "help": "多语言替代版本" }
+                }
               },
               "platform": {
                 "titleCross": "跨平台存在度",

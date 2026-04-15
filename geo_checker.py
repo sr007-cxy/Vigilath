@@ -68,6 +68,24 @@ FIX  = "\033[96m FIX\033[0m"
 _page_cache = {}
 
 # ---------------------------------------------------------------------------
+# i18n-ready check emitter — see geo_checker/__main__.py for full rationale.
+# ---------------------------------------------------------------------------
+import os as _os
+
+_EMIT_STRUCTURED = _os.environ.get("GEO_EMIT_STRUCTURED") == "1"
+_KEY_MARKER_START = "\x01GK\x01"
+_KEY_MARKER_END = "\x01GE\x01"
+
+
+def emit_check(status_tag, key, message, params=None):
+    """Print a check result line and (optionally) embed i18n metadata."""
+    line = f"  [{status_tag}] {message}"
+    if _EMIT_STRUCTURED and key:
+        meta = json.dumps({"k": key, "p": params or {}}, ensure_ascii=False)
+        line += f"{_KEY_MARKER_START}{meta}{_KEY_MARKER_END}"
+    print(line)
+
+# ---------------------------------------------------------------------------
 # Score tracking
 # ---------------------------------------------------------------------------
 _scores = {}  # category -> {"earned": float, "max": float}
