@@ -1,11 +1,14 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from geo.services.geo_checker import run_geo_check
 from geo.services.membership_service import (
     membership_service,
     FREE_CHECK_CATEGORIES,
     ALL_CHECK_CATEGORIES,
 )
-from geo.services.quota_service import check_and_increment_quota
+from geo.services.quota_service import (
+    check_and_increment_anonymous_quota,
+    check_and_increment_quota,
+)
 from geo.models.geo import GeoTestRequest, GeoTestResult
 from geo.models.membership import Membership
 from geo.utils.validator import validate_url, sanitize_url
@@ -18,19 +21,19 @@ import json
 import uuid
 import time
 from fastapi.responses import StreamingResponse
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 # Re-export from the membership service so we don't maintain duplicate lists.
 ALL_CATEGORIES = ALL_CHECK_CATEGORIES
 
 
-def _resolve_membership_from_request(request: Request) -> Membership:
-    """Pull the effective membership for the caller.
+def _resolve_membership_from_request(request: Request) -> Tuple[Membership, Optional[int]]:
+    """Pull the effective membership and (if any) user_id for the caller.
 
-    If an Authorization: Bearer token is present and valid, return the user's
-    active paid tier (or fall back to free). Otherwise return the free tier.
-    This is used by endpoints that allow both anonymous and authenticated
-    callers without forcing login.
+    If an Authorization: Bearer token is present and valid, returns the user's
+    active paid tier and their user_id. Otherwise returns the free tier and
+    None. The user_id is needed by callers that want to enforce monthly quota
+    via quota_service — returning it here avoids decoding the JWT twice.
     """
     auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
     if auth_header and auth_header.lower().startswith("bearer "):
@@ -41,13 +44,13 @@ def _resolve_membership_from_request(request: Request) -> Membership:
             if username:
                 user = user_service.get_user_by_username(username)
                 if user:
-                    return membership_service.get_effective_membership(user.id)
+                    return membership_service.get_effective_membership(user.id), user.id
         except JWTError:
             pass
     free = membership_service.get_membership_by_slug("free")
     if free is None:
         raise AppException(status_code=500, message="Free membership tier not initialized")
-    return free
+    return free, None
 
 
 def _locked_for(membership: Membership) -> List[str]:
@@ -56,6 +59,36 @@ def _locked_for(membership: Membership) -> List[str]:
         return []
     allowed_set = set(allowed)
     return [c for c in ALL_CATEGORIES if c not in allowed_set]
+
+
+ANON_COOKIE_NAME = "geo_anon_id"
+# 1 year. Long enough that the monthly bucket is the limiting factor, not the
+# cookie lifetime; short enough that it eventually rotates if a browser stays
+# logged out forever.
+ANON_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+
+def _ensure_anon_client_id(request: Request, response: Response) -> str:
+    """Read or mint the `geo_anon_id` cookie used to bucket anonymous usage.
+
+    If the request already carries the cookie we reuse it; otherwise we
+    generate a fresh UUID4 and set it on the outgoing response so the next
+    request lands in the same bucket. The cookie is HTTP-only — frontend JS
+    has no need to read it, and httponly avoids accidental leakage via XSS.
+    """
+    existing = request.cookies.get(ANON_COOKIE_NAME)
+    if existing:
+        return existing
+    new_id = uuid.uuid4().hex
+    response.set_cookie(
+        key=ANON_COOKIE_NAME,
+        value=new_id,
+        max_age=ANON_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return new_id
 
 
 router = APIRouter()
@@ -144,14 +177,18 @@ async def geo_check_task(
             print(f"Task {task_id} no longer exists, error: {str(e)}")
 
 @router.post("/check/anonymous", response_model=GeoTestResult)
-async def check_anonymous(body: GeoTestRequest):
+async def check_anonymous(body: GeoTestRequest, request: Request, response: Response):
     """Anonymous check — always returns only the free-tier 5 categories.
 
-    No authentication, no rate limiting (this phase).
+    Rate-limited to ANONYMOUS_MONTHLY_QUOTA checks per browser per month
+    (tracked via the `geo_anon_id` cookie set on the response).
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
+
+    client_id = _ensure_anon_client_id(request, response)
+    check_and_increment_anonymous_quota(client_id)
 
     result = await asyncio.to_thread(
         run_geo_check,
@@ -166,7 +203,7 @@ async def check_anonymous(body: GeoTestRequest):
 
 
 @router.post("/check", response_model=GeoTestResult)
-async def check_authenticated(body: GeoTestRequest, request: Request):
+async def check_authenticated(body: GeoTestRequest, request: Request, response: Response):
     """Tiered check: uses the caller's membership to decide quota + categories.
 
     - Bearer token is optional. Without it, falls back to the free tier (same
@@ -178,25 +215,16 @@ async def check_authenticated(body: GeoTestRequest, request: Request):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
 
-    membership = _resolve_membership_from_request(request)
+    membership, user_id = _resolve_membership_from_request(request)
 
-    # Enforce quota only for authenticated users (we can tell by re-reading the
-    # header — if present and valid, we'll have a non-free tier or at least a
-    # real user_id to record against).
-    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-    if auth_header and auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username = payload.get("sub")
-            if username:
-                user = user_service.get_user_by_username(username)
-                if user:
-                    # TODO: 429 配额用尽,临时注释掉配额校验
-                    # check_and_increment_quota(user.id, membership)
-                    pass
-        except JWTError:
-            pass  # fall through to anonymous-equivalent run
+    # Logged-in users get the per-tier monthly quota; everyone else (no token
+    # or invalid token) falls into the per-cookie anonymous bucket so we
+    # don't leave an unlimited backdoor on the same endpoint.
+    if user_id is not None:
+        check_and_increment_quota(user_id, membership)
+    else:
+        client_id = _ensure_anon_client_id(request, response)
+        check_and_increment_anonymous_quota(client_id)
 
     allowed = membership.allowed_check_categories  # None = all 23
     result = await asyncio.to_thread(
@@ -212,15 +240,18 @@ async def check_authenticated(body: GeoTestRequest, request: Request):
 
 
 @router.post("/geo", response_model=GeoTestResult)
-async def test_geo(body: GeoTestRequest):
+async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     """Legacy alias — behaves like /check/anonymous (5 free categories).
 
     Kept so existing frontend calls to `geoApi.checkGeo` continue to work
-    during the frontend migration.
+    during the frontend migration. Same per-cookie anonymous quota applies.
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
+
+    client_id = _ensure_anon_client_id(request, response)
+    check_and_increment_anonymous_quota(client_id)
 
     result = await asyncio.to_thread(
         run_geo_check,
@@ -253,23 +284,24 @@ async def test_geo_stream(
     sanitized_url = sanitize_url(url)
     print(f"Sanitized URL: {sanitized_url}")
 
-    membership = _resolve_membership_from_request(request)
+    membership, user_id = _resolve_membership_from_request(request)
 
-    # Enforce quota for authenticated callers only.
-    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-    if auth_header and auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username = payload.get("sub")
-            if username:
-                user = user_service.get_user_by_username(username)
-                if user:
-                    # TODO: 429 配额用尽,临时注释掉配额校验
-                    # check_and_increment_quota(user.id, membership)
-                    pass
-        except JWTError:
-            pass
+    # Enforce quota before spawning the background task so the 429 surfaces
+    # synchronously on the SSE handshake instead of inside the event stream.
+    # Authenticated callers use their tier quota; anonymous SSE callers share
+    # the per-cookie anonymous bucket. We also need to remember whether to
+    # mint a fresh `geo_anon_id` cookie so we can attach it to the
+    # StreamingResponse below (set_cookie can't be called from inside the
+    # event generator since headers are flushed before yields).
+    set_anon_cookie_value: Optional[str] = None
+    if user_id is not None:
+        check_and_increment_quota(user_id, membership)
+    else:
+        client_id = request.cookies.get(ANON_COOKIE_NAME)
+        if not client_id:
+            client_id = uuid.uuid4().hex
+            set_anon_cookie_value = client_id
+        check_and_increment_anonymous_quota(client_id)
 
     allowed = membership.allowed_check_categories  # None = all 23
     locked = _locked_for(membership)
@@ -393,4 +425,14 @@ async def test_geo_stream(
             print(f"Event generator for task {task_id} completed")
 
     
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    sse_response = StreamingResponse(event_generator(), media_type="text/event-stream")
+    if set_anon_cookie_value is not None:
+        sse_response.set_cookie(
+            key=ANON_COOKIE_NAME,
+            value=set_anon_cookie_value,
+            max_age=ANON_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+    return sse_response

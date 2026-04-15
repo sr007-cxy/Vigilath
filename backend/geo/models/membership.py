@@ -46,6 +46,16 @@ class UserCheckUsageORM(Base):
     year_month = Column(String, primary_key=True)  # '2026-04'
     used_count = Column(Integer, nullable=False, default=0)
 
+class AnonymousCheckUsageORM(Base):
+    __tablename__ = "anonymous_check_usage"
+
+    # Opaque per-browser identifier set by the backend as an HTTP cookie
+    # (`geo_anon_id`). UUID4 fits in 36 chars; widen for safety. Composite PK
+    # with year_month so monthly buckets reset naturally.
+    client_id = Column(String(64), primary_key=True)
+    year_month = Column(String, primary_key=True)  # '2026-04'
+    used_count = Column(Integer, nullable=False, default=0)
+
 class SalesLeadORM(Base):
     __tablename__ = "sales_leads"
 
