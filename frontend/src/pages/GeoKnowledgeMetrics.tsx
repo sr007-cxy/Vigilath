@@ -19,32 +19,23 @@ function MetricCard({ ns }: { ns: string }) {
   const steps = Array.isArray(howto) ? (howto as string[]) : [];
 
   return (
-    <details
-      className="group rounded-xl overflow-hidden border"
+    <article
+      className="rounded-xl border p-6 sm:p-7"
       style={{
         background: 'var(--bg-card)',
         borderColor: 'var(--border-color)',
       }}
     >
-      <summary
-        className="px-6 py-4 cursor-pointer flex items-center justify-between list-none"
-        style={{ color: 'var(--text-primary)' }}
+      <h3
+        className="text-lg sm:text-xl font-bold mb-5 pb-4 border-b"
+        style={{
+          color: 'var(--text-primary)',
+          borderColor: 'var(--border-color)',
+        }}
       >
-        <span className="font-semibold">{t(`${ns}.name`)}</span>
-        <svg
-          className="w-5 h-5 transition-transform group-open:rotate-180"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </summary>
-      <div
-        className="px-6 pb-6 pt-4 space-y-5 border-t"
-        style={{ borderColor: 'var(--border-color)' }}
-      >
+        {t(`${ns}.name`)}
+      </h3>
+      <div className="space-y-5">
         <div>
           <h4
             className="text-[11px] uppercase tracking-wider font-bold mb-2"
@@ -106,7 +97,7 @@ function MetricCard({ ns }: { ns: string }) {
           </div>
         )}
       </div>
-    </details>
+    </article>
   );
 }
 
