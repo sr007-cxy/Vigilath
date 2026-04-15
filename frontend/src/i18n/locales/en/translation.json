@@ -362,6 +362,8 @@
       "copyLink": "Copy link",
       "exportPDF": "Export PDF report",
       "exportPDFLoading": "Generating PDF…",
+      "downloadReport": "Download Report",
+      "downloadReportLoading": "Generating report…",
       "share": "Share",
       "copied": "Link copied to clipboard",
       "shareSocial": "Share to social media"

@@ -362,6 +362,8 @@
       "copyLink": "复制链接",
       "exportPDF": "导出 PDF 报告",
       "exportPDFLoading": "正在生成 PDF…",
+      "downloadReport": "下载报告",
+      "downloadReportLoading": "正在生成报告…",
       "share": "分享",
       "copied": "链接已复制到剪贴板",
       "shareSocial": "分享到社交媒体"
