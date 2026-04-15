@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseMetaTags, type MetaItemStatus, type MetaItem } from '../lib/parseChecks';
 import type { CheckResult } from '../../../types/geo';
+import { Tooltip } from '../../Tooltip';
 
 interface Props {
   checks: CheckResult[];
@@ -110,22 +111,22 @@ export function MetaTagsGrid({ checks }: Props) {
           const label = ITEM_LABELS[item.key];
           const theme = STATUS_THEME[item.status];
           return (
-            <div
-              key={item.key}
-              className={`flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border ${theme.border} ${theme.bg}`}
-              title={label.help}
-            >
-              <div className="flex items-center justify-between">
-                <div className={`flex items-center gap-1.5 ${theme.text}`}>
-                  {label.icon}
-                  <span className="text-[11px] font-semibold font-mono">{label.label}</span>
+            <Tooltip key={item.key} content={label.help}>
+              <div
+                className={`flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border cursor-help ${theme.border} ${theme.bg}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className={`flex items-center gap-1.5 ${theme.text}`}>
+                    {label.icon}
+                    <span className="text-[11px] font-semibold font-mono">{label.label}</span>
+                  </div>
+                  <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
                 </div>
-                <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
+                <p className="text-[10px] text-[#d5d5dc] leading-snug line-clamp-2 min-h-[1.5em]">
+                  {item.status === 'UNKNOWN' ? '—' : item.detail || label.help}
+                </p>
               </div>
-              <p className="text-[10px] text-[#d5d5dc] leading-snug line-clamp-2 min-h-[1.5em]">
-                {item.status === 'UNKNOWN' ? '—' : item.detail || label.help}
-              </p>
-            </div>
+            </Tooltip>
           );
         })}
       </div>

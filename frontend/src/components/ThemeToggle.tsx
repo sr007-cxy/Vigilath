@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Tooltip } from './Tooltip';
 
 type Theme = 'peec' | 'light' | 'dark';
 const THEMES: Theme[] = ['peec', 'light', 'dark'];
@@ -41,11 +42,11 @@ export function ThemeToggle() {
   const nextLabel = LABELS[THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]];
 
   return (
+    <Tooltip content={`Theme: ${LABELS[theme]} — click for ${nextLabel}`}>
     <button
       onClick={cycle}
       className="h-9 px-3 flex items-center gap-2 rounded-full border text-xs font-semibold transition bg-surface border-soft border-soft-hover"
       style={{ color: 'var(--text-primary)' }}
-      title={`Theme: ${LABELS[theme]} — click for ${nextLabel}`}
       aria-label={`Theme: ${LABELS[theme]}`}
     >
       {theme === 'peec' && (
@@ -67,5 +68,6 @@ export function ThemeToggle() {
       )}
       <span>{LABELS[theme]}</span>
     </button>
+    </Tooltip>
   );
 }

@@ -467,23 +467,25 @@ export function Result() {
                   className="flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted"
                   disabled={rerunLoading}
                 />
-                <button
-                  type="submit"
-                  disabled={rerunLoading}
-                  title={t('result.header.rerun')}
-                  className="gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60"
-                >
-                  {rerunLoading ? (
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                </button>
+                <Tooltip content={t('result.header.rerun')}>
+                  <button
+                    type="submit"
+                    disabled={rerunLoading}
+                    aria-label={t('result.header.rerun')}
+                    className="gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60"
+                  >
+                    {rerunLoading ? (
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
+                  </button>
+                </Tooltip>
               </div>
               {rerunError && (
                 <div className="mt-2 px-3 flex flex-wrap items-center gap-2">
@@ -505,7 +507,6 @@ export function Result() {
               <button
                 onClick={handleExportPDF}
                 disabled={exportingPdf}
-                title={exportingPdf ? t('result.shareExport.downloadReportLoading') : t('result.shareExport.downloadReport')}
                 className="h-9 px-3 rounded-lg bg-card border border-[#3f4143] border-border text-secondary hover:text-accent-primary hover:border-accent-primary/40 transition-colors flex items-center gap-2 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
               >
                 {exportingPdf ? (
@@ -536,13 +537,12 @@ export function Result() {
           >
             {groupStats.map((g) => {
               const isActive = activeTab === g.tab;
-              return (
+              const tabButton = (
                 <button
                   key={g.tab}
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveTab(g.tab)}
-                  title={g.isTabLocked ? t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' }) : undefined}
                   className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
                     ? 'border-cyan-400/60 border-b-transparent bg-gradient-to-b from-cyan-500/15 via-purple-500/10 to-transparent shadow-[0_-1px_0_0_rgba(0,240,255,0.25),-1px_0_0_0_rgba(0,240,255,0.1),1px_0_0_0_rgba(0,240,255,0.1)] z-10'
                     : 'border-transparent border-b-[#3f4143] bg-card/40 hover:border-b-cyan-500/30 hover:bg-card/60'
@@ -585,6 +585,15 @@ export function Result() {
                     )}
                   </div>
                 </button>
+              );
+              return (
+                <Tooltip
+                  key={g.tab}
+                  disabled={!g.isTabLocked}
+                  content={t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                >
+                  {tabButton}
+                </Tooltip>
               );
             })}
           </div>
