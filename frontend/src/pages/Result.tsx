@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PaymentModal } from '../components/PaymentModal';
+import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
 import { geoApi, ApiError } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
@@ -243,17 +244,40 @@ export function Result() {
       const cats = categoriesForTab(tab);
       const checks = cats.flatMap((c) => checksByCategory[c] || []);
       const total = checks.length;
-      const passed = checks.filter((c) => c.status === 'PASS').length;
-      const failed = checks.filter((c) => c.status === 'FAIL').length;
-      const warned = checks.filter((c) => c.status === 'WARN').length;
-      const info = checks.filter((c) => c.status === 'INFO').length;
+      const namesByStatus = (status: string) =>
+        checks.filter((c) => c.status === status).map((c) => c.message);
+      const passedNames = namesByStatus('PASS');
+      const failedNames = namesByStatus('FAIL');
+      const warnedNames = namesByStatus('WARN');
+      const infoNames = namesByStatus('INFO');
+      const allNames = checks.map((c) => c.message);
+      const passed = passedNames.length;
+      const failed = failedNames.length;
+      const warned = warnedNames.length;
+      const info = infoNames.length;
       const passRate = total === 0 ? 0 : Math.round((passed / total) * 100);
       const lockedInTab = cats.filter((c) => lockedCategorySet.has(c)).length;
       // Paid tab is "locked" if not in FREE_GROUPS and any category is
       // in the backend-provided locked set. Free tabs are never locked.
       const isPaid = !FREE_GROUPS.has(tab) && tab !== 'other';
       const isTabLocked = isPaid && lockedInTab > 0;
-      return { tab, total, passed, failed, warned, info, passRate, lockedInTab, isPaid, isTabLocked };
+      return {
+        tab,
+        total,
+        passed,
+        failed,
+        warned,
+        info,
+        passRate,
+        lockedInTab,
+        isPaid,
+        isTabLocked,
+        passedNames,
+        failedNames,
+        warnedNames,
+        infoNames,
+        allNames,
+      };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory, lockedCategorySet]);
@@ -661,11 +685,11 @@ export function Result() {
                 </div>
                 {/* Group-scoped stat pills */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} />
-                  <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} />
-                  <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} />
-                  <StatPill color="cyan" value={stat.info} label={t('result.summary.info')} />
-                  <StatPill color="muted" value={stat.total} label={t('result.summary.totalChecks')} />
+                  <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} items={stat.passedNames} />
+                  <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} items={stat.warnedNames} />
+                  <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} items={stat.failedNames} />
+                  <StatPill color="cyan" value={stat.info} label={t('result.summary.info')} items={stat.infoNames} />
+                  <StatPill color="muted" value={stat.total} label={t('result.summary.totalChecks')} items={stat.allNames} />
                 </div>
                 {stat.isTabLocked && (
                   <button
@@ -1034,10 +1058,12 @@ function StatPill({
   color,
   value,
   label,
+  items = [],
 }: {
   color: 'emerald' | 'amber' | 'rose' | 'cyan' | 'muted';
   value: number;
   label: string;
+  items?: string[];
 }) {
   const palette = {
     emerald: { text: 'text-emerald-400', dot: 'bg-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/5' },
@@ -1046,13 +1072,33 @@ function StatPill({
     cyan: { text: 'text-cyan-400', dot: 'bg-cyan-400', border: 'border-cyan-500/20', bg: 'bg-cyan-500/5' },
     muted: { text: 'text-primary', dot: 'bg-white/40', border: 'border-border', bg: 'bg-white/5' },
   }[color];
-  return (
-    <div className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#3f4143] ${palette.border} ${palette.bg}`}>
+  const hasItems = items.length > 0;
+  const pill = (
+    <div
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#3f4143] ${palette.border} ${palette.bg} ${hasItems ? 'cursor-help' : ''}`}
+    >
       <span className={`w-1.5 h-1.5 rounded-full ${palette.dot}`}></span>
       <div className="flex flex-col leading-tight min-w-0">
         <span className={`text-base font-bold tabular-nums ${palette.text}`}>{value}</span>
         <span className="text-[9px] uppercase tracking-wider text-[#d5d5dc] truncate">{label}</span>
       </div>
     </div>
+  );
+  return (
+    <Tooltip
+      disabled={!hasItems}
+      content={
+        <ul className="space-y-1">
+          {items.map((name, i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <span className={`mt-1 w-1 h-1 rounded-full shrink-0 ${palette.dot}`}></span>
+              <span>{name}</span>
+            </li>
+          ))}
+        </ul>
+      }
+    >
+      {pill}
+    </Tooltip>
   );
 }
