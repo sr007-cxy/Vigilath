@@ -3460,8 +3460,16 @@ def citation_check(url, return_data=False):
                 time.sleep(5)
                 r = requests.post(api_url, json=payload, headers=headers, timeout=30)
             if r.status_code != 200:
+                err_body = r.text[:200] if r.text else ""
                 print(f"    [{WARN}] API error (HTTP {r.status_code}), skipping this query")
-                results.append({"query": query, "cited": False, "citations": [], "error": True})
+                results.append({
+                    "query": query,
+                    "cited": False,
+                    "citations": [],
+                    "error": True,
+                    "upstream_status": r.status_code,
+                    "upstream_body": err_body,
+                })
                 continue
 
             data = r.json()
@@ -3530,6 +3538,17 @@ def citation_check(url, return_data=False):
     if valid_count == 0:
         print(f"  [{FAIL}] No queries completed successfully.")
         print(f"{'='*60}\n")
+        if return_data:
+            first_err = next((r for r in results if r.get("error")), {})
+            upstream_status = first_err.get("upstream_status")
+            upstream_body = first_err.get("upstream_body", "")
+            msg = "All citation queries failed — upstream AI API returned no valid responses"
+            if upstream_status:
+                msg += f" (upstream HTTP {upstream_status})"
+            if upstream_body:
+                msg += f": {upstream_body}"
+            msg += ". Check OPENROUTER_API_KEY quota and network connectivity."
+            raise RuntimeError(msg)
         return
 
     citation_rate = (cited_count / valid_count * 100) if valid_count > 0 else 0
