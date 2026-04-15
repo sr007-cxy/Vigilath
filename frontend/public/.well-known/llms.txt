@@ -1,0 +1,19 @@
+# Vigilath — GEO Readiness Checker
+
+> Vigilath audits any website for Generative Engine Optimization readiness. It returns an AI visibility score and category breakdown across 23 dimensions that determine how well ChatGPT, Perplexity, Claude, and Google AI Overviews can discover, parse, and cite the site.
+
+## Pages
+
+- [Home](https://www.vigilath.com/): overview
+- [Checker](https://www.vigilath.com/checker): run an audit
+- [GEO knowledge base](https://www.vigilath.com/geo-knowledge): how LLMs discover and quote content
+- [Products & services](https://www.vigilath.com/products-services): offerings
+- [Membership](https://www.vigilath.com/membership): pricing tiers
+- [About](https://www.vigilath.com/about): team and mission
+- [Contact](https://www.vigilath.com/contact): get in touch
+
+## Machine-readable
+
+- [Sitemap](https://www.vigilath.com/sitemap.xml)
+- [robots.txt](https://www.vigilath.com/robots.txt)
+- [OpenAPI](https://www.vigilath.com/openapi.json)

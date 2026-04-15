@@ -1,0 +1,64 @@
+# Vigilath — GEO Readiness Checker
+
+> Vigilath is a Generative Engine Optimization (GEO) readiness checker for the AI search era. It audits any website across 23 categories and 100+ discrete signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, Copilot, and other large-language-model answer engines. The output is a 0–100 AI Visibility Score, a category-level breakdown, and an actionable list of fixes.
+
+## What GEO is
+
+Generative Engine Optimization is the practice of making a website legible and attractive to the retrieval and citation layer of large language models. Unlike traditional SEO — which optimizes for a keyword-based ranking algorithm — GEO optimizes for two distinct things:
+
+1. **Discoverability by AI crawlers.** Engines like ChatGPT's browse tool, Perplexity's search crawler, ClaudeBot, Google-Extended, and Applebot-Extended explicitly identify themselves in `User-Agent` and expect explicit allow/deny rules in `robots.txt`, machine-readable manifests in `.well-known/`, and a flat, complete sitemap.
+2. **Quotability by language models.** When an LLM answers a question, it picks passages it can attribute cleanly: definition sentences, lists, comparison tables, step-by-step instructions, quotable statistics, and FAQ blocks. Semantic HTML, JSON-LD, canonical URLs, and authorship signals raise confidence that a passage is worth citing.
+
+## What Vigilath checks
+
+### Crawl access
+- `robots.txt` presence, syntax, and explicit AI bot allow/deny rules
+- `llms.txt`, `llms-full.txt`, and `.well-known/llms.txt` availability
+- `sitemap.xml` discovery (direct + via robots)
+- `.well-known/` manifests: `ai-plugin.json`, `openai.yaml`, `security.txt`, `gpc.json`
+- IndexNow endpoint for instant re-indexing
+
+### Content extractability
+- Server-side rendering vs. client-side JS (most AI crawlers do not execute JS)
+- Content-to-HTML ratio (how much of the page is actual text)
+- Semantic HTML tags: `<header>`, `<nav>`, `<main>`, `<article>`, `<section>`, `<footer>`
+- Heading structure (`<h1>` … `<h6>`)
+- Internal link density
+
+### Meta & structured data
+- `<title>`, `<meta name="description">`, canonical URL, `hreflang`
+- Open Graph (`og:*`) and Twitter card meta
+- JSON-LD: `Organization`, `WebSite`, `FAQPage`, `HowTo`, `BreadcrumbList`, `Article`
+- Schema.org `sameAs` profile links
+
+### Authority & trust signals
+- HTTPS with a valid certificate
+- Security headers: `Strict-Transport-Security`, `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`
+- Author attribution (E-E-A-T: Experience, Expertise, Authority, Trust)
+- Cross-platform presence on X / LinkedIn / GitHub / Medium / Reddit
+
+### Answer-format optimization
+- Definition-style sentences ("X is…")
+- Step-by-step instructions
+- Comparison tables
+- Pros/cons patterns
+- TL;DR / key-takeaways blocks
+- FAQ sections
+- Quotable statistics with sources
+
+## Core pages
+
+- [Home](https://www.vigilath.com/) — overview and entry point
+- [Run a check](https://www.vigilath.com/checker) — free audit on any URL
+- [GEO knowledge base](https://www.vigilath.com/geo-knowledge) — guides on AI search
+- [Products & services](https://www.vigilath.com/products-services) — SaaS tiers and managed services
+- [Membership](https://www.vigilath.com/membership) — Free, Pro, Starter, Growth, Scale plans
+- [About](https://www.vigilath.com/about) — team and mission
+- [Contact](https://www.vigilath.com/contact) — support and sales
+
+## Machine-readable endpoints
+
+- [Sitemap](https://www.vigilath.com/sitemap.xml)
+- [robots.txt](https://www.vigilath.com/robots.txt)
+- [OpenAPI spec](https://www.vigilath.com/openapi.json)
+- [ai-plugin.json](https://www.vigilath.com/.well-known/ai-plugin.json)

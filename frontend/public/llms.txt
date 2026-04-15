@@ -1,0 +1,29 @@
+# Vigilath — GEO Readiness Checker
+
+> Vigilath is the GEO (Generative Engine Optimization) readiness checker for the AI search era. It audits a website across 23 categories and 100+ signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, and Copilot.
+
+Vigilath helps product teams, marketers, and agencies understand whether their website is discoverable and correctly represented by large language models. A single audit returns an AI Visibility Score (0–100), a category breakdown, and actionable fix recommendations.
+
+## What Vigilath checks
+
+- **Crawl access**: robots.txt, llms.txt, sitemap.xml, .well-known manifests, and explicit allow/deny rules for AI bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and 12 more).
+- **Content extractability**: server-side rendering vs. client-side JS, semantic HTML, heading structure, readable text ratio.
+- **Meta & structured data**: title, description, Open Graph, Twitter card, JSON-LD Organization/FAQ/HowTo, canonical.
+- **Authority signals**: HTTPS, security headers, author attribution, sameAs profile links, cross-platform presence.
+- **Answer-format readiness**: FAQ blocks, step-by-step instructions, comparison tables, TL;DR summaries, quotable statistics — content shapes AI models prefer to cite.
+
+## Core pages
+
+- [Home](https://www.vigilath.com/): overview and entry point
+- [Run a check](https://www.vigilath.com/checker): run a free audit on any URL
+- [GEO knowledge base](https://www.vigilath.com/geo-knowledge): guides on how LLMs discover and quote content
+- [Products & services](https://www.vigilath.com/products-services): SaaS tiers and managed GEO services
+- [Membership & pricing](https://www.vigilath.com/membership): Free / Pro / Starter / Growth / Scale plans
+- [About](https://www.vigilath.com/about): mission and background
+- [Contact](https://www.vigilath.com/contact): support and sales
+
+## Machine-readable endpoints
+
+- [Sitemap](https://www.vigilath.com/sitemap.xml)
+- [robots.txt](https://www.vigilath.com/robots.txt)
+- [OpenAPI spec](https://www.vigilath.com/openapi.json): the audit engine's public API
