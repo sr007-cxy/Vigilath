@@ -498,6 +498,35 @@ if (!i18n.isInitialized) {
                 "lists_good": "Structured lists found ({{lists}} lists, {{items}} items)",
                 "lists_few": "Some list content ({{items}} items) — structured lists help AI extract key points",
                 "lists_missing": "No list elements — structured lists help AI engines extract key points"
+              },
+              "tech_crawl": {
+                "fetch_failed": "Could not fetch homepage",
+                "canonical_chain": "Canonical chain detected: {{from}} -> {{via}} -> {{to}}",
+                "canonical_resolves": "Canonical URL resolves correctly",
+                "canonical_broken": "Canonical URL {{url}} returns error",
+                "canonical_self": "Canonical URL is self-referencing (correct)",
+                "redirect_chain": "Redirect chain with {{hops}} hops: {{chain}} -> {{final}}",
+                "redirect_ok": "{{count}} redirect(s) — within acceptable range",
+                "no_redirect": "No redirects — direct access",
+                "redirect_test_failed": "Could not test redirect chain",
+                "http2_supported": "HTTP/{{version}} supported — faster crawling",
+                "http1_only": "HTTP/{{version}} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling",
+                "http_unknown": "Could not determine HTTP version",
+                "feed_declared": "RSS/Atom feed(s) found: {{feeds}}",
+                "feed_found_at_path": "Feed found at {{path}}",
+                "feed_missing": "No RSS/Atom feed found — feeds help AI engines monitor content freshness"
+              },
+              "authority": {
+                "fetch_failed": "Could not fetch homepage",
+                "security_headers_strong": "Strong security headers ({{count}}/4): {{headers}}",
+                "security_headers_partial": "Some security headers present ({{count}}/4): {{headers}}",
+                "security_headers_missing": "No security headers found — reduces trust signal for AI engines",
+                "humans_txt_found": "humans.txt found — authorship transparency",
+                "humans_txt_missing": "No humans.txt — optional authorship transparency file",
+                "author_jsonld": "Author markup found in structured data (JSON-LD)",
+                "author_meta": "Author information found (meta/link tag)",
+                "author_class_only": "Author class detected in HTML — consider adding schema.org Person markup",
+                "author_missing": "No author attribution found — authorship signals boost AI trust (E-E-A-T)"
               }
             },
             "scoreCard": {
@@ -1906,6 +1935,35 @@ if (!i18n.isInitialized) {
                 "lists_good": "找到结构化列表（{{lists}} 个列表，{{items}} 项）",
                 "lists_few": "列表内容较少（{{items}} 项）——结构化列表有助于 AI 提取要点",
                 "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点"
+              },
+              "tech_crawl": {
+                "fetch_failed": "无法抓取首页",
+                "canonical_chain": "检测到 canonical 链：{{from}} -> {{via}} -> {{to}}",
+                "canonical_resolves": "Canonical URL 解析正确",
+                "canonical_broken": "Canonical URL {{url}} 返回错误",
+                "canonical_self": "Canonical URL 自引用（正确）",
+                "redirect_chain": "存在 {{hops}} 跳重定向链：{{chain}} -> {{final}}",
+                "redirect_ok": "{{count}} 次重定向——在可接受范围",
+                "no_redirect": "没有重定向——直接访问",
+                "redirect_test_failed": "无法测试重定向链",
+                "http2_supported": "支持 HTTP/{{version}}——爬取更快",
+                "http1_only": "HTTP/{{version}}——建议升级到 HTTP/2 或 HTTP/3 以加快爬取",
+                "http_unknown": "无法确定 HTTP 版本",
+                "feed_declared": "找到 RSS/Atom feed：{{feeds}}",
+                "feed_found_at_path": "在 {{path}} 找到 feed",
+                "feed_missing": "没有找到 RSS/Atom feed——feed 有助于 AI 引擎监控内容更新"
+              },
+              "authority": {
+                "fetch_failed": "无法抓取首页",
+                "security_headers_strong": "安全头齐全（{{count}}/4）：{{headers}}",
+                "security_headers_partial": "部分安全头（{{count}}/4）：{{headers}}",
+                "security_headers_missing": "没有安全头——降低 AI 引擎的信任信号",
+                "humans_txt_found": "找到 humans.txt——展示作者身份",
+                "humans_txt_missing": "没有 humans.txt——可选的作者身份声明文件",
+                "author_jsonld": "结构化数据（JSON-LD）中有作者信息",
+                "author_meta": "meta/link 标签中有作者信息",
+                "author_class_only": "HTML 中检测到 author class——建议添加 schema.org Person 标记",
+                "author_missing": "没有作者署名——作者信号会提升 AI 信任度（E-E-A-T）"
               }
             },
             "scoreCard": {

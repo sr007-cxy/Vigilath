@@ -973,7 +973,7 @@ def check_technical_crawlability(base_url):
     print("\n--- Technical Crawlability ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.tech_crawl.fetch_failed", "Could not fetch homepage")
         track_score("Technical Crawlability", 0, 5)
         return
 
@@ -989,19 +989,19 @@ def check_technical_crawlability(base_url):
                 if canon2 and canon2.get("href"):
                     canon2_url = urljoin(canonical_url, canon2["href"])
                     if canon2_url.rstrip("/") != canonical_url.rstrip("/"):
-                        print(f"  [{WARN}] Canonical chain detected: {base_url} -> {canonical_url} -> {canon2_url}")
+                        emit_check(WARN, "result.checks.tech_crawl.canonical_chain", f"Canonical chain detected: {base_url} -> {canonical_url} -> {canon2_url}", {"from": base_url, "via": canonical_url, "to": canon2_url})
                         fix("Fix the canonical chain — each page's canonical should point directly to the final URL, not through intermediaries.\nSet the canonical on each page to its own URL or the ultimate target.")
                     else:
-                        print(f"  [{PASS}] Canonical URL resolves correctly")
+                        emit_check(PASS, "result.checks.tech_crawl.canonical_resolves", "Canonical URL resolves correctly")
                         tc_score += 1.5
                 else:
-                    print(f"  [{PASS}] Canonical URL resolves correctly")
+                    emit_check(PASS, "result.checks.tech_crawl.canonical_resolves", "Canonical URL resolves correctly")
                     tc_score += 1.5
             else:
-                print(f"  [{FAIL}] Canonical URL {canonical_url} returns error")
+                emit_check(FAIL, "result.checks.tech_crawl.canonical_broken", f"Canonical URL {canonical_url} returns error", {"url": canonical_url})
                 fix(f"The canonical URL {canonical_url} is broken. Either fix the target page or update the canonical to a working URL.")
         else:
-            print(f"  [{PASS}] Canonical URL is self-referencing (correct)")
+            emit_check(PASS, "result.checks.tech_crawl.canonical_self", "Canonical URL is self-referencing (correct)")
             tc_score += 1.5
 
     try:
@@ -1015,17 +1015,17 @@ def check_technical_crawlability(base_url):
             num_redirects = len(redir_resp.history)
             if num_redirects > 2:
                 chain = " -> ".join(r.url for r in redir_resp.history)
-                print(f"  [{WARN}] Redirect chain with {num_redirects} hops: {chain} -> {redir_resp.url}")
+                emit_check(WARN, "result.checks.tech_crawl.redirect_chain", f"Redirect chain with {num_redirects} hops: {chain} -> {redir_resp.url}", {"hops": num_redirects, "chain": chain, "final": redir_resp.url})
                 print(f"         Long redirect chains can cause AI crawlers to give up")
                 fix("Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL.")
             elif num_redirects > 0:
-                print(f"  [{PASS}] {num_redirects} redirect(s) — within acceptable range")
+                emit_check(PASS, "result.checks.tech_crawl.redirect_ok", f"{num_redirects} redirect(s) — within acceptable range", {"count": num_redirects})
                 tc_score += 1
         else:
-            print(f"  [{PASS}] No redirects — direct access")
+            emit_check(PASS, "result.checks.tech_crawl.no_redirect", "No redirects — direct access")
             tc_score += 1
     except requests.RequestException:
-        print(f"  [{WARN}] Could not test redirect chain")
+        emit_check(WARN, "result.checks.tech_crawl.redirect_test_failed", "Could not test redirect chain")
 
     try:
         import subprocess
@@ -1035,18 +1035,19 @@ def check_technical_crawlability(base_url):
         )
         http_version = result.stdout.strip()
         if http_version in ("2", "3"):
-            print(f"  [{PASS}] HTTP/{http_version} supported — faster crawling")
+            emit_check(PASS, "result.checks.tech_crawl.http2_supported", f"HTTP/{http_version} supported — faster crawling", {"version": http_version})
             tc_score += 1
         elif http_version:
-            print(f"  [{INFO}] HTTP/{http_version} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling")
+            emit_check(INFO, "result.checks.tech_crawl.http1_only", f"HTTP/{http_version} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling", {"version": http_version})
             fix("Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.")
     except Exception:
-        print(f"  [{INFO}] Could not determine HTTP version")
+        emit_check(INFO, "result.checks.tech_crawl.http_unknown", "Could not determine HTTP version")
 
     feeds = soup.find_all("link", type=re.compile(r"(rss|atom)\+xml", re.IGNORECASE))
     if feeds:
         feed_urls = [f.get("href", "N/A") for f in feeds]
-        print(f"  [{PASS}] RSS/Atom feed(s) found: {', '.join(feed_urls[:3])}")
+        feeds_text = ", ".join(feed_urls[:3])
+        emit_check(PASS, "result.checks.tech_crawl.feed_declared", f"RSS/Atom feed(s) found: {feeds_text}", {"feeds": feeds_text})
         tc_score += 1.5
     else:
         feed_found = False
@@ -1054,12 +1055,12 @@ def check_technical_crawlability(base_url):
             feed_url = urljoin(base_url, feed_path)
             feed_resp = fetch(feed_url, timeout=5)
             if feed_resp and feed_resp.status_code == 200 and ("<rss" in feed_resp.text or "<feed" in feed_resp.text):
-                print(f"  [{PASS}] Feed found at {feed_path}")
+                emit_check(PASS, "result.checks.tech_crawl.feed_found_at_path", f"Feed found at {feed_path}", {"path": feed_path})
                 feed_found = True
                 tc_score += 1.5
                 break
         if not feed_found:
-            print(f"  [{INFO}] No RSS/Atom feed found — feeds help AI engines monitor content freshness")
+            emit_check(INFO, "result.checks.tech_crawl.feed_missing", "No RSS/Atom feed found — feeds help AI engines monitor content freshness")
             fix("Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.")
 
     track_score("Technical Crawlability", min(tc_score, 5), 5)
@@ -1072,7 +1073,7 @@ def check_authority_trust(base_url):
     print("\n--- Authority & Trust Signals ---")
     resp, soup = get_soup(base_url)
     if not resp:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.authority.fetch_failed", "Could not fetch homepage")
         track_score("Authority & Trust", 0, 5)
         return
 
@@ -1091,26 +1092,26 @@ def check_authority_trust(base_url):
 
     if found_sec_headers >= 3:
         present = [h for h in security_headers if resp.headers.get(h)]
-        print(f"  [{PASS}] Strong security headers ({found_sec_headers}/4): {', '.join(present)}")
+        emit_check(PASS, "result.checks.authority.security_headers_strong", f"Strong security headers ({found_sec_headers}/4): {', '.join(present)}", {"count": found_sec_headers, "headers": ", ".join(present)})
         at_score += 2
     elif found_sec_headers >= 1:
         present = [h for h in security_headers if resp.headers.get(h)]
         missing = [h for h in security_headers if not resp.headers.get(h)]
-        print(f"  [{WARN}] Some security headers present ({found_sec_headers}/4): {', '.join(present)}")
+        emit_check(WARN, "result.checks.authority.security_headers_partial", f"Some security headers present ({found_sec_headers}/4): {', '.join(present)}", {"count": found_sec_headers, "headers": ", ".join(present)})
         at_score += 1
         print(f"         Missing: {', '.join(missing)}")
         fix("Add missing security headers to your server config:\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY")
     else:
-        print(f"  [{FAIL}] No security headers found — reduces trust signal for AI engines")
+        emit_check(FAIL, "result.checks.authority.security_headers_missing", "No security headers found — reduces trust signal for AI engines")
         fix("Add security headers to your server response. In nginx:\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;")
 
     humans_url = urljoin(base_url, "/humans.txt")
     humans_resp = fetch(humans_url)
     if humans_resp and humans_resp.status_code == 200 and len(humans_resp.text.strip()) > 0:
-        print(f"  [{PASS}] humans.txt found — authorship transparency")
+        emit_check(PASS, "result.checks.authority.humans_txt_found", "humans.txt found — authorship transparency")
         at_score += 1
     else:
-        print(f"  [{INFO}] No humans.txt — optional authorship transparency file")
+        emit_check(INFO, "result.checks.authority.humans_txt_missing", "No humans.txt — optional authorship transparency file")
         fix("Create a humans.txt at your site root to signal authorship:\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\nSee humanstxt.org for the full spec.")
 
     if soup:
@@ -1134,16 +1135,16 @@ def check_authority_trust(base_url):
         author_tag = soup.find(class_=re.compile(r"author", re.IGNORECASE))
 
         if has_author:
-            print(f"  [{PASS}] Author markup found in structured data (JSON-LD)")
+            emit_check(PASS, "result.checks.authority.author_jsonld", "Author markup found in structured data (JSON-LD)")
             at_score += 2
         elif author_meta or author_link:
-            print(f"  [{PASS}] Author information found (meta/link tag)")
+            emit_check(PASS, "result.checks.authority.author_meta", "Author information found (meta/link tag)")
             at_score += 1.5
         elif author_tag:
-            print(f"  [{INFO}] Author class detected in HTML — consider adding schema.org Person markup")
+            emit_check(INFO, "result.checks.authority.author_class_only", "Author class detected in HTML — consider adding schema.org Person markup")
             fix("Upgrade your author attribution with JSON-LD:\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }")
         else:
-            print(f"  [{WARN}] No author attribution found — authorship signals boost AI trust (E-E-A-T)")
+            emit_check(WARN, "result.checks.authority.author_missing", "No author attribution found — authorship signals boost AI trust (E-E-A-T)")
             fix("Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.")
 
     track_score("Authority & Trust", min(at_score, 5), 5)
