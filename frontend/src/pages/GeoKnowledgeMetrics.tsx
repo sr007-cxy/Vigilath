@@ -31,8 +31,6 @@ const CATEGORIES: Category[] = [
 
 function MetricCard({ ns }: { ns: string }) {
   const { t } = useTranslation();
-  const howto = t(`${ns}.howto`, { returnObjects: true }) as unknown;
-  const steps = Array.isArray(howto) ? (howto as string[]) : [];
 
   return (
     <article
@@ -94,24 +92,6 @@ function MetricCard({ ns }: { ns: string }) {
             {t(`${ns}.scoring`)}
           </p>
         </div>
-        {steps.length > 0 && (
-          <div>
-            <h4
-              className="text-[11px] uppercase tracking-wider font-bold mb-2"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {t('geoKnowledge.metrics.field.howto')}
-            </h4>
-            <ul className="space-y-1.5 text-sm" style={{ color: 'var(--text-primary)' }}>
-              {steps.map((step, i) => (
-                <li key={i} className="flex items-start gap-2 leading-relaxed">
-                  <span style={{ color: 'var(--accent-primary)' }}>▸</span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     </article>
   );
