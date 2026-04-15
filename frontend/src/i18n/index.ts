@@ -616,6 +616,37 @@ if (!i18n.isInitialized) {
                 "no_tables": "No tables found on homepage",
                 "definition_markup": "Definition markup found: {{dfn}} <dfn>, {{abbr}} <abbr> tags",
                 "no_definition_markup": "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations"
+              },
+              "multilingual": {
+                "fetch_failed": "Could not fetch homepage",
+                "no_hreflang": "No hreflang tags — skipping multilingual check",
+                "lang_substantive": "[{{lang}}] has substantive content ({{count}} words)",
+                "lang_thin": "[{{lang}}] has very thin content ({{count}} words): {{url}}",
+                "lang_broken": "[{{lang}}] page is broken or inaccessible: {{url}}",
+                "all_good": "All alternate language pages have substantive content"
+              },
+              "cross_platform": {
+                "linked_on_site": "{{platform}} linked on site: {{url}}",
+                "profile_found": "{{platform}} profile found: {{url}}",
+                "not_detected": "{{platform}} not detected",
+                "presence_strong": "Strong cross-platform presence: {{found}}/{{total}} platforms",
+                "presence_moderate": "Moderate cross-platform presence: {{found}}/{{total}} platforms",
+                "presence_limited": "Limited cross-platform presence: {{found}}/{{total}} platforms",
+                "presence_none": "No cross-platform presence detected"
+              },
+              "multi_page": {
+                "no_internal_pages": "No internal pages to sample",
+                "no_content_pages": "No content pages found to sample",
+                "missing_title": "Missing <title> on {{count}} page(s):",
+                "missing_description": "Missing meta description on {{count}} page(s):",
+                "missing_canonical": "Missing canonical URL on {{count}} page(s):",
+                "missing_structured_data": "No structured data (JSON-LD) on {{count}} page(s):",
+                "missing_h1": "Missing <h1> on {{count}} page(s):",
+                "low_word_count": "Low word count (<100 words) on {{count}} page(s):",
+                "missing_og": "Missing Open Graph tags on {{count}} page(s):",
+                "missing_alt_text": "Most images missing alt text on {{count}} page(s):",
+                "duplicate_descriptions": "Duplicate meta descriptions found across pages:",
+                "all_good": "All sampled pages maintain consistent GEO standards"
               }
             },
             "scoreCard": {
@@ -2154,6 +2185,37 @@ if (!i18n.isInitialized) {
                 "no_tables": "首页没有表格",
                 "definition_markup": "找到定义标记：{{dfn}} 个 <dfn>、{{abbr}} 个 <abbr>",
                 "no_definition_markup": "没有 <dfn> 或 <abbr>——建议用它们标记技术术语和缩写"
+              },
+              "multilingual": {
+                "fetch_failed": "无法抓取首页",
+                "no_hreflang": "没有 hreflang 标签——跳过多语言检查",
+                "lang_substantive": "[{{lang}}] 包含充实内容（{{count}} 字）",
+                "lang_thin": "[{{lang}}] 内容非常稀薄（{{count}} 字）：{{url}}",
+                "lang_broken": "[{{lang}}] 页面损坏或不可访问：{{url}}",
+                "all_good": "所有备用语言页面均包含充实内容"
+              },
+              "cross_platform": {
+                "linked_on_site": "{{platform}} 已在站点链接：{{url}}",
+                "profile_found": "找到 {{platform}} 档案：{{url}}",
+                "not_detected": "未检测到 {{platform}}",
+                "presence_strong": "跨平台存在度强：{{found}}/{{total}} 个平台",
+                "presence_moderate": "跨平台存在度中等：{{found}}/{{total}} 个平台",
+                "presence_limited": "跨平台存在度有限：{{found}}/{{total}} 个平台",
+                "presence_none": "未检测到跨平台存在"
+              },
+              "multi_page": {
+                "no_internal_pages": "没有内部页面可采样",
+                "no_content_pages": "没有找到可采样的内容页面",
+                "missing_title": "{{count}} 个页面缺少 <title>：",
+                "missing_description": "{{count}} 个页面缺少 meta description：",
+                "missing_canonical": "{{count}} 个页面缺少 canonical URL：",
+                "missing_structured_data": "{{count}} 个页面没有结构化数据（JSON-LD）：",
+                "missing_h1": "{{count}} 个页面缺少 <h1>：",
+                "low_word_count": "{{count}} 个页面字数过低（<100）：",
+                "missing_og": "{{count}} 个页面缺少 Open Graph 标签：",
+                "missing_alt_text": "{{count}} 个页面大多数图片缺少 alt 文本：",
+                "duplicate_descriptions": "跨页面存在重复的 meta description：",
+                "all_good": "所有采样页面都保持一致的 GEO 标准"
               }
             },
             "scoreCard": {
