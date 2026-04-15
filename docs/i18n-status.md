@@ -152,8 +152,8 @@ grep -rL "useTranslation" frontend/src/pages frontend/src/components \
 | `frontend/src/pages/Result.tsx` | `renderCheckMessage()` helper + 渲染路径 |
 | `frontend/src/i18n/index.ts` | `result.checks.{category}.{message_slug}` 子树 |
 
-### 迁移进度（截至 commit `c1e8344`）
-**已完成** (8 / 23 类):
+### 迁移进度（截至 check.message 双语全量完成）
+**已完成** (23 / 23 类) ✅:
 - ✅ HTTPS
 - ✅ robots.txt
 - ✅ llms.txt
@@ -162,25 +162,23 @@ grep -rL "useTranslation" frontend/src/pages frontend/src/components \
 - ✅ Meta Tags
 - ✅ Mobile-Friendliness & Page Weight
 - ✅ Structured Data
+- ✅ Search Engine & AI Platform Registration
+- ✅ Content Accessibility
+- ✅ AI Crawl Readiness
+- ✅ Content Quality for AI
+- ✅ Technical Crawlability
+- ✅ Authority & Trust Signals
+- ✅ AI-Specific Optimization
+- ✅ Social Signals
+- ✅ AI Answer Format Optimization
+- ✅ Schema Breadcrumbs & Knowledge Panel
+- ✅ URL Normalization
+- ✅ Outbound Links & Media
+- ✅ Multilingual Content Depth
+- ✅ Cross-Platform Content Distribution
+- ✅ Multi-Page Sampling
 
-**匿名/免费档 (`FREE_CHECK_CATEGORIES` 的 5 个) 已全部覆盖**——example.com anonymous check 的 14/14 条 message 都带 i18n key。
-
-**待迁移** (15 / 23 类):
-- Search Engine & AI Platform Registration
-- Content Accessibility
-- AI Crawl Readiness
-- Content Quality for AI
-- Technical Crawlability
-- Authority & Trust Signals
-- AI-Specific Optimization
-- Social Signals
-- AI Answer Format Optimization
-- Schema Breadcrumbs & Knowledge Panel
-- URL Normalization
-- Outbound Links & Media
-- Multilingual Content Depth
-- Cross-Platform Content Distribution
-- Multi-Page Sampling
+**所有 23 类 check 的 `[PASS/WARN/FAIL/INFO]` 结果行均已迁移至 `emit_check()`，前端 `renderCheckMessage()` 可完整双语展示。**
 
 ### 迁移模板
 每个 check 函数里的每条 `print(f"  [{STATUS}] ...")` 替换为：
@@ -195,6 +193,6 @@ emit_check(STATUS, "result.checks.{category_slug}.{message_slug}", "English fall
 任何还未迁移的 check 函数继续走 legacy 英文 print 路径。parser 找不到 marker 时 `message_key=None`、`message_params=None`，前端回落到 raw `message` 字符串（英文）。所以**迁移可以按类目独立推进，每次提交都是完整可部署状态**。
 
 ### 待办
-1. **剩余 15 类 check 迁移**（每类 0.5–1 小时）
+1. ~~**剩余 15 类 check 迁移**~~ ✅ 已全部完成（23/23）
 2. **两份 geo_checker 源的合并**：`backend/geo_checker/__main__.py` 和 `geo_checker/__main__.py` 现在已经分叉（CHECK_REGISTRY 只在 backend 版有，--citation-check CLI 只在 root 版有）。长期需要合并成一份
 3. **Standalone CLI 同步**：迁移后 CLI 用户仍然看英文（marker 被 env var 关掉）——这是预期行为，但 CLI 自带 i18n 是另一个话题

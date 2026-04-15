@@ -1799,12 +1799,12 @@ def check_multilingual_depth(base_url):
     print("\n--- Multilingual Content Depth ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.multilingual.fetch_failed", "Could not fetch homepage")
         return
 
     hreflangs = soup.find_all("link", rel="alternate", hreflang=True)
     if not hreflangs:
-        print(f"  [{INFO}] No hreflang tags — skipping multilingual check")
+        emit_check(INFO, "result.checks.multilingual.no_hreflang", "No hreflang tags — skipping multilingual check")
         return
 
     print(f"  Found {len(hreflangs)} hreflang tag(s), checking content depth...\n")
@@ -1836,20 +1836,20 @@ def check_multilingual_depth(base_url):
 
     if good_pages:
         for lang, wc in good_pages:
-            print(f"  [{PASS}] [{lang}] has substantive content ({wc} words)")
+            emit_check(PASS, "result.checks.multilingual.lang_substantive", f"[{lang}] has substantive content ({wc} words)", {"lang": lang, "count": wc})
 
     if thin_pages:
         for lang, href, wc in thin_pages:
-            print(f"  [{WARN}] [{lang}] has very thin content ({wc} words): {href}")
+            emit_check(WARN, "result.checks.multilingual.lang_thin", f"[{lang}] has very thin content ({wc} words): {href}", {"lang": lang, "count": wc, "url": href})
         fix("Alternate language pages have too little content. Ensure translations are complete\nand not just stubs or machine-translated snippets. AI engines may skip thin multilingual pages.")
 
     if broken_pages:
         for lang, href in broken_pages:
-            print(f"  [{FAIL}] [{lang}] page is broken or inaccessible: {href}")
+            emit_check(FAIL, "result.checks.multilingual.lang_broken", f"[{lang}] page is broken or inaccessible: {href}", {"lang": lang, "url": href})
         fix("Fix broken hreflang URLs — they return errors. Either create the page\nor remove the hreflang tag to avoid confusing AI crawlers.")
 
     if not thin_pages and not broken_pages and good_pages:
-        print(f"  [{PASS}] All alternate language pages have substantive content")
+        emit_check(PASS, "result.checks.multilingual.all_good", "All alternate language pages have substantive content")
         track_score("Multilingual", 2, 2)
     elif good_pages and not broken_pages:
         track_score("Multilingual", 1, 2)
@@ -2014,19 +2014,19 @@ def check_cross_platform(base_url):
     # On-page links (highest confidence)
     for plat_name, link in sorted(on_page_links.items()):
         found_platforms.append(plat_name)
-        print(f"  [{PASS}] {plat_name:<16} linked on site: {link}")
+        emit_check(PASS, "result.checks.cross_platform.linked_on_site", f"{plat_name:<16} linked on site: {link}", {"platform": plat_name, "url": link})
 
     # Probed and found
     for plat_name, (found, url) in sorted(probed.items()):
         if found:
             found_platforms.append(plat_name)
-            print(f"  [{PASS}] {plat_name:<16} profile found: {url}")
+            emit_check(PASS, "result.checks.cross_platform.profile_found", f"{plat_name:<16} profile found: {url}", {"platform": plat_name, "url": url})
 
     # Not found
     for plat_name, (found, url) in sorted(probed.items()):
         if not found:
             not_found_platforms.append(plat_name)
-            print(f"  [{INFO}] {plat_name:<16} not detected")
+            emit_check(INFO, "result.checks.cross_platform.not_detected", f"{plat_name:<16} not detected", {"platform": plat_name})
 
     # --- Score & summary ---
     total_platforms = len(platforms)
@@ -2034,13 +2034,13 @@ def check_cross_platform(base_url):
 
     print()
     if found_count >= 6:
-        print(f"  [{PASS}] Strong cross-platform presence: {found_count}/{total_platforms} platforms")
+        emit_check(PASS, "result.checks.cross_platform.presence_strong", f"Strong cross-platform presence: {found_count}/{total_platforms} platforms", {"found": found_count, "total": total_platforms})
     elif found_count >= 3:
-        print(f"  [{WARN}] Moderate cross-platform presence: {found_count}/{total_platforms} platforms")
+        emit_check(WARN, "result.checks.cross_platform.presence_moderate", f"Moderate cross-platform presence: {found_count}/{total_platforms} platforms", {"found": found_count, "total": total_platforms})
     elif found_count >= 1:
-        print(f"  [{WARN}] Limited cross-platform presence: {found_count}/{total_platforms} platforms")
+        emit_check(WARN, "result.checks.cross_platform.presence_limited", f"Limited cross-platform presence: {found_count}/{total_platforms} platforms", {"found": found_count, "total": total_platforms})
     else:
-        print(f"  [{FAIL}] No cross-platform presence detected")
+        emit_check(FAIL, "result.checks.cross_platform.presence_none", "No cross-platform presence detected")
 
     if not_found_platforms:
         fix(
@@ -2104,7 +2104,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
                     candidates.append(href)
 
     if not candidates:
-        print(f"  [{WARN}] No internal pages to sample")
+        emit_check(WARN, "result.checks.multi_page.no_internal_pages", "No internal pages to sample")
         track_score("Multi-Page", 0, 5)
         return
 
@@ -2117,7 +2117,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
     sample = content_candidates[:max_pages]
 
     if not sample:
-        print(f"  [{WARN}] No content pages found to sample")
+        emit_check(WARN, "result.checks.multi_page.no_content_pages", "No content pages found to sample")
         track_score("Multi-Page", 0, 5)
         return
 
@@ -2183,14 +2183,14 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
     duplicate_descs = {desc: pages for desc, pages in descriptions_seen.items() if len(pages) > 1}
 
     check_labels = {
-        "missing_title": ("Missing <title>", FAIL),
-        "missing_description": ("Missing meta description", FAIL),
-        "missing_canonical": ("Missing canonical URL", WARN),
-        "missing_structured_data": ("No structured data (JSON-LD)", WARN),
-        "missing_h1": ("Missing <h1>", WARN),
-        "low_word_count": ("Low word count (<100 words)", WARN),
-        "missing_og": ("Missing Open Graph tags", WARN),
-        "missing_alt_text": ("Most images missing alt text", WARN),
+        "missing_title": ("Missing <title>", FAIL, "result.checks.multi_page.missing_title"),
+        "missing_description": ("Missing meta description", FAIL, "result.checks.multi_page.missing_description"),
+        "missing_canonical": ("Missing canonical URL", WARN, "result.checks.multi_page.missing_canonical"),
+        "missing_structured_data": ("No structured data (JSON-LD)", WARN, "result.checks.multi_page.missing_structured_data"),
+        "missing_h1": ("Missing <h1>", WARN, "result.checks.multi_page.missing_h1"),
+        "low_word_count": ("Low word count (<100 words)", WARN, "result.checks.multi_page.low_word_count"),
+        "missing_og": ("Missing Open Graph tags", WARN, "result.checks.multi_page.missing_og"),
+        "missing_alt_text": ("Most images missing alt text", WARN, "result.checks.multi_page.missing_alt_text"),
     }
 
     fix_suggestions = {
@@ -2205,11 +2205,11 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
     }
 
     all_good = True
-    for key, (label, severity) in check_labels.items():
+    for key, (label, severity, i18n_key) in check_labels.items():
         pages = issues[key]
         if pages:
             all_good = False
-            print(f"  [{severity}] {label} on {len(pages)} page(s):")
+            emit_check(severity, i18n_key, f"{label} on {len(pages)} page(s):", {"count": len(pages)})
             for p in pages[:3]:
                 print(f"         {p}")
             if len(pages) > 3:
@@ -2218,13 +2218,13 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
 
     if duplicate_descs:
         all_good = False
-        print(f"  [{WARN}] Duplicate meta descriptions found across pages:")
+        emit_check(WARN, "result.checks.multi_page.duplicate_descriptions", "Duplicate meta descriptions found across pages:")
         for desc_text, pages in list(duplicate_descs.items())[:3]:
             print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages")
         fix("Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.")
 
     if all_good:
-        print(f"  [{PASS}] All sampled pages maintain consistent GEO standards")
+        emit_check(PASS, "result.checks.multi_page.all_good", "All sampled pages maintain consistent GEO standards")
         track_score("Multi-Page", 5, 5)
     else:
         total_issues = sum(len(v) for v in issues.values()) + len(duplicate_descs)
