@@ -455,35 +455,35 @@ def check_search_engine_registration(base_url):
     print("\n--- Search Engine & AI Platform Registration ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.platform_reg.fetch_failed", "Could not fetch homepage")
         track_score("Platform Registration", 0, 7)
         return
 
     # Google Search Console verification
     google_verify = soup.find("meta", attrs={"name": "google-site-verification"})
     if google_verify and google_verify.get("content"):
-        print(f"  [{PASS}] Google Search Console verification tag found")
+        emit_check(PASS, "result.checks.platform_reg.gsc_verified", "Google Search Console verification tag found")
     else:
         # Check for verification file
         gsc_resp = fetch(urljoin(base_url, "/google*.html"), timeout=5)
         # Can't glob on server, so just note the absence
-        print(f"  [{WARN}] No Google Search Console verification tag found")
+        emit_check(WARN, "result.checks.platform_reg.gsc_missing", "No Google Search Console verification tag found")
         fix("Register your site with Google Search Console (https://search.google.com/search-console):\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml under Sitemaps\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — Google's AI Overviews and SGE pull from the Google index.")
 
     # Bing Webmaster Tools verification
     bing_verify = soup.find("meta", attrs={"name": "msvalidate.01"})
     if bing_verify and bing_verify.get("content"):
-        print(f"  [{PASS}] Bing Webmaster Tools verification tag found")
+        emit_check(PASS, "result.checks.platform_reg.bing_verified", "Bing Webmaster Tools verification tag found")
     else:
-        print(f"  [{WARN}] No Bing Webmaster Tools verification tag found")
+        emit_check(WARN, "result.checks.platform_reg.bing_missing", "No Bing Webmaster Tools verification tag found")
         fix("Register your site with Bing Webmaster Tools (https://www.bing.com/webmasters):\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This is essential — Bing's index powers Microsoft Copilot, ChatGPT (via Bing search),\n     and other AI assistants that use Bing as their search backend.")
 
     # Yandex verification (feeds into some AI systems)
     yandex_verify = soup.find("meta", attrs={"name": "yandex-verification"})
     if yandex_verify and yandex_verify.get("content"):
-        print(f"  [{PASS}] Yandex Webmaster verification tag found")
+        emit_check(PASS, "result.checks.platform_reg.yandex_verified", "Yandex Webmaster verification tag found")
     else:
-        print(f"  [{INFO}] No Yandex Webmaster verification tag — relevant if targeting international AI platforms")
+        emit_check(INFO, "result.checks.platform_reg.yandex_missing", "No Yandex Webmaster verification tag — relevant if targeting international AI platforms")
 
     # IndexNow support — check for key file
     indexnow_found = False
@@ -493,7 +493,7 @@ def check_search_engine_registration(base_url):
         inow_resp = fetch(inow_url, timeout=5)
         if inow_resp and inow_resp.status_code == 200 and len(inow_resp.text.strip()) > 0:
             indexnow_found = True
-            print(f"  [{PASS}] IndexNow endpoint found at {key_path} — enables instant index notifications")
+            emit_check(PASS, "result.checks.platform_reg.indexnow_endpoint", f"IndexNow endpoint found at {key_path} — enables instant index notifications", {"path": key_path})
             break
 
     # Also check for IndexNow meta tag or key file pattern
@@ -502,16 +502,16 @@ def check_search_engine_registration(base_url):
         indexnow_meta = soup.find("meta", attrs={"name": "indexnow"})
         if indexnow_meta:
             indexnow_found = True
-            print(f"  [{PASS}] IndexNow meta tag found")
+            emit_check(PASS, "result.checks.platform_reg.indexnow_meta", "IndexNow meta tag found")
 
     if not indexnow_found:
-        print(f"  [{INFO}] No IndexNow integration detected")
+        emit_check(INFO, "result.checks.platform_reg.indexnow_missing", "No IndexNow integration detected")
         fix("Set up IndexNow for instant indexing by Bing, Yandex, and others:\n  1. Generate an API key at https://www.indexnow.org/\n  2. Host the key file at your site root: https://yoursite.com/{key}.txt\n  3. Notify search engines when content changes:\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. Many CMS plugins (WordPress, etc.) support IndexNow automatically.")
 
     # Check for Pinterest verification (some AI visual search)
     pinterest_verify = soup.find("meta", attrs={"name": "p:domain_verify"})
     if pinterest_verify:
-        print(f"  [{PASS}] Pinterest domain verification found")
+        emit_check(PASS, "result.checks.platform_reg.pinterest_verified", "Pinterest domain verification found")
 
     # Summary / platform checklist
     print()
@@ -524,9 +524,11 @@ def check_search_engine_registration(base_url):
     not_registered = [k for k, v in platforms.items() if not v]
 
     if registered:
-        print(f"  [{PASS}] Registered: {', '.join(registered)}")
+        registered_text = ", ".join(registered)
+        emit_check(PASS, "result.checks.platform_reg.summary_registered", f"Registered: {registered_text}", {"platforms": registered_text})
     if not_registered:
-        print(f"  [{WARN}] Not detected: {', '.join(not_registered)}")
+        missing_text = ", ".join(not_registered)
+        emit_check(WARN, "result.checks.platform_reg.summary_missing", f"Not detected: {missing_text}", {"platforms": missing_text})
 
         fix("Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register and submit them to each platform:\n  \n  Google Search Console → Submit sitemap → Powers Google AI Overviews / SGE\n  Bing Webmaster Tools  → Submit sitemap → Powers Copilot, ChatGPT (Bing backend)\n  IndexNow              → Auto-notify   → Instant indexing for Bing, Yandex, Naver\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing.")
 
@@ -1425,7 +1427,7 @@ def check_schema_knowledge(base_url):
     print("\n--- Schema Breadcrumbs & Knowledge Panel ---")
     resp, soup = get_soup(base_url)
     if not soup:
-        print(f"  [{FAIL}] Could not fetch homepage")
+        emit_check(FAIL, "result.checks.schema_kg.fetch_failed", "Could not fetch homepage")
         track_score("Schema & Knowledge", 0, 4)
         return
 
@@ -1457,22 +1459,23 @@ def check_schema_knowledge(base_url):
 
     # Breadcrumbs
     if "BreadcrumbList" in all_types:
-        print(f"  [{PASS}] BreadcrumbList schema found — helps AI engines understand site hierarchy")
+        emit_check(PASS, "result.checks.schema_kg.breadcrumb_schema", "BreadcrumbList schema found — helps AI engines understand site hierarchy")
         sk_score += 1.5
     else:
         # Check for HTML breadcrumb nav
         breadcrumb_nav = soup.find(attrs={"aria-label": re.compile(r"breadcrumb", re.IGNORECASE)})
         breadcrumb_class = soup.find(class_=re.compile(r"breadcrumb", re.IGNORECASE))
         if breadcrumb_nav or breadcrumb_class:
-            print(f"  [{WARN}] HTML breadcrumb navigation found but no BreadcrumbList schema")
+            emit_check(WARN, "result.checks.schema_kg.breadcrumb_html_only", "HTML breadcrumb navigation found but no BreadcrumbList schema")
             fix("Add BreadcrumbList structured data to match your HTML breadcrumbs:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>")
         else:
-            print(f"  [{INFO}] No breadcrumb navigation or schema found")
+            emit_check(INFO, "result.checks.schema_kg.breadcrumb_none", "No breadcrumb navigation or schema found")
             fix("Add breadcrumb navigation to help AI engines understand your site structure:\n  1. Add visible breadcrumbs: Home > Category > Page\n  2. Add BreadcrumbList JSON-LD schema to match")
 
     # Knowledge panel readiness — check Organization/LocalBusiness completeness
     if org_data:
-        print(f"  [{PASS}] Organization/Business schema found: @type = {org_data.get('@type')}")
+        org_type = org_data.get("@type")
+        emit_check(PASS, "result.checks.schema_kg.org_schema_found", f"Organization/Business schema found: @type = {org_type}", {"type": org_type})
         sk_score += 1
         required_fields = {
             "name": "Organization name",
@@ -1491,21 +1494,23 @@ def check_schema_knowledge(base_url):
 
         for field, label in required_fields.items():
             if org_data.get(field):
-                print(f"  [{PASS}] {label}: present")
+                emit_check(PASS, "result.checks.schema_kg.org_field_present", f"{label}: present", {"label": label})
                 sk_score += 0.375  # 4 fields * 0.375 = 1.5 pts max
             else:
-                print(f"  [{WARN}] {label}: missing")
+                emit_check(WARN, "result.checks.schema_kg.org_field_missing", f"{label}: missing", {"label": label})
                 fix(f"Add \"{field}\" to your Organization JSON-LD to improve knowledge panel eligibility.")
 
         present_optional = [label for field, label in optional_fields.items() if org_data.get(field)]
         missing_optional = [label for field, label in optional_fields.items() if not org_data.get(field)]
         if present_optional:
-            print(f"  [{PASS}] Optional fields present: {', '.join(present_optional)}")
+            present_text = ", ".join(present_optional)
+            emit_check(PASS, "result.checks.schema_kg.optional_present", f"Optional fields present: {present_text}", {"fields": present_text})
         if missing_optional:
-            print(f"  [{INFO}] Optional fields missing: {', '.join(missing_optional)}")
+            missing_text = ", ".join(missing_optional)
+            emit_check(INFO, "result.checks.schema_kg.optional_missing", f"Optional fields missing: {missing_text}", {"fields": missing_text})
             fix("Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]")
     else:
-        print(f"  [{WARN}] No Organization/LocalBusiness schema found — needed for knowledge panels")
+        emit_check(WARN, "result.checks.schema_kg.org_schema_missing", "No Organization/LocalBusiness schema found — needed for knowledge panels")
         fix("Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>")
 
     track_score("Schema & Knowledge", min(sk_score, 4), 4)

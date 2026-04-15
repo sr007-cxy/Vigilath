@@ -561,6 +561,33 @@ if (!i18n.isInitialized) {
                 "proscons_missing": "No pros/cons pattern detected",
                 "summary_found": "Summary/key takeaways section found — AI engines prefer concise summaries",
                 "summary_missing": "No key takeaways or TL;DR section found"
+              },
+              "platform_reg": {
+                "fetch_failed": "Could not fetch homepage",
+                "gsc_verified": "Google Search Console verification tag found",
+                "gsc_missing": "No Google Search Console verification tag found",
+                "bing_verified": "Bing Webmaster Tools verification tag found",
+                "bing_missing": "No Bing Webmaster Tools verification tag found",
+                "yandex_verified": "Yandex Webmaster verification tag found",
+                "yandex_missing": "No Yandex Webmaster verification tag — relevant if targeting international AI platforms",
+                "indexnow_endpoint": "IndexNow endpoint found at {{path}} — enables instant index notifications",
+                "indexnow_meta": "IndexNow meta tag found",
+                "indexnow_missing": "No IndexNow integration detected",
+                "pinterest_verified": "Pinterest domain verification found",
+                "summary_registered": "Registered: {{platforms}}",
+                "summary_missing": "Not detected: {{platforms}}"
+              },
+              "schema_kg": {
+                "fetch_failed": "Could not fetch homepage",
+                "breadcrumb_schema": "BreadcrumbList schema found — helps AI engines understand site hierarchy",
+                "breadcrumb_html_only": "HTML breadcrumb navigation found but no BreadcrumbList schema",
+                "breadcrumb_none": "No breadcrumb navigation or schema found",
+                "org_schema_found": "Organization/Business schema found: @type = {{type}}",
+                "org_field_present": "{{label}}: present",
+                "org_field_missing": "{{label}}: missing",
+                "optional_present": "Optional fields present: {{fields}}",
+                "optional_missing": "Optional fields missing: {{fields}}",
+                "org_schema_missing": "No Organization/LocalBusiness schema found — needed for knowledge panels"
               }
             },
             "scoreCard": {
@@ -2032,6 +2059,33 @@ if (!i18n.isInitialized) {
                 "proscons_missing": "没有检测到优劣结构",
                 "summary_found": "找到摘要/关键要点区块——AI 引擎偏好简明摘要",
                 "summary_missing": "没有关键要点或 TL;DR 区块"
+              },
+              "platform_reg": {
+                "fetch_failed": "无法抓取首页",
+                "gsc_verified": "找到 Google Search Console 验证标签",
+                "gsc_missing": "没有 Google Search Console 验证标签",
+                "bing_verified": "找到 Bing Webmaster Tools 验证标签",
+                "bing_missing": "没有 Bing Webmaster Tools 验证标签",
+                "yandex_verified": "找到 Yandex Webmaster 验证标签",
+                "yandex_missing": "没有 Yandex Webmaster 验证标签——如面向国际 AI 平台可补充",
+                "indexnow_endpoint": "在 {{path}} 找到 IndexNow 端点——可即时通知索引更新",
+                "indexnow_meta": "找到 IndexNow meta 标签",
+                "indexnow_missing": "未检测到 IndexNow 集成",
+                "pinterest_verified": "找到 Pinterest 域名验证",
+                "summary_registered": "已注册：{{platforms}}",
+                "summary_missing": "未检测到：{{platforms}}"
+              },
+              "schema_kg": {
+                "fetch_failed": "无法抓取首页",
+                "breadcrumb_schema": "找到 BreadcrumbList 结构化数据——有助于 AI 理解站点层级",
+                "breadcrumb_html_only": "HTML 中有面包屑但缺少 BreadcrumbList 结构化数据",
+                "breadcrumb_none": "没有面包屑导航或相应结构化数据",
+                "org_schema_found": "找到 Organization/Business 结构化数据：@type = {{type}}",
+                "org_field_present": "{{label}}：存在",
+                "org_field_missing": "{{label}}：缺失",
+                "optional_present": "可选字段已填：{{fields}}",
+                "optional_missing": "可选字段缺失：{{fields}}",
+                "org_schema_missing": "没有 Organization/LocalBusiness 结构化数据——知识面板需要它"
               }
             },
             "scoreCard": {
