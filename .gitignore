@@ -103,3 +103,6 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+backend/geo_checker.db.bak
+backend/geo_checker.db.broken.202604141506
+backend/geo_checker.db.predeploy.202604141447
