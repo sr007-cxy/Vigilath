@@ -7,9 +7,15 @@ import { useTierModal } from '../components/TierModalContext';
 import { CheckProgress } from '../components/result/CheckProgress';
 import { useMembership } from '../hooks/useMembership';
 
-type AdvancedKey = 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
+type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
 const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
+  {
+    key: 'aeo',
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+    ),
+  },
   {
     key: 'compare',
     icon: (
@@ -107,7 +113,7 @@ export function Home() {
   };
 
   const handleAdvancedClick = (key: AdvancedKey) => {
-    if (!isLoggedIn || !isUnlocked) {
+    if (key !== 'aeo' && (!isLoggedIn || !isUnlocked)) {
       openTierModal();
       return;
     }
@@ -305,7 +311,11 @@ export function Home() {
                   onClick={() => handleAdvancedClick(key)}
                   className="group flex gap-4 relative text-left card p-6 hover:-translate-y-0.5"
                 >
-                  {!isUnlocked && (
+                  {key === 'aeo' ? (
+                    <span className="absolute top-4 right-4 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                      FREE
+                    </span>
+                  ) : !isUnlocked && (
                     <div className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-surface border border-soft">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

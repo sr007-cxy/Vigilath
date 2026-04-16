@@ -65,6 +65,63 @@ FAIL = "\033[91mFAIL\033[0m"
 INFO = "\033[94mINFO\033[0m"
 FIX  = "\033[96m FIX\033[0m"
 
+# ---------------------------------------------------------------------------
+# i18n  — output-level translation
+# ---------------------------------------------------------------------------
+LANG = "en"
+
+# Pre-scan sys.argv so everything downstream sees the right language
+if "--lang" in sys.argv:
+    _idx = sys.argv.index("--lang")
+    if _idx + 1 < len(sys.argv) and sys.argv[_idx + 1] in ("en", "zh"):
+        LANG = sys.argv[_idx + 1]
+
+# _ZH maps English substrings → Chinese.  Populated at end of file before main().
+# Entries are tried longest-first to avoid partial matches.
+_ZH = {}
+_ZH_SORTED = []  # [(en, zh)] sorted by len(en) descending; built once
+
+def _tr(text):
+    """Translate English substrings in *text* to Chinese using _ZH table."""
+    global _ZH_SORTED
+    if LANG == "en" or not _ZH:
+        return text
+    if not _ZH_SORTED:
+        _ZH_SORTED = sorted(_ZH.items(), key=lambda kv: len(kv[0]), reverse=True)
+    for en, zh in _ZH_SORTED:
+        if en in text:
+            text = text.replace(en, zh)
+    return text
+
+
+def _display_width(s):
+    """Return the number of terminal columns *s* occupies.
+    CJK characters are double-width; ANSI escapes are zero-width."""
+    import unicodedata
+    s = re.sub(r'\033\[[0-9;]*m', '', s)  # strip ANSI
+    w = 0
+    for ch in s:
+        if unicodedata.east_asian_width(ch) in ('W', 'F'):
+            w += 2
+        else:
+            w += 1
+    return w
+
+
+def _pad(s, width):
+    """Left-align *s* in a field of *width* terminal columns.
+    Translates *s* first so padding accounts for CJK display width."""
+    s = _tr(s)
+    return s + ' ' * max(0, width - _display_width(s))
+
+# Module-level print override — only translates when LANG != "en"
+_builtin_print = print  # keep a reference to the real print
+
+def print(*args, **kwargs):            # noqa: A001 — intentional shadow
+    if LANG != "en" and args:
+        args = tuple(_tr(str(a)) if isinstance(a, str) else a for a in args)
+    _builtin_print(*args, **kwargs)
+
 _page_cache = {}
 
 # ---------------------------------------------------------------------------
@@ -264,6 +321,37 @@ def check_robots_txt(base_url):
     bot_ratio = max(accessible, 0) / total_bots if total_bots > 0 else 1
     track_score("robots.txt", round(bot_ratio * 3, 1), 3)
 
+    # ai.txt / .well-known/ai.txt — emerging standard for strategic AI policy
+    ai_txt_found = False
+    for ai_path in ["/ai.txt", "/.well-known/ai.txt"]:
+        ai_resp = fetch(urljoin(base_url, ai_path))
+        if ai_resp and ai_resp.status_code == 200 and len(ai_resp.text.strip()) > 0:
+            ai_txt_found = True
+            print(f"  [{PASS}] {ai_path} found — strategic AI crawler policy declared")
+            ai_text = ai_resp.text.lower()
+            has_allow = "allow" in ai_text
+            has_disallow = "disallow" in ai_text
+            if has_allow and has_disallow:
+                print(f"         Contains both allow and disallow directives (balanced policy)")
+            elif has_allow:
+                print(f"         Allow-focused policy (crawl-friendly)")
+            elif has_disallow:
+                print(f"         Disallow-focused policy (training opt-out)")
+            track_score("robots.txt", 2, 2)
+            break
+    if not ai_txt_found:
+        print(f"  [{INFO}] No ai.txt or .well-known/ai.txt found — emerging standard for AI-specific policies")
+        fix("Consider an ai.txt file at your site root (spec: spawning.ai/ai-txt) to declare\n"
+            "a strategic policy separate from robots.txt. Example balancing access vs. training:\n"
+            "  # Allow search indexing for AI answers\n"
+            "  User-Agent: *\n"
+            "  Allow: /\n"
+            "  # Opt out of training\n"
+            "  User-Agent: GPTBot\n"
+            "  Disallow: /private/\n"
+            "This communicates a deliberate allow-for-citation / opt-out-of-training stance.")
+        track_score("robots.txt", 0, 2)
+
 
 # ---------------------------------------------------------------------------
 # 3. llms.txt
@@ -283,7 +371,11 @@ def check_llms_txt(base_url):
             has_title = any(line.strip().startswith("# ") for line in lines)
             has_description = len([l for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith(">") and not l.strip().startswith("-")]) > 0
             has_sections = any(line.strip().startswith("## ") for line in lines)
-            has_links = any("](http" in line or "](/" in line for line in lines)
+            has_links = any(
+                "](http" in line or "](/" in line
+                or "http://" in line or "https://" in line
+                for line in lines
+            )
             has_blockquotes = any(line.strip().startswith("> ") for line in lines)
 
             llms_score += 2  # file found
@@ -311,7 +403,11 @@ def check_llms_txt(base_url):
                 fix("Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog")
 
             if has_links:
-                link_count = sum(1 for l in lines if "](http" in l or "](/" in l)
+                link_count = sum(
+                    1 for l in lines
+                    if "](http" in l or "](/" in l
+                    or "http://" in l or "https://" in l
+                )
                 print(f"  [{PASS}] {link_count} link(s) to resources found")
                 llms_score += 0.5
             else:
@@ -352,21 +448,43 @@ def check_well_known(base_url):
     for path, description in well_known_files.items():
         url = urljoin(base_url, f"/{path}")
         resp = fetch(url)
-        if resp and resp.status_code == 200 and len(resp.text.strip()) > 0:
+        if not (resp and resp.status_code == 200 and len(resp.text.strip()) > 0):
+            print(f"  [{INFO}] {path} not found — {description}")
+            continue
+
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        body = resp.text.lstrip()
+        looks_html = ctype.startswith("text/html") or body[:15].lower().startswith(("<!doctype", "<html"))
+
+        if path.endswith(".json"):
+            if looks_html:
+                print(f"  [{INFO}] {path} not found — {description} (server returned HTML fallback)")
+                continue
+            try:
+                data = json.loads(resp.text)
+            except json.JSONDecodeError:
+                print(f"  [{WARN}] {path} exists but contains invalid JSON")
+                fix(f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.")
+                found_any = True
+                wk_found += 1
+                continue
             found_any = True
             wk_found += 1
             print(f"  [{PASS}] {path} found — {description}")
-            if path.endswith(".json"):
-                try:
-                    data = json.loads(resp.text)
-                    if path.endswith("ai-plugin.json"):
-                        name = data.get("name_for_human", data.get("name", "unknown"))
-                        print(f"         Plugin name: {name}")
-                except json.JSONDecodeError:
-                    print(f"  [{WARN}] {path} exists but contains invalid JSON")
-                    fix(f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.")
+            if path.endswith("ai-plugin.json"):
+                name = data.get("name_for_human", data.get("name", "unknown"))
+                print(f"         Plugin name: {name}")
+        elif path.endswith(".yaml") or path.endswith(".txt"):
+            if looks_html:
+                print(f"  [{INFO}] {path} not found — {description} (server returned HTML fallback)")
+                continue
+            found_any = True
+            wk_found += 1
+            print(f"  [{PASS}] {path} found — {description}")
         else:
-            print(f"  [{INFO}] {path} not found — {description}")
+            found_any = True
+            wk_found += 1
+            print(f"  [{PASS}] {path} found — {description}")
 
     if not found_any:
         print(f"  [{INFO}] No .well-known AI discovery files found")
@@ -528,25 +646,105 @@ def check_structured_data(base_url):
         print(f"  [{FAIL}] Could not fetch homepage")
         return
 
+    # Granular types that give AI engines the most extractable facts
+    GRANULAR_TYPES = {
+        "HowTo": "step-by-step instructions",
+        "Recipe": "cooking/recipe data",
+        "FAQPage": "Q&A pairs",
+        "QAPage": "single Q&A",
+        "Product": "product details",
+        "Review": "individual review",
+        "AggregateRating": "aggregate ratings",
+        "Event": "event details",
+        "Course": "course details",
+        "JobPosting": "job listing",
+        "SoftwareApplication": "software metadata",
+        "Dataset": "dataset metadata",
+        "Article": "article metadata",
+        "NewsArticle": "news article",
+        "BlogPosting": "blog post",
+        "VideoObject": "video metadata",
+        "LocalBusiness": "local business",
+        "Organization": "organization",
+        "BreadcrumbList": "site hierarchy",
+    }
+    GENERIC_TYPES = {"Thing", "WebPage", "WebSite", "CreativeWork"}
+
+    def _collect_types(obj, collected):
+        if isinstance(obj, dict):
+            t = obj.get("@type")
+            if isinstance(t, list):
+                for x in t:
+                    if isinstance(x, str):
+                        collected.append((x, obj))
+            elif isinstance(t, str):
+                collected.append((t, obj))
+            graph = obj.get("@graph", [])
+            if isinstance(graph, list):
+                for item in graph:
+                    _collect_types(item, collected)
+
     json_ld_scripts = soup.find_all("script", type="application/ld+json")
     if json_ld_scripts:
         print(f"  [{PASS}] Found {len(json_ld_scripts)} JSON-LD block(s)")
-        track_score("Structured Data", 4, 4)
+        track_score("Structured Data", 3, 3)
         parsed_types = 0
+        all_collected = []
         for i, script in enumerate(json_ld_scripts):
             try:
                 data = json.loads(script.string)
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    _collect_types(item, all_collected)
+                type_names = sorted({name for name, _ in all_collected})
+                if i == 0:
+                    pass  # brief header output below
                 if isinstance(data, dict):
-                    schema_type = data.get("@type", "unknown")
-                    print(f"         Block {i+1}: @type = {schema_type}")
-                    parsed_types += 1
+                    print(f"         Block {i+1}: @type = {data.get('@type', 'unknown')}")
                 elif isinstance(data, list):
                     types = [item.get("@type", "unknown") for item in data if isinstance(item, dict)]
-                    print(f"         Block {i+1}: @types = {', '.join(types)}")
-                    parsed_types += len(types)
+                    print(f"         Block {i+1}: @types = {', '.join(str(t) for t in types)}")
+                parsed_types += len(items)
             except (json.JSONDecodeError, TypeError):
                 print(f"         Block {i+1}: present but could not parse")
-        track_score("Structured Data", min(parsed_types, 3), 3)
+
+        present_granular = {name for name, _ in all_collected if name in GRANULAR_TYPES}
+        present_generic = {name for name, _ in all_collected if name in GENERIC_TYPES}
+        if present_granular:
+            labels = ", ".join(f"{n} ({GRANULAR_TYPES[n]})" for n in sorted(present_granular))
+            print(f"  [{PASS}] Granular schema types present: {labels}")
+
+            # Extra credit for Product with reviews
+            product_has_reviews = False
+            for name, obj in all_collected:
+                if name == "Product":
+                    if obj.get("review") or obj.get("aggregateRating") or obj.get("reviews"):
+                        product_has_reviews = True
+                        break
+            if "Product" in present_granular:
+                if product_has_reviews:
+                    print(f"  [{PASS}] Product schema includes reviews/ratings — strong AI signal")
+                else:
+                    print(f"  [{WARN}] Product schema present but no review/aggregateRating field")
+                    fix("Add review and aggregateRating to your Product schema:\n"
+                        "  \"aggregateRating\": {\"@type\": \"AggregateRating\", \"ratingValue\": \"4.6\", \"reviewCount\": \"128\"},\n"
+                        "  \"review\": [{\"@type\": \"Review\", \"author\": ..., \"reviewRating\": ...}]")
+
+            granular_score = min(len(present_granular), 4)
+            track_score("Structured Data", granular_score, 4)
+        elif present_generic:
+            print(f"  [{WARN}] Only generic schema types found ({', '.join(sorted(present_generic))}) — add granular types for richer AI extraction")
+            fix("Upgrade from generic WebPage/CreativeWork to specific types:\n"
+                "  • How-to content → HowTo with step list\n"
+                "  • Q&A pages     → FAQPage with Question/Answer pairs\n"
+                "  • Products      → Product with offers + aggregateRating\n"
+                "  • Recipes       → Recipe with ingredients and instructions\n"
+                "  • Articles      → NewsArticle or BlogPosting\n"
+                "Granular types give AI engines far more extractable facts than WebPage.")
+            track_score("Structured Data", 1, 4)
+        else:
+            print(f"  [{INFO}] Non-standard @types detected — consider using schema.org granular types")
+            track_score("Structured Data", 1, 4)
     else:
         print(f"  [{WARN}] No JSON-LD structured data found — helps AI engines understand your content")
         track_score("Structured Data", 0, 7)
@@ -597,14 +795,34 @@ def check_meta_tags(base_url):
         print(f"  [{WARN}] No canonical URL — can cause duplicate content issues for AI engines")
         fix("Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.")
 
-    og_tags = soup.find_all("meta", property=re.compile(r"^og:"))
-    if og_tags:
-        og_types = [tag.get("property") for tag in og_tags]
-        print(f"  [{PASS}] Open Graph tags found: {', '.join(og_types)}")
-        meta_score += 1
-    else:
-        print(f"  [{WARN}] No Open Graph tags — used by AI engines for content summarization")
-        fix("Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />")
+    required_og = ["og:title", "og:description", "og:image", "og:url", "og:type"]
+    present_og = {
+        tag.get("property"): (tag.get("content") or "").strip()
+        for tag in soup.find_all("meta", property=re.compile(r"^og:"))
+        if tag.get("property")
+    }
+    found_og = [name for name in required_og if present_og.get(name)]
+    missing_og = [name for name in required_og if not present_og.get(name)]
+    if found_og:
+        print(f"  [{PASS}] Open Graph tags present: {', '.join(found_og)}")
+    if missing_og:
+        print(f"  [{WARN}] Missing Open Graph tags: {', '.join(missing_og)} — shown by AI engines and link previews")
+        fix("Add the missing Open Graph tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />\nog:image is what makes your logo/thumbnail appear when links are shared.")
+    meta_score += (len(found_og) / len(required_og))
+
+    required_tw = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"]
+    present_tw = {}
+    for tag in soup.find_all("meta"):
+        name = tag.get("name") or tag.get("property")
+        if name and name.startswith("twitter:"):
+            present_tw[name] = (tag.get("content") or "").strip()
+    found_tw = [name for name in required_tw if present_tw.get(name)]
+    missing_tw = [name for name in required_tw if not present_tw.get(name)]
+    if found_tw:
+        print(f"  [{PASS}] Twitter Card tags present: {', '.join(found_tw)}")
+    if missing_tw:
+        print(f"  [{INFO}] Missing Twitter Card tags: {', '.join(missing_tw)} — improves X/Twitter link previews")
+        fix("Add Twitter Card meta tags in your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     html_tag = soup.find("html")
     if html_tag and html_tag.get("lang"):
@@ -1019,24 +1237,95 @@ def check_technical_crawlability(base_url):
     except Exception:
         print(f"  [{INFO}] Could not determine HTTP version")
 
+    feed_url = None
     feeds = soup.find_all("link", type=re.compile(r"(rss|atom)\+xml", re.IGNORECASE))
     if feeds:
         feed_urls = [f.get("href", "N/A") for f in feeds]
         print(f"  [{PASS}] RSS/Atom feed(s) found: {', '.join(feed_urls[:3])}")
         tc_score += 1.5
+        first_href = feeds[0].get("href")
+        if first_href:
+            feed_url = urljoin(base_url, first_href)
     else:
-        feed_found = False
         for feed_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml", "/rss", "/blog/feed"]:
-            feed_url = urljoin(base_url, feed_path)
-            feed_resp = fetch(feed_url, timeout=5)
+            candidate = urljoin(base_url, feed_path)
+            feed_resp = fetch(candidate, timeout=5)
             if feed_resp and feed_resp.status_code == 200 and ("<rss" in feed_resp.text or "<feed" in feed_resp.text):
                 print(f"  [{PASS}] Feed found at {feed_path}")
-                feed_found = True
+                feed_url = candidate
                 tc_score += 1.5
                 break
-        if not feed_found:
+        if not feed_url:
             print(f"  [{INFO}] No RSS/Atom feed found — feeds help AI engines monitor content freshness")
             fix("Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.")
+
+    # Feed richness: full content vs excerpt
+    if feed_url:
+        feed_resp = fetch(feed_url, timeout=8)
+        if feed_resp and feed_resp.status_code == 200:
+            feed_text = feed_resp.text
+            # Count items/entries and measure content length
+            rss_items = re.findall(r"<item\b[^>]*>.*?</item>", feed_text, re.DOTALL | re.IGNORECASE)
+            atom_entries = re.findall(r"<entry\b[^>]*>.*?</entry>", feed_text, re.DOTALL | re.IGNORECASE)
+            entries = rss_items or atom_entries
+            if entries:
+                lengths = []
+                for entry in entries[:10]:
+                    content_match = re.search(r"<content:encoded[^>]*>(.*?)</content:encoded>", entry, re.DOTALL | re.IGNORECASE)
+                    if not content_match:
+                        content_match = re.search(r"<content[^>]*>(.*?)</content>", entry, re.DOTALL | re.IGNORECASE)
+                    if not content_match:
+                        content_match = re.search(r"<description[^>]*>(.*?)</description>", entry, re.DOTALL | re.IGNORECASE)
+                    if content_match:
+                        stripped = re.sub(r"<[^>]+>", "", content_match.group(1))
+                        stripped = re.sub(r"<!\[CDATA\[|\]\]>", "", stripped).strip()
+                        lengths.append(len(stripped.split()))
+                if lengths:
+                    avg = sum(lengths) / len(lengths)
+                    if avg >= 300:
+                        print(f"  [{PASS}] Feed provides full content (avg {int(avg)} words/item) — AI-friendly")
+                        tc_score += 0.5
+                    elif avg >= 80:
+                        print(f"  [{INFO}] Feed provides excerpts (avg {int(avg)} words/item) — consider full content")
+                        fix("Publish full content in your feed rather than excerpts. AI agents that consume feeds\n"
+                            "programmatically prefer complete text they can extract without following every link:\n"
+                            "  WordPress: Settings → Reading → 'Full text' in feed\n"
+                            "  Custom: include <content:encoded> with the full post body")
+                    else:
+                        print(f"  [{WARN}] Feed items are very short (avg {int(avg)} words) — mostly headlines")
+                        fix("Your feed publishes only headlines/snippets. Switch to full content so AI agents\n"
+                            "and aggregators can index the actual article without scraping the HTML page.")
+
+    # Machine-readable exports & integration docs
+    api_probes = [
+        ("/api", "API base path"),
+        ("/api/v1", "Versioned API"),
+        ("/graphql", "GraphQL endpoint"),
+        ("/openapi.json", "OpenAPI spec"),
+        ("/openapi.yaml", "OpenAPI spec"),
+        ("/swagger.json", "Swagger spec"),
+        ("/docs/api", "API documentation"),
+        ("/webhooks", "Webhook documentation"),
+        ("/integrations", "Integrations page"),
+        ("/developers", "Developer portal"),
+    ]
+    machine_readable_found = []
+    for path, label in api_probes:
+        r = fetch(urljoin(base_url, path), timeout=5)
+        if r and r.status_code == 200 and len(r.text.strip()) > 100:
+            machine_readable_found.append((path, label))
+            if len(machine_readable_found) >= 3:
+                break
+    if machine_readable_found:
+        print(f"  [{PASS}] Machine-readable / integration endpoints: {', '.join(p for p, _ in machine_readable_found[:3])}")
+        tc_score += 0.5
+    else:
+        print(f"  [{INFO}] No API / integration / webhook documentation detected")
+        fix("Publish machine-readable data feeds and integration docs so AI agents can consume\n"
+            "your data programmatically:\n"
+            "  • /openapi.json (or /swagger.json) for a public API\n"
+            "  • /webhooks for event subscription documentation\n"
+            "  • /integrations or /developers as a landing page linking SDKs, API keys, examples")
 
     track_score("Technical Crawlability", min(tc_score, 5), 5)
 
@@ -1122,7 +1411,376 @@ def check_authority_trust(base_url):
             print(f"  [{WARN}] No author attribution found — authorship signals boost AI trust (E-E-A-T)")
             fix("Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.")
 
+        # E-E-A-T depth: look for a bio/about/team page and assess credentials
+        bio_url = None
+        bio_text = ""
+        for path in ["/about", "/about-us", "/team", "/authors", "/our-team", "/people"]:
+            candidate = urljoin(base_url, path)
+            r = fetch(candidate, timeout=8)
+            if r and r.status_code == 200 and len(r.text) > 500:
+                try:
+                    s = BeautifulSoup(r.text, "html.parser")
+                    bio_text = get_text_content(s)
+                    if len(bio_text.split()) >= 50:
+                        bio_url = candidate
+                        break
+                except Exception:
+                    pass
+
+        credential_keywords = [
+            "phd", "ph.d", "m.d.", "md,", "dphil", "doctorate",
+            "founder", "ceo", "cto", "cfo", "coo", "chief ",
+            "years of experience", "years experience", "decades of",
+            "formerly at", "previously at", "ex-", "alumnus", "alumni",
+            "certified", "licensed", "board-certified",
+            "author of", "published in", "featured in", "cited by",
+            "harvard", "stanford", "mit ", "oxford", "cambridge", "berkeley",
+        ]
+        bylines_hosts = [
+            "medium.com/@", "substack.com", "forbes.com", "techcrunch.com",
+            "hbr.org", "wired.com", "theverge.com", "bloomberg.com",
+            "scholar.google", "orcid.org", "arxiv.org",
+        ]
+
+        if bio_url:
+            print(f"  [{PASS}] Bio/about page found at {urlparse(bio_url).path}")
+            at_score += 0.5
+            bio_lower = bio_text.lower()
+            found_creds = [k for k in credential_keywords if k in bio_lower]
+            if found_creds:
+                print(f"  [{PASS}] Credential signals in bio: {', '.join(sorted(set(found_creds))[:5])}")
+                at_score += 1
+            else:
+                print(f"  [{INFO}] Bio page has little credential language — add credentials/experience")
+                fix("Strengthen your bio/about page with explicit E-E-A-T signals:\n"
+                    "  • Credentials (PhD, MD, certifications)\n"
+                    "  • Years of experience and roles (\"10 years at X as...\")\n"
+                    "  • Notable prior affiliations (\"formerly at Google\", \"ex-McKinsey\")\n"
+                    "  • External bylines, publications, or press coverage")
+
+            # External bylines discovered on bio page
+            try:
+                bs = BeautifulSoup(fetch(bio_url, timeout=8).text, "html.parser")
+                external_bylines = set()
+                for a in bs.find_all("a", href=True):
+                    href = a["href"].lower()
+                    for host in bylines_hosts:
+                        if host in href:
+                            external_bylines.add(host.split("/")[0] if "/" in host else host)
+                if external_bylines:
+                    print(f"  [{PASS}] External byline/profile links: {', '.join(sorted(external_bylines))}")
+                    at_score += 0.5
+                else:
+                    print(f"  [{INFO}] No external bylines detected on bio page")
+                    fix("Link to external bylines (Medium, Substack, trade press, Google Scholar, ORCID)\n"
+                        "from your bio/about page. Independent bylines carry more E-E-A-T weight than self-claims.")
+            except Exception:
+                pass
+        else:
+            print(f"  [{WARN}] No author bio / about / team page found")
+            fix("Create a substantive /about or /team page (200+ words) documenting who is behind\n"
+                "the site: real names, credentials, photos, contact paths, and links to external profiles.\n"
+                "AI engines treat faceless sites as lower E-E-A-T.")
+
     track_score("Authority & Trust", min(at_score, 5), 5)
+
+
+# ---------------------------------------------------------------------------
+# 12b. Brand Entity in Knowledge Graphs (Wikipedia / Wikidata)
+# ---------------------------------------------------------------------------
+def check_brand_entity_kg(base_url):
+    """Check if the site's brand exists as a recognized entity in Wikipedia/Wikidata."""
+    print("\n--- Brand Entity in Knowledge Graphs ---")
+
+    # Derive brand candidates from domain and page signals
+    resp, soup = get_soup(base_url)
+    parsed = urlparse(base_url)
+    domain = parsed.netloc.replace("www.", "")
+    raw_brand = domain.split(".")[0]
+
+    candidates = [raw_brand]
+    # Prefer a human-readable brand from og:site_name or <title>
+    if soup:
+        og_site = soup.find("meta", property="og:site_name")
+        if og_site and og_site.get("content"):
+            candidates.insert(0, og_site["content"].strip())
+        t = soup.find("title")
+        if t and t.string and t.string.strip():
+            parts = re.split(r'[|\-\u2013\u2014]', t.string)
+            if parts:
+                tail = parts[-1].strip()
+                if 2 <= len(tail) <= 40 and tail not in candidates:
+                    candidates.append(tail)
+        # Organization name from JSON-LD
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string)
+                items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
+                if isinstance(data, dict) and "@graph" in data:
+                    items.extend(data["@graph"])
+                for item in items:
+                    if isinstance(item, dict):
+                        t_val = item.get("@type", "")
+                        if t_val in ("Organization", "LocalBusiness", "Corporation") and item.get("name"):
+                            candidates.insert(0, item["name"].strip())
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Dedupe while preserving order
+    seen_c = set()
+    candidates = [c for c in candidates if c and not (c.lower() in seen_c or seen_c.add(c.lower()))]
+    brand = candidates[0]
+    print(f"  Checking entity: \"{brand}\" (domain: {domain})")
+
+    import urllib.parse
+    score = 0
+    wiki_page = None
+    wikidata_id = None
+    backlink_count = 0
+
+    # Wikipedia
+    try:
+        enc = urllib.parse.quote(brand)
+        r = requests.get(
+            f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={enc}&format=json&srlimit=3",
+            timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+        )
+        if r.status_code == 200:
+            results = r.json().get("query", {}).get("search", [])
+            for result in results:
+                title = result.get("title", "")
+                if brand.lower() in title.lower() or title.lower() in brand.lower():
+                    wiki_page = title
+                    break
+    except requests.RequestException:
+        pass
+
+    if wiki_page:
+        print(f"  [{PASS}] Wikipedia page found: \"{wiki_page}\"")
+        score += 2
+        # Backlink proxy: count pages that link to this article
+        try:
+            enc = urllib.parse.quote(wiki_page)
+            br = requests.get(
+                f"https://en.wikipedia.org/w/api.php?action=query&list=backlinks&bltitle={enc}&bllimit=50&format=json",
+                timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+            )
+            if br.status_code == 200:
+                backlink_count = len(br.json().get("query", {}).get("backlinks", []))
+                if backlink_count >= 20:
+                    print(f"  [{PASS}] Wikipedia backlinks: {backlink_count}+ pages link to this entity — strong authority")
+                    score += 1
+                elif backlink_count >= 5:
+                    print(f"  [{INFO}] Wikipedia backlinks: {backlink_count} pages link to this entity")
+                    score += 0.5
+                else:
+                    print(f"  [{INFO}] Only {backlink_count} Wikipedia backlink(s) — entity is recognized but niche")
+        except requests.RequestException:
+            pass
+    else:
+        print(f"  [{WARN}] No Wikipedia page found for \"{brand}\"")
+        fix("A Wikipedia page is one of the strongest entity signals for AI engines. If you're\n"
+            "notable enough, seek independent coverage in news/trade press and follow Wikipedia's\n"
+            "notability guidelines. Do not write your own page — it will be flagged as COI.")
+
+    # Wikidata
+    try:
+        enc = urllib.parse.quote(brand)
+        r = requests.get(
+            f"https://www.wikidata.org/w/api.php?action=wbsearchentities&search={enc}&language=en&format=json&limit=3",
+            timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+        )
+        if r.status_code == 200:
+            for result in r.json().get("search", []):
+                label = result.get("label", "")
+                if brand.lower() in label.lower() or label.lower() in brand.lower():
+                    wikidata_id = result.get("id")
+                    break
+    except requests.RequestException:
+        pass
+
+    if wikidata_id:
+        print(f"  [{PASS}] Wikidata entity found: {wikidata_id}")
+        score += 2
+    else:
+        print(f"  [{WARN}] No Wikidata entity found for \"{brand}\"")
+        fix("Wikidata is free to edit and AI engines (especially Google Knowledge Graph) ingest it\n"
+            "heavily. Create an entry at https://www.wikidata.org/wiki/Special:NewItem with:\n"
+            "  • Label + description\n"
+            "  • instance of (P31) — e.g. 'business'\n"
+            "  • official website (P856) — your domain\n"
+            "  • sameAs links to social profiles")
+
+    track_score("Brand Entity KG", min(score, 5), 5)
+
+
+# ---------------------------------------------------------------------------
+# 12c. Trust & Safety Signals (privacy/terms/contact/DMCA/business info)
+# ---------------------------------------------------------------------------
+def check_trust_safety(base_url):
+    """Check for trust & safety pages and business identity signals that AI engines use
+    to assess source credibility and citation-worthiness."""
+    print("\n--- Trust & Safety Signals ---")
+    resp, soup = get_soup(base_url)
+    if not soup:
+        print(f"  [{FAIL}] Could not fetch homepage")
+        track_score("Trust & Safety", 0, 6)
+        return
+
+    ts_score = 0
+
+    # Build a merged haystack: homepage HTML + linked policy anchors
+    home_links = {a.get("href", "").lower(): (a.get_text(strip=True) or "").lower()
+                  for a in soup.find_all("a", href=True)}
+
+    def _anchor_match(keywords):
+        for href, text in home_links.items():
+            combined = f"{href} {text}"
+            if any(k in combined for k in keywords):
+                return href
+        return None
+
+    def _probe(paths):
+        """Fetch the first path that returns 200 with substantive content."""
+        for p in paths:
+            r = fetch(urljoin(base_url, p), timeout=6)
+            if r and r.status_code == 200 and len(r.text) > 500:
+                return p
+        return None
+
+    # 1. Privacy policy
+    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
+                     "/policies/privacy", "/privacypolicy"]
+    privacy_found = _probe(privacy_paths) or _anchor_match(["privacy"])
+    if privacy_found:
+        print(f"  [{PASS}] Privacy policy found: {privacy_found}")
+        ts_score += 1.5
+    else:
+        print(f"  [{FAIL}] No privacy policy page detected")
+        fix("Publish a Privacy Policy at /privacy (or /privacy-policy). AI engines treat missing\n"
+            "privacy policies as a trust red flag — required by GDPR, CCPA, and most ad networks.")
+
+    # 2. Terms of service
+    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
+                   "/terms.html", "/legal/terms"]
+    terms_found = _probe(terms_paths) or _anchor_match(["terms", "tos"])
+    if terms_found:
+        print(f"  [{PASS}] Terms of service found: {terms_found}")
+        ts_score += 1
+    else:
+        print(f"  [{WARN}] No terms of service page detected")
+        fix("Publish Terms of Service at /terms. This is a basic trust signal AI engines\n"
+            "and search platforms expect from legitimate sites.")
+
+    # 3. Contact page
+    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
+                     "/support", "/help"]
+    contact_found = _probe(contact_paths) or _anchor_match(["contact", "get in touch"])
+    if contact_found:
+        print(f"  [{PASS}] Contact page found: {contact_found}")
+        ts_score += 1
+    else:
+        print(f"  [{WARN}] No contact page detected")
+        fix("Add a /contact page with at least an email address and/or form. AI engines rank\n"
+            "sites with clear contact paths higher for trust-sensitive queries.")
+
+    # 4. DMCA / copyright / legal
+    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
+    legal_found = _probe(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
+    if legal_found:
+        print(f"  [{PASS}] Legal/DMCA/imprint page found: {legal_found}")
+        ts_score += 0.5
+    else:
+        print(f"  [{INFO}] No DMCA / legal / imprint page detected")
+        fix("Add a /dmca or /legal page. In the EU an 'Impressum' (imprint) is legally required;\n"
+            "elsewhere a DMCA agent page protects you from copyright liability and boosts trust.")
+
+    # 5. Business identity: address / phone / email / registration in footer or schema
+    homepage_text = get_text_content(soup)
+    footer = soup.find("footer")
+    footer_text = footer.get_text(" ", strip=True) if footer else ""
+
+    # Email / phone / street address heuristics
+    email_re = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+    phone_re = re.compile(r"(?:\+?\d{1,3}[\s\-.])?\(?\d{2,4}\)?[\s\-.]\d{3,4}[\s\-.]\d{3,4}")
+    address_hint = re.compile(
+        r"\b\d{1,5}\s+\w+(?:\s+\w+){0,5}\s+"
+        r"(?:street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|suite|ste\.?|floor|fl\.?)\b",
+        re.IGNORECASE,
+    )
+    # Business registration numbers (LLC, Inc, GmbH, Ltd, AG, AB, SA, SARL, Pty, EIN, VAT, ABN, SIREN)
+    registration_re = re.compile(
+        r"\b(?:LLC|Inc\.?|Corp\.?|Ltd\.?|GmbH|AG|S\.?A\.?|S\.?L\.?|SARL|Pty|BV|Oy)\b"
+        r"|\b(?:EIN|VAT|ABN|SIREN|SIRET|company\s+(?:no|number)|reg(?:istration)?\s+(?:no|number)|CIN)\b",
+        re.IGNORECASE,
+    )
+
+    # Structured data signals
+    sd_has_address = False
+    sd_has_contact_point = False
+    sd_has_telephone = False
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string)
+            items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
+            if isinstance(data, dict) and "@graph" in data:
+                items.extend(data["@graph"])
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("address"):
+                    sd_has_address = True
+                if item.get("contactPoint"):
+                    sd_has_contact_point = True
+                if item.get("telephone"):
+                    sd_has_telephone = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    has_email = bool(email_re.search(footer_text) or email_re.search(homepage_text))
+    has_phone = bool(phone_re.search(footer_text) or phone_re.search(homepage_text))
+    has_address = (
+        sd_has_address
+        or bool(address_hint.search(footer_text))
+        or bool(address_hint.search(homepage_text))
+    )
+    has_registration = bool(registration_re.search(footer_text) or registration_re.search(homepage_text))
+
+    identity_signals = []
+    if has_email or sd_has_contact_point:
+        identity_signals.append("email/contactPoint")
+    if has_phone or sd_has_telephone:
+        identity_signals.append("phone")
+    if has_address:
+        identity_signals.append("address")
+    if has_registration:
+        identity_signals.append("legal entity")
+
+    if len(identity_signals) >= 3:
+        print(f"  [{PASS}] Strong business identity in footer/schema: {', '.join(identity_signals)}")
+        ts_score += 2
+    elif len(identity_signals) >= 1:
+        print(f"  [{WARN}] Partial business identity: {', '.join(identity_signals)}")
+        ts_score += 1
+        missing = []
+        if not (has_email or sd_has_contact_point):
+            missing.append("email or contactPoint")
+        if not (has_phone or sd_has_telephone):
+            missing.append("phone")
+        if not has_address:
+            missing.append("physical address")
+        if not has_registration:
+            missing.append("legal entity (LLC/Inc/Ltd/GmbH/EIN/VAT)")
+        fix("Add missing trust signals so AI engines can verify who is behind the site:\n  "
+            + "\n  ".join(f"- {m}" for m in missing))
+    else:
+        print(f"  [{FAIL}] No business identity signals found (email, phone, address, or legal entity)")
+        fix("AI engines cannot verify who runs this site. Add in the footer and/or Organization JSON-LD:\n"
+            "  • Physical address (schema.org PostalAddress)\n"
+            "  • Contact email and telephone (contactPoint)\n"
+            "  • Legal entity suffix (LLC / Inc / Ltd / GmbH) and registration number where applicable")
+
+    track_score("Trust & Safety", min(ts_score, 6), 6)
 
 
 # ---------------------------------------------------------------------------
@@ -1172,6 +1830,57 @@ def check_ai_optimization(base_url):
     else:
         print(f"  [{WARN}] No content freshness signals — add dateModified to JSON-LD or <time> elements")
         fix("Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server")
+
+    # Sitewide update cadence — analyze sitemap <lastmod> dates across the whole site
+    from datetime import datetime, timezone
+    sitemap_resp = fetch(urljoin(base_url, "/sitemap.xml"), timeout=10)
+    if not sitemap_resp or sitemap_resp.status_code != 200:
+        sitemap_resp = fetch(urljoin(base_url, "/sitemap_index.xml"), timeout=10)
+    lastmods = []
+    if sitemap_resp and sitemap_resp.status_code == 200 and "<" in sitemap_resp.text:
+        lastmods = re.findall(r"<lastmod>([^<]+)</lastmod>", sitemap_resp.text)
+        # If this is an index, follow the first few child sitemaps
+        if "<sitemapindex" in sitemap_resp.text:
+            child_locs = re.findall(r"<loc>([^<]+)</loc>", sitemap_resp.text)[:3]
+            for loc in child_locs:
+                child = fetch(loc.strip(), timeout=8)
+                if child and child.status_code == 200:
+                    lastmods.extend(re.findall(r"<lastmod>([^<]+)</lastmod>", child.text))
+
+    parsed_dates = []
+    for lm in lastmods[:200]:
+        lm = lm.strip()
+        for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(lm.replace("Z", "+0000") if fmt == "%Y-%m-%dT%H:%M:%S%z" and "Z" in lm else lm, fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                parsed_dates.append(dt)
+                break
+            except ValueError:
+                continue
+
+    if parsed_dates:
+        now = datetime.now(timezone.utc)
+        ages_days = sorted((now - d).days for d in parsed_dates)
+        median_days = ages_days[len(ages_days) // 2]
+        fresh_90 = sum(1 for a in ages_days if a <= 90)
+        fresh_ratio = fresh_90 / len(ages_days)
+        print(f"  [{INFO}] Sitemap contains {len(parsed_dates)} <lastmod> entries "
+              f"(median age: {median_days} days, {fresh_90}/{len(ages_days)} updated in last 90d)")
+        if fresh_ratio >= 0.5 or median_days <= 90:
+            print(f"  [{PASS}] Healthy sitewide update cadence")
+            ao_score += 1
+        elif fresh_ratio >= 0.2:
+            print(f"  [{WARN}] Moderate cadence — less than half of pages updated in the last 90 days")
+            fix("Increase content refresh cadence. AI engines prefer sites that update regularly — stale pages\n"
+                "drop out of training windows and retrieval indexes.")
+        else:
+            print(f"  [{WARN}] Low cadence — most pages are stale (median {median_days} days old)")
+            fix("Most of your content hasn't been touched in months. Refresh high-value pages periodically\n"
+                "(update stats, add recent examples, bump dateModified) so AI engines see ongoing maintenance.")
+    else:
+        print(f"  [{INFO}] Could not analyze sitewide update cadence (no parseable <lastmod> in sitemap)")
 
     title = soup.find("title")
     og_site = soup.find("meta", property="og:site_name")
@@ -1309,7 +2018,7 @@ def check_ai_answer_formats(base_url):
 
     text = get_text_content(soup)
     score = 0
-    total_checks = 5
+    total_checks = 6
 
     # 1. Definition sentences ("X is...", "X refers to...")
     definition_patterns = re.findall(
@@ -1385,6 +2094,38 @@ def check_ai_answer_formats(base_url):
     else:
         print(f"  [{INFO}] No key takeaways or TL;DR section found")
         fix("Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.")
+
+    # 6. Conversational question-pattern headings (who/what/how/why/when/where/is/can/does)
+    question_word_re = re.compile(
+        r"^\s*(?:who|what|how|why|when|where|is|are|can|does|do|should|will|which|whose|whom)\b",
+        re.IGNORECASE,
+    )
+    headings_all = soup.find_all(re.compile(r"^h[1-6]$"))
+    q_headings = []
+    for h in headings_all:
+        txt = h.get_text(strip=True)
+        if not txt:
+            continue
+        if question_word_re.match(txt) or txt.rstrip().endswith("?"):
+            q_headings.append(txt)
+    if len(q_headings) >= 3:
+        score += 1
+        print(f"  [{PASS}] {len(q_headings)} question-pattern heading(s) — strong conversational readiness")
+        for qh in q_headings[:3]:
+            print(f"         \"{qh[:70]}\"")
+    elif q_headings:
+        print(f"  [{INFO}] Only {len(q_headings)} question-pattern heading(s) — add more for chat-style queries")
+        fix("Add more question-pattern headings that match how people prompt AI engines:\n"
+            "  <h2>What is GEO?</h2>\n"
+            "  <h2>How do I optimize for AI search?</h2>\n"
+            "  <h2>Why does GEO matter?</h2>\n"
+            "Follow each with a short, direct answer so AI engines can extract it.")
+    else:
+        print(f"  [{WARN}] No question-pattern headings detected — low conversational readiness")
+        fix("Add question-pattern headings so AI engines can match chat-style queries to your content:\n"
+            "  <h2>What is GEO?</h2>\n"
+            "  <h3>How does this work?</h3>\n"
+            "Pages structured around who/what/how/why questions rank higher in AI answers.")
 
     print(f"\n  AI answer format score: {score}/{total_checks}")
     track_score("AI Answer Formats", score, total_checks)
@@ -1722,6 +2463,78 @@ def check_outbound_and_media(base_url):
             print(f"  [{WARN}] Videos found but no transcript detected")
             fix("Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.")
 
+    # Multi-format coverage: podcast, PDF, infographic, slides
+    formats_found = set()
+    if video_embeds or has_video_schema:
+        formats_found.add("video")
+
+    # Podcast detection: audio elements, podcast RSS, common host links
+    audio_tags = soup.find_all("audio")
+    podcast_hosts = ["anchor.fm", "spotify.com/show", "podcasts.apple.com",
+                     "soundcloud.com", "buzzsprout.com", "transistor.fm",
+                     "libsyn.com", "simplecast.com"]
+    podcast_link = False
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        for h in podcast_hosts:
+            if h in href:
+                podcast_link = True
+                break
+        if podcast_link:
+            break
+    podcast_schema = False
+    for script in json_ld_scripts:
+        try:
+            data = json.loads(script.string)
+            s = json.dumps(data).lower()
+            if '"podcastseries"' in s or '"podcastepisode"' in s:
+                podcast_schema = True
+                break
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if audio_tags or podcast_link or podcast_schema:
+        formats_found.add("podcast/audio")
+
+    # PDFs
+    pdf_links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].lower().endswith(".pdf")]
+    if pdf_links:
+        formats_found.add("PDF")
+
+    # Infographics: images with "infographic" in alt/src, or large standalone graphics
+    infographic_imgs = []
+    for img in soup.find_all("img"):
+        alt = (img.get("alt") or "").lower()
+        src = (img.get("src") or "").lower()
+        if "infographic" in alt or "infographic" in src or "diagram" in alt or "chart" in alt:
+            infographic_imgs.append(img)
+    if infographic_imgs:
+        formats_found.add("infographic")
+
+    # Slides / presentations
+    slide_hosts = ["slideshare.net", "speakerdeck.com", "slides.com"]
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        if any(h in href for h in slide_hosts):
+            formats_found.add("slides")
+            break
+
+    print(f"  [{INFO}] Multi-format coverage: {', '.join(sorted(formats_found)) or 'text only'}")
+    if len(formats_found) >= 3:
+        print(f"  [{PASS}] {len(formats_found)} content format(s) — broad AI surface area")
+        om_score += 0.5
+    elif len(formats_found) >= 1:
+        print(f"  [{INFO}] Only {len(formats_found)} non-text format(s) detected — more formats = more AI surface area")
+        fix("Diversify your content formats so AI engines encounter you in more contexts:\n"
+            "  • Podcast (audio transcripts feed ChatGPT, Perplexity)\n"
+            "  • PDF whitepapers (citable documents)\n"
+            "  • Infographics with descriptive alt text\n"
+            "  • Slides on SlideShare / Speaker Deck\n"
+            "  • Video with transcripts")
+    else:
+        print(f"  [{WARN}] No non-text formats detected — content is text-only")
+        fix("Add at least one alternative format (video with transcript, podcast, PDF, or infographic).\n"
+            "Each format opens a new retrieval channel for AI engines.")
+
     # Table markup quality
     tables = soup.find_all("table")
     if tables:
@@ -1752,6 +2565,40 @@ def check_outbound_and_media(base_url):
     else:
         print(f"  [{INFO}] No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations")
         fix("Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.")
+
+    # First-paragraph extractability — AI engines preferentially pull facts from the top
+    main = soup.find("main") or soup.find("article") or soup.find("body")
+    first_para = None
+    if main:
+        for p in main.find_all("p"):
+            t = p.get_text(strip=True)
+            if len(t.split()) >= 15:
+                first_para = t
+                break
+    if first_para:
+        has_definition = bool(re.search(r"\b(is|are|means|refers to|describes)\b", first_para, re.IGNORECASE))
+        has_stat = bool(re.search(r"\d+(?:\.\d+)?%|\$\d+|\d{1,3}(?:,\d{3})+|\b\d{4}\b", first_para))
+        wc = len(first_para.split())
+        facts = []
+        if has_definition:
+            facts.append("definition")
+        if has_stat:
+            facts.append("statistic/number")
+        if 25 <= wc <= 120 and facts:
+            print(f"  [{PASS}] First paragraph ({wc} words) contains extractable facts: {', '.join(facts)}")
+            om_score += 0.5
+        elif facts:
+            print(f"  [{INFO}] First paragraph has facts ({', '.join(facts)}) but is {wc} words — aim for 25-120")
+            fix("Tighten your opening paragraph to 25-120 words so AI engines can lift it as a snippet.")
+        else:
+            print(f"  [{WARN}] First paragraph ({wc} words) lacks extractable facts — add a definition or key statistic up front")
+            fix("Front-load facts into your first paragraph so AI engines can extract it directly:\n"
+                "  'GEO is the practice of optimizing content for AI-powered search engines.\n"
+                "   Over 70% of search users now consult an AI assistant before clicking a link.'\n"
+                "Aim for one definition-style sentence and one concrete stat in the first 25-120 words.")
+    else:
+        print(f"  [{INFO}] Could not identify a substantive first paragraph — AI engines rely on early content for extraction")
+        fix("Place a substantive opening paragraph high in the page body (inside <main> or <article>)\nthat answers 'what is this about?' with a definition and/or a concrete number.")
 
     track_score("Outbound & Media", min(om_score, 3), 3)
 
@@ -2076,7 +2923,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
     candidates = list(dict.fromkeys(candidates))
     content_candidates = [
         u for u in candidates
-        if not re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|pdf|zip)$', u, re.IGNORECASE)
+        if not re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|zip|gz|tar|mp4|mp3|webm|webp|avif|txt|md|xml|json|csv|rss|atom)$', urlparse(u).path, re.IGNORECASE)
         and "#" not in u
     ]
     sample = content_candidates[:max_pages]
@@ -2099,18 +2946,35 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         "missing_alt_text": [],
     }
     descriptions_seen = {}
+    titles_seen = {}
+    page_shingles = {}  # short_url -> set of 5-word shingles
+
+    def _shingles(text, k=5):
+        tokens = re.findall(r"\w+", text.lower())
+        if len(tokens) < k:
+            return set()
+        return {" ".join(tokens[i:i + k]) for i in range(len(tokens) - k + 1)}
 
     for page_url in sample:
         page_resp = fetch(page_url, timeout=10)
         if not page_resp or page_resp.status_code != 200:
             continue
 
+        ctype = page_resp.headers.get("Content-Type", "").lower()
+        if ctype and "html" not in ctype:
+            continue
+
         page_soup = BeautifulSoup(page_resp.text, "html.parser")
         short_url = urlparse(page_url).path or page_url
 
         title = page_soup.find("title")
-        if not title or not (title.string and title.string.strip()):
+        title_text = ""
+        if title and title.string and title.string.strip():
+            title_text = title.string.strip()
+        else:
             issues["missing_title"].append(short_url)
+        if title_text:
+            titles_seen.setdefault(title_text, []).append(short_url)
 
         desc = page_soup.find("meta", attrs={"name": "description"})
         desc_content = ""
@@ -2135,6 +2999,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         page_text = get_text_content(page_soup)
         if len(page_text.split()) < 100:
             issues["low_word_count"].append(short_url)
+        page_shingles[short_url] = _shingles(page_text)
 
         if not page_soup.find("meta", property="og:title"):
             issues["missing_og"].append(short_url)
@@ -2146,6 +3011,21 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
                 issues["missing_alt_text"].append(short_url)
 
     duplicate_descs = {desc: pages for desc, pages in descriptions_seen.items() if len(pages) > 1}
+    duplicate_titles = {t: pages for t, pages in titles_seen.items() if len(pages) > 1}
+
+    # Jaccard similarity between page content pairs — detect overlap/cannibalization
+    overlap_pairs = []
+    shingle_items = [(u, s) for u, s in page_shingles.items() if s]
+    for i in range(len(shingle_items)):
+        u1, s1 = shingle_items[i]
+        for j in range(i + 1, len(shingle_items)):
+            u2, s2 = shingle_items[j]
+            union = s1 | s2
+            if not union:
+                continue
+            jaccard = len(s1 & s2) / len(union)
+            if jaccard >= 0.5:
+                overlap_pairs.append((u1, u2, jaccard))
 
     check_labels = {
         "missing_title": ("Missing <title>", FAIL),
@@ -2185,14 +3065,42 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         all_good = False
         print(f"  [{WARN}] Duplicate meta descriptions found across pages:")
         for desc_text, pages in list(duplicate_descs.items())[:3]:
-            print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages")
+            print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages:")
+            for p in pages[:5]:
+                print(f"           - {p}")
+            if len(pages) > 5:
+                print(f"           ...and {len(pages) - 5} more")
         fix("Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.")
+
+    if duplicate_titles:
+        all_good = False
+        print(f"  [{WARN}] Duplicate <title> tags found across pages:")
+        for t, pages in list(duplicate_titles.items())[:3]:
+            print(f"         \"{t[:60]}\" on {len(pages)} pages:")
+            for p in pages[:5]:
+                print(f"           - {p}")
+            if len(pages) > 5:
+                print(f"           ...and {len(pages) - 5} more")
+        fix("Write unique <title> tags for each page. Identical titles cause keyword\ncannibalization — AI engines can't tell which page to cite for a given query.")
+
+    if overlap_pairs:
+        all_good = False
+        print(f"  [{WARN}] Content overlap / possible cannibalization between pages:")
+        for u1, u2, j in sorted(overlap_pairs, key=lambda x: -x[2])[:3]:
+            print(f"         {int(j * 100)}% overlap: {u1}  ↔  {u2}")
+        fix("Two or more pages cover the same topic with highly overlapping content.\n"
+            "Options:\n"
+            "  1. Consolidate into one canonical page and 301-redirect the others.\n"
+            "  2. Differentiate each page with distinct angles, examples, and keywords.\n"
+            "  3. Use rel=canonical to point near-duplicates to the primary page.\n"
+            "Cannibalization dilutes your AI visibility — pick the strongest page to surface.")
 
     if all_good:
         print(f"  [{PASS}] All sampled pages maintain consistent GEO standards")
         track_score("Multi-Page", 5, 5)
     else:
-        total_issues = sum(len(v) for v in issues.values()) + len(duplicate_descs)
+        total_issues = (sum(len(v) for v in issues.values())
+                        + len(duplicate_descs) + len(duplicate_titles) + len(overlap_pairs))
         mp_score = max(5 - total_issues, 0)
         track_score("Multi-Page", mp_score, 5)
 
@@ -2227,6 +3135,8 @@ def generate_score(base_url):
     check_content_quality(base_url)
     check_technical_crawlability(base_url)
     check_authority_trust(base_url)
+    check_brand_entity_kg(base_url)
+    check_trust_safety(base_url)
     check_ai_optimization(base_url)
     check_social_signals(base_url)
     check_ai_answer_formats(base_url)
@@ -2246,24 +3156,117 @@ def generate_score(base_url):
     print(f"  AI VISIBILITY SCORE: {score}/100  (Grade: {grade})")
     print(f"{'='*60}")
     print(f"\n  Category Breakdown:")
-    print(f"  {'Category':<25} {'Score':>7}  {'Bar'}")
-    print(f"  {'-'*25} {'-'*7}  {'-'*20}")
+    _W = 25
+    print(f"  {_pad('Category', _W)} {'Score':>7}  {'Bar'}")
+    print(f"  {'-'*_W} {'-'*7}  {'-'*20}")
     for cat, vals in sorted(_scores.items(), key=lambda x: x[0]):
         earned = vals["earned"]
         mx = vals["max"]
         pct = (earned / mx * 100) if mx > 0 else 0
         bar_len = int(pct / 5)
         bar = "\033[92m" + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
-        print(f"  {cat:<25} {earned:>4.1f}/{mx:<3.0f}  {bar}")
+        print(f"  {_pad(cat, _W)} {earned:>4.1f}/{mx:<3.0f}  {bar}")
 
     total_earned = sum(v["earned"] for v in _scores.values())
     total_max = sum(v["max"] for v in _scores.values())
-    print(f"  {'-'*25} {'-'*7}")
-    print(f"  {'TOTAL':<25} {total_earned:>4.1f}/{total_max:<3.0f}")
+    print(f"  {'-'*_W} {'-'*7}")
+    print(f"  {_pad('TOTAL', _W)} {total_earned:>4.1f}/{total_max:<3.0f}")
 
     print(f"\n  Legend: PASS = good | WARN = could improve | FAIL = missing/bad")
     if SHOW_FIX:
         print("          FIX = recommended action to resolve the issue")
+
+        # ── Content Gap Suggestions ──────────────────────────────
+        # Analyze weak categories and suggest content strategies
+        weak_cats = sorted(
+            [(cat, vals) for cat, vals in _scores.items()
+             if vals["max"] > 0 and (vals["earned"] / vals["max"]) < 0.5],
+            key=lambda x: x[1]["earned"] / x[1]["max"],
+        )
+        if weak_cats:
+            print(f"\n{'='*60}")
+            print(f"  CONTENT GAP SUGGESTIONS")
+            print(f"{'='*60}")
+            print(f"\n  Based on your weakest categories, here are content strategies")
+            print(f"  to improve your AI visibility:\n")
+
+            # Map categories to content suggestions
+            content_suggestions = {
+                "Structured Data": [
+                    "Create a FAQ page with FAQPage schema answering top questions about your product/service",
+                    "Add HowTo schema to tutorial or setup guide pages",
+                    "Use Product schema with reviews, pricing, and availability on product pages",
+                ],
+                "Content Quality": [
+                    "Write long-form pillar content (2000+ words) covering your core topic comprehensively",
+                    "Add an 'Industry Statistics' page with original data — AI engines heavily cite pages with numbers",
+                    "Create comparison articles ('X vs Y') — these match competitive queries AI users ask",
+                ],
+                "AI Answer Formats": [
+                    "Add a 'What is [your product]?' section with a clear 1-2 sentence definition",
+                    "Structure blog posts as Q&A: use question headings followed by direct answers",
+                    "Add 'Key Takeaways' or 'TL;DR' sections — AI engines extract these as summaries",
+                ],
+                "Meta Tags": [
+                    "Write meta descriptions as self-contained answers (80-160 chars) — AI uses these as fallback snippets",
+                    "Add Open Graph tags so AI engines can extract your preferred title and description",
+                ],
+                "Content Accessibility": [
+                    "Reduce JavaScript dependency — AI crawlers can't execute JS; ensure content is in raw HTML",
+                    "Add alt text to all images describing what they show — AI uses this for context",
+                ],
+                "Brand Entity KG": [
+                    "Create or improve your Wikipedia page — AI engines use Wikipedia as a primary knowledge source",
+                    "Claim and complete your Google Business Profile, Crunchbase, and LinkedIn company pages",
+                    "Get featured on industry-specific directories and 'best of' lists",
+                ],
+                "Authority & Trust": [
+                    "Add author bios with credentials and links to external profiles (LinkedIn, Twitter)",
+                    "Publish guest posts on authoritative sites in your industry with backlinks",
+                    "Add an 'About Us' page with team expertise, founding story, and mission statement",
+                ],
+                "Trust & Safety": [
+                    "Add clearly linked Privacy Policy, Terms of Service, and Contact pages",
+                    "Display business identity: address, phone, registration number where applicable",
+                ],
+                "Social Signals": [
+                    "Link to active social media profiles from your site (header or footer)",
+                    "Publish regularly on LinkedIn, Twitter/X — AI engines cross-reference social presence",
+                ],
+                "llms.txt": [
+                    "Create /llms.txt describing your site's purpose and content for AI crawlers",
+                    "Add /llms-full.txt with comprehensive site documentation for deeper AI indexing",
+                ],
+                "Robots.txt": [
+                    "Create a robots.txt that explicitly allows AI crawler access",
+                    "Add an ai.txt or .well-known/ai.txt to declare your AI data usage preferences",
+                ],
+                "Multi-Page": [
+                    "Ensure each page has a unique title and meta description — duplicate content confuses AI",
+                    "Diversify content across pages; avoid repeating the same paragraphs on multiple URLs",
+                ],
+                "Outbound & Media": [
+                    "Link to authoritative external sources — AI engines trust pages that cite credible references",
+                    "Embed diverse media (images, videos, infographics) — richer content gets cited more",
+                ],
+            }
+
+            shown = 0
+            for cat, vals in weak_cats:
+                pct = round(vals["earned"] / vals["max"] * 100)
+                suggestions = content_suggestions.get(cat, [])
+                if not suggestions:
+                    # Fuzzy match: try partial category name
+                    for key in content_suggestions:
+                        if key.lower() in cat.lower() or cat.lower() in key.lower():
+                            suggestions = content_suggestions[key]
+                            break
+                if suggestions and shown < 5:
+                    print(f"  {cat} ({pct}%):")
+                    for s in suggestions[:2]:
+                        print(f"    → {s}")
+                    print()
+                    shown += 1
     else:
         print("  Tip: Run with --fix to see recommended solutions")
     print(f"{'='*60}\n")
@@ -2301,6 +3304,8 @@ def run_silent(url):
         check_content_quality(url)
         check_technical_crawlability(url)
         check_authority_trust(url)
+        check_brand_entity_kg(url)
+        check_trust_safety(url)
         check_ai_optimization(url)
         check_social_signals(url)
         check_ai_answer_formats(url)
@@ -2353,15 +3358,16 @@ def compare_urls(urls, return_data=False):
     print(f"{'='*60}\n")
 
     # Header row
-    header = f"  {'Category':<25}"
+    _W = 25
+    header = f"  {_pad('Category', _W)}"
     for r in results:
         header += f" {r['domain']:>{col_width}}"
     print(header)
-    print(f"  {'-'*25}" + f" {'-'*col_width}" * len(results))
+    print(f"  {'-'*_W}" + f" {'-'*col_width}" * len(results))
 
     # Category rows
     for cat in all_categories:
-        row = f"  {cat:<25}"
+        row = f"  {_pad(cat, _W)}"
         cat_scores = []
         for r in results:
             vals = r["categories"].get(cat, {"earned": 0, "max": 0})
@@ -2379,8 +3385,8 @@ def compare_urls(urls, return_data=False):
         print(row)
 
     # Totals
-    print(f"  {'-'*25}" + f" {'-'*col_width}" * len(results))
-    total_row = f"  {'AI VISIBILITY SCORE':<25}"
+    print(f"  {'-'*_W}" + f" {'-'*col_width}" * len(results))
+    total_row = f"  {_pad('AI VISIBILITY SCORE', _W)}"
     for r in results:
         total_row += f" {'':>{col_width - 10}}{r['score']:>3}/100 ({r['grade']})"
     print(total_row)
@@ -2407,7 +3413,143 @@ def compare_urls(urls, return_data=False):
                 scores_per_url.append((r["domain"], pct))
             scores_per_url.sort(key=lambda x: x[1], reverse=True)
             if len(scores_per_url) > 1 and scores_per_url[0][1] > scores_per_url[1][1]:
-                print(f"    {cat:<25} → {scores_per_url[0][0]} ({scores_per_url[0][1]:.0f}% vs {scores_per_url[1][1]:.0f}%)")
+                print(f"    {_pad(cat, _W)} → {scores_per_url[0][0]} ({scores_per_url[0][1]:.0f}% vs {scores_per_url[1][1]:.0f}%)")
+
+    # ── AI Citation Share (when API keys available) ────────────
+    import os as _os
+    _pplx = _os.environ.get("PERPLEXITY_API_KEY", "").strip()
+    _oai = _os.environ.get("OPENAI_API_KEY", "").strip()
+    _anth = _os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    _dsk = _os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    _dbao = _os.environ.get("DOUBAO_API_KEY", "").strip()
+    _dbao_m = _os.environ.get("DOUBAO_MODEL_ID", "").strip()
+
+    _engines = {}
+    if _pplx:
+        _engines["Perplexity"] = ("perplexity", _pplx)
+    if _oai:
+        _engines["ChatGPT"] = ("openai", _oai)
+    if _anth:
+        _engines["Claude"] = ("anthropic", _anth)
+    if _dsk:
+        _engines["DeepSeek"] = ("deepseek", _dsk)
+    if _dbao and _dbao_m:
+        _engines["Doubao"] = ("doubao", _dbao)
+
+    if _engines and len(results) >= 2:
+        print(f"{'='*60}")
+        print(f"  AI CITATION SHARE")
+        print(f"  Engines: {', '.join(_engines.keys())}")
+        print(f"{'='*60}")
+
+        # Build competitive queries from the domains
+        brands = [r["domain"].replace("www.", "").split(".")[0] for r in results]
+        category_hint = ""
+        for r in results:
+            resp_c, soup_c = get_soup(r["url"])
+            if soup_c:
+                meta_d = soup_c.find("meta", attrs={"name": "description"})
+                if meta_d and meta_d.get("content"):
+                    category_hint = meta_d["content"][:60].split(",")[0].strip()
+                    break
+
+        cite_queries = []
+        if category_hint:
+            cite_queries.append(f"Best {category_hint} tools")
+            cite_queries.append(f"Top {category_hint} solutions in 2025")
+        cite_queries.append(f"Compare {' vs '.join(brands[:3])}")
+        cite_queries.append(f"Which is better: {' or '.join(brands[:3])}?")
+        for b in brands:
+            cite_queries.append(f"What is {b}?")
+
+        # Query each engine
+        def _dispatch_query(query, eng_type, api_key):
+            if eng_type == "perplexity":
+                return _query_perplexity(query, api_key)
+            elif eng_type == "openai":
+                return _query_openai(query, api_key)
+            elif eng_type == "anthropic":
+                return _query_anthropic(query, api_key)
+            elif eng_type == "deepseek":
+                return _query_deepseek(query, api_key)
+            elif eng_type == "doubao":
+                return _query_doubao(query, api_key, _dbao_m)
+            return "", [], "unknown_engine"
+
+        # Track citation counts per domain
+        domain_citations = {r["domain"]: 0 for r in results}
+        domain_mentions = {r["domain"]: 0 for r in results}
+        total_queries_run = 0
+
+        for eng_name, (eng_type, api_key) in _engines.items():
+            print(f"\n--- {eng_name} ---")
+            for query in cite_queries:
+                print(f"  [{INFO}] \"{query}\"")
+                answer, citations, error = _dispatch_query(query, eng_type, api_key)
+                if error == "invalid_key":
+                    print(f"    [{FAIL}] Invalid API key — skipping {eng_name}")
+                    break
+                if error:
+                    print(f"    [{WARN}] Error: {error}")
+                    continue
+
+                total_queries_run += 1
+                answer_lower = answer.lower()
+                for r in results:
+                    dom = r["domain"]
+                    dom_bare = dom.replace("www.", "")
+                    brand_name = dom_bare.split(".")[0].lower()
+                    # Check citations
+                    cited = any(dom_bare in c for c in citations)
+                    # Check text mentions
+                    mentioned = dom_bare in answer_lower or brand_name in answer_lower
+                    if cited:
+                        domain_citations[dom] += 1
+                        status = PASS
+                    elif mentioned:
+                        domain_mentions[dom] += 1
+                        status = INFO
+                    else:
+                        status = FAIL
+                    print(f"    {dom:<30} [{'CITED' if cited else 'MENTIONED' if mentioned else 'ABSENT'}]")
+
+                time.sleep(1)
+
+        # Citation share summary
+        if total_queries_run > 0:
+            print(f"\n{'='*60}")
+            print(f"  CITATION SHARE RESULTS ({total_queries_run} queries x {len(_engines)} engine(s))")
+            print(f"{'='*60}\n")
+            print(f"  {_pad('Domain', 30)} {'Cited':>6} {'Mentioned':>10} {'Share':>8}")
+            print(f"  {'-'*30} {'-'*6} {'-'*10} {'-'*8}")
+
+            total_cites = sum(domain_citations.values()) or 1
+            for r in results:
+                dom = r["domain"]
+                cites = domain_citations[dom]
+                mentions = domain_mentions[dom]
+                share = round(cites / total_cites * 100)
+                bar_len = share // 5
+                if share >= 40:
+                    bc = "\033[92m"
+                elif share >= 20:
+                    bc = "\033[93m"
+                else:
+                    bc = "\033[91m"
+                bar = bc + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
+                print(f"  {dom:<30} {cites:>6} {mentions:>10} {share:>6}%  {bar}")
+
+            # Declare citation winner
+            cite_winner = max(results, key=lambda r: domain_citations[r["domain"]])
+            cite_loser = min(results, key=lambda r: domain_citations[r["domain"]])
+            if domain_citations[cite_winner["domain"]] > domain_citations[cite_loser["domain"]]:
+                print(f"\n  Citation leader: {cite_winner['domain']} "
+                      f"({domain_citations[cite_winner['domain']]} citations, "
+                      f"{round(domain_citations[cite_winner['domain']] / total_cites * 100)}% share)")
+
+    elif not _engines and len(results) >= 2:
+        print(f"\n  Tip: Set an AI API key to see Citation Share analysis")
+        print(f"    export PERPLEXITY_API_KEY='pplx-...'   or   export OPENAI_API_KEY='sk-...'")
 
     print(f"\n{'='*60}\n")
 
@@ -2652,6 +3794,715 @@ def crawl_check_files(log_files, display_pattern=""):
     print(f"\n{'='*60}")
     print(f"  Detected: {len(bot_hits)} bot(s) | Not seen: {len(missing_bots)} bot(s)")
     print(f"{'='*60}\n")
+
+
+def aeo_visibility(url, return_data=False):
+    """Answer Engine Optimization audit — checks how well a page is optimized
+    to appear in AI-generated answers (ChatGPT, Perplexity, Google AI Overviews, etc.).
+    Bundles all AEO-related signals into a single, focused report.
+    Free — no API keys required.
+    """
+    parsed = urlparse(url)
+    if not parsed.scheme:
+        url = "https://" + url
+    if not url.endswith("/"):
+        url += "/"
+    reset_state()
+
+    print(f"\n{'='*60}")
+    print(f"  AEO (Answer Engine Optimization) Audit")
+    print(f"  Target: {url}")
+    print(f"{'='*60}")
+
+    resp, soup = get_soup(url)
+    if not soup:
+        print(f"\n  [{FAIL}] Could not fetch {url}")
+        print(f"{'='*60}\n")
+        return
+
+    text = get_text_content(soup)
+
+    # ── 1. FAQ Readiness ─────────────────────────────────────────
+    print(f"\n--- 1. FAQ Readiness ---")
+    faq_score = 0
+    faq_max = 4
+
+    # FAQPage schema
+    json_ld_scripts = soup.find_all("script", type="application/ld+json")
+    has_faq_schema = False
+    faq_question_count = 0
+    has_howto_schema = False
+    has_qapage_schema = False
+    all_schema_types = []
+    for script in json_ld_scripts:
+        try:
+            data = json.loads(script.string)
+            items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
+            if isinstance(data, dict) and "@graph" in data:
+                items.extend(data["@graph"])
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                t = item.get("@type", "")
+                if isinstance(t, list):
+                    all_schema_types.extend(t)
+                else:
+                    all_schema_types.append(t)
+                if t == "FAQPage":
+                    has_faq_schema = True
+                    entities = item.get("mainEntity", [])
+                    if isinstance(entities, list):
+                        faq_question_count = len(entities)
+                elif t == "HowTo":
+                    has_howto_schema = True
+                elif t in ("QAPage", "Question"):
+                    has_qapage_schema = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if has_faq_schema:
+        print(f"  [{PASS}] FAQPage schema found ({faq_question_count} question(s))")
+        faq_score += 2
+    else:
+        print(f"  [{FAIL}] No FAQPage schema — AI engines prioritize pages with FAQ structured data")
+        fix("Add FAQPage JSON-LD schema:\n  <script type=\"application/ld+json\">\n  {\"@context\":\"https://schema.org\",\"@type\":\"FAQPage\",\n   \"mainEntity\":[{\"@type\":\"Question\",\"name\":\"Your question?\",\n   \"acceptedAnswer\":{\"@type\":\"Answer\",\"text\":\"Your answer.\"}}]}\n  </script>")
+
+    # HTML FAQ signals
+    faq_elements = soup.find_all(class_=re.compile(r"faq|frequently.asked", re.IGNORECASE))
+    faq_elements += soup.find_all(id=re.compile(r"faq|frequently.asked", re.IGNORECASE))
+    details_elements = soup.find_all("details")
+    headings = soup.find_all(re.compile(r"^h[1-6]$"))
+    question_headings = [h for h in headings if h.get_text(strip=True).rstrip().endswith("?")]
+
+    html_faq_signals = 0
+    if faq_elements:
+        html_faq_signals += 1
+        print(f"  [{PASS}] FAQ section found in HTML (class/id match)")
+    if details_elements:
+        html_faq_signals += 1
+        print(f"  [{PASS}] {len(details_elements)} <details> accordion element(s) — good for expandable Q&A")
+    if question_headings:
+        html_faq_signals += 1
+        print(f"  [{PASS}] {len(question_headings)} question heading(s) ending in '?'")
+        for qh in question_headings[:3]:
+            print(f"         \"{qh.get_text(strip=True)[:70]}\"")
+
+    if html_faq_signals >= 2:
+        faq_score += 2
+    elif html_faq_signals == 1:
+        faq_score += 1
+        if not has_faq_schema:
+            print(f"  [{WARN}] FAQ-like content exists but lacks FAQPage schema — add structured data")
+    else:
+        print(f"  [{WARN}] No FAQ section or question headings detected in HTML")
+        fix("Add an FAQ section with question headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>")
+
+    track_score("FAQ Readiness", faq_score, faq_max)
+
+    # ── 2. Question-Pattern Headings ─────────────────────────────
+    print(f"\n--- 2. Question-Pattern Headings ---")
+    qh_score = 0
+    qh_max = 3
+
+    question_word_re = re.compile(
+        r"^\s*(?:who|what|how|why|when|where|is|are|can|does|do|should|will|which|whose|whom)\b",
+        re.IGNORECASE,
+    )
+    q_headings = []
+    for h in headings:
+        txt = h.get_text(strip=True)
+        if not txt:
+            continue
+        if question_word_re.match(txt) or txt.rstrip().endswith("?"):
+            q_headings.append((h.name, txt))
+
+    if len(q_headings) >= 5:
+        qh_score = 3
+        print(f"  [{PASS}] {len(q_headings)} question-pattern headings — excellent conversational readiness")
+    elif len(q_headings) >= 3:
+        qh_score = 2
+        print(f"  [{PASS}] {len(q_headings)} question-pattern headings — good conversational readiness")
+    elif q_headings:
+        qh_score = 1
+        print(f"  [{WARN}] Only {len(q_headings)} question-pattern heading(s) — add more for chat-style queries")
+        fix("Add more question-pattern headings matching how users prompt AI:\n  <h2>What is GEO?</h2>\n  <h2>How do I optimize for AI search?</h2>")
+    else:
+        print(f"  [{FAIL}] No question-pattern headings — AI answer engines match queries to Q&A headings")
+        fix("Structure content around questions users ask AI engines:\n  <h2>What is [your topic]?</h2> → concise answer\n  <h3>How does [feature] work?</h3> → step-by-step")
+
+    for tag_name, txt in q_headings[:5]:
+        print(f"         <{tag_name}> \"{txt[:70]}\"")
+
+    track_score("Question Headings", qh_score, qh_max)
+
+    # ── 3. Direct Answer Snippets ────────────────────────────────
+    print(f"\n--- 3. Direct Answer Snippets ---")
+    da_score = 0
+    da_max = 4
+
+    # Definition sentences
+    definition_patterns = re.findall(
+        r'(?:^|\.\s+)([A-Z][^.]{5,60}?\s+(?:is|are|refers to|means|describes)\s+[^.]{10,}\.)',
+        text
+    )
+    if definition_patterns:
+        da_score += 1
+        print(f"  [{PASS}] {len(definition_patterns)} definition-style sentence(s) — highly citable by AI")
+        for d in definition_patterns[:2]:
+            print(f"         \"{d[:80]}...\"" if len(d) > 80 else f"         \"{d}\"")
+    else:
+        print(f"  [{FAIL}] No definition-style sentences — AI engines quote 'X is Y' patterns directly")
+        fix("Add clear definitions: '[Term] is [clear definition].'\n  e.g. 'Answer Engine Optimization (AEO) is the practice of optimizing content\n  to appear in AI-generated answers.'")
+
+    # First-paragraph extractability
+    main_el = soup.find("main") or soup.find("article") or soup.find("body")
+    first_para = None
+    if main_el:
+        for p in main_el.find_all("p"):
+            t = p.get_text(strip=True)
+            if len(t.split()) >= 15:
+                first_para = t
+                break
+    if first_para:
+        has_definition = bool(re.search(r"\b(is|are|means|refers to|describes)\b", first_para, re.IGNORECASE))
+        has_stat = bool(re.search(r"\d+(?:\.\d+)?%|\$\d+|\d{1,3}(?:,\d{3})+|\b\d{4}\b", first_para))
+        wc = len(first_para.split())
+        facts = []
+        if has_definition:
+            facts.append("definition")
+        if has_stat:
+            facts.append("statistic")
+        if 25 <= wc <= 120 and facts:
+            da_score += 1
+            print(f"  [{PASS}] First paragraph ({wc} words) contains extractable facts: {', '.join(facts)}")
+        elif facts:
+            print(f"  [{WARN}] First paragraph has facts ({', '.join(facts)}) but is {wc} words — aim for 25-120")
+            fix("Tighten your opening paragraph to 25-120 words for optimal AI snippet extraction.")
+        else:
+            print(f"  [{WARN}] First paragraph ({wc} words) lacks extractable facts")
+            fix("Front-load a definition or key statistic into your first paragraph.")
+    else:
+        print(f"  [{WARN}] No substantive first paragraph found for snippet extraction")
+        fix("Place a substantive opening paragraph inside <main> or <article> that\ndirectly answers 'what is this about?'")
+
+    # Meta description as answer seed
+    desc_tag = soup.find("meta", attrs={"name": "description"})
+    desc_content = (desc_tag.get("content", "").strip()) if desc_tag else ""
+    if desc_content:
+        desc_len = len(desc_content)
+        if 80 <= desc_len <= 160:
+            da_score += 1
+            print(f"  [{PASS}] Meta description ({desc_len} chars) — good length for AI answer seed")
+        elif desc_len > 160:
+            print(f"  [{WARN}] Meta description is {desc_len} chars — trim to 80-160 for a crisp AI summary")
+        elif desc_len < 80:
+            print(f"  [{WARN}] Meta description is only {desc_len} chars — expand to 80-160 for richer AI extraction")
+    else:
+        print(f"  [{FAIL}] No meta description — AI engines use this as a fallback answer snippet")
+        fix("Add: <meta name=\"description\" content=\"80-160 char summary answering 'what is this page about?'\">")
+
+    # Quotable statistics
+    stat_patterns = re.findall(r'\d+(?:\.\d+)?%|\$\d+|\d+(?:,\d{3})+', text)
+    if len(stat_patterns) >= 3:
+        da_score += 1
+        print(f"  [{PASS}] {len(stat_patterns)} quotable statistics — concrete data improves AI citations")
+    elif stat_patterns:
+        print(f"  [{INFO}] {len(stat_patterns)} statistic(s) — add more specific numbers for citability")
+    else:
+        print(f"  [{WARN}] No quotable statistics — specific data points make content more citable")
+        fix("Add concrete, quotable statistics:\n  '95% of customers report improved performance'\n  'Reduces processing time by 3.5x'")
+
+    track_score("Direct Answer Snippets", da_score, da_max)
+
+    # ── 4. Structured Data for Answers ───────────────────────────
+    print(f"\n--- 4. Answer Engine Schema ---")
+    ae_score = 0
+    ae_max = 4
+
+    answer_types = {
+        "FAQPage": has_faq_schema,
+        "HowTo": has_howto_schema,
+        "QAPage": has_qapage_schema,
+    }
+    present = [t for t, found in answer_types.items() if found]
+    missing = [t for t, found in answer_types.items() if not found]
+
+    if present:
+        print(f"  [{PASS}] Answer-oriented schema: {', '.join(present)}")
+        ae_score += min(len(present) * 1.5, 3)
+    else:
+        print(f"  [{FAIL}] No answer-oriented schema (FAQPage, HowTo, QAPage)")
+        fix("Add at least one answer-oriented schema type:\n"
+            "  • FAQPage — for Q&A content\n"
+            "  • HowTo — for step-by-step instructions\n"
+            "  • QAPage — for single-question answer pages")
+    if missing and present:
+        print(f"  [{INFO}] Not found: {', '.join(missing)}")
+
+    # Speakable schema (voice search / smart speakers)
+    has_speakable = "speakable" in " ".join(
+        s.string or "" for s in json_ld_scripts
+    ).lower()
+    speakable_meta = soup.find("meta", attrs={"name": "speakable"})
+    if has_speakable or speakable_meta:
+        ae_score += 1
+        print(f"  [{PASS}] Speakable markup found — voice assistants can read your content aloud")
+    else:
+        print(f"  [{INFO}] No Speakable markup — helps voice assistants (Siri, Alexa, Google) select content to read")
+        fix("Add Speakable structured data to flag which content is voice-ready:\n"
+            "  \"speakable\": {\"@type\": \"SpeakableSpecification\",\n"
+            "    \"cssSelector\": [\".article-summary\", \".faq-answer\"]}")
+
+    track_score("Answer Engine Schema", ae_score, ae_max)
+
+    # ── 5. Content Structure for AI Extraction ───────────────────
+    print(f"\n--- 5. Content Structure for AI Extraction ---")
+    cs_score = 0
+    cs_max = 5
+
+    # Comparison tables
+    tables = soup.find_all("table")
+    has_comparison_table = False
+    for table in tables:
+        headers = table.find_all("th")
+        if len(headers) >= 2:
+            has_comparison_table = True
+            break
+    if has_comparison_table:
+        cs_score += 1
+        print(f"  [{PASS}] Comparison table(s) with headers — AI engines extract tabular data")
+    elif tables:
+        print(f"  [{WARN}] Tables found but missing <th> headers — add headers for AI extraction")
+        fix("Add <thead>/<th> to tables for AI to extract comparison data.")
+    else:
+        print(f"  [{INFO}] No comparison tables — consider adding for feature/pricing comparisons")
+
+    # Step-by-step instructions
+    ordered_lists = soup.find_all("ol")
+    has_steps = any(len(ol.find_all("li")) >= 3 for ol in ordered_lists)
+    step_headings_found = [
+        h for h in headings
+        if re.search(r'step\s+\d|^\d+[\.\)]\s', h.get_text(strip=True), re.IGNORECASE)
+    ]
+    if has_steps or step_headings_found:
+        cs_score += 1
+        print(f"  [{PASS}] Step-by-step instructional content — great for 'how to' AI answers")
+    else:
+        print(f"  [{INFO}] No step-by-step instructions found")
+        fix("Add numbered how-to instructions:\n  <h2>How to Set Up</h2>\n  <ol><li>Step 1</li><li>Step 2</li><li>Step 3</li></ol>")
+
+    # Pros and cons
+    pros_cons = re.findall(
+        r'(?:pros?\s+(?:and|&)\s+cons?|advantages?\s+(?:and|&)\s+disadvantages?|benefits?\s+(?:and|&)\s+drawbacks?)',
+        text, re.IGNORECASE
+    )
+    pros_cons_el = soup.find_all(class_=re.compile(r"pros?|cons?|advantage|disadvantage", re.IGNORECASE))
+    if pros_cons or pros_cons_el:
+        cs_score += 1
+        print(f"  [{PASS}] Pros/cons content detected — AI engines cite balanced comparisons")
+    else:
+        print(f"  [{INFO}] No pros/cons content — balanced assessments help AI recommendation answers")
+        fix("Add a pros/cons section:\n  <h3>Pros</h3><ul><li>...</li></ul>\n  <h3>Cons</h3><ul><li>...</li></ul>")
+
+    # Key takeaways / TL;DR
+    summary_headings = soup.find_all(
+        re.compile(r"^h[1-6]$"),
+        string=re.compile(r"key\s+takeaway|tl;?\s*dr|summary|in\s+(?:a\s+)?nutshell|bottom\s+line|conclusion", re.IGNORECASE)
+    )
+    summary_classes = soup.find_all(class_=re.compile(r"takeaway|tldr|summary|highlight", re.IGNORECASE))
+    if summary_headings or summary_classes:
+        cs_score += 1
+        print(f"  [{PASS}] Summary/key takeaways section — AI engines prefer concise summaries")
+    else:
+        print(f"  [{WARN}] No key takeaways or TL;DR section")
+        fix("Add a 'Key Takeaways' section:\n  <h2>Key Takeaways</h2>\n  <ul><li>Point 1</li><li>Point 2</li></ul>")
+
+    # Structured lists
+    list_items = soup.find_all("li")
+    if len(list_items) >= 5:
+        cs_score += 1
+        print(f"  [{PASS}] Structured lists ({len(list_items)} items) — easily extractable by AI")
+    elif list_items:
+        print(f"  [{INFO}] Some list content ({len(list_items)} items) — more structured lists help AI")
+    else:
+        print(f"  [{WARN}] No list elements — structured lists help AI extract key points")
+
+    track_score("Content Structure", min(cs_score, cs_max), cs_max)
+
+    # ── 6. Readability & Source Trust ────────────────────────────
+    print(f"\n--- 6. Readability & Source Trust ---")
+    rt_score = 0
+    rt_max = 4
+
+    grade = flesch_kincaid_grade(text)
+    if grade is not None:
+        if 6 <= grade <= 12:
+            rt_score += 1.5
+            print(f"  [{PASS}] Readability: Flesch-Kincaid grade {grade:.1f} (accessible for AI extraction)")
+        elif grade < 6:
+            rt_score += 1
+            print(f"  [{INFO}] Readability: Flesch-Kincaid grade {grade:.1f} (very simple)")
+        else:
+            print(f"  [{WARN}] Readability: Flesch-Kincaid grade {grade:.1f} — simpler text ranks better in AI answers")
+            fix("Simplify content: shorter sentences, plain language, bullet points, active voice.")
+
+    # Source attributions
+    source_patterns = re.findall(
+        r'(?:according to|source:|study by|research from|data from|report by|published in)\s',
+        text, re.IGNORECASE
+    )
+    if source_patterns:
+        rt_score += 1
+        print(f"  [{PASS}] {len(source_patterns)} source attribution(s) — increases AI trust in your content")
+    else:
+        print(f"  [{WARN}] No source attributions — citing sources increases AI engine trust")
+        fix("Add attributions: 'According to [Source]...' or 'Data from [Study]...'")
+
+    # Definition markup (<dfn>, <abbr>)
+    dfn_tags = soup.find_all("dfn")
+    abbr_tags = soup.find_all("abbr")
+    if dfn_tags or abbr_tags:
+        rt_score += 0.5
+        print(f"  [{PASS}] Definition markup: {len(dfn_tags)} <dfn>, {len(abbr_tags)} <abbr> tags")
+    else:
+        print(f"  [{INFO}] No <dfn>/<abbr> tags — markup terms so AI engines can define them")
+
+    # Semantic HTML
+    semantic_tags = ["article", "main", "section", "nav", "aside", "header", "footer"]
+    found_semantic = [tag for tag in semantic_tags if soup.find(tag)]
+    if len(found_semantic) >= 3:
+        rt_score += 1
+        print(f"  [{PASS}] Good semantic HTML ({', '.join(found_semantic)}) — helps AI parse content blocks")
+    elif found_semantic:
+        rt_score += 0.5
+        print(f"  [{WARN}] Limited semantic HTML ({', '.join(found_semantic)}) — more semantic tags help AI")
+    else:
+        print(f"  [{FAIL}] No semantic HTML tags — AI engines rely on semantic structure to extract answers")
+        fix("Replace <div> containers with: <main>, <article>, <section>, <aside>, <header>, <footer>")
+
+    track_score("Readability & Trust", rt_score, rt_max)
+
+    # ── 7. Heading Hierarchy & Answer Mapping ────────────────────
+    print(f"\n--- 7. Heading Hierarchy ---")
+    hh_score = 0
+    hh_max = 3
+
+    if headings:
+        h_tags = [h.name for h in headings]
+        h_summary = {tag: h_tags.count(tag) for tag in sorted(set(h_tags))}
+        summary_str = ", ".join(f"{k}: {v}" for k, v in h_summary.items())
+        print(f"  [{PASS}] Heading structure: {summary_str}")
+        hh_score += 1
+        if headings[0].name == "h1":
+            hh_score += 1
+            print(f"  [{PASS}] Page starts with <h1> — clear topic signal for AI")
+        else:
+            print(f"  [{WARN}] First heading is <{headings[0].name}>, not <h1>")
+            fix("Start with an <h1> containing the primary topic.")
+
+        # Check for logical hierarchy (no level skipping)
+        prev_level = 0
+        skips = 0
+        for h in headings:
+            level = int(h.name[1])
+            if prev_level > 0 and level > prev_level + 1:
+                skips += 1
+            prev_level = level
+        if skips == 0:
+            hh_score += 1
+            print(f"  [{PASS}] Clean heading hierarchy — no skipped levels")
+        else:
+            print(f"  [{WARN}] {skips} heading level skip(s) — use sequential h1→h2→h3 for AI parsing")
+    else:
+        print(f"  [{FAIL}] No heading tags found — headings are critical for AI content parsing")
+        fix("Add heading tags: <h1>Main Topic</h1>, <h2>Subtopic</h2>, <h3>Detail</h3>")
+
+    track_score("Heading Hierarchy", hh_score, hh_max)
+
+    # ── 8. Per-Page Content Score ────────────────────────────────
+    print(f"\n--- 8. Per-Page AEO Content Score ---")
+    pp_score = 0
+    pp_max = 5
+
+    # Discover internal pages from links on the target page
+    parsed_url = urlparse(url)
+    internal_urls = []
+    seen_paths = {parsed_url.path.rstrip("/") or "/"}
+    for a_tag in soup.find_all("a", href=True):
+        href = urljoin(url, a_tag["href"])
+        parsed_href = urlparse(href)
+        norm_path = parsed_href.path.rstrip("/") or "/"
+        if (parsed_href.netloc == parsed_url.netloc
+                and norm_path not in seen_paths
+                and not re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|zip|gz|mp4|mp3|webm|webp|xml|json|txt|rss)$', parsed_href.path, re.IGNORECASE)
+                and "#" not in href):
+            seen_paths.add(norm_path)
+            internal_urls.append(href)
+
+    sample_pages = internal_urls[:5]
+    # Include the target page itself as the first page to score
+    all_pages = [url] + sample_pages
+
+    def _score_page_aeo(page_url, page_soup):
+        """Score a single page on AEO content signals. Returns (score_0_100, weakest_signal)."""
+        signals = {}  # signal_name -> (earned, max, label)
+
+        page_text = get_text_content(page_soup)
+        page_headings = page_soup.find_all(re.compile(r"^h[1-6]$"))
+        word_count = len(page_text.split()) if page_text else 0
+
+        # Signal 1: Title length (40-65 chars is optimal)
+        title_tag = page_soup.find("title")
+        title_text = title_tag.get_text(strip=True) if title_tag else ""
+        tlen = len(title_text)
+        if 40 <= tlen <= 65:
+            signals["Title length"] = (2, 2, f"{tlen}ch")
+        elif 20 <= tlen < 40 or 65 < tlen <= 80:
+            signals["Title length"] = (1, 2, f"{tlen}ch")
+        else:
+            signals["Title length"] = (0, 2, f"{tlen}ch" if tlen else "missing")
+
+        # Signal 2: Heading density (headings per 500 words)
+        if word_count >= 100:
+            h_density = len(page_headings) / (word_count / 500) if word_count > 0 else 0
+            if 2 <= h_density <= 8:
+                signals["Heading density"] = (2, 2, f"{h_density:.1f}/500w")
+            elif 1 <= h_density < 2 or 8 < h_density <= 12:
+                signals["Heading density"] = (1, 2, f"{h_density:.1f}/500w")
+            else:
+                signals["Heading density"] = (0, 2, f"{h_density:.1f}/500w")
+        else:
+            signals["Heading density"] = (1, 2, f"{word_count}w total")
+
+        # Signal 3: Paragraph balance (avg paragraph length 40-120 words)
+        main_el = page_soup.find("main") or page_soup.find("article") or page_soup.find("body")
+        paragraphs = main_el.find_all("p") if main_el else []
+        para_lengths = [len(p.get_text(strip=True).split()) for p in paragraphs if len(p.get_text(strip=True).split()) >= 5]
+        if para_lengths:
+            avg_para = sum(para_lengths) / len(para_lengths)
+            if 40 <= avg_para <= 120:
+                signals["Paragraph balance"] = (2, 2, f"avg {avg_para:.0f}w")
+            elif 20 <= avg_para < 40 or 120 < avg_para <= 180:
+                signals["Paragraph balance"] = (1, 2, f"avg {avg_para:.0f}w")
+            else:
+                signals["Paragraph balance"] = (0, 2, f"avg {avg_para:.0f}w")
+        else:
+            signals["Paragraph balance"] = (0, 2, "no paragraphs")
+
+        # Signal 4: Question-pattern headings
+        q_word_re = re.compile(r"^\s*(?:who|what|how|why|when|where|is|are|can|does|do|should|will|which)\b", re.IGNORECASE)
+        q_count = sum(1 for h in page_headings if q_word_re.match(h.get_text(strip=True)) or h.get_text(strip=True).rstrip().endswith("?"))
+        if q_count >= 3:
+            signals["Question headings"] = (2, 2, str(q_count))
+        elif q_count >= 1:
+            signals["Question headings"] = (1, 2, str(q_count))
+        else:
+            signals["Question headings"] = (0, 2, "0")
+
+        # Signal 5: Definition sentences ("X is Y" patterns)
+        def_count = len(re.findall(
+            r'(?:^|\.\s+)([A-Z][^.]{5,60}?\s+(?:is|are|refers to|means|describes)\s+[^.]{10,}\.)',
+            page_text
+        )) if page_text else 0
+        if def_count >= 3:
+            signals["Definitions"] = (2, 2, str(def_count))
+        elif def_count >= 1:
+            signals["Definitions"] = (1, 2, str(def_count))
+        else:
+            signals["Definitions"] = (0, 2, "0")
+
+        # Signal 6: Structured data specificity (answer-oriented types score higher)
+        page_schemas = []
+        answer_schemas = {"FAQPage", "HowTo", "QAPage", "Question"}
+        specific_schemas = {"Product", "Recipe", "Event", "Course", "SoftwareApplication",
+                           "LocalBusiness", "Review", "MedicalCondition", "JobPosting"}
+        for sc in page_soup.find_all("script", type="application/ld+json"):
+            try:
+                sd = json.loads(sc.string)
+                items = [sd] if isinstance(sd, dict) else sd if isinstance(sd, list) else []
+                if isinstance(sd, dict) and "@graph" in sd:
+                    items.extend(sd["@graph"])
+                for item in items:
+                    if isinstance(item, dict):
+                        st = item.get("@type", "")
+                        if isinstance(st, list):
+                            page_schemas.extend(st)
+                        else:
+                            page_schemas.append(st)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        has_answer_schema = any(s in answer_schemas for s in page_schemas)
+        has_specific_schema = any(s in specific_schemas for s in page_schemas)
+        if has_answer_schema:
+            signals["Schema specificity"] = (2, 2, "answer-oriented")
+        elif has_specific_schema:
+            signals["Schema specificity"] = (1, 2, "specific type")
+        elif page_schemas:
+            signals["Schema specificity"] = (0.5, 2, "generic only")
+        else:
+            signals["Schema specificity"] = (0, 2, "none")
+
+        # Signal 7: List usage (structured content)
+        list_items = len(page_soup.find_all("li"))
+        if list_items >= 8:
+            signals["List usage"] = (1, 1, f"{list_items} items")
+        elif list_items >= 3:
+            signals["List usage"] = (0.5, 1, f"{list_items} items")
+        else:
+            signals["List usage"] = (0, 1, f"{list_items} items")
+
+        # Signal 8: Content freshness (dateModified, <time> tags, last-modified header)
+        has_date_modified = False
+        for sc in page_soup.find_all("script", type="application/ld+json"):
+            try:
+                sd = json.loads(sc.string)
+                items = [sd] if isinstance(sd, dict) else sd if isinstance(sd, list) else []
+                if isinstance(sd, dict) and "@graph" in sd:
+                    items.extend(sd["@graph"])
+                for item in items:
+                    if isinstance(item, dict) and item.get("dateModified"):
+                        has_date_modified = True
+                        break
+            except (json.JSONDecodeError, TypeError):
+                pass
+        time_tags = page_soup.find_all("time")
+        if has_date_modified:
+            signals["Content freshness"] = (1, 1, "dateModified")
+        elif time_tags:
+            signals["Content freshness"] = (0.5, 1, "<time> tags")
+        else:
+            signals["Content freshness"] = (0, 1, "no date signals")
+
+        total_e = sum(v[0] for v in signals.values())
+        total_m = sum(v[1] for v in signals.values())
+        score_100 = round((total_e / total_m) * 100) if total_m > 0 else 0
+
+        # Find weakest signal
+        weakest = min(signals.items(), key=lambda x: x[1][0] / x[1][1] if x[1][1] > 0 else 0)
+        return score_100, weakest[0], weakest[1][2], signals
+
+    page_results = []
+    for page_url in all_pages:
+        p_resp, p_soup = get_soup(page_url)
+        if not p_soup:
+            continue
+        score_100, weak_name, weak_detail, _ = _score_page_aeo(page_url, p_soup)
+        short_url = urlparse(page_url).path or "/"
+        if len(short_url) > 40:
+            short_url = short_url[:37] + "..."
+        page_results.append((short_url, score_100, weak_name, weak_detail))
+
+    if page_results:
+        print(f"  Scored {len(page_results)} page(s) on 8 AEO content signals:\n")
+        print(f"  {_pad('Page', 42)} {'Score':>5}  {'Weakest Signal'}")
+        print(f"  {'-'*42} {'-'*5}  {'-'*30}")
+        total_page_score = 0
+        for short_url, sc, wk_name, wk_detail in page_results:
+            color = "\033[92m" if sc >= 70 else "\033[93m" if sc >= 40 else "\033[91m"
+            rst = "\033[0m"
+            print(f"  {short_url:<42} {color}{sc:>3}{rst}/100  {wk_name}: {wk_detail}")
+            total_page_score += sc
+
+        avg_score = total_page_score / len(page_results)
+        print(f"  {'-'*42} {'-'*5}")
+        print(f"  {_pad('Average', 42)} {avg_score:>5.0f}/100")
+
+        # Map average to pp_score: 80+ = 5, 60-79 = 4, 40-59 = 3, 20-39 = 2, <20 = 1
+        if avg_score >= 80:
+            pp_score = 5
+            print(f"\n  [{PASS}] Strong per-page AEO content quality across sampled pages")
+        elif avg_score >= 60:
+            pp_score = 4
+            print(f"\n  [{PASS}] Good per-page AEO content quality — some pages need attention")
+        elif avg_score >= 40:
+            pp_score = 3
+            print(f"\n  [{WARN}] Moderate per-page AEO quality — several pages need optimization")
+        elif avg_score >= 20:
+            pp_score = 2
+            print(f"\n  [{WARN}] Weak per-page AEO content — most pages need significant improvement")
+        else:
+            pp_score = 1
+            print(f"\n  [{FAIL}] Very weak per-page AEO content — pages lack AI-citable structure")
+
+        # Show top improvement opportunities
+        weak_pages = [(u, s, w, d) for u, s, w, d in page_results if s < 60]
+        if weak_pages:
+            fix("Pages scoring below 60 need attention:\n" + "\n".join(
+                f"  • {u} — improve {w} ({d})" for u, s, w, d in sorted(weak_pages, key=lambda x: x[1])[:3]
+            ))
+    else:
+        print(f"  [{WARN}] Could not score any pages")
+        pp_score = 0
+
+    track_score("Per-Page Content", pp_score, pp_max)
+
+    # ── AEO Score ────────────────────────────────────────────────
+    total_earned = sum(v["earned"] for v in _scores.values())
+    total_max = sum(v["max"] for v in _scores.values())
+    aeo_score = round((total_earned / total_max) * 100) if total_max > 0 else 0
+    grade_letter = get_grade(aeo_score)
+
+    print(f"\n{'='*60}")
+    print(f"  AEO SCORE: {aeo_score}/100  (Grade: {grade_letter})")
+    print(f"{'='*60}")
+    print(f"\n  Category Breakdown:")
+    _W = 25
+    print(f"  {_pad('Category', _W)} {'Score':>7}  {'Bar'}")
+    print(f"  {'-'*_W} {'-'*7}  {'-'*20}")
+    for cat, vals in sorted(_scores.items(), key=lambda x: x[0]):
+        earned = vals["earned"]
+        mx = vals["max"]
+        pct = (earned / mx * 100) if mx > 0 else 0
+        bar_len = int(pct / 5)
+        bar = "\033[92m" + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
+        print(f"  {_pad(cat, _W)} {earned:>4.1f}/{mx:<3.0f}  {bar}")
+
+    print(f"  {'-'*_W} {'-'*7}")
+    print(f"  {_pad('TOTAL', _W)} {total_earned:>4.1f}/{total_max:<3.0f}")
+
+    # AEO-specific recommendations
+    weak_categories = [
+        (cat, vals) for cat, vals in _scores.items()
+        if vals["max"] > 0 and (vals["earned"] / vals["max"]) < 0.5
+    ]
+    if weak_categories:
+        print(f"\n  Priority improvements:")
+        for cat, vals in sorted(weak_categories, key=lambda x: x[1]["earned"] / x[1]["max"]):
+            pct = round(vals["earned"] / vals["max"] * 100)
+            print(f"    • {cat} ({pct}%) — see recommendations above")
+
+    if SHOW_FIX:
+        print(f"\n  FIX recommendations are shown inline above.")
+    else:
+        print(f"\n  Tip: Run with --fix to see actionable fix recommendations")
+    print(f"{'='*60}\n")
+
+    if return_data:
+        return {
+            "url": url,
+            "domain": urlparse(url).netloc,
+            "score": aeo_score,
+            "grade": grade_letter,
+            "max_score": 100,
+            "categories": {
+                cat: {"earned": round(vals["earned"], 1), "max": round(vals["max"], 1)}
+                for cat, vals in _scores.items()
+            },
+            "page_results": [
+                {"path": u, "score": s, "weakest_signal": w, "weakest_detail": d}
+                for u, s, w, d in page_results
+            ],
+            "priority_improvements": [
+                {"category": cat, "percent": round(vals["earned"] / vals["max"] * 100)}
+                for cat, vals in sorted(
+                    [(c, v) for c, v in _scores.items()
+                     if v["max"] > 0 and v["earned"] / v["max"] < 0.5],
+                    key=lambda x: x[1]["earned"] / x[1]["max"],
+                )
+            ],
+        }
+
+    return aeo_score
 
 
 def crawl_test(url, return_data=False):
@@ -3760,6 +5611,66 @@ def _query_anthropic(query, api_key):
         return "", [], str(e)
 
 
+def _query_deepseek(query, api_key):
+    """Send a query to DeepSeek API. Returns (answer, citations, error)."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": query}],
+    }
+    try:
+        r = requests.post("https://api.deepseek.com/chat/completions",
+                          json=payload, headers=headers, timeout=30)
+        if r.status_code == 401:
+            return "", [], "invalid_key"
+        if r.status_code == 429:
+            time.sleep(5)
+            r = requests.post("https://api.deepseek.com/chat/completions",
+                              json=payload, headers=headers, timeout=30)
+        if r.status_code != 200:
+            return "", [], f"http_{r.status_code}"
+        data = r.json()
+        answer = ""
+        choices = data.get("choices", [])
+        if choices:
+            answer = choices[0].get("message", {}).get("content", "")
+        # No built-in web search — extract URLs from answer text
+        citations = list(dict.fromkeys(re.findall(r'https?://[^\s\)\]>]+', answer)))
+        return answer, citations, None
+    except requests.RequestException as e:
+        return "", [], str(e)
+
+
+def _query_doubao(query, api_key, model_id):
+    """Send a query to Doubao (ByteDance Ark) API. Returns (answer, citations, error)."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": query}],
+    }
+    try:
+        r = requests.post("https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                          json=payload, headers=headers, timeout=30)
+        if r.status_code == 401:
+            return "", [], "invalid_key"
+        if r.status_code == 429:
+            time.sleep(5)
+            r = requests.post("https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                              json=payload, headers=headers, timeout=30)
+        if r.status_code != 200:
+            return "", [], f"http_{r.status_code}"
+        data = r.json()
+        answer = ""
+        choices = data.get("choices", [])
+        if choices:
+            answer = choices[0].get("message", {}).get("content", "")
+        # No built-in web search — extract URLs from answer text
+        citations = list(dict.fromkeys(re.findall(r'https?://[^\s\)\]>]+', answer)))
+        return answer, citations, None
+    except requests.RequestException as e:
+        return "", [], str(e)
+
+
 def _check_brand_in_result(answer, citations, domain, brand):
     """Check if brand/domain appears in answer or citations. Returns dict with details."""
     domain_citations = [c for c in citations if domain in c]
@@ -3867,20 +5778,30 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     # Detect available AI engines (using OpenRouter)
     engines = {}
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    doubao_key = os.environ.get("DOUBAO_API_KEY", "").strip()
+    doubao_model = os.environ.get("DOUBAO_MODEL_ID", "").strip()
 
     if openrouter_key:
         engines["Perplexity"] = ("perplexity", openrouter_key)
         engines["ChatGPT"] = ("openai", openrouter_key)
         engines["Claude"] = ("anthropic", openrouter_key)
+    if deepseek_key:
+        engines["DeepSeek"] = ("deepseek", deepseek_key)
+    if doubao_key and doubao_model:
+        engines["Doubao"] = ("doubao", doubao_key)
+    elif doubao_key and not doubao_model:
+        print(f"  [{WARN}] DOUBAO_API_KEY set but DOUBAO_MODEL_ID missing — skipping Doubao")
+        print(f"           Set your endpoint ID: export DOUBAO_MODEL_ID='ep-20240...'")
 
     if not engines:
         if return_data:
             raise RuntimeError("OPENROUTER_API_KEY not set")
-        print(f"\n  [{FAIL}] OPENROUTER_API_KEY environment variable not set.")
-        print(f"  This is a paid feature. Set your API key to use it:")
-        print(f"    export OPENROUTER_API_KEY='your-openrouter-api-key'")
-        print(f"  Get an API key at: https://openrouter.ai/")
-        print(f"\n  This is a paid feature requiring OpenRouter API access.")
+        print(f"\n  [{FAIL}] No AI API keys found. Set at least one:")
+        print(f"    export OPENROUTER_API_KEY='your-key'   (recommended — Perplexity+ChatGPT+Claude)")
+        print(f"    export DEEPSEEK_API_KEY='sk-...'")
+        print(f"    export DOUBAO_API_KEY='...'  + DOUBAO_MODEL_ID='ep-...'")
+        print(f"\n  This is a paid feature requiring AI API access.")
         sys.exit(1)
 
     engine_names = ", ".join(engines.keys())
@@ -3966,6 +5887,10 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             return _query_openai(query, api_key)
         elif engine_type == "anthropic":
             return _query_anthropic(query, api_key)
+        elif engine_type == "deepseek":
+            return _query_deepseek(query, api_key)
+        elif engine_type == "doubao":
+            return _query_doubao(query, api_key, doubao_model)
         return "", [], "unknown_engine"
 
     # ── Run all queries across all engines, 3x each for stability (parallel) ──
@@ -4336,10 +6261,10 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         else:
             bar_color = "\033[91m"
         bar = bar_color + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
-        print(f"  {cat_name:<22} {earned:>2}/{mx}  {bar}  {pct:.0f}%")
+        print(f"  {_pad(cat_name, 22)} {earned:>2}/{mx}  {bar}  {pct:.0f}%")
 
     print(f"  {'─'*22} {'─'*5}")
-    print(f"  {'GEO HEALTH':<22} {total_score:>2}/{total_max}")
+    print(f"  {_pad('GEO HEALTH', 22)} {total_score:>2}/{total_max}")
 
     # Overall grade
     if total_score >= 80:
@@ -4960,10 +6885,10 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         else:
             bc = "\033[91m"
         bar = bc + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
-        print(f"    {cat:<24} {sc:>2}/20  {bar}  {round(bar_pct*100):>3}%")
+        print(f"    {_pad(cat, 24)} {sc:>2}/20  {bar}  {round(bar_pct*100):>3}%")
 
     print(f"    {'─'*44}")
-    print(f"    {'ENTITY GEO SCORE':<24} {total_score:>3}/{max_score}")
+    print(f"    {_pad('ENTITY GEO SCORE', 24)} {total_score:>3}/{max_score}")
     print(f"\n    Grade: {grade} ({pct}%)")
 
     # ── Key Findings ──────────────────────────────────────────
@@ -5216,6 +7141,748 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         }
 
 
+def _scores_snapshot():
+    """Return a serializable copy of the current score state."""
+    total_earned = sum(v["earned"] for v in _scores.values())
+    total_max = sum(v["max"] for v in _scores.values())
+    overall = round((total_earned / total_max) * 100) if total_max > 0 else 0
+    return {
+        "overall_score": overall,
+        "grade": get_grade(overall),
+        "total_earned": round(total_earned, 1),
+        "total_max": round(total_max, 1),
+        "categories": {
+            cat: {
+                "earned": round(vals["earned"], 2),
+                "max": round(vals["max"], 2),
+                "percent": round((vals["earned"] / vals["max"]) * 100, 1) if vals["max"] > 0 else 0,
+            }
+            for cat, vals in sorted(_scores.items())
+        },
+    }
+
+
+def _write_json_report(path, args, timestamp):
+    """Write a machine-readable JSON report."""
+    import os
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = {
+        "schema_version": 1,
+        "generated_at": timestamp,
+        "tool": "geo_checker",
+        "mode": _active_mode(args),
+        "target": _active_target(args),
+        "fix_mode": bool(args.fix),
+        "score": _scores_snapshot(),
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=False)
+
+
+def _active_mode(args):
+    if args.entity:
+        return "entity"
+    if args.compare:
+        return "compare"
+    if args.ai_visibility:
+        return "ai-visibility"
+    if args.citation_check:
+        return "citation-check"
+    if args.authority_audit:
+        return "authority-audit"
+    if args.crawl_test:
+        return "crawl-test"
+    if args.crawl_check:
+        return "crawl-check"
+    return "default"
+
+
+def _active_target(args):
+    return (
+        args.entity or args.ai_visibility or args.citation_check or args.authority_audit
+        or args.crawl_test or args.url or (args.compare[0] if args.compare else None)
+    )
+
+
+def _write_html_report(path, terminal_text, args, timestamp):
+    """Write a styled HTML report with scores and captured terminal output."""
+    import html as html_mod
+    import os
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    snap = _scores_snapshot()
+    target = _active_target(args) or ""
+    mode = _active_mode(args)
+    cleaned_text = _strip_ansi(terminal_text or "")
+
+    def grade_color(grade):
+        return {
+            "A+": "#16a34a", "A": "#22c55e",
+            "B": "#84cc16", "C": "#eab308",
+            "D": "#f97316", "F": "#ef4444",
+        }.get(grade, "#64748b")
+
+    overall = snap["overall_score"]
+    grade = snap["grade"]
+
+    rows = []
+    for cat, vals in snap["categories"].items():
+        pct = vals["percent"]
+        bar_color = "#22c55e" if pct >= 70 else "#eab308" if pct >= 40 else "#ef4444"
+        rows.append(f"""
+      <tr>
+        <td>{html_mod.escape(cat)}</td>
+        <td class="num">{vals['earned']}/{vals['max']}</td>
+        <td class="bar-cell"><div class="bar"><div class="bar-fill" style="width:{pct}%;background:{bar_color}"></div></div></td>
+        <td class="num">{pct:.0f}%</td>
+      </tr>""")
+
+    html_doc = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GEO Readiness Report — {html_mod.escape(target)}</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{ font-family: -apple-system, system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #0f172a; background: #f8fafc; }}
+  header {{ display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+  .score {{ font-size: 3rem; font-weight: 700; color: {grade_color(grade)}; line-height: 1; }}
+  .grade {{ font-size: 2rem; font-weight: 700; color: {grade_color(grade)}; }}
+  h1 {{ margin: 0 0 0.25rem; font-size: 1.25rem; }}
+  .meta {{ color: #64748b; font-size: 0.9rem; }}
+  section {{ margin-top: 2rem; }}
+  table {{ width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+  th, td {{ padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #e2e8f0; }}
+  th {{ background: #f1f5f9; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: #475569; }}
+  td.num {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
+  td.bar-cell {{ width: 40%; }}
+  .bar {{ background: #e2e8f0; height: 10px; border-radius: 5px; overflow: hidden; }}
+  .bar-fill {{ height: 100%; border-radius: 5px; }}
+  pre {{ background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }}
+  footer {{ margin-top: 2rem; color: #94a3b8; font-size: 0.8rem; text-align: center; }}
+</style>
+</head>
+<body>
+<header>
+  <div class="score">{overall}<span style="font-size:1.5rem;color:#94a3b8;">/100</span></div>
+  <div class="grade">{grade}</div>
+  <div>
+    <h1>GEO Readiness Report</h1>
+    <div class="meta">{html_mod.escape(target)} &middot; mode: {mode} &middot; generated {timestamp}</div>
+  </div>
+</header>
+
+<section>
+  <h2>Category Breakdown</h2>
+  <table>
+    <thead><tr><th>Category</th><th class="num">Score</th><th>Progress</th><th class="num">%</th></tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Run Output</h2>
+  <pre>{html_mod.escape(cleaned_text)}</pre>
+</section>
+
+<footer>Generated by geo_checker &middot; <a href="https://github.com/anthropics/claude-code">geo</a></footer>
+</body>
+</html>
+"""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(html_doc)
+
+
+# ---------------------------------------------------------------------------
+# Chinese translation table  (populated here, used by _tr() at module top)
+# ---------------------------------------------------------------------------
+_ZH.update({
+    # ── Category names (score table display) ──
+    "AI Answer Formats": "AI 回答格式",
+    "AI Crawl Readiness": "AI 抓取就绪度",
+    "AI Optimization": "AI 优化",
+    "Answer Engine Schema": "问答引擎 Schema",
+    "Authority & Trust": "权威性与信任度",
+    "Brand Entity KG": "品牌实体知识图谱",
+    "Content Accessibility": "内容可访问性",
+    "Content Quality": "内容质量",
+    "Content Structure": "内容结构",
+    "Cross-Platform": "跨平台分发",
+    "Direct Answer Snippets": "直接回答片段",
+    "FAQ Readiness": "FAQ 就绪度",
+    "Heading Hierarchy": "标题层级结构",
+    "Meta Tags": "Meta 标签",
+    "Mobile & Weight": "移动端与页面体积",
+    "Multi-Page": "多页面一致性",
+    "Multilingual": "多语言支持",
+    "Outbound & Media": "外链与媒体",
+    "Per-Page Content": "单页内容评分",
+    "Platform Registration": "平台注册",
+    "Question Headings": "问句式标题",
+    "Readability & Trust": "可读性与来源信任",
+    "Schema & Knowledge": "Schema 与知识面板",
+    "Sitemap": "站点地图",
+    "Social Signals": "社交信号",
+    "Structured Data": "结构化数据",
+    "Technical Crawlability": "技术可抓取性",
+    "Trust & Safety": "信任与安全",
+    "URL Normalization": "URL 规范化",
+
+    # ── Section headers ──
+    ".well-known Discovery": ".well-known 发现",
+    "Search Engine & AI Platform Registration": "搜索引擎与 AI 平台注册",
+    "Content Quality for AI": "面向 AI 的内容质量",
+    "Authority & Trust Signals": "权威性与信任信号",
+    "Brand Entity in Knowledge Graphs": "品牌实体在知识图谱中的表现",
+    "Trust & Safety Signals": "信任与安全信号",
+    "AI-Specific Optimization": "AI 专项优化",
+    "AI Answer Format Optimization": "AI 回答格式优化",
+    "Schema Breadcrumbs & Knowledge Panel": "Schema 面包屑与知识面板",
+    "Mobile-Friendliness & Page Weight": "移动端适配与页面体积",
+    "Outbound Links & Media": "外链与媒体资源",
+    "Multilingual Content Depth": "多语言内容深度",
+    "Cross-Platform Content Distribution": "跨平台内容分发",
+    "Multi-Page Sampling": "多页面抽样检测",
+    "Per-Page AEO Content Score": "单页 AEO 内容评分",
+    "AEO (Answer Engine Optimization) Audit": "AEO（问答引擎优化）审计",
+    "1. FAQ Readiness": "1. FAQ 就绪度",
+    "2. Question-Pattern Headings": "2. 问句式标题",
+    "3. Direct Answer Snippets": "3. 直接回答片段",
+    "4. Answer Engine Schema": "4. 问答引擎 Schema",
+    "5. Content Structure for AI Extraction": "5. 面向 AI 提取的内容结构",
+    "6. Readability & Source Trust": "6. 可读性与来源信任",
+    "7. Heading Hierarchy": "7. 标题层级结构",
+    "8. Per-Page AEO Content Score": "8. 单页 AEO 内容评分",
+
+    # ── UI chrome / structural ──
+    "GEO Readiness Report for:": "GEO 就绪度报告：",
+    "Mode:": "模式：",
+    "Diagnose + Fix Recommendations": "诊断 + 修复建议",
+    "Diagnose Only": "仅诊断",
+    "AI VISIBILITY SCORE": "AI 可见度评分",
+    "Category Breakdown:": "分类明细：",
+    "TOTAL": "总计",
+    "Category": "类别",
+    "Legend: PASS = good | WARN = could improve | FAIL = missing/bad": "图例：PASS = 良好 | WARN = 待改进 | FAIL = 缺失/异常",
+    "FIX = recommended action to resolve the issue": "FIX = 建议采取的修复操作",
+    "Tip: Run with --fix to see recommended solutions": "提示：使用 --fix 参数运行可查看修复建议",
+    "CONTENT GAP SUGGESTIONS": "内容缺口建议",
+    "Based on your weakest categories, here are content strategies": "根据您得分最低的类别，以下是提升",
+    "to improve your AI visibility:": "AI 可见度的内容策略：",
+    "Priority improvements:": "优先改进项：",
+    "AEO SCORE": "AEO 评分",
+    "Target:": "目标：",
+    "GEO COMPETITIVE COMPARISON": "GEO 竞争对比",
+    "AI CITATION SHARE": "AI 引用份额",
+    "Winner:": "获胜者：",
+    "Lead:": "领先：",
+    "Category Advantages:": "类别优势：",
+    "Weakest Signal": "最弱信号",
+    "Average": "平均",
+    "AI VISIBILITY AUDIT": "AI 可见度审计",
+    "GEO HEALTH SCORECARD": "GEO 健康度记分卡",
+    "Engines:": "引擎：",
+    "Per-Engine Visibility:": "各引擎可见度：",
+    "Citation leader:": "引用领先者：",
+    "CITATION SHARE RESULTS": "引用份额结果",
+    "FIX recommendations are shown inline above.": "FIX 修复建议已在上方对应位置显示。",
+
+    # ── Status messages ──
+    "Site uses HTTPS": "站点已启用 HTTPS",
+    "Site does not use HTTPS — AI engines prefer secure sites": "站点未使用 HTTPS —— AI 引擎更青睐安全站点",
+    "robots.txt found": "robots.txt 已找到",
+    "robots.txt not found": "robots.txt 未找到",
+    "robots.txt references a sitemap": "robots.txt 中引用了站点地图",
+    "AI bots not mentioned (inherit wildcard rules):": "以下 AI 爬虫未单独提及（继承通配符规则）：",
+    "AI bots explicitly BLOCKED:": "以下 AI 爬虫被明确阻止：",
+    "/ai.txt found — strategic AI crawler policy declared": "/ai.txt 已找到 —— 已声明 AI 抓取策略",
+    "llms.txt found": "llms.txt 已找到",
+    "llms-full.txt found": "llms-full.txt 已找到",
+    ".well-known/llms.txt found": ".well-known/llms.txt 已找到",
+    "Contains descriptive text": "包含描述性文本",
+    "No sections (## headings) — consider organizing content into sections": "无章节（## 标题）—— 建议将内容组织为分节结构",
+    "link(s) to resources found": "个资源链接已找到",
+    "section(s) found (## headings)": "个章节已找到（## 标题）",
+    "No llms.txt found": "未找到 llms.txt",
+    "Sitemap found": "站点地图已找到",
+    "Sitemap includes <lastmod> timestamps": "站点地图包含 <lastmod> 时间戳",
+    "No sitemap found": "未找到站点地图",
+    "Google Search Console verification tag found": "Google Search Console 验证标签已找到",
+    "Bing Webmaster Tools verification tag found": "Bing Webmaster Tools 验证标签已找到",
+    "No Yandex Webmaster verification tag — relevant if targeting international AI platforms": "未找到 Yandex Webmaster 验证标签 —— 若面向国际 AI 平台则需关注",
+    "IndexNow endpoint found": "IndexNow 端点已找到",
+    "Found JSON-LD block(s)": "找到 JSON-LD 代码块",
+    "No structured data (JSON-LD/Microdata) found": "未找到结构化数据（JSON-LD / Microdata）",
+    "Granular schema types present:": "已使用细粒度 Schema 类型：",
+    "<title> found:": "<title> 已找到：",
+    "Meta description found": "Meta 描述已找到",
+    "Canonical URL set:": "Canonical URL 已设置：",
+    "Open Graph tags present:": "Open Graph 标签已设置：",
+    "Twitter Card tags present:": "Twitter Card 标签已设置：",
+    "Language declared:": "语言声明：",
+    "No hreflang tags — add these if your site supports multiple languages": "无 hreflang 标签 —— 若站点支持多语言请添加",
+    "Homepage has": "首页包含",
+    "words in initial HTML": "个单词（初始 HTML）",
+    "Content-to-HTML ratio:": "内容与 HTML 的比例：",
+    "Heading structure found": "标题结构已找到",
+    "Content is rendered server-side": "内容为服务端渲染",
+    "No restrictive meta robots tag found": "未发现限制性 meta robots 标签",
+    "No restrictive X-Robots-Tag header": "未发现限制性 X-Robots-Tag 头",
+    "No paywall/login-wall indicators detected": "未检测到付费墙/登录墙",
+    "Good semantic HTML structure": "良好的语义化 HTML 结构",
+    "images have alt text": "张图片已添加 alt 文本",
+    "internal links — good for AI crawl discovery": "个内部链接 —— 有利于 AI 抓取发现",
+    "Response time:": "响应时间：",
+    "Readability: Flesch-Kincaid grade": "可读性：Flesch-Kincaid 等级",
+    "FAQ content detected — strong signal for AI-generated answers": "检测到 FAQ 内容 —— 对 AI 生成回答有强信号作用",
+    "quotable statistics found — good for AI citations": "个可引用的统计数据 —— 有利于 AI 引用",
+    "No explicit source attributions — citing sources increases AI trust in your content": "未发现明确的来源引用 —— 引用来源可提升 AI 对您内容的信任度",
+    "Structured lists found": "找到结构化列表",
+    "Canonical URL is self-referencing (correct)": "Canonical URL 自引用（正确）",
+    "No redirects — direct access": "无重定向 —— 直接访问",
+    "HTTP/2 supported — faster crawling": "支持 HTTP/2 —— 抓取更快",
+    "No RSS/Atom feed found — feeds help AI engines monitor content freshness": "未找到 RSS/Atom 订阅源 —— 订阅源帮助 AI 引擎追踪内容更新",
+    "Machine-readable / integration endpoints:": "机器可读 / 集成端点：",
+    "Strong security headers": "安全响应头设置良好",
+    "humans.txt found — authorship transparency": "humans.txt 已找到 —— 作者信息透明",
+    "Author markup found in structured data (JSON-LD)": "结构化数据（JSON-LD）中找到作者标记",
+    "Bio/about page found at": "个人/关于页面已找到，地址为",
+    "Credential signals in bio:": "简介中的资质信号：",
+    "No external bylines detected on bio page": "个人简介页未检测到外部署名",
+    "Checking entity:": "正在检查实体：",
+    "No Wikipedia page found for": "未找到相关 Wikipedia 页面：",
+    "No Wikidata entity found for": "未找到相关 Wikidata 实体：",
+    "Privacy policy found:": "隐私政策已找到：",
+    "Terms of service found:": "服务条款已找到：",
+    "Contact page found:": "联系页面已找到：",
+    "Legal/DMCA/imprint page found:": "法律声明/DMCA/印记页面已找到：",
+    "Partial business identity:": "部分企业身份信息：",
+    "Content freshness signals found:": "内容时效性信号已找到：",
+    "Healthy sitewide update cadence": "全站更新频率良好",
+    "Inconsistent site name across tags:": "各标签中站点名称不一致：",
+    "Machine-readable endpoint found:": "机器可读端点已找到：",
+    "Twitter/X card tags found:": "Twitter/X Card 标签已找到：",
+    "sameAs social links in JSON-LD": "JSON-LD 中的 sameAs 社交链接",
+    "definition-style sentence(s) found — highly citable by AI": "个定义式语句 —— AI 引用度极高",
+    "No comparison tables — consider adding tables for feature comparisons, pricing, etc.": "未找到对比表格 —— 建议添加功能对比、价格对比等表格",
+    "Step-by-step instructional content detected — great for 'how to' AI answers": "检测到分步教程内容 —— 非常适合 AI 的「怎么做」类回答",
+    "Pros/cons or advantages/disadvantages content detected": "检测到优缺点/利弊分析内容",
+    "Summary/key takeaways section found — AI engines prefer concise summaries": "找到摘要/关键要点部分 —— AI 引擎偏好简洁的总结",
+    "question-pattern heading(s) — add more for chat-style queries": "个问句式标题 —— 建议增加更多以适配对话式查询",
+    "AI answer format score:": "AI 回答格式评分：",
+    "No breadcrumb navigation or schema found": "未找到面包屑导航或 Schema",
+    "Organization/Business schema found:": "Organization/Business Schema 已找到：",
+    "Organization name: present": "组织名称：已填写",
+    "Website URL: present": "网站 URL：已填写",
+    "Logo image: present": "Logo 图片：已填写",
+    "Description: present": "描述：已填写",
+    "Optional fields present:": "可选字段已填写：",
+    "Optional fields missing:": "可选字段缺失：",
+    "Viewport meta tag found:": "Viewport meta 标签已找到：",
+    "Uses width=device-width (responsive)": "使用 width=device-width（响应式）",
+    "HTML page weight:": "HTML 页面体积：",
+    "Inline resources within acceptable range": "内联资源在可接受范围内",
+    "Cache headers found:": "缓存头已找到：",
+    "Both trailing slash and non-trailing slash return 200 — ensure canonical is set": "带尾斜杠和不带尾斜杠均返回 200 —— 请确保设置 canonical",
+    "serve content — duplicate content risk": "均提供内容 —— 存在重复内容风险",
+    "URL case handling is consistent": "URL 大小写处理一致",
+    "outbound link(s) to": "个外链指向",
+    "unique domain(s)": "个独立域名",
+    "Links to authoritative sources:": "指向权威来源的链接：",
+    "No video content detected": "未检测到视频内容",
+    "Multi-format coverage:": "多格式覆盖：",
+    "non-text format(s) detected — more formats = more AI surface area": "种非文本格式 —— 格式越多，AI 可见面越广",
+    "No tables found on homepage": "首页未找到表格",
+    "First paragraph": "首段",
+    "lacks extractable facts — add a definition or key statistic up front": "缺少可提取的事实 —— 建议在开头添加定义或关键数据",
+    "No hreflang tags — skipping multilingual check": "无 hreflang 标签 —— 跳过多语言检查",
+    "linked on site:": "在站内被链接：",
+    "not detected": "未检测到",
+    "Limited cross-platform presence:": "跨平台覆盖有限：",
+    "Platforms where your brand is visible to AI training:": "您的品牌在以下平台对 AI 训练可见：",
+    "trains:": "训练数据来源：",
+    "Sampling": "正在抽样",
+    "internal page(s)...": "个内部页面……",
+    "Low word count (<100 words) on": "低字数（<100 词）的页面共",
+    "Duplicate meta descriptions found across pages:": "多个页面存在重复的 meta 描述：",
+    "Duplicate <title> tags found across pages:": "多个页面存在重复的 <title> 标签：",
+    "All sampled pages maintain consistent GEO standards": "所有抽样页面均保持一致的 GEO 标准",
+    "No internal pages to sample": "无内部页面可供抽样",
+
+    # ── Content gap suggestions ──
+    "Create a FAQ page with FAQPage schema answering top questions about your product/service": "创建 FAQ 页面并使用 FAQPage Schema，解答关于您产品/服务的常见问题",
+    "Add HowTo schema to tutorial or setup guide pages": "在教程或安装指南页面添加 HowTo Schema",
+    "Use Product schema with reviews, pricing, and availability on product pages": "在产品页面使用 Product Schema，包含评价、价格和库存信息",
+    "Write long-form pillar content (2000+ words) covering your core topic comprehensively": "撰写 2000 字以上的长篇支柱内容，全面覆盖核心主题",
+    "Add an 'Industry Statistics' page with original data — AI engines heavily cite pages with numbers": "添加「行业数据」页面并提供原创数据 —— AI 引擎大量引用含数据的页面",
+    "Create comparison articles ('X vs Y') — these match competitive queries AI users ask": "创建对比文章（X vs Y）—— 匹配 AI 用户常见的竞品对比查询",
+    "Add a 'What is [your product]?' section with a clear 1-2 sentence definition": "添加「什么是[您的产品]？」部分，提供简明的一两句话定义",
+    "Structure blog posts as Q&A: use question headings followed by direct answers": "将博客文章结构化为问答形式：使用问句标题，紧跟直接回答",
+    "Add 'Key Takeaways' or 'TL;DR' sections — AI engines extract these as summaries": "添加「关键要点」或「TL;DR」部分 —— AI 引擎会将其提取为摘要",
+    "Write meta descriptions as self-contained answers (80-160 chars) — AI uses these as fallback snippets": "将 meta 描述写成独立完整的回答（80-160 字符）—— AI 会将其作为备选摘要",
+    "Add Open Graph tags so AI engines can extract your preferred title and description": "添加 Open Graph 标签，以便 AI 引擎提取您偏好的标题和描述",
+    "Reduce JavaScript dependency — AI crawlers can't execute JS; ensure content is in raw HTML": "减少 JavaScript 依赖 —— AI 爬虫无法执行 JS，请确保内容在原始 HTML 中可见",
+    "Add alt text to all images describing what they show — AI uses this for context": "为所有图片添加描述性 alt 文本 —— AI 利用 alt 文本理解图片内容",
+    "Create or improve your Wikipedia page — AI engines use Wikipedia as a primary knowledge source": "创建或完善您的 Wikipedia 页面 —— AI 引擎将 Wikipedia 作为主要知识来源",
+    "Claim and complete your Google Business Profile, Crunchbase, and LinkedIn company pages": "认领并完善您的 Google 商家资料、Crunchbase 和 LinkedIn 公司页面",
+    "Get featured on industry-specific directories and 'best of' lists": "争取出现在行业垂直目录和「精选推荐」榜单中",
+    "Add author bios with credentials and links to external profiles (LinkedIn, Twitter)": "添加作者简介，包含资质信息及外部个人主页链接（LinkedIn、Twitter）",
+    "Publish guest posts on authoritative sites in your industry with backlinks": "在行业权威网站发布嘉宾文章并附带反向链接",
+    "Add an 'About Us' page with team expertise, founding story, and mission statement": "添加「关于我们」页面，包含团队专长、创业故事和使命宣言",
+    "Add clearly linked Privacy Policy, Terms of Service, and Contact pages": "添加清晰链接的隐私政策、服务条款和联系方式页面",
+    "Display business identity: address, phone, registration number where applicable": "展示企业身份信息：地址、电话、工商注册号等（如适用）",
+    "Link to active social media profiles from your site (header or footer)": "在网站页头或页脚链接到活跃的社交媒体主页",
+    "Publish regularly on LinkedIn, Twitter/X — AI engines cross-reference social presence": "定期在 LinkedIn、Twitter/X 上发布内容 —— AI 引擎会交叉核实社交媒体存在",
+    "Create /llms.txt describing your site's purpose and content for AI crawlers": "创建 /llms.txt，向 AI 爬虫描述您网站的用途和内容",
+    "Add /llms-full.txt with comprehensive site documentation for deeper AI indexing": "添加 /llms-full.txt，提供完整的站点文档以促进 AI 深度索引",
+    "Create a robots.txt that explicitly allows AI crawler access": "创建 robots.txt 并明确允许 AI 爬虫访问",
+    "Add an ai.txt or .well-known/ai.txt to declare your AI data usage preferences": "添加 ai.txt 或 .well-known/ai.txt 以声明您的 AI 数据使用偏好",
+    "Ensure each page has a unique title and meta description — duplicate content confuses AI": "确保每个页面都有唯一的标题和 meta 描述 —— 重复内容会干扰 AI 判断",
+    "Diversify content across pages; avoid repeating the same paragraphs on multiple URLs": "在各页面差异化内容，避免多个 URL 出现相同段落",
+    "Link to authoritative external sources — AI engines trust pages that cite credible references": "链接到权威的外部来源 —— AI 引擎信任引用可靠参考资料的页面",
+    "Embed diverse media (images, videos, infographics) — richer content gets cited more": "嵌入多样化媒体（图片、视频、信息图）—— 内容越丰富，被引用越多",
+
+    # ── Fix recommendations ──
+    "Install an SSL/TLS certificate (free via Let's Encrypt) and redirect all HTTP traffic to HTTPS.": "安装 SSL/TLS 证书（可通过 Let's Encrypt 免费获取），并将所有 HTTP 流量重定向到 HTTPS。",
+    "Create a robots.txt file at your site root.": "在网站根目录创建 robots.txt 文件。",
+    "Ensure at least one common AI bot is not blocked by robots.txt.": "确保 robots.txt 未屏蔽至少一个常见的 AI 爬虫。",
+    "Add your sitemap URL to robots.txt:": "将站点地图 URL 添加到 robots.txt：",
+    "Add a Sitemap reference in robots.txt so AI crawlers find it immediately:": "在 robots.txt 中添加 Sitemap 引用，以便 AI 爬虫能立即找到它：",
+    "Create and submit a sitemap.xml": "创建并提交 sitemap.xml",
+    "Register with Google Search Console": "注册 Google Search Console",
+    "Register with Bing Webmaster Tools": "注册 Bing Webmaster Tools",
+    "Add structured data to help AI engines understand your content.": "添加结构化数据，帮助 AI 引擎理解您的内容。",
+    "Add a meta description tag.": "添加 meta description 标签。",
+    "Set a canonical URL.": "设置 canonical URL。",
+    "Add Open Graph meta tags.": "添加 Open Graph meta 标签。",
+    "Add alt text to images.": "为图片添加 alt 文本。",
+    "Move inline CSS to external stylesheets": "将内联 CSS 移至外部样式表",
+    "Move inline JS to external scripts with defer/async": "将内联 JS 移至外部脚本并使用 defer/async 加载",
+    "Remove unused HTML/comments": "移除无用的 HTML 代码和注释",
+    "Enable server-side compression (gzip/brotli)": "启用服务器端压缩（gzip/brotli）",
+    "Reduce page weight:": "减小页面体积：",
+    "Simplify content: shorter sentences, plain language, bullet points, active voice.": "简化内容：使用更短的句子、通俗的语言、项目符号列表和主动语态。",
+    "Add source attributions to increase credibility:": "添加来源引用以提高可信度：",
+    "Add comparison tables where applicable (pricing, features, vs. competitors):": "在适当位置添加对比表格（定价、功能、竞品比较）：",
+    "AI engines frequently cite tabular data in comparison answers.": "AI 引擎在生成对比类回答时经常引用表格数据。",
+    "Add more question-pattern headings that match how people prompt AI engines:": "添加更多与用户向 AI 引擎提问方式匹配的疑问句式标题：",
+    "Follow each with a short, direct answer so AI engines can extract it.": "在每个问题标题后紧跟一个简短、直接的回答，以便 AI 引擎提取。",
+    "Add breadcrumb navigation to help AI engines understand your site structure:": "添加面包屑导航，帮助 AI 引擎理解您的网站结构：",
+    "Add more fields to strengthen knowledge panel eligibility:": "补充更多字段以增强知识面板的收录资格：",
+    "Organize your llms.txt with sections like:": "按以下分区组织您的 llms.txt：",
+    "Front-load facts into your first paragraph so AI engines can extract it directly:": "将关键事实前置到第一段，以便 AI 引擎直接提取：",
+    "Aim for one definition-style sentence and one concrete stat in the first 25-120 words.": "力求在前 25–120 个词中包含一个定义式语句和一个具体数据。",
+    "Write unique meta descriptions for each page. Duplicate descriptions": "为每个页面撰写独特的 meta description。重复的描述",
+    "confuse AI engines about which page to cite for a given topic.": "会让 AI 引擎无法判断针对某一主题应引用哪个页面。",
+    "Write unique <title> tags for each page. Identical titles cause keyword": "为每个页面撰写独特的 <title> 标签。相同的标题会导致关键词",
+    "cannibalization — AI engines can't tell which page to cite for a given query.": "自相蚕食——AI 引擎无法判断针对某一查询应引用哪个页面。",
+    "Pages with <100 words have too little content for AI engines. Add substantive, unique text.": "少于 100 词的页面内容过少，不利于 AI 引擎引用。请添加有实质内容的独特文本。",
+    "Content overlap / possible cannibalization between pages:": "页面之间存在内容重叠/可能的关键词自相蚕食：",
+    "Consolidate into one canonical page and 301-redirect the others.": "合并为一个权威页面，并将其他页面进行 301 重定向。",
+    "Differentiate each page with distinct angles, examples, and keywords.": "通过不同的角度、案例和关键词来区分各个页面。",
+    "Use rel=canonical to point near-duplicates to the primary page.": "使用 rel=canonical 将近似重复页面指向主页面。",
+    "Cannibalization dilutes your AI visibility — pick the strongest page to surface.": "关键词自相蚕食会稀释您的 AI 可见度——选择最有优势的页面来展示。",
+    "A Wikipedia page is one of the strongest entity signals for AI engines.": "维基百科页面是 AI 引擎识别实体的最强信号之一。",
+    "Wikidata is free to edit and AI engines (especially Google Knowledge Graph) ingest it": "Wikidata 可免费编辑，且 AI 引擎（尤其是 Google Knowledge Graph）会主动采集其数据",
+    "Mark up key terms and abbreviations:": "标注关键术语和缩写：",
+    "This helps AI engines understand and define terms in your content.": "这有助于 AI 引擎理解和定义您内容中的术语。",
+    "Diversify your content formats so AI engines encounter you in more contexts:": "丰富您的内容形式，让 AI 引擎在更多场景中接触到您：",
+    "Set up a 301 redirect so one version redirects to the other:": "设置 301 重定向，将其中一个版本跳转到另一个版本：",
+    "Then set the canonical URL to match the preferred version.": "然后将 canonical URL 设置为首选版本。",
+    "Expand your brand presence on platforms that AI models train on:": "在 AI 模型训练所用的平台上扩展您的品牌影响力：",
+    "Being present increases the probability of your brand being cited in AI answers,": "在这些平台上建立存在感，可以提高您的品牌在 AI 回答中被引用的概率，",
+    "regardless of which source the AI pulls from.": "无论 AI 最终从哪个来源提取信息。",
+    "Add missing trust signals so AI engines can verify who is behind the site:": "补充缺失的信任信号，以便 AI 引擎验证网站的运营主体：",
+    "Use the same brand name everywhere.": "在所有平台上使用统一的品牌名称。",
+    "No AI API keys found. Set at least one:": "未找到 AI API 密钥。请至少设置一个：",
+    "This is a paid feature requiring AI API access.": "此为付费功能，需要 AI API 访问权限。",
+    "Tip: Set an AI API key to see Citation Share analysis": "提示：设置 AI API 密钥即可查看引用份额分析",
+    "see recommendations above": "请参阅上方建议",
+
+    # ══════════════════════════════════════════════════════════
+    # --ai-visibility mode
+    # ══════════════════════════════════════════════════════════
+    "AI VISIBILITY AUDIT v2": "AI 可见度审计 v2",
+    "AI VISIBILITY AUDIT — RESULTS": "AI 可见度审计 — 结果",
+    "Entity Definition": "实体定义",
+    "Gap Detection": "缺口检测",
+    "Total queries:": "查询总数：",
+    "engine(s) x 3 runs =": "个引擎 x 3 次运行 =",
+    "API calls": "次 API 调用",
+    "Estimated time:": "预计耗时：",
+    "Engine:": "引擎：",
+    "All runs failed": "所有运行均失败",
+    "STABLE — cited in": "稳定 — 被引用于",
+    "UNSTABLE — cited in": "不稳定 — 被引用于",
+    "runs": "次运行",
+    "NOT CITED in any run": "在所有运行中均未被引用",
+    "Framing:": "定位：",
+    "Invalid": "无效",
+    "API key. Skipping this engine.": "API 密钥。跳过此引擎。",
+    "--- 1. Prompt Visibility ---": "--- 1. 提示词可见性 ---",
+    "queries cited": "个查询被引用",
+    "--- 2. Entity Clarity ---": "--- 2. 实体清晰度 ---",
+    "Found": "找到",
+    "definition(s) across engines:": "个跨引擎定义：",
+    "No clear definitions found in AI answers": "AI 回答中未找到明确定义",
+    "Possible brand confusion: AI describes": "可能存在品牌混淆：AI 将",
+    "as a '": "描述为 '",
+    "No brand confusion detected": "未检测到品牌混淆",
+    "Entity Clarity:": "实体清晰度：",
+    "--- 3. Competitor Position ---": "--- 3. 竞争定位 ---",
+    "Top competitors mentioned alongside queries:": "查询中同时提及的主要竞争对手：",
+    "mention(s)": "次提及",
+    "Brand framing across all answers:": "所有回答中的品牌定位分析：",
+    "Recommended (strongest)": "推荐（最强）",
+    "Leader/major player": "领导者/主要参与者",
+    "One of several options": "多个选项之一",
+    "Passively mentioned": "被动提及",
+    "Niche/experimental": "小众/实验性",
+    "Not mentioned": "未被提及",
+    "Competitor Position:": "竞争定位：",
+    "--- 4. Answer Stability ---": "--- 4. 回答稳定性 ---",
+    "Stable (all runs cited):": "稳定（所有运行均引用）：",
+    "Unstable (some runs):": "不稳定（部分运行引用）：",
+    "Absent (never cited):": "缺失（从未引用）：",
+    "Answer Stability:": "回答稳定性：",
+    "--- 5. Content Gaps ---": "--- 5. 内容缺口 ---",
+    "content gap(s) detected:": "个内容缺口已检测到：",
+    "Recommended actions to fill gaps:": "填补缺口的建议操作：",
+    "Create dedicated pages for topics where": "为以下主题创建专门页面，其中",
+    "is not cited": "未被引用",
+    "Add FAQ sections answering these exact queries on your site": "在您的网站上添加 FAQ 栏目，回答这些具体问题",
+    "Write comparison pages": "撰写对比页面",
+    "for competitive queries": "用于竞争性查询",
+    "Publish content on third-party platforms (blog posts, Reddit, GitHub)": "在第三方平台发布内容（博客文章、Reddit、GitHub）",
+    "No major content gaps detected!": "未检测到重大内容缺口！",
+    "Content Gap:": "内容缺口：",
+    "Prompt Visibility": "提示词可见性",
+    "Competitor Position": "竞争定位",
+    "Answer Stability": "回答稳定性",
+    "A — AI engines actively recommend this brand": "A — AI 引擎主动推荐该品牌",
+    "B — Good visibility, some gaps to fill": "B — 可见性良好，存在部分缺口待填补",
+    "C — Moderate visibility, significant gaps": "C — 可见性一般，存在较大缺口",
+    "D — Low visibility, major work needed": "D — 可见性低，需要大量优化工作",
+    "F — Not visible to AI engines": "F — 对 AI 引擎不可见",
+    "Run periodically to track improvements over time.": "建议定期运行以跟踪改进情况。",
+    "Tip: Use --queries to test your specific category prompts.": "提示：使用 --queries 测试您自定义的品类提示词。",
+
+    # ══════════════════════════════════════════════════════════
+    # --entity mode
+    # ══════════════════════════════════════════════════════════
+    "OPENAI_API_KEY environment variable not set.": "未设置 OPENAI_API_KEY 环境变量。",
+    "This feature requires an OpenAI API key.": "此功能需要 OpenAI API key。",
+    "ENTITY GEO AUDIT": "实体 GEO 审计",
+    "Engine: OpenAI GPT-4o-mini (web search)": "引擎：OpenAI GPT-4o-mini（网络搜索）",
+    "Phase 1: Knowledge Graph & Platform checks...": "阶段 1：知识图谱与平台检查……",
+    "Phase 2: AI engine queries...": "阶段 2：AI 引擎查询……",
+    "Analysis complete. Scoring...": "分析完成。正在评分……",
+    "Knowledge Graph: Found on": "知识图谱：已在以下平台找到",
+    "Knowledge Graph: Not found on Wikipedia or Wikidata": "知识图谱：未在 Wikipedia 或 Wikidata 上找到",
+    "ENTITY GEO SCORECARD": "实体 GEO 评分卡",
+    "Entity Recognition": "实体识别",
+    "Category Association": "类别关联度",
+    "Competitive Position": "竞争地位",
+    "Sentiment & Framing": "情感与定位",
+    "Knowledge Graph": "知识图谱",
+    "Platform Footprint": "平台覆盖",
+    "ENTITY GEO SCORE": "实体 GEO 总分",
+    "Content Gap": "内容缺口",
+    "Entity Clarity": "实体清晰度",
+    "KEY FINDINGS": "主要发现",
+    "Strong Knowledge Graph presence": "知识图谱覆盖良好",
+    "Partial Knowledge Graph presence": "知识图谱覆盖部分",
+    "Not found in Knowledge Graph (Wikipedia, Wikidata)": "未在知识图谱中找到（Wikipedia、Wikidata）",
+    "Strong platform footprint": "平台覆盖良好",
+    "Moderate platform footprint": "平台覆盖一般",
+    "Weak platform footprint": "平台覆盖薄弱",
+    "AI consistently recognizes": "AI 始终能识别",
+    "AI partially recognizes": "AI 部分识别",
+    "— inconsistent across queries": "—— 不同查询间结果不一致",
+    "AI does not reliably recognize": "AI 无法可靠识别",
+    "Entity definition is clear and consistent across runs": "实体定义清晰，各次查询结果一致",
+    "Entity definition varies between queries — may indicate ambiguity": "实体定义在不同查询间有差异 —— 可能存在歧义",
+    "Entity definition is unclear or confused with other entities": "实体定义不清晰或与其他实体混淆",
+    "Strong category/domain association detected": "检测到强类别/领域关联",
+    "Weak category association — AI may not map entity to its core domain": "类别关联较弱 —— AI 可能无法将实体映射到核心领域",
+    "AI does not clearly associate entity with a specific category": "AI 未将实体与特定类别清晰关联",
+    "Mentioned among top experts/leaders in field": "在领域顶级专家/领袖中被提及",
+    "Mentioned but not prominently positioned among peers": "被提及但在同行中位置不突出",
+    "Not mentioned among leaders in field": "未在领域领袖中被提及",
+    "Competitive framing:": "竞争定位：",
+    "Overall AI sentiment:": "AI 整体情感倾向：",
+    "AI uses recommendation language": "AI 使用推荐性语言",
+    "strongly positive": "强烈正面",
+    "positive": "正面",
+    "neutral": "中性",
+    "negative": "负面",
+    "mixed": "褒贬不一",
+    "CONTENT GAPS (entity not mentioned for these queries)": "内容缺口（以下查询中未提及该实体）",
+    "No content gaps detected — entity appears across all tested queries": "未检测到内容缺口 —— 实体出现在所有测试查询中",
+    "Create content targeting these gap queries:": "创建针对这些缺口查询的内容：",
+
+    # ══════════════════════════════════════════════════════════
+    # --authority-audit mode
+    # ══════════════════════════════════════════════════════════
+    "Authority & Reputation Audit": "权威性与声誉审计",
+    "1. Online Reviews": "1. 在线评价",
+    "— profile found": "—— 已找到资料页",
+    "— possible profile found": "—— 可能找到资料页",
+    "— no profile detected": "—— 未检测到资料页",
+    "— could not check (timeout/blocked)": "—— 无法检查（超时/被阻止）",
+    "Review/Rating structured data found on site": "站点上发现评价/评分结构化数据",
+    "review page from site": "评价页面（来自站点）",
+    "Review presence: STRONG": "评价覆盖：强",
+    "Review presence: MODERATE": "评价覆盖：中等",
+    "No review presence detected on major platforms": "在主要平台上未检测到评价信息",
+    "2. Awards, Accreditations & Affiliations": "2. 奖项、资质认证与合作关系",
+    "Award/accreditation signals found in content:": "在内容中发现奖项/资质认证信号：",
+    "No award/accreditation keywords detected in homepage content": "首页内容中未检测到奖项/资质认证关键词",
+    "Award/certification structured data found": "发现奖项/认证结构化数据",
+    "No award-specific schema markup": "无奖项专用 Schema 标记",
+    "Trust/certification badge images found": "发现信任/认证徽章图片",
+    "No trust badge images detected": "未检测到信任徽章图片",
+    "Awards/accreditations: STRONG": "奖项/资质认证：强",
+    "Awards/accreditations: MODERATE": "奖项/资质认证：中等",
+    "Awards/accreditations: WEAK": "奖项/资质认证：弱",
+    "3. Google Website Authority": "3. Google 网站权威性",
+    "Checking Google index presence...": "正在检查 Google 索引情况……",
+    "Google indexed pages:": "Google 已索引页面数：",
+    "Domain not indexed by Google": "该域名未被 Google 索引",
+    "Checking Knowledge Panel readiness...": "正在检查知识面板就绪度……",
+    "Organization schema:": "Organization Schema：",
+    "No Wikipedia/Wikidata links — consider creating entries for brand recognition": "无 Wikipedia/Wikidata 链接——建议创建条目以提升品牌辨识度",
+    "Google authority signals: STRONG": "Google 权威性信号：强",
+    "Google authority signals: MODERATE": "Google 权威性信号：中等",
+    "Google authority signals: WEAK": "Google 权威性信号：弱",
+    "4. Authoritative List Mentions": "4. 权威榜单提及",
+    "— no mentions": "—— 无提及",
+    "— package found:": "—— 已找到软件包：",
+    "— not found": "—— 未找到",
+    "— could not check": "—— 无法检查",
+    "— company page found": "—— 已找到公司页面",
+    "— not detected (may require login)": "—— 未检测到（可能需要登录）",
+    "repo(s) found, top:": "个仓库，排名第一：",
+    "— found": "—— 已找到",
+    "— no profile found": "—— 未找到资料页",
+    "authoritative domain(s) (.gov/.edu/.org)": "个权威域名（.gov/.edu/.org）",
+    "Authoritative mentions: STRONG": "权威提及：强",
+    "Authoritative mentions: MODERATE": "权威提及：中等",
+    "Authoritative mentions: WEAK": "权威提及：弱",
+    "Authority Score:": "权威性评分：",
+    "A — Excellent": "A — 优秀",
+    "B — Good": "B — 良好",
+    "C — Needs improvement": "C — 有待改进",
+    "D — Weak": "D — 薄弱",
+    "F — Critical gaps": "F — 存在严重缺陷",
+    "Breakdown:": "明细：",
+    "Online Reviews:": "在线评价：",
+    "Awards/Accreditations:": "奖项/资质认证：",
+    "Google Authority:": "Google 权威性：",
+    "Authoritative Mentions:": "权威提及：",
+
+    # ══════════════════════════════════════════════════════════
+    # --crawl-check / --crawl-test mode
+    # ══════════════════════════════════════════════════════════
+    "AI/LLM Crawl Activity Report": "AI/LLM 抓取活动报告",
+    "No log files matched:": "未匹配到日志文件：",
+    "Files matched:": "匹配文件：",
+    "MB total": "MB（合计）",
+    "Log period:": "日志时段：",
+    "Total lines:": "总行数：",
+    "Parsed:": "已解析：",
+    "AI/LLM bot requests:": "AI/LLM 爬虫请求数：",
+    "No AI/LLM crawler activity detected in this log file.": "在此日志文件中未检测到 AI/LLM 爬虫活动。",
+    "This could mean:": "这可能意味着：",
+    "AI bots haven't discovered your site yet": "AI 爬虫尚未发现您的站点",
+    "The log file doesn't cover enough time": "日志文件覆盖的时间段不够长",
+    "Bots are blocked by robots.txt or firewall": "爬虫被 robots.txt 或防火墙阻止",
+    "Your CDN/proxy strips bot user agents": "您的 CDN/代理剥离了爬虫 User-Agent",
+    "Bot Activity Breakdown": "爬虫活动明细",
+    "Critical Bots NOT Detected": "关键爬虫未检测到",
+    "Optional Bots NOT Detected": "可选爬虫未检测到",
+    "bot(s)": "个爬虫",
+    "Not seen:": "未检测到：",
+    "AI Crawl Accessibility Test": "AI 抓取可访问性测试",
+    "robots.txt Rules for AI Bots": "AI 爬虫的 robots.txt 规则",
+    "robots.txt not found — all bots allowed by default": "robots.txt 未找到——默认允许所有爬虫",
+    "— BLOCKED by robots.txt": "—— 被 robots.txt 阻止",
+    "— allowed": "—— 已允许",
+    "Simulated Bot Access Test": "模拟爬虫访问测试",
+    "Sending requests to": "正在发送请求到",
+    "with AI bot user agents...": "使用 AI 爬虫 User-Agent……",
+    "(Checks if your server/CDN/WAF blocks bot traffic)": "（检查您的服务器/CDN/WAF 是否阻止爬虫流量）",
+    "Baseline (browser):": "基准（浏览器）：",
+    "— BLOCKED by server/WAF": "—— 被服务器/WAF 阻止",
+    "suspiciously small vs baseline": "与基准相比可疑地小",
+    "request failed:": "请求失败：",
+    "All tested bots can access your site successfully.": "所有测试的爬虫均可成功访问您的站点。",
+    "Common Crawl Index Check": "Common Crawl 索引检查",
+    "page(s) in Common Crawl index": "个页面在 Common Crawl 索引中",
+    "Domain not found in Common Crawl index": "在 Common Crawl 索引中未找到该域名",
+    "Could not reach Common Crawl index — their servers may be slow, try again later": "无法连接 Common Crawl 索引——其服务器可能较慢，请稍后重试",
+    "Your site appears accessible to all major AI crawlers.": "您的站点对所有主要 AI 爬虫均可访问。",
+    "Issues found:": "发现的问题：",
+    "bot(s) blocked by robots.txt,": "个爬虫被 robots.txt 阻止，",
+    "bot(s) blocked by server/WAF": "个爬虫被服务器/WAF 阻止",
+
+    # AI_CRAWLERS powers values
+    "ChatGPT training data": "ChatGPT 训练数据",
+    "ChatGPT live browsing": "ChatGPT 实时浏览",
+    "Claude training data": "Claude 训练数据",
+    "Anthropic crawling": "Anthropic 爬取",
+    "Perplexity AI answers": "Perplexity AI 回答",
+    "Google AI training": "Google AI 训练",
+    "Bing link preview (Teams/Outlook)": "Bing 链接预览（Teams/Outlook）",
+    "Common Crawl (used by many LLMs)": "Common Crawl（被众多 LLM 使用）",
+    "Knowledge graph extraction": "知识图谱提取",
+    "Apple Intelligence / Siri": "Apple Intelligence / Siri",
+    "Apple search / Siri": "Apple 搜索 / Siri",
+    "Cohere models": "Cohere 模型",
+    "You.com AI search": "You.com AI 搜索",
+    "SEO analytics (AI-adjacent)": "SEO 分析（AI 相关）",
+
+    # ══════════════════════════════════════════════════════════
+    # --citation-check mode
+    # ══════════════════════════════════════════════════════════
+    "PERPLEXITY_API_KEY environment variable not set.": "PERPLEXITY_API_KEY 环境变量未设置。",
+    "This is a paid feature. Set your API key to use it:": "这是一项付费功能。请设置 API 密钥后使用：",
+    "AI Citation Check (Powered by Perplexity)": "AI 引用检查（由 Perplexity 驱动）",
+    "Sending brand-relevant queries to Perplexity AI...": "正在向 Perplexity AI 发送品牌相关查询……",
+    "appears in AI-generated citations...": "是否出现在 AI 生成的引用中……",
+    "Invalid API key. Check your PERPLEXITY_API_KEY.": "API 密钥无效。请检查 PERPLEXITY_API_KEY。",
+    "Rate limited. Waiting before next query...": "已被限流。正在等待后重试……",
+    "CITED!": "被引用！",
+    "citation(s) from": "条引用来自",
+    "MENTIONED in answer (no direct citation link)": "在回答中被提及（无直接引用链接）",
+    "Not cited.": "未被引用。",
+    "other source(s) cited instead.": "个其他来源被引用。",
+    "AI CITATION REPORT": "AI 引用报告",
+    "No queries completed successfully.": "无查询成功完成。",
+    "Citation Rate:": "引用率：",
+    "Direct Links:": "直接链接：",
+    "citation(s) pointing to": "条引用指向",
+    "A — Excellent AI visibility": "A — AI 可见度优秀",
+    "B — Good AI visibility": "B — AI 可见度良好",
+    "C — Moderate AI visibility": "C — AI 可见度中等",
+    "D — Low AI visibility": "D — AI 可见度偏低",
+    "F — Not visible to AI engines": "F — 对 AI 引擎不可见",
+    "AI Visibility:": "AI 可见度：",
+    "Query Results:": "查询结果：",
+    "CITED": "已引用",
+    "NOT CITED": "未引用",
+    "Recommendations to improve AI citation rate:": "提高 AI 引用率的建议：",
+    "Ensure your site has comprehensive, authoritative content about your brand": "确保您的站点拥有关于品牌的全面、权威内容",
+    "Add structured data (JSON-LD) with Organization schema": "添加包含 Organization Schema 的结构化数据（JSON-LD）",
+    "Create an llms.txt file to help AI engines understand your site": "创建 llms.txt 文件以帮助 AI 引擎了解您的站点",
+    "Build presence on platforms AI models reference (Wikipedia, Reddit, GitHub)": "在 AI 模型引用的平台上建立影响力（Wikipedia、Reddit、GitHub）",
+    "Publish original research, data, and expert content that AI engines want to cite": "发布 AI 引擎乐于引用的原创研究、数据和专家内容",
+    "Ensure AI crawlers (GPTBot, ClaudeBot, PerplexityBot) are not blocked in robots.txt": "确保 robots.txt 未屏蔽 AI 爬虫（GPTBot、ClaudeBot、PerplexityBot）",
+    "Results reflect Perplexity AI's current knowledge. Other AI engines": "结果反映 Perplexity AI 当前的知识。其他 AI 引擎",
+    "(ChatGPT, Gemini, Claude) may differ. Run periodically to track changes.": "（ChatGPT、Gemini、Claude）的结果可能不同。建议定期运行以跟踪变化。",
+})
+
+
 def main():
     global SHOW_FIX
     parser = argparse.ArgumentParser(
@@ -5250,6 +7917,12 @@ def main():
     parser.add_argument("--queries", metavar="QUERY", nargs="+",
                         help="Custom queries for --ai-visibility. Test specific prompts relevant "
                              "to your niche. Example: --queries 'best AI payment tools' 'x402 tools'")
+    parser.add_argument("--aeo-visibility", metavar="URL",
+                        help="AEO (Answer Engine Optimization) audit. Checks how well a page "
+                             "is optimized to appear in AI-generated answers: FAQ readiness, "
+                             "question-pattern headings, direct answer snippets, answer engine "
+                             "schema (FAQPage/HowTo/QAPage), content structure, readability, "
+                             "and heading hierarchy. Free — no API keys required.")
     parser.add_argument("--entity", metavar="NAME",
                         help="[PAID] Audit GEO readiness of a brand, product, or person by name. "
                              "Queries AI engines to assess entity recognition, clarity, competitive "
@@ -5257,12 +7930,68 @@ def main():
     parser.add_argument("--entity-type", metavar="TYPE", default="brand",
                         choices=["brand", "product", "person"],
                         help="Entity type for --entity audit: brand, product, or person (default: brand)")
+    parser.add_argument("--report", nargs="?", const="pdf", default=None,
+                        choices=["pdf", "json", "html"],
+                        metavar="FORMAT",
+                        help="Also save the run's output as a report at "
+                             "~/geo_reports/<timestamp>/report.<ext>. "
+                             "Default format is pdf. Pass 'json' for a machine-readable "
+                             "score document or 'html' for a styled standalone page. "
+                             "Examples: --report | --report json | --report html")
+    parser.add_argument("--lang", choices=["en", "zh"], default="en",
+                        help="Output language: en (English) or zh (Chinese)")
     args = parser.parse_args()
 
     SHOW_FIX = args.fix
 
+    report_format = args.report  # None | "pdf" | "json" | "html"
+    capture_output = report_format in ("pdf", "html")
+    report_buffer = io.StringIO() if capture_output else None
+    original_stdout = None
+    if capture_output:
+        original_stdout = sys.stdout
+        sys.stdout = _TeeStream(original_stdout, report_buffer)
+
+    try:
+        _dispatch(args, parser)
+    finally:
+        if capture_output:
+            sys.stdout = original_stdout
+        if report_format:
+            import os
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            report_dir = os.path.expanduser(f"~/geo_reports/{timestamp}")
+            text_output = report_buffer.getvalue() if report_buffer else ""
+
+            if report_format == "pdf":
+                report_path = os.path.join(report_dir, "report.pdf")
+                try:
+                    _write_text_pdf(report_path, text_output)
+                    print(f"\nPDF report saved to: {report_path}")
+                except Exception as e:
+                    print(f"\nFailed to write PDF report: {e}", file=sys.stderr)
+            elif report_format == "json":
+                json_path = os.path.join(report_dir, "report.json")
+                try:
+                    _write_json_report(json_path, args, timestamp)
+                    print(f"\nJSON report saved to: {json_path}")
+                except Exception as e:
+                    print(f"\nFailed to write JSON report: {e}", file=sys.stderr)
+            elif report_format == "html":
+                html_path = os.path.join(report_dir, "report.html")
+                try:
+                    _write_html_report(html_path, text_output, args, timestamp)
+                    print(f"\nHTML report saved to: {html_path}")
+                except Exception as e:
+                    print(f"\nFailed to write HTML report: {e}", file=sys.stderr)
+
+
+def _dispatch(args, parser):
     if args.entity:
         entity_audit(args.entity, entity_type=args.entity_type)
+    elif args.aeo_visibility:
+        aeo_visibility(args.aeo_visibility)
     elif args.compare:
         compare_urls(args.compare)
     elif args.ai_visibility:
@@ -5298,7 +8027,7 @@ def main():
     elif args.url:
         generate_score(args.url)
     else:
-        parser.error("Provide a URL or a mode flag: --compare, --crawl-check, --crawl-test, --citation-check, --ai-visibility, --entity")
+        parser.error("Provide a URL or a mode flag: --compare, --crawl-check, --crawl-test, --citation-check, --ai-visibility, --aeo-visibility, --entity")
 
 
 if __name__ == "__main__":

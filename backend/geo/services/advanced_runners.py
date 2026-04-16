@@ -126,3 +126,7 @@ def run_entity_audit(entity_name: str, entity_type: str = "brand") -> Dict[str, 
         entity_type=entity_type,
         return_data=True,
     )
+
+
+def run_aeo_visibility(url: str) -> Dict[str, Any]:
+    return _silent_call(_geo.aeo_visibility, url, return_data=True)

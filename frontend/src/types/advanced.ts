@@ -2,6 +2,7 @@
 // changes, update this file in lockstep.
 
 export type AdvancedMode =
+  | 'aeo'
   | 'compare'
   | 'crawlTest'
   | 'authority'
@@ -31,6 +32,8 @@ export interface EntityAuditRequest {
 
 export type AdvancedRequestBody<M extends AdvancedMode> = M extends 'compare'
   ? CompareRequest
+  : M extends 'aeo'
+  ? SingleUrlRequest
   : M extends 'visibility'
   ? AiVisibilityRequest
   : M extends 'entity'
@@ -182,8 +185,29 @@ export interface EntityAuditResponse {
   stability_runs: number;
 }
 
+export interface AeoVisibilityResponse {
+  url: string;
+  domain: string;
+  score: number;
+  grade: string;
+  max_score: number;
+  categories: Record<string, { earned: number; max: number }>;
+  page_results: Array<{
+    path: string;
+    score: number;
+    weakest_signal: string;
+    weakest_detail: string;
+  }>;
+  priority_improvements: Array<{
+    category: string;
+    percent: number;
+  }>;
+}
+
 export type AdvancedResponseOf<M extends AdvancedMode> = M extends 'compare'
   ? CompareResponse
+  : M extends 'aeo'
+  ? AeoVisibilityResponse
   : M extends 'crawlTest'
   ? CrawlTestResponse
   : M extends 'authority'

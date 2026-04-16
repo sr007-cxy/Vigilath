@@ -234,7 +234,7 @@ const zh = {
             "title": "GEO 检测",
             "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
             "placeholder": "example.com",
-            "button": "检测 GEO",
+            "button": "Start Free Check",
             "analyzing": "分析中...",
             "error": {
               "empty": "请输入 URL",
@@ -243,7 +243,7 @@ const zh = {
               "quotaExceeded": "本月的免费检测次数已用完，升级会员方案后可继续检测。",
               "quotaCta": "查看会员方案"
             },
-            "poweredBy": "由 GApex 提供支持",
+            "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "需要专家优化帮助？",
             "advanced": {
               "badge": "会员专享",
@@ -262,6 +262,10 @@ const zh = {
                 "unexpected": "发生未知错误，请稍后重试"
               },
               "cards": {
+                "aeo": {
+                  "title": "AEO 可见性审计",
+                  "desc": "检测页面在 AI 生成答案中的优化程度 — 免费，无需 API Key。"
+                },
                 "compare": {
                   "title": "竞争对比检测",
                   "desc": "多站点并排对比全部 GEO 类目的得分差距。"
@@ -289,6 +293,17 @@ const zh = {
               },
               "result": {
                 "lead": "领先",
+                "aeo": {
+                  "title": "AEO 评分",
+                  "overall": "AEO 总分",
+                  "categoryBreakdown": "分类明细",
+                  "pageScores": "逐页 AEO 评分",
+                  "pagePath": "页面",
+                  "pageScore": "得分",
+                  "weakest": "最弱信号",
+                  "priorities": "优先改进项",
+                  "prioritiesHint": "得分低于 50% 的类别 — 优先关注。"
+                },
                 "compare": {
                   "categoryCompare": "类目得分对比",
                   "sitesCategories": "{{sites}} 站点 · {{categories}} 类目",
@@ -431,7 +446,7 @@ const zh = {
               "hint": "请保持此页面打开",
               "almostDone": "即将完成…",
               "subtitle": {
-                "default": "正在运行 23 项 GEO 全量检测",
+                "default": "正在运行 25 项 GEO 全量检测",
                 "compare": "多站点并排打分对比",
                 "crawlTest": "测试 AI 爬虫可达性",
                 "authority": "审计外部权威信号",
@@ -452,7 +467,7 @@ const zh = {
                 "compare": {
                   "fetch": "抓取所有对比站点",
                   "parse": "解析各站点页面",
-                  "score": "对 23 项 GEO 类目打分",
+                  "score": "对 25 项 GEO 类目打分",
                   "diff": "计算类目差距",
                   "finalize": "生成对比表"
                 },
@@ -1001,6 +1016,8 @@ const zh = {
               "Content Quality for AI": "内容质量（面向 AI）",
               "Technical Crawlability": "技术抓取能力",
               "Authority & Trust Signals": "权威与信任信号",
+              "Brand Entity in Knowledge Graphs": "品牌实体知识图谱",
+              "Trust & Safety Signals": "信任与安全信号",
               "AI-Specific Optimization": "AI 专项优化",
               "Social Signals": "社交信号",
               "AI Answer Format Optimization": "AI 答案格式优化",
@@ -1536,7 +1553,7 @@ const zh = {
                 "description": "需要完整自助检测结果的网站管理员和个人开发者",
                 "features": [
                   "需登录账号",
-                  "23 项完整检测（全部子项）",
+                  "25 项完整检测（全部子项）",
                   "每月 20 次检测",
                   "检测项优先级排序",
                   "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
@@ -1550,7 +1567,7 @@ const zh = {
                 "description": "初阶团队的无限检测与优化建议",
                 "features": [
                   "无限检测次数",
-                  "23 项完整检测 + 详细优化建议",
+                  "25 项完整检测 + 详细优化建议",
                   "基础 GEO 覆盖",
                   "OpenAI / Gemini / Anthropic 收录规范",
                   "网站文案建设与优化",
@@ -1564,7 +1581,7 @@ const zh = {
                 "description": "增长期品牌的无限检测 + 优化建议 + 榜单投放",
                 "features": [
                   "无限检测次数",
-                  "23 项完整检测 + 详细优化建议",
+                  "25 项完整检测 + 详细优化建议",
                   "海外主流 LLM 收录规范适配",
                   "含使用场景级文案与合规配置",
                   "付费榜单 SEO 低成本投放位",
@@ -1651,7 +1668,7 @@ const zh = {
                   "price": "$9.99/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
-                  "checkItems": "23 项",
+                  "checkItems": "25 项",
                   "subCheckItems": "全部子项",
                   "monthlyChecks": "20 次",
                   "optimizationDetails": "❌",
@@ -1673,7 +1690,7 @@ const zh = {
                   "price": "$999/月",
                   "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
-                  "checkItems": "23 项",
+                  "checkItems": "25 项",
                   "subCheckItems": "全部子项",
                   "monthlyChecks": "无限",
                   "optimizationDetails": "✅ 详细优化建议",
@@ -1695,7 +1712,7 @@ const zh = {
                   "price": "$2,500/月",
                   "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
-                  "checkItems": "23 项",
+                  "checkItems": "25 项",
                   "subCheckItems": "全部子项",
                   "monthlyChecks": "无限",
                   "optimizationDetails": "✅ 详细优化建议",
@@ -1717,7 +1734,7 @@ const zh = {
                   "price": "专属定制",
                   "type": "定制企业服务",
                   "loginRequired": "✅ 需登录",
-                  "checkItems": "23 项",
+                  "checkItems": "25 项",
                   "subCheckItems": "全部子项",
                   "monthlyChecks": "无限",
                   "optimizationDetails": "✅ 详细优化建议",
@@ -1854,7 +1871,7 @@ const zh = {
               "unlimited": "您当前套餐无检测次数限制。",
               "remaining": "剩余 {{n}} 次，月初自动重置。",
               "unlockedCategories": "已解锁检测类目",
-              "allUnlocked": "您已解锁全部 23 项检测能力。",
+              "allUnlocked": "您已解锁全部 25 项检测能力。",
               "partialUnlocked": "升级套餐可解锁更多检测类目。"
             },
             "history": {

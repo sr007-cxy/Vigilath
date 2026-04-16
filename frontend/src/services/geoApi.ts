@@ -48,6 +48,7 @@ function throwApiError(error: unknown, fallback: string): never {
 // Route-path segment for each advanced mode. Keep in sync with backend
 // backend/app/api/advanced.py paths.
 const ADVANCED_PATH: Record<AdvancedMode, string> = {
+  aeo: '/check/advanced/aeo',
   compare: '/check/advanced/compare',
   crawlTest: '/check/advanced/crawl-test',
   authority: '/check/advanced/authority',

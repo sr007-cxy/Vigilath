@@ -234,7 +234,7 @@ const en = {
             "title": "GEO Readiness Checker",
             "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
             "placeholder": "example.com",
-            "button": "Check GEO Readiness",
+            "button": "Start Free Check",
             "analyzing": "Analyzing...",
             "error": {
               "empty": "Please enter a URL",
@@ -243,7 +243,7 @@ const en = {
               "quotaExceeded": "You've used all your free checks this month. Upgrade a plan to keep checking.",
               "quotaCta": "View plans"
             },
-            "poweredBy": "Powered by GApex",
+            "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "Need expert optimization help?",
             "advanced": {
               "badge": "Members Only",
@@ -262,6 +262,10 @@ const en = {
                 "unexpected": "Unexpected error, please try again later."
               },
               "cards": {
+                "aeo": {
+                  "title": "AEO Visibility Audit",
+                  "desc": "Check how well your pages are optimized for AI-generated answers — free, no API keys needed."
+                },
                 "compare": {
                   "title": "Competitive Comparison",
                   "desc": "Benchmark multiple sites side-by-side across all GEO categories."
@@ -289,6 +293,17 @@ const en = {
               },
               "result": {
                 "lead": "lead",
+                "aeo": {
+                  "title": "AEO Score",
+                  "overall": "Overall AEO Score",
+                  "categoryBreakdown": "Category Breakdown",
+                  "pageScores": "Per-Page AEO Scores",
+                  "pagePath": "Page",
+                  "pageScore": "Score",
+                  "weakest": "Weakest Signal",
+                  "priorities": "Priority Improvements",
+                  "prioritiesHint": "Categories scoring below 50% — focus here first."
+                },
                 "compare": {
                   "categoryCompare": "Category score comparison",
                   "sitesCategories": "{{sites}} sites · {{categories}} categories",
@@ -431,7 +446,7 @@ const en = {
               "hint": "Please keep this page open",
               "almostDone": "Almost done…",
               "subtitle": {
-                "default": "Running all 23 GEO categories",
+                "default": "Running all 25 GEO categories",
                 "compare": "Scoring multiple sites side-by-side",
                 "crawlTest": "Testing AI crawler reachability",
                 "authority": "Auditing off-page authority signals",
@@ -452,7 +467,7 @@ const en = {
                 "compare": {
                   "fetch": "Fetching all target sites",
                   "parse": "Parsing each site",
-                  "score": "Scoring all 23 GEO categories",
+                  "score": "Scoring all 25 GEO categories",
                   "diff": "Computing category differences",
                   "finalize": "Building comparison table"
                 },
@@ -1001,6 +1016,8 @@ const en = {
               "Content Quality for AI": "Content Quality for AI",
               "Technical Crawlability": "Technical Crawlability",
               "Authority & Trust Signals": "Authority & Trust Signals",
+              "Brand Entity in Knowledge Graphs": "Brand Entity in Knowledge Graphs",
+              "Trust & Safety Signals": "Trust & Safety Signals",
               "AI-Specific Optimization": "AI-Specific Optimization",
               "Social Signals": "Social Signals",
               "AI Answer Format Optimization": "AI Answer Format Optimization",
@@ -1536,10 +1553,10 @@ const en = {
                 "originalPrice": "$9.99",
                 "features": [
                   "Account login required",
-                  "23 complete checks (all sub-items)",
+                  "25 complete checks (all sub-items)",
                   "20 checks per month",
                   "Check item priority sorting",
-                  "Complete 23-category report (AI Visibility Score + letter grade + visualization)"
+                  "Complete 25-category report (AI Visibility Score + letter grade + visualization)"
                 ]
               },
               "starter": {
@@ -1548,7 +1565,7 @@ const en = {
                 "description": "Unlimited checks plus optimization suggestions for early-stage teams",
                 "features": [
                   "Unlimited checks",
-                  "23 complete checks + detailed optimization suggestions",
+                  "25 complete checks + detailed optimization suggestions",
                   "Basic GEO coverage",
                   "OpenAI / Gemini / Anthropic indexing standards",
                   "Website copy creation and optimization"
@@ -1560,7 +1577,7 @@ const en = {
                 "description": "Unlimited checks + optimization + paid ranking placement for growth-stage brands",
                 "features": [
                   "Unlimited checks",
-                  "23 complete checks + detailed optimization suggestions",
+                  "25 complete checks + detailed optimization suggestions",
                   "Overseas mainstream LLM indexing standard adaptation",
                   "Usage scenario-level copy and compliance configuration",
                   "Paid list SEO low-cost placement"
@@ -1605,7 +1622,7 @@ const en = {
                 "monthlyChecks": "Monthly Checks",
                 "optimizationDetails": "Optimization Suggestions Detail",
                 "prioritySorting": "Check Item Priority Sorting",
-                "fullReport": "Full Report (23 Categories)",
+                "fullReport": "Full Report (25 Categories)",
                 "history": "Check History",
                 "support": "Technical Support",
                 "basicGeo": "Basic GEO Coverage",
@@ -1848,7 +1865,7 @@ const en = {
               "unlimited": "Your plan has no monthly check limit.",
               "remaining": "{{n}} left. Resets at the start of next month.",
               "unlockedCategories": "Unlocked categories",
-              "allUnlocked": "All 23 detection categories unlocked.",
+              "allUnlocked": "All 25 detection categories unlocked.",
               "partialUnlocked": "Upgrade your plan to unlock more categories."
             },
             "history": {

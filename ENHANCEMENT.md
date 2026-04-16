@@ -1,5 +1,36 @@
 # GEO Checker — Planned Enhancements
 
+## Status Summary (as of 2026-04-13)
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | Competitive Comparison Analysis | ✅ DONE |
+| 2 | AI Visibility Score | ✅ DONE |
+| 3 | Brand Entity Establishment | ✅ DONE |
+| 4 | Topical Authority & Content Depth | ⬜ Open |
+| 5 | E-E-A-T Signals | ✅ DONE |
+| 6 | Backlink Profile & External Mentions | ✅ DONE |
+| 7 | Content Freshness & Update Cadence | ✅ DONE |
+| 8 | Multi-Format Content Coverage | ✅ DONE |
+| 9 | Cross-Platform Content Distribution | ✅ DONE |
+| 10 | Overall GEO Report Export | ✅ DONE |
+| 11 | AI Citation Tracking (`--citation-check`) | ✅ DONE |
+| 11b | Expanded AI Visibility Audit (`--ai-visibility`) | ✅ DONE |
+| 12 | Prompt-Aligned Content Optimization | ✅ DONE |
+| 13 | Semantic Markup & Linked Data Quality | ✅ DONE |
+| 14 | Content Deduplication / Cannibalization | ✅ DONE |
+| 15 | AI-Specific robots.txt Granularity | ✅ DONE |
+| 16 | Page-Level Entity Density | ⬜ Open |
+| 17 | Conversational Content Readiness | ✅ DONE |
+| 18 | AI Snippet Extraction Friendliness | ✅ DONE |
+| 19 | Trust & Safety Signals | ✅ DONE |
+| 20 | API & Data Feed Availability | ✅ DONE |
+| 21 | Entity GEO Audit (`--entity`) | ✅ DONE |
+
+**Remaining open work:** #4 (topical authority / content clusters) and #16 (page-level entity density). Both would need a deeper crawl than the current 5-page `check_multi_page` sample.
+
+---
+
 ## 1. Competitive Comparison Analysis ✅ DONE
 Compare GEO readiness across multiple URLs (`geo_checker.py --compare url1 url2 url3`) with a side-by-side scorecard showing which site wins on each check.
 
@@ -10,31 +41,43 @@ A metric measuring how likely a site is to appear in AI-generated answers. Combi
 
 **Implementation:** All 23 check categories now track earned/max points via `track_score()`. Produces a 0-100 score with letter grade (A+ through F). Displayed at the end of every report with a per-category breakdown and visual bar chart.
 
-## 3. Brand Entity Establishment
+## 3. Brand Entity Establishment ✅ DONE
 Check if the brand exists as a recognized entity in Knowledge Graphs, Wikidata, Wikipedia — verifiable identity that AI engines trust.
+
+**Implementation:** New `check_brand_entity_kg()` function runs in default URL mode. Derives brand candidates from JSON-LD Organization name, `og:site_name`, title suffix, and domain. Queries the Wikipedia and Wikidata search APIs. Also pulls Wikipedia backlinks (up to 50) as a proxy for external authority (#6). Scored 0-5 under `Brand Entity KG`.
 
 ## 4. Topical Authority & Content Depth
 Assess whether the site covers its core topics comprehensively through interlinked content clusters, not just isolated pages.
 
-## 5. E-E-A-T Signals
+## 5. E-E-A-T Signals ✅ DONE
 Check for author bio pages, credentials, external bylines, and expertise indicators beyond basic author meta tags.
 
-## 6. Backlink Profile & External Mentions
+**Implementation:** `check_authority_trust()` now probes `/about`, `/about-us`, `/team`, `/authors`, `/our-team`, `/people` for a substantive bio page, then scans for credential keywords (PhD, MD, founder, formerly at, published in, etc.) and external bylines on major outlets (Medium, Substack, Forbes, HBR, arxiv, ORCID, Google Scholar).
+
+## 6. Backlink Profile & External Mentions ✅ DONE
 Assess third-party corroboration: authoritative sites linking to or mentioning the brand.
 
-## 7. Content Freshness & Update Cadence
+**Implementation:** Covered by `check_brand_entity_kg()` via the Wikipedia `backlinks` API — counts how many Wikipedia pages link to the brand's article. `--authority-audit` continues to handle the multi-platform probe side.
+
+## 7. Content Freshness & Update Cadence ✅ DONE
 Measure how frequently content is updated across the site, not just homepage freshness.
 
-## 8. Multi-Format Content Coverage
+**Implementation:** `check_ai_optimization()` now fetches `sitemap.xml` (or `sitemap_index.xml` with child sitemap following), parses up to 200 `<lastmod>` entries, and computes median page age and the fraction updated in the last 90 days. Reports sitewide cadence as healthy / moderate / low.
+
+## 8. Multi-Format Content Coverage ✅ DONE
 Check for content diversity: video + transcripts, podcasts, PDFs, infographics — more formats = more AI surface area.
+
+**Implementation:** `check_outbound_and_media()` now detects podcasts (audio tags, Spotify/Apple/Anchor/Soundcloud links, PodcastSeries schema), PDFs (links ending in .pdf), infographics (alt/src keywords), and slides (SlideShare, Speaker Deck). Reports total format count.
 
 ## 9. Cross-Platform Content Distribution ✅ DONE
 Detect presence on YouTube, Medium, LinkedIn, Reddit, Quora — platforms AI models train on.
 
 **Implementation:** New `check_cross_platform()` function detects brand presence on 10 platforms (X/Twitter, LinkedIn, YouTube, GitHub, Reddit, Facebook, Instagram, Medium, TikTok, Quora). Uses a two-phase approach: (1) on-page signals from sameAs JSON-LD, social links, and meta tags, (2) active URL probing for platforms not found on-page. Shows AI training context mapping each platform to the AI models it feeds. Scores 0-5 based on coverage count.
 
-## 10. Overall GEO Report Export
+## 10. Overall GEO Report Export ✅ DONE
 JSON/HTML/PDF export for stakeholders, CI/CD integration, and tracking improvements over time.
+
+**Implementation:** Single `--report [FORMAT]` flag with `FORMAT` ∈ {`pdf`, `json`, `html`}. Bare `--report` defaults to `pdf` (paginated Courier PDF of the run's terminal output). `--report json` emits a structured JSON document (schema_version, generated_at, mode, target, overall score, grade, per-category earned/max/percent). `--report html` writes a styled standalone HTML page with score header, per-category bar chart, and captured run output. All variants write to `~/geo_reports/<timestamp>/report.<ext>` and compose with any audit mode.
 
 ## 11. AI Citation / Source Attribution Tracking ✅ DONE (v1)
 Check whether the site is actually being cited by AI engines (Perplexity, ChatGPT with browsing, Gemini). This is the ultimate GEO outcome metric — measure whether AI-generated answers reference or link back to the site.
@@ -75,32 +118,48 @@ Content Gap Score:     X/20  (missing-topic coverage)
 GEO Health:           X/100
 ```
 
-## 12. Prompt-Aligned Content Optimization
+## 12. Prompt-Aligned Content Optimization ✅ DONE
 Detect whether content answers question-style queries directly (who/what/how/why patterns). AI engines serve content that maps to how users prompt them — pages structured around natural questions rank higher in AI answers.
 
-## 13. Semantic Markup & Linked Data Quality
+**Implementation:** Added a 6th check to `check_ai_answer_formats()` that regex-matches headings against question-pattern starters (who/what/how/why/when/where/is/are/can/does/do/should/will/which/whose/whom) and the trailing `?` suffix. Scores 1/6 for 3+ question headings.
+
+## 13. Semantic Markup & Linked Data Quality ✅ DONE
 Beyond basic JSON-LD detection, validate that structured data uses specific, granular schema types (e.g., `HowTo`, `Recipe`, `Product` with reviews, `FAQPage`) rather than just generic `WebPage` or `Article`. Richer schema types give AI engines more extractable facts.
 
-## 14. Content Deduplication / Cannibalization
+**Implementation:** `check_structured_data()` now walks every JSON-LD block (including `@graph` children) and classifies types into `GRANULAR_TYPES` (HowTo, Recipe, FAQPage, QAPage, Product, Review, AggregateRating, Event, Course, JobPosting, SoftwareApplication, Dataset, Article, NewsArticle, BlogPosting, VideoObject, LocalBusiness, Organization, BreadcrumbList) vs. `GENERIC_TYPES` (Thing, WebPage, WebSite, CreativeWork). Additionally checks whether `Product` objects include `review`/`aggregateRating` fields.
+
+## 14. Content Deduplication / Cannibalization ✅ DONE
 Detect pages competing for the same topic or keywords, which confuses AI engines about which page to cite. Flag near-duplicate titles, meta descriptions, and content overlap across pages.
 
-## 15. AI-Specific robots.txt Granularity
+**Implementation:** `check_multi_page()` now collects titles alongside descriptions for duplicate detection and computes 5-gram Jaccard similarity between every pair of sampled pages. Flags any pair with ≥50% overlap as potential cannibalization and suggests consolidation or `rel=canonical`.
+
+## 15. AI-Specific robots.txt Granularity ✅ DONE
 Beyond checking if AI bots are allowed or blocked, assess whether the site has a *strategic* allow/block policy. Check for `ai.txt`, per-bot directives, and whether the policy balances crawl access (for citation) vs. training opt-out (for IP protection).
+
+**Implementation:** `check_robots_txt()` now probes `/ai.txt` and `/.well-known/ai.txt`, reports allow-focused / disallow-focused / balanced policies based on directive mix, and awards 0-2 pts.
 
 ## 16. Page-Level Entity Density
 Measure how clearly each page defines and reinforces a single entity or topic. Pages with a clear primary entity help AI engines extract clean, attributable facts rather than muddled multi-topic content.
 
-## 17. Conversational Content Readiness
+## 17. Conversational Content Readiness ✅ DONE
 Check for Q&A pairs, "People Also Ask" style content, and conversational tone that maps well to chat-based AI interfaces. Detect question headings (`<h2>How do I...?</h2>`) and direct-answer patterns.
 
-## 18. AI Snippet Extraction Friendliness
+**Implementation:** Covered by the same question-heading detection added for #12 in `check_ai_answer_formats()`.
+
+## 18. AI Snippet Extraction Friendliness ✅ DONE
 Detect whether key facts appear in extractable positions (first paragraph, table cells, list items, definition lists) vs. buried deep in prose. AI engines preferentially extract content from prominent, structured positions.
 
-## 19. Trust & Safety Signals
+**Implementation:** `check_outbound_and_media()` now locates the first substantive paragraph inside `<main>` / `<article>` / `<body>` and checks whether it (a) contains a definition verb (is/are/means/refers to/describes) and/or (b) contains a statistic (percent, dollar amount, comma-separated number, or year) within a 25-120 word window — the ideal snippet length.
+
+## 19. Trust & Safety Signals ✅ DONE
 Check for privacy policy, terms of service, contact information completeness, DMCA/copyright pages, and business registration details. These are trust signals AI engines use to assess source credibility and determine citation-worthiness.
 
-## 20. API & Data Feed Availability
+**Implementation:** New `check_trust_safety()` function registered in the default pipeline. Probes common paths for Privacy (/privacy, /privacy-policy, /legal/privacy, …), Terms (/terms, /tos, /terms-of-service, …), Contact (/contact, /support, /help, …), and DMCA/legal/imprint pages — falling back to homepage anchor-text matching when the path isn't standard. Also scans the footer and full page text for email, phone, physical-address hints, and legal entity markers (LLC/Inc/Ltd/GmbH/SA/EIN/VAT/SIREN/company number), and cross-checks JSON-LD Organization for `address`, `contactPoint`, and `telephone`. Scored 0-6 under `Trust & Safety`.
+
+## 20. API & Data Feed Availability ✅ DONE
 Beyond OpenAPI detection, check for RSS feed richness (full content vs. excerpts), webhook/integration documentation, and machine-readable data exports. AI agents increasingly consume structured data feeds programmatically.
+
+**Implementation:** `check_technical_crawlability()` now fetches the discovered feed, parses its items/entries, and measures the average content length per item: ≥300 words is flagged "full content", 80-299 is "excerpts", <80 is "headlines". Also probes /api, /api/v1, /graphql, /openapi.{json,yaml}, /swagger.json, /docs/api, /webhooks, /integrations, /developers for machine-readable / integration endpoints.
 
 ## 21. Entity GEO Audit (`--entity`) ✅ DONE
 Audit the GEO readiness of a **brand, product, or person** — without requiring a URL. Instead of crawling a website, this mode queries AI engines to assess how well an entity is recognized, described, and recommended across AI-powered search.

@@ -32,6 +32,11 @@ class CitationCheckRequest(BaseModel):
     url: str
 
 
+class AeoVisibilityRequest(BaseModel):
+    """--aeo-visibility: one URL, AEO content optimization audit (free)."""
+    url: str
+
+
 class AiVisibilityRequest(BaseModel):
     """--ai-visibility: one URL, optional custom queries for the audit."""
     url: str
@@ -241,6 +246,34 @@ class EntityAuditResponse(BaseModel):
     stability_runs: int
 
 
+class AeoCategoryScore(BaseModel):
+    earned: float
+    max: float
+
+
+class AeoPageResult(BaseModel):
+    path: str
+    score: int
+    weakest_signal: str
+    weakest_detail: str
+
+
+class AeoPriorityImprovement(BaseModel):
+    category: str
+    percent: int
+
+
+class AeoVisibilityResponse(BaseModel):
+    url: str
+    domain: str
+    score: int
+    grade: str
+    max_score: int
+    categories: Dict[str, AeoCategoryScore]
+    page_results: List[AeoPageResult]
+    priority_improvements: List[AeoPriorityImprovement]
+
+
 # ---------------------------------------------------------------------------
 # Tier gating — mirrors frontend ADVANCED_MODES in Result.tsx. Keep in sync.
 # ---------------------------------------------------------------------------
@@ -256,6 +289,7 @@ TIER_RANK: Dict[str, int] = {
 # Each advanced mode's minimum paid tier. These match Result.tsx ADVANCED_MODES
 # so frontend and backend agree on what's locked.
 MODE_MIN_TIER: Dict[str, str] = {
+    "aeo": "free",
     "compare": "pro",
     "crawlTest": "pro",
     "authority": "pro",

@@ -9,6 +9,7 @@
 import type { TFunction } from 'i18next';
 import type {
   AdvancedMode,
+  AeoVisibilityResponse,
   AiVisibilityResponse,
   AuthorityAuditResponse,
   CitationCheckResponse,
@@ -824,9 +825,109 @@ const buildEntityBlocks = (data: EntityAuditResponse, t: TFunction, language: st
   return blocks;
 };
 
+// ---------- aeo ----------
+
+const buildAeoBlocks = (data: AeoVisibilityResponse, t: TFunction, language: string): string[] => {
+  const blocks: string[] = [];
+  const generatedAt = new Date().toLocaleString(localeFor(language));
+
+  blocks.push(
+    coverBlock({
+      badge: t('home.advanced.cards.aeo.title', { defaultValue: 'AEO Visibility Audit' }) as string,
+      title: t('home.advanced.result.aeo.title', { defaultValue: 'AEO Score' }) as string,
+      subtitle: t('home.advanced.cards.aeo.desc', { defaultValue: '' }) as string,
+      rows: [
+        { label: t('result.pdfReport.targetSite') as string, value: data.url },
+        { label: t('result.advancedPdf.domain', { defaultValue: 'Domain' }) as string, value: data.domain },
+        { label: t('result.pdfReport.generatedAt') as string, value: generatedAt },
+      ],
+      accent: '#0ea5e9',
+    }),
+  );
+
+  const pct = (data.score / Math.max(1, data.max_score)) * 100;
+  blocks.push(
+    scoreHero({
+      scoreLabel: t('home.advanced.result.aeo.overall', { defaultValue: 'Overall AEO Score' }) as string,
+      scoreValue: fmtScore(data.score, data.max_score),
+      scoreSuffix: fmtPercent(pct),
+      grade: data.grade,
+      rightStats: [
+        {
+          label: t('home.advanced.result.aeo.pageScores', { defaultValue: 'Per-Page AEO Scores' }) as string,
+          value: data.page_results.length,
+          tone: 'neutral',
+        },
+        {
+          label: t('home.advanced.result.aeo.priorities', { defaultValue: 'Priority Improvements' }) as string,
+          value: data.priority_improvements.length,
+          tone: data.priority_improvements.length === 0 ? 'good' : 'warn',
+        },
+      ],
+    }),
+  );
+
+  // Category breakdown
+  blocks.push(sectionHeading(t('home.advanced.result.aeo.categoryBreakdown', { defaultValue: 'Category Breakdown' }) as string, '#0ea5e9'));
+  const catEntries = Object.entries(data.categories);
+  blocks.push(
+    dataTable(
+      [
+        t('home.advanced.result.compare.category', { defaultValue: 'Category' }) as string,
+        t('result.advancedPdf.compare.score', { defaultValue: 'Score' }) as string,
+        '%',
+      ],
+      catEntries.map(([cat, { earned, max }]) => {
+        const p = max > 0 ? (earned / max) * 100 : 0;
+        return [
+          { value: cat, align: 'left' as const, bold: true },
+          { value: fmtScore(earned, max), align: 'center' as const },
+          { value: fmtPercent(p), align: 'center' as const, color: p >= 75 ? '#166534' : p >= 50 ? '#92400e' : '#991b1b', bold: true },
+        ];
+      }),
+    ),
+  );
+
+  // Per-page scores
+  if (data.page_results.length > 0) {
+    blocks.push(sectionHeading(t('home.advanced.result.aeo.pageScores', { defaultValue: 'Per-Page AEO Scores' }) as string, '#8b5cf6'));
+    blocks.push(
+      dataTable(
+        [
+          t('home.advanced.result.aeo.pagePath', { defaultValue: 'Page' }) as string,
+          t('home.advanced.result.aeo.pageScore', { defaultValue: 'Score' }) as string,
+          t('home.advanced.result.aeo.weakest', { defaultValue: 'Weakest Signal' }) as string,
+        ],
+        data.page_results.map((p) => [
+          { value: p.path, align: 'left' as const, bold: true },
+          { value: String(p.score), align: 'center' as const, color: p.score >= 75 ? '#166534' : p.score >= 50 ? '#92400e' : '#991b1b', bold: true },
+          { value: p.weakest_signal || '—', align: 'left' as const },
+        ]),
+      ),
+    );
+  }
+
+  // Priority improvements
+  if (data.priority_improvements.length > 0) {
+    blocks.push(sectionHeading(t('home.advanced.result.aeo.priorities', { defaultValue: 'Priority Improvements' }) as string, '#f59e0b'));
+    blocks.push(
+      callout(t('home.advanced.result.aeo.prioritiesHint', { defaultValue: 'Categories scoring below 50% — focus here first.' }) as string, 'warn'),
+    );
+    blocks.push(
+      bulletList(
+        t('home.advanced.result.aeo.priorities', { defaultValue: 'Priority Improvements' }) as string,
+        data.priority_improvements.map((pi) => `${pi.category} — ${fmtPercent(pi.percent)}`),
+      ),
+    );
+  }
+
+  return blocks;
+};
+
 // ---------- Dispatcher ----------
 
 interface ModeArgsMap {
+  aeo: AeoVisibilityResponse;
   compare: CompareResponse;
   crawlTest: CrawlTestResponse;
   authority: AuthorityAuditResponse;
@@ -844,6 +945,8 @@ export interface ExportAdvancedArgs<M extends AdvancedMode> {
 
 const buildBlocksFor = <M extends AdvancedMode>(args: ExportAdvancedArgs<M>): string[] => {
   switch (args.mode) {
+    case 'aeo':
+      return buildAeoBlocks(args.data as AeoVisibilityResponse, args.t, args.language);
     case 'compare':
       return buildCompareBlocks(args.data as CompareResponse, args.t, args.language);
     case 'crawlTest':
@@ -870,6 +973,7 @@ const headerSubjectFor = <M extends AdvancedMode>(args: ExportAdvancedArgs<M>): 
       const winner = d.winner?.domain || d.results[0]?.domain || 'compare';
       return { headerRight: `${labelSite}: ${d.urls.length} URLs`, filenameSubject: winner };
     }
+    case 'aeo':
     case 'crawlTest':
     case 'authority':
     case 'citation':

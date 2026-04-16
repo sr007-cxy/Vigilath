@@ -25,6 +25,8 @@ from geo.models.advanced import (
     AiVisibilityResponse,
     EntityAuditRequest,
     EntityAuditResponse,
+    AeoVisibilityRequest,
+    AeoVisibilityResponse,
     MODE_MIN_TIER,
     TIER_RANK,
 )
@@ -126,3 +128,11 @@ async def advanced_entity(body: EntityAuditRequest, request: Request):
         body.entity_type.strip().lower(),
     )
     return EntityAuditResponse(**data)
+
+
+@router.post("/check/advanced/aeo", response_model=AeoVisibilityResponse)
+async def advanced_aeo(body: AeoVisibilityRequest, request: Request):
+    _ensure_tier(request, "aeo")
+    clean_url = _check_url(body.url)
+    data = await _run_or_raise(advanced_runners.run_aeo_visibility, clean_url)
+    return AeoVisibilityResponse(**data)

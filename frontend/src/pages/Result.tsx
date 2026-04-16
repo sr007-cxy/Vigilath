@@ -94,6 +94,8 @@ const categoryGroups: Record<string, string[]> = {
   authorityExternal: [
     'Search Engine & AI Platform Registration',
     'Authority & Trust Signals',
+    'Brand Entity in Knowledge Graphs',
+    'Trust & Safety Signals',
     'Social Signals',
     'Cross-Platform Content Distribution',
   ],

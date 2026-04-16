@@ -6,6 +6,7 @@ import { useMembership } from '../hooks/useMembership';
 import { PaymentModal } from '../components/PaymentModal';
 import type {
   AdvancedMode,
+  AeoVisibilityResponse,
   CompareResponse,
   CrawlTestResponse,
   AuthorityAuditResponse,
@@ -15,7 +16,8 @@ import type {
 } from '../types/advanced';
 
 // Must match backend MODE_MIN_TIER in app/models/advanced.py.
-const MODE_MIN_TIER: Record<AdvancedMode, 'pro' | 'starter'> = {
+const MODE_MIN_TIER: Record<AdvancedMode, 'free' | 'pro' | 'starter'> = {
+  aeo: 'free',
   compare: 'pro',
   crawlTest: 'pro',
   authority: 'pro',
@@ -25,6 +27,7 @@ const MODE_MIN_TIER: Record<AdvancedMode, 'pro' | 'starter'> = {
 };
 
 const VALID_MODES: AdvancedMode[] = [
+  'aeo',
   'compare',
   'crawlTest',
   'authority',
@@ -42,6 +45,14 @@ interface ModeVisual {
 // `home.advanced.cards.<mode>.title` — kept out of this table so the UI
 // stays fully localizable.
 const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
+  aeo: {
+    gradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+    ),
+  },
   compare: {
     gradient: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
     icon: (
@@ -116,6 +127,7 @@ function isValidUrl(s: string): boolean {
 }
 
 export type AnyAdvancedResult =
+  | AeoVisibilityResponse
   | CompareResponse
   | CrawlTestResponse
   | AuthorityAuditResponse
@@ -156,10 +168,10 @@ export function Advanced() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (mode !== 'aeo' && !isLoggedIn) {
       navigate('/login', { replace: true });
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoggedIn, mode, navigate]);
 
   if (!mode) {
     return (
@@ -213,7 +225,7 @@ export function Advanced() {
       }
     }
 
-    if (!isUnlocked) {
+    if (mode !== 'aeo' && !isUnlocked) {
       setShowPaymentModal(true);
       return;
     }
@@ -511,6 +523,8 @@ function ModeForm(props: ModeFormProps) {
 
 export function ResultPanel({ mode, result }: { mode: AdvancedMode; result: AnyAdvancedResult }) {
   switch (mode) {
+    case 'aeo':
+      return <AeoResult data={result as AeoVisibilityResponse} />;
     case 'compare':
       return <CompareResult data={result as CompareResponse} />;
     case 'crawlTest':
@@ -655,6 +669,94 @@ function MetricRing({
         )}
       </div>
     </div>
+  );
+}
+
+// --- AEO Visibility ---
+function AeoResult({ data }: { data: AeoVisibilityResponse }) {
+  const { t } = useTranslation();
+  const catEntries = Object.entries(data.categories);
+  return (
+    <>
+      {/* Score hero */}
+      <SectionCard title={t('home.advanced.result.aeo.title', { defaultValue: 'AEO Score' })}>
+        <div className="flex items-end gap-4 mb-4">
+          <div>
+            <div className="text-4xl font-bold gradient-text">
+              {data.score}<span className="text-lg text-secondary font-normal">/100</span>
+            </div>
+            <div className="text-sm text-secondary">{data.grade}</div>
+          </div>
+          <div className="flex-1">
+            <ScoreBar
+              label={t('home.advanced.result.aeo.overall', { defaultValue: 'Overall AEO Score' })}
+              value={data.score}
+              max={data.max_score}
+            />
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Category breakdown */}
+      <SectionCard title={t('home.advanced.result.aeo.categoryBreakdown', { defaultValue: 'Category Breakdown' })}>
+        {catEntries.map(([cat, { earned, max }]) => (
+          <ScoreBar key={cat} label={cat} value={earned} max={max} />
+        ))}
+      </SectionCard>
+
+      {/* Per-page scores */}
+      {data.page_results.length > 0 && (
+        <SectionCard
+          title={t('home.advanced.result.aeo.pageScores', { defaultValue: 'Per-Page AEO Scores' })}
+          subtitle={`${data.page_results.length} pages`}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-secondary text-xs border-b border-border">
+                  <th className="text-left pb-2 font-medium">{t('home.advanced.result.aeo.pagePath', { defaultValue: 'Page' })}</th>
+                  <th className="text-right pb-2 font-medium">{t('home.advanced.result.aeo.pageScore', { defaultValue: 'Score' })}</th>
+                  <th className="text-left pb-2 pl-4 font-medium">{t('home.advanced.result.aeo.weakest', { defaultValue: 'Weakest Signal' })}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.page_results.map((p) => {
+                  const clr = p.score >= 70 ? 'text-emerald-400' : p.score >= 40 ? 'text-amber-400' : 'text-rose-400';
+                  return (
+                    <tr key={p.path} className="border-b border-border/50 last:border-0">
+                      <td className="py-2 font-mono text-xs text-primary truncate max-w-[200px]">{p.path}</td>
+                      <td className={`py-2 text-right font-mono font-semibold ${clr}`}>{p.score}</td>
+                      <td className="py-2 pl-4 text-secondary text-xs">
+                        <span className="text-primary font-medium">{p.weakest_signal}</span>: {p.weakest_detail}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Priority improvements */}
+      {data.priority_improvements.length > 0 && (
+        <SectionCard title={t('home.advanced.result.aeo.priorities', { defaultValue: 'Priority Improvements' })}>
+          <p className="text-xs text-secondary mb-3">
+            {t('home.advanced.result.aeo.prioritiesHint', { defaultValue: 'Categories scoring below 50% — focus here first.' })}
+          </p>
+          <div className="space-y-2">
+            {data.priority_improvements.map((p) => (
+              <div key={p.category} className="flex items-center justify-between bg-tertiary rounded-lg px-3 py-2">
+                <span className="text-sm text-primary">{p.category}</span>
+                <span className={`text-xs font-mono font-semibold ${p.percent < 25 ? 'text-rose-400' : 'text-amber-400'}`}>
+                  {p.percent}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+    </>
   );
 }
 

@@ -309,6 +309,40 @@ def check_robots_txt(base_url):
     bot_ratio = max(accessible, 0) / total_bots if total_bots > 0 else 1
     track_score("robots.txt", round(bot_ratio * 3, 1), 3)
 
+    # ai.txt / .well-known/ai.txt — emerging standard for strategic AI policy
+    ai_txt_found = False
+    for ai_path in ["/ai.txt", "/.well-known/ai.txt"]:
+        ai_resp = fetch(urljoin(base_url, ai_path))
+        if ai_resp and ai_resp.status_code == 200 and len(ai_resp.text.strip()) > 0:
+            ai_txt_found = True
+            emit_check(PASS, "result.checks.robots.ai_txt_found",
+                       f"{ai_path} found — strategic AI crawler policy declared", {"path": ai_path})
+            ai_text = ai_resp.text.lower()
+            has_allow = "allow" in ai_text
+            has_disallow = "disallow" in ai_text
+            if has_allow and has_disallow:
+                print(f"         Contains both allow and disallow directives (balanced policy)")
+            elif has_allow:
+                print(f"         Allow-focused policy (crawl-friendly)")
+            elif has_disallow:
+                print(f"         Disallow-focused policy (training opt-out)")
+            track_score("robots.txt", 2, 2)
+            break
+    if not ai_txt_found:
+        emit_check(INFO, "result.checks.robots.ai_txt_not_found",
+                   "No ai.txt or .well-known/ai.txt found — emerging standard for AI-specific policies")
+        emit_fix("result.fixes.robots.add_ai_txt",
+                 "Consider an ai.txt file at your site root (spec: spawning.ai/ai-txt) to declare\n"
+                 "a strategic policy separate from robots.txt. Example balancing access vs. training:\n"
+                 "  # Allow search indexing for AI answers\n"
+                 "  User-Agent: *\n"
+                 "  Allow: /\n"
+                 "  # Opt out of training\n"
+                 "  User-Agent: GPTBot\n"
+                 "  Disallow: /private/\n"
+                 "This communicates a deliberate allow-for-citation / opt-out-of-training stance.")
+        track_score("robots.txt", 0, 2)
+
 
 # ---------------------------------------------------------------------------
 # 3. llms.txt
@@ -328,7 +362,11 @@ def check_llms_txt(base_url):
             has_title = any(line.strip().startswith("# ") for line in lines)
             has_description = len([l for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith(">") and not l.strip().startswith("-")]) > 0
             has_sections = any(line.strip().startswith("## ") for line in lines)
-            has_links = any("](http" in line or "](/" in line for line in lines)
+            has_links = any(
+                "](http" in line or "](/" in line
+                or "http://" in line or "https://" in line
+                for line in lines
+            )
             has_blockquotes = any(line.strip().startswith("> ") for line in lines)
 
             llms_score += 2  # file found
@@ -356,7 +394,7 @@ def check_llms_txt(base_url):
                 emit_fix("result.fixes.llms.add_sections", "Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog")
 
             if has_links:
-                link_count = sum(1 for l in lines if "](http" in l or "](/" in l)
+                link_count = sum(1 for l in lines if "](http" in l or "](/" in l or "http://" in l or "https://" in l)
                 emit_check(PASS, "result.checks.llms.links_found", f"{link_count} link(s) to resources found", {"count": link_count})
                 llms_score += 0.5
             else:
@@ -397,21 +435,36 @@ def check_well_known(base_url):
     for path, description in well_known_files.items():
         url = urljoin(base_url, f"/{path}")
         resp = fetch(url)
-        if resp and resp.status_code == 200 and len(resp.text.strip()) > 0:
+        if not (resp and resp.status_code == 200 and len(resp.text.strip()) > 0):
+            emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description}", {"path": path, "description": description})
+            continue
+
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        body = resp.text.lstrip()
+        looks_html = ctype.startswith("text/html") or body[:15].lower().startswith(("<!doctype", "<html"))
+
+        if path.endswith(".json"):
+            if looks_html:
+                emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description} (server returned HTML fallback)", {"path": path, "description": description})
+                continue
+            try:
+                data = json.loads(resp.text)
+            except json.JSONDecodeError:
+                emit_check(WARN, "result.checks.well_known.invalid_json", f"{path} exists but contains invalid JSON", {"path": path})
+                emit_fix("result.fixes.well_known.fix_invalid_json", f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.", {"path": path})
+                found_any = True
+                wk_found += 1
+                continue
             found_any = True
             wk_found += 1
             emit_check(PASS, "result.checks.well_known.file_found", f"{path} found — {description}", {"path": path, "description": description})
-            if path.endswith(".json"):
-                try:
-                    data = json.loads(resp.text)
-                    if path.endswith("ai-plugin.json"):
-                        name = data.get("name_for_human", data.get("name", "unknown"))
-                        print(f"         Plugin name: {name}")
-                except json.JSONDecodeError:
-                    emit_check(WARN, "result.checks.well_known.invalid_json", f"{path} exists but contains invalid JSON", {"path": path})
-                    emit_fix("result.fixes.well_known.fix_invalid_json", f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.", {"path": path})
+            if path.endswith("ai-plugin.json"):
+                name = data.get("name_for_human", data.get("name", "unknown"))
+                print(f"         Plugin name: {name}")
         else:
-            emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description}", {"path": path, "description": description})
+            found_any = True
+            wk_found += 1
+            emit_check(PASS, "result.checks.well_known.file_found", f"{path} found — {description}", {"path": path, "description": description})
 
     if not found_any:
         print(f"  [{INFO}] No .well-known AI discovery files found")
@@ -575,25 +628,102 @@ def check_structured_data(base_url):
         emit_check(FAIL, "result.checks.structured_data.fetch_failed", "Could not fetch homepage")
         return
 
+    # Granular types that give AI engines the most extractable facts
+    GRANULAR_TYPES = {
+        "HowTo": "step-by-step instructions",
+        "Recipe": "cooking/recipe data",
+        "FAQPage": "Q&A pairs",
+        "QAPage": "single Q&A",
+        "Product": "product details",
+        "Review": "individual review",
+        "AggregateRating": "aggregate ratings",
+        "Event": "event details",
+        "Course": "course details",
+        "JobPosting": "job listing",
+        "SoftwareApplication": "software metadata",
+        "Dataset": "dataset metadata",
+        "Article": "article metadata",
+        "NewsArticle": "news article",
+        "BlogPosting": "blog post",
+        "VideoObject": "video metadata",
+        "LocalBusiness": "local business",
+        "Organization": "organization",
+        "BreadcrumbList": "site hierarchy",
+    }
+    GENERIC_TYPES = {"Thing", "WebPage", "WebSite", "CreativeWork"}
+
+    def _collect_types(obj, collected):
+        if isinstance(obj, dict):
+            t = obj.get("@type")
+            if isinstance(t, list):
+                for x in t:
+                    if isinstance(x, str):
+                        collected.append((x, obj))
+            elif isinstance(t, str):
+                collected.append((t, obj))
+            graph = obj.get("@graph", [])
+            if isinstance(graph, list):
+                for item in graph:
+                    _collect_types(item, collected)
+
     json_ld_scripts = soup.find_all("script", type="application/ld+json")
     if json_ld_scripts:
         emit_check(PASS, "result.checks.structured_data.jsonld_found", f"Found {len(json_ld_scripts)} JSON-LD block(s)", {"count": len(json_ld_scripts)})
-        track_score("Structured Data", 4, 4)
+        track_score("Structured Data", 3, 3)
         parsed_types = 0
+        all_collected = []
         for i, script in enumerate(json_ld_scripts):
             try:
                 data = json.loads(script.string)
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    _collect_types(item, all_collected)
                 if isinstance(data, dict):
-                    schema_type = data.get("@type", "unknown")
-                    print(f"         Block {i+1}: @type = {schema_type}")
-                    parsed_types += 1
+                    print(f"         Block {i+1}: @type = {data.get('@type', 'unknown')}")
                 elif isinstance(data, list):
                     types = [item.get("@type", "unknown") for item in data if isinstance(item, dict)]
-                    print(f"         Block {i+1}: @types = {', '.join(types)}")
-                    parsed_types += len(types)
+                    print(f"         Block {i+1}: @types = {', '.join(str(t) for t in types)}")
+                parsed_types += len(items)
             except (json.JSONDecodeError, TypeError):
                 print(f"         Block {i+1}: present but could not parse")
-        track_score("Structured Data", min(parsed_types, 3), 3)
+
+        present_granular = {name for name, _ in all_collected if name in GRANULAR_TYPES}
+        present_generic = {name for name, _ in all_collected if name in GENERIC_TYPES}
+        if present_granular:
+            labels = ", ".join(f"{n} ({GRANULAR_TYPES[n]})" for n in sorted(present_granular))
+            emit_check(PASS, "result.checks.structured_data.granular_types", f"Granular schema types present: {labels}", {"types": labels})
+
+            # Extra credit for Product with reviews
+            product_has_reviews = False
+            for name, obj in all_collected:
+                if name == "Product":
+                    if obj.get("review") or obj.get("aggregateRating") or obj.get("reviews"):
+                        product_has_reviews = True
+                        break
+            if "Product" in present_granular:
+                if product_has_reviews:
+                    emit_check(PASS, "result.checks.structured_data.product_reviews", "Product schema includes reviews/ratings — strong AI signal")
+                else:
+                    emit_check(WARN, "result.checks.structured_data.product_no_reviews", "Product schema present but no review/aggregateRating field")
+                    emit_fix("result.fixes.structured.add_product_reviews", "Add review and aggregateRating to your Product schema:\n"
+                        "  \"aggregateRating\": {\"@type\": \"AggregateRating\", \"ratingValue\": \"4.6\", \"reviewCount\": \"128\"},\n"
+                        "  \"review\": [{\"@type\": \"Review\", \"author\": ..., \"reviewRating\": ...}]")
+
+            granular_score = min(len(present_granular), 4)
+            track_score("Structured Data", granular_score, 4)
+        elif present_generic:
+            emit_check(WARN, "result.checks.structured_data.generic_only", f"Only generic schema types found ({', '.join(sorted(present_generic))}) — add granular types for richer AI extraction", {"types": ", ".join(sorted(present_generic))})
+            emit_fix("result.fixes.structured.upgrade_to_granular", "Upgrade from generic WebPage/CreativeWork to specific types:\n"
+                "  \u2022 How-to content \u2192 HowTo with step list\n"
+                "  \u2022 Q&A pages     \u2192 FAQPage with Question/Answer pairs\n"
+                "  \u2022 Products      \u2192 Product with offers + aggregateRating\n"
+                "  \u2022 Recipes       \u2192 Recipe with ingredients and instructions\n"
+                "  \u2022 Articles      \u2192 NewsArticle or BlogPosting\n"
+                "Granular types give AI engines far more extractable facts than WebPage.")
+            track_score("Structured Data", 1, 4)
+        else:
+            emit_check(INFO, "result.checks.structured_data.nonstandard_types", "Non-standard @types detected — consider using schema.org granular types")
+            track_score("Structured Data", 1, 4)
     else:
         emit_check(WARN, "result.checks.structured_data.jsonld_missing", "No JSON-LD structured data found — helps AI engines understand your content")
         track_score("Structured Data", 0, 7)
@@ -645,14 +775,34 @@ def check_meta_tags(base_url):
         emit_check(WARN, "result.checks.meta.canonical_missing", "No canonical URL — can cause duplicate content issues for AI engines")
         emit_fix("result.fixes.meta.add_canonical", "Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.")
 
-    og_tags = soup.find_all("meta", property=re.compile(r"^og:"))
-    if og_tags:
-        og_types = [tag.get("property") for tag in og_tags]
-        emit_check(PASS, "result.checks.meta.og_tags_found", f"Open Graph tags found: {', '.join(og_types)}", {"tags": ", ".join(og_types)})
-        meta_score += 1
-    else:
-        emit_check(WARN, "result.checks.meta.og_tags_missing", "No Open Graph tags — used by AI engines for content summarization")
-        emit_fix("result.fixes.meta.add_og", "Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />")
+    required_og = ["og:title", "og:description", "og:image", "og:url", "og:type"]
+    present_og = {
+        tag.get("property"): (tag.get("content") or "").strip()
+        for tag in soup.find_all("meta", property=re.compile(r"^og:"))
+        if tag.get("property")
+    }
+    found_og = [name for name in required_og if present_og.get(name)]
+    missing_og = [name for name in required_og if not present_og.get(name)]
+    if found_og:
+        emit_check(PASS, "result.checks.meta.og_tags_found", f"Open Graph tags present: {', '.join(found_og)}", {"tags": ", ".join(found_og)})
+    if missing_og:
+        emit_check(WARN, "result.checks.meta.og_tags_missing", f"Missing Open Graph tags: {', '.join(missing_og)} — shown by AI engines and link previews", {"missing": ", ".join(missing_og)})
+        emit_fix("result.fixes.meta.add_og", "Add the missing Open Graph tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />\nog:image is what makes your logo/thumbnail appear when links are shared.")
+    meta_score += (len(found_og) / len(required_og))
+
+    required_tw = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"]
+    present_tw = {}
+    for tag in soup.find_all("meta"):
+        name = tag.get("name") or tag.get("property")
+        if name and name.startswith("twitter:"):
+            present_tw[name] = (tag.get("content") or "").strip()
+    found_tw = [name for name in required_tw if present_tw.get(name)]
+    missing_tw = [name for name in required_tw if not present_tw.get(name)]
+    if found_tw:
+        emit_check(PASS, "result.checks.meta.twitter_cards_found", f"Twitter Card tags present: {', '.join(found_tw)}", {"tags": ", ".join(found_tw)})
+    if missing_tw:
+        emit_check(INFO, "result.checks.meta.twitter_cards_missing", f"Missing Twitter Card tags: {', '.join(missing_tw)} — improves X/Twitter link previews", {"missing": ", ".join(missing_tw)})
+        emit_fix("result.fixes.meta.add_twitter_cards", "Add Twitter Card meta tags in your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     html_tag = soup.find("html")
     if html_tag and html_tag.get("lang"):
@@ -988,6 +1138,40 @@ def check_content_quality(base_url):
         emit_check(WARN, "result.checks.content_quality.lists_missing", "No list elements — structured lists help AI engines extract key points")
         emit_fix("result.fixes.content_quality.add_lists", "Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.")
 
+    # First-paragraph extractability — AI engines preferentially pull facts from the top
+    main = soup.find("main") or soup.find("article") or soup.find("body")
+    first_para = None
+    if main:
+        for p in main.find_all("p"):
+            t = p.get_text(strip=True)
+            if len(t.split()) >= 15:
+                first_para = t
+                break
+    if first_para:
+        has_definition = bool(re.search(r"\b(is|are|means|refers to|describes)\b", first_para, re.IGNORECASE))
+        has_stat = bool(re.search(r"\d+(?:\.\d+)?%|\$\d+|\d{1,3}(?:,\d{3})+|\b\d{4}\b", first_para))
+        wc = len(first_para.split())
+        facts = []
+        if has_definition:
+            facts.append("definition")
+        if has_stat:
+            facts.append("statistic/number")
+        if 25 <= wc <= 120 and facts:
+            emit_check(PASS, "result.checks.content_quality.first_para_good", f"First paragraph ({wc} words) contains extractable facts: {', '.join(facts)}", {"words": wc, "facts": ", ".join(facts)})
+            cq_score += 0.5
+        elif facts:
+            emit_check(INFO, "result.checks.content_quality.first_para_length", f"First paragraph has facts ({', '.join(facts)}) but is {wc} words — aim for 25-120", {"words": wc, "facts": ", ".join(facts)})
+            emit_fix("result.fixes.content_quality.tighten_first_para", "Tighten your opening paragraph to 25-120 words so AI engines can lift it as a snippet.")
+        else:
+            emit_check(WARN, "result.checks.content_quality.first_para_no_facts", f"First paragraph ({wc} words) lacks extractable facts — add a definition or key statistic up front", {"words": wc})
+            emit_fix("result.fixes.content_quality.frontload_facts", "Front-load facts into your first paragraph so AI engines can extract it directly:\n"
+                "  'GEO is the practice of optimizing content for AI-powered search engines.\n"
+                "   Over 70% of search users now consult an AI assistant before clicking a link.'\n"
+                "Aim for one definition-style sentence and one concrete stat in the first 25-120 words.")
+    else:
+        emit_check(INFO, "result.checks.content_quality.first_para_missing", "Could not identify a substantive first paragraph — AI engines rely on early content for extraction")
+        emit_fix("result.fixes.content_quality.add_opening_para", "Place a substantive opening paragraph high in the page body (inside <main> or <article>)\nthat answers 'what is this about?' with a definition and/or a concrete number.")
+
     track_score("Content Quality", min(cq_score, 7), 7)
 
 
@@ -1068,25 +1252,97 @@ def check_technical_crawlability(base_url):
     except Exception:
         emit_check(INFO, "result.checks.tech_crawl.http_unknown", "Could not determine HTTP version")
 
+    feed_url = None
     feeds = soup.find_all("link", type=re.compile(r"(rss|atom)\+xml", re.IGNORECASE))
     if feeds:
-        feed_urls = [f.get("href", "N/A") for f in feeds]
-        feeds_text = ", ".join(feed_urls[:3])
+        feed_urls_list = [f.get("href", "N/A") for f in feeds]
+        feeds_text = ", ".join(feed_urls_list[:3])
         emit_check(PASS, "result.checks.tech_crawl.feed_declared", f"RSS/Atom feed(s) found: {feeds_text}", {"feeds": feeds_text})
         tc_score += 1.5
+        first_href = feeds[0].get("href")
+        if first_href:
+            feed_url = urljoin(base_url, first_href)
     else:
-        feed_found = False
         for feed_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml", "/rss", "/blog/feed"]:
-            feed_url = urljoin(base_url, feed_path)
-            feed_resp = fetch(feed_url, timeout=5)
+            candidate = urljoin(base_url, feed_path)
+            feed_resp = fetch(candidate, timeout=5)
             if feed_resp and feed_resp.status_code == 200 and ("<rss" in feed_resp.text or "<feed" in feed_resp.text):
                 emit_check(PASS, "result.checks.tech_crawl.feed_found_at_path", f"Feed found at {feed_path}", {"path": feed_path})
-                feed_found = True
+                feed_url = candidate
                 tc_score += 1.5
                 break
-        if not feed_found:
+        if not feed_url:
             emit_check(INFO, "result.checks.tech_crawl.feed_missing", "No RSS/Atom feed found — feeds help AI engines monitor content freshness")
             emit_fix("result.fixes.tech_crawl.add_rss_feed", "Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.")
+
+    # Feed richness: full content vs excerpt
+    if feed_url:
+        feed_resp = fetch(feed_url, timeout=8)
+        if feed_resp and feed_resp.status_code == 200:
+            feed_text = feed_resp.text
+            # Count items/entries and measure content length
+            rss_items = re.findall(r"<item\b[^>]*>.*?</item>", feed_text, re.DOTALL | re.IGNORECASE)
+            atom_entries = re.findall(r"<entry\b[^>]*>.*?</entry>", feed_text, re.DOTALL | re.IGNORECASE)
+            entries = rss_items or atom_entries
+            if entries:
+                lengths = []
+                for entry in entries[:10]:
+                    content_match = re.search(r"<content:encoded[^>]*>(.*?)</content:encoded>", entry, re.DOTALL | re.IGNORECASE)
+                    if not content_match:
+                        content_match = re.search(r"<content[^>]*>(.*?)</content>", entry, re.DOTALL | re.IGNORECASE)
+                    if not content_match:
+                        content_match = re.search(r"<description[^>]*>(.*?)</description>", entry, re.DOTALL | re.IGNORECASE)
+                    if content_match:
+                        stripped = re.sub(r"<[^>]+>", "", content_match.group(1))
+                        stripped = re.sub(r"<!\[CDATA\[|\]\]>", "", stripped).strip()
+                        lengths.append(len(stripped.split()))
+                if lengths:
+                    avg = sum(lengths) / len(lengths)
+                    if avg >= 300:
+                        emit_check(PASS, "result.checks.tech_crawl.feed_full_content", f"Feed provides full content (avg {int(avg)} words/item) — AI-friendly", {"avg_words": int(avg)})
+                        tc_score += 0.5
+                    elif avg >= 80:
+                        emit_check(INFO, "result.checks.tech_crawl.feed_excerpts", f"Feed provides excerpts (avg {int(avg)} words/item) — consider full content", {"avg_words": int(avg)})
+                        emit_fix("result.fixes.tech_crawl.feed_full_content", "Publish full content in your feed rather than excerpts. AI agents that consume feeds\n"
+                            "programmatically prefer complete text they can extract without following every link:\n"
+                            "  WordPress: Settings \u2192 Reading \u2192 'Full text' in feed\n"
+                            "  Custom: include <content:encoded> with the full post body")
+                    else:
+                        emit_check(WARN, "result.checks.tech_crawl.feed_headlines_only", f"Feed items are very short (avg {int(avg)} words) — mostly headlines", {"avg_words": int(avg)})
+                        emit_fix("result.fixes.tech_crawl.feed_expand_content", "Your feed publishes only headlines/snippets. Switch to full content so AI agents\n"
+                            "and aggregators can index the actual article without scraping the HTML page.")
+
+    # Machine-readable exports & integration docs
+    api_probes = [
+        ("/api", "API base path"),
+        ("/api/v1", "Versioned API"),
+        ("/graphql", "GraphQL endpoint"),
+        ("/openapi.json", "OpenAPI spec"),
+        ("/openapi.yaml", "OpenAPI spec"),
+        ("/swagger.json", "Swagger spec"),
+        ("/docs/api", "API documentation"),
+        ("/webhooks", "Webhook documentation"),
+        ("/integrations", "Integrations page"),
+        ("/developers", "Developer portal"),
+    ]
+    machine_readable_found = []
+    for path, label in api_probes:
+        r = fetch(urljoin(base_url, path), timeout=5)
+        if r and r.status_code == 200 and len(r.text.strip()) > 100:
+            machine_readable_found.append((path, label))
+            if len(machine_readable_found) >= 3:
+                break
+    if machine_readable_found:
+        paths_text = ", ".join(p for p, _ in machine_readable_found[:3])
+        emit_check(PASS, "result.checks.tech_crawl.machine_readable", f"Machine-readable / integration endpoints: {paths_text}", {"paths": paths_text})
+        tc_score += 0.5
+    else:
+        emit_check(INFO, "result.checks.tech_crawl.no_machine_readable", "No API / integration / webhook documentation detected")
+        emit_fix("result.fixes.tech_crawl.add_api_docs", "Publish machine-readable data feeds and integration docs so AI agents can consume\n"
+            "your data programmatically:\n"
+            "  \u2022 /openapi.json (or /swagger.json) for a public API\n"
+            "  \u2022 /webhooks for event subscription documentation\n"
+            "  \u2022 /integrations or /developers as a landing page linking SDKs, API keys, examples")
 
     track_score("Technical Crawlability", min(tc_score, 5), 5)
 
@@ -1172,7 +1428,399 @@ def check_authority_trust(base_url):
             emit_check(WARN, "result.checks.authority.author_missing", "No author attribution found — authorship signals boost AI trust (E-E-A-T)")
             emit_fix("result.fixes.authority.add_author", "Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.")
 
+        # E-E-A-T depth: look for a bio/about/team page and assess credentials
+        bio_url = None
+        bio_text = ""
+        for path in ["/about", "/about-us", "/team", "/authors", "/our-team", "/people"]:
+            candidate = urljoin(base_url, path)
+            r = fetch(candidate, timeout=8)
+            if r and r.status_code == 200 and len(r.text) > 500:
+                try:
+                    s = BeautifulSoup(r.text, "html.parser")
+                    bio_text = get_text_content(s)
+                    if len(bio_text.split()) >= 50:
+                        bio_url = candidate
+                        break
+                except Exception:
+                    pass
+
+        credential_keywords = [
+            "phd", "ph.d", "m.d.", "md,", "dphil", "doctorate",
+            "founder", "ceo", "cto", "cfo", "coo", "chief ",
+            "years of experience", "years experience", "decades of",
+            "formerly at", "previously at", "ex-", "alumnus", "alumni",
+            "certified", "licensed", "board-certified",
+            "author of", "published in", "featured in", "cited by",
+            "harvard", "stanford", "mit ", "oxford", "cambridge", "berkeley",
+        ]
+        bylines_hosts = [
+            "medium.com/@", "substack.com", "forbes.com", "techcrunch.com",
+            "hbr.org", "wired.com", "theverge.com", "bloomberg.com",
+            "scholar.google", "orcid.org", "arxiv.org",
+        ]
+
+        if bio_url:
+            emit_check(PASS, "result.checks.authority.bio_page_found", f"Bio/about page found at {urlparse(bio_url).path}", {"path": urlparse(bio_url).path})
+            at_score += 0.5
+            bio_lower = bio_text.lower()
+            found_creds = [k for k in credential_keywords if k in bio_lower]
+            if found_creds:
+                creds_text = ", ".join(sorted(set(found_creds))[:5])
+                emit_check(PASS, "result.checks.authority.credentials_found", f"Credential signals in bio: {creds_text}", {"credentials": creds_text})
+                at_score += 1
+            else:
+                emit_check(INFO, "result.checks.authority.credentials_weak", "Bio page has little credential language — add credentials/experience")
+                emit_fix("result.fixes.authority.strengthen_bio", "Strengthen your bio/about page with explicit E-E-A-T signals:\n"
+                    "  \u2022 Credentials (PhD, MD, certifications)\n"
+                    "  \u2022 Years of experience and roles (\"10 years at X as...\")\n"
+                    "  \u2022 Notable prior affiliations (\"formerly at Google\", \"ex-McKinsey\")\n"
+                    "  \u2022 External bylines, publications, or press coverage")
+
+            # External bylines discovered on bio page
+            try:
+                bs = BeautifulSoup(fetch(bio_url, timeout=8).text, "html.parser")
+                external_bylines = set()
+                for a in bs.find_all("a", href=True):
+                    href = a["href"].lower()
+                    for host in bylines_hosts:
+                        if host in href:
+                            external_bylines.add(host.split("/")[0] if "/" in host else host)
+                if external_bylines:
+                    bylines_text = ", ".join(sorted(external_bylines))
+                    emit_check(PASS, "result.checks.authority.external_bylines", f"External byline/profile links: {bylines_text}", {"bylines": bylines_text})
+                    at_score += 0.5
+                else:
+                    emit_check(INFO, "result.checks.authority.no_external_bylines", "No external bylines detected on bio page")
+                    emit_fix("result.fixes.authority.add_external_bylines", "Link to external bylines (Medium, Substack, trade press, Google Scholar, ORCID)\n"
+                        "from your bio/about page. Independent bylines carry more E-E-A-T weight than self-claims.")
+            except Exception:
+                pass
+        else:
+            emit_check(WARN, "result.checks.authority.no_bio_page", "No author bio / about / team page found")
+            emit_fix("result.fixes.authority.create_about_page", "Create a substantive /about or /team page (200+ words) documenting who is behind\n"
+                "the site: real names, credentials, photos, contact paths, and links to external profiles.\n"
+                "AI engines treat faceless sites as lower E-E-A-T.")
+
     track_score("Authority & Trust", min(at_score, 5), 5)
+
+
+# ---------------------------------------------------------------------------
+# 12b. Brand Entity in Knowledge Graphs (Wikipedia / Wikidata)
+# ---------------------------------------------------------------------------
+def check_brand_entity_kg(base_url):
+    """Check if the site's brand exists as a recognized entity in Wikipedia/Wikidata."""
+    print("\n--- Brand Entity in Knowledge Graphs ---")
+
+    # Derive brand candidates from domain and page signals
+    resp, soup = get_soup(base_url)
+    parsed = urlparse(base_url)
+    domain = parsed.netloc.replace("www.", "")
+    raw_brand = domain.split(".")[0]
+
+    candidates = [raw_brand]
+    if soup:
+        og_site = soup.find("meta", property="og:site_name")
+        if og_site and og_site.get("content"):
+            candidates.insert(0, og_site["content"].strip())
+        t = soup.find("title")
+        if t and t.string and t.string.strip():
+            parts = re.split(r'[|\-\u2013\u2014]', t.string)
+            if parts:
+                tail = parts[-1].strip()
+                if 2 <= len(tail) <= 40 and tail not in candidates:
+                    candidates.append(tail)
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string)
+                items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
+                if isinstance(data, dict) and "@graph" in data:
+                    items.extend(data["@graph"])
+                for item in items:
+                    if isinstance(item, dict):
+                        t_val = item.get("@type", "")
+                        if t_val in ("Organization", "LocalBusiness", "Corporation") and item.get("name"):
+                            candidates.insert(0, item["name"].strip())
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    seen_c = set()
+    candidates = [c for c in candidates if c and not (c.lower() in seen_c or seen_c.add(c.lower()))]
+    brand = candidates[0]
+    print(f"  Checking entity: \"{brand}\" (domain: {domain})")
+
+    import urllib.parse
+    score = 0
+    wiki_page = None
+    wikidata_id = None
+
+    # Wikipedia
+    try:
+        enc = urllib.parse.quote(brand)
+        r = requests.get(
+            f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={enc}&format=json&srlimit=3",
+            timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+        )
+        if r.status_code == 200:
+            results = r.json().get("query", {}).get("search", [])
+            for result in results:
+                title = result.get("title", "")
+                if brand.lower() in title.lower() or title.lower() in brand.lower():
+                    wiki_page = title
+                    break
+    except requests.RequestException:
+        pass
+
+    if wiki_page:
+        emit_check(PASS, "result.checks.brand_kg.wikipedia_found",
+                   f"Wikipedia page found: \"{wiki_page}\"", {"title": wiki_page})
+        score += 2
+        try:
+            enc = urllib.parse.quote(wiki_page)
+            br = requests.get(
+                f"https://en.wikipedia.org/w/api.php?action=query&list=backlinks&bltitle={enc}&bllimit=50&format=json",
+                timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+            )
+            if br.status_code == 200:
+                backlink_count = len(br.json().get("query", {}).get("backlinks", []))
+                if backlink_count >= 20:
+                    emit_check(PASS, "result.checks.brand_kg.backlinks_strong",
+                               f"Wikipedia backlinks: {backlink_count}+ pages link to this entity — strong authority",
+                               {"count": backlink_count})
+                    score += 1
+                elif backlink_count >= 5:
+                    emit_check(INFO, "result.checks.brand_kg.backlinks_moderate",
+                               f"Wikipedia backlinks: {backlink_count} pages link to this entity",
+                               {"count": backlink_count})
+                    score += 0.5
+                else:
+                    emit_check(INFO, "result.checks.brand_kg.backlinks_weak",
+                               f"Only {backlink_count} Wikipedia backlink(s) — entity is recognized but niche",
+                               {"count": backlink_count})
+        except requests.RequestException:
+            pass
+    else:
+        emit_check(WARN, "result.checks.brand_kg.wikipedia_not_found",
+                   f"No Wikipedia page found for \"{brand}\"", {"brand": brand})
+        emit_fix("result.fixes.brand_kg.create_wikipedia",
+                 "A Wikipedia page is one of the strongest entity signals for AI engines. If you're\n"
+                 "notable enough, seek independent coverage in news/trade press and follow Wikipedia's\n"
+                 "notability guidelines. Do not write your own page — it will be flagged as COI.")
+
+    # Wikidata
+    try:
+        enc = urllib.parse.quote(brand)
+        r = requests.get(
+            f"https://www.wikidata.org/w/api.php?action=wbsearchentities&search={enc}&language=en&format=json&limit=3",
+            timeout=10, headers={"User-Agent": "GEO-Checker/1.0"},
+        )
+        if r.status_code == 200:
+            for result in r.json().get("search", []):
+                label = result.get("label", "")
+                if brand.lower() in label.lower() or label.lower() in brand.lower():
+                    wikidata_id = result.get("id")
+                    break
+    except requests.RequestException:
+        pass
+
+    if wikidata_id:
+        emit_check(PASS, "result.checks.brand_kg.wikidata_found",
+                   f"Wikidata entity found: {wikidata_id}", {"id": wikidata_id})
+        score += 2
+    else:
+        emit_check(WARN, "result.checks.brand_kg.wikidata_not_found",
+                   f"No Wikidata entity found for \"{brand}\"", {"brand": brand})
+        emit_fix("result.fixes.brand_kg.create_wikidata",
+                 "Wikidata is free to edit and AI engines (especially Google Knowledge Graph) ingest it\n"
+                 "heavily. Create an entry at https://www.wikidata.org/wiki/Special:NewItem with:\n"
+                 "  • Label + description\n"
+                 "  • instance of (P31) — e.g. 'business'\n"
+                 "  • official website (P856) — your domain\n"
+                 "  • sameAs links to social profiles")
+
+    track_score("Brand Entity KG", min(score, 5), 5)
+
+
+# ---------------------------------------------------------------------------
+# 12c. Trust & Safety Signals (privacy/terms/contact/DMCA/business info)
+# ---------------------------------------------------------------------------
+def check_trust_safety(base_url):
+    """Check for trust & safety pages and business identity signals that AI engines use
+    to assess source credibility and citation-worthiness."""
+    print("\n--- Trust & Safety Signals ---")
+    resp, soup = get_soup(base_url)
+    if not soup:
+        emit_check(FAIL, "result.checks.trust_safety.fetch_failed", "Could not fetch homepage")
+        track_score("Trust & Safety", 0, 6)
+        return
+
+    ts_score = 0
+
+    home_links = {a.get("href", "").lower(): (a.get_text(strip=True) or "").lower()
+                  for a in soup.find_all("a", href=True)}
+
+    def _anchor_match(keywords):
+        for href, text in home_links.items():
+            combined = f"{href} {text}"
+            if any(k in combined for k in keywords):
+                return href
+        return None
+
+    def _probe(paths):
+        for p in paths:
+            r = fetch(urljoin(base_url, p), timeout=6)
+            if r and r.status_code == 200 and len(r.text) > 500:
+                return p
+        return None
+
+    # 1. Privacy policy
+    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
+                     "/policies/privacy", "/privacypolicy"]
+    privacy_found = _probe(privacy_paths) or _anchor_match(["privacy"])
+    if privacy_found:
+        emit_check(PASS, "result.checks.trust_safety.privacy_found",
+                   f"Privacy policy found: {privacy_found}", {"path": privacy_found})
+        ts_score += 1.5
+    else:
+        emit_check(FAIL, "result.checks.trust_safety.privacy_missing",
+                   "No privacy policy page detected")
+        emit_fix("result.fixes.trust_safety.add_privacy",
+                 "Publish a Privacy Policy at /privacy (or /privacy-policy). AI engines treat missing\n"
+                 "privacy policies as a trust red flag — required by GDPR, CCPA, and most ad networks.")
+
+    # 2. Terms of service
+    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
+                   "/terms.html", "/legal/terms"]
+    terms_found = _probe(terms_paths) or _anchor_match(["terms", "tos"])
+    if terms_found:
+        emit_check(PASS, "result.checks.trust_safety.terms_found",
+                   f"Terms of service found: {terms_found}", {"path": terms_found})
+        ts_score += 1
+    else:
+        emit_check(WARN, "result.checks.trust_safety.terms_missing",
+                   "No terms of service page detected")
+        emit_fix("result.fixes.trust_safety.add_terms",
+                 "Publish Terms of Service at /terms. This is a basic trust signal AI engines\n"
+                 "and search platforms expect from legitimate sites.")
+
+    # 3. Contact page
+    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
+                     "/support", "/help"]
+    contact_found = _probe(contact_paths) or _anchor_match(["contact", "get in touch"])
+    if contact_found:
+        emit_check(PASS, "result.checks.trust_safety.contact_found",
+                   f"Contact page found: {contact_found}", {"path": contact_found})
+        ts_score += 1
+    else:
+        emit_check(WARN, "result.checks.trust_safety.contact_missing",
+                   "No contact page detected")
+        emit_fix("result.fixes.trust_safety.add_contact",
+                 "Add a /contact page with at least an email address and/or form. AI engines rank\n"
+                 "sites with clear contact paths higher for trust-sensitive queries.")
+
+    # 4. DMCA / copyright / legal
+    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
+    legal_found = _probe(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
+    if legal_found:
+        emit_check(PASS, "result.checks.trust_safety.legal_found",
+                   f"Legal/DMCA/imprint page found: {legal_found}", {"path": legal_found})
+        ts_score += 0.5
+    else:
+        emit_check(INFO, "result.checks.trust_safety.legal_missing",
+                   "No DMCA / legal / imprint page detected")
+        emit_fix("result.fixes.trust_safety.add_legal",
+                 "Add a /dmca or /legal page. In the EU an 'Impressum' (imprint) is legally required;\n"
+                 "elsewhere a DMCA agent page protects you from copyright liability and boosts trust.")
+
+    # 5. Business identity: address / phone / email / registration in footer or schema
+    homepage_text = get_text_content(soup)
+    footer = soup.find("footer")
+    footer_text = footer.get_text(" ", strip=True) if footer else ""
+
+    email_re = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+    phone_re = re.compile(r"(?:\+?\d{1,3}[\s\-.])?\(?\d{2,4}\)?[\s\-.]\d{3,4}[\s\-.]\d{3,4}")
+    address_hint = re.compile(
+        r"\b\d{1,5}\s+\w+(?:\s+\w+){0,5}\s+"
+        r"(?:street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|suite|ste\.?|floor|fl\.?)\b",
+        re.IGNORECASE,
+    )
+    registration_re = re.compile(
+        r"\b(?:LLC|Inc\.?|Corp\.?|Ltd\.?|GmbH|AG|S\.?A\.?|S\.?L\.?|SARL|Pty|BV|Oy)\b"
+        r"|\b(?:EIN|VAT|ABN|SIREN|SIRET|company\s+(?:no|number)|reg(?:istration)?\s+(?:no|number)|CIN)\b",
+        re.IGNORECASE,
+    )
+
+    sd_has_address = False
+    sd_has_contact_point = False
+    sd_has_telephone = False
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string)
+            items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
+            if isinstance(data, dict) and "@graph" in data:
+                items.extend(data["@graph"])
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("address"):
+                    sd_has_address = True
+                if item.get("contactPoint"):
+                    sd_has_contact_point = True
+                if item.get("telephone"):
+                    sd_has_telephone = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    has_email = bool(email_re.search(footer_text) or email_re.search(homepage_text))
+    has_phone = bool(phone_re.search(footer_text) or phone_re.search(homepage_text))
+    has_address = (
+        sd_has_address
+        or bool(address_hint.search(footer_text))
+        or bool(address_hint.search(homepage_text))
+    )
+    has_registration = bool(registration_re.search(footer_text) or registration_re.search(homepage_text))
+
+    identity_signals = []
+    if has_email or sd_has_contact_point:
+        identity_signals.append("email/contactPoint")
+    if has_phone or sd_has_telephone:
+        identity_signals.append("phone")
+    if has_address:
+        identity_signals.append("address")
+    if has_registration:
+        identity_signals.append("legal entity")
+
+    if len(identity_signals) >= 3:
+        emit_check(PASS, "result.checks.trust_safety.identity_strong",
+                   f"Strong business identity in footer/schema: {', '.join(identity_signals)}",
+                   {"signals": ", ".join(identity_signals)})
+        ts_score += 2
+    elif len(identity_signals) >= 1:
+        emit_check(WARN, "result.checks.trust_safety.identity_partial",
+                   f"Partial business identity: {', '.join(identity_signals)}",
+                   {"signals": ", ".join(identity_signals)})
+        ts_score += 1
+        missing = []
+        if not (has_email or sd_has_contact_point):
+            missing.append("email or contactPoint")
+        if not (has_phone or sd_has_telephone):
+            missing.append("phone")
+        if not has_address:
+            missing.append("physical address")
+        if not has_registration:
+            missing.append("legal entity (LLC/Inc/Ltd/GmbH/EIN/VAT)")
+        emit_fix("result.fixes.trust_safety.add_identity_signals",
+                 "Add missing trust signals so AI engines can verify who is behind the site:\n  "
+                 + "\n  ".join(f"- {m}" for m in missing))
+    else:
+        emit_check(FAIL, "result.checks.trust_safety.identity_missing",
+                   "No business identity signals found (email, phone, address, or legal entity)")
+        emit_fix("result.fixes.trust_safety.add_business_identity",
+                 "AI engines cannot verify who runs this site. Add in the footer and/or Organization JSON-LD:\n"
+                 "  • Physical address (schema.org PostalAddress)\n"
+                 "  • Contact email and telephone (contactPoint)\n"
+                 "  • Legal entity suffix (LLC / Inc / Ltd / GmbH) and registration number where applicable")
+
+    track_score("Trust & Safety", min(ts_score, 6), 6)
 
 
 # ---------------------------------------------------------------------------
@@ -1222,6 +1870,56 @@ def check_ai_optimization(base_url):
     else:
         emit_check(WARN, "result.checks.ai_opt.freshness_missing", "No content freshness signals — add dateModified to JSON-LD or <time> elements")
         emit_fix("result.fixes.ai_opt.add_freshness", "Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server")
+
+    # Sitewide update cadence — analyze sitemap <lastmod> dates across the whole site
+    from datetime import datetime, timezone
+    sitemap_resp = fetch(urljoin(base_url, "/sitemap.xml"), timeout=10)
+    if not sitemap_resp or sitemap_resp.status_code != 200:
+        sitemap_resp = fetch(urljoin(base_url, "/sitemap_index.xml"), timeout=10)
+    lastmods = []
+    if sitemap_resp and sitemap_resp.status_code == 200 and "<" in sitemap_resp.text:
+        lastmods = re.findall(r"<lastmod>([^<]+)</lastmod>", sitemap_resp.text)
+        # If this is an index, follow the first few child sitemaps
+        if "<sitemapindex" in sitemap_resp.text:
+            child_locs = re.findall(r"<loc>([^<]+)</loc>", sitemap_resp.text)[:3]
+            for loc in child_locs:
+                child = fetch(loc.strip(), timeout=8)
+                if child and child.status_code == 200:
+                    lastmods.extend(re.findall(r"<lastmod>([^<]+)</lastmod>", child.text))
+
+    parsed_dates = []
+    for lm in lastmods[:200]:
+        lm = lm.strip()
+        for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(lm.replace("Z", "+0000") if fmt == "%Y-%m-%dT%H:%M:%S%z" and "Z" in lm else lm, fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                parsed_dates.append(dt)
+                break
+            except ValueError:
+                continue
+
+    if parsed_dates:
+        now = datetime.now(timezone.utc)
+        ages_days = sorted((now - d).days for d in parsed_dates)
+        median_days = ages_days[len(ages_days) // 2]
+        fresh_90 = sum(1 for a in ages_days if a <= 90)
+        fresh_ratio = fresh_90 / len(ages_days)
+        emit_check(INFO, "result.checks.ai_opt.sitemap_cadence", f"Sitemap contains {len(parsed_dates)} <lastmod> entries (median age: {median_days} days, {fresh_90}/{len(ages_days)} updated in last 90d)", {"total": len(parsed_dates), "median_days": median_days, "fresh_90": fresh_90, "count": len(ages_days)})
+        if fresh_ratio >= 0.5 or median_days <= 90:
+            emit_check(PASS, "result.checks.ai_opt.cadence_healthy", "Healthy sitewide update cadence")
+            ao_score += 1
+        elif fresh_ratio >= 0.2:
+            emit_check(WARN, "result.checks.ai_opt.cadence_moderate", "Moderate cadence — less than half of pages updated in the last 90 days")
+            emit_fix("result.fixes.ai_opt.increase_cadence", "Increase content refresh cadence. AI engines prefer sites that update regularly — stale pages\n"
+                "drop out of training windows and retrieval indexes.")
+        else:
+            emit_check(WARN, "result.checks.ai_opt.cadence_low", f"Low cadence — most pages are stale (median {median_days} days old)", {"median_days": median_days})
+            emit_fix("result.fixes.ai_opt.refresh_stale_content", "Most of your content hasn't been touched in months. Refresh high-value pages periodically\n"
+                "(update stats, add recent examples, bump dateModified) so AI engines see ongoing maintenance.")
+    else:
+        emit_check(INFO, "result.checks.ai_opt.cadence_unknown", "Could not analyze sitewide update cadence (no parseable <lastmod> in sitemap)")
 
     title = soup.find("title")
     og_site = soup.find("meta", property="og:site_name")
@@ -1361,7 +2059,7 @@ def check_ai_answer_formats(base_url):
 
     text = get_text_content(soup)
     score = 0
-    total_checks = 5
+    total_checks = 6
 
     # 1. Definition sentences ("X is...", "X refers to...")
     definition_patterns = re.findall(
@@ -1437,6 +2135,38 @@ def check_ai_answer_formats(base_url):
     else:
         emit_check(INFO, "result.checks.answer_format.summary_missing", "No key takeaways or TL;DR section found")
         emit_fix("result.fixes.answer_format.add_summary", "Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.")
+
+    # 6. Conversational question-pattern headings (who/what/how/why/when/where/is/can/does)
+    question_word_re = re.compile(
+        r"^\s*(?:who|what|how|why|when|where|is|are|can|does|do|should|will|which|whose|whom)\b",
+        re.IGNORECASE,
+    )
+    headings_all = soup.find_all(re.compile(r"^h[1-6]$"))
+    q_headings = []
+    for h in headings_all:
+        txt = h.get_text(strip=True)
+        if not txt:
+            continue
+        if question_word_re.match(txt) or txt.rstrip().endswith("?"):
+            q_headings.append(txt)
+    if len(q_headings) >= 3:
+        score += 1
+        emit_check(PASS, "result.checks.answer_format.question_headings_strong", f"{len(q_headings)} question-pattern heading(s) — strong conversational readiness", {"count": len(q_headings)})
+        for qh in q_headings[:3]:
+            print(f"         \"{qh[:70]}\"")
+    elif q_headings:
+        emit_check(INFO, "result.checks.answer_format.question_headings_few", f"Only {len(q_headings)} question-pattern heading(s) — add more for chat-style queries", {"count": len(q_headings)})
+        emit_fix("result.fixes.answer_format.add_question_headings", "Add more question-pattern headings that match how people prompt AI engines:\n"
+            "  <h2>What is GEO?</h2>\n"
+            "  <h2>How do I optimize for AI search?</h2>\n"
+            "  <h2>Why does GEO matter?</h2>\n"
+            "Follow each with a short, direct answer so AI engines can extract it.")
+    else:
+        emit_check(WARN, "result.checks.answer_format.question_headings_none", "No question-pattern headings detected — low conversational readiness")
+        emit_fix("result.fixes.answer_format.add_question_headings_intro", "Add question-pattern headings so AI engines can match chat-style queries to your content:\n"
+            "  <h2>What is GEO?</h2>\n"
+            "  <h3>How does this work?</h3>\n"
+            "Pages structured around who/what/how/why questions rank higher in AI answers.")
 
     print(f"\n  AI answer format score: {score}/{total_checks}")
     track_score("AI Answer Formats", score, total_checks)
@@ -1779,6 +2509,78 @@ def check_outbound_and_media(base_url):
         else:
             emit_check(WARN, "result.checks.outbound.transcript_missing", "Videos found but no transcript detected")
             emit_fix("result.fixes.outbound.add_video_transcripts", "Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.")
+
+    # Multi-format coverage: podcast, PDF, infographic, slides
+    formats_found = set()
+    if video_embeds or has_video_schema:
+        formats_found.add("video")
+
+    # Podcast detection: audio elements, podcast RSS, common host links
+    audio_tags = soup.find_all("audio")
+    podcast_hosts = ["anchor.fm", "spotify.com/show", "podcasts.apple.com",
+                     "soundcloud.com", "buzzsprout.com", "transistor.fm",
+                     "libsyn.com", "simplecast.com"]
+    podcast_link = False
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        for h in podcast_hosts:
+            if h in href:
+                podcast_link = True
+                break
+        if podcast_link:
+            break
+    podcast_schema = False
+    for script in json_ld_scripts:
+        try:
+            data = json.loads(script.string)
+            s = json.dumps(data).lower()
+            if '"podcastseries"' in s or '"podcastepisode"' in s:
+                podcast_schema = True
+                break
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if audio_tags or podcast_link or podcast_schema:
+        formats_found.add("podcast/audio")
+
+    # PDFs
+    pdf_links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].lower().endswith(".pdf")]
+    if pdf_links:
+        formats_found.add("PDF")
+
+    # Infographics: images with "infographic" in alt/src, or large standalone graphics
+    infographic_imgs = []
+    for img in soup.find_all("img"):
+        alt = (img.get("alt") or "").lower()
+        src = (img.get("src") or "").lower()
+        if "infographic" in alt or "infographic" in src or "diagram" in alt or "chart" in alt:
+            infographic_imgs.append(img)
+    if infographic_imgs:
+        formats_found.add("infographic")
+
+    # Slides / presentations
+    slide_hosts = ["slideshare.net", "speakerdeck.com", "slides.com"]
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        if any(h in href for h in slide_hosts):
+            formats_found.add("slides")
+            break
+
+    emit_check(INFO, "result.checks.outbound.multi_format_coverage", f"Multi-format coverage: {', '.join(sorted(formats_found)) or 'text only'}", {"formats": ", ".join(sorted(formats_found)) or "text only"})
+    if len(formats_found) >= 3:
+        emit_check(PASS, "result.checks.outbound.multi_format_strong", f"{len(formats_found)} content format(s) — broad AI surface area", {"count": len(formats_found)})
+        om_score += 0.5
+    elif len(formats_found) >= 1:
+        emit_check(INFO, "result.checks.outbound.multi_format_limited", f"Only {len(formats_found)} non-text format(s) detected — more formats = more AI surface area", {"count": len(formats_found)})
+        emit_fix("result.fixes.outbound.diversify_formats", "Diversify your content formats so AI engines encounter you in more contexts:\n"
+            "  \u2022 Podcast (audio transcripts feed ChatGPT, Perplexity)\n"
+            "  \u2022 PDF whitepapers (citable documents)\n"
+            "  \u2022 Infographics with descriptive alt text\n"
+            "  \u2022 Slides on SlideShare / Speaker Deck\n"
+            "  \u2022 Video with transcripts")
+    else:
+        emit_check(WARN, "result.checks.outbound.multi_format_none", "No non-text formats detected — content is text-only")
+        emit_fix("result.fixes.outbound.add_alt_format", "Add at least one alternative format (video with transcript, podcast, PDF, or infographic).\n"
+            "Each format opens a new retrieval channel for AI engines.")
 
     # Table markup quality
     tables = soup.find_all("table")
@@ -2136,7 +2938,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
     candidates = list(dict.fromkeys(candidates))
     content_candidates = [
         u for u in candidates
-        if not re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|pdf|zip)$', u, re.IGNORECASE)
+        if not re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|zip|gz|tar|mp4|mp3|webm|webp|avif|txt|md|xml|json|csv|rss|atom)$', urlparse(u).path, re.IGNORECASE)
         and "#" not in u
     ]
     sample = content_candidates[:max_pages]
@@ -2159,18 +2961,35 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         "missing_alt_text": [],
     }
     descriptions_seen = {}
+    titles_seen = {}
+    page_shingles = {}  # short_url -> set of 5-word shingles
+
+    def _shingles(text, k=5):
+        tokens = re.findall(r"\w+", text.lower())
+        if len(tokens) < k:
+            return set()
+        return {" ".join(tokens[i:i + k]) for i in range(len(tokens) - k + 1)}
 
     for page_url in sample:
         page_resp = fetch(page_url, timeout=10)
         if not page_resp or page_resp.status_code != 200:
             continue
 
+        ctype = page_resp.headers.get("Content-Type", "").lower()
+        if ctype and "html" not in ctype:
+            continue
+
         page_soup = BeautifulSoup(page_resp.text, "html.parser")
         short_url = urlparse(page_url).path or page_url
 
         title = page_soup.find("title")
-        if not title or not (title.string and title.string.strip()):
+        title_text = ""
+        if title and title.string and title.string.strip():
+            title_text = title.string.strip()
+        else:
             issues["missing_title"].append(short_url)
+        if title_text:
+            titles_seen.setdefault(title_text, []).append(short_url)
 
         desc = page_soup.find("meta", attrs={"name": "description"})
         desc_content = ""
@@ -2195,6 +3014,7 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         page_text = get_text_content(page_soup)
         if len(page_text.split()) < 100:
             issues["low_word_count"].append(short_url)
+        page_shingles[short_url] = _shingles(page_text)
 
         if not page_soup.find("meta", property="og:title"):
             issues["missing_og"].append(short_url)
@@ -2206,6 +3026,21 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
                 issues["missing_alt_text"].append(short_url)
 
     duplicate_descs = {desc: pages for desc, pages in descriptions_seen.items() if len(pages) > 1}
+    duplicate_titles = {t: pages for t, pages in titles_seen.items() if len(pages) > 1}
+
+    # Jaccard similarity between page content pairs — detect overlap/cannibalization
+    overlap_pairs = []
+    shingle_items = [(u, s) for u, s in page_shingles.items() if s]
+    for i in range(len(shingle_items)):
+        u1, s1 = shingle_items[i]
+        for j in range(i + 1, len(shingle_items)):
+            u2, s2 = shingle_items[j]
+            union = s1 | s2
+            if not union:
+                continue
+            jaccard = len(s1 & s2) / len(union)
+            if jaccard >= 0.5:
+                overlap_pairs.append((u1, u2, jaccard))
 
     check_labels = {
         "missing_title": ("Missing <title>", FAIL, "result.checks.multi_page.missing_title"),
@@ -2245,14 +3080,41 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
         all_good = False
         emit_check(WARN, "result.checks.multi_page.duplicate_descriptions", "Duplicate meta descriptions found across pages:")
         for desc_text, pages in list(duplicate_descs.items())[:3]:
-            print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages")
+            print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages:")
+            for p in pages[:5]:
+                print(f"           - {p}")
+            if len(pages) > 5:
+                print(f"           ...and {len(pages) - 5} more")
         emit_fix("result.fixes.multi_page.duplicate_descriptions", "Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.")
+
+    if duplicate_titles:
+        all_good = False
+        emit_check(WARN, "result.checks.multi_page.duplicate_titles", "Duplicate <title> tags found across pages:")
+        for t, pages in list(duplicate_titles.items())[:3]:
+            print(f"         \"{t[:60]}\" on {len(pages)} pages:")
+            for p in pages[:5]:
+                print(f"           - {p}")
+            if len(pages) > 5:
+                print(f"           ...and {len(pages) - 5} more")
+        emit_fix("result.fixes.multi_page.duplicate_titles", "Write unique <title> tags for each page. Identical titles cause keyword\ncannibalization — AI engines can't tell which page to cite for a given query.")
+
+    if overlap_pairs:
+        all_good = False
+        emit_check(WARN, "result.checks.multi_page.content_overlap", "Content overlap / possible cannibalization between pages:")
+        for u1, u2, j in sorted(overlap_pairs, key=lambda x: -x[2])[:3]:
+            print(f"         {int(j * 100)}% overlap: {u1}  \u2194  {u2}")
+        emit_fix("result.fixes.multi_page.content_overlap", "Two or more pages cover the same topic with highly overlapping content.\n"
+            "Options:\n"
+            "  1. Consolidate into one canonical page and 301-redirect the others.\n"
+            "  2. Differentiate each page with distinct angles, examples, and keywords.\n"
+            "  3. Use rel=canonical to point near-duplicates to the primary page.\n"
+            "Cannibalization dilutes your AI visibility \u2014 pick the strongest page to surface.")
 
     if all_good:
         emit_check(PASS, "result.checks.multi_page.all_good", "All sampled pages maintain consistent GEO standards")
         track_score("Multi-Page", 5, 5)
     else:
-        total_issues = sum(len(v) for v in issues.values()) + len(duplicate_descs)
+        total_issues = sum(len(v) for v in issues.values()) + len(duplicate_descs) + len(duplicate_titles) + len(overlap_pairs)
         mp_score = max(5 - total_issues, 0)
         track_score("Multi-Page", mp_score, 5)
 
@@ -2280,6 +3142,8 @@ CHECK_REGISTRY = [
     ("Content Quality for AI",                         lambda url, sitemap_urls: check_content_quality(url)),
     ("Technical Crawlability",                         lambda url, sitemap_urls: check_technical_crawlability(url)),
     ("Authority & Trust Signals",                      lambda url, sitemap_urls: check_authority_trust(url)),
+    ("Brand Entity in Knowledge Graphs",               lambda url, sitemap_urls: check_brand_entity_kg(url)),
+    ("Trust & Safety Signals",                         lambda url, sitemap_urls: check_trust_safety(url)),
     ("AI-Specific Optimization",                       lambda url, sitemap_urls: check_ai_optimization(url)),
     ("Social Signals",                                 lambda url, sitemap_urls: check_social_signals(url)),
     ("AI Answer Format Optimization",                  lambda url, sitemap_urls: check_ai_answer_formats(url)),
