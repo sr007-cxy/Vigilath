@@ -2,6 +2,7 @@ from geo.database import Base, engine
 from geo.models.user import UserORM
 from geo.models.membership import (
     AnonymousCheckUsageORM,  # noqa: F401 (register ORM so create_all builds it)
+    ContactSubmissionORM,  # noqa: F401 (register ORM)
     MembershipORM,
     UserCheckUsageORM,  # noqa: F401
     UserMembershipORM,

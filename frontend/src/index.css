@@ -298,6 +298,38 @@
     h3 {
       font-size: 1.25rem;
     }
+
+    /* Prevent horizontal overflow on mobile */
+    body {
+      overflow-x: hidden;
+    }
+
+    /* Reduce card hover transform on mobile (prevents jank) */
+    .card:hover {
+      transform: none;
+    }
+
+    /* Better touch targets */
+    button, a {
+      min-height: 44px;
+    }
+
+    /* Prevent text overflow */
+    .truncate-mobile {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  /* Small phones */
+  @media (max-width: 380px) {
+    h1 {
+      font-size: 1.75rem;
+    }
+    h2 {
+      font-size: 1.35rem;
+    }
   }
 }
 

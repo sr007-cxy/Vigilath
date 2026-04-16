@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
+import { useTierModal } from '../components/TierModalContext';
 
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { openTierModal } = useTierModal();
   const [params] = useSearchParams();
   const { token, isLoggedIn } = useMembership();
 
@@ -147,7 +149,7 @@ export function CheckoutPending() {
             <p className="text-sm text-rose-400 mb-6">{loadError}</p>
             <button
               type="button"
-              onClick={() => navigate('/products-services')}
+              onClick={openTierModal}
               className="w-full justify-center btn-primary !py-3"
             >
               {t('checkoutPending.backToPlans', '返回套餐列表')}
@@ -251,7 +253,7 @@ export function CheckoutPending() {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/products-services')}
+                onClick={openTierModal}
                 disabled={submitting}
                 className="px-5 py-3 rounded-lg border border-border text-secondary hover:text-primary hover:bg-border/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >

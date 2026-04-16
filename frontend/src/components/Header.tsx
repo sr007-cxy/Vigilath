@@ -39,6 +39,7 @@ export function Header() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'zh' : 'en';
@@ -69,13 +70,32 @@ export function Header() {
     localStorage.removeItem('token');
     setUser(null);
     setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
     navigate('/');
   };
 
   const toggleAuthModal = (tab: 'login' | 'register' = 'login') => {
     setAuthModalTab(tab);
     setIsAuthModalOpen(!isAuthModalOpen);
+    setIsMobileMenuOpen(false);
   };
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -105,7 +125,7 @@ export function Header() {
 
   return (
     <header
-      className="fixed top-0 left-0 w-full px-4 sm:px-6 lg:px-8 py-4 backdrop-blur-xl border-b z-50 nav-surface"
+      className="fixed top-0 left-0 w-full px-4 sm:px-6 lg:px-8 py-3 md:py-4 backdrop-blur-xl border-b z-50 nav-surface"
     >
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -113,12 +133,13 @@ export function Header() {
             <img
               src="/image/logo.png"
               alt="GApex"
-              className="brand-logo h-9 w-auto select-none"
+              className="brand-logo h-8 md:h-9 w-auto select-none"
               draggable={false}
             />
           </Link>
         </div>
 
+        {/* Desktop navigation */}
         <nav className="hidden md:flex items-center gap-8">
           {navItems.map((item) => {
             const active = isActive(item.to);
@@ -135,7 +156,8 @@ export function Header() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3">
+        {/* Desktop right side */}
+        <div className="hidden md:flex items-center gap-3">
           <ThemeToggle />
 
           <button
@@ -158,8 +180,8 @@ export function Header() {
               <button
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors duration-200 bg-surface border-soft border-soft-hover"
               >
-                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{user}</span>
-                <svg className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <span className="text-sm font-medium max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>{user}</span>
+                <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-secondary)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -215,7 +237,122 @@ export function Header() {
             </div>
           )}
         </div>
+
+        {/* Mobile right side: compact controls + hamburger */}
+        <div className="flex md:hidden items-center gap-2">
+          <ThemeToggle />
+
+          <button
+            onClick={toggleLanguage}
+            className="h-8 px-2 flex items-center gap-0.5 rounded-full border text-xs font-semibold transition bg-surface border-soft"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <span style={{ color: i18n.language === 'en' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>EN</span>
+            <span style={{ color: 'var(--text-muted)' }}>/</span>
+            <span style={{ color: i18n.language === 'zh' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>中文</span>
+          </button>
+
+          {/* Hamburger button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="h-9 w-9 flex items-center justify-center rounded-lg border transition bg-surface border-soft"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--text-primary)' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--text-primary)' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile menu drawer */}
+      {isMobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 top-0 bg-black/40 z-40 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Menu panel */}
+          <div
+            className="fixed top-[57px] left-0 right-0 z-50 md:hidden animate-fade-in border-b"
+            style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}
+          >
+            <nav className="flex flex-col px-4 py-3 gap-1">
+              {navItems.map((item) => {
+                const active = isActive(item.to);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200"
+                    style={{
+                      color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      background: active ? 'var(--bg-surface-hover)' : 'transparent',
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
+              {user ? (
+                <div className="flex flex-col gap-1">
+                  <div className="px-3 py-2">
+                    <p className="text-xs text-muted">{t('nav.signedInAs')}</p>
+                    <p className="text-sm font-medium truncate text-primary">{user}</p>
+                  </div>
+                  <Link
+                    to="/account"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {t('nav.account')}
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2 text-left"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    {t('nav.logout')}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleAuthModal('login')}
+                    className="btn-secondary flex-1 inline-flex items-center justify-center h-10 rounded-lg text-sm font-semibold transition-all duration-200"
+                  >
+                    {t('nav.login')}
+                  </button>
+                  <button
+                    onClick={() => toggleAuthModal('register')}
+                    className="btn-solid flex-1 inline-flex items-center justify-center h-10 rounded-lg text-sm font-semibold transition-all duration-200"
+                  >
+                    {t('nav.register')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}

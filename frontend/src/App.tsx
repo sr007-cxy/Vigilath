@@ -28,6 +28,8 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ContactModalProvider } from './components/ContactModalContext';
 import { ContactModal } from './components/ContactModal';
+import { TierModalProvider } from './components/TierModalContext';
+import { TierModal } from './components/TierModal';
 import './i18n';
 
 // Create a client
@@ -37,9 +39,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ContactModalProvider>
+      <TierModalProvider>
       <Router>
         <Header />
         <ContactModal />
+        <TierModal />
         <div className="pt-16">
           <Routes>
             <Route path="/" element={<Home />} />
@@ -75,6 +79,7 @@ function App() {
           <Footer />
         </div>
       </Router>
+      </TierModalProvider>
       </ContactModalProvider>
     </QueryClientProvider>
   );

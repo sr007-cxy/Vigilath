@@ -10,7 +10,6 @@ type ContactFormState = {
   name: string;
   email: string;
   website: string;
-  service: string;
   message: string;
 };
 
@@ -18,7 +17,6 @@ const INITIAL_FORM: ContactFormState = {
   name: '',
   email: '',
   website: '',
-  service: '',
   message: '',
 };
 
@@ -81,11 +79,6 @@ export function ProductsServices() {
     };
   }, []);
 
-  const serviceTiers = useMemo(
-    () => memberships.filter((m) => m.tier_type === 'service'),
-    [memberships],
-  );
-
   const handleCTA = (tier: Membership) => {
     if (tier.slug === 'free') {
       navigate('/');
@@ -120,7 +113,6 @@ export function ProductsServices() {
         name: form.name,
         email: form.email,
         website: form.website || undefined,
-        tier_slug: form.service || undefined,
         message: form.message || undefined,
       });
       setFeedback(resp.message);
@@ -154,7 +146,7 @@ export function ProductsServices() {
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
 
-      <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
+      <main className="flex-1 px-4 pt-24 pb-12 sm:py-24 hero-gradient relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero mb-16">
             <div className="max-w-3xl mx-auto text-center">
@@ -181,7 +173,7 @@ export function ProductsServices() {
 
             {!isLoading && !loadError && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12 items-stretch">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 mb-12 items-stretch">
                   {memberships.map((tier) => {
                     const text = tierText(tier);
                     return (
@@ -541,25 +533,6 @@ export function ProductsServices() {
                   className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
                   placeholder={t('productsServices.contact.websitePlaceholder')}
                 />
-              </div>
-              <div>
-                <label htmlFor="service" className="block text-sm font-semibold mb-2">
-                  {t('productsServices.contact.service')}
-                </label>
-                <select
-                  id="service"
-                  name="service"
-                  value={form.service}
-                  onChange={(e) => setForm({ ...form, service: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-card border border-border text-white placeholder-gray-500 focus:outline-none focus:border-accent-primary transition-colors duration-200"
-                >
-                  <option value="">{t('productsServices.selectPlaceholder')}</option>
-                  {serviceTiers.map((tier) => (
-                    <option key={tier.slug} value={tier.slug}>
-                      {tierText(tier).name} · {formatTierPrice(tier)}
-                    </option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label htmlFor="message" className="block text-sm font-semibold mb-2">

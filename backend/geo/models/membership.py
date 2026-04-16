@@ -67,6 +67,16 @@ class SalesLeadORM(Base):
     message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class ContactSubmissionORM(Base):
+    __tablename__ = "contact_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    website = Column(String, nullable=False)
+    message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 # Pydantic Models
 class MembershipBase(BaseModel):
     name: str

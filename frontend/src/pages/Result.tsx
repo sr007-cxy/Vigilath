@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { PaymentModal } from '../components/PaymentModal';
 import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
+import { useTierModal } from '../components/TierModalContext';
 import { geoApi, ApiError } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
 import { CheckProgress } from '../components/result/CheckProgress';
@@ -162,6 +163,7 @@ export function Result() {
   const initialAdvancedUrl = navState?.initialUrl || '';
   const isEmptyAdvancedMode = !result && !!initialAdvancedMode;
   const { token, isLoggedIn, refresh } = useMembership();
+  const { openTierModal } = useTierModal();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('infraProtocols');
   const [showContactModal, setShowContactModal] = useState(false);
@@ -459,9 +461,9 @@ export function Result() {
       ? 'flex-1 min-w-0 py-3 px-5 text-base bg-transparent focus:outline-none text-primary placeholder-muted'
       : 'flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted';
     const buttonClass = hero
-      ? 'gradient-bg text-white w-12 h-12 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60'
-      : 'gradient-bg text-white w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-all shrink-0 disabled:opacity-60';
-    const iconSize = hero ? 'h-5 w-5' : 'h-4 w-4';
+      ? 'btn-solid px-5 py-3 rounded-full flex items-center justify-center gap-2 font-semibold transition-all shrink-0 disabled:opacity-60 text-sm'
+      : 'btn-solid px-4 py-2 rounded-full flex items-center justify-center gap-1.5 font-semibold transition-all shrink-0 disabled:opacity-60 text-xs sm:text-sm';
+    const iconSize = hero ? 'h-4 w-4' : 'h-3.5 w-3.5';
     const selectClass = hero
       ? 'appearance-none bg-transparent text-base text-primary pl-3 pr-2 py-3 focus:outline-none cursor-pointer shrink-0'
       : 'appearance-none bg-transparent text-xs sm:text-sm text-primary pl-3 pr-2 py-2 focus:outline-none cursor-pointer shrink-0';
@@ -544,14 +546,15 @@ export function Result() {
             className={buttonClass}
           >
             {rerunLoading ? (
-              <svg className={`animate-spin ${iconSize}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <>
+                <svg className={`animate-spin ${iconSize}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="hidden sm:inline">{t('home.analyzing', { defaultValue: '检测中...' })}</span>
+              </>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              t('home.button')
             )}
           </button>
         </div>
@@ -577,7 +580,7 @@ export function Result() {
             {rerunQuotaExceeded && (
               <button
                 type="button"
-                onClick={() => navigate('/products-services')}
+                onClick={openTierModal}
                 className="text-[11px] font-semibold text-rose-200 bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded-full transition-colors"
               >
                 {t('home.error.quotaCta')}
@@ -724,7 +727,7 @@ export function Result() {
           <p className="text-secondary mb-6">{t('result.error.noData')}</p>
           <button
             onClick={() => navigate('/')}
-            className="w-full gradient-bg text-white rounded-xl py-3.5 font-semibold hover:opacity-90 transition-all duration-300 flex items-center justify-center gap-2 shadow-glow"
+            className="w-full btn-solid rounded-xl py-3.5 font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-glow"
           >
             {t('result.buttons.checkAnother')}
           </button>
@@ -968,7 +971,7 @@ export function Result() {
                           </p>
                         </div>
                         <button
-                          onClick={() => navigate('/products-services')}
+                          onClick={openTierModal}
                           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full gradient-bg text-white text-xs font-semibold hover:opacity-90 transition-all"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1234,7 +1237,7 @@ export function Result() {
               {!isUnlocked && (
                 <button
                   onClick={handleUnlockClick}
-                  className="flex-1 gradient-bg text-white rounded-xl py-3 px-5 text-sm font-semibold hover:opacity-90 transition-all shadow-glow flex items-center justify-center gap-2"
+                  className="flex-1 btn-solid rounded-xl py-3 px-5 text-sm font-semibold transition-all shadow-glow flex items-center justify-center gap-2"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />

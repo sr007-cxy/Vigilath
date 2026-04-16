@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useContactModal } from '../../components/ContactModalContext';
+import { useTierModal } from '../../components/TierModalContext';
 import {
   membershipApi,
   type Membership as MembershipType,
@@ -21,6 +22,7 @@ const SLUG_TO_CARD_KEY: Record<string, string> = { pro: 'detector' };
 export function MembershipTab() {
   const navigate = useNavigate();
   const { openContact } = useContactModal();
+  const { openTierModal } = useTierModal();
   const { t, i18n } = useTranslation();
   const [userMembership, setUserMembership] = useState<UserMembership | null>(null);
   const [details, setDetails] = useState<MembershipType | null>(null);
@@ -125,9 +127,7 @@ export function MembershipTab() {
                       color: 'var(--accent-primary)',
                     }}
                   >
-                    {details.tier_type === 'saas'
-                      ? 'SaaS'
-                      : t('account.membership.service', '人工服务')}
+                    {details.slug.charAt(0).toUpperCase() + details.slug.slice(1)}
                   </span>
                 </div>
                 <p className="text-sm text-secondary">
@@ -176,7 +176,7 @@ export function MembershipTab() {
         <div className="mt-5 flex flex-col sm:flex-row gap-3">
           {!isHighestTier && (
             <button
-              onClick={() => navigate('/products-services')}
+              onClick={openTierModal}
               className="btn-primary flex-1 justify-center !py-2.5"
             >
               {hasPaidPlan

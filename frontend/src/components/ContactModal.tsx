@@ -28,7 +28,7 @@ export function ContactModal() {
     e.preventDefault();
     if (!formData.name.trim()) { setError(t('contact.form.errors.name')); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setError(t('contact.form.errors.email')); return; }
-    if (!formData.message.trim()) { setError(t('contact.form.errors.message')); return; }
+    if (!formData.website.trim()) { setError(t('contact.form.errors.website')); return; }
 
     setIsLoading(true);
     setError('');
@@ -41,7 +41,7 @@ export function ContactModal() {
           name: sanitizeInput(formData.name),
           email: sanitizeInput(formData.email),
           website: sanitizeInput(formData.website),
-          message: sanitizeInput(formData.message),
+          message: formData.message.trim() ? sanitizeInput(formData.message) : undefined,
         }),
       });
       if (!res.ok) throw new Error();
@@ -131,7 +131,7 @@ export function ContactModal() {
             type="submit" disabled={isLoading}
             className="w-full bg-accent-primary hover:bg-accent-primary/80 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? t('contact.form.sending') : t('contact.form.submit')}
+            {isLoading ? t('contact.form.sending') : t('contact.submit')}
           </button>
         </form>
 

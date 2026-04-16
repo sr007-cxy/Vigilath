@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { paymentApi, type StripeSessionStatus } from '../services/paymentApi';
+import { useTierModal } from '../components/TierModalContext';
 
 type LoadState = 'loading' | 'paid' | 'pending' | 'error';
 
 export function CheckoutSuccess() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { openTierModal } = useTierModal();
   const [params] = useSearchParams();
   const [state, setState] = useState<LoadState>('loading');
   const [status, setStatus] = useState<StripeSessionStatus | null>(null);
@@ -156,7 +158,7 @@ export function CheckoutSuccess() {
             <p className="text-sm text-secondary mb-4">{error}</p>
             <button
               type="button"
-              onClick={() => navigate('/products-services')}
+              onClick={openTierModal}
               className="px-5 py-2.5 rounded-lg border border-border text-secondary hover:text-primary hover:bg-border/40 transition-colors"
             >
               {t('checkout.backToPlans', 'Back to plans')}

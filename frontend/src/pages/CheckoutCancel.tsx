@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useTierModal } from '../components/TierModalContext';
 
 export function CheckoutCancel() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { openTierModal } = useTierModal();
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6">
@@ -20,7 +22,7 @@ export function CheckoutCancel() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             type="button"
-            onClick={() => navigate('/products-services')}
+            onClick={openTierModal}
             className="px-5 py-2.5 rounded-lg bg-accent-primary text-white font-semibold hover:bg-accent-primary/80 transition-colors"
           >
             {t('checkout.backToPlans', 'Back to plans')}

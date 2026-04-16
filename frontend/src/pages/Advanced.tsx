@@ -171,7 +171,7 @@ export function Advanced() {
           <p className="text-secondary mb-6">Unknown advanced mode: {modeParam}</p>
           <button
             onClick={() => navigate('/')}
-            className="gradient-bg text-white rounded-full py-2.5 px-6 font-semibold hover:opacity-90 transition"
+            className="btn-solid rounded-full py-2.5 px-6 font-semibold transition"
           >
             {t('result.buttons.checkAnother', { defaultValue: 'Back to home' })}
           </button>
@@ -311,7 +311,7 @@ export function Advanced() {
               </p>
               <button
                 onClick={() => setShowPaymentModal(true)}
-                className="gradient-bg text-white rounded-full py-2 px-5 text-sm font-semibold"
+                className="btn-solid rounded-full py-2 px-5 text-sm font-semibold"
               >
                 {t('home.advanced.upgrade')}
               </button>
@@ -347,7 +347,7 @@ export function Advanced() {
               <button
                 type="submit"
                 disabled={loading}
-                className="gradient-bg text-white rounded-full py-2.5 px-6 font-semibold hover:opacity-90 transition disabled:opacity-60"
+                className="btn-solid rounded-full py-2.5 px-6 font-semibold transition disabled:opacity-60"
               >
                 {loading
                   ? t('home.analyzing', { defaultValue: 'Analyzing...' })
