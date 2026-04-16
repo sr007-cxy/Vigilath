@@ -9,6 +9,7 @@ import type { RerunMode } from './rerunModes';
 // takes longer, the last stage parks with an "almost done" hint.
 const STAGE_WEIGHTS: Record<RerunMode, number[]> = {
   default:    [3, 4, 5, 5, 6, 6, 5],
+  aeo:        [4, 6, 8, 8, 6, 5],
   compare:    [3, 5, 6, 6, 5],
   crawlTest:  [3, 5, 6, 6, 4],
   authority:  [4, 6, 7, 7, 6],
@@ -18,6 +19,14 @@ const STAGE_WEIGHTS: Record<RerunMode, number[]> = {
 };
 
 const STAGE_KEYS: Record<RerunMode, string[]> = {
+  aeo: [
+    'result.progress.stages.default.fetch',
+    'result.progress.stages.default.protocols',
+    'result.progress.stages.default.structured',
+    'result.progress.stages.default.content',
+    'result.progress.stages.default.authority',
+    'result.progress.stages.default.finalize',
+  ],
   default: [
     'result.progress.stages.default.fetch',
     'result.progress.stages.default.protocols',

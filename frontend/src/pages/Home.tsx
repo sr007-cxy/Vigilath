@@ -6,7 +6,6 @@ import { useContactModal } from '../components/ContactModalContext';
 import { useTierModal } from '../components/TierModalContext';
 import { CheckProgress } from '../components/result/CheckProgress';
 import { useMembership } from '../hooks/useMembership';
-import { useLoadNs } from '../i18n/useLoadNs';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
@@ -50,7 +49,6 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
 ];
 
 export function Home() {
-  useLoadNs('result');
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { isLoggedIn, isUnlocked } = useMembership();
