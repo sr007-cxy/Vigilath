@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { BrowserProvider, randomBytes, hexlify } from 'ethers';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 import { useTierModal } from '../components/TierModalContext';
+
+type PayMethod = 'stripe' | 'usdc';
+
+const BASE_CHAIN_ID = 8453;
+const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const PAY_EXECUTE_URL = '/pay/execute';
 
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
@@ -40,6 +47,12 @@ export function CheckoutPending() {
   const [isLoading, setIsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [payMethod, setPayMethod] = useState<PayMethod>('stripe');
+
+  // USDC / Web3 state
+  const [usdcAmount, setUsdcAmount] = useState<number>(0);
+  const [walletAddr, setWalletAddr] = useState<string>('');
+  const [usdcStep, setUsdcStep] = useState<'idle' | 'connecting' | 'paying' | 'verifying' | 'done'>('idle');
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -49,7 +62,7 @@ export function CheckoutPending() {
       return;
     }
     if (!slug) {
-      setLoadError(t('checkoutPending.missingSlug', 'Missing plan identifier'));
+      setLoadError(t('checkoutPending.missingSlug'));
       setIsLoading(false);
       return;
     }
@@ -61,14 +74,9 @@ export function CheckoutPending() {
         if (cancelled) return;
         const found = list.find((m) => m.slug === slug);
         if (!found) {
-          setLoadError(t('checkoutPending.notFound', 'Plan not found'));
+          setLoadError(t('checkoutPending.notFound'));
         } else if (found.tier_type !== 'saas') {
-          setLoadError(
-            t(
-              'checkoutPending.notSubscribable',
-              'This plan is not directly subscribable. Please contact sales.',
-            ),
-          );
+          setLoadError(t('checkoutPending.notSubscribable'));
         } else {
           setTier(found);
         }
@@ -80,68 +88,221 @@ export function CheckoutPending() {
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [slug, isLoggedIn, navigate, t]);
 
-  const tierInfo = useMemo(() => tier ? tierText(tier) : null, [tier, i18n.language]);
+  const tierInfo = useMemo(() => (tier ? tierText(tier) : null), [tier, i18n.language]);
   const features = useMemo(() => tierInfo?.features.slice(0, 6) ?? [], [tierInfo]);
 
-  const handlePay = async () => {
+  const handleStripePay = async () => {
     if (!tier || !token || submitting) return;
     setSubmitting(true);
     setPayError(null);
     try {
-      const { checkout_url } = await paymentApi.createStripeCheckoutSession(
-        token,
-        tier.slug,
-        i18n.language,
-      );
+      const { checkout_url } = await paymentApi.createStripeCheckoutSession(token, tier.slug, i18n.language);
       window.location.href = checkout_url;
     } catch (err) {
-      setPayError(
-        err instanceof Error
-          ? err.message
-          : t('checkoutPending.payError', 'Failed to start payment'),
-      );
+      setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
       setSubmitting(false);
     }
   };
+
+  const slugToServiceId: Record<string, string> = {
+    pro: 'membership-detector',
+    starter: 'membership-starter',
+    growth: 'membership-growth',
+  };
+
+  const handleUsdcPay = async () => {
+    if (!tier || !token || submitting) return;
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) {
+      setPayError(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
+      return;
+    }
+
+    const serviceId = slugToServiceId[tier.slug];
+    if (!serviceId) {
+      setPayError('USDC payment not available for this plan.');
+      return;
+    }
+
+    setSubmitting(true);
+    setPayError(null);
+    try {
+      // 1. Create backend order
+      setUsdcStep('connecting');
+      const order = await paymentApi.createMoltsPaySession(token, tier.slug);
+      setUsdcAmount(order.amount_usdc);
+
+      // 2. Connect wallet & switch to Base
+      const provider = new BrowserProvider(ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== BASE_CHAIN_ID) {
+        try {
+          await provider.send('wallet_switchEthereumChain', [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }]);
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await provider.send('wallet_addEthereumChain', [{
+              chainId: '0x' + BASE_CHAIN_ID.toString(16),
+              chainName: 'Base',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }]);
+          } else {
+            throw switchErr;
+          }
+        }
+      }
+
+      const signer = await provider.getSigner();
+      const fromAddr = await signer.getAddress();
+      setWalletAddr(fromAddr);
+
+      // 3. Request 402 from MoltsPayServer to get payment requirements
+      setUsdcStep('paying');
+      const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      const executeBody = {
+        service: serviceId,
+        params: { user_id: userId, membership_slug: tier.slug },
+        chain: 'base',
+      };
+
+      const res402 = await fetch(PAY_EXECUTE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(executeBody),
+      });
+
+      if (res402.status !== 402) {
+        throw new Error(`Expected 402, got ${res402.status}`);
+      }
+
+      const reqHeader = res402.headers.get('x-payment-required');
+      if (!reqHeader) throw new Error('Missing x-payment-required header');
+
+      let requirements: any[];
+      try {
+        const parsed = JSON.parse(atob(reqHeader));
+        if (parsed.accepts && Array.isArray(parsed.accepts)) {
+          requirements = parsed.accepts;
+        } else if (Array.isArray(parsed)) {
+          requirements = parsed;
+        } else {
+          requirements = [parsed];
+        }
+      } catch {
+        throw new Error('Invalid payment requirements');
+      }
+
+      const req = requirements.find((r: any) => r.network === 'eip155:8453' && r.scheme === 'exact');
+      if (!req) throw new Error('No Base chain payment requirement found');
+
+      const payTo = req.payTo || req.resource;
+      const amountRaw = req.amount || req.maxAmountRequired;
+      if (!payTo || !amountRaw) throw new Error('Missing payTo or amount in requirements');
+
+      const extra = req.extra && typeof req.extra === 'object' ? req.extra : { name: 'USD Coin', version: '2' };
+
+      // 4. Sign EIP-3009 TransferWithAuthorization (gasless)
+      const authorization = {
+        from: fromAddr,
+        to: payTo,
+        value: amountRaw,
+        validAfter: '0',
+        validBefore: String(Math.floor(Date.now() / 1000) + 3600),
+        nonce: hexlify(randomBytes(32)),
+      };
+
+      const domain = {
+        name: extra.name || 'USD Coin',
+        version: extra.version || '2',
+        chainId: BASE_CHAIN_ID,
+        verifyingContract: USDC_CONTRACT,
+      };
+
+      const types = {
+        TransferWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ],
+      };
+
+      const signature = await signer.signTypedData(domain, types, authorization);
+
+      // 5. Send paid request with X-Payment header
+      setUsdcStep('verifying');
+      const payload = {
+        x402Version: 2,
+        scheme: 'exact',
+        network: 'eip155:8453',
+        payload: { authorization, signature },
+        accepted: {
+          scheme: 'exact',
+          network: 'eip155:8453',
+          asset: USDC_CONTRACT,
+          amount: amountRaw,
+          payTo,
+          maxTimeoutSeconds: 300,
+          extra,
+        },
+      };
+
+      const paymentHeader = btoa(JSON.stringify(payload));
+      const paidRes = await fetch(PAY_EXECUTE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Payment': paymentHeader,
+        },
+        body: JSON.stringify(executeBody),
+      });
+
+      if (!paidRes.ok) {
+        const errData = await paidRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Payment failed (${paidRes.status})`);
+      }
+
+      // 6. MoltsPayServer has called /fulfill — poll to confirm
+      setUsdcStep('done');
+      navigate('/checkout/success?provider=moltspay');
+    } catch (err: any) {
+      if (err?.code === 4001 || err?.code === 'ACTION_REJECTED') {
+        setPayError(t('checkoutPending.usdcRejected', 'Transaction rejected by user.'));
+      } else {
+        setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
+      }
+      setUsdcStep('idle');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePay = payMethod === 'stripe' ? handleStripePay : handleUsdcPay;
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6 py-16">
       <div className="max-w-xl w-full bg-card border border-border rounded-2xl p-8">
         <div className="mb-6 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-accent-primary/10 flex items-center justify-center">
-            <svg
-              className="w-5 h-5 text-accent-primary"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
+            <svg className="w-5 h-5 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-primary">
-              {t('checkoutPending.title', '待支付订单')}
-            </h1>
-            <p className="text-xs text-secondary">
-              {t('checkoutPending.subtitle', '请确认订单信息后完成支付')}
-            </p>
+            <h1 className="text-xl font-bold text-primary">{t('checkoutPending.title')}</h1>
+            <p className="text-xs text-secondary">{t('checkoutPending.subtitle')}</p>
           </div>
         </div>
 
         {isLoading && (
-          <div className="py-12 text-center text-sm text-secondary">
-            {t('checkoutPending.loading', '加载订单中…')}
-          </div>
+          <div className="py-12 text-center text-sm text-secondary">{t('checkoutPending.loading')}</div>
         )}
 
         {!isLoading && loadError && (
@@ -152,24 +313,23 @@ export function CheckoutPending() {
               onClick={openTierModal}
               className="w-full justify-center btn-primary !py-3"
             >
-              {t('checkoutPending.backToPlans', '返回套餐列表')}
+              {t('checkoutPending.backToPlans')}
             </button>
           </div>
         )}
 
         {!isLoading && tier && (
           <>
+            {/* Plan info */}
             <div className="rounded-xl border border-border p-5 mb-5 bg-[rgba(255,255,255,0.02)]">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div>
-                  <div className="text-sm text-secondary">
-                    {t('checkoutPending.planLabel', '订阅套餐')}
-                  </div>
+                  <div className="text-sm text-secondary">{t('checkoutPending.planLabel')}</div>
                   <div className="text-lg font-bold text-primary mt-0.5">{tierInfo?.name || tier.name}</div>
                 </div>
                 {tier.popular && (
                   <span className="px-2 py-0.5 rounded-full bg-accent-primary/10 text-accent-primary text-[10px] font-semibold uppercase tracking-wider">
-                    {t('checkoutPending.popular', '热门')}
+                    {t('checkoutPending.popular')}
                   </span>
                 )}
               </div>
@@ -178,18 +338,8 @@ export function CheckoutPending() {
                 <ul className="space-y-2 mb-4">
                   {features.map((f, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs text-primary">
-                      <svg
-                        className="w-4 h-4 text-accent-primary shrink-0 mt-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2.5"
-                          d="M5 13l4 4L19 7"
-                        />
+                      <svg className="w-4 h-4 text-accent-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                       </svg>
                       <span className="leading-snug">{f}</span>
                     </li>
@@ -197,9 +347,7 @@ export function CheckoutPending() {
                 </ul>
               )}
               <div className="flex items-end justify-between pt-4 border-t border-border">
-                <span className="text-sm text-secondary">
-                  {t('checkoutPending.totalLabel', '应付金额')}
-                </span>
+                <span className="text-sm text-secondary">{t('checkoutPending.totalLabel')}</span>
                 <span className="text-2xl font-bold text-accent-primary">
                   {formatTierPrice(tier)}
                   <span className="text-sm text-secondary font-medium ml-1">{tierInfo?.period || tier.period}</span>
@@ -207,32 +355,111 @@ export function CheckoutPending() {
               </div>
             </div>
 
-            <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
-              <div className="flex items-center gap-2 mb-1.5">
-                <svg
-                  className="w-4 h-4 text-accent-primary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
+            {/* Payment method selector */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                <span className="text-xs font-semibold text-primary">
-                  {t('checkoutPending.methodLabel', '支付方式')}
-                </span>
+                <span className="text-xs font-semibold text-primary">{t('checkoutPending.methodLabel')}</span>
               </div>
-              <p className="text-xs text-secondary leading-relaxed">
-                {t(
-                  'checkoutPending.methodStripe',
-                  'You will be redirected to Stripe to complete the payment securely.',
-                )}
-              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPayMethod('stripe')}
+                  disabled={submitting}
+                  className={`rounded-xl border-2 p-4 text-left transition-all ${
+                    payMethod === 'stripe'
+                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
+                      : 'border-border hover:border-accent-primary/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">💳</span>
+                    <div>
+                      <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
+                      <div className="text-[10px] text-secondary">Stripe</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayMethod('usdc')}
+                  disabled={submitting}
+                  className={`rounded-xl border-2 p-4 text-left transition-all ${
+                    payMethod === 'usdc'
+                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
+                      : 'border-border hover:border-accent-primary/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                      <circle cx="16" cy="16" r="16" fill="#2775CA"/>
+                      <path d="M20.5 18.5c0-2.1-1.3-2.8-3.8-3.1-1.8-.3-2.2-.7-2.2-1.4s.6-1.2 1.8-1.2c1.1 0 1.6.4 1.9 1.2.1.2.2.3.4.3h1c.2 0 .4-.2.3-.4-.3-1.2-1.1-2.1-2.4-2.4v-1.4c0-.2-.2-.4-.4-.4h-.9c-.2 0-.4.2-.4.4v1.3c-1.7.3-2.8 1.3-2.8 2.7 0 2 1.2 2.7 3.7 3.1 1.7.3 2.3.7 2.3 1.5s-.8 1.3-1.9 1.3c-1.5 0-2-.6-2.2-1.3-.1-.2-.2-.3-.4-.3h-1c-.2 0-.4.2-.3.4.4 1.4 1.2 2.2 2.7 2.5v1.4c0 .2.2.4.4.4h.9c.2 0 .4-.2.4-.4v-1.4c1.7-.2 2.9-1.3 2.9-2.8z" fill="#fff"/>
+                    </svg>
+                    <div>
+                      <div className="text-sm font-semibold text-primary">USDC</div>
+                      <div className="text-[10px] text-secondary">Coinbase</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
+
+            {/* Stripe info */}
+            {payMethod === 'stripe' && !submitting && (
+              <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
+                <p className="text-xs text-secondary leading-relaxed">{t('checkoutPending.methodStripe')}</p>
+              </div>
+            )}
+
+            {/* USDC info */}
+            {payMethod === 'usdc' && usdcStep === 'idle' && (
+              <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
+                <p className="text-xs text-secondary leading-relaxed">
+                  {t('checkoutPending.methodUsdc', 'Pay with USDC on Base chain via your Web3 wallet (MetaMask, etc.). Click "Pay Now" to connect wallet and approve the transfer.')}
+                </p>
+                {!(window as any).ethereum && (
+                  <p className="text-xs text-yellow-400 mt-2">
+                    {t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* USDC progress panel */}
+            {payMethod === 'usdc' && usdcStep !== 'idle' && usdcStep !== 'done' && (
+              <div className="rounded-lg bg-accent-primary/5 border border-accent-primary/30 p-5 mb-5">
+                <div className="space-y-3 text-xs">
+                  {walletAddr && (
+                    <div className="flex justify-between">
+                      <span className="text-secondary">{t('checkoutPending.usdcYourWallet', 'Your wallet')}</span>
+                      <span className="font-mono text-primary">{walletAddr.slice(0, 8)}...{walletAddr.slice(-6)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-secondary">{t('checkoutPending.usdcAmount', 'Amount')}</span>
+                    <span className="font-mono text-primary">{usdcAmount || '...'} USDC</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-secondary">{t('checkoutPending.usdcChain', 'Chain')}</span>
+                    <span className="font-mono text-primary">Base</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-secondary">{t('checkoutPending.usdcStatus', 'Status')}</span>
+                    <span className="text-yellow-400 font-medium flex items-center gap-1.5">
+                      <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      {usdcStep === 'connecting' && t('checkoutPending.usdcConnecting', 'Connecting wallet...')}
+                      {usdcStep === 'paying' && t('checkoutPending.usdcSigning', 'Please approve in your wallet...')}
+                      {usdcStep === 'verifying' && t('checkoutPending.usdcVerifying', 'Confirming on chain...')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {payError && (
               <div className="mb-4 text-xs px-4 py-3 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30">
@@ -241,23 +468,27 @@ export function CheckoutPending() {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3">
+              {usdcStep === 'idle' && (
+                <button
+                  type="button"
+                  onClick={handlePay}
+                  disabled={submitting}
+                  className="flex-1 justify-center btn-primary !py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting
+                    ? t('checkoutPending.submitting')
+                    : payMethod === 'usdc'
+                      ? t('checkoutPending.usdcPayNow', 'Connect Wallet & Pay')
+                      : t('checkoutPending.payNow')}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handlePay}
-                disabled={submitting}
-                className="flex-1 justify-center btn-primary !py-3 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {submitting
-                  ? t('checkoutPending.submitting', '正在跳转支付…')
-                  : t('checkoutPending.payNow', '立即支付')}
-              </button>
-              <button
-                type="button"
-                onClick={openTierModal}
+                onClick={() => openTierModal()}
                 disabled={submitting}
                 className="px-5 py-3 rounded-lg border border-border text-secondary hover:text-primary hover:bg-border/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {t('checkoutPending.cancel', '取消')}
+                {t('checkoutPending.cancel')}
               </button>
             </div>
           </>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useLoadNs } from '../i18n/useLoadNs';
 import { PaymentModal } from '../components/PaymentModal';
 import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
@@ -150,6 +151,7 @@ const statusTheme = (status: string) => {
 };
 
 export function Result() {
+  useLoadNs('result');
   const { t, i18n } = useTranslation();
   const [exportingPdf, setExportingPdf] = useState(false);
   const location = useLocation();

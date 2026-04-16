@@ -18,4 +18,28 @@ if (!i18n.isInitialized) {
   });
 }
 
+const loaded: Record<string, boolean> = {};
+
+export async function loadNamespace(ns: 'result' | 'knowledge') {
+  if (loaded[ns]) return;
+
+  if (ns === 'result') {
+    const [enM, zhM] = await Promise.all([
+      import('./en-result'),
+      import('./zh-result'),
+    ]);
+    i18n.addResourceBundle('en', 'translation', enM.default, true, true);
+    i18n.addResourceBundle('zh', 'translation', zhM.default, true, true);
+  } else if (ns === 'knowledge') {
+    const [enM, zhM] = await Promise.all([
+      import('./en-knowledge'),
+      import('./zh-knowledge'),
+    ]);
+    i18n.addResourceBundle('en', 'translation', enM.default, true, true);
+    i18n.addResourceBundle('zh', 'translation', zhM.default, true, true);
+  }
+
+  loaded[ns] = true;
+}
+
 export default i18n;

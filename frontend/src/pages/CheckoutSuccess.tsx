@@ -16,8 +16,16 @@ export function CheckoutSuccess() {
   const [error, setError] = useState<string>('');
 
   const sessionId = params.get('session_id');
+  const provider = params.get('provider');
 
   useEffect(() => {
+    // MoltsPay: fulfillment already happened via /fulfill callback
+    if (provider === 'moltspay') {
+      setState('paid');
+      return;
+    }
+
+    // Stripe flow
     const token = localStorage.getItem('token');
     if (!sessionId) {
       setState('error');
@@ -50,7 +58,6 @@ export function CheckoutSuccess() {
           );
           return;
         }
-        // Still pending — Stripe webhook may not have arrived yet.
         attempts += 1;
         if (attempts < 5) {
           setTimeout(poll, 1500);
@@ -72,7 +79,7 @@ export function CheckoutSuccess() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, t]);
+  }, [sessionId, provider, t]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6">
@@ -137,7 +144,7 @@ export function CheckoutSuccess() {
             <p className="text-sm text-secondary mb-4">
               {t(
                 'checkout.pendingBody',
-                'Stripe is still confirming the charge. Your membership will activate within a minute. Refresh this page or check the membership dashboard.',
+                'Payment is still confirming. Your membership will activate within a minute. Refresh this page or check the membership dashboard.',
               )}
             </p>
             <button

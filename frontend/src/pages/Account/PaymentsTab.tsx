@@ -104,10 +104,16 @@ export function PaymentsTab() {
                       {t('account.payments.amount')}
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
+                      {t('account.payments.provider', 'Method')}
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
                       {t('account.payments.status')}
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
                       {t('account.payments.completedAt')}
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium">
+                      {t('account.payments.actions', 'Actions')}
                     </th>
                   </tr>
                 </thead>
@@ -129,6 +135,9 @@ export function PaymentsTab() {
                         <td className="px-4 py-3 text-primary font-medium">
                           {formatAmount(row.amount_cents, row.currency)}
                         </td>
+                        <td className="px-4 py-3 text-xs text-secondary">
+                          {row.provider === 'moltspay' ? 'Base USDC' : 'Stripe'}
+                        </td>
                         <td className="px-4 py-3">
                           <span
                             className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
@@ -141,6 +150,17 @@ export function PaymentsTab() {
                           {row.completed_at
                             ? new Date(row.completed_at).toLocaleString()
                             : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {row.status === 'pending' && row.provider === 'stripe' && row.checkout_url && (
+                            <a
+                              href={row.checkout_url}
+                              className="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
+                              style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
+                            >
+                              {t('account.payments.retry', 'Pay')}
+                            </a>
+                          )}
                         </td>
                       </tr>
                     );

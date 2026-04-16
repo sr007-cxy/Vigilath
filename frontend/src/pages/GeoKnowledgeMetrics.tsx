@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useLoadNs } from '../i18n/useLoadNs';
 import { GeoKnowledgeTabs } from '../components/GeoKnowledgeTabs';
 
 type Category = {
@@ -98,6 +99,7 @@ function MetricCard({ ns }: { ns: string }) {
 }
 
 export function GeoKnowledgeMetrics() {
+  useLoadNs('knowledge');
   const { t } = useTranslation();
 
   return (
