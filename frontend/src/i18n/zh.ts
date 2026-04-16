@@ -1529,6 +1529,7 @@ const zh = {
               "detector": {
                 "name": "检测会员",
                 "period": "/月",
+                "originalPrice": "$9.99",
                 "description": "需要完整自助检测结果的网站管理员和个人开发者",
                 "features": [
                   "需登录账号",
@@ -1644,7 +1645,7 @@ const zh = {
                   "serviceCycle": "❌"
                 },
                 "detector": {
-                  "price": "$9.99/月",
+                  "price": "$0.99/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
