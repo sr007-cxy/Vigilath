@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Optional
+import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
@@ -83,6 +85,7 @@ async def create_moltspay_payment(
         amount_cents = int(round(float(membership.price) * 100))
 
         row = PaymentSessionORM(
+            stripe_session_id=f"moltspay_{uuid.uuid4().hex[:16]}",
             user_id=current_user.id,
             membership_id=membership.id,
             amount_cents=amount_cents,
@@ -178,3 +181,113 @@ async def moltspay_fulfill(request: Request, body: FulfillRequest):
         return {"success": True, "payment_id": row.id}
     finally:
         db.close()
+
+
+# USDC on Base mainnet
+USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+BASE_RPC = "https://mainnet.base.org"
+# ERC-20 Transfer event topic
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+
+class VerifyTxRequest(BaseModel):
+    payment_id: int
+    tx_hash: str
+
+
+@router.post("/moltspay/verify")
+async def verify_moltspay_tx(
+    body: VerifyTxRequest,
+    current_user: UserORM = Depends(get_current_user),
+):
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(PaymentSessionORM)
+            .filter(
+                PaymentSessionORM.id == body.payment_id,
+                PaymentSessionORM.user_id == current_user.id,
+                PaymentSessionORM.provider == "moltspay",
+            )
+            .first()
+        )
+        if not row:
+            raise AppException(status_code=404, message="Payment not found")
+        if row.status == "paid":
+            return {"success": True, "payment_id": row.id, "already_paid": True}
+
+        # Check tx_hash not already used
+        existing_tx = (
+            db.query(PaymentSessionORM)
+            .filter(
+                PaymentSessionORM.tx_hash == body.tx_hash,
+                PaymentSessionORM.status == "paid",
+            )
+            .first()
+        )
+        if existing_tx:
+            raise AppException(status_code=400, message="Transaction already used")
+
+        # Verify on-chain
+        receipt = await _get_tx_receipt(body.tx_hash)
+        if not receipt:
+            raise AppException(status_code=400, message="Transaction not found on chain")
+
+        status_hex = receipt.get("status", "0x0")
+        if int(status_hex, 16) != 1:
+            raise AppException(status_code=400, message="Transaction failed on chain")
+
+        # Parse USDC Transfer events from logs
+        expected_to = MOLTSPAY_WALLET.lower()
+        expected_amount = row.amount_cents * 10000  # cents → 6-decimal USDC (e.g. 999 cents = 9990000)
+        usdc_contract = USDC_CONTRACT.lower()
+
+        transfer_matched = False
+        for log in receipt.get("logs", []):
+            if log.get("address", "").lower() != usdc_contract:
+                continue
+            topics = log.get("topics", [])
+            if len(topics) < 3 or topics[0] != TRANSFER_TOPIC:
+                continue
+            to_addr = "0x" + topics[2][-40:]
+            if to_addr.lower() != expected_to:
+                continue
+            amount = int(log.get("data", "0x0"), 16)
+            if amount >= expected_amount:
+                transfer_matched = True
+                break
+
+        if not transfer_matched:
+            raise AppException(
+                status_code=400,
+                message="USDC transfer not found or amount mismatch",
+            )
+
+        # Fulfill
+        row.status = "paid"
+        row.tx_hash = body.tx_hash
+        row.completed_at = datetime.utcnow()
+        db.commit()
+
+        membership_service.upgrade_membership(current_user.id, row.membership_id)
+
+        return {"success": True, "payment_id": row.id}
+    finally:
+        db.close()
+
+
+async def _get_tx_receipt(tx_hash: str) -> Optional[dict]:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            BASE_RPC,
+            json={
+                "jsonrpc": "2.0",
+                "method": "eth_getTransactionReceipt",
+                "params": [tx_hash],
+                "id": 1,
+            },
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        return data.get("result")

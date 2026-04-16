@@ -91,6 +91,7 @@ class PaymentRecordItem(BaseModel):
     currency: str
     status: str
     provider: str = "stripe"
+    checkout_url: Optional[str] = None
     created_at: str
     completed_at: Optional[str] = None
 
@@ -126,6 +127,7 @@ async def list_user_payments(
                 currency=ps.currency,
                 status=ps.status,
                 provider=ps.provider or "stripe",
+                checkout_url=ps.checkout_url if ps.status == "pending" and (ps.provider or "stripe") == "stripe" else None,
                 created_at=str(ps.created_at),
                 completed_at=str(ps.completed_at) if ps.completed_at else None,
             )

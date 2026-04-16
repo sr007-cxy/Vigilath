@@ -1897,6 +1897,8 @@ const zh = {
               "status": "状态",
               "completedAt": "完成时间",
               "provider": "支付方式",
+              "actions": "操作",
+              "retry": "支付",
               "prev": "上一页",
               "next": "下一页",
               "pageOf": "第 {{page}} / {{pages}} 页",

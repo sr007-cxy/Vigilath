@@ -1,3 +1,6 @@
+import { webcrypto } from 'node:crypto';
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
+
 import { MoltsPayServer } from 'moltspay/server';
 
 const server = new MoltsPayServer('./moltspay.services.json');

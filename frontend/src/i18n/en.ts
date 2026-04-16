@@ -1891,6 +1891,8 @@ const en = {
               "status": "Status",
               "completedAt": "Completed",
               "provider": "Method",
+              "actions": "Actions",
+              "retry": "Pay",
               "prev": "Prev",
               "next": "Next",
               "pageOf": "Page {{page}} of {{pages}}",

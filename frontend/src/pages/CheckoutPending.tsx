@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { BrowserProvider, randomBytes, hexlify } from 'ethers';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 import { useTierModal } from '../components/TierModalContext';
 
 type PayMethod = 'stripe' | 'usdc';
+
+const BASE_CHAIN_ID = 8453;
+const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const PAY_EXECUTE_URL = '/pay/execute';
 
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
@@ -44,13 +49,10 @@ export function CheckoutPending() {
   const [payError, setPayError] = useState<string | null>(null);
   const [payMethod, setPayMethod] = useState<PayMethod>('stripe');
 
-  // USDC state
-  const [usdcPaymentId, setUsdcPaymentId] = useState<number | null>(null);
-  const [usdcServiceId, setUsdcServiceId] = useState<string>('');
+  // USDC / Web3 state
   const [usdcAmount, setUsdcAmount] = useState<number>(0);
-  const [usdcWallet, setUsdcWallet] = useState<string>('');
-  const [usdcPolling, setUsdcPolling] = useState(false);
-  const [usdcStatus, setUsdcStatus] = useState<string>('');
+  const [walletAddr, setWalletAddr] = useState<string>('');
+  const [usdcStep, setUsdcStep] = useState<'idle' | 'connecting' | 'paying' | 'verifying' | 'done'>('idle');
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -105,50 +107,184 @@ export function CheckoutPending() {
     }
   };
 
+  const slugToServiceId: Record<string, string> = {
+    pro: 'membership-detector',
+    starter: 'membership-starter',
+    growth: 'membership-growth',
+  };
+
   const handleUsdcPay = async () => {
     if (!tier || !token || submitting) return;
+    const ethereum = (window as any).ethereum;
+    if (!ethereum) {
+      setPayError(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
+      return;
+    }
+
+    const serviceId = slugToServiceId[tier.slug];
+    if (!serviceId) {
+      setPayError('USDC payment not available for this plan.');
+      return;
+    }
+
     setSubmitting(true);
     setPayError(null);
     try {
-      const data = await paymentApi.createMoltsPaySession(token, tier.slug);
-      setUsdcPaymentId(data.payment_id);
-      setUsdcServiceId(data.service_id);
-      setUsdcAmount(data.amount_usdc);
-      setUsdcWallet(data.wallet_address);
-      setUsdcStatus('pending');
-      setUsdcPolling(true);
-    } catch (err) {
-      setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
+      // 1. Create backend order
+      setUsdcStep('connecting');
+      const order = await paymentApi.createMoltsPaySession(token, tier.slug);
+      setUsdcAmount(order.amount_usdc);
+
+      // 2. Connect wallet & switch to Base
+      const provider = new BrowserProvider(ethereum);
+      await provider.send('eth_requestAccounts', []);
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== BASE_CHAIN_ID) {
+        try {
+          await provider.send('wallet_switchEthereumChain', [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }]);
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await provider.send('wallet_addEthereumChain', [{
+              chainId: '0x' + BASE_CHAIN_ID.toString(16),
+              chainName: 'Base',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }]);
+          } else {
+            throw switchErr;
+          }
+        }
+      }
+
+      const signer = await provider.getSigner();
+      const fromAddr = await signer.getAddress();
+      setWalletAddr(fromAddr);
+
+      // 3. Request 402 from MoltsPayServer to get payment requirements
+      setUsdcStep('paying');
+      const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      const executeBody = {
+        service: serviceId,
+        params: { user_id: userId, membership_slug: tier.slug },
+        chain: 'base',
+      };
+
+      const res402 = await fetch(PAY_EXECUTE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(executeBody),
+      });
+
+      if (res402.status !== 402) {
+        throw new Error(`Expected 402, got ${res402.status}`);
+      }
+
+      const reqHeader = res402.headers.get('x-payment-required');
+      if (!reqHeader) throw new Error('Missing x-payment-required header');
+
+      let requirements: any[];
+      try {
+        const parsed = JSON.parse(atob(reqHeader));
+        if (parsed.accepts && Array.isArray(parsed.accepts)) {
+          requirements = parsed.accepts;
+        } else if (Array.isArray(parsed)) {
+          requirements = parsed;
+        } else {
+          requirements = [parsed];
+        }
+      } catch {
+        throw new Error('Invalid payment requirements');
+      }
+
+      const req = requirements.find((r: any) => r.network === 'eip155:8453' && r.scheme === 'exact');
+      if (!req) throw new Error('No Base chain payment requirement found');
+
+      const payTo = req.payTo || req.resource;
+      const amountRaw = req.amount || req.maxAmountRequired;
+      if (!payTo || !amountRaw) throw new Error('Missing payTo or amount in requirements');
+
+      const extra = req.extra && typeof req.extra === 'object' ? req.extra : { name: 'USD Coin', version: '2' };
+
+      // 4. Sign EIP-3009 TransferWithAuthorization (gasless)
+      const authorization = {
+        from: fromAddr,
+        to: payTo,
+        value: amountRaw,
+        validAfter: '0',
+        validBefore: String(Math.floor(Date.now() / 1000) + 3600),
+        nonce: hexlify(randomBytes(32)),
+      };
+
+      const domain = {
+        name: extra.name || 'USD Coin',
+        version: extra.version || '2',
+        chainId: BASE_CHAIN_ID,
+        verifyingContract: USDC_CONTRACT,
+      };
+
+      const types = {
+        TransferWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ],
+      };
+
+      const signature = await signer.signTypedData(domain, types, authorization);
+
+      // 5. Send paid request with X-Payment header
+      setUsdcStep('verifying');
+      const payload = {
+        x402Version: 2,
+        scheme: 'exact',
+        network: 'eip155:8453',
+        payload: { authorization, signature },
+        accepted: {
+          scheme: 'exact',
+          network: 'eip155:8453',
+          asset: USDC_CONTRACT,
+          amount: amountRaw,
+          payTo,
+          maxTimeoutSeconds: 300,
+          extra,
+        },
+      };
+
+      const paymentHeader = btoa(JSON.stringify(payload));
+      const paidRes = await fetch(PAY_EXECUTE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Payment': paymentHeader,
+        },
+        body: JSON.stringify(executeBody),
+      });
+
+      if (!paidRes.ok) {
+        const errData = await paidRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Payment failed (${paidRes.status})`);
+      }
+
+      // 6. MoltsPayServer has called /fulfill — poll to confirm
+      setUsdcStep('done');
+      navigate('/checkout/success?provider=moltspay');
+    } catch (err: any) {
+      if (err?.code === 4001 || err?.code === 'ACTION_REJECTED') {
+        setPayError(t('checkoutPending.usdcRejected', 'Transaction rejected by user.'));
+      } else {
+        setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
+      }
+      setUsdcStep('idle');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Poll USDC payment status
-  useEffect(() => {
-    if (!usdcPolling || !usdcPaymentId || !token) return;
-    let cancelled = false;
-    const interval = setInterval(async () => {
-      try {
-        const data = await paymentApi.getMoltsPayStatus(token, usdcPaymentId);
-        if (cancelled) return;
-        setUsdcStatus(data.status);
-        if (data.status === 'paid') {
-          setUsdcPolling(false);
-          navigate('/checkout/success?provider=moltspay');
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [usdcPolling, usdcPaymentId, token, navigate]);
-
   const handlePay = payMethod === 'stripe' ? handleStripePay : handleUsdcPay;
-
-  const copied = useCallback(() => {
-    navigator.clipboard.writeText(usdcWallet);
-  }, [usdcWallet]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6 py-16">
@@ -231,85 +367,97 @@ export function CheckoutPending() {
                 <button
                   type="button"
                   onClick={() => setPayMethod('stripe')}
-                  disabled={usdcPolling}
-                  className={`rounded-lg border p-3 text-left transition-all ${
+                  disabled={submitting}
+                  className={`rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'stripe'
-                      ? 'border-accent-primary bg-accent-primary/5'
-                      : 'border-border hover:border-accent-primary/50'
+                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
+                      : 'border-border hover:border-accent-primary/40'
                   }`}
                 >
-                  <div className="text-sm font-semibold text-primary">💳 {t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
-                  <div className="text-[10px] text-secondary mt-0.5">Stripe</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">💳</span>
+                    <div>
+                      <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
+                      <div className="text-[10px] text-secondary">Stripe</div>
+                    </div>
+                  </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPayMethod('usdc')}
-                  disabled={usdcPolling}
-                  className={`rounded-lg border p-3 text-left transition-all ${
+                  disabled={submitting}
+                  className={`rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'usdc'
-                      ? 'border-accent-primary bg-accent-primary/5'
-                      : 'border-border hover:border-accent-primary/50'
+                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
+                      : 'border-border hover:border-accent-primary/40'
                   }`}
                 >
-                  <div className="text-sm font-semibold text-primary">💰 USDC</div>
-                  <div className="text-[10px] text-secondary mt-0.5">Base Chain</div>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                      <circle cx="16" cy="16" r="16" fill="#2775CA"/>
+                      <path d="M20.5 18.5c0-2.1-1.3-2.8-3.8-3.1-1.8-.3-2.2-.7-2.2-1.4s.6-1.2 1.8-1.2c1.1 0 1.6.4 1.9 1.2.1.2.2.3.4.3h1c.2 0 .4-.2.3-.4-.3-1.2-1.1-2.1-2.4-2.4v-1.4c0-.2-.2-.4-.4-.4h-.9c-.2 0-.4.2-.4.4v1.3c-1.7.3-2.8 1.3-2.8 2.7 0 2 1.2 2.7 3.7 3.1 1.7.3 2.3.7 2.3 1.5s-.8 1.3-1.9 1.3c-1.5 0-2-.6-2.2-1.3-.1-.2-.2-.3-.4-.3h-1c-.2 0-.4.2-.3.4.4 1.4 1.2 2.2 2.7 2.5v1.4c0 .2.2.4.4.4h.9c.2 0 .4-.2.4-.4v-1.4c1.7-.2 2.9-1.3 2.9-2.8z" fill="#fff"/>
+                    </svg>
+                    <div>
+                      <div className="text-sm font-semibold text-primary">USDC</div>
+                      <div className="text-[10px] text-secondary">Coinbase</div>
+                    </div>
+                  </div>
                 </button>
               </div>
             </div>
 
             {/* Stripe info */}
-            {payMethod === 'stripe' && !usdcPolling && (
+            {payMethod === 'stripe' && !submitting && (
               <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
                 <p className="text-xs text-secondary leading-relaxed">{t('checkoutPending.methodStripe')}</p>
               </div>
             )}
 
             {/* USDC info */}
-            {payMethod === 'usdc' && !usdcPolling && !usdcPaymentId && (
+            {payMethod === 'usdc' && usdcStep === 'idle' && (
               <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
                 <p className="text-xs text-secondary leading-relaxed">
-                  {t('checkoutPending.methodUsdc', 'Pay with USDC on Base chain. Click "Pay Now" to generate a payment session, then complete it with MoltsPay CLI or any x402-compatible wallet.')}
+                  {t('checkoutPending.methodUsdc', 'Pay with USDC on Base chain via your Web3 wallet (MetaMask, etc.). Click "Pay Now" to connect wallet and approve the transfer.')}
                 </p>
+                {!(window as any).ethereum && (
+                  <p className="text-xs text-yellow-400 mt-2">
+                    {t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.')}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* USDC waiting panel */}
-            {usdcPolling && usdcPaymentId && (
+            {/* USDC progress panel */}
+            {payMethod === 'usdc' && usdcStep !== 'idle' && usdcStep !== 'done' && (
               <div className="rounded-lg bg-accent-primary/5 border border-accent-primary/30 p-5 mb-5">
-                <div className="text-sm font-semibold text-primary mb-3">
-                  {t('checkoutPending.usdcWaiting', 'Waiting for USDC payment...')}
-                </div>
-                <div className="space-y-2 text-xs">
+                <div className="space-y-3 text-xs">
+                  {walletAddr && (
+                    <div className="flex justify-between">
+                      <span className="text-secondary">{t('checkoutPending.usdcYourWallet', 'Your wallet')}</span>
+                      <span className="font-mono text-primary">{walletAddr.slice(0, 8)}...{walletAddr.slice(-6)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-secondary">{t('checkoutPending.usdcAmount', 'Amount')}</span>
-                    <span className="font-mono text-primary">{usdcAmount} USDC</span>
+                    <span className="font-mono text-primary">{usdcAmount || '...'} USDC</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-secondary">{t('checkoutPending.usdcChain', 'Chain')}</span>
                     <span className="font-mono text-primary">Base</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-secondary">{t('checkoutPending.usdcWallet', 'Wallet')}</span>
-                    <span className="font-mono text-primary text-[10px] flex items-center gap-1">
-                      {usdcWallet.slice(0, 8)}...{usdcWallet.slice(-6)}
-                      <button onClick={copied} className="text-accent-primary hover:underline text-[10px]">
-                        {t('checkoutPending.usdcCopy', 'Copy')}
-                      </button>
-                    </span>
-                  </div>
                   <div className="flex justify-between">
                     <span className="text-secondary">{t('checkoutPending.usdcStatus', 'Status')}</span>
-                    <span className="text-yellow-400 font-medium">
-                      {usdcStatus === 'paid' ? '✅ Paid' : '⏳ ' + t('checkoutPending.usdcPending', 'Pending')}
+                    <span className="text-yellow-400 font-medium flex items-center gap-1.5">
+                      <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      {usdcStep === 'connecting' && t('checkoutPending.usdcConnecting', 'Connecting wallet...')}
+                      {usdcStep === 'paying' && t('checkoutPending.usdcSigning', 'Please approve in your wallet...')}
+                      {usdcStep === 'verifying' && t('checkoutPending.usdcVerifying', 'Confirming on chain...')}
                     </span>
                   </div>
                 </div>
-                <div className="mt-4 p-3 rounded-lg bg-[rgba(0,0,0,0.2)] text-[10px] font-mono text-secondary break-all">
-                  moltspay pay https://www.vigilath.com/pay {usdcServiceId} --chain base user_id={'{user_id}'} membership_slug={slug}
-                </div>
-                <p className="text-[10px] text-secondary mt-2">
-                  {t('checkoutPending.usdcHint', 'Use MoltsPay CLI or any x402-compatible client to complete the payment.')}
-                </p>
               </div>
             )}
 
@@ -320,7 +468,7 @@ export function CheckoutPending() {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3">
-              {!usdcPolling && (
+              {usdcStep === 'idle' && (
                 <button
                   type="button"
                   onClick={handlePay}
@@ -329,26 +477,14 @@ export function CheckoutPending() {
                 >
                   {submitting
                     ? t('checkoutPending.submitting')
-                    : t('checkoutPending.payNow')}
+                    : payMethod === 'usdc'
+                      ? t('checkoutPending.usdcPayNow', 'Connect Wallet & Pay')
+                      : t('checkoutPending.payNow')}
                 </button>
               )}
               <button
                 type="button"
-<<<<<<< HEAD
-                onClick={handlePay}
-                disabled={submitting}
-                className="flex-1 justify-center btn-primary !py-3 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {submitting
-                  ? t('checkoutPending.submitting', '正在跳转支付…')
-                  : t('checkoutPending.payNow', '立即支付')}
-              </button>
-              <button
-                type="button"
-                onClick={openTierModal}
-=======
-                onClick={() => { setUsdcPolling(false); navigate('/products-services'); }}
->>>>>>> 72f4216 (feat(payment): 集成 MoltsPay USDC 支付（Base 链 x402 协议）)
+                onClick={() => openTierModal()}
                 disabled={submitting}
                 className="px-5 py-3 rounded-lg border border-border text-secondary hover:text-primary hover:bg-border/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >

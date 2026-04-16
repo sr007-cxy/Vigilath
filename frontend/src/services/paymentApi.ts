@@ -69,6 +69,25 @@ export const paymentApi = {
     return response.json();
   },
 
+  async verifyMoltsPayTx(
+    token: string,
+    paymentId: number,
+    txHash: string,
+  ): Promise<MoltsPayVerifyResponse> {
+    const response = await fetch(`${API_BASE}/payment/moltspay/verify`, {
+      method: 'POST',
+      headers: localizedHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }),
+      body: JSON.stringify({ payment_id: paymentId, tx_hash: txHash }),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Payment verification failed'));
+    }
+    return response.json();
+  },
+
   async getMoltsPayStatus(
     token: string,
     paymentId: number,
@@ -100,4 +119,10 @@ export interface MoltsPayStatusResponse {
   status: string;
   tx_hash: string | null;
   completed_at: string | null;
+}
+
+export interface MoltsPayVerifyResponse {
+  success: boolean;
+  payment_id: number;
+  already_paid?: boolean;
 }

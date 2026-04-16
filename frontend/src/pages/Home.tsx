@@ -49,7 +49,7 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
 ];
 
 export function Home() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { isLoggedIn, isUnlocked } = useMembership();
   const { openContact } = useContactModal();

@@ -27,6 +27,7 @@ export interface PaymentRecord {
   id: number;
   membership_slug: string;
   provider: string;
+  checkout_url: string | null;
   amount_cents: number;
   currency: string;
   status: string;
