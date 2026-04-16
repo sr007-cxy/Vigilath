@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
+import { useLoadNs } from '../i18n/useLoadNs';
 import { GeoKnowledgeTabs } from '../components/GeoKnowledgeTabs';
 
 export function GeoKnowledge() {
+  useLoadNs('knowledge');
   const { t } = useTranslation();
 
   return (

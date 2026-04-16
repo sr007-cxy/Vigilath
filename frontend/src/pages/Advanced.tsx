@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useLoadNs } from '../i18n/useLoadNs';
 import { geoApi } from '../services/geoApi';
 import { useMembership } from '../hooks/useMembership';
 import { PaymentModal } from '../components/PaymentModal';
@@ -124,6 +125,7 @@ export type AnyAdvancedResult =
   | EntityAuditResponse;
 
 export function Advanced() {
+  useLoadNs('result');
   const { mode: modeParam } = useParams<{ mode: string }>();
   const navigate = useNavigate();
   const location = useLocation();
