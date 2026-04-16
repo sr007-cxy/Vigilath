@@ -1560,7 +1560,7 @@ function StatPill({
   const hasItems = items.length > 0;
   const pill = (
     <div
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#3f4143] ${palette.border} ${palette.bg} ${hasItems ? 'cursor-help' : ''}`}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border-strong ${palette.border} ${palette.bg} ${hasItems ? 'cursor-help' : ''}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${palette.dot}`}></span>
       <div className="flex flex-col leading-tight min-w-0">

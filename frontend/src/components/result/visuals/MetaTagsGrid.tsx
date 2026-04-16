@@ -120,7 +120,7 @@ export function MetaTagsGrid({ checks }: Props) {
                   </div>
                   <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
                 </div>
-                <p className="text-[10px] text-[#d5d5dc] leading-snug line-clamp-2 min-h-[1.5em]">
+                <p className="text-[10px] text-secondary leading-snug line-clamp-2 min-h-[1.5em]">
                   {item.status === 'UNKNOWN' ? '—' : item.detail || help}
                 </p>
               </div>

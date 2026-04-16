@@ -164,7 +164,7 @@ export function Advanced() {
   if (!mode) {
     return (
       <div className="min-h-screen grid-background flex items-center justify-center p-6">
-        <div className="bg-card border border-[#3f4143] rounded-2xl p-8 max-w-md text-center">
+        <div className="bg-card border border-border-strong rounded-2xl p-8 max-w-md text-center">
           <h2 className="text-2xl font-bold mb-3 gradient-text">
             {t('common.error', { defaultValue: 'Error' })}
           </h2>
@@ -270,7 +270,7 @@ export function Advanced() {
             ← {t('result.buttons.checkAnother', { defaultValue: 'Back' })}
           </button>
 
-          <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-3xl p-6 sm:p-7 mb-8">
+          <div className="relative overflow-hidden bg-card border border-border-strong rounded-3xl p-6 sm:p-7 mb-8">
             <div
               className="absolute -top-28 -right-24 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
               style={{ background: MODE_VISUALS[mode].gradient }}
@@ -287,10 +287,10 @@ export function Advanced() {
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-accent-primary/10 border border-accent-primary/30 text-[10px] font-bold text-accent-primary uppercase tracking-[0.12em]">
                     {t('home.advanced.badge')}
                   </span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#3f4143] text-[10px] font-bold text-secondary uppercase tracking-[0.12em]">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-border-strong text-[10px] font-bold text-secondary uppercase tracking-[0.12em]">
                     {MODE_MIN_TIER[mode]}+
                   </span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#3f4143] text-[10px] font-mono text-secondary">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-border-strong text-[10px] font-mono text-secondary">
                     {t(`home.advanced.cards.${mode}.title`)}
                   </span>
                 </div>
@@ -320,7 +320,7 @@ export function Advanced() {
 
           <form
             onSubmit={handleSubmit}
-            className="bg-card border border-[#3f4143] rounded-2xl p-6 mb-8"
+            className="bg-card border border-border-strong rounded-2xl p-6 mb-8"
           >
             <ModeForm
               mode={mode}
@@ -397,7 +397,7 @@ function ModeForm(props: ModeFormProps) {
   const { mode, urlInput, setUrlInput, compareUrls, setCompareUrls, loading } = props;
 
   const inputClass =
-    'w-full bg-[#141416] border border-[#3f4143] rounded-xl px-4 py-3 text-primary placeholder-muted focus:outline-none focus:border-accent-primary';
+    'w-full bg-tertiary border border-border-strong rounded-xl px-4 py-3 text-primary placeholder-muted focus:outline-none focus:border-accent-primary';
 
   if (mode === 'compare') {
     return (
@@ -536,8 +536,8 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
-      <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-[#2a2a2e]">
+    <div className="bg-card border border-border-strong rounded-2xl p-5 sm:p-6 mb-6">
+      <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-border">
         <span className="w-1 h-4 rounded-full gradient-bg" />
         <h3 className="text-base font-bold text-primary leading-tight">{title}</h3>
         {subtitle && (
@@ -566,7 +566,7 @@ function ScoreBar({ label, value, max }: { label: string; value: number; max: nu
           <span className="text-secondary">/{max}</span>
         </span>
       </div>
-      <div className="h-2 bg-[#1a1a1e] rounded-full overflow-hidden">
+      <div className="h-2 bg-tertiary rounded-full overflow-hidden">
         <div
           className={`h-full bg-gradient-to-r ${color} transition-all duration-700`}
           style={{ width: `${pct}%` }}
@@ -600,7 +600,7 @@ function StatTile({
             ? 'gradient-text'
             : 'text-primary';
   return (
-    <div className="bg-[#141416] border border-[#2a2a2e] rounded-xl p-4 hover:border-[#3f4143] transition-colors">
+    <div className="bg-tertiary border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
       <div className="text-[10px] uppercase tracking-[0.12em] text-secondary mb-1.5 font-semibold">
         {label}
       </div>
@@ -628,7 +628,7 @@ function MetricRing({
   return (
     <div className="relative w-28 h-28 shrink-0">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#1f1f24" strokeWidth="9" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--border-color)" strokeWidth="9" />
         <circle
           cx="50"
           cy="50"
@@ -712,13 +712,13 @@ function CompareResult({ data }: { data: CompareResponse }) {
           <table className="w-full text-sm border-separate border-spacing-0 min-w-[520px]">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 bg-card text-left py-2 pr-4 text-[10px] uppercase tracking-wider text-secondary font-semibold border-b border-[#3f4143]">
+                <th className="sticky left-0 z-10 bg-card text-left py-2 pr-4 text-[10px] uppercase tracking-wider text-secondary font-semibold border-b border-border-strong">
                   {t('home.advanced.result.compare.category')}
                 </th>
                 {data.results.map((r) => (
                   <th
                     key={r.url}
-                    className="py-2 px-3 text-primary font-semibold text-xs text-left border-b border-[#3f4143] whitespace-nowrap max-w-[180px] truncate"
+                    className="py-2 px-3 text-primary font-semibold text-xs text-left border-b border-border-strong whitespace-nowrap max-w-[180px] truncate"
                     title={r.domain}
                   >
                     {r.domain}
@@ -738,7 +738,7 @@ function CompareResult({ data }: { data: CompareResponse }) {
                 const topPct = Math.max(...cells.map((c) => c.pct));
                 return (
                   <tr key={cat} className="group">
-                    <td className="sticky left-0 z-10 bg-card group-hover:bg-[#17171c] py-3 pr-4 text-secondary text-xs border-b border-[#2a2a2e] transition-colors">
+                    <td className="sticky left-0 z-10 bg-card group-hover:bg-surface-hover py-3 pr-4 text-secondary text-xs border-b border-border transition-colors">
                       {cat}
                     </td>
                     {cells.map((c, i) => {
@@ -752,10 +752,10 @@ function CompareResult({ data }: { data: CompareResponse }) {
                       return (
                         <td
                           key={i}
-                          className="py-3 px-3 border-b border-[#2a2a2e] group-hover:bg-[#17171c] transition-colors"
+                          className="py-3 px-3 border-b border-border group-hover:bg-surface-hover transition-colors"
                         >
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 bg-[#1a1a1e] rounded-full overflow-hidden min-w-[40px]">
+                            <div className="flex-1 h-1.5 bg-tertiary rounded-full overflow-hidden min-w-[40px]">
                               <div
                                 className={`h-full ${barColor} transition-all duration-700`}
                                 style={{ width: `${c.pct}%` }}
@@ -775,11 +775,11 @@ function CompareResult({ data }: { data: CompareResponse }) {
                 );
               })}
               <tr>
-                <td className="sticky left-0 z-10 bg-card py-4 pr-4 font-bold text-primary text-[10px] uppercase tracking-wider border-t-2 border-[#3f4143]">
+                <td className="sticky left-0 z-10 bg-card py-4 pr-4 font-bold text-primary text-[10px] uppercase tracking-wider border-t-2 border-border-strong">
                   {t('home.advanced.result.compare.total')}
                 </td>
                 {data.results.map((r) => (
-                  <td key={r.url} className="py-4 px-3 border-t-2 border-[#3f4143]">
+                  <td key={r.url} className="py-4 px-3 border-t-2 border-border-strong">
                     <div className="flex items-baseline gap-1 flex-wrap">
                       <span className="text-xl font-bold gradient-text tabular-nums">
                         {r.score}
@@ -850,7 +850,7 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
               return (
                 <li
                   key={b.bot}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e]"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-tertiary border border-border"
                 >
                   <span className="text-sm text-primary font-mono">{b.bot}</span>
                   <span
@@ -883,7 +883,7 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
               return (
                 <li
                   key={b.bot}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e]"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-tertiary border border-border"
                 >
                   <span className="text-sm text-primary font-mono">{b.bot}</span>
                   <span
@@ -952,7 +952,7 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
           )}
         </div>
         {data.common_crawl.samples.length > 0 && (
-          <ul className="space-y-1 text-xs text-secondary pt-3 border-t border-[#2a2a2e]">
+          <ul className="space-y-1 text-xs text-secondary pt-3 border-t border-border">
             {data.common_crawl.samples.map((s, i) => (
               <li key={i} className="font-mono truncate" title={s}>
                 → {s}
@@ -1011,7 +1011,7 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
           {data.awards.keywords.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {data.awards.keywords.slice(0, 12).map((k) => (
-                <span key={k} className="text-xs bg-[#1a1a1e] border border-[#3f4143] rounded-full px-2 py-0.5">
+                <span key={k} className="text-xs bg-tertiary border border-border-strong rounded-full px-2 py-0.5">
                   {k}
                 </span>
               ))}
@@ -1058,7 +1058,7 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
   const { t } = useTranslation();
   return (
     <>
-      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+      <div className="relative overflow-hidden bg-card border border-border-strong rounded-2xl p-5 sm:p-6 mb-6">
         <div className="absolute -top-20 -right-20 w-56 h-56 rounded-full bg-emerald-500/10 blur-3xl" />
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6">
           <MetricRing value={Math.round(data.citation_rate)} max={100} suffix="%" />
@@ -1111,7 +1111,7 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
             return (
               <li
                 key={i}
-                className="bg-[#141416] border border-[#2a2a2e] rounded-xl p-3.5 hover:border-[#3f4143] transition-colors"
+                className="bg-tertiary border border-border rounded-xl p-3.5 hover:border-border-strong transition-colors"
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <span className="text-sm text-primary flex-1 leading-snug">"{q.query}"</span>
@@ -1159,7 +1159,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
   const framingTotal = Object.values(data.framings).reduce((a, b) => a + b, 0);
   return (
     <>
-      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+      <div className="relative overflow-hidden bg-card border border-border-strong rounded-2xl p-5 sm:p-6 mb-6">
         <div
           className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 blur-3xl"
           style={{ background: 'linear-gradient(135deg, #06b6d4, #a855f7, #ec4899)' }}
@@ -1178,7 +1178,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
               {data.engines.map((e) => (
                 <span
                   key={e}
-                  className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#141416] border border-[#3f4143] text-secondary"
+                  className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-tertiary border border-border-strong text-secondary"
                 >
                   {e}
                 </span>
@@ -1189,7 +1189,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
             </p>
           </div>
         </div>
-        <div className="relative border-t border-[#2a2a2e] pt-4">
+        <div className="relative border-t border-border pt-4">
           {categories.map((c) => (
             <ScoreBar key={c.label} label={c.label} value={c.value} max={20} />
           ))}
@@ -1206,7 +1206,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
                     {rate.toFixed(0)}%
                   </span>
                 </div>
-                <div className="h-2 bg-[#1a1a1e] rounded-full overflow-hidden">
+                <div className="h-2 bg-tertiary rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 transition-all duration-700"
                     style={{ width: `${rate}%` }}
@@ -1224,7 +1224,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
               {data.top_competitors.slice(0, 10).map((c, i) => (
                 <li
                   key={c.domain}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#141416] border border-[#2a2a2e] hover:border-[#3f4143] transition-colors"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-tertiary border border-border hover:border-border-strong transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[10px] font-mono text-secondary w-5">#{i + 1}</span>
@@ -1250,7 +1250,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
                     </span>
                     <span className="text-xs text-primary font-mono tabular-nums">{n}</span>
                   </div>
-                  <div className="h-1.5 bg-[#1a1a1e] rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-tertiary rounded-full overflow-hidden">
                     <div
                       className="h-full bg-accent-primary/70 transition-all duration-700"
                       style={{ width: `${pct}%` }}
@@ -1325,7 +1325,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
   ];
   return (
     <>
-      <div className="relative overflow-hidden bg-card border border-[#3f4143] rounded-2xl p-5 sm:p-6 mb-6">
+      <div className="relative overflow-hidden bg-card border border-border-strong rounded-2xl p-5 sm:p-6 mb-6">
         <div
           className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 blur-3xl"
           style={{ background: 'linear-gradient(135deg, #ec4899, #f59e0b)' }}
@@ -1344,13 +1344,13 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full gradient-bg text-white uppercase tracking-wider">
                 {t('home.advanced.result.entity.gradePrefix')} {data.grade}
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[#3f4143] text-secondary">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-border-strong text-secondary">
                 {data.percent}%
               </span>
             </div>
           </div>
         </div>
-        <div className="relative border-t border-[#2a2a2e] pt-4">
+        <div className="relative border-t border-border pt-4">
           {Object.entries(data.scores).map(([name, v]) => {
             const slug = ENTITY_SCORE_SLUG[name];
             const label = slug
@@ -1366,7 +1366,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             {kgItems.map((kg) => (
               <li
                 key={kg.key}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#141416] border border-[#2a2a2e]"
+                className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-tertiary border border-border"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
@@ -1447,7 +1447,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
         </SectionCard>
         <SectionCard title={t('home.advanced.result.entity.sentimentTitle')}>
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.overallSentiment')}
               </span>
@@ -1455,7 +1455,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
                 {t(`home.advanced.result.entity.sentiments.${data.sentiment}`, { defaultValue: data.sentiment })}
               </span>
             </div>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.bestFraming')}
               </span>
@@ -1463,7 +1463,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
                 {t(`home.advanced.result.entity.framings.${data.best_framing}`, { defaultValue: data.best_framing.replace('_', ' ') })}
               </span>
             </div>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.recognitionRate')}
               </span>
