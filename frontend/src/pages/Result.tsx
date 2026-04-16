@@ -459,14 +459,14 @@ export function Result() {
       ? 'w-full max-w-2xl mx-auto'
       : 'flex-1 min-w-0 lg:max-w-xl w-full';
     const capsuleClass = hero
-      ? 'flex items-center bg-card border border-border rounded-full p-1.5 shadow-glow'
-      : 'flex items-center bg-card border border-border rounded-full p-1 shadow-glow';
+      ? 'flex flex-col sm:flex-row sm:items-center bg-card border border-border rounded-2xl sm:rounded-full p-1.5 shadow-glow gap-1.5 sm:gap-0'
+      : 'flex flex-col sm:flex-row sm:items-center bg-card border border-border rounded-2xl sm:rounded-full p-1.5 sm:p-1 shadow-glow gap-1.5 sm:gap-0';
     const inputClass = hero
       ? 'flex-1 min-w-0 py-3 px-5 text-base bg-transparent focus:outline-none text-primary placeholder-muted'
       : 'flex-1 min-w-0 py-2 px-3 text-xs sm:text-sm bg-transparent focus:outline-none text-primary placeholder-muted';
     const buttonClass = hero
-      ? 'btn-solid px-5 py-3 rounded-full flex items-center justify-center gap-2 font-semibold transition-all shrink-0 disabled:opacity-60 text-sm'
-      : 'btn-solid px-4 py-2 rounded-full flex items-center justify-center gap-1.5 font-semibold transition-all shrink-0 disabled:opacity-60 text-xs sm:text-sm';
+      ? 'btn-solid px-5 py-3 rounded-xl sm:rounded-full flex items-center justify-center gap-2 font-semibold transition-all shrink-0 disabled:opacity-60 text-sm w-full sm:w-auto'
+      : 'btn-solid px-4 py-2 rounded-xl sm:rounded-full flex items-center justify-center gap-1.5 font-semibold transition-all shrink-0 disabled:opacity-60 text-xs sm:text-sm w-full sm:w-auto';
     const iconSize = hero ? 'h-4 w-4' : 'h-3.5 w-3.5';
     const selectClass = hero
       ? 'appearance-none bg-transparent text-base text-primary pl-3 pr-2 py-3 focus:outline-none cursor-pointer shrink-0'
@@ -490,7 +490,7 @@ export function Result() {
                 className={inputClass}
                 disabled={rerunLoading}
               />
-              <div className="w-px h-5 bg-border shrink-0" />
+              <div className="hidden sm:block w-px h-5 bg-border shrink-0" />
               <select
                 value={rerunEntityType}
                 onChange={(e) => setRerunEntityType(e.target.value as 'brand' | 'product' | 'person')}
@@ -519,7 +519,7 @@ export function Result() {
                 className={`flex-[2] ${inputClass.replace('flex-1 ', '')}`}
                 disabled={rerunLoading}
               />
-              <div className="w-px h-5 bg-border shrink-0" />
+              <div className="hidden sm:block w-px h-5 bg-border shrink-0" />
               <input
                 type="text"
                 value={rerunKeywords}
@@ -558,7 +558,7 @@ export function Result() {
                 <span className="hidden sm:inline">{t('home.analyzing', { defaultValue: '检测中...' })}</span>
               </>
             ) : (
-              t('home.button')
+              t('result.startCheck')
             )}
           </button>
         </div>
@@ -755,51 +755,14 @@ export function Result() {
 
       <main className="flex-1 px-4 py-5 hero-gradient relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
-          {/* Top bar: title + rerun input (center) + export buttons (right) */}
-          <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 lg:shrink-0 lg:max-w-sm">
-              {advancedResult
-                ? renderAdvancedHero(advancedResult, t)
-                : (
-                  <>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm text-secondary min-w-0 mb-2">
-                      <span className="uppercase tracking-[0.15em] text-muted text-[10px] shrink-0">{t('result.resultsFor')}</span>
-                      <a
-                        href={result.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent-primary hover:text-primary transition-colors font-medium truncate"
-                      >
-                        {result.url}
-                      </a>
-                    </div>
-                    {/* Hero score: large gradient number + grade badge + progress bar. */}
-                    <div className="flex items-end gap-3">
-                      <div className="flex items-baseline gap-1 leading-none">
-                        <span className="text-5xl sm:text-6xl font-black gradient-text tabular-nums tracking-tight">{score}</span>
-                        <span className="text-lg text-muted font-mono">/100</span>
-                      </div>
-                      <div className="flex flex-col items-start gap-1 pb-1">
-                        <span className="text-[9px] uppercase tracking-[0.2em] text-muted font-semibold">
-                          {t('result.scoreCard.title', { defaultValue: 'Score' })}
-                        </span>
-                        <span className="text-sm font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none">
-                          {grade}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-tertiary/60 overflow-hidden">
-                      <div
-                        className="h-full gradient-bg rounded-full transition-all duration-700"
-                        style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
-                      />
-                    </div>
-                  </>
-                )}
-            </div>
-
+          {/* Top bar: rerun input (left) + export button (right) */}
+          <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
+            {advancedResult ? (
+              <div className="min-w-0 sm:shrink-0 sm:max-w-sm">
+                {renderAdvancedHero(advancedResult, t)}
+              </div>
+            ) : null}
             {renderRerunForm({ hero: false })}
-
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleExportPDF}
@@ -823,6 +786,121 @@ export function Result() {
               </button>
             </div>
           </div>
+
+          {/* ── Report Summary Card (like PDF first page) ── */}
+          {!advancedResult && (
+            <section className="bg-card border border-border rounded-2xl p-5 sm:p-6 mb-5 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent" />
+
+              {/* Cover info row */}
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
+                <span className="text-[10px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--accent-primary, #06b6d4)' }}>
+                  {t('result.pdfReport.coverBadge')}
+                </span>
+              </div>
+
+              {/* Score + Stats */}
+              <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 items-stretch">
+                {/* Left: Score ring + grade + interpretation */}
+                <div className="flex items-center gap-5 lg:gap-6 lg:w-[280px] shrink-0">
+                  <div className="relative">
+                    <svg width="100" height="100" viewBox="0 0 100 100" className="transform -rotate-90 shrink-0">
+                      <defs>
+                        <linearGradient id="hero-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="var(--accent-primary, #06b6d4)" />
+                          <stop offset="100%" stopColor="var(--accent-secondary, #3b82f6)" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="var(--bg-tertiary, rgba(148,163,184,0.12))" strokeWidth="6" />
+                      <circle
+                        cx="50" cy="50" r="42"
+                        fill="none"
+                        stroke="url(#hero-ring-grad)"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 42}`}
+                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - Math.max(0, Math.min(100, score)) / 100)}`}
+                        className="transition-all duration-700"
+                      />
+                      <text
+                        x="50" y="50"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        className="transform rotate-90 origin-center"
+                        fill="var(--text-primary, #e2e8f0)"
+                        fontSize="26"
+                        fontWeight="800"
+                      >
+                        {score}
+                      </text>
+                    </svg>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-muted font-semibold">
+                      {t('result.pdfReport.overallScore')}
+                    </span>
+                    <span className="text-xs text-muted font-mono">/ 100</span>
+                    <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-tertiary text-primary border border-border leading-none w-fit">
+                      {grade}
+                    </span>
+                    <p className="text-[11px] text-secondary leading-relaxed mt-1 max-w-[180px]">
+                      {score >= 90
+                        ? t('result.pdfReport.scoreLevels.excellent')
+                        : score >= 75
+                          ? t('result.pdfReport.scoreLevels.good')
+                          : score >= 60
+                            ? t('result.pdfReport.scoreLevels.average')
+                            : score >= 40
+                              ? t('result.pdfReport.scoreLevels.poor')
+                              : t('result.pdfReport.scoreLevels.critical')}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right: stat tiles + meta info */}
+                <div className="flex-1 min-w-0 flex flex-col gap-4">
+                  {/* 4 stat tiles */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+                      <div className="text-2xl font-extrabold text-emerald-500">{result.summary.pass_count}</div>
+                      <div className="text-[10px] font-semibold text-emerald-600 mt-1">{t('result.summary.passed')}</div>
+                    </div>
+                    <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
+                      <div className="text-2xl font-extrabold text-amber-500">{result.summary.warn_count}</div>
+                      <div className="text-[10px] font-semibold text-amber-600 mt-1">{t('result.summary.warnings')}</div>
+                    </div>
+                    <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-center">
+                      <div className="text-2xl font-extrabold text-rose-500">{result.summary.fail_count}</div>
+                      <div className="text-[10px] font-semibold text-rose-600 mt-1">{t('result.summary.failed')}</div>
+                    </div>
+                    <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-3 text-center">
+                      <div className="text-2xl font-extrabold text-cyan-500">{result.summary.info_count}</div>
+                      <div className="text-[10px] font-semibold text-cyan-600 mt-1">{t('result.summary.info')}</div>
+                    </div>
+                  </div>
+                  {/* Meta info row */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-muted">
+                    <span>
+                      <span className="text-secondary font-medium">{t('result.pdfReport.targetSite')}:</span>{' '}
+                      <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-accent-primary hover:text-primary transition-colors font-medium">
+                        {result.url}
+                      </a>
+                    </span>
+                    <span>
+                      <span className="text-secondary font-medium">{t('result.pdfReport.generatedAt')}:</span>{' '}
+                      {new Date().toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
+                    </span>
+                    {result.tier && (
+                      <span>
+                        <span className="text-secondary font-medium">{t('result.pdfReport.tier')}:</span>{' '}
+                        {t(`result.pdfReport.tierLabels.${(result.tier || 'free').toLowerCase()}`, { defaultValue: (result.tier || 'free').toUpperCase() })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {advancedResult && (
             <section
@@ -851,6 +929,100 @@ export function Result() {
           )}
 
           {!advancedResult && (<>
+            {/* ── Overview grid ── */}
+            {(() => {
+              const totalPassed = groupStats.reduce((s, g) => s + g.passed, 0);
+              const totalChecks = groupStats.reduce((s, g) => s + g.total, 0);
+              const totalRate = totalChecks === 0 ? 0 : Math.round((totalPassed / totalChecks) * 100);
+              return (
+                <section className="bg-card border border-border rounded-2xl p-4 sm:p-5 mb-5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-5 gradient-bg rounded-full shrink-0" />
+                      <h2 className="text-sm sm:text-base font-bold text-primary">
+                        {t('result.summary.overview')}
+                      </h2>
+                    </div>
+                    <span className="text-[11px] font-mono text-muted tabular-nums">
+                      {totalPassed}/{totalChecks} · {totalRate}%
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {groupStats.map((g) => {
+                      if (g.isTabLocked) {
+                        return (
+                          <button
+                            key={g.tab}
+                            type="button"
+                            onClick={() => setActiveTab(g.tab)}
+                            className="w-full flex items-center gap-3 rounded-xl border border-border bg-tertiary/40 px-4 py-3 opacity-60 cursor-pointer hover:opacity-80 transition-all"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <span className="text-xs font-semibold text-muted truncate">
+                              {tabLabel(g.tab)}
+                            </span>
+                          </button>
+                        );
+                      }
+                      const barColor = g.passRate >= 80
+                        ? 'from-emerald-400 to-emerald-500'
+                        : g.passRate >= 50
+                          ? 'from-amber-400 to-amber-500'
+                          : 'from-rose-400 to-rose-500';
+                      const pctColor = g.passRate >= 80
+                        ? 'text-emerald-500'
+                        : g.passRate >= 50
+                          ? 'text-amber-500'
+                          : 'text-rose-500';
+                      return (
+                        <button
+                          key={g.tab}
+                          type="button"
+                          onClick={() => setActiveTab(g.tab)}
+                          className={`w-full rounded-xl border px-4 py-3 cursor-pointer transition-all text-left ${
+                            activeTab === g.tab
+                              ? 'border-accent-primary bg-accent-primary/5 shadow-sm'
+                              : 'border-border bg-card hover:border-border-strong hover:bg-tertiary/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-primary truncate">
+                              {tabLabel(g.tab)}
+                            </span>
+                            <div className="flex items-center gap-2.5 shrink-0 ml-3">
+                              <span className="text-[10px] font-mono text-muted">
+                                {g.passed}/{g.total}
+                              </span>
+                              {g.failed === 0 && g.warned === 0 ? (
+                                <span className="text-[10px] text-emerald-500 font-semibold">{t('result.summary.allPassed')}</span>
+                              ) : (
+                                <span className="flex items-center gap-1.5 text-[10px] text-muted">
+                                  {g.warned > 0 && <span className="text-amber-500">&#9888;{g.warned}</span>}
+                                  {g.failed > 0 && <span className="text-rose-500">&#10007;{g.failed}</span>}
+                                </span>
+                              )}
+                              <span className={`text-[11px] font-bold tabular-nums ${pctColor}`}>
+                                {g.passRate}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-tertiary overflow-hidden">
+                            <div
+                              className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-700`}
+                              style={{ width: `${g.passRate}%` }}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
+
             {/* Tab navigation — card-style tabs. Inactive tabs carry their own
               border-b; the active tab drops its bottom border so it visually
               merges with the content panel below. Doing the bottom line
@@ -858,7 +1030,7 @@ export function Result() {
               identically across Chrome / Safari / Firefox. */}
             <div
               role="tablist"
-              className="flex flex-wrap items-end gap-1.5 mt-2"
+              className="flex items-end gap-1.5 mt-2 overflow-x-auto pb-px scrollbar-hide"
             >
               {groupStats.map((g) => {
                 const isActive = activeTab === g.tab;
@@ -868,7 +1040,7 @@ export function Result() {
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setActiveTab(g.tab)}
-                    className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all ${isActive
+                    className={`relative px-4 py-2.5 rounded-t-xl border text-left transition-all shrink-0 ${isActive
                       ? 'border-border border-b-transparent bg-card shadow-sm z-10'
                       : 'border-transparent border-b border-b-border bg-transparent hover:bg-tertiary'
                       }`}
@@ -1018,7 +1190,7 @@ export function Result() {
                     ></div>
                   </div>
                   {/* Group-scoped stat pills */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     <StatPill color="emerald" value={stat.passed} label={t('result.summary.passed')} items={stat.passedNames} />
                     <StatPill color="amber" value={stat.warned} label={t('result.summary.warnings')} items={stat.warnedNames} />
                     <StatPill color="rose" value={stat.failed} label={t('result.summary.failed')} items={stat.failedNames} />
@@ -1079,6 +1251,23 @@ export function Result() {
                             </span>
                           </div>
                         </div>
+                      )}
+                      {/* Upgrade hint for FAIL/WARN items when user cannot see fixes */}
+                      {!canShowFix && (check.status === 'FAIL' || check.status === 'WARN') && (
+                        <button
+                          onClick={() => {
+                            if (!isLoggedIn) { navigate('/login'); return; }
+                            openTierModal();
+                          }}
+                          className="mt-2 ml-[4.25rem] flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-[11px] text-amber-600 group-hover:text-amber-700 transition-colors">
+                            {t('result.upgradeHint.fixPrompt', { defaultValue: 'Upgrade to get fix recommendations →' })}
+                          </span>
+                        </button>
                       )}
                     </div>
                   );
@@ -1161,6 +1350,23 @@ export function Result() {
                             );
                           })}
                         </div>
+                      )}
+                      {/* Upgrade hint for visual categories with issues when user cannot see fixes */}
+                      {visual && !canShowFix && checksForCategory.some((c) => c.status === 'FAIL' || c.status === 'WARN') && (
+                        <button
+                          onClick={() => {
+                            if (!isLoggedIn) { navigate('/login'); return; }
+                            openTierModal();
+                          }}
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="text-[11px] text-amber-600 group-hover:text-amber-700 transition-colors">
+                            {t('result.upgradeHint.fixPrompt', { defaultValue: 'Upgrade to get fix recommendations →' })}
+                          </span>
+                        </button>
                       )}
                     </div>
                   );
@@ -1522,25 +1728,46 @@ function renderAdvancedHero(
           <span className="font-medium text-primary truncate">{subjectText}</span>
         )}
       </div>
-      <div className="flex items-end gap-3">
-        <div className="flex items-baseline gap-1 leading-none">
-          <span className="text-5xl sm:text-6xl font-black gradient-text tabular-nums tracking-tight">{bigNum}</span>
-          <span className="text-lg text-muted font-mono">{bigSuffix}</span>
-        </div>
-        <div className="flex flex-col items-start gap-1 pb-1">
+      <div className="flex items-center gap-4">
+        <svg width="72" height="72" viewBox="0 0 72 72" className="transform -rotate-90 shrink-0">
+          <defs>
+            <linearGradient id="adv-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--accent-primary, #06b6d4)" />
+              <stop offset="100%" stopColor="var(--accent-secondary, #3b82f6)" />
+            </linearGradient>
+          </defs>
+          <circle cx="36" cy="36" r="30" fill="none" stroke="var(--bg-tertiary, rgba(148,163,184,0.12))" strokeWidth="5" />
+          <circle
+            cx="36" cy="36" r="30"
+            fill="none"
+            stroke="url(#adv-ring-grad)"
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={`${2 * Math.PI * 30}`}
+            strokeDashoffset={`${2 * Math.PI * 30 * (1 - Math.max(0, Math.min(100, progressPct)) / 100)}`}
+            className="transition-all duration-700"
+          />
+          <text
+            x="36" y="36"
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="transform rotate-90 origin-center"
+            fill="var(--text-primary, #e2e8f0)"
+            fontSize="18"
+            fontWeight="800"
+          >
+            {bigNum}
+          </text>
+        </svg>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted font-mono">{bigSuffix}</span>
           <span className="text-[9px] uppercase tracking-[0.2em] text-muted font-semibold">
             {t('result.scoreCard.title', { defaultValue: 'Score' })}
           </span>
-          <span className="text-sm font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none">
+          <span className="text-sm font-bold px-2 py-0.5 rounded bg-tertiary text-primary border border-border leading-none w-fit">
             {gradeText}
           </span>
         </div>
-      </div>
-      <div className="mt-2 h-1.5 w-full rounded-full bg-tertiary/60 overflow-hidden">
-        <div
-          className="h-full gradient-bg rounded-full transition-all duration-700"
-          style={{ width: `${Math.max(0, Math.min(100, progressPct))}%` }}
-        />
       </div>
     </>
   );

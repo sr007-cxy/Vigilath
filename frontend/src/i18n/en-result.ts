@@ -531,7 +531,9 @@ const enResult = {
               "warnings": "Warnings",
               "failed": "Failed",
               "info": "Info",
-              "totalChecks": "Total Checks"
+              "totalChecks": "Total Checks",
+              "overview": "Overview",
+              "allPassed": "All Passed"
             },
             "detailedResults": "Detailed Results",
             "fix": "Fix:",
@@ -550,6 +552,9 @@ const enResult = {
               "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
               "viewAll": "View all →",
               "perCategoryHint": "View 2 of {{total}} checks (membership unlocks all)"
+            },
+            "upgradeHint": {
+              "fixPrompt": "Upgrade to get fix recommendations →"
             },
             "groupProgress": {
               "title": "Category Progress"

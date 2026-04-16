@@ -159,57 +159,80 @@ export const packBlocks = (blocks: CapturedBlock[]): { placed: PlacedBlock[]; pa
 
 // ---------- Header/footer + entry point ----------
 
-export interface DrawHeaderFooterContext {
-  pdf: jsPDF;
-  pageNum: number;
-  totalPages: number;
-}
-export type HeaderFooterDrawer = (ctx: DrawHeaderFooterContext) => void;
-
 export interface StandardHeaderFooterOptions {
   rightHeaderText: string;
   t: TFunction;
 }
 
-// Default brand header/footer used by every report. `rightHeaderText` is
-// usually the target site (default report) or the audited subject (advanced).
-export const makeStandardHeaderFooter = (
+// Capture a small HTML snippet to a data-URL image via html2canvas.
+// Used for header/footer so CJK text renders correctly (jsPDF built-in
+// fonts don't support Chinese characters).
+const captureHtmlToImage = async (
+  html: string,
+  widthPx: number,
+): Promise<{ dataUrl: string; widthPx: number; heightPx: number }> => {
+  const container = document.createElement('div');
+  container.setAttribute('aria-hidden', 'true');
+  container.style.cssText = `position:fixed;left:-10000px;top:0;width:${widthPx}px;background:#fff;z-index:-1;`;
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  try {
+    await new Promise((r) => setTimeout(r, 20));
+    const canvas = await html2canvas(container, {
+      scale: CANVAS_SCALE,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+      windowWidth: widthPx,
+    });
+    return {
+      dataUrl: canvas.toDataURL('image/png'),
+      widthPx: canvas.width,
+      heightPx: canvas.height,
+    };
+  } finally {
+    document.body.removeChild(container);
+  }
+};
+
+// Pre-render all per-page header/footer images so CJK text works.
+const renderHeaderFooterImages = async (
   opts: StandardHeaderFooterOptions,
-): HeaderFooterDrawer => {
+  totalPages: number,
+): Promise<{ headers: string[]; footers: string[] }> => {
   const { rightHeaderText, t } = opts;
-  return ({ pdf, pageNum, totalPages }) => {
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(120, 120, 130);
-    pdf.setFontSize(9);
-    pdf.text('GApex', MARGIN_X_PT, 24);
+  const year = new Date().getFullYear();
+  const widthPx = CONTENT_W_PX;
 
-    const maxWidth = CONTENT_W_PT - 100;
-    const truncated =
-      pdf.getTextWidth(rightHeaderText) > maxWidth
-        ? rightHeaderText.slice(
-            0,
-            Math.max(10, Math.floor((maxWidth / pdf.getTextWidth(rightHeaderText)) * rightHeaderText.length) - 1),
-          ) + '…'
-        : rightHeaderText;
-    pdf.text(truncated, PAGE_W_PT - MARGIN_X_PT, 24, { align: 'right' });
+  // Header is the same for every page — render once.
+  const headerHtml =
+    `<div style="font-family:${FONT_STACK};width:${widthPx}px;display:flex;align-items:center;justify-content:space-between;padding:6px 0 8px 0;border-bottom:1px solid #e2e8f0;">` +
+    `<span style="font-size:11px;color:#78788c;font-weight:600;">GApex</span>` +
+    `<span style="font-size:11px;color:#78788c;max-width:${widthPx - 120}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rightHeaderText)}</span>` +
+    `</div>`;
+  const headerImg = await captureHtmlToImage(headerHtml, widthPx);
+  const headerDataUrl = headerImg.dataUrl;
 
-    pdf.setDrawColor(226, 232, 240);
-    pdf.setLineWidth(0.5);
-    pdf.line(MARGIN_X_PT, 32, PAGE_W_PT - MARGIN_X_PT, 32);
-    pdf.line(MARGIN_X_PT, PAGE_H_PT - FOOTER_H_PT + 8, PAGE_W_PT - MARGIN_X_PT, PAGE_H_PT - FOOTER_H_PT + 8);
+  // Footer varies per page (page number), render each.
+  const footers: string[] = [];
+  for (let p = 1; p <= totalPages; p++) {
+    const pageText = t('result.pdfReport.pageOf', { current: p, total: totalPages });
+    const footerHtml =
+      `<div style="font-family:${FONT_STACK};width:${widthPx}px;display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px 0;border-top:1px solid #e2e8f0;">` +
+      `<span style="font-size:10px;color:#94a3b8;">GApex · © ${year}</span>` +
+      `<span style="font-size:10px;color:#94a3b8;">${escapeHtml(pageText)}</span>` +
+      `</div>`;
+    const footerImg = await captureHtmlToImage(footerHtml, widthPx);
+    footers.push(footerImg.dataUrl);
+  }
 
-    pdf.setFontSize(9);
-    pdf.setTextColor(148, 163, 184);
-    const year = new Date().getFullYear();
-    pdf.text(`GApex · © ${year}`, MARGIN_X_PT, PAGE_H_PT - 14);
-    const pageText = t('result.pdfReport.pageOf', { current: pageNum, total: totalPages });
-    pdf.text(pageText, PAGE_W_PT - MARGIN_X_PT, PAGE_H_PT - 14, { align: 'right' });
-  };
+  const headers = Array(totalPages).fill(headerDataUrl) as string[];
+  return { headers, footers };
 };
 
 export async function composeAndSavePdf(
   htmlBlocks: string[],
-  drawHeaderFooter: HeaderFooterDrawer,
+  headerFooterOpts: StandardHeaderFooterOptions,
   fileName: string,
 ): Promise<void> {
   const rawCaptured = await captureBlocks(htmlBlocks);
@@ -225,11 +248,24 @@ export async function composeAndSavePdf(
   }
 
   const { placed, pageCount } = packBlocks(captured);
+
+  // Pre-render header/footer as images (supports CJK text).
+  const { headers, footers } = await renderHeaderFooterImages(headerFooterOpts, pageCount);
+
   const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+
+  const hdrWidthPt = CONTENT_W_PT;
+  const hdrHeightPt = HEADER_H_PT - 4;
+  const ftrWidthPt = CONTENT_W_PT;
+  const ftrHeightPt = FOOTER_H_PT - 4;
 
   for (let p = 0; p < pageCount; p++) {
     if (p > 0) pdf.addPage();
-    drawHeaderFooter({ pdf, pageNum: p + 1, totalPages: pageCount });
+    // Draw header image
+    pdf.addImage(headers[p], 'PNG', MARGIN_X_PT, 6, hdrWidthPt, hdrHeightPt);
+    // Draw footer image
+    pdf.addImage(footers[p], 'PNG', MARGIN_X_PT, PAGE_H_PT - FOOTER_H_PT + 2, ftrWidthPt, ftrHeightPt);
+    // Draw content blocks
     for (const item of placed) {
       if (item.pageIndex !== p) continue;
       pdf.addImage(

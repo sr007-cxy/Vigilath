@@ -90,7 +90,53 @@ export function PaymentsTab() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y" style={{ borderColor: 'var(--border-color)' }}>
+              {items.map((row) => {
+                const sc = statusColors[row.status] || statusColors.pending;
+                return (
+                  <div key={row.id} className="px-4 py-4 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-primary">
+                        {t(`productsServices.cards.${row.membership_slug === 'pro' ? 'detector' : row.membership_slug}.name`, row.membership_slug)}
+                      </span>
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full shrink-0"
+                        style={{ background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color }}
+                      >
+                        {t(`account.payments.statuses.${row.status}`, row.status)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-lg font-bold text-primary">
+                        {formatAmount(row.amount_cents, row.currency)}
+                      </span>
+                      <span className="text-xs text-secondary">
+                        {row.provider === 'moltspay' ? 'Base USDC' : 'Stripe'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-secondary">
+                      <span>{new Date(row.created_at).toLocaleString()}</span>
+                      {row.completed_at && (
+                        <span>{new Date(row.completed_at).toLocaleString()}</span>
+                      )}
+                    </div>
+                    {row.status === 'pending' && row.provider === 'stripe' && row.checkout_url && (
+                      <a
+                        href={row.checkout_url}
+                        className="inline-flex text-xs font-medium px-3 py-1.5 rounded-lg transition-colors mt-1"
+                        style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
+                      >
+                        {t('account.payments.retry', 'Pay')}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead style={{ background: 'var(--bg-tertiary)' }}>
                   <tr className="text-secondary">

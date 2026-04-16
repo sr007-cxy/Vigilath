@@ -69,6 +69,7 @@ async def get_user_detection(
         tier=row.tier,
         mode=row.mode,
         created_at=row.created_at,
+        deleted_at=row.deleted_at,
         result=snapshot,
     )
 

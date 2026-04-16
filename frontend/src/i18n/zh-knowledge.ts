@@ -1,17 +1,17 @@
 const zhKnowledge = {
 "geoKnowledge": {
-            "title": "GEO 知识中心",
-            "description": "了解什么是生成式引擎优化（Generative Engine Optimization），它为何会在 AI 时代取代传统 SEO，以及如何让 ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等 AI 引擎优先推荐你的品牌。",
+            "title": "资源中心",
+            "description": "掌握 GEO + AEO：从 AI 搜索引擎赢得可见性与推荐的聪明方法",
             "sections": {
-              "about": "关于 GEO",
-              "whatIsGeo": "什么是 GEO？",
-              "whatIsGeoBody": "GEO 即 Generative Engine Optimization（生成式引擎优化），是一套针对 AI 搜索引擎和 AI 助手（ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等）的优化实践，目的是让 AI 在回答用户关于产品、服务或专家咨询的问题时，能够识别、信任并推荐你的品牌。传统 SEO 优化的是搜索结果页上的蓝色链接，而 GEO 优化的是 AI 直接生成的那段答案本身。",
-              "whyGeoImportant": "为什么 GEO 很重要？",
+              "about": "理解 GEO & AEO",
+              "whatIsGeo": "什么是 GEO & AEO？",
+              "whatIsGeoBody": "GEO（生成式引擎优化）和 AEO（答案引擎优化）是专为 AI 搜索引擎和 AI 助手（ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等）设计的优化实践。GEO 专注于让你的品牌在 AI 引擎中可见并可被引用。AEO 更进一步 — 优化你的内容，让 AI 不仅能找到你，更能直接理解、信任并选择你的品牌作为用户问题的最佳答案。传统 SEO 优化的是搜索结果页上的蓝色链接，而 GEO + AEO 优化的是 AI 实际生成的那段答案。",
+              "whyGeoImportant": "为什么 GEO + AEO 重要",
               "whyGeoPoints": [
-                "传统搜索流量正在被 AI 生成的答案取代——如果你不在答案里，就是彻底隐形",
-                "AI 引擎每个查询只会引用极少量的可信来源，进入这个名单就锁定了品类心智",
-                "一旦 AI 模型把你识别为品牌实体，它会在大量相关查询中反复推荐你，效果会复利放大",
-                "GEO 的先行者能在竞争对手反应过来之前锁定品类权威地位"
+                "传统搜索流量正在被 AI 生成的答案取代 — 如果你不在答案里，就是彻底隐形。",
+                "AI 引擎每次查询只引用极少量可信来源 — 进入这个名单就锁定了品类权威。",
+                "一旦 AI 模型将你识别为品牌实体，它会在无数相关查询中反复推荐你，产生复利效应。",
+                "GEO + AEO 的先行者能在竞争对手反应过来之前锁定品类领导地位。"
               ],
               "strategies": "GEO 策略",
               "contentLocalization": "权威内容与实体清晰度",

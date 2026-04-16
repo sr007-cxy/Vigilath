@@ -19,6 +19,7 @@ class DetectionRecordORM(Base):
     mode = Column(String, nullable=False, default="free")  # 'free' | 'advanced'
     result_snapshot = Column(Text, nullable=False)  # JSON string of GeoTestResult
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    deleted_at = Column(DateTime, nullable=True, default=None)
 
 
 class DetectionRecordSummary(BaseModel):
@@ -29,6 +30,7 @@ class DetectionRecordSummary(BaseModel):
     tier: Optional[str] = None
     mode: str
     created_at: datetime
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

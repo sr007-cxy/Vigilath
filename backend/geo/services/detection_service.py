@@ -5,6 +5,7 @@ personal center can list past checks and replay results without having to
 re-run the checker (which would also burn the user's monthly quota).
 """
 import json
+from datetime import datetime
 from typing import Optional, Tuple, List
 
 from sqlalchemy import desc
@@ -79,7 +80,7 @@ def list_detections(
 def get_detection(user_id: int, record_id: int) -> Optional[DetectionRecordORM]:
     db = SessionLocal()
     try:
-        return (
+        row = (
             db.query(DetectionRecordORM)
             .filter(
                 DetectionRecordORM.id == record_id,
@@ -87,6 +88,9 @@ def get_detection(user_id: int, record_id: int) -> Optional[DetectionRecordORM]:
             )
             .first()
         )
+        if row and row.deleted_at is not None:
+            return None
+        return row
     finally:
         db.close()
 
@@ -102,9 +106,9 @@ def delete_detection(user_id: int, record_id: int) -> bool:
             )
             .first()
         )
-        if not row:
+        if not row or row.deleted_at is not None:
             return False
-        db.delete(row)
+        row.deleted_at = datetime.utcnow()
         db.commit()
         return True
     finally:

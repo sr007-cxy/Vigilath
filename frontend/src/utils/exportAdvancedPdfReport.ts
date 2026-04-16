@@ -22,7 +22,6 @@ import {
   blockWrapOpen,
   composeAndSavePdf,
   escapeHtml,
-  makeStandardHeaderFooter,
 } from './pdfPrimitives';
 
 // ---------- Shared building blocks ----------
@@ -997,7 +996,7 @@ export async function exportAdvancedPdfReport<M extends AdvancedMode>(
   const fileName = `geo-${args.mode}-${safeFile(filenameSubject)}-${todayStamp()}.pdf`;
   await composeAndSavePdf(
     blocks,
-    makeStandardHeaderFooter({ rightHeaderText: headerRight, t: args.t }),
+    { rightHeaderText: headerRight, t: args.t },
     fileName,
   );
 }

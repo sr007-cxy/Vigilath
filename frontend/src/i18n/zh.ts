@@ -1,7 +1,7 @@
 const zh = {
           "nav": {
             "home": "首页",
-            "geoKnowledge": "GEO 知识",
+            "geoKnowledge": "资源中心",
             "productsServices": "产品与服务",
             "aboutUs": "关于我们",
             "about": "关于 GEO",
@@ -232,9 +232,9 @@ const zh = {
           },
           "home": {
             "title": "GEO 检测",
-            "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
+            "description": "解锁专业 GEO & AEO 工具，全面了解 AI 引擎如何感知您的品牌。",
             "placeholder": "example.com",
-            "button": "Start Free Check",
+            "button": "开始免费检测",
             "analyzing": "分析中...",
             "error": {
               "empty": "请输入 URL",
@@ -245,10 +245,22 @@ const zh = {
             },
             "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "需要专家优化帮助？",
+            "slogan": {
+              "title": "让 AI 引擎看见、信任并推荐您的品牌",
+              "sectionTitle": "营销团队为什么喜爱 GApex",
+              "points": [
+                "精准洞察 AI 对你的认知 — 获取 0–100 AI 可见性评分 + 优先修复清单",
+                "超越 GEO — 统一 AEO 能力帮你掌控实体识别、作者权威和品牌叙事，覆盖每一次 AI 对话",
+                "从检测到结果 — 从自助检测无缝衔接到全面人工优化、付费投放、声誉管理和公关支持",
+                "面向未来 — 在 AI 搜索成为默认的时代保持领先"
+              ],
+              "cta": "被全球发现，被 AI 选择。",
+              "contactSales": "联系销售"
+            },
             "advanced": {
               "badge": "会员专享",
               "title": "高级检测能力",
-              "subtitle": "开通会员，解锁专业 GEO 检测工具，全面洞察 AI 引擎对你的网站的认知。",
+              "subtitle": "解锁专业 GEO & AEO 工具，全面了解 AI 引擎如何感知您的品牌。",
               "upgrade": "升级解锁",
               "comingSoon": "功能即将上线",
               "tierModal": {
@@ -439,7 +451,8 @@ const zh = {
           },
           "result": {
             "title": "GEO 检测结果",
-            "resultsFor": "检查结果：",
+            "resultsFor": "检查���果：",
+            "startCheck": "开始检测",
             "progress": {
               "title": "正在检测中…",
               "elapsed": "已用时 {{seconds}} 秒",
@@ -969,7 +982,9 @@ const zh = {
               "warnings": "警告",
               "failed": "失败",
               "info": "信息",
-              "totalChecks": "总检查项"
+              "totalChecks": "总检查项",
+              "overview": "汇总概览",
+              "allPassed": "全部通过"
             },
             "detailedResults": "详细结果",
             "fix": "修复建议：",
@@ -1236,27 +1251,27 @@ const zh = {
           },
           "aboutUs": {
             "title": "关于我们",
-            "description": "专注于GEO（生成式引擎优化）的技术服务提供商，帮助网站在生成式AI时代获得更好的表现。",
+            "description": "专注于 AI 优化的技术服务提供商，帮助网站在 AI 搜索时代获得更好的表现。",
             "story": {
               "title": "我们的故事",
               "subtitle": "从技术创新到行业领先",
-              "paragraph1": "我们的团队由一群对AI和搜索引擎技术充满热情的专家组成。在生成式AI技术爆发的时代，我们看到了网站优化的新机遇和挑战。",
-              "paragraph2": "2023年，我们开始研发GEO（生成式引擎优化）技术，旨在帮助网站在生成式AI时代获得更好的表现。经过一年的努力，我们开发出了一套完整的GEO检测和优化系统，为企业和个人网站提供专业的技术支持。",
-              "paragraph3": "今天，我们已经成为GEO领域的领先服务提供商，为众多客户提供了专业的GEO检测和优化服务，帮助他们在生成式AI时代获得更好的线上表现。"
+              "paragraph1": "我们是一支真正痴迷于技术的 AI 与搜索引擎专家团队。当生成式 AI 在 2023 年爆发时，我们同时看到了网站优化的新机遇与新挑战。传统 SEO 已不再足够 — 网站需要被 AI 主动推荐。",
+              "paragraph2": "正因如此，我们开始研发 GEO + AEO 技术。经过整整一年的专注研发，我们打造了 GApex：一个将 GEO 与 AEO 融为一体的完整检测与优化系统。",
+              "paragraph3": "如今，GApex 已成为领先的 AI 搜索服务提供商。我们已帮助全球众多企业和网站大幅提升可见度，在 AI 搜索时代赢得优先推荐。"
             },
             "mission": {
               "title": "我们的使命",
               "innovation": {
                 "title": "技术创新",
-                "description": "不断探索和创新GEO技术，为客户提供最先进的检测和优化方案。"
+                "description": "持续突破边界，提供最先进的 AI 可见性与推荐解决方案。"
               },
               "value": {
                 "title": "客户价值",
-                "description": "以客户需求为中心，提供高质量的GEO服务，帮助客户在生成式AI时代获得竞争优势。"
+                "description": "客户至上，提供高质量服务，在生成式 AI 时代为客户创造真正的竞争优势。"
               },
               "leadership": {
                 "title": "行业领先",
-                "description": "成为GEO领域的行业领导者，推动行业标准的建立和发展。"
+                "description": "成为 AI 搜索时代的全球标杆，推动这些新标准成为每家企业的必备。"
               }
             },
             "team": {
@@ -1305,7 +1320,7 @@ const zh = {
           },
           "productsServices": {
             "title": "产品 & 服务",
-            "description": "我们提供一系列GEO检测和优化服务，帮助您的网站在全球范围内获得最佳的搜索可见性。",
+            "description": "我们提供全方位优化服务，帮助您的品牌在全球范围内实现最大可见度、引用率和 AI 推荐。",
             "sections": {
               "ourServices": "我们的服务",
               "contactConsultation": "联系咨询"
@@ -1671,6 +1686,7 @@ const zh = {
               "view": "查看",
               "loading": "加载中...",
               "delete": "删除",
+              "deleted": "已删除",
               "deleteConfirm": "确定删除这条检测记录吗？",
               "prev": "上一页",
               "next": "下一页",

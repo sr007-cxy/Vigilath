@@ -10,6 +10,7 @@ export interface DetectionRecordSummary {
   tier: string | null;
   mode: string;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface DetectionRecordDetail extends DetectionRecordSummary {

@@ -1,17 +1,17 @@
 const enKnowledge = {
 "geoKnowledge": {
-            "title": "GEO Knowledge Center",
-            "description": "Learn what Generative Engine Optimization is, why it replaces traditional SEO in the AI era, and how to get your brand recommended by ChatGPT, Perplexity, Google AI Overviews, Gemini, Claude and Copilot.",
+            "title": "Resources Center",
+            "description": "Master GEO + AEO: The Smart Way to Win Visibility and Recommendations from AI Search Engines",
             "sections": {
-              "about": "About GEO",
-              "whatIsGeo": "What is GEO?",
-              "whatIsGeoBody": "GEO — Generative Engine Optimization — is the practice of optimizing your website, brand and content so that AI search engines and assistants (ChatGPT, Perplexity, Google AI Overviews, Gemini, Claude, Copilot) recognize, trust and recommend you when users ask for products, services or expert information. Where classic SEO targets the blue links on a search results page, GEO targets the generated answer itself.",
-              "whyGeoImportant": "Why is GEO important?",
+              "about": "Understand GEO & AEO",
+              "whatIsGeo": "What are GEO & AEO?",
+              "whatIsGeoBody": "GEO (Generative Engine Optimization) and AEO (Answer Engine Optimization) are optimization practices designed for AI search engines and AI assistants (ChatGPT, Perplexity, Google AI Overviews, Gemini, Claude, Copilot, etc.). GEO focuses on making your brand visible and citable by AI engines. AEO takes it further — optimizing your content so AI not only finds you but directly understands, trusts, and selects your brand as the best answer to user questions. While traditional SEO optimizes for blue links on search result pages, GEO + AEO optimizes the actual answers AI generates.",
+              "whyGeoImportant": "Why GEO + AEO Matter",
               "whyGeoPoints": [
-                "Traditional search traffic is being replaced by AI-generated answers — if you are not in the answer, you are invisible",
-                "AI engines cite only a handful of trusted sources per query; appearing in that set captures category-defining mindshare",
-                "Once an AI model learns your brand as an entity, it recommends you across many related queries — the effect compounds",
-                "Early GEO movers lock in category authority before competitors catch up"
+                "Traditional search traffic is being replaced by AI-generated answers — if you're not in the answer, you're completely invisible.",
+                "AI engines cite only a very small number of trusted sources per query — getting into that list locks in category authority.",
+                "Once AI models recognize you as a brand entity, they repeatedly recommend you across countless related queries, creating compounding effects.",
+                "Early adopters of GEO + AEO can secure category leadership before competitors catch up."
               ],
               "strategies": "GEO Strategies",
               "contentLocalization": "Authoritative Content & Entity Clarity",

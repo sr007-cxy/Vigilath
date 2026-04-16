@@ -173,7 +173,7 @@ export function ProductsServices() {
 
             {!isLoading && !loadError && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 mb-12 items-stretch">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 mb-12 items-stretch">
                   {memberships.map((tier) => {
                     const text = tierText(tier);
                     return (
@@ -248,17 +248,17 @@ export function ProductsServices() {
                     );
                   })}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <table className="w-full border-collapse min-w-[640px]">
                     <thead>
                       <tr className="bg-card border-b border-border">
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">{t('productsServices.table.headers.number')}</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">{t('productsServices.table.headers.feature')}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">{t('productsServices.table.headers.free')}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">{t('productsServices.table.headers.detector')}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">{t('productsServices.table.headers.starter')}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">{t('productsServices.table.headers.growth')}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">{t('productsServices.table.headers.scale')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.number')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.feature')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.free')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.detector')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.starter')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.growth')}</th>
+                        <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-semibold text-secondary">{t('productsServices.table.headers.scale')}</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -531,7 +531,9 @@ const zhResult = {
               "warnings": "警告",
               "failed": "失败",
               "info": "信息",
-              "totalChecks": "总检查项"
+              "totalChecks": "总检查项",
+              "overview": "汇总概览",
+              "allPassed": "全部通过"
             },
             "detailedResults": "详细结果",
             "fix": "修复建议：",
@@ -550,6 +552,9 @@ const zhResult = {
               "subtitle": "开通会员即可解锁所有检测详情与优化建议",
               "viewAll": "查看全部 →",
               "perCategoryHint": "查看 {{total}} 项检查中的 2 项（会员可查看全部）"
+            },
+            "upgradeHint": {
+              "fixPrompt": "升级会员获取修复建议 →"
             },
             "groupProgress": {
               "title": "分类进度"

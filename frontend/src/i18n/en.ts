@@ -1,7 +1,7 @@
 const en = {
           "nav": {
             "home": "Home",
-            "geoKnowledge": "GEO Knowledge",
+            "geoKnowledge": "Resources Center",
             "productsServices": "Products & Services",
             "aboutUs": "About Us",
             "about": "About GEO",
@@ -232,7 +232,7 @@ const en = {
           },
           "home": {
             "title": "GEO Readiness Checker",
-            "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
+            "description": "Unlock professional GEO & AEO Tools and gain a complete understanding of how AI engines perceive your brand.",
             "placeholder": "example.com",
             "button": "Start Free Check",
             "analyzing": "Analyzing...",
@@ -245,10 +245,22 @@ const en = {
             },
             "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "Need expert optimization help?",
+            "slogan": {
+              "title": "Make AI Engines See, Trust, and Recommend Your Brand",
+              "sectionTitle": "Why Marketing Teams Love GApex",
+              "points": [
+                "See exactly how AI sees you — Get a clear 0–100 AI Visibility Score + prioritized fix list",
+                "Go beyond GEO — Unified AEO capabilities help you own entity recognition, author authority, and brand narratives across every AI conversation",
+                "From audit to results — Move seamlessly from self-service checks to full manual optimization, paid placements, reputation management, and PR support",
+                "Future-proof your brand — Stay ahead as AI search becomes the default"
+              ],
+              "cta": "Be discovered globally.  Be chosen by AI.",
+              "contactSales": "Contact Sales"
+            },
             "advanced": {
               "badge": "Members Only",
               "title": "Advanced Detection",
-              "subtitle": "Unlock professional GEO tools to measure how AI engines see your brand across the web.",
+              "subtitle": "Unlock professional GEO & AEO Tools and gain a complete understanding of how AI engines perceive your brand.",
               "upgrade": "Upgrade to unlock",
               "comingSoon": "Coming soon",
               "tierModal": {
@@ -440,6 +452,7 @@ const en = {
           "result": {
             "title": "GEO Readiness Results",
             "resultsFor": "Results for:",
+            "startCheck": "Start Check",
             "progress": {
               "title": "Running check…",
               "elapsed": "Elapsed {{seconds}}s",
@@ -969,7 +982,9 @@ const en = {
               "warnings": "Warnings",
               "failed": "Failed",
               "info": "Info",
-              "totalChecks": "Total Checks"
+              "totalChecks": "Total Checks",
+              "overview": "Overview",
+              "allPassed": "All Passed"
             },
             "detailedResults": "Detailed Results",
             "fix": "Fix:",
@@ -1236,27 +1251,27 @@ const en = {
           },
           "aboutUs": {
             "title": "About Us",
-            "description": "A technology service provider specializing in GEO (Generative Engine Optimization), helping websites perform better in the generative AI era.",
+            "description": "A technology service provider specializing in AI optimization, helping websites perform better in the AI search era.",
             "story": {
               "title": "Our Story",
-              "subtitle": "From Technological Innovation to Industry Leadership",
-              "paragraph1": "Our team consists of experts passionate about AI and search engine technology. In the era of generative AI technology explosion, we saw new opportunities and challenges in website optimization.",
-              "paragraph2": "In 2023, we began researching GEO (Generative Engine Optimization) technology, aiming to help websites perform better in the generative AI era. After a year of hard work, we developed a complete GEO detection and optimization system, providing professional technical support for enterprise and personal websites.",
-              "paragraph3": "Today, we have become a leading service provider in the GEO field, providing professional GEO detection and optimization services to many clients, helping them achieve better online performance in the generative AI era."
+              "subtitle": "From Technical Innovation to Industry Leadership",
+              "paragraph1": "We are a team of AI and search engine experts who are truly obsessed with the technology. When generative AI exploded in 2023, we saw both the new opportunities and challenges in website optimization. Traditional SEO was no longer enough — websites needed to be actively recommended by AI.",
+              "paragraph2": "That's why we started developing GEO + AEO technology. After a full year of focused research and development, we built GApex: a complete detection and optimization system that combines GEO and AEO into one powerful platform.",
+              "paragraph3": "Today, GApex is the leading AI search service provider. We've already helped businesses and websites worldwide dramatically improve their visibility and earn priority recommendations in the AI search era."
             },
             "mission": {
               "title": "Our Mission",
               "innovation": {
                 "title": "Technological Innovation",
-                "description": "Continuously explore and innovate GEO technology, providing clients with the most advanced detection and optimization solutions."
+                "description": "Continuously push the boundaries to deliver the most advanced AI visibility and recommendation solutions."
               },
               "value": {
                 "title": "Customer Value",
-                "description": "Customer-centric, providing high-quality GEO services to help clients gain competitive advantages in the generative AI era."
+                "description": "Put customers first by providing high-quality services that create real competitive advantage in the generative AI age."
               },
               "leadership": {
                 "title": "Industry Leadership",
-                "description": "Become an industry leader in the GEO field, promoting the establishment and development of industry standards."
+                "description": "Become the global benchmark in AI search era and help establish these new standards as essential for every company."
               }
             },
             "team": {
@@ -1305,7 +1320,7 @@ const en = {
           },
           "productsServices": {
             "title": "Products & Services",
-            "description": "We offer a range of GEO detection and optimization services to help your website achieve optimal search visibility worldwide.",
+            "description": "We deliver a full range of optimization services to help your brand achieve maximum visibility, citations, and AI recommendations worldwide.",
             "sections": {
               "ourServices": "Our Services",
               "contactConsultation": "Contact & Consultation"
@@ -1665,6 +1680,7 @@ const en = {
               "view": "View",
               "loading": "Loading...",
               "delete": "Delete",
+              "deleted": "Deleted",
               "deleteConfirm": "Delete this detection record?",
               "prev": "Prev",
               "next": "Next",

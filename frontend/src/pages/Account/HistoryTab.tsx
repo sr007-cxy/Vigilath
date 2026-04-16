@@ -65,8 +65,7 @@ export function HistoryTab() {
     if (!token) return;
     try {
       await accountApi.deleteDetection(token, id);
-      const nextPage = items.length === 1 && page > 1 ? page - 1 : page;
-      await load(nextPage);
+      await load(page);
     } catch (err) {
       alert(err instanceof Error ? err.message : t('common.errors.deleteFailed'));
     }
@@ -111,7 +110,81 @@ export function HistoryTab() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y" style={{ borderColor: 'var(--border-color)' }}>
+              {items.map((row) => {
+                const isDeleted = !!row.deleted_at;
+                return (
+                  <div
+                    key={row.id}
+                    className="px-4 py-4 space-y-2.5"
+                    style={isDeleted ? { opacity: 0.5 } : undefined}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p
+                        className="text-sm text-primary font-medium truncate flex-1 min-w-0"
+                        title={row.url}
+                        style={isDeleted ? { textDecoration: 'line-through' } : undefined}
+                      >
+                        {row.url}
+                      </p>
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full shrink-0"
+                        style={{
+                          background: 'rgba(0, 240, 255, 0.1)',
+                          border: '1px solid rgba(0, 240, 255, 0.3)',
+                          color: 'var(--accent-primary)',
+                        }}
+                      >
+                        {row.mode === 'advanced'
+                          ? t('account.history.modeAdvanced', '高级')
+                          : t('account.history.modeFree', '标准')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-secondary">
+                      <span style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
+                        {new Date(row.created_at).toLocaleString()}
+                      </span>
+                      {row.score != null && (
+                        <span className="font-semibold text-primary" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
+                          {row.score}{row.grade && <span className="text-secondary ml-0.5">({row.grade})</span>}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 pt-1">
+                      {isDeleted ? (
+                        <span className="text-secondary text-xs">
+                          {t('account.history.deleted', '已删除')}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            disabled={viewingId === row.id}
+                            onClick={() => handleView(row.id)}
+                            className="text-xs font-medium disabled:opacity-50"
+                            style={{ color: 'var(--accent-primary)' }}
+                          >
+                            {viewingId === row.id
+                              ? t('account.history.loading', '加载中...')
+                              : t('account.history.view', '查看')}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(row.id)}
+                            className="text-xs font-medium"
+                            style={{ color: '#ff006e' }}
+                          >
+                            {t('account.history.delete', '删除')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead style={{ background: 'var(--bg-tertiary)' }}>
                   <tr className="text-secondary">
@@ -133,19 +206,24 @@ export function HistoryTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((row, idx) => (
+                  {items.map((row, idx) => {
+                    const isDeleted = !!row.deleted_at;
+                    return (
                     <tr
                       key={row.id}
-                      style={idx < items.length - 1 ? borderBottomStyle : undefined}
+                      style={{
+                        ...(idx < items.length - 1 ? borderBottomStyle : undefined),
+                        ...(isDeleted ? { opacity: 0.5 } : undefined),
+                      }}
                       className="transition-colors hover:bg-white/5"
                     >
-                      <td className="px-4 py-3 text-secondary whitespace-nowrap">
+                      <td className="px-4 py-3 text-secondary whitespace-nowrap" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
                         {new Date(row.created_at).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-primary max-w-xs truncate">
+                      <td className="px-4 py-3 text-primary max-w-xs truncate" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
                         <span title={row.url}>{row.url}</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
                         {row.score != null ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-primary">
                             {row.score}
@@ -157,7 +235,7 @@ export function HistoryTab() {
                           <span className="text-secondary">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
                         <span
                           className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full"
                           style={{
@@ -172,26 +250,35 @@ export function HistoryTab() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          disabled={viewingId === row.id}
-                          onClick={() => handleView(row.id)}
-                          className="font-medium mr-3 disabled:opacity-50"
-                          style={{ color: 'var(--accent-primary)' }}
-                        >
-                          {viewingId === row.id
-                            ? t('account.history.loading', '加载中...')
-                            : t('account.history.view', '查看')}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(row.id)}
-                          className="font-medium"
-                          style={{ color: '#ff006e' }}
-                        >
-                          {t('account.history.delete', '删除')}
-                        </button>
+                        {isDeleted ? (
+                          <span className="text-secondary text-xs">
+                            {t('account.history.deleted', '已删除')}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              disabled={viewingId === row.id}
+                              onClick={() => handleView(row.id)}
+                              className="font-medium mr-3 disabled:opacity-50"
+                              style={{ color: 'var(--accent-primary)' }}
+                            >
+                              {viewingId === row.id
+                                ? t('account.history.loading', '加载中...')
+                                : t('account.history.view', '查看')}
+                            </button>
+                            <button
+                              onClick={() => handleDelete(row.id)}
+                              className="font-medium"
+                              style={{ color: '#ff006e' }}
+                            >
+                              {t('account.history.delete', '删除')}
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

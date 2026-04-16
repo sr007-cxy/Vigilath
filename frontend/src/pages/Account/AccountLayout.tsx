@@ -81,7 +81,7 @@ export function AccountLayout() {
           }}
         >
           <div
-            className="p-5 border-b"
+            className="hidden md:block p-5 border-b"
             style={{ borderColor: 'var(--border-color)' }}
           >
             <p className="text-sm font-semibold truncate text-primary">
@@ -91,7 +91,7 @@ export function AccountLayout() {
               {t('account.layout.subtitle', '账户信息')}
             </p>
           </div>
-          <nav className="p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-visible md:flex-1">
+          <nav className="p-2 md:p-3 flex md:flex-col gap-1 overflow-x-auto md:overflow-visible md:flex-1 scrollbar-hide">
             {menu.map((item) => (
               <NavLink
                 key={item.to}
@@ -109,6 +109,14 @@ export function AccountLayout() {
                 {item.label}
               </NavLink>
             ))}
+            {/* Mobile logout button inline */}
+            <button
+              onClick={handleLogout}
+              className="md:hidden px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+              style={{ color: '#f43f5e' }}
+            >
+              {t('account.layout.logout', '退出登录')}
+            </button>
           </nav>
           <div
             className="hidden md:block p-3 border-t"

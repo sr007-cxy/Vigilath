@@ -138,18 +138,43 @@ export function CheckProgress({ mode }: { mode: RerunMode }) {
           </p>
         </div>
 
-        <div
-          className="relative h-1.5 rounded-full overflow-hidden mb-5"
-          style={{ background: 'var(--surface-hover, rgba(148, 163, 184, 0.15))' }}
-        >
-          <div
-            className="absolute inset-y-0 left-0 transition-all duration-500 ease-out"
-            style={{
-              width: `${percent}%`,
-              background:
-                'linear-gradient(90deg, var(--accent-primary, #06b6d4), var(--accent-secondary, #3b82f6))',
-            }}
-          />
+        {/* Circular ring progress */}
+        <div className="flex justify-center mb-5">
+          <svg width="80" height="80" viewBox="0 0 80 80" className="transform -rotate-90">
+            <defs>
+              <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="var(--accent-primary, #06b6d4)" />
+                <stop offset="100%" stopColor="var(--accent-secondary, #3b82f6)" />
+              </linearGradient>
+            </defs>
+            <circle
+              cx="40" cy="40" r="34"
+              fill="none"
+              stroke="var(--surface-hover, rgba(148, 163, 184, 0.15))"
+              strokeWidth="6"
+            />
+            <circle
+              cx="40" cy="40" r="34"
+              fill="none"
+              stroke="url(#ring-grad)"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * 34}`}
+              strokeDashoffset={`${2 * Math.PI * 34 * (1 - percent / 100)}`}
+              className="transition-all duration-500 ease-out"
+            />
+            <text
+              x="40" y="40"
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="transform rotate-90 origin-center"
+              fill="var(--text-primary, #e2e8f0)"
+              fontSize="18"
+              fontWeight="700"
+            >
+              {percent}%
+            </text>
+          </svg>
         </div>
 
         <ul className="space-y-2.5">

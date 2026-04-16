@@ -5,7 +5,6 @@ import {
   blockWrapOpen,
   composeAndSavePdf,
   escapeHtml,
-  makeStandardHeaderFooter,
   statusBadge,
 } from './pdfPrimitives';
 
@@ -74,23 +73,56 @@ const buildCoverBlock = (args: ExportArgs): string => {
   );
 };
 
+const scoreRingColor = (score: number): string => {
+  if (score >= 90) return '#22c55e';
+  if (score >= 75) return '#06b6d4';
+  if (score >= 60) return '#eab308';
+  if (score >= 40) return '#f97316';
+  return '#ef4444';
+};
+
 const buildScoreBlock = (args: ExportArgs): string => {
   const { result, t } = args;
   const score = result.score || 0;
   const grade = result.grade || 'F';
   const summary = result.summary || { pass_count: 0, warn_count: 0, fail_count: 0, info_count: 0, total_checks: 0 };
+
+  // SVG circular progress ring
+  const radius = 54;
+  const stroke = 8;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - score / 100);
+  const ringColor = scoreRingColor(score);
+
+  const ringHtml =
+    `<svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">` +
+    `<circle cx="70" cy="70" r="${radius}" fill="none" stroke="#e2e8f0" stroke-width="${stroke}"/>` +
+    `<circle cx="70" cy="70" r="${radius}" fill="none" stroke="${ringColor}" stroke-width="${stroke}" ` +
+    `stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" ` +
+    `transform="rotate(-90 70 70)"/>` +
+    `</svg>`;
+
   return (
     blockWrapOpen('padding:0 0 8px 0;') +
     `<div style="display:flex;gap:14px;align-items:stretch;">` +
-    `<div style="flex-shrink:0;width:170px;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;border-radius:12px;padding:18px;text-align:center;box-sizing:border-box;">` +
-    `<div style="font-size:10px;letter-spacing:0.16em;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">${escapeHtml(t('result.pdfReport.overallScore'))}</div>` +
-    `<div style="font-size:48px;font-weight:800;line-height:1;color:#22d3ee;">${score}</div>` +
-    `<div style="font-size:11px;color:#94a3b8;margin-top:4px;">/ 100</div>` +
-    `<div style="margin-top:12px;display:inline-block;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:16px;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
+    // Left: ring progress
+    `<div style="flex-shrink:0;width:190px;background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;border-radius:12px;padding:20px 18px;text-align:center;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
+    `<div style="font-size:10px;letter-spacing:0.16em;color:#94a3b8;text-transform:uppercase;margin-bottom:10px;">${escapeHtml(t('result.pdfReport.overallScore'))}</div>` +
+    `<div style="position:relative;width:140px;height:140px;">` +
+    ringHtml +
+    `<div style="position:absolute;top:0;left:0;width:140px;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
+    `<div style="font-size:40px;font-weight:800;line-height:1;color:#fff;">${score}</div>` +
+    `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">/ 100</div>` +
     `</div>` +
-    `<div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-sizing:border-box;">` +
+    `</div>` +
+    `<div style="margin-top:10px;display:inline-block;padding:4px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:16px;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
+    `</div>` +
+    // Right: interpretation + summary counts
+    `<div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">` +
+    `<div>` +
     `<div style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:6px;">${escapeHtml(t('result.pdfReport.scoreInterpretation'))}</div>` +
     `<div style="font-size:12px;color:#334155;line-height:1.7;">${escapeHtml(interpretScore(score, t))}</div>` +
+    `</div>` +
     `<div style="display:flex;gap:8px;margin-top:14px;">` +
     `<div style="flex:1;background:#dcfce7;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#166534;">${summary.pass_count}</div><div style="font-size:9px;color:#166534;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.passed'))}</div></div>` +
     `<div style="flex:1;background:#fef3c7;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#92400e;">${summary.warn_count}</div><div style="font-size:9px;color:#92400e;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.warnings'))}</div></div>` +
@@ -288,7 +320,7 @@ export async function exportPdfReport(args: ExportArgs): Promise<void> {
   const headerRight = `${t('result.pdfReport.headerSite')}: ${result.url || ''}`;
   await composeAndSavePdf(
     htmlBlocks,
-    makeStandardHeaderFooter({ rightHeaderText: headerRight, t }),
+    { rightHeaderText: headerRight, t },
     `${baseName}-${safeUrl}.pdf`,
   );
 }
