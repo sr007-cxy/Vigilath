@@ -66,8 +66,6 @@ export function Footer() {
         <div className="text-center text-sm text-secondary mb-6">
           Email:{' '}
           <a href="mailto:support@zen7.com" className="hover:text-primary transition-colors">support@zen7.com</a>
-          {' / '}
-          <a href="mailto:admin@zen7.com" className="hover:text-primary transition-colors">admin@zen7.com</a>
         </div>
 
         {/* Copyright */}

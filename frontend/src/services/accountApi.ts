@@ -26,6 +26,7 @@ export interface DetectionRecordList {
 export interface PaymentRecord {
   id: number;
   membership_slug: string;
+  provider: string;
   amount_cents: number;
   currency: string;
   status: string;

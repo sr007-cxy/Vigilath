@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_SUCCESS_URL: str = "http://localhost:5173/checkout/success"
     STRIPE_CANCEL_URL: str = "http://localhost:5173/checkout/cancel"
+    STRIPE_TEST_MODE: bool = False
+
+    # MoltsPay (USDC via x402 protocol)
+    MOLTSPAY_ENABLED: bool = False
+    MOLTSPAY_WALLET_ADDRESS: str = ""
+    MOLTSPAY_CHAIN: str = "base"
+    MOLTSPAY_SERVER_URL: str = "http://127.0.0.1:3010"
 
     # AI engine keys (paid detection modes — entity / ai-visibility / citation-check).
     # Read by both the backend `geo` package and the standalone CLI tool spawned

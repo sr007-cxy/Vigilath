@@ -118,7 +118,7 @@ export function PrivacyPolicy() {
                 : 'If you have questions about this Privacy Policy, please contact us:'}
             </p>
             <p className="mt-2">
-              Email: <a href="mailto:admin@zen7.com" className="text-accent-primary hover:underline">admin@zen7.com</a>
+              Email: <a href="mailto:support@zen7.com" className="text-accent-primary hover:underline">support@zen7.com</a>
             </p>
           </section>
         </div>

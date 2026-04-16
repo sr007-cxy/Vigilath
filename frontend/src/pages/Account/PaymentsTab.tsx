@@ -104,6 +104,9 @@ export function PaymentsTab() {
                       {t('account.payments.amount')}
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
+                      {t('account.payments.provider', 'Method')}
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium">
                       {t('account.payments.status')}
                     </th>
                     <th className="px-4 py-3 text-left font-medium">
@@ -128,6 +131,9 @@ export function PaymentsTab() {
                         </td>
                         <td className="px-4 py-3 text-primary font-medium">
                           {formatAmount(row.amount_cents, row.currency)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-secondary">
+                          {row.provider === 'moltspay' ? 'Base USDC' : 'Stripe'}
                         </td>
                         <td className="px-4 py-3">
                           <span

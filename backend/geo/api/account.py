@@ -90,6 +90,7 @@ class PaymentRecordItem(BaseModel):
     amount_cents: int
     currency: str
     status: str
+    provider: str = "stripe"
     created_at: str
     completed_at: Optional[str] = None
 
@@ -124,6 +125,7 @@ async def list_user_payments(
                 amount_cents=ps.amount_cents,
                 currency=ps.currency,
                 status=ps.status,
+                provider=ps.provider or "stripe",
                 created_at=str(ps.created_at),
                 completed_at=str(ps.completed_at) if ps.completed_at else None,
             )

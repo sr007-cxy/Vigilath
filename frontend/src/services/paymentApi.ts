@@ -50,4 +50,54 @@ export const paymentApi = {
     }
     return response.json();
   },
+
+  async createMoltsPaySession(
+    token: string,
+    slug: string,
+  ): Promise<MoltsPayCreateResponse> {
+    const response = await fetch(`${API_BASE}/payment/moltspay/create`, {
+      method: 'POST',
+      headers: localizedHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }),
+      body: JSON.stringify({ slug }),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to create USDC payment'));
+    }
+    return response.json();
+  },
+
+  async getMoltsPayStatus(
+    token: string,
+    paymentId: number,
+  ): Promise<MoltsPayStatusResponse> {
+    const response = await fetch(
+      `${API_BASE}/payment/moltspay/status/${paymentId}`,
+      {
+        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to check USDC payment status'));
+    }
+    return response.json();
+  },
 };
+
+export interface MoltsPayCreateResponse {
+  payment_id: number;
+  amount_usdc: number;
+  chain: string;
+  service_id: string;
+  wallet_address: string;
+  status: string;
+}
+
+export interface MoltsPayStatusResponse {
+  payment_id: number;
+  status: string;
+  tx_hash: string | null;
+  completed_at: string | null;
+}
