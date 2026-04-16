@@ -20,6 +20,7 @@ import { ProfileTab } from './pages/Account/ProfileTab';
 import { MembershipTab } from './pages/Account/MembershipTab';
 import { UsageTab } from './pages/Account/UsageTab';
 import { HistoryTab } from './pages/Account/HistoryTab';
+import { PaymentsTab } from './pages/Account/PaymentsTab';
 import { Header } from './components/Header';
 import './i18n'; // 导入 i18n 配置
 
@@ -44,6 +45,7 @@ function App() {
               <Route path="membership" element={<MembershipTab />} />
               <Route path="usage" element={<UsageTab />} />
               <Route path="history" element={<HistoryTab />} />
+              <Route path="payments" element={<PaymentsTab />} />
             </Route>
             <Route path="/about" element={<About />} />
             <Route path="/process" element={<Landing />} />

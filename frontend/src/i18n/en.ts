@@ -1639,7 +1639,7 @@ const en = {
                   "serviceCycle": "❌"
                 },
                 "detector": {
-                  "price": "$0.99/mo",
+                  "price": "$9.99/mo",
                   "type": "Self-service SaaS",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",
@@ -1798,7 +1798,8 @@ const en = {
               "profile": "Profile",
               "membership": "Membership",
               "usage": "Usage",
-              "history": "Detection history"
+              "history": "Detection history",
+              "payments": "Payment history"
             },
             "common": {
               "needLogin": "Please sign in first"
@@ -1866,6 +1867,25 @@ const en = {
               "prev": "Prev",
               "next": "Next",
               "pageOf": "Page {{page}} of {{pages}}"
+            },
+            "payments": {
+              "title": "Payment History",
+              "total": "{{n}} records",
+              "empty": "No payment records yet",
+              "time": "Time",
+              "plan": "Plan",
+              "amount": "Amount",
+              "status": "Status",
+              "completedAt": "Completed",
+              "prev": "Prev",
+              "next": "Next",
+              "pageOf": "Page {{page}} of {{pages}}",
+              "statuses": {
+                "paid": "Paid",
+                "pending": "Pending",
+                "expired": "Expired",
+                "failed": "Failed"
+              }
             }
           }
         } as const;

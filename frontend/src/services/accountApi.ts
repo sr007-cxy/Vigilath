@@ -23,6 +23,23 @@ export interface DetectionRecordList {
   size: number;
 }
 
+export interface PaymentRecord {
+  id: number;
+  membership_slug: string;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface PaymentRecordList {
+  items: PaymentRecord[];
+  total: number;
+  page: number;
+  size: number;
+}
+
 class AccountApi {
   private baseUrl: string;
 
@@ -59,6 +76,17 @@ class AccountApi {
     if (!response.ok) {
       throw new ApiError(response.status, await readApiError(response, 'Failed to delete record'));
     }
+  }
+
+  async listPayments(token: string, page = 1, size = 10): Promise<PaymentRecordList> {
+    const response = await fetch(
+      `${this.baseUrl}/payments?page=${page}&size=${size}`,
+      { headers: localizedHeaders({ Authorization: `Bearer ${token}` }) },
+    );
+    if (!response.ok) {
+      throw new ApiError(response.status, await readApiError(response, 'Failed to load payments'));
+    }
+    return response.json();
   }
 
   async changePassword(token: string, oldPassword: string, newPassword: string): Promise<void> {

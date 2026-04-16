@@ -19,6 +19,8 @@ from geo.models.detection import (
     DetectionRecordList,
     DetectionRecordSummary,
 )
+from geo.models.payment import PaymentSessionORM
+from geo.models.membership import MembershipORM
 from geo.models.user import UserORM
 from geo.services.detection_service import (
     delete_detection,
@@ -80,6 +82,56 @@ async def delete_user_detection(
     if not ok:
         raise AppException(status_code=404, message="Detection record not found")
     return {"success": True}
+
+
+class PaymentRecordItem(BaseModel):
+    id: int
+    membership_slug: str
+    amount_cents: int
+    currency: str
+    status: str
+    created_at: str
+    completed_at: Optional[str] = None
+
+
+class PaymentRecordList(BaseModel):
+    items: list[PaymentRecordItem]
+    total: int
+    page: int
+    size: int
+
+
+@router.get("/payments", response_model=PaymentRecordList)
+async def list_user_payments(
+    page: int = 1,
+    size: int = 10,
+    current_user: UserORM = Depends(get_current_user),
+):
+    db = SessionLocal()
+    try:
+        q = (
+            db.query(PaymentSessionORM, MembershipORM.slug)
+            .outerjoin(MembershipORM, PaymentSessionORM.membership_id == MembershipORM.id)
+            .filter(PaymentSessionORM.user_id == current_user.id)
+            .order_by(PaymentSessionORM.created_at.desc())
+        )
+        total = q.count()
+        rows = q.offset((page - 1) * size).limit(size).all()
+        items = [
+            PaymentRecordItem(
+                id=ps.id,
+                membership_slug=slug or "",
+                amount_cents=ps.amount_cents,
+                currency=ps.currency,
+                status=ps.status,
+                created_at=str(ps.created_at),
+                completed_at=str(ps.completed_at) if ps.completed_at else None,
+            )
+            for ps, slug in rows
+        ]
+        return PaymentRecordList(items=items, total=total, page=page, size=size)
+    finally:
+        db.close()
 
 
 @router.post("/change-password")

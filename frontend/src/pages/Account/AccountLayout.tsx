@@ -52,6 +52,7 @@ export function AccountLayout() {
     { to: '/account/membership', label: t('account.menu.membership', '会员信息') },
     { to: '/account/usage', label: t('account.menu.usage', '使用情况') },
     { to: '/account/history', label: t('account.menu.history', '检测记录') },
+    { to: '/account/payments', label: t('account.menu.payments', '支付记录') },
   ];
 
   if (loading) {

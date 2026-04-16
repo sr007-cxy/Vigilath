@@ -1645,7 +1645,7 @@ const zh = {
                   "serviceCycle": "❌"
                 },
                 "detector": {
-                  "price": "$0.99/月",
+                  "price": "$9.99/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "23 项",
@@ -1804,7 +1804,8 @@ const zh = {
               "profile": "个人资料",
               "membership": "会员信息",
               "usage": "使用情况",
-              "history": "检测记录"
+              "history": "检测记录",
+              "payments": "支付记录"
             },
             "common": {
               "needLogin": "请先登录"
@@ -1872,6 +1873,25 @@ const zh = {
               "prev": "上一页",
               "next": "下一页",
               "pageOf": "第 {{page}} / {{pages}} 页"
+            },
+            "payments": {
+              "title": "支付记录",
+              "total": "共 {{n}} 条",
+              "empty": "暂无支付记录",
+              "time": "时间",
+              "plan": "方案",
+              "amount": "金额",
+              "status": "状态",
+              "completedAt": "完成时间",
+              "prev": "上一页",
+              "next": "下一页",
+              "pageOf": "第 {{page}} / {{pages}} 页",
+              "statuses": {
+                "paid": "已支付",
+                "pending": "待支付",
+                "expired": "已过期",
+                "failed": "失败"
+              }
             }
           }
         } as const;

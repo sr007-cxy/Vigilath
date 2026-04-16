@@ -506,14 +506,27 @@ class MembershipService:
             if not new_membership:
                 return None
 
-            start_date = datetime.utcnow()
+            now = datetime.utcnow()
             period = new_membership.period or ""
             if "/月" in period or "/mo" in period.lower():
-                end_date = start_date + timedelta(days=30)
+                duration = timedelta(days=30)
             elif "/年" in period or "/yr" in period.lower() or "/year" in period.lower():
-                end_date = start_date + timedelta(days=365)
+                duration = timedelta(days=365)
             else:
-                end_date = start_date + timedelta(days=36500)
+                duration = timedelta(days=36500)
+
+            # Renewing the same plan: extend from the old end_date if still active
+            if (
+                current_membership
+                and current_membership.membership_id == new_membership_id
+                and current_membership.end_date
+                and current_membership.end_date > now
+            ):
+                start_date = now
+                end_date = current_membership.end_date + duration
+            else:
+                start_date = now
+                end_date = now + duration
 
             db_user_membership = UserMembershipORM(
                 user_id=user_id,

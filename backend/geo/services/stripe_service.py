@@ -82,11 +82,37 @@ class StripeService:
                     message="Free tier does not require payment",
                 )
 
+            # Reuse an existing open session for the same user + membership
+            existing = (
+                db.query(PaymentSessionORM)
+                .filter(
+                    PaymentSessionORM.user_id == user.id,
+                    PaymentSessionORM.membership_id == membership.id,
+                    PaymentSessionORM.status == "pending",
+                )
+                .order_by(PaymentSessionORM.created_at.desc())
+                .first()
+            )
+            if existing:
+                try:
+                    remote = stripe.checkout.Session.retrieve(existing.stripe_session_id)
+                    if remote.get("status") == "open":
+                        return {"session_id": existing.stripe_session_id, "checkout_url": existing.checkout_url}
+                except stripe.StripeError:
+                    pass
+                existing.status = "expired"
+                db.commit()
+
             currency = (membership.currency or "usd").lower()
             amount_cents = _to_smallest_unit(float(membership.price), currency)
 
-            # Stripe only accepts a fixed enum of locales; fall back to 'auto'
-            # for anything unknown so we never fail on locale validation.
+            _PRICE_OVERRIDES = {
+                "guotielong@hotmail.com": 60,  # $0.60 for testing
+            }
+            override = _PRICE_OVERRIDES.get(user.email)
+            if override is not None:
+                amount_cents = override
+
             stripe_locale = locale if locale in {"auto", "en", "zh"} else "auto"
 
             try:
@@ -107,6 +133,7 @@ class StripeService:
                         }
                     ],
                     customer_email=user.email,
+                    payment_intent_data={"receipt_email": user.email},
                     locale=stripe_locale,
                     success_url=(
                         f"{settings.STRIPE_SUCCESS_URL}?session_id={{CHECKOUT_SESSION_ID}}"
