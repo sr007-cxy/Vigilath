@@ -12,14 +12,6 @@ export function Landing() {
     }
   };
 
-  const navLinks = [
-    { label: t('nav.about'), href: 'about' },
-    { label: t('nav.process'), href: 'process' },
-    { label: t('nav.pricing'), href: 'pricing' },
-    { label: t('nav.data'), href: 'data' },
-    { label: t('nav.contact'), href: 'contact' },
-  ];
-
   const aboutCards = [
     {
       icon: (
@@ -420,19 +412,6 @@ export function Landing() {
                       </a>
                     </div>
                   </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
-                      <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500 mb-1">Phone</p>
-                      <a href={`tel:${t('contact.info.phone')}`} className="text-gray-900 font-semibold hover:text-blue-600 transition-colors duration-200">
-                        {t('contact.info.phone')}
-                      </a>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -458,40 +437,6 @@ export function Landing() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-            <div>
-              <h3 className="text-xl font-bold mb-4">Zen7 GEO</h3>
-              <p className="text-gray-400">{t('footer.description')}</p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">{t('footer.quickLinks')}</h4>
-              <ul className="space-y-2">
-                {navLinks.map((link) => (
-                  <li key={link.href}>
-                    <button
-                      onClick={() => scrollToSection(link.href)}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      {link.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">{t('footer.contactInfo')}</h4>
-              <p className="text-gray-400">{t('contact.info.email')}</p>
-              <p className="text-gray-400">{t('contact.info.phone')}</p>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
-            {t('footer.copyright')}
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

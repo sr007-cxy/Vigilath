@@ -21,8 +21,12 @@ import { MembershipTab } from './pages/Account/MembershipTab';
 import { UsageTab } from './pages/Account/UsageTab';
 import { HistoryTab } from './pages/Account/HistoryTab';
 import { PaymentsTab } from './pages/Account/PaymentsTab';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { TermsOfUse } from './pages/TermsOfUse';
+import { CookiePolicy } from './pages/CookiePolicy';
 import { Header } from './components/Header';
-import './i18n'; // 导入 i18n 配置
+import { Footer } from './components/Footer';
+import './i18n';
 
 // Create a client
 const queryClient = new QueryClient();
@@ -60,7 +64,11 @@ function App() {
             <Route path="/checkout/pending" element={<CheckoutPending />} />
             <Route path="/checkout/success" element={<CheckoutSuccess />} />
             <Route path="/checkout/cancel" element={<CheckoutCancel />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfUse />} />
+            <Route path="/cookie-policy" element={<CookiePolicy />} />
           </Routes>
+          <Footer />
         </div>
       </Router>
     </QueryClientProvider>

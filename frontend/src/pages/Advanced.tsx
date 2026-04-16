@@ -141,10 +141,10 @@ export function Advanced() {
   const prefilledResult = navState?.prefilledResult ?? null;
 
   // Per-mode form state
-  const [urlInput, setUrlInput] = useState<string>(initialUrl || 'moltspay.com');
+  const [urlInput, setUrlInput] = useState<string>(initialUrl || '');
   const [compareUrls, setCompareUrls] = useState<string[]>(() => {
     if (initialUrl) return [initialUrl, 'https://example.org'];
-    return ['moltspay.com', 'https://example.org'];
+    return ['', 'https://example.org'];
   });
   const [customQueries, setCustomQueries] = useState<string>('');
   const [entityName, setEntityName] = useState<string>('');
@@ -413,7 +413,7 @@ function ModeForm(props: ModeFormProps) {
                 next[i] = e.target.value;
                 setCompareUrls(next);
               }}
-              placeholder="moltspay.com"
+              placeholder="example.com"
               disabled={loading}
               className={inputClass}
             />
@@ -481,7 +481,7 @@ function ModeForm(props: ModeFormProps) {
           type="text"
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="moltspay.com"
+          placeholder="example.com"
           disabled={loading}
           className={inputClass}
         />

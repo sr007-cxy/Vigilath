@@ -56,7 +56,7 @@ export function Home() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { isLoggedIn, isUnlocked, refresh } = useMembership();
-  const [url, setUrl] = useState('moltspay.com');
+  const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [quotaExceeded, setQuotaExceeded] = useState(false);

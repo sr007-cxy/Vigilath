@@ -169,8 +169,7 @@ const en = {
             "message": "Message",
             "submit": "Submit Inquiry",
             "info": {
-              "email": "support@zen7.com",
-              "phone": "+86 400-XXX-XXXX"
+              "email": "support@zen7.com"
             },
             "form": {
               "name": "Name",
@@ -218,7 +217,13 @@ const en = {
             "description": "Zen7 is a professional Generative Engine Optimization (GEO) service provider, helping businesses achieve maximum brand exposure in the AI era.",
             "quickLinks": "Quick Links",
             "contactInfo": "Contact Info",
-            "copyright": "© 2026 Zen7. All rights reserved."
+            "copyright": "© 2026 Zen7. All rights reserved.",
+            "links": {
+              "privacy": "Privacy Policy",
+              "terms": "Terms of Use",
+              "cookie": "Cookie Policy",
+              "contact": "Contact Us"
+            }
           },
           "geoTool": {
             "title": "Want to check your website GEO readiness?",
@@ -228,7 +233,7 @@ const en = {
           "home": {
             "title": "GEO Readiness Checker",
             "description": "Optimize your website for AI-powered search engines and assistants. Get detailed insights and actionable recommendations.",
-            "placeholder": "moltspay.com",
+            "placeholder": "example.com",
             "button": "Check GEO Readiness",
             "analyzing": "Analyzing...",
             "error": {
@@ -1257,9 +1262,7 @@ const en = {
                 "address": "Address",
                 "addressValue": "Zhongguancun Science and Technology Park, Haidian District, Beijing",
                 "email": "Email",
-                "emailValue": "support@zen7.com",
-                "phone": "Phone",
-                "phoneValue": "+86 10 8888 8888"
+                "emailValue": "support@zen7.com"
               },
               "form": {
                 "title": "Send Message",
@@ -1773,7 +1776,7 @@ const en = {
               "email": "Email",
               "emailPlaceholder": "Your email",
               "website": "Website",
-              "websitePlaceholder": "moltspay.com",
+              "websitePlaceholder": "example.com",
               "service": "Interested Service",
               "serviceOptions": [
                 "Basic Detection Service",

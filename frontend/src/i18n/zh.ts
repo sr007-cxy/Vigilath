@@ -169,8 +169,7 @@ const zh = {
             "message": "留言",
             "submit": "提交咨询",
             "info": {
-              "email": "support@zen7.com",
-              "phone": "+86 400-XXX-XXXX"
+              "email": "support@zen7.com"
             },
             "form": {
               "name": "姓名",
@@ -218,7 +217,13 @@ const zh = {
             "description": "Zen7 是专业的生成式引擎优化（GEO）服务提供商，帮助企业在 AI 时代获得最大品牌曝光。",
             "quickLinks": "快速链接",
             "contactInfo": "联系方式",
-            "copyright": "© 2026 Zen7. 保留所有权利。"
+            "copyright": "© 2026 Zen7. 保留所有权利。",
+            "links": {
+              "privacy": "隐私政策",
+              "terms": "使用条款",
+              "cookie": "Cookie 政策",
+              "contact": "联系我们"
+            }
           },
           "geoTool": {
             "title": "想要检查您网站的 GEO 就绪状态？",
@@ -228,7 +233,7 @@ const zh = {
           "home": {
             "title": "GEO 检测",
             "description": "优化您的网站以适应 AI 驱动的搜索引擎和助手。获取详细的见解和可操作的建议。",
-            "placeholder": "moltspay.com",
+            "placeholder": "example.com",
             "button": "检测 GEO",
             "analyzing": "分析中...",
             "error": {
@@ -1257,9 +1262,7 @@ const zh = {
                 "address": "地址",
                 "addressValue": "北京市海淀区中关村科技园区",
                 "email": "邮箱",
-                "emailValue": "support@zen7.com",
-                "phone": "电话",
-                "phoneValue": "+86 10 8888 8888"
+                "emailValue": "support@zen7.com"
               },
               "form": {
                 "title": "发送消息",
@@ -1779,7 +1782,7 @@ const zh = {
               "email": "邮箱",
               "emailPlaceholder": "您的邮箱",
               "website": "网站",
-              "websitePlaceholder": "moltspay.com",
+              "websitePlaceholder": "example.com",
               "service": "感兴趣的服务",
               "serviceOptions": [
                 "基础检测服务",
