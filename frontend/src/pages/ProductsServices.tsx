@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { useMembership } from '../hooks/useMembership';
 import { AuthModal } from '../components/AuthModal';
+import { useContactModal } from '../components/ContactModalContext';
 
 type ContactFormState = {
   name: string;
@@ -47,6 +48,7 @@ export function ProductsServices() {
     return { name, description, period, features };
   };
   const { isLoggedIn, refresh: refreshMembership } = useMembership();
+  const { openContact } = useContactModal();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,11 +100,8 @@ export function ProductsServices() {
       navigate(`/checkout/pending?slug=${encodeURIComponent(tier.slug)}`);
       return;
     }
-    // service tier: open the contact consultation popup pre-selected to this tier
-    setForm((f) => ({ ...INITIAL_FORM, service: tier.slug, name: f.name, email: f.email }));
-    setFeedback(null);
-    setFeedbackKind(null);
-    setShowContactModal(true);
+    // service tier: open shared contact modal
+    openContact();
   };
 
   const closeContactModal = () => {

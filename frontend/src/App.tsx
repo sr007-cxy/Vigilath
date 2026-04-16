@@ -26,6 +26,8 @@ import { TermsOfUse } from './pages/TermsOfUse';
 import { CookiePolicy } from './pages/CookiePolicy';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { ContactModalProvider } from './components/ContactModalContext';
+import { ContactModal } from './components/ContactModal';
 import './i18n';
 
 // Create a client
@@ -34,8 +36,10 @@ const queryClient = new QueryClient();
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ContactModalProvider>
       <Router>
         <Header />
+        <ContactModal />
         <div className="pt-16">
           <Routes>
             <Route path="/" element={<Home />} />
@@ -71,6 +75,7 @@ function App() {
           <Footer />
         </div>
       </Router>
+      </ContactModalProvider>
     </QueryClientProvider>
   );
 }

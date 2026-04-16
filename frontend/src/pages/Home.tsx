@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoApi, ApiError } from '../services/geoApi';
 import { AuthModal } from '../components/AuthModal';
+import { useContactModal } from '../components/ContactModalContext';
 import { CheckProgress } from '../components/result/CheckProgress';
 import { useMembership } from '../hooks/useMembership';
 import {
@@ -56,6 +57,7 @@ export function Home() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { isLoggedIn, isUnlocked, refresh } = useMembership();
+  const { openContact } = useContactModal();
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -123,9 +125,9 @@ export function Home() {
       navigate(`/checkout/pending?slug=${encodeURIComponent(tier.slug)}`);
       return;
     }
-    // Service tier — redirect to the products-services page for contact sales flow.
+    // Service tier — open contact modal.
     setShowTierModal(false);
-    navigate('/products-services');
+    openContact();
   };
 
   const handleAuthSuccess = () => {

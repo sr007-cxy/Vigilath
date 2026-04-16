@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useContactModal } from '../../components/ContactModalContext';
 import {
   membershipApi,
   type Membership as MembershipType,
@@ -19,6 +20,7 @@ const SLUG_TO_CARD_KEY: Record<string, string> = { pro: 'detector' };
 
 export function MembershipTab() {
   const navigate = useNavigate();
+  const { openContact } = useContactModal();
   const { t, i18n } = useTranslation();
   const [userMembership, setUserMembership] = useState<UserMembership | null>(null);
   const [details, setDetails] = useState<MembershipType | null>(null);
@@ -69,7 +71,7 @@ export function MembershipTab() {
   const handleRenew = () => {
     if (!details) return;
     if (details.tier_type === 'service') {
-      navigate('/products-services');
+      openContact();
       return;
     }
     navigate(`/checkout/pending?slug=${encodeURIComponent(details.slug)}`);

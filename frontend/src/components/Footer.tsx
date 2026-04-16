@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useContactModal } from './ContactModalContext';
 
 export function Footer() {
   const { t } = useTranslation();
+  const { openContact } = useContactModal();
 
   const legalLinks = [
     { to: '/privacy', label: t('footer.links.privacy', 'Privacy Policy') },
     { to: '/terms', label: t('footer.links.terms', 'Terms of Use') },
     { to: '/cookie-policy', label: t('footer.links.cookie', 'Cookie Policy') },
-    { to: '/contact', label: t('footer.links.contact', 'Contact Us') },
   ];
 
   return (
@@ -53,6 +54,12 @@ export function Footer() {
               {link.label}
             </Link>
           ))}
+          <button
+            onClick={openContact}
+            className="text-secondary hover:text-primary transition-colors"
+          >
+            {t('footer.links.contact', 'Contact Us')}
+          </button>
         </div>
 
         {/* Contact */}
