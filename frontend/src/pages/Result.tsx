@@ -6,6 +6,7 @@ import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
 import { geoApi, ApiError } from '../services/geoApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
+import { CheckProgress } from '../components/result/CheckProgress';
 import { RerunModeDropdown } from '../components/result/RerunModeDropdown';
 import { ADVANCED_MODES, type AdvancedMode, type RerunMode } from '../components/result/rerunModes';
 import { ResultPanel as AdvancedResultPanel, type AnyAdvancedResult } from './Advanced';
@@ -26,6 +27,22 @@ function renderCheckMessage(
     return t(check.message_key, (check.message_params || {}) as Record<string, unknown>);
   }
   return check.message;
+}
+
+/**
+ * Render a check's fix recommendation. Prefers `fix_key` + `fix_params`
+ * (emitted via emit_fix), falls back to the raw English `fix` text.
+ * Returns an empty string when no fix is available so callers can boolean-
+ * check the result.
+ */
+function renderCheckFix(
+  check: CheckResult,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (check.fix_key) {
+    return t(check.fix_key, (check.fix_params || {}) as Record<string, unknown>);
+  }
+  return (check.fix || '').trim();
 }
 
 // 23 categories split into 7 tabs (2 free + 5 paid) aligned with
@@ -612,8 +629,16 @@ export function Result() {
   //  (b) something else — show the standard "no data" error.
   if (!result) {
     if (isEmptyAdvancedMode) {
-      const modeTitle = t(`home.advanced.cards.${initialAdvancedMode}.title`) as string;
-      const modeDesc = t(`home.advanced.cards.${initialAdvancedMode}.desc`) as string;
+      // Title tracks the live dropdown selection, not the entry mode — when
+      // the user flips the rerun dropdown, the hero heading updates in sync.
+      const modeTitle =
+        rerunMode === 'default'
+          ? (t('result.header.modeDefault', { defaultValue: '基础 GEO 检测' }) as string)
+          : (t(`home.advanced.cards.${rerunMode}.title`) as string);
+      const modeDesc =
+        rerunMode === 'default'
+          ? (t('home.description') as string)
+          : (t(`home.advanced.cards.${rerunMode}.desc`) as string);
       return (
         <div className="min-h-screen grid-background">
           <div className="bg-glow bg-glow-1"></div>
@@ -1018,32 +1043,34 @@ export function Result() {
                 if (activeStat?.isTabLocked) return null;
                 const renderRow = (check: CheckResult, rowKey: string) => {
                   const theme = statusTheme(check.status);
-                  const fixText = check.fix?.trim();
+                  const fixText = renderCheckFix(check, t);
                   const showFix = canShowFix && !!fixText && check.status !== 'PASS';
                   const displayMessage = renderCheckMessage(check, t);
                   return (
                     <div
                       key={rowKey}
-                      className="px-4 py-2.5 hover:bg-tertiary transition-colors"
+                      className="px-4 py-3 hover:bg-tertiary/60 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-[7px] w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`}></span>
+                        <span className={`mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
                           {check.status}
                         </span>
-                        <p className="flex-1 min-w-0 text-xs text-primary truncate" title={displayMessage}>
+                        <p className="flex-1 min-w-0 text-xs sm:text-[13px] text-primary leading-snug break-words" title={displayMessage}>
                           {displayMessage}
                         </p>
                       </div>
                       {showFix && (
-                        <div className="mt-1.5 ml-[4.25rem] flex items-start gap-1.5 text-[11px] text-secondary leading-snug">
-                          <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
-                          <span>
-                            <span className="font-semibold text-accent-primary mr-1">
-                              {t('result.fix')}
+                        <div className="mt-2 ml-[4.25rem] rounded-lg border-l-2 border-accent-primary bg-accent-primary/5 px-3 py-2">
+                          <div className="flex items-start gap-2 text-[12px] text-primary leading-relaxed">
+                            <span className="mt-[2px] text-accent-primary shrink-0 font-bold" aria-hidden="true">→</span>
+                            <span className="flex-1 min-w-0">
+                              <span className="font-semibold text-accent-primary mr-1">
+                                {t('result.fix')}
+                              </span>
+                              <span className="text-secondary whitespace-pre-line break-words">{fixText}</span>
                             </span>
-                            {fixText}
-                          </span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1063,8 +1090,9 @@ export function Result() {
                   // doesn't surface check.fix. Collect fix text separately so
                   // starter+ tiers still see actionable recommendations.
                   const visualFixes = checksForCategory
-                    .filter((c) => c.status !== 'PASS' && c.fix && c.fix.trim())
-                    .map((c) => ({ status: c.status, text: (c.fix as string).trim() }));
+                    .filter((c) => c.status !== 'PASS')
+                    .map((c) => ({ status: c.status, text: renderCheckFix(c, t) }))
+                    .filter((f) => !!f.text);
                   // Try the rich visual first. resolveCategoryVisual is a plain
                   // function — it returns a React element or null. If null, we
                   // fall back to the plain row list so every category always
@@ -1104,20 +1132,23 @@ export function Result() {
                         </div>
                       )}
                       {visual && canShowFix && visualFixes.length > 0 && (
-                        <div className="mt-2 bg-card border border-border rounded-xl p-3 space-y-1.5">
+                        <div className="mt-2 space-y-2">
                           {visualFixes.map((f, idx) => {
                             const theme = statusTheme(f.status);
                             return (
-                              <div key={idx} className="flex items-start gap-2 text-[11px] text-secondary leading-snug">
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
+                              <div
+                                key={idx}
+                                className="rounded-lg border-l-2 border-accent-primary bg-accent-primary/5 px-3 py-2 flex items-start gap-2 text-[12px] text-primary leading-relaxed"
+                              >
+                                <span className={`mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 w-12 text-center ${theme.badge}`}>
                                   {f.status}
                                 </span>
-                                <span className="mt-[1px] text-accent-primary shrink-0" aria-hidden="true">→</span>
-                                <span>
+                                <span className="mt-[2px] text-accent-primary shrink-0 font-bold" aria-hidden="true">→</span>
+                                <span className="flex-1 min-w-0">
                                   <span className="font-semibold text-accent-primary mr-1">
                                     {t('result.fix')}
                                   </span>
-                                  {f.text}
+                                  <span className="text-secondary whitespace-pre-line break-words">{f.text}</span>
                                 </span>
                               </div>
                             );
@@ -1354,6 +1385,8 @@ export function Result() {
           </div>
         </div>
       )}
+
+      {rerunLoading && <CheckProgress mode={rerunMode} />}
     </div>
   );
 }
@@ -1453,7 +1486,7 @@ function renderAdvancedHero(
     topLabel = `${t('home.advanced.cards.citation.title')}${d.engine ? ` · ${d.engine}` : ''}`;
     subjectText = d.brand || d.domain;
     subjectHref = d.url;
-    const ratePct = Math.round(d.citation_rate * 100);
+    const ratePct = Math.round(d.citation_rate);
     bigNum = ratePct;
     bigSuffix = '%';
     gradeText = d.grade;

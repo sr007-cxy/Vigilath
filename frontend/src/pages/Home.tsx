@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoApi, ApiError } from '../services/geoApi';
 import { AuthModal } from '../components/AuthModal';
+import { CheckProgress } from '../components/result/CheckProgress';
 import { useMembership } from '../hooks/useMembership';
 import {
   membershipApi,
@@ -575,6 +576,8 @@ export function Home() {
         defaultTab="login"
         onSuccess={handleAuthSuccess}
       />
+
+      {isLoading && <CheckProgress mode="default" />}
     </div>
   );
 }

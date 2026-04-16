@@ -3686,7 +3686,7 @@ def _query_openai(query, api_key):
     """Send a query to OpenAI API via OpenRouter with web search. Returns (answer, citations, error)."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
-        "model": "openai/gpt-4o-mini",
+        "model": "openai/gpt-4o-mini:online",
         "messages": [
             {"role": "user", "content": query}
         ],
@@ -3729,7 +3729,7 @@ def _query_anthropic(query, api_key):
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "anthropic/claude-sonnet-4",
+        "model": "anthropic/claude-sonnet-4:online",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": query}],
     }

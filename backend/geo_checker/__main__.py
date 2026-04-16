@@ -103,6 +103,28 @@ def emit_check(status_tag, key, message, params=None):
     print(line)
 
 
+def emit_fix(key, message, params=None):
+    """Print a fix recommendation (multi-line) with optional i18n metadata.
+
+    Unlike the legacy fix(), this emits the ENTIRE message as a single line
+    block (joined with a sentinel newline char \\x02 that the backend parser
+    splits back out) so the structured marker only appears once and the
+    parser can assign `fix_key` + `fix_params` to the preceding check.
+    When SHOW_FIX is off the call is a no-op.
+    """
+    if not SHOW_FIX:
+        return
+    # Emit a single line with literal newlines replaced by a sentinel so the
+    # backend's line-based parser still sees "one FIX row". The parser
+    # reconstitutes the newlines before handing the text to the response model.
+    one_liner = message.strip().replace("\n", "\x02")
+    line = f"  [{FIX}] {one_liner}"
+    if _EMIT_STRUCTURED and key:
+        meta = json.dumps({"k": key, "p": params or {}}, ensure_ascii=False)
+        line += f"{_KEY_MARKER_START}{meta}{_KEY_MARKER_END}"
+    print(line)
+
+
 # ---------------------------------------------------------------------------
 # Score tracking
 # ---------------------------------------------------------------------------
@@ -153,10 +175,11 @@ def reset_state():
 # Helpers
 # ---------------------------------------------------------------------------
 def fix(message):
-    """Print a fix recommendation if --fix flag is enabled."""
-    if SHOW_FIX:
-        for line in message.strip().splitlines():
-            print(f"  [{FIX}] {line}")
+    """Legacy fix() helper — routes to emit_fix() with no i18n key so
+    un-migrated call sites still work. New code should call emit_fix()
+    directly with a stable key under result.fixes.*.
+    """
+    emit_fix(None, message)
 
 
 def fetch(url, timeout=15, allow_redirects=True):
@@ -202,7 +225,7 @@ def check_https(url):
             "result.checks.https.not_https",
             "Site does not use HTTPS — AI engines prefer secure sites",
         )
-        fix("Install an SSL/TLS certificate (free via Let's Encrypt) and redirect all HTTP traffic to HTTPS.\nExample nginx: return 301 https://$host$request_uri;")
+        emit_fix("result.fixes.https.enable_https", "Install an SSL/TLS certificate (free via Let's Encrypt) and redirect all HTTP traffic to HTTPS.\nExample nginx: return 301 https://$host$request_uri;")
         track_score("HTTPS", 0, 5)
         return False
 
@@ -217,7 +240,7 @@ def check_robots_txt(base_url):
 
     if resp is None or resp.status_code != 200:
         emit_check(FAIL, "result.checks.robots.not_found", f"robots.txt not found at {url}", {"url": url})
-        fix("Create a robots.txt file at the root of your site.\nMinimal example:\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml")
+        emit_fix("result.fixes.robots.create", "Create a robots.txt file at the root of your site.\nMinimal example:\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml")
         track_score("robots.txt", 0, 8)
         return
 
@@ -231,7 +254,7 @@ def check_robots_txt(base_url):
         track_score("robots.txt", 2, 2)
     else:
         emit_check(WARN, "result.checks.robots.sitemap_ref_missing", "robots.txt does not reference a sitemap")
-        fix("Add a Sitemap directive to your robots.txt:\n  Sitemap: https://yoursite.com/sitemap.xml")
+        emit_fix("result.fixes.robots.add_sitemap_directive", "Add a Sitemap directive to your robots.txt:\n  Sitemap: https://yoursite.com/sitemap.xml")
         track_score("robots.txt", 0, 2)
 
     blocked, allowed, not_mentioned = [], [], []
@@ -271,10 +294,10 @@ def check_robots_txt(base_url):
 
     if wildcard_blocks_all:
         emit_check(WARN, "result.checks.robots.wildcard_blocks_all", "Wildcard user-agent blocks all crawlers (Disallow: /)")
-        fix("Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others.")
+        emit_fix("result.fixes.robots.unblock_wildcard", "Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others.")
     if blocked:
         emit_check(WARN, "result.checks.robots.bots_blocked", f"AI bots explicitly BLOCKED: {', '.join(blocked)}", {"bots": ", ".join(blocked)})
-        fix(f"To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /")
+        emit_fix("result.fixes.robots.unblock_bots", "To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /")
     if allowed:
         emit_check(PASS, "result.checks.robots.bots_with_directives", f"AI bots with directives (not blocked): {', '.join(allowed)}", {"bots": ", ".join(allowed)})
     if not_mentioned:
@@ -316,13 +339,13 @@ def check_llms_txt(base_url):
                 llms_score += 0.5
             else:
                 emit_check(WARN, "result.checks.llms.title_missing", "No markdown title (# heading) — recommended by llms.txt spec")
-                fix(f"Add a title as the first line of {filename}:\n  # Your Site Name")
+                emit_fix("result.fixes.llms.add_title", f"Add a title as the first line of {filename}:\n  # Your Site Name", {"filename": filename})
 
             if has_description:
                 emit_check(PASS, "result.checks.llms.description_present", "Contains descriptive text")
             else:
                 emit_check(WARN, "result.checks.llms.description_missing", "No descriptive text found — should explain what the site/org does")
-                fix(f"Add a paragraph below the title explaining what your site/org does:\n  # Your Site\n  A brief description of your site and what it offers.")
+                emit_fix("result.fixes.llms.add_description", "Add a paragraph below the title explaining what your site/org does:\n  # Your Site\n  A brief description of your site and what it offers.")
 
             if has_sections:
                 section_count = sum(1 for l in lines if l.strip().startswith("## "))
@@ -330,7 +353,7 @@ def check_llms_txt(base_url):
                 llms_score += 0.5
             else:
                 emit_check(WARN, "result.checks.llms.sections_missing", "No sections (## headings) — consider organizing content into sections")
-                fix("Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog")
+                emit_fix("result.fixes.llms.add_sections", "Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog")
 
             if has_links:
                 link_count = sum(1 for l in lines if "](http" in l or "](/" in l)
@@ -338,20 +361,20 @@ def check_llms_txt(base_url):
                 llms_score += 0.5
             else:
                 emit_check(WARN, "result.checks.llms.links_missing", "No links found — llms.txt should link to key resources")
-                fix("Add markdown links to your key pages:\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)")
+                emit_fix("result.fixes.llms.add_links", "Add markdown links to your key pages:\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)")
 
             if has_blockquotes:
                 emit_check(PASS, "result.checks.llms.blockquotes_present", "Blockquote descriptions (>) present")
 
             if len(text) < 100:
                 emit_check(WARN, "result.checks.llms.too_short", f"File is very short ({len(text)} bytes) — may be a placeholder", {"bytes": len(text)})
-                fix("Expand the file with meaningful content about your site, its purpose, key pages, and resources.")
+                emit_fix("result.fixes.llms.expand_content", "Expand the file with meaningful content about your site, its purpose, key pages, and resources.")
         else:
             emit_check(FAIL, "result.checks.llms.file_not_found", f"{filename} not found", {"filename": filename})
             if filename == "llms.txt":
-                fix("Create an llms.txt file at your site root. Example structure:\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)")
+                emit_fix("result.fixes.llms.create_file", "Create an llms.txt file at your site root. Example structure:\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)")
             elif filename == "llms-full.txt":
-                fix("Create llms-full.txt with expanded content — a more detailed version of llms.txt\nwith full descriptions, complete resource listings, and deeper context for AI models.")
+                emit_fix("result.fixes.llms.create_full_file", "Create llms-full.txt with expanded content — a more detailed version of llms.txt\nwith full descriptions, complete resource listings, and deeper context for AI models.")
 
     track_score("llms.txt", min(llms_score, 5), 5)
 
@@ -386,13 +409,13 @@ def check_well_known(base_url):
                         print(f"         Plugin name: {name}")
                 except json.JSONDecodeError:
                     emit_check(WARN, "result.checks.well_known.invalid_json", f"{path} exists but contains invalid JSON", {"path": path})
-                    fix(f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.")
+                    emit_fix("result.fixes.well_known.fix_invalid_json", f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.", {"path": path})
         else:
             emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description}", {"path": path, "description": description})
 
     if not found_any:
         print(f"  [{INFO}] No .well-known AI discovery files found")
-        fix("Consider adding .well-known/security.txt (RFC 9116) as a trust signal:\n  Contact: mailto:security@yoursite.com\n  Preferred-Languages: en\n  Canonical: https://yoursite.com/.well-known/security.txt")
+        emit_fix("result.fixes.well_known.add_security_txt", "Consider adding .well-known/security.txt (RFC 9116) as a trust signal:\n  Contact: mailto:security@yoursite.com\n  Preferred-Languages: en\n  Canonical: https://yoursite.com/.well-known/security.txt")
 
     track_score(".well-known", min(wk_found, 3), 3)
 
@@ -422,7 +445,7 @@ def check_sitemap(base_url):
                 track_score("Sitemap", 3, 3)
             else:
                 emit_check(WARN, "result.checks.sitemap.lastmod_missing", "Sitemap missing <lastmod> timestamps — helps AI engines know content freshness")
-                fix("Add <lastmod> to each <url> entry in your sitemap:\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>")
+                emit_fix("result.fixes.sitemap.add_lastmod", "Add <lastmod> to each <url> entry in your sitemap:\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>")
                 track_score("Sitemap", 1, 3)
 
             try:
@@ -441,7 +464,7 @@ def check_sitemap(base_url):
 
     if not found:
         emit_check(FAIL, "result.checks.sitemap.not_found", "No sitemap.xml found")
-        fix("Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms (WordPress, Next.js, etc.) can auto-generate sitemaps.")
+        emit_fix("result.fixes.sitemap.create_file", "Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms (WordPress, Next.js, etc.) can auto-generate sitemaps.")
         track_score("Sitemap", 0, 7)
 
     return sitemap_urls
@@ -468,7 +491,7 @@ def check_search_engine_registration(base_url):
         gsc_resp = fetch(urljoin(base_url, "/google*.html"), timeout=5)
         # Can't glob on server, so just note the absence
         emit_check(WARN, "result.checks.platform_reg.gsc_missing", "No Google Search Console verification tag found")
-        fix("Register your site with Google Search Console (https://search.google.com/search-console):\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml under Sitemaps\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — Google's AI Overviews and SGE pull from the Google index.")
+        emit_fix("result.fixes.search_reg.google_console", "Register your site with Google Search Console (https://search.google.com/search-console):\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml under Sitemaps\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — Google's AI Overviews and SGE pull from the Google index.")
 
     # Bing Webmaster Tools verification
     bing_verify = soup.find("meta", attrs={"name": "msvalidate.01"})
@@ -476,7 +499,7 @@ def check_search_engine_registration(base_url):
         emit_check(PASS, "result.checks.platform_reg.bing_verified", "Bing Webmaster Tools verification tag found")
     else:
         emit_check(WARN, "result.checks.platform_reg.bing_missing", "No Bing Webmaster Tools verification tag found")
-        fix("Register your site with Bing Webmaster Tools (https://www.bing.com/webmasters):\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This is essential — Bing's index powers Microsoft Copilot, ChatGPT (via Bing search),\n     and other AI assistants that use Bing as their search backend.")
+        emit_fix("result.fixes.search_reg.bing_webmaster", "Register your site with Bing Webmaster Tools (https://www.bing.com/webmasters):\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This is essential — Bing's index powers Microsoft Copilot, ChatGPT (via Bing search),\n     and other AI assistants that use Bing as their search backend.")
 
     # Yandex verification (feeds into some AI systems)
     yandex_verify = soup.find("meta", attrs={"name": "yandex-verification"})
@@ -506,7 +529,7 @@ def check_search_engine_registration(base_url):
 
     if not indexnow_found:
         emit_check(INFO, "result.checks.platform_reg.indexnow_missing", "No IndexNow integration detected")
-        fix("Set up IndexNow for instant indexing by Bing, Yandex, and others:\n  1. Generate an API key at https://www.indexnow.org/\n  2. Host the key file at your site root: https://yoursite.com/{key}.txt\n  3. Notify search engines when content changes:\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. Many CMS plugins (WordPress, etc.) support IndexNow automatically.")
+        emit_fix("result.fixes.search_reg.indexnow", "Set up IndexNow for instant indexing by Bing, Yandex, and others:\n  1. Generate an API key at https://www.indexnow.org/\n  2. Host the key file at your site root: https://yoursite.com/{key}.txt\n  3. Notify search engines when content changes:\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. Many CMS plugins (WordPress, etc.) support IndexNow automatically.")
 
     # Check for Pinterest verification (some AI visual search)
     pinterest_verify = soup.find("meta", attrs={"name": "p:domain_verify"})
@@ -530,7 +553,7 @@ def check_search_engine_registration(base_url):
         missing_text = ", ".join(not_registered)
         emit_check(WARN, "result.checks.platform_reg.summary_missing", f"Not detected: {missing_text}", {"platforms": missing_text})
 
-        fix("Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register and submit them to each platform:\n  \n  Google Search Console → Submit sitemap → Powers Google AI Overviews / SGE\n  Bing Webmaster Tools  → Submit sitemap → Powers Copilot, ChatGPT (Bing backend)\n  IndexNow              → Auto-notify   → Instant indexing for Bing, Yandex, Naver\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing.")
+        emit_fix("result.fixes.search_reg.submit_all", "Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register and submit them to each platform:\n  \n  Google Search Console → Submit sitemap → Powers Google AI Overviews / SGE\n  Bing Webmaster Tools  → Submit sitemap → Powers Copilot, ChatGPT (Bing backend)\n  IndexNow              → Auto-notify   → Instant indexing for Bing, Yandex, Naver\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing.")
 
     reg_score = 0
     if platforms.get("Google Search Console"):
@@ -574,7 +597,7 @@ def check_structured_data(base_url):
     else:
         emit_check(WARN, "result.checks.structured_data.jsonld_missing", "No JSON-LD structured data found — helps AI engines understand your content")
         track_score("Structured Data", 0, 7)
-        fix("Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results")
+        emit_fix("result.fixes.structured.add_organization_jsonld", "Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results")
 
     has_schema_ref = 'schema.org' in resp.text
     if has_schema_ref and not json_ld_scripts:
@@ -600,7 +623,7 @@ def check_meta_tags(base_url):
         meta_score += 1.5
     else:
         emit_check(FAIL, "result.checks.meta.title_missing", "Missing <title> tag")
-        fix("Add a <title> tag in your <head>:\n  <title>Your Page Title — Your Brand</title>\nKeep it under 60 characters and include your primary keyword.")
+        emit_fix("result.fixes.meta.add_title", "Add a <title> tag in your <head>:\n  <title>Your Page Title — Your Brand</title>\nKeep it under 60 characters and include your primary keyword.")
 
     desc = soup.find("meta", attrs={"name": "description"})
     if desc and desc.get("content", "").strip():
@@ -609,10 +632,10 @@ def check_meta_tags(base_url):
         meta_score += 1.5
         if len(content) < 50:
             emit_check(WARN, "result.checks.meta.description_too_short", "Meta description is very short — aim for 120-160 characters")
-            fix("Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords.")
+            emit_fix("result.fixes.meta.expand_description", "Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords.")
     else:
         emit_check(FAIL, "result.checks.meta.description_missing", "Missing meta description")
-        fix("Add a meta description in your <head>:\n  <meta name=\"description\" content=\"A 120-160 character summary of your page content, including key topics and value proposition.\">\nThis is often what AI engines use when summarizing your site.")
+        emit_fix("result.fixes.meta.add_description", "Add a meta description in your <head>:\n  <meta name=\"description\" content=\"A 120-160 character summary of your page content, including key topics and value proposition.\">\nThis is often what AI engines use when summarizing your site.")
 
     canonical = soup.find("link", rel="canonical")
     if canonical and canonical.get("href"):
@@ -620,7 +643,7 @@ def check_meta_tags(base_url):
         meta_score += 1
     else:
         emit_check(WARN, "result.checks.meta.canonical_missing", "No canonical URL — can cause duplicate content issues for AI engines")
-        fix("Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.")
+        emit_fix("result.fixes.meta.add_canonical", "Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.")
 
     og_tags = soup.find_all("meta", property=re.compile(r"^og:"))
     if og_tags:
@@ -629,7 +652,7 @@ def check_meta_tags(base_url):
         meta_score += 1
     else:
         emit_check(WARN, "result.checks.meta.og_tags_missing", "No Open Graph tags — used by AI engines for content summarization")
-        fix("Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />")
+        emit_fix("result.fixes.meta.add_og", "Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     html_tag = soup.find("html")
     if html_tag and html_tag.get("lang"):
@@ -637,7 +660,7 @@ def check_meta_tags(base_url):
         meta_score += 1
     else:
         emit_check(WARN, "result.checks.meta.lang_missing", "No lang attribute on <html> — helps AI engines understand content language")
-        fix("Add a lang attribute to your <html> tag:\n  <html lang=\"en\">")
+        emit_fix("result.fixes.meta.add_lang", "Add a lang attribute to your <html> tag:\n  <html lang=\"en\">")
 
     hreflangs = soup.find_all("link", rel="alternate", hreflang=True)
     if hreflangs:
@@ -646,7 +669,7 @@ def check_meta_tags(base_url):
         meta_score += 1
     else:
         emit_check(INFO, "result.checks.meta.hreflang_missing", "No hreflang tags — add these if your site supports multiple languages")
-        fix("If your site is multilingual, add hreflang tags:\n  <link rel=\"alternate\" hreflang=\"en\" href=\"https://yoursite.com/en/page\" />\n  <link rel=\"alternate\" hreflang=\"es\" href=\"https://yoursite.com/es/page\" />\n  <link rel=\"alternate\" hreflang=\"x-default\" href=\"https://yoursite.com/page\" />")
+        emit_fix("result.fixes.meta.add_hreflang", "If your site is multilingual, add hreflang tags:\n  <link rel=\"alternate\" hreflang=\"en\" href=\"https://yoursite.com/en/page\" />\n  <link rel=\"alternate\" hreflang=\"es\" href=\"https://yoursite.com/es/page\" />\n  <link rel=\"alternate\" hreflang=\"x-default\" href=\"https://yoursite.com/page\" />")
 
     track_score("Meta Tags", meta_score, 7)
 
@@ -671,11 +694,11 @@ def check_content_accessibility(base_url):
         ca_score += 2
     elif word_count > 50:
         emit_check(WARN, "result.checks.content_access.words_low", f"Homepage has only {word_count} words in initial HTML — may rely too heavily on JavaScript rendering", {"count": word_count})
-        fix("Ensure key content is rendered server-side (SSR/SSG) so AI crawlers can read it.\nIf using React/Vue/Angular, switch to Next.js/Nuxt.js/Angular Universal for server-side rendering.")
+        emit_fix("result.fixes.content_access.enable_ssr", "Ensure key content is rendered server-side (SSR/SSG) so AI crawlers can read it.\nIf using React/Vue/Angular, switch to Next.js/Nuxt.js/Angular Universal for server-side rendering.")
         ca_score += 1
     else:
         emit_check(FAIL, "result.checks.content_access.words_js_only", f"Homepage has only {word_count} words — likely JS-rendered, invisible to most AI crawlers", {"count": word_count})
-        fix("Your page content is likely rendered client-side via JavaScript. AI crawlers cannot execute JS.\nSolutions:\n  1. Use server-side rendering (SSR) — Next.js, Nuxt.js, etc.\n  2. Use static site generation (SSG) — pre-render pages at build time.\n  3. Add a pre-rendering service (e.g., Prerender.io) to serve static HTML to bots.")
+        emit_fix("result.fixes.content_access.client_rendered_workarounds", "Your page content is likely rendered client-side via JavaScript. AI crawlers cannot execute JS.\nSolutions:\n  1. Use server-side rendering (SSR) — Next.js, Nuxt.js, etc.\n  2. Use static site generation (SSG) — pre-render pages at build time.\n  3. Add a pre-rendering service (e.g., Prerender.io) to serve static HTML to bots.")
 
     html_size = len(resp.text)
     text_size = len(text.encode("utf-8"))
@@ -687,10 +710,10 @@ def check_content_accessibility(base_url):
         elif ratio >= 5:
             emit_check(WARN, "result.checks.content_access.ratio_low", f"Content-to-HTML ratio: {ratio:.1f}% — low ratio means lots of boilerplate vs. real content", {"ratio": f"{ratio:.1f}"})
             ca_score += 1
-            fix("Reduce HTML bloat: minimize inline CSS/JS, remove unused markup, and move scripts to external files.\nEnsure the page body contains substantive, unique content — not just navigation and footers.")
+            emit_fix("result.fixes.content_access.reduce_html_bloat", "Reduce HTML bloat: minimize inline CSS/JS, remove unused markup, and move scripts to external files.\nEnsure the page body contains substantive, unique content — not just navigation and footers.")
         else:
             emit_check(FAIL, "result.checks.content_access.ratio_very_low", f"Content-to-HTML ratio: {ratio:.1f}% — very low, mostly boilerplate/code", {"ratio": f"{ratio:.1f}"})
-            fix("Extremely low content ratio. Likely causes:\n  1. Heavy inline CSS/JS frameworks — externalize them.\n  2. Client-side rendering — switch to SSR/SSG.\n  3. Content hidden in JavaScript state — ensure HTML contains readable text.")
+            emit_fix("result.fixes.content_access.improve_text_ratio", "Extremely low content ratio. Likely causes:\n  1. Heavy inline CSS/JS frameworks — externalize them.\n  2. Client-side rendering — switch to SSR/SSG.\n  3. Content hidden in JavaScript state — ensure HTML contains readable text.")
 
     headings = soup.find_all(re.compile(r"^h[1-6]$"))
     if headings:
@@ -701,10 +724,10 @@ def check_content_accessibility(base_url):
         ca_score += 2
         if headings[0].name != "h1":
             emit_check(WARN, "result.checks.content_access.first_heading_not_h1", f"First heading is <{headings[0].name}>, not <h1> — clear hierarchy helps AI engines", {"tag": headings[0].name})
-            fix("Ensure the first heading on the page is an <h1> tag containing the primary topic.\nUse a logical hierarchy: h1 > h2 > h3 (don't skip levels).")
+            emit_fix("result.fixes.content_access.add_h1", "Ensure the first heading on the page is an <h1> tag containing the primary topic.\nUse a logical hierarchy: h1 > h2 > h3 (don't skip levels).")
     else:
         emit_check(WARN, "result.checks.content_access.headings_missing", "No heading tags found — structured headings help AI engines parse content")
-        fix("Add heading tags to structure your content:\n  <h1>Main Page Topic</h1>\n  <h2>Subtopic</h2>\n  <h3>Detail</h3>\nHeadings help AI engines understand content hierarchy and extract key topics.")
+        emit_fix("result.fixes.content_access.add_headings", "Add heading tags to structure your content:\n  <h1>Main Page Topic</h1>\n  <h2>Subtopic</h2>\n  <h3>Detail</h3>\nHeadings help AI engines understand content hierarchy and extract key topics.")
 
     track_score("Content Accessibility", ca_score, 6)
 
@@ -732,7 +755,7 @@ def check_ai_crawl_readiness(base_url):
         if is_likely_spa and len(body_text.split()) < 100:
             emit_check(FAIL, "result.checks.crawl_ready.spa_empty", "Likely a client-side rendered SPA with minimal server-side content")
             print(f"         AI crawlers cannot execute JavaScript — consider SSR/SSG")
-            fix("Enable server-side rendering in your framework:\n  Next.js: use getServerSideProps() or generateStaticParams()\n  Nuxt.js: set ssr: true in nuxt.config\n  React: consider migrating to Next.js or Remix")
+            emit_fix("result.fixes.crawl_ready.enable_ssr", "Enable server-side rendering in your framework:\n  Next.js: use getServerSideProps() or generateStaticParams()\n  Nuxt.js: set ssr: true in nuxt.config\n  React: consider migrating to Next.js or Remix")
         elif is_likely_spa:
             emit_check(PASS, "result.checks.crawl_ready.spa_with_ssr", "SPA framework detected but server-side content is present (SSR/SSG)")
             acr_score += 2
@@ -745,13 +768,13 @@ def check_ai_crawl_readiness(base_url):
         robots_content = robots_meta.get("content", "").lower()
         if "noindex" in robots_content:
             emit_check(FAIL, "result.checks.crawl_ready.meta_noindex", "Meta robots contains 'noindex' — page will be excluded from AI training data")
-            fix("Remove 'noindex' from the meta robots tag if you want AI engines to index this page:\n  <meta name=\"robots\" content=\"index, follow\" />")
+            emit_fix("result.fixes.crawl_ready.remove_noindex", "Remove 'noindex' from the meta robots tag if you want AI engines to index this page:\n  <meta name=\"robots\" content=\"index, follow\" />")
         if "nofollow" in robots_content:
             emit_check(WARN, "result.checks.crawl_ready.meta_nofollow", "Meta robots contains 'nofollow' — AI crawlers won't follow links on this page")
-            fix("Remove 'nofollow' if you want AI crawlers to discover linked pages:\n  <meta name=\"robots\" content=\"index, follow\" />")
+            emit_fix("result.fixes.crawl_ready.remove_nofollow", "Remove 'nofollow' if you want AI crawlers to discover linked pages:\n  <meta name=\"robots\" content=\"index, follow\" />")
         if "noai" in robots_content or "noimageai" in robots_content:
             emit_check(WARN, "result.checks.crawl_ready.meta_noai", f"Meta robots contains AI-specific opt-out directive: {robots_content}", {"content": robots_content})
-            fix("The 'noai' / 'noimageai' directive opts your content out of AI training.\nRemove it if you want AI engines to include your content in their responses.")
+            emit_fix("result.fixes.crawl_ready.remove_noai", "The 'noai' / 'noimageai' directive opts your content out of AI training.\nRemove it if you want AI engines to include your content in their responses.")
         if "noindex" not in robots_content and "noai" not in robots_content:
             emit_check(PASS, "result.checks.crawl_ready.meta_allows_index", f"Meta robots allows indexing: {robots_content}", {"content": robots_content})
             acr_score += 1
@@ -763,7 +786,7 @@ def check_ai_crawl_readiness(base_url):
     if x_robots:
         if "noindex" in x_robots.lower() or "noai" in x_robots.lower():
             emit_check(FAIL, "result.checks.crawl_ready.xrobots_restrict", f"X-Robots-Tag header restricts AI: {x_robots}", {"header": x_robots})
-            fix("Remove the restrictive X-Robots-Tag header from your server config.\nNginx: remove 'add_header X-Robots-Tag \"noindex\";'\nApache: remove 'Header set X-Robots-Tag \"noindex\"'")
+            emit_fix("result.fixes.crawl_ready.remove_xrobots", "Remove the restrictive X-Robots-Tag header from your server config.\nNginx: remove 'add_header X-Robots-Tag \"noindex\";'\nApache: remove 'Header set X-Robots-Tag \"noindex\"'")
         else:
             emit_check(INFO, "result.checks.crawl_ready.xrobots_present", f"X-Robots-Tag header present: {x_robots}", {"header": x_robots})
     else:
@@ -784,7 +807,7 @@ def check_ai_crawl_readiness(base_url):
     if paywall_classes:
         emit_check(WARN, "result.checks.crawl_ready.paywall_detected", f"Possible gated content detected (classes/ids: {', '.join(paywall_classes)})", {"classes": ", ".join(paywall_classes)})
         print(f"         Gated content is invisible to AI crawlers")
-        fix("AI crawlers cannot see content behind paywalls/login walls.\nConsider:\n  1. Providing a generous free preview or summary above the gate.\n  2. Using 'metered' access so bots see full content on first visit.\n  3. Adding structured data (JSON-LD) with key facts outside the gate.")
+        emit_fix("result.fixes.crawl_ready.paywall_workarounds", "AI crawlers cannot see content behind paywalls/login walls.\nConsider:\n  1. Providing a generous free preview or summary above the gate.\n  2. Using 'metered' access so bots see full content on first visit.\n  3. Adding structured data (JSON-LD) with key facts outside the gate.")
     else:
         emit_check(PASS, "result.checks.crawl_ready.no_paywall", "No paywall/login-wall indicators detected")
         acr_score += 1
@@ -796,10 +819,10 @@ def check_ai_crawl_readiness(base_url):
         acr_score += 1
     elif found_semantic:
         emit_check(WARN, "result.checks.crawl_ready.semantic_limited", f"Limited semantic HTML ({', '.join(found_semantic)}) — more semantic tags help AI parse content", {"tags": ", ".join(found_semantic)})
-        fix("Replace generic <div> containers with semantic HTML5 tags:\n  <header> for site header/nav\n  <main> for primary content\n  <article> for self-contained content\n  <section> for thematic groupings\n  <aside> for sidebar/related content\n  <footer> for footer")
+        emit_fix("result.fixes.crawl_ready.add_semantic_html5", "Replace generic <div> containers with semantic HTML5 tags:\n  <header> for site header/nav\n  <main> for primary content\n  <article> for self-contained content\n  <section> for thematic groupings\n  <aside> for sidebar/related content\n  <footer> for footer")
     else:
         emit_check(FAIL, "result.checks.crawl_ready.semantic_missing", "No semantic HTML tags found — AI crawlers rely on semantic structure")
-        fix("Your page uses only <div> tags. Replace them with semantic HTML5 elements:\n  <header>, <nav>, <main>, <article>, <section>, <aside>, <footer>\nThis helps AI engines understand the role of each content block.")
+        emit_fix("result.fixes.crawl_ready.replace_divs", "Your page uses only <div> tags. Replace them with semantic HTML5 elements:\n  <header>, <nav>, <main>, <article>, <section>, <aside>, <footer>\nThis helps AI engines understand the role of each content block.")
 
     images = soup.find_all("img")
     if images:
@@ -811,10 +834,10 @@ def check_ai_crawl_readiness(base_url):
             acr_score += 1
         elif pct >= 50:
             emit_check(WARN, "result.checks.crawl_ready.alt_medium", f"{with_alt}/{total} images have alt text ({pct:.0f}%) — aim for >80%", {"with_alt": with_alt, "total": total, "pct": f"{pct:.0f}"})
-            fix("Add descriptive alt text to all <img> tags:\n  <img src=\"photo.jpg\" alt=\"Description of what the image shows\" />\nGood alt text is specific: 'Team meeting in conference room' not 'image1'.")
+            emit_fix("result.fixes.crawl_ready.add_alt_text", "Add descriptive alt text to all <img> tags:\n  <img src=\"photo.jpg\" alt=\"Description of what the image shows\" />\nGood alt text is specific: 'Team meeting in conference room' not 'image1'.")
         else:
             emit_check(FAIL, "result.checks.crawl_ready.alt_poor", f"Only {with_alt}/{total} images have alt text ({pct:.0f}%) — AI crawlers need alt text", {"with_alt": with_alt, "total": total, "pct": f"{pct:.0f}"})
-            fix("Most images are missing alt text. Add descriptive alt attributes to every <img>:\n  <img src=\"photo.jpg\" alt=\"Descriptive text about the image content\" />\nFor decorative images, use alt=\"\" (empty but present).")
+            emit_fix("result.fixes.crawl_ready.add_alt_text_majority", "Most images are missing alt text. Add descriptive alt attributes to every <img>:\n  <img src=\"photo.jpg\" alt=\"Descriptive text about the image content\" />\nFor decorative images, use alt=\"\" (empty but present).")
     else:
         emit_check(INFO, "result.checks.crawl_ready.no_images", "No images found on homepage")
 
@@ -828,10 +851,10 @@ def check_ai_crawl_readiness(base_url):
         emit_check(PASS, "result.checks.crawl_ready.internal_links_good", f"{len(internal_links)} internal links — good for AI crawl discovery", {"count": len(internal_links)})
     elif len(internal_links) >= 3:
         emit_check(WARN, "result.checks.crawl_ready.internal_links_few", f"Only {len(internal_links)} internal links — more internal links help AI engines discover content", {"count": len(internal_links)})
-        fix("Add more internal links to help AI crawlers discover your content.\nInclude links to key pages in your navigation, footer, and within content body.\nUse descriptive anchor text: 'Read our pricing guide' not 'click here'.")
+        emit_fix("result.fixes.crawl_ready.add_internal_links", "Add more internal links to help AI crawlers discover your content.\nInclude links to key pages in your navigation, footer, and within content body.\nUse descriptive anchor text: 'Read our pricing guide' not 'click here'.")
     else:
         emit_check(FAIL, "result.checks.crawl_ready.internal_links_none", f"Very few internal links ({len(internal_links)}) — AI crawlers rely on links to find content", {"count": len(internal_links)})
-        fix("Your homepage has very few internal links. AI crawlers use links to discover pages.\nAdd:\n  1. A navigation menu linking to key sections\n  2. Featured content links in the body\n  3. A footer with links to important pages\n  4. Contextual links within content")
+        emit_fix("result.fixes.crawl_ready.add_internal_links_homepage", "Your homepage has very few internal links. AI crawlers use links to discover pages.\nAdd:\n  1. A navigation menu linking to key sections\n  2. Featured content links in the body\n  3. A footer with links to important pages\n  4. Contextual links within content")
 
     start = time.time()
     fetch(urljoin(base_url, "/?_geo_timing_check"), timeout=10)
@@ -841,10 +864,10 @@ def check_ai_crawl_readiness(base_url):
         acr_score += 1
     elif elapsed < 3:
         emit_check(WARN, "result.checks.crawl_ready.response_slow", f"Response time: {elapsed:.2f}s — slow responses may cause AI crawlers to skip pages", {"seconds": f"{elapsed:.2f}"})
-        fix("Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN (Cloudflare, Fastly, CloudFront)\n  4. Enable gzip/brotli compression")
+        emit_fix("result.fixes.crawl_ready.improve_response_time", "Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN (Cloudflare, Fastly, CloudFront)\n  4. Enable gzip/brotli compression")
     else:
         emit_check(FAIL, "result.checks.crawl_ready.response_timeout", f"Response time: {elapsed:.2f}s — too slow for reliable AI crawling", {"seconds": f"{elapsed:.2f}"})
-        fix("Response time is critically slow. AI crawlers may time out.\nImmediate actions:\n  1. Add a CDN in front of your origin server\n  2. Enable page caching at the server level\n  3. Profile your server-side code for bottlenecks\n  4. Consider static site generation for content pages")
+        emit_fix("result.fixes.crawl_ready.critical_response_time", "Response time is critically slow. AI crawlers may time out.\nImmediate actions:\n  1. Add a CDN in front of your origin server\n  2. Enable page caching at the server level\n  3. Profile your server-side code for bottlenecks\n  4. Consider static site generation for content pages")
 
     track_score("AI Crawl Readiness", acr_score, 8)
 
@@ -896,7 +919,7 @@ def check_content_quality(base_url):
             cq_score += 1.5
         else:
             emit_check(WARN, "result.checks.content_quality.readability_complex", f"Readability: Flesch-Kincaid grade {grade_str} (complex) — simpler text ranks better in AI answers", {"grade": grade_str})
-            fix("Simplify your content for better AI readability:\n  1. Use shorter sentences (under 20 words)\n  2. Replace jargon with plain language\n  3. Break complex ideas into bullet points\n  4. Use active voice instead of passive\n  5. Target a grade 8-10 reading level")
+            emit_fix("result.fixes.content_quality.simplify", "Simplify your content for better AI readability:\n  1. Use shorter sentences (under 20 words)\n  2. Replace jargon with plain language\n  3. Break complex ideas into bullet points\n  4. Use active voice instead of passive\n  5. Target a grade 8-10 reading level")
 
     # FAQ detection
     faq_indicators = 0
@@ -928,10 +951,10 @@ def check_content_quality(base_url):
     elif faq_indicators == 1:
         emit_check(INFO, "result.checks.content_quality.faq_partial", "Possible FAQ-like content — consider adding FAQPage structured data")
         cq_score += 1
-        fix("Add FAQPage schema to boost AI answer ranking:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"FAQPage\",\n    \"mainEntity\": [{\n      \"@type\": \"Question\",\n      \"name\": \"What is your product?\",\n      \"acceptedAnswer\": {\n        \"@type\": \"Answer\",\n        \"text\": \"Our product is...\"\n      }\n    }]\n  }\n  </script>")
+        emit_fix("result.fixes.content_quality.add_faq_schema", "Add FAQPage schema to boost AI answer ranking:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"FAQPage\",\n    \"mainEntity\": [{\n      \"@type\": \"Question\",\n      \"name\": \"What is your product?\",\n      \"acceptedAnswer\": {\n        \"@type\": \"Answer\",\n        \"text\": \"Our product is...\"\n      }\n    }]\n  }\n  </script>")
     else:
         emit_check(INFO, "result.checks.content_quality.faq_missing", "No FAQ content detected — FAQ pages rank well in AI-generated answers")
-        fix("Consider adding an FAQ section to your page. Format questions as headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\nThen add FAQPage structured data (JSON-LD) for each Q&A pair.")
+        emit_fix("result.fixes.content_quality.add_faq_section", "Consider adding an FAQ section to your page. Format questions as headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\nThen add FAQPage structured data (JSON-LD) for each Q&A pair.")
 
     stat_patterns = re.findall(r'\d+(?:\.\d+)?%|\$\d+|\d+(?:,\d{3})+', text)
     if len(stat_patterns) >= 3:
@@ -941,7 +964,7 @@ def check_content_quality(base_url):
         emit_check(INFO, "result.checks.content_quality.stats_few", f"{len(stat_patterns)} statistic(s) found — more specific data improves AI citation likelihood", {"count": len(stat_patterns)})
     else:
         emit_check(WARN, "result.checks.content_quality.stats_missing", "No quotable statistics found — specific numbers/data help AI engines cite your content")
-        fix("Add concrete, quotable statistics to your content:\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI engines prefer citing specific data points over vague claims.")
+        emit_fix("result.fixes.content_quality.add_statistics", "Add concrete, quotable statistics to your content:\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI engines prefer citing specific data points over vague claims.")
 
     source_patterns = re.findall(
         r'(?:according to|source:|study by|research from|data from|report by|published in)\s',
@@ -952,7 +975,7 @@ def check_content_quality(base_url):
         cq_score += 1
     else:
         emit_check(INFO, "result.checks.content_quality.sources_missing", "No explicit source attributions — citing sources increases AI trust in your content")
-        fix("Add source attributions to increase credibility:\n  'According to [Source Name], ...'\n  'Data from our 2025 industry report shows...'\n  'A study by [Institution] found...'\nAI engines weight attributed claims higher than unattributed ones.")
+        emit_fix("result.fixes.content_quality.add_attributions", "Add source attributions to increase credibility:\n  'According to [Source Name], ...'\n  'Data from our 2025 industry report shows...'\n  'A study by [Institution] found...'\nAI engines weight attributed claims higher than unattributed ones.")
 
     lists = soup.find_all(["ul", "ol"])
     list_items = soup.find_all("li")
@@ -963,7 +986,7 @@ def check_content_quality(base_url):
         emit_check(INFO, "result.checks.content_quality.lists_few", f"Some list content ({len(list_items)} items) — structured lists help AI extract key points", {"items": len(list_items)})
     else:
         emit_check(WARN, "result.checks.content_quality.lists_missing", "No list elements — structured lists help AI engines extract key points")
-        fix("Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.")
+        emit_fix("result.fixes.content_quality.add_lists", "Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.")
 
     track_score("Content Quality", min(cq_score, 7), 7)
 
@@ -992,7 +1015,7 @@ def check_technical_crawlability(base_url):
                     canon2_url = urljoin(canonical_url, canon2["href"])
                     if canon2_url.rstrip("/") != canonical_url.rstrip("/"):
                         emit_check(WARN, "result.checks.tech_crawl.canonical_chain", f"Canonical chain detected: {base_url} -> {canonical_url} -> {canon2_url}", {"from": base_url, "via": canonical_url, "to": canon2_url})
-                        fix("Fix the canonical chain — each page's canonical should point directly to the final URL, not through intermediaries.\nSet the canonical on each page to its own URL or the ultimate target.")
+                        emit_fix("result.fixes.tech_crawl.fix_canonical_chain", "Fix the canonical chain — each page's canonical should point directly to the final URL, not through intermediaries.\nSet the canonical on each page to its own URL or the ultimate target.")
                     else:
                         emit_check(PASS, "result.checks.tech_crawl.canonical_resolves", "Canonical URL resolves correctly")
                         tc_score += 1.5
@@ -1001,7 +1024,7 @@ def check_technical_crawlability(base_url):
                     tc_score += 1.5
             else:
                 emit_check(FAIL, "result.checks.tech_crawl.canonical_broken", f"Canonical URL {canonical_url} returns error", {"url": canonical_url})
-                fix(f"The canonical URL {canonical_url} is broken. Either fix the target page or update the canonical to a working URL.")
+                emit_fix("result.fixes.tech_crawl.broken_canonical", f"The canonical URL {canonical_url} is broken. Either fix the target page or update the canonical to a working URL.", {"canonical_url": canonical_url})
         else:
             emit_check(PASS, "result.checks.tech_crawl.canonical_self", "Canonical URL is self-referencing (correct)")
             tc_score += 1.5
@@ -1019,7 +1042,7 @@ def check_technical_crawlability(base_url):
                 chain = " -> ".join(r.url for r in redir_resp.history)
                 emit_check(WARN, "result.checks.tech_crawl.redirect_chain", f"Redirect chain with {num_redirects} hops: {chain} -> {redir_resp.url}", {"hops": num_redirects, "chain": chain, "final": redir_resp.url})
                 print(f"         Long redirect chains can cause AI crawlers to give up")
-                fix("Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL.")
+                emit_fix("result.fixes.tech_crawl.reduce_redirects", "Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL.")
             elif num_redirects > 0:
                 emit_check(PASS, "result.checks.tech_crawl.redirect_ok", f"{num_redirects} redirect(s) — within acceptable range", {"count": num_redirects})
                 tc_score += 1
@@ -1041,7 +1064,7 @@ def check_technical_crawlability(base_url):
             tc_score += 1
         elif http_version:
             emit_check(INFO, "result.checks.tech_crawl.http1_only", f"HTTP/{http_version} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling", {"version": http_version})
-            fix("Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.")
+            emit_fix("result.fixes.tech_crawl.enable_http2", "Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.")
     except Exception:
         emit_check(INFO, "result.checks.tech_crawl.http_unknown", "Could not determine HTTP version")
 
@@ -1063,7 +1086,7 @@ def check_technical_crawlability(base_url):
                 break
         if not feed_found:
             emit_check(INFO, "result.checks.tech_crawl.feed_missing", "No RSS/Atom feed found — feeds help AI engines monitor content freshness")
-            fix("Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.")
+            emit_fix("result.fixes.tech_crawl.add_rss_feed", "Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.")
 
     track_score("Technical Crawlability", min(tc_score, 5), 5)
 
@@ -1102,10 +1125,10 @@ def check_authority_trust(base_url):
         emit_check(WARN, "result.checks.authority.security_headers_partial", f"Some security headers present ({found_sec_headers}/4): {', '.join(present)}", {"count": found_sec_headers, "headers": ", ".join(present)})
         at_score += 1
         print(f"         Missing: {', '.join(missing)}")
-        fix("Add missing security headers to your server config:\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY")
+        emit_fix("result.fixes.authority.add_security_headers", "Add missing security headers to your server config:\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY")
     else:
         emit_check(FAIL, "result.checks.authority.security_headers_missing", "No security headers found — reduces trust signal for AI engines")
-        fix("Add security headers to your server response. In nginx:\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;")
+        emit_fix("result.fixes.authority.add_security_headers_nginx", "Add security headers to your server response. In nginx:\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;")
 
     humans_url = urljoin(base_url, "/humans.txt")
     humans_resp = fetch(humans_url)
@@ -1114,7 +1137,7 @@ def check_authority_trust(base_url):
         at_score += 1
     else:
         emit_check(INFO, "result.checks.authority.humans_txt_missing", "No humans.txt — optional authorship transparency file")
-        fix("Create a humans.txt at your site root to signal authorship:\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\nSee humanstxt.org for the full spec.")
+        emit_fix("result.fixes.authority.add_humans_txt", "Create a humans.txt at your site root to signal authorship:\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\nSee humanstxt.org for the full spec.")
 
     if soup:
         json_ld_scripts = soup.find_all("script", type="application/ld+json")
@@ -1144,10 +1167,10 @@ def check_authority_trust(base_url):
             at_score += 1.5
         elif author_tag:
             emit_check(INFO, "result.checks.authority.author_class_only", "Author class detected in HTML — consider adding schema.org Person markup")
-            fix("Upgrade your author attribution with JSON-LD:\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }")
+            emit_fix("result.fixes.authority.upgrade_author_jsonld", "Upgrade your author attribution with JSON-LD:\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }")
         else:
             emit_check(WARN, "result.checks.authority.author_missing", "No author attribution found — authorship signals boost AI trust (E-E-A-T)")
-            fix("Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.")
+            emit_fix("result.fixes.authority.add_author", "Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.")
 
     track_score("Authority & Trust", min(at_score, 5), 5)
 
@@ -1198,7 +1221,7 @@ def check_ai_optimization(base_url):
             print(f"         {sig}")
     else:
         emit_check(WARN, "result.checks.ai_opt.freshness_missing", "No content freshness signals — add dateModified to JSON-LD or <time> elements")
-        fix("Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server")
+        emit_fix("result.fixes.ai_opt.add_freshness", "Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server")
 
     title = soup.find("title")
     og_site = soup.find("meta", property="og:site_name")
@@ -1213,7 +1236,7 @@ def check_ai_optimization(base_url):
     if len(site_names) > 1:
         names_str = ", ".join(site_names)
         emit_check(WARN, "result.checks.ai_opt.brand_inconsistent", f"Inconsistent site name across tags: {names_str}", {"names": names_str})
-        fix(f"Use the same brand name everywhere. Ensure og:site_name, the title tag suffix,\nand JSON-LD Organization name all use the exact same string.\nPick one: {' or '.join(repr(n) for n in site_names)}")
+        emit_fix("result.fixes.ai_opt.unify_brand_name", f"Use the same brand name everywhere. Ensure og:site_name, the title tag suffix,\nand JSON-LD Organization name all use the exact same string.\nPick one: {' or '.join(repr(n) for n in site_names)}", {"names": " or ".join(repr(n) for n in site_names)})
     elif site_names:
         name = list(site_names)[0]
         text = get_text_content(soup)
@@ -1223,10 +1246,10 @@ def check_ai_optimization(base_url):
             ao_score += 1.5
         else:
             emit_check(INFO, "result.checks.ai_opt.brand_sparse", f"Brand entity \"{name}\" found but used sparingly — consistent naming helps AI entity recognition", {"name": name})
-            fix(f"Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition.")
+            emit_fix("result.fixes.ai_opt.use_brand_consistently", f"Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition.", {"name": name})
     else:
         emit_check(INFO, "result.checks.ai_opt.brand_unknown", "Could not determine primary brand/entity name")
-        fix("Make your brand name discoverable by adding:\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\nAnd use a consistent 'Brand — Page Title' format in your <title> tags.")
+        emit_fix("result.fixes.ai_opt.add_brand_meta", "Make your brand name discoverable by adding:\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\nAnd use a consistent 'Brand — Page Title' format in your <title> tags.")
 
     api_paths = [
         "/openapi.json", "/openapi.yaml", "/swagger.json",
@@ -1272,7 +1295,7 @@ def check_social_signals(base_url):
         ss_score += 1
     else:
         emit_check(WARN, "result.checks.social.twitter_missing", "No Twitter/X card meta tags found")
-        fix("Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
+        emit_fix("result.fixes.social.add_twitter_card", "Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
 
     # sameAs links in JSON-LD (social profiles for entity disambiguation)
     same_as_links = []
@@ -1303,7 +1326,7 @@ def check_social_signals(base_url):
             print(f"         {link}")
     else:
         emit_check(WARN, "result.checks.social.sameas_missing", "No sameAs social profile links in structured data")
-        fix("Add sameAs to your Organization JSON-LD to connect your social profiles:\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.")
+        emit_fix("result.fixes.social.add_sameas", "Add sameAs to your Organization JSON-LD to connect your social profiles:\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.")
 
     # Check for social profile links in HTML (fallback)
     if not same_as_links:
@@ -1350,7 +1373,7 @@ def check_ai_answer_formats(base_url):
         emit_check(PASS, "result.checks.answer_format.definitions_found", f"{len(definition_patterns)} definition-style sentence(s) found — highly citable by AI", {"count": len(definition_patterns)})
     else:
         emit_check(WARN, "result.checks.answer_format.definitions_missing", "No definition-style sentences detected")
-        fix("Add clear definition sentences that AI engines can directly quote:\n  'Generative Engine Optimization (GEO) is the practice of optimizing web content...'\n  'A sitemap refers to a file that lists all pages on a website...'\nPattern: '[Term] is/are [clear definition].'")
+        emit_fix("result.fixes.answer_format.add_definitions", "Add clear definition sentences that AI engines can directly quote:\n  'Generative Engine Optimization (GEO) is the practice of optimizing web content...'\n  'A sitemap refers to a file that lists all pages on a website...'\nPattern: '[Term] is/are [clear definition].'")
 
     # 2. Comparison tables
     tables = soup.find_all("table")
@@ -1366,10 +1389,10 @@ def check_ai_answer_formats(base_url):
     else:
         if tables:
             emit_check(WARN, "result.checks.answer_format.tables_without_headers", "Tables found but missing <th> headers — add headers for AI extraction")
-            fix("Add proper headers to your tables:\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI engines extract well-structured tables for comparison answers.")
+            emit_fix("result.fixes.answer_format.add_table_headers", "Add proper headers to your tables:\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI engines extract well-structured tables for comparison answers.")
         else:
             emit_check(INFO, "result.checks.answer_format.tables_missing", "No comparison tables — consider adding tables for feature comparisons, pricing, etc.")
-            fix("Add comparison tables where applicable (pricing, features, vs. competitors):\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI engines frequently cite tabular data in comparison answers.")
+            emit_fix("result.fixes.answer_format.add_comparison_tables", "Add comparison tables where applicable (pricing, features, vs. competitors):\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI engines frequently cite tabular data in comparison answers.")
 
     # 3. Numbered step-by-step instructions
     ordered_lists = soup.find_all("ol")
@@ -1387,7 +1410,7 @@ def check_ai_answer_formats(base_url):
         emit_check(PASS, "result.checks.answer_format.steps_found", "Step-by-step instructional content detected — great for 'how to' AI answers")
     else:
         emit_check(INFO, "result.checks.answer_format.steps_missing", "No step-by-step instructions found")
-        fix("Add numbered how-to instructions where relevant:\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI engines surface step-by-step content for 'how to' queries.")
+        emit_fix("result.fixes.answer_format.add_steps", "Add numbered how-to instructions where relevant:\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI engines surface step-by-step content for 'how to' queries.")
 
     # 4. Pros and cons / advantages and disadvantages
     pros_cons_patterns = re.findall(
@@ -1400,7 +1423,7 @@ def check_ai_answer_formats(base_url):
         emit_check(PASS, "result.checks.answer_format.proscons_found", "Pros/cons or advantages/disadvantages content detected")
     else:
         emit_check(INFO, "result.checks.answer_format.proscons_missing", "No pros/cons pattern detected")
-        fix("Add pros and cons sections for products, services, or comparisons:\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI engines frequently cite balanced pros/cons in recommendation answers.")
+        emit_fix("result.fixes.answer_format.add_proscons", "Add pros and cons sections for products, services, or comparisons:\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI engines frequently cite balanced pros/cons in recommendation answers.")
 
     # 5. Key takeaways / TL;DR / summary sections
     summary_indicators = soup.find_all(
@@ -1413,7 +1436,7 @@ def check_ai_answer_formats(base_url):
         emit_check(PASS, "result.checks.answer_format.summary_found", "Summary/key takeaways section found — AI engines prefer concise summaries")
     else:
         emit_check(INFO, "result.checks.answer_format.summary_missing", "No key takeaways or TL;DR section found")
-        fix("Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.")
+        emit_fix("result.fixes.answer_format.add_summary", "Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.")
 
     print(f"\n  AI answer format score: {score}/{total_checks}")
     track_score("AI Answer Formats", score, total_checks)
@@ -1467,10 +1490,10 @@ def check_schema_knowledge(base_url):
         breadcrumb_class = soup.find(class_=re.compile(r"breadcrumb", re.IGNORECASE))
         if breadcrumb_nav or breadcrumb_class:
             emit_check(WARN, "result.checks.schema_kg.breadcrumb_html_only", "HTML breadcrumb navigation found but no BreadcrumbList schema")
-            fix("Add BreadcrumbList structured data to match your HTML breadcrumbs:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>")
+            emit_fix("result.fixes.schema_kb.add_breadcrumb_schema", "Add BreadcrumbList structured data to match your HTML breadcrumbs:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>")
         else:
             emit_check(INFO, "result.checks.schema_kg.breadcrumb_none", "No breadcrumb navigation or schema found")
-            fix("Add breadcrumb navigation to help AI engines understand your site structure:\n  1. Add visible breadcrumbs: Home > Category > Page\n  2. Add BreadcrumbList JSON-LD schema to match")
+            emit_fix("result.fixes.schema_kb.add_breadcrumbs", "Add breadcrumb navigation to help AI engines understand your site structure:\n  1. Add visible breadcrumbs: Home > Category > Page\n  2. Add BreadcrumbList JSON-LD schema to match")
 
     # Knowledge panel readiness — check Organization/LocalBusiness completeness
     if org_data:
@@ -1498,7 +1521,7 @@ def check_schema_knowledge(base_url):
                 sk_score += 0.375  # 4 fields * 0.375 = 1.5 pts max
             else:
                 emit_check(WARN, "result.checks.schema_kg.org_field_missing", f"{label}: missing", {"label": label})
-                fix(f"Add \"{field}\" to your Organization JSON-LD to improve knowledge panel eligibility.")
+                emit_fix("result.fixes.schema_kb.add_org_field", f"Add \"{field}\" to your Organization JSON-LD to improve knowledge panel eligibility.", {"field": field})
 
         present_optional = [label for field, label in optional_fields.items() if org_data.get(field)]
         missing_optional = [label for field, label in optional_fields.items() if not org_data.get(field)]
@@ -1508,10 +1531,10 @@ def check_schema_knowledge(base_url):
         if missing_optional:
             missing_text = ", ".join(missing_optional)
             emit_check(INFO, "result.checks.schema_kg.optional_missing", f"Optional fields missing: {missing_text}", {"fields": missing_text})
-            fix("Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]")
+            emit_fix("result.fixes.schema_kb.add_org_fields", "Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]")
     else:
         emit_check(WARN, "result.checks.schema_kg.org_schema_missing", "No Organization/LocalBusiness schema found — needed for knowledge panels")
-        fix("Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>")
+        emit_fix("result.fixes.schema_kb.add_organization", "Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>")
 
     track_score("Schema & Knowledge", min(sk_score, 4), 4)
 
@@ -1541,10 +1564,10 @@ def check_mobile_and_weight(base_url):
             mw_score += 1
         else:
             emit_check(WARN, "result.checks.mobile.viewport_not_responsive", "Viewport doesn't use width=device-width")
-            fix("Set viewport to responsive:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />")
+            emit_fix("result.fixes.mobile.set_viewport_responsive", "Set viewport to responsive:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />")
     else:
         emit_check(FAIL, "result.checks.mobile.viewport_missing", "No viewport meta tag — page won't render properly on mobile")
-        fix("Add a viewport meta tag to your <head>:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\nMobile-first indexing means AI crawlers expect mobile-friendly pages.")
+        emit_fix("result.fixes.mobile.add_viewport", "Add a viewport meta tag to your <head>:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\nMobile-first indexing means AI crawlers expect mobile-friendly pages.")
 
     # Page weight
     html_size = len(resp.text.encode("utf-8"))
@@ -1554,10 +1577,10 @@ def check_mobile_and_weight(base_url):
         mw_score += 1
     elif html_kb < 500:
         emit_check(WARN, "result.checks.mobile.weight_medium", f"HTML page weight: {html_kb:.0f} KB — consider reducing inline CSS/JS", {"kb": int(html_kb)})
-        fix("Reduce page weight:\n  1. Move inline CSS to external stylesheets\n  2. Move inline JS to external scripts with defer/async\n  3. Remove unused HTML/comments\n  4. Enable server-side compression (gzip/brotli)")
+        emit_fix("result.fixes.mobile.reduce_weight", "Reduce page weight:\n  1. Move inline CSS to external stylesheets\n  2. Move inline JS to external scripts with defer/async\n  3. Remove unused HTML/comments\n  4. Enable server-side compression (gzip/brotli)")
     else:
         emit_check(FAIL, "result.checks.mobile.weight_heavy", f"HTML page weight: {html_kb:.0f} KB — very heavy, may slow AI crawlers", {"kb": int(html_kb)})
-        fix("Page is too heavy for efficient crawling. Actions:\n  1. Externalize all inline CSS and JavaScript\n  2. Remove inline SVGs and base64 images — use external files\n  3. Enable gzip/brotli compression on your server\n  4. Consider code-splitting for JavaScript-heavy pages")
+        emit_fix("result.fixes.mobile.reduce_weight_critical", "Page is too heavy for efficient crawling. Actions:\n  1. Externalize all inline CSS and JavaScript\n  2. Remove inline SVGs and base64 images — use external files\n  3. Enable gzip/brotli compression on your server\n  4. Consider code-splitting for JavaScript-heavy pages")
 
     # Count inline resources
     inline_styles = soup.find_all("style")
@@ -1566,7 +1589,7 @@ def check_mobile_and_weight(base_url):
 
     if len(inline_styles) > 3 or len(inline_scripts) > 5:
         emit_check(WARN, "result.checks.mobile.inline_heavy", f"Heavy inline resources: {len(inline_styles)} <style> blocks, {len(inline_scripts)} large <script> blocks", {"styles": len(inline_styles), "scripts": len(inline_scripts)})
-        fix("Move inline styles and scripts to external files to reduce HTML weight\nand improve caching for repeat crawls.")
+        emit_fix("result.fixes.mobile.externalize_inline", "Move inline styles and scripts to external files to reduce HTML weight\nand improve caching for repeat crawls.")
     else:
         emit_check(PASS, "result.checks.mobile.inline_ok", "Inline resources within acceptable range")
         mw_score += 1
@@ -1590,7 +1613,7 @@ def check_mobile_and_weight(base_url):
         mw_score += 1
     else:
         emit_check(WARN, "result.checks.mobile.cache_headers_missing", "No cache headers (Cache-Control, ETag, Last-Modified)")
-        fix("Add cache headers for efficient re-crawling:\n  Cache-Control: public, max-age=3600\n  ETag: (auto-generated by most servers)\nThis allows AI crawlers to use conditional requests (If-None-Match)\nand avoid re-downloading unchanged pages.")
+        emit_fix("result.fixes.mobile.add_cache_headers", "Add cache headers for efficient re-crawling:\n  Cache-Control: public, max-age=3600\n  ETag: (auto-generated by most servers)\nThis allows AI crawlers to use conditional requests (If-None-Match)\nand avoid re-downloading unchanged pages.")
 
     track_score("Mobile & Weight", mw_score, 4)
 
@@ -1626,7 +1649,7 @@ def check_url_normalization(base_url):
             un_score += 1
         elif alt_resp.status_code == 200:
             emit_check(WARN, "result.checks.url_norm.host_duplicate", f"Both {hostname} and {alt_host} serve content — duplicate content risk", {"main": hostname, "alt": alt_host})
-            fix(f"Set up a 301 redirect so one version redirects to the other:\n  # Nginx: redirect www to non-www\n  server {{ server_name www.{parsed.netloc.replace('www.', '')}; return 301 https://{parsed.netloc.replace('www.', '')}$request_uri; }}\nThen set the canonical URL to match the preferred version.")
+            emit_fix("result.fixes.url_norm.www_redirect", f"Set up a 301 redirect so one version redirects to the other:\n  # Nginx: redirect www to non-www\n  server {{ server_name www.{parsed.netloc.replace('www.', '')}; return 301 https://{parsed.netloc.replace('www.', '')}$request_uri; }}\nThen set the canonical URL to match the preferred version.", {"host": parsed.netloc.replace("www.", "")})
         else:
             emit_check(PASS, "result.checks.url_norm.host_alt_inaccessible", f"Alternate hostname ({alt_host}) is not accessible", {"alt": alt_host})
             un_score += 1
@@ -1665,7 +1688,7 @@ def check_url_normalization(base_url):
             })
             if upper_resp.status_code == 200 and upper_resp.url.rstrip("/") != base_url.rstrip("/"):
                 emit_check(WARN, "result.checks.url_norm.case_mixed", "Mixed case URLs resolve to different pages — can cause duplicate content")
-                fix("Ensure your server normalizes URL case (lowercase). In nginx:\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }")
+                emit_fix("result.fixes.url_norm.lowercase_url", "Ensure your server normalizes URL case (lowercase). In nginx:\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }")
             else:
                 emit_check(PASS, "result.checks.url_norm.case_consistent", "URL case handling is consistent")
                 un_score += 0.5
@@ -1713,10 +1736,10 @@ def check_outbound_and_media(base_url):
             om_score += 0.5
         else:
             emit_check(INFO, "result.checks.outbound.no_authoritative", "No links to .gov/.edu/.org authoritative sources detected")
-            fix("Link to authoritative external sources where relevant (research papers, .gov/.edu sites,\nindustry standards). Outbound links to reputable sources signal well-researched content to AI engines.")
+            emit_fix("result.fixes.outbound.add_authoritative_links", "Link to authoritative external sources where relevant (research papers, .gov/.edu sites,\nindustry standards). Outbound links to reputable sources signal well-researched content to AI engines.")
     else:
         emit_check(INFO, "result.checks.outbound.no_outbound_links", "No outbound links found — linking to authoritative sources increases content trust")
-        fix("Add outbound links to reputable, authoritative sources that support your claims.\nAI engines see this as a signal of well-researched, trustworthy content.")
+        emit_fix("result.fixes.outbound.add_outbound_links", "Add outbound links to reputable, authoritative sources that support your claims.\nAI engines see this as a signal of well-researched, trustworthy content.")
 
     # Video / media schema
     json_ld_scripts = soup.find_all("script", type="application/ld+json")
@@ -1743,7 +1766,7 @@ def check_outbound_and_media(base_url):
         om_score += 0.5
     elif video_embeds:
         emit_check(WARN, "result.checks.outbound.video_no_schema", f"Video content found ({len(video_embeds)} embed(s)) but no VideoObject schema", {"count": len(video_embeds)})
-        fix("Add VideoObject structured data for your video content:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>")
+        emit_fix("result.fixes.outbound.add_video_schema", "Add VideoObject structured data for your video content:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>")
     else:
         emit_check(INFO, "result.checks.outbound.no_video", "No video content detected")
 
@@ -1755,7 +1778,7 @@ def check_outbound_and_media(base_url):
             emit_check(PASS, "result.checks.outbound.transcript_found", "Video transcript section found — AI engines can index transcript text")
         else:
             emit_check(WARN, "result.checks.outbound.transcript_missing", "Videos found but no transcript detected")
-            fix("Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.")
+            emit_fix("result.fixes.outbound.add_video_transcripts", "Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.")
 
     # Table markup quality
     tables = soup.find_all("table")
@@ -1771,10 +1794,10 @@ def check_outbound_and_media(base_url):
             om_score += 0.5
         elif well_formed > 0:
             emit_check(WARN, "result.checks.outbound.tables_partial_headers", f"{well_formed}/{len(tables)} tables have proper headers — fix the rest", {"well_formed": well_formed, "total": len(tables)})
-            fix("Add <thead> and <th> to all data tables:\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>")
+            emit_fix("result.fixes.outbound.add_table_thead", "Add <thead> and <th> to all data tables:\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>")
         else:
             emit_check(WARN, "result.checks.outbound.tables_no_headers", f"{len(tables)} table(s) but none have proper <thead>/<th> headers", {"count": len(tables)})
-            fix("Add semantic headers to your tables for AI extraction:\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>")
+            emit_fix("result.fixes.outbound.add_table_headers_semantic", "Add semantic headers to your tables for AI extraction:\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>")
     else:
         emit_check(INFO, "result.checks.outbound.no_tables", "No tables found on homepage")
 
@@ -1786,7 +1809,7 @@ def check_outbound_and_media(base_url):
         om_score += 0.5
     else:
         emit_check(INFO, "result.checks.outbound.no_definition_markup", "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations")
-        fix("Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.")
+        emit_fix("result.fixes.outbound.add_dfn_abbr", "Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.")
 
     track_score("Outbound & Media", min(om_score, 3), 3)
 
@@ -1841,12 +1864,12 @@ def check_multilingual_depth(base_url):
     if thin_pages:
         for lang, href, wc in thin_pages:
             emit_check(WARN, "result.checks.multilingual.lang_thin", f"[{lang}] has very thin content ({wc} words): {href}", {"lang": lang, "count": wc, "url": href})
-        fix("Alternate language pages have too little content. Ensure translations are complete\nand not just stubs or machine-translated snippets. AI engines may skip thin multilingual pages.")
+        emit_fix("result.fixes.multilingual.expand_alt_pages", "Alternate language pages have too little content. Ensure translations are complete\nand not just stubs or machine-translated snippets. AI engines may skip thin multilingual pages.")
 
     if broken_pages:
         for lang, href in broken_pages:
             emit_check(FAIL, "result.checks.multilingual.lang_broken", f"[{lang}] page is broken or inaccessible: {href}", {"lang": lang, "url": href})
-        fix("Fix broken hreflang URLs — they return errors. Either create the page\nor remove the hreflang tag to avoid confusing AI crawlers.")
+        emit_fix("result.fixes.multilingual.fix_hreflang", "Fix broken hreflang URLs — they return errors. Either create the page\nor remove the hreflang tag to avoid confusing AI crawlers.")
 
     if not thin_pages and not broken_pages and good_pages:
         emit_check(PASS, "result.checks.multilingual.all_good", "All alternate language pages have substantive content")
@@ -2043,12 +2066,14 @@ def check_cross_platform(base_url):
         emit_check(FAIL, "result.checks.cross_platform.presence_none", "No cross-platform presence detected")
 
     if not_found_platforms:
-        fix(
+        emit_fix(
+            "result.fixes.cross_platform.expand_presence",
             "Expand your brand presence on platforms that AI models train on:\n"
             + "".join(f"  - {p}\n" for p in not_found_platforms)
             + "AI engines (ChatGPT, Perplexity, Claude, Gemini) train on data from these platforms.\n"
             "Being present increases the probability of your brand being cited in AI answers,\n"
-            "regardless of which source the AI pulls from."
+            "regardless of which source the AI pulls from.",
+            {"platforms": ", ".join(not_found_platforms)},
         )
 
     # Score: 0-5 based on coverage
@@ -2214,14 +2239,14 @@ def check_multi_page(base_url, sitemap_urls, max_pages=5):
                 print(f"         {p}")
             if len(pages) > 3:
                 print(f"         ...and {len(pages) - 3} more")
-            fix(fix_suggestions[key])
+            emit_fix("result.fixes.multi_page." + key, fix_suggestions[key])
 
     if duplicate_descs:
         all_good = False
         emit_check(WARN, "result.checks.multi_page.duplicate_descriptions", "Duplicate meta descriptions found across pages:")
         for desc_text, pages in list(duplicate_descs.items())[:3]:
             print(f"         \"{desc_text[:60]}...\" on {len(pages)} pages")
-        fix("Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.")
+        emit_fix("result.fixes.multi_page.duplicate_descriptions", "Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.")
 
     if all_good:
         emit_check(PASS, "result.checks.multi_page.all_good", "All sampled pages maintain consistent GEO standards")
@@ -2623,10 +2648,13 @@ def crawl_check_files(log_files, display_pattern=""):
         print(f"         - The log file doesn't cover enough time")
         print(f"         - Bots are blocked by robots.txt or firewall")
         print(f"         - Your CDN/proxy strips bot user agents")
-        fix("Register with Google Search Console and Bing Webmaster Tools to get indexed.\n"
+        emit_fix(
+            "result.fixes.multi_page.register_search_engines",
+            "Register with Google Search Console and Bing Webmaster Tools to get indexed.\n"
             "Submit your sitemap.xml to each platform.\n"
             "Ensure robots.txt does not block AI crawlers.\n"
-            "Check your CDN/WAF settings — some block bot traffic by default.")
+            "Check your CDN/WAF settings — some block bot traffic by default.",
+        )
         return
 
     # Per-bot breakdown
@@ -2668,10 +2696,13 @@ def crawl_check_files(log_files, display_pattern=""):
         for bot_name in missing_critical:
             info = AI_CRAWLERS[bot_name]
             print(f"  [{WARN}] {bot_name} — {info['powers']}")
-        fix("These are core AI crawlers. If missing, your content may not appear in their AI products.\n"
+        emit_fix(
+            "result.fixes.multi_page.unblock_core_bots",
+            "These are core AI crawlers. If missing, your content may not appear in their AI products.\n"
             "Ensure you are registered with the corresponding search platforms.\n"
             "Check that robots.txt does not block these user agents.\n"
-            "Submit your sitemap to Google Search Console and Bing Webmaster Tools.")
+            "Submit your sitemap to Google Search Console and Bing Webmaster Tools.",
+        )
 
     if missing_optional:
         print(f"\n--- Optional Bots NOT Detected ---")
@@ -2798,11 +2829,15 @@ def crawl_test(url):
             print(f"  [{PASS}] {display_name} — allowed")
 
     if blocked_bots:
-        fix("The following bots are blocked by robots.txt: " + ", ".join(blocked_bots) + "\n"
+        emit_fix(
+            "result.fixes.multi_page.unblock_robots_bots",
+            "The following bots are blocked by robots.txt: " + ", ".join(blocked_bots) + "\n"
             "If you want AI engines to index your content, remove or modify these rules:\n"
             "  User-agent: BotName\n"
             "  Disallow: /\n"
-            "Change 'Disallow: /' to 'Allow: /' or remove the block entirely.")
+            "Change 'Disallow: /' to 'Allow: /' or remove the block entirely.",
+            {"bots": ", ".join(blocked_bots)},
+        )
 
     # ── Step 2: Simulate requests with AI bot user agents ──
     print(f"\n--- Simulated Bot Access Test ---")
@@ -2857,12 +2892,15 @@ def crawl_test(url):
             waf_blocked.append(bot_name)
 
     if waf_blocked:
-        fix("Some AI bots are being blocked by your server, CDN, or WAF.\n"
+        emit_fix(
+            "result.fixes.multi_page.unblock_waf_bots",
+            "Some AI bots are being blocked by your server, CDN, or WAF.\n"
             "Check your Cloudflare/AWS WAF/Nginx rules and whitelist these user agents.\n"
             "Common causes:\n"
             "  - Cloudflare Bot Fight Mode blocking non-browser user agents\n"
             "  - Rate limiting rules that are too aggressive\n"
-            "  - Security plugins (Wordfence, Sucuri) with strict bot blocking")
+            "  - Security plugins (Wordfence, Sucuri) with strict bot blocking",
+        )
     else:
         print(f"\n  All tested bots can access your site successfully.")
 
@@ -2884,8 +2922,11 @@ def crawl_test(url):
                 print(f"         ...and {len(cc_lines) - 5} more")
         elif cc_resp.status_code == 404:
             print(f"  [{WARN}] Domain not found in Common Crawl index")
-            fix("Your site hasn't been crawled by Common Crawl yet.\n"
-                "This is normal for newer/smaller sites. Build inbound links to increase discovery.")
+            emit_fix(
+                "result.fixes.multi_page.common_crawl_inbound_links",
+                "Your site hasn't been crawled by Common Crawl yet.\n"
+                "This is normal for newer/smaller sites. Build inbound links to increase discovery.",
+            )
         else:
             print(f"  [{INFO}] Common Crawl index returned status {cc_resp.status_code} — try again later")
     except requests.RequestException:
@@ -3015,12 +3056,15 @@ def authority_audit(url):
         print(f"\n  Review presence: MODERATE ({len(found_platforms)} platform(s))")
     else:
         print(f"\n  [{WARN}] No review presence detected on major platforms")
-        fix("List your product on review platforms to build trust signals:\n"
+        emit_fix(
+            "result.fixes.multi_page.list_review_platforms",
+            "List your product on review platforms to build trust signals:\n"
             "  - Trustpilot (https://business.trustpilot.com) — general reviews\n"
             "  - G2 (https://sell.g2.com) — B2B/SaaS reviews\n"
             "  - Product Hunt (https://producthunt.com) — launch & discovery\n"
             "  - Capterra (https://capterra.com) — software reviews\n"
-            "Add AggregateRating schema to your site to display star ratings in search.")
+            "Add AggregateRating schema to your site to display star ratings in search.",
+        )
 
     # ── 2. Awards, Accreditations & Affiliations ──
     print(f"\n--- 2. Awards, Accreditations & Affiliations ---")
@@ -3093,12 +3137,15 @@ def authority_audit(url):
         print(f"\n  Awards/accreditations: MODERATE")
     else:
         print(f"\n  Awards/accreditations: WEAK")
-        fix("Strengthen trust signals:\n"
+        emit_fix(
+            "result.fixes.multi_page.strengthen_trust",
+            "Strengthen trust signals:\n"
             "  - Display certifications prominently (SOC2, GDPR, ISO, PCI-DSS)\n"
             "  - Add award badges with alt text: <img alt='2025 Best Fintech Award' ...>\n"
             "  - Add partner/affiliation logos (Y Combinator, accelerators, industry groups)\n"
             "  - Use structured data for awards:\n"
-            '    {"@type": "Organization", "award": ["Best Fintech 2025", ...]}')
+            '    {"@type": "Organization", "award": ["Best Fintech 2025", ...]}',
+        )
 
     # ── 3. Google Website Authority ──
     print(f"\n--- 3. Google Website Authority ---")
@@ -3187,12 +3234,15 @@ def authority_audit(url):
         print(f"\n  Google authority signals: MODERATE")
     else:
         print(f"\n  Google authority signals: WEAK")
-        fix("Boost Google authority:\n"
+        emit_fix(
+            "result.fixes.multi_page.boost_google_authority",
+            "Boost Google authority:\n"
             "  - Complete your Organization schema (all 9 fields)\n"
             "  - Create a Wikipedia article for your brand/product\n"
             "  - Create a Wikidata entity and link it in sameAs\n"
             "  - Claim your Google Business Profile\n"
-            "  - Build high-quality backlinks from authoritative domains")
+            "  - Build high-quality backlinks from authoritative domains",
+        )
 
     # ── 4. Authoritative List Mentions ──
     print(f"\n--- 4. Authoritative List Mentions ---")
@@ -3322,13 +3372,16 @@ def authority_audit(url):
     else:
         authority_score += 1
         print(f"\n  Authoritative mentions: WEAK ({len(found_mentions)} platform(s))")
-        fix("Increase your presence on authoritative platforms:\n"
+        emit_fix(
+            "result.fixes.multi_page.increase_platform_presence",
+            "Increase your presence on authoritative platforms:\n"
             "  - Create a Crunchbase profile for your company\n"
             "  - Maintain an active GitHub organization\n"
             "  - Publish packages on npm/PyPI if applicable\n"
             "  - Get mentioned on Hacker News (Show HN posts)\n"
             "  - Submit to startup directories (Product Hunt, AngelList/Wellfound)\n"
-            "  - Seek mentions in industry publications and comparison lists")
+            "  - Seek mentions in industry publications and comparison lists",
+        )
 
     # ── Final Score ──
     print(f"\n{'='*60}")

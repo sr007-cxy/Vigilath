@@ -8,6 +8,11 @@ export interface CheckResult {
   message_key?: string | null;
   /** Interpolation params for message_key (e.g. {count: 12, url: "..."}). */
   message_params?: Record<string, unknown> | null;
+  /** i18n key under result.fixes.* for the fix recommendation. Absent for
+   *  legacy fix() calls that haven't been migrated to emit_fix(). */
+  fix_key?: string | null;
+  /** Interpolation params for fix_key. */
+  fix_params?: Record<string, unknown> | null;
 }
 
 export interface GeoTestRequest {

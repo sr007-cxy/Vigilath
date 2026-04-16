@@ -301,7 +301,9 @@ if (!i18n.isInitialized) {
                   "categoryCompare": "Category score comparison",
                   "sitesCategories": "{{sites}} sites · {{categories}} categories",
                   "category": "Category",
-                  "total": "Total"
+                  "total": "Total",
+                  "winner": "Winner",
+                  "gradePrefix": "Grade"
                 },
                 "crawl": {
                   "targetDomain": "Target domain",
@@ -324,17 +326,46 @@ if (!i18n.isInitialized) {
                   "pagesSuffix": "{{count}} pages",
                   "notIndexed": "Not indexed",
                   "foundInCcPrefix": "Found ",
-                  "foundInCcSuffix": " pages in Common Crawl"
+                  "foundInCcSuffix": " pages in Common Crawl",
+                  "blocked": "Blocked",
+                  "allowed": "Allowed",
+                  "wafStatus": {
+                    "allowed": "allowed",
+                    "blocked": "blocked",
+                    "suspicious": "suspicious"
+                  }
                 },
                 "citation": {
+                  "questionsAsked": "Questions asked",
+                  "questionsAskedHint": "Prompts sent to the AI engine",
                   "cited": "Cited",
-                  "queries": "Queries",
-                  "citationCount": "Citation count",
-                  "directCitations": "Direct citations",
+                  "citedHint": "out of {{total}} queries",
                   "grade": "Grade",
                   "overallScore": "Overall score",
                   "perQuery": "Per-query results",
-                  "queriesSuffix": "{{count}} queries"
+                  "queriesSuffix": "{{count}} queries",
+                  "rate": "Citation Rate",
+                  "statusCited": "CITED",
+                  "statusError": "ERROR",
+                  "statusNot": "NOT CITED"
+                },
+                "authority": {
+                  "title": "Authority Audit — {{brand}}",
+                  "overall": "Overall",
+                  "reviewsTitle": "Online reviews",
+                  "reviewSchema": "Review schema present:",
+                  "yes": "yes",
+                  "no": "no",
+                  "platformsFound": "Platforms found:",
+                  "none": "None",
+                  "awardsTitle": "Awards & trust signals",
+                  "signalCount": "Signal count:",
+                  "googleTitle": "Google authority",
+                  "indexedPages": "Indexed pages:",
+                  "unknown": "unknown",
+                  "orgSchemaFields": "Org schema fields:",
+                  "wikiLabel": "Wikipedia / Wikidata:",
+                  "mentionsTitle": "Authoritative mentions"
                 },
                 "visibility": {
                   "queryBreakdown": "{{count}} queries × {{runs}} stability runs",
@@ -343,7 +374,14 @@ if (!i18n.isInitialized) {
                   "noCompetitors": "No competitors detected.",
                   "framings": "Brand sentiment framings",
                   "contentGaps": "Content gaps",
-                  "noGaps": "No major gaps"
+                  "noGaps": "No major gaps",
+                  "categories": {
+                    "visibility": "Prompt Visibility",
+                    "entity": "Entity Clarity",
+                    "competitor": "Competitor Position",
+                    "stability": "Answer Stability",
+                    "contentGap": "Content Gaps"
+                  }
                 },
                 "entity": {
                   "kgTitle": "Knowledge graph coverage",
@@ -353,7 +391,37 @@ if (!i18n.isInitialized) {
                   "bestFraming": "Best framing",
                   "recognitionRate": "Recognition rate",
                   "contentGaps": "Content gaps",
-                  "noGaps": "No gaps found"
+                  "noGaps": "No gaps found",
+                  "gradePrefix": "Grade",
+                  "found": "Found",
+                  "missing": "Missing",
+                  "scoreLabels": {
+                    "entityRecognition": "Entity Recognition",
+                    "entityClarity": "Entity Clarity",
+                    "categoryAssociation": "Category Association",
+                    "competitivePosition": "Competitive Position",
+                    "sentimentFraming": "Sentiment & Framing",
+                    "contentGap": "Content Gap",
+                    "knowledgeGraph": "Knowledge Graph",
+                    "platformFootprint": "Platform Footprint"
+                  },
+                  "sentiments": {
+                    "unknown": "unknown",
+                    "negative": "negative",
+                    "mixed": "mixed",
+                    "strongly positive": "strongly positive",
+                    "positive": "positive",
+                    "neutral": "neutral"
+                  },
+                  "framings": {
+                    "recommended": "recommended",
+                    "leader": "leader",
+                    "option": "option",
+                    "mentioned": "mentioned",
+                    "present": "present",
+                    "niche": "niche",
+                    "not_mentioned": "not mentioned"
+                  }
                 }
               }
             },
@@ -365,6 +433,76 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO Readiness Results",
             "resultsFor": "Results for:",
+            "progress": {
+              "title": "Running check…",
+              "elapsed": "Elapsed {{seconds}}s",
+              "hint": "Please keep this page open",
+              "almostDone": "Almost done…",
+              "subtitle": {
+                "default": "Running all 23 GEO categories",
+                "compare": "Scoring multiple sites side-by-side",
+                "crawlTest": "Testing AI crawler reachability",
+                "authority": "Auditing off-page authority signals",
+                "citation": "Checking AI citations via Perplexity",
+                "visibility": "Running multi-engine visibility audit",
+                "entity": "Auditing AI recognition of this entity"
+              },
+              "stages": {
+                "default": {
+                  "fetch": "Fetching page & HTTP headers",
+                  "protocols": "Checking robots, sitemap, llms.txt",
+                  "structured": "Parsing structured data & schema",
+                  "content": "Analyzing content quality for AI",
+                  "technical": "Testing technical robustness & media",
+                  "authority": "Gathering authority & trust signals",
+                  "finalize": "Scoring & finalizing report"
+                },
+                "compare": {
+                  "fetch": "Fetching all target sites",
+                  "parse": "Parsing each site",
+                  "score": "Scoring all 23 GEO categories",
+                  "diff": "Computing category differences",
+                  "finalize": "Building comparison table"
+                },
+                "crawlTest": {
+                  "robots": "Reading robots.txt rules",
+                  "probe": "Probing GPTBot / ClaudeBot / PerplexityBot",
+                  "waf": "Testing WAF & CDN reachability",
+                  "commonCrawl": "Querying Common Crawl index",
+                  "finalize": "Summarizing crawler findings"
+                },
+                "authority": {
+                  "github": "Searching GitHub mentions",
+                  "pkg": "Checking npm / PyPI registries",
+                  "wiki": "Looking up Wikipedia & Wikidata",
+                  "social": "Collecting social signals",
+                  "finalize": "Aggregating authority score"
+                },
+                "citation": {
+                  "prepare": "Preparing brand-relevant queries",
+                  "perplexity": "Querying Perplexity AI (this can take a while)",
+                  "parseCites": "Parsing citations & source domains",
+                  "finalize": "Scoring citation coverage"
+                },
+                "visibility": {
+                  "prepare": "Preparing visibility queries",
+                  "chatgpt": "Asking ChatGPT (this can take a while)",
+                  "perplexity": "Asking Perplexity",
+                  "claude": "Asking Claude",
+                  "classify": "Classifying brand framings",
+                  "finalize": "Aggregating cross-engine visibility"
+                },
+                "entity": {
+                  "wiki": "Checking Wikipedia coverage",
+                  "wikidata": "Checking Wikidata entity",
+                  "platforms": "Checking platform coverage (GitHub, IMDB…)",
+                  "llm": "Probing AI recognition (multi-engine)",
+                  "sentiment": "Classifying sentiment & framing",
+                  "gaps": "Detecting content gaps",
+                  "finalize": "Aggregating entity GEO score"
+                }
+              }
+            },
             "checks": {
               "https": {
                 "uses_https": "Site uses HTTPS",
@@ -647,6 +785,171 @@ if (!i18n.isInitialized) {
                 "missing_alt_text": "Most images missing alt text on {{count}} page(s):",
                 "duplicate_descriptions": "Duplicate meta descriptions found across pages:",
                 "all_good": "All sampled pages maintain consistent GEO standards"
+              }
+            },
+            "fixes": {
+              "ai_opt": {
+                "add_brand_meta": "Make your brand name discoverable by adding:\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\nAnd use a consistent 'Brand — Page Title' format in your <title> tags.",
+                "add_freshness": "Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server",
+                "unify_brand_name": "Use the same brand name everywhere. Ensure og:site_name, the title tag suffix,\nand JSON-LD Organization name all use the exact same string.\nPick one: {names}",
+                "use_brand_consistently": "Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition."
+              },
+              "answer_format": {
+                "add_comparison_tables": "Add comparison tables where applicable (pricing, features, vs. competitors):\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI engines frequently cite tabular data in comparison answers.",
+                "add_definitions": "Add clear definition sentences that AI engines can directly quote:\n  'Generative Engine Optimization (GEO) is the practice of optimizing web content...'\n  'A sitemap refers to a file that lists all pages on a website...'\nPattern: '[Term] is/are [clear definition].'",
+                "add_proscons": "Add pros and cons sections for products, services, or comparisons:\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI engines frequently cite balanced pros/cons in recommendation answers.",
+                "add_steps": "Add numbered how-to instructions where relevant:\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI engines surface step-by-step content for 'how to' queries.",
+                "add_summary": "Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.",
+                "add_table_headers": "Add proper headers to your tables:\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI engines extract well-structured tables for comparison answers."
+              },
+              "authority": {
+                "add_author": "Add author information to boost E-E-A-T signals:\n  1. Add <meta name=\"author\" content=\"Author Name\">\n  2. Or add author to your JSON-LD structured data:\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. For blog posts, display author name, bio, and credentials visibly on the page.",
+                "add_humans_txt": "Create a humans.txt at your site root to signal authorship:\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\nSee humanstxt.org for the full spec.",
+                "add_security_headers": "Add missing security headers to your server config:\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY",
+                "add_security_headers_nginx": "Add security headers to your server response. In nginx:\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;",
+                "upgrade_author_jsonld": "Upgrade your author attribution with JSON-LD:\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }"
+              },
+              "content_access": {
+                "add_h1": "Ensure the first heading on the page is an <h1> tag containing the primary topic.\nUse a logical hierarchy: h1 > h2 > h3 (don't skip levels).",
+                "add_headings": "Add heading tags to structure your content:\n  <h1>Main Page Topic</h1>\n  <h2>Subtopic</h2>\n  <h3>Detail</h3>\nHeadings help AI engines understand content hierarchy and extract key topics.",
+                "client_rendered_workarounds": "Your page content is likely rendered client-side via JavaScript. AI crawlers cannot execute JS.\nSolutions:\n  1. Use server-side rendering (SSR) — Next.js, Nuxt.js, etc.\n  2. Use static site generation (SSG) — pre-render pages at build time.\n  3. Add a pre-rendering service (e.g., Prerender.io) to serve static HTML to bots.",
+                "enable_ssr": "Ensure key content is rendered server-side (SSR/SSG) so AI crawlers can read it.\nIf using React/Vue/Angular, switch to Next.js/Nuxt.js/Angular Universal for server-side rendering.",
+                "improve_text_ratio": "Extremely low content ratio. Likely causes:\n  1. Heavy inline CSS/JS frameworks — externalize them.\n  2. Client-side rendering — switch to SSR/SSG.\n  3. Content hidden in JavaScript state — ensure HTML contains readable text.",
+                "reduce_html_bloat": "Reduce HTML bloat: minimize inline CSS/JS, remove unused markup, and move scripts to external files.\nEnsure the page body contains substantive, unique content — not just navigation and footers."
+              },
+              "content_quality": {
+                "add_attributions": "Add source attributions to increase credibility:\n  'According to [Source Name], ...'\n  'Data from our 2025 industry report shows...'\n  'A study by [Institution] found...'\nAI engines weight attributed claims higher than unattributed ones.",
+                "add_faq_schema": "Add FAQPage schema to boost AI answer ranking:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"FAQPage\",\n    \"mainEntity\": [{\n      \"@type\": \"Question\",\n      \"name\": \"What is your product?\",\n      \"acceptedAnswer\": {\n        \"@type\": \"Answer\",\n        \"text\": \"Our product is...\"\n      }\n    }]\n  }\n  </script>",
+                "add_faq_section": "Consider adding an FAQ section to your page. Format questions as headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\nThen add FAQPage structured data (JSON-LD) for each Q&A pair.",
+                "add_lists": "Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.",
+                "add_statistics": "Add concrete, quotable statistics to your content:\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI engines prefer citing specific data points over vague claims.",
+                "simplify": "Simplify your content for better AI readability:\n  1. Use shorter sentences (under 20 words)\n  2. Replace jargon with plain language\n  3. Break complex ideas into bullet points\n  4. Use active voice instead of passive\n  5. Target a grade 8-10 reading level"
+              },
+              "crawl_ready": {
+                "add_alt_text": "Add descriptive alt text to all <img> tags:\n  <img src=\"photo.jpg\" alt=\"Description of what the image shows\" />\nGood alt text is specific: 'Team meeting in conference room' not 'image1'.",
+                "add_alt_text_majority": "Most images are missing alt text. Add descriptive alt attributes to every <img>:\n  <img src=\"photo.jpg\" alt=\"Descriptive text about the image content\" />\nFor decorative images, use alt=\"\" (empty but present).",
+                "add_internal_links": "Add more internal links to help AI crawlers discover your content.\nInclude links to key pages in your navigation, footer, and within content body.\nUse descriptive anchor text: 'Read our pricing guide' not 'click here'.",
+                "add_internal_links_homepage": "Your homepage has very few internal links. AI crawlers use links to discover pages.\nAdd:\n  1. A navigation menu linking to key sections\n  2. Featured content links in the body\n  3. A footer with links to important pages\n  4. Contextual links within content",
+                "add_semantic_html5": "Replace generic <div> containers with semantic HTML5 tags:\n  <header> for site header/nav\n  <main> for primary content\n  <article> for self-contained content\n  <section> for thematic groupings\n  <aside> for sidebar/related content\n  <footer> for footer",
+                "critical_response_time": "Response time is critically slow. AI crawlers may time out.\nImmediate actions:\n  1. Add a CDN in front of your origin server\n  2. Enable page caching at the server level\n  3. Profile your server-side code for bottlenecks\n  4. Consider static site generation for content pages",
+                "enable_ssr": "Enable server-side rendering in your framework:\n  Next.js: use getServerSideProps() or generateStaticParams()\n  Nuxt.js: set ssr: true in nuxt.config\n  React: consider migrating to Next.js or Remix",
+                "improve_response_time": "Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN (Cloudflare, Fastly, CloudFront)\n  4. Enable gzip/brotli compression",
+                "paywall_workarounds": "AI crawlers cannot see content behind paywalls/login walls.\nConsider:\n  1. Providing a generous free preview or summary above the gate.\n  2. Using 'metered' access so bots see full content on first visit.\n  3. Adding structured data (JSON-LD) with key facts outside the gate.",
+                "remove_noai": "The 'noai' / 'noimageai' directive opts your content out of AI training.\nRemove it if you want AI engines to include your content in their responses.",
+                "remove_nofollow": "Remove 'nofollow' if you want AI crawlers to discover linked pages:\n  <meta name=\"robots\" content=\"index, follow\" />",
+                "remove_noindex": "Remove 'noindex' from the meta robots tag if you want AI engines to index this page:\n  <meta name=\"robots\" content=\"index, follow\" />",
+                "remove_xrobots": "Remove the restrictive X-Robots-Tag header from your server config.\nNginx: remove 'add_header X-Robots-Tag \"noindex\";'\nApache: remove 'Header set X-Robots-Tag \"noindex\"'",
+                "replace_divs": "Your page uses only <div> tags. Replace them with semantic HTML5 elements:\n  <header>, <nav>, <main>, <article>, <section>, <aside>, <footer>\nThis helps AI engines understand the role of each content block."
+              },
+              "cross_platform": {
+                "expand_presence": "Expand your brand presence on platforms that AI models train on: {platforms}\nAI engines (ChatGPT, Perplexity, Claude, Gemini) train on data from these platforms.\nBeing present increases the probability of your brand being cited in AI answers,\nregardless of which source the AI pulls from."
+              },
+              "https": {
+                "enable_https": "Install an SSL/TLS certificate (free via Let's Encrypt) and redirect all HTTP traffic to HTTPS.\nExample nginx: return 301 https://$host$request_uri;"
+              },
+              "llms": {
+                "add_description": "Add a paragraph below the title explaining what your site/org does:\n  # Your Site\n  A brief description of your site and what it offers.",
+                "add_links": "Add markdown links to your key pages:\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)",
+                "add_sections": "Organize your llms.txt with sections like:\n  ## Documentation\n  ## API Reference\n  ## Blog",
+                "add_title": "Add a title as the first line of {filename}:\n  # Your Site Name",
+                "create_file": "Create an llms.txt file at your site root. Example structure:\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)",
+                "create_full_file": "Create llms-full.txt with expanded content — a more detailed version of llms.txt\nwith full descriptions, complete resource listings, and deeper context for AI models.",
+                "expand_content": "Expand the file with meaningful content about your site, its purpose, key pages, and resources."
+              },
+              "meta": {
+                "add_canonical": "Add a canonical link in your <head>:\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\nThis tells AI engines which version of a page is the authoritative one.",
+                "add_description": "Add a meta description in your <head>:\n  <meta name=\"description\" content=\"A 120-160 character summary of your page content, including key topics and value proposition.\">\nThis is often what AI engines use when summarizing your site.",
+                "add_hreflang": "If your site is multilingual, add hreflang tags:\n  <link rel=\"alternate\" hreflang=\"en\" href=\"https://yoursite.com/en/page\" />\n  <link rel=\"alternate\" hreflang=\"es\" href=\"https://yoursite.com/es/page\" />\n  <link rel=\"alternate\" hreflang=\"x-default\" href=\"https://yoursite.com/page\" />",
+                "add_lang": "Add a lang attribute to your <html> tag:\n  <html lang=\"en\">",
+                "add_og": "Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />",
+                "add_title": "Add a <title> tag in your <head>:\n  <title>Your Page Title — Your Brand</title>\nKeep it under 60 characters and include your primary keyword.",
+                "expand_description": "Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords."
+              },
+              "mobile": {
+                "add_cache_headers": "Add cache headers for efficient re-crawling:\n  Cache-Control: public, max-age=3600\n  ETag: (auto-generated by most servers)\nThis allows AI crawlers to use conditional requests (If-None-Match)\nand avoid re-downloading unchanged pages.",
+                "add_viewport": "Add a viewport meta tag to your <head>:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\nMobile-first indexing means AI crawlers expect mobile-friendly pages.",
+                "externalize_inline": "Move inline styles and scripts to external files to reduce HTML weight\nand improve caching for repeat crawls.",
+                "reduce_weight": "Reduce page weight:\n  1. Move inline CSS to external stylesheets\n  2. Move inline JS to external scripts with defer/async\n  3. Remove unused HTML/comments\n  4. Enable server-side compression (gzip/brotli)",
+                "reduce_weight_critical": "Page is too heavy for efficient crawling. Actions:\n  1. Externalize all inline CSS and JavaScript\n  2. Remove inline SVGs and base64 images — use external files\n  3. Enable gzip/brotli compression on your server\n  4. Consider code-splitting for JavaScript-heavy pages",
+                "set_viewport_responsive": "Set viewport to responsive:\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
+              },
+              "multi_page": {
+                "boost_google_authority": "Boost Google authority:\n  - Complete your Organization schema (all 9 fields)\n  - Create a Wikipedia article for your brand/product\n  - Create a Wikidata entity and link it in sameAs\n  - Claim your Google Business Profile\n  - Build high-quality backlinks from authoritative domains",
+                "common_crawl_inbound_links": "Your site hasn't been crawled by Common Crawl yet.\nThis is normal for newer/smaller sites. Build inbound links to increase discovery.",
+                "duplicate_descriptions": "Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.",
+                "increase_platform_presence": "Increase your presence on authoritative platforms:\n  - Create a Crunchbase profile for your company\n  - Maintain an active GitHub organization\n  - Publish packages on npm/PyPI if applicable\n  - Get mentioned on Hacker News (Show HN posts)\n  - Submit to startup directories (Product Hunt, AngelList/Wellfound)\n  - Seek mentions in industry publications and comparison lists",
+                "list_review_platforms": "List your product on review platforms to build trust signals:\n  - Trustpilot (https://business.trustpilot.com) — general reviews\n  - G2 (https://sell.g2.com) — B2B/SaaS reviews\n  - Product Hunt (https://producthunt.com) — launch & discovery\n  - Capterra (https://capterra.com) — software reviews\nAdd AggregateRating schema to your site to display star ratings in search.",
+                "low_word_count": "Pages with <100 words have too little content for AI engines. Add substantive, unique text.",
+                "missing_alt_text": "Add descriptive alt text to all images on these pages.",
+                "missing_canonical": "Add <link rel=\"canonical\" href=\"...\"> to each page pointing to its preferred URL.",
+                "missing_description": "Add a unique meta description to each page (120-160 chars) summarizing the page content.",
+                "missing_h1": "Add a single <h1> tag to each page describing its primary topic.",
+                "missing_og": "Add Open Graph tags (og:title, og:description, og:image) to each page.",
+                "missing_structured_data": "Add JSON-LD structured data to content pages (Article, Product, FAQPage, etc.).",
+                "missing_title": "Add a unique, descriptive <title> tag to each page (under 60 chars).",
+                "register_search_engines": "Register with Google Search Console and Bing Webmaster Tools to get indexed.\nSubmit your sitemap.xml to each platform.\nEnsure robots.txt does not block AI crawlers.\nCheck your CDN/WAF settings — some block bot traffic by default.",
+                "strengthen_trust": "Strengthen trust signals:\n  - Display certifications prominently (SOC2, GDPR, ISO, PCI-DSS)\n  - Add award badges with alt text: <img alt='2025 Best Fintech Award' ...>\n  - Add partner/affiliation logos (Y Combinator, accelerators, industry groups)\n  - Use structured data for awards:\n    {\"@type\": \"Organization\", \"award\": [\"Best Fintech 2025\", ...]}",
+                "unblock_core_bots": "These are core AI crawlers. If missing, your content may not appear in their AI products.\nEnsure you are registered with the corresponding search platforms.\nCheck that robots.txt does not block these user agents.\nSubmit your sitemap to Google Search Console and Bing Webmaster Tools.",
+                "unblock_robots_bots": "The following bots are blocked by robots.txt: {bots}\nIf you want AI engines to index your content, remove or modify these rules:\n  User-agent: BotName\n  Disallow: /\nChange 'Disallow: /' to 'Allow: /' or remove the block entirely.",
+                "unblock_waf_bots": "Some AI bots are being blocked by your server, CDN, or WAF.\nCheck your Cloudflare/AWS WAF/Nginx rules and whitelist these user agents.\nCommon causes:\n  - Cloudflare Bot Fight Mode blocking non-browser user agents\n  - Rate limiting rules that are too aggressive\n  - Security plugins (Wordfence, Sucuri) with strict bot blocking"
+              },
+              "multilingual": {
+                "expand_alt_pages": "Alternate language pages have too little content. Ensure translations are complete\nand not just stubs or machine-translated snippets. AI engines may skip thin multilingual pages.",
+                "fix_hreflang": "Fix broken hreflang URLs — they return errors. Either create the page\nor remove the hreflang tag to avoid confusing AI crawlers."
+              },
+              "outbound": {
+                "add_authoritative_links": "Link to authoritative external sources where relevant (research papers, .gov/.edu sites,\nindustry standards). Outbound links to reputable sources signal well-researched content to AI engines.",
+                "add_dfn_abbr": "Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.",
+                "add_outbound_links": "Add outbound links to reputable, authoritative sources that support your claims.\nAI engines see this as a signal of well-researched, trustworthy content.",
+                "add_table_headers_semantic": "Add semantic headers to your tables for AI extraction:\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>",
+                "add_table_thead": "Add <thead> and <th> to all data tables:\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>",
+                "add_video_schema": "Add VideoObject structured data for your video content:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>",
+                "add_video_transcripts": "Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video."
+              },
+              "robots": {
+                "add_sitemap_directive": "Add a Sitemap directive to your robots.txt:\n  Sitemap: https://yoursite.com/sitemap.xml",
+                "create": "Create a robots.txt file at the root of your site.\nMinimal example:\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
+                "unblock_bots": "To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /",
+                "unblock_wildcard": "Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others."
+              },
+              "schema_kb": {
+                "add_breadcrumb_schema": "Add BreadcrumbList structured data to match your HTML breadcrumbs:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
+                "add_breadcrumbs": "Add breadcrumb navigation to help AI engines understand your site structure:\n  1. Add visible breadcrumbs: Home > Category > Page\n  2. Add BreadcrumbList JSON-LD schema to match",
+                "add_org_field": "Add \"{field}\" to your Organization JSON-LD to improve knowledge panel eligibility.",
+                "add_org_fields": "Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]",
+                "add_organization": "Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>"
+              },
+              "search_reg": {
+                "bing_webmaster": "Register your site with Bing Webmaster Tools (https://www.bing.com/webmasters):\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This is essential — Bing's index powers Microsoft Copilot, ChatGPT (via Bing search),\n     and other AI assistants that use Bing as their search backend.",
+                "google_console": "Register your site with Google Search Console (https://search.google.com/search-console):\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml under Sitemaps\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — Google's AI Overviews and SGE pull from the Google index.",
+                "indexnow": "Set up IndexNow for instant indexing by Bing, Yandex, and others:\n  1. Generate an API key at https://www.indexnow.org/\n  2. Host the key file at your site root: https://yoursite.com/{key}.txt\n  3. Notify search engines when content changes:\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. Many CMS plugins (WordPress, etc.) support IndexNow automatically.",
+                "submit_all": "Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register and submit them to each platform:\n  \n  Google Search Console → Submit sitemap → Powers Google AI Overviews / SGE\n  Bing Webmaster Tools  → Submit sitemap → Powers Copilot, ChatGPT (Bing backend)\n  IndexNow              → Auto-notify   → Instant indexing for Bing, Yandex, Naver\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing."
+              },
+              "sitemap": {
+                "add_lastmod": "Add <lastmod> to each <url> entry in your sitemap:\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>",
+                "create_file": "Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms (WordPress, Next.js, etc.) can auto-generate sitemaps."
+              },
+              "social": {
+                "add_sameas": "Add sameAs to your Organization JSON-LD to connect your social profiles:\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.",
+                "add_twitter_card": "Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
+              },
+              "structured": {
+                "add_organization_jsonld": "Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results"
+              },
+              "tech_crawl": {
+                "add_rss_feed": "Add an RSS or Atom feed for your content and link to it in <head>:\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\nMost CMS platforms generate feeds automatically. For static sites, tools like eleventy-rss can help.",
+                "broken_canonical": "The canonical URL {canonical_url} is broken. Either fix the target page or update the canonical to a working URL.",
+                "enable_http2": "Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.",
+                "fix_canonical_chain": "Fix the canonical chain — each page's canonical should point directly to the final URL, not through intermediaries.\nSet the canonical on each page to its own URL or the ultimate target.",
+                "reduce_redirects": "Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL."
+              },
+              "url_norm": {
+                "lowercase_url": "Ensure your server normalizes URL case (lowercase). In nginx:\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }",
+                "www_redirect": "Set up a 301 redirect so one version redirects to the other:\n  # Nginx: redirect www to non-www\n  server {{ server_name www.{host}; return 301 https://{host}$request_uri; }}\nThen set the canonical URL to match the preferred version."
+              },
+              "well_known": {
+                "add_security_txt": "Consider adding .well-known/security.txt (RFC 9116) as a trust signal:\n  Contact: mailto:security@yoursite.com\n  Preferred-Languages: en\n  Canonical: https://yoursite.com/.well-known/security.txt",
+                "fix_invalid_json": "Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors."
               }
             },
             "scoreCard": {
@@ -1870,7 +2173,9 @@ if (!i18n.isInitialized) {
                   "categoryCompare": "类目得分对比",
                   "sitesCategories": "{{sites}} 站点 · {{categories}} 类目",
                   "category": "类目",
-                  "total": "总分"
+                  "total": "总分",
+                  "winner": "胜出",
+                  "gradePrefix": "评级"
                 },
                 "crawl": {
                   "targetDomain": "目标域名",
@@ -1893,17 +2198,46 @@ if (!i18n.isInitialized) {
                   "pagesSuffix": "{{count}} 页",
                   "notIndexed": "未收录",
                   "foundInCcPrefix": "已在 Common Crawl 中找到 ",
-                  "foundInCcSuffix": " 页"
+                  "foundInCcSuffix": " 页",
+                  "blocked": "已屏蔽",
+                  "allowed": "已放行",
+                  "wafStatus": {
+                    "allowed": "放行",
+                    "blocked": "屏蔽",
+                    "suspicious": "可疑"
+                  }
                 },
                 "citation": {
+                  "questionsAsked": "提问数量",
+                  "questionsAskedHint": "向 AI 引擎发送的问题数",
                   "cited": "已引用",
-                  "queries": "查询数量",
-                  "citationCount": "引用次数",
-                  "directCitations": "直接引用",
+                  "citedHint": "共 {{total}} 个问题",
                   "grade": "评级",
                   "overallScore": "综合评分",
                   "perQuery": "逐条查询结果",
-                  "queriesSuffix": "{{count}} 条"
+                  "queriesSuffix": "{{count}} 条",
+                  "rate": "引用率",
+                  "statusCited": "已引用",
+                  "statusError": "错误",
+                  "statusNot": "未引用"
+                },
+                "authority": {
+                  "title": "权威信号审计 — {{brand}}",
+                  "overall": "综合得分",
+                  "reviewsTitle": "在线评测",
+                  "reviewSchema": "评测结构化数据：",
+                  "yes": "有",
+                  "no": "无",
+                  "platformsFound": "已覆盖平台：",
+                  "none": "无",
+                  "awardsTitle": "奖项与信任信号",
+                  "signalCount": "信号数量：",
+                  "googleTitle": "Google 权威度",
+                  "indexedPages": "已索引页数：",
+                  "unknown": "未知",
+                  "orgSchemaFields": "Organization schema 字段：",
+                  "wikiLabel": "Wikipedia / Wikidata：",
+                  "mentionsTitle": "权威提及"
                 },
                 "visibility": {
                   "queryBreakdown": "{{count}} 个查询 × {{runs}} 次稳定性运行",
@@ -1912,7 +2246,14 @@ if (!i18n.isInitialized) {
                   "noCompetitors": "未提取到竞品。",
                   "framings": "品牌情感框架",
                   "contentGaps": "内容缺口",
-                  "noGaps": "没有重大缺口"
+                  "noGaps": "没有重大缺口",
+                  "categories": {
+                    "visibility": "提示可见度",
+                    "entity": "实体清晰度",
+                    "competitor": "竞争位置",
+                    "stability": "回答稳定性",
+                    "contentGap": "内容缺口"
+                  }
                 },
                 "entity": {
                   "kgTitle": "知识图谱覆盖",
@@ -1922,7 +2263,37 @@ if (!i18n.isInitialized) {
                   "bestFraming": "最佳框架",
                   "recognitionRate": "识别率",
                   "contentGaps": "内容缺口",
-                  "noGaps": "未发现缺口"
+                  "noGaps": "未发现缺口",
+                  "gradePrefix": "评级",
+                  "found": "已找到",
+                  "missing": "缺失",
+                  "scoreLabels": {
+                    "entityRecognition": "实体识别",
+                    "entityClarity": "实体清晰度",
+                    "categoryAssociation": "类别关联",
+                    "competitivePosition": "竞争位置",
+                    "sentimentFraming": "情感与叙述框架",
+                    "contentGap": "内容缺口",
+                    "knowledgeGraph": "知识图谱",
+                    "platformFootprint": "平台覆盖度"
+                  },
+                  "sentiments": {
+                    "unknown": "未知",
+                    "negative": "负面",
+                    "mixed": "褒贬不一",
+                    "strongly positive": "强烈正面",
+                    "positive": "正面",
+                    "neutral": "中性"
+                  },
+                  "framings": {
+                    "recommended": "被推荐",
+                    "leader": "领导者",
+                    "option": "候选项",
+                    "mentioned": "被提及",
+                    "present": "出现",
+                    "niche": "小众",
+                    "not_mentioned": "未被提及"
+                  }
                 }
               }
             },
@@ -1934,6 +2305,76 @@ if (!i18n.isInitialized) {
           "result": {
             "title": "GEO 检测结果",
             "resultsFor": "检查结果：",
+            "progress": {
+              "title": "正在检测中…",
+              "elapsed": "已用时 {{seconds}} 秒",
+              "hint": "请保持此页面打开",
+              "almostDone": "即将完成…",
+              "subtitle": {
+                "default": "正在运行 23 项 GEO 全量检测",
+                "compare": "多站点并排打分对比",
+                "crawlTest": "测试 AI 爬虫可达性",
+                "authority": "审计外部权威信号",
+                "citation": "通过 Perplexity 检测 AI 引用",
+                "visibility": "跨引擎可见性审计",
+                "entity": "审计 AI 对该实体的认知"
+              },
+              "stages": {
+                "default": {
+                  "fetch": "抓取页面与 HTTP 头",
+                  "protocols": "检测 robots、sitemap、llms.txt",
+                  "structured": "解析结构化数据与 schema",
+                  "content": "分析 AI 内容质量",
+                  "technical": "检测技术健壮性与媒体",
+                  "authority": "汇总权威与信任信号",
+                  "finalize": "评分并生成报告"
+                },
+                "compare": {
+                  "fetch": "抓取所有对比站点",
+                  "parse": "解析各站点页面",
+                  "score": "对 23 项 GEO 类目打分",
+                  "diff": "计算类目差距",
+                  "finalize": "生成对比表"
+                },
+                "crawlTest": {
+                  "robots": "读取 robots.txt 规则",
+                  "probe": "模拟 GPTBot / ClaudeBot / PerplexityBot 抓取",
+                  "waf": "检测 WAF / CDN 可达性",
+                  "commonCrawl": "查询 Common Crawl 索引",
+                  "finalize": "汇总抓取测试结果"
+                },
+                "authority": {
+                  "github": "检索 GitHub 提及",
+                  "pkg": "查询 npm / PyPI 包登记",
+                  "wiki": "查询 Wikipedia 与 Wikidata",
+                  "social": "收集社交信号",
+                  "finalize": "汇总权威评分"
+                },
+                "citation": {
+                  "prepare": "生成品牌相关提问",
+                  "perplexity": "调用 Perplexity AI 查询（耗时较长）",
+                  "parseCites": "解析引用与来源域名",
+                  "finalize": "计算引用覆盖率"
+                },
+                "visibility": {
+                  "prepare": "生成可见性查询集",
+                  "chatgpt": "调用 ChatGPT 查询（耗时较长）",
+                  "perplexity": "调用 Perplexity 查询",
+                  "claude": "调用 Claude 查询",
+                  "classify": "归类品牌情感框架",
+                  "finalize": "汇总跨引擎可见性"
+                },
+                "entity": {
+                  "wiki": "检测 Wikipedia 词条",
+                  "wikidata": "检测 Wikidata 实体",
+                  "platforms": "检测平台覆盖（GitHub、IMDB 等）",
+                  "llm": "多引擎 AI 识别探测",
+                  "sentiment": "识别情感与叙述框架",
+                  "gaps": "识别内容缺口",
+                  "finalize": "汇总实体 GEO 评分"
+                }
+              }
+            },
             "checks": {
               "https": {
                 "uses_https": "站点已启用 HTTPS",
@@ -2216,6 +2657,171 @@ if (!i18n.isInitialized) {
                 "missing_alt_text": "{{count}} 个页面大多数图片缺少 alt 文本：",
                 "duplicate_descriptions": "跨页面存在重复的 meta description：",
                 "all_good": "所有采样页面都保持一致的 GEO 标准"
+              }
+            },
+            "fixes": {
+              "ai_opt": {
+                "add_brand_meta": "通过以下方式让品牌名易于被发现：\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\n并在 <title> 中统一使用 'Brand — Page Title' 格式。",
+                "add_freshness": "添加新鲜度信号，让 AI 引擎判断内容是否最新：\n  1. 在 JSON-LD 中加入 \"dateModified\": \"2025-01-15\"\n  2. 使用 <time> 标签：<time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. 在服务器响应中设置 Last-Modified 头",
+                "unify_brand_name": "在所有位置使用同一个品牌名。确保 og:site_name、<title> 后缀、\nJSON-LD Organization 中的 name 完全一致。\n请从下列名称中选定一个：{names}",
+                "use_brand_consistently": "在页面内容中更稳定地使用品牌名 \"{name}\"。\n在标题、开头段落和结构化数据中提及该名称，以强化实体识别。"
+              },
+              "answer_format": {
+                "add_comparison_tables": "在合适的位置加入对比表格（价格、功能、对标竞品）：\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI 引擎在对比类回答中常常引用表格数据。",
+                "add_definitions": "添加可被 AI 引擎直接引用的定义句：\n  'Generative Engine Optimization (GEO) is the practice of optimizing web content...'\n  'A sitemap refers to a file that lists all pages on a website...'\n句式：'[Term] is/are [clear definition].'",
+                "add_proscons": "为产品、服务或对比内容添加优缺点段落：\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI 引擎在推荐类回答中常引用平衡的优缺点。",
+                "add_steps": "在合适的位置加入编号步骤说明：\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI 引擎在 'how to' 类查询中会优先呈现分步内容。",
+                "add_summary": "在页面靠前或靠后位置加入 'Key Takeaways' 或 'TL;DR' 区块：\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI 引擎在生成快速回答时常引用摘要段落。",
+                "add_table_headers": "为表格补齐表头：\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI 引擎会从结构良好的表格中抽取对比答案。"
+              },
+              "authority": {
+                "add_author": "添加作者信息以增强 E-E-A-T 信号：\n  1. 添加 <meta name=\"author\" content=\"Author Name\">\n  2. 或在 JSON-LD 中添加 author 字段：\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. 博客文章应在页面可见处展示作者姓名、简介与资历。",
+                "add_humans_txt": "在站点根目录创建 humans.txt 表明作者身份：\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\n完整规范见 humanstxt.org。",
+                "add_security_headers": "在服务器配置中补齐安全响应头：\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY",
+                "add_security_headers_nginx": "为响应添加安全头部，Nginx 示例：\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;",
+                "upgrade_author_jsonld": "用 JSON-LD 结构化数据完善作者信息：\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }"
+              },
+              "content_access": {
+                "add_h1": "确保页面首个标题是包含主题的 <h1>。\n使用合理的层级：h1 > h2 > h3，不要跳级。",
+                "add_headings": "用标题标签构建内容层级：\n  <h1>Main Page Topic</h1>\n  <h2>Subtopic</h2>\n  <h3>Detail</h3>\n标题层次有助于 AI 引擎理解结构并提取核心主题。",
+                "client_rendered_workarounds": "页面内容可能完全依赖客户端 JavaScript 渲染，而 AI 爬虫无法执行 JS。\n可选方案：\n  1. 服务端渲染（SSR）——Next.js、Nuxt.js 等\n  2. 静态站点生成（SSG）——构建时预渲染页面\n  3. 接入预渲染服务（如 Prerender.io）为爬虫返回静态 HTML",
+                "enable_ssr": "确保关键内容由服务端渲染（SSR/SSG），便于 AI 爬虫读取。\n若使用 React/Vue/Angular，可改用 Next.js/Nuxt.js/Angular Universal 启用服务端渲染。",
+                "improve_text_ratio": "正文占比过低，常见原因：\n  1. 大量行内 CSS/JS 框架——拆分到外部文件\n  2. 完全使用客户端渲染——改用 SSR/SSG\n  3. 内容隐藏在 JavaScript 状态中——确保 HTML 中包含可读文本",
+                "reduce_html_bloat": "精简 HTML：减少行内 CSS/JS、移除冗余标记、将脚本拆分到外部文件。\n确保 body 中含有具有实质价值的独特内容，而不只是导航和页脚。"
+              },
+              "content_quality": {
+                "add_attributions": "添加来源标注以增强可信度：\n  'According to [Source Name], ...'\n  'Data from our 2025 industry report shows...'\n  'A study by [Institution] found...'\nAI 引擎对带来源的论述给予更高权重。",
+                "add_faq_schema": "添加 FAQPage 结构化数据以提升 AI 答案排名：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"FAQPage\",\n    \"mainEntity\": [{\n      \"@type\": \"Question\",\n      \"name\": \"What is your product?\",\n      \"acceptedAnswer\": {\n        \"@type\": \"Answer\",\n        \"text\": \"Our product is...\"\n      }\n    }]\n  }\n  </script>",
+                "add_faq_section": "建议为页面添加 FAQ 区块，问题用标题表示：\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\n再为每个问答对补充 FAQPage JSON-LD 结构化数据。",
+                "add_lists": "使用结构化列表，便于 AI 提取关键信息：\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\n步骤/流程使用 <ol>，特性/优势使用 <ul>。",
+                "add_statistics": "在内容中加入可被引用的具体数据：\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI 引擎更倾向于引用具体数据而不是模糊表述。",
+                "simplify": "简化内容，提高 AI 可读性：\n  1. 使用更短的句子（20 个单词以内）\n  2. 用通俗表达替代专业术语\n  3. 将复杂概念拆分为列表条目\n  4. 优先使用主动语态\n  5. 控制在 8–10 年级阅读水平"
+              },
+              "crawl_ready": {
+                "add_alt_text": "为所有 <img> 标签补充描述性 alt 文本：\n  <img src=\"photo.jpg\" alt=\"Description of what the image shows\" />\n好的 alt 应当具体，例如 'Team meeting in conference room' 而不是 'image1'。",
+                "add_alt_text_majority": "大多数图片缺少 alt 文本。请为每个 <img> 添加描述性 alt：\n  <img src=\"photo.jpg\" alt=\"Descriptive text about the image content\" />\n纯装饰性图片可使用 alt=\"\"（保留属性但留空）。",
+                "add_internal_links": "增加内部链接，帮助 AI 爬虫发现更多内容。\n在导航、页脚以及正文中加入指向关键页面的链接。\n使用具有描述性的锚文本，例如 'Read our pricing guide' 而不是 'click here'。",
+                "add_internal_links_homepage": "首页内部链接过少，AI 爬虫依赖链接发现页面。建议添加：\n  1. 指向核心栏目的导航菜单\n  2. 正文中的精选内容链接\n  3. 包含重要页面链接的页脚\n  4. 正文内的上下文链接",
+                "add_semantic_html5": "用语义化 HTML5 标签替换通用 <div>：\n  <header>：页头/导航\n  <main>：主体内容\n  <article>：独立成篇的内容\n  <section>：主题分组\n  <aside>：侧栏/相关内容\n  <footer>：页脚",
+                "critical_response_time": "响应时间极慢，AI 爬虫可能超时。立即处理：\n  1. 在源站前部署 CDN\n  2. 在服务器层启用页面缓存\n  3. 对服务端代码做性能剖析定位瓶颈\n  4. 内容页面可考虑改为静态生成",
+                "enable_ssr": "在前端框架中启用服务端渲染：\n  Next.js：使用 getServerSideProps() 或 generateStaticParams()\n  Nuxt.js：在 nuxt.config 中设置 ssr: true\n  纯 React：建议迁移到 Next.js 或 Remix",
+                "improve_response_time": "优化响应时间：\n  1. 启用服务端缓存（Redis、Varnish、CDN）\n  2. 优化数据库查询\n  3. 使用 CDN（Cloudflare、Fastly、CloudFront）\n  4. 开启 gzip/brotli 压缩",
+                "paywall_workarounds": "AI 爬虫无法访问付费墙/登录墙后的内容。\n可考虑：\n  1. 在收费墙之前提供充分的免费预览或摘要\n  2. 采用计次访问，让爬虫首次访问时能看到全文\n  3. 在墙外提供包含核心事实的 JSON-LD 结构化数据",
+                "remove_noai": "'noai' / 'noimageai' 指令会让你的内容退出 AI 训练。\n如希望 AI 引擎在回答中引用你的内容，请将其移除。",
+                "remove_nofollow": "若希望 AI 爬虫发现页面中的链接，请移除 'nofollow'：\n  <meta name=\"robots\" content=\"index, follow\" />",
+                "remove_noindex": "若希望 AI 引擎索引该页面，请从 meta robots 中移除 'noindex'：\n  <meta name=\"robots\" content=\"index, follow\" />",
+                "remove_xrobots": "在服务器配置中移除限制性的 X-Robots-Tag 响应头。\nNginx：删除 'add_header X-Robots-Tag \"noindex\";'\nApache：删除 'Header set X-Robots-Tag \"noindex\"'",
+                "replace_divs": "页面仅使用 <div> 标签。请替换为语义化 HTML5 元素：\n  <header>、<nav>、<main>、<article>、<section>、<aside>、<footer>\n这能帮助 AI 引擎理解每个内容块的角色。"
+              },
+              "cross_platform": {
+                "expand_presence": "在 AI 模型的训练数据来源平台上扩展品牌存在：{platforms}\nAI 引擎（ChatGPT、Perplexity、Claude、Gemini）会从这些平台获取训练数据。\n在更多平台上出现可以提高品牌被 AI 回答引用的概率，\n无论 AI 实际引用的是哪一个来源。"
+              },
+              "https": {
+                "enable_https": "为站点安装 SSL/TLS 证书（可通过 Let's Encrypt 免费获取），并将全部 HTTP 流量 301 重定向到 HTTPS。\nNginx 示例：return 301 https://$host$request_uri;"
+              },
+              "llms": {
+                "add_description": "在标题下方添加一段说明，介绍站点或组织的业务：\n  # Your Site\n  A brief description of your site and what it offers.",
+                "add_links": "在 llms.txt 中以 markdown 链接列出关键页面：\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)",
+                "add_sections": "用分节组织 llms.txt 内容，例如：\n  ## Documentation\n  ## API Reference\n  ## Blog",
+                "add_title": "将标题作为 {filename} 的第一行：\n  # Your Site Name",
+                "create_file": "在站点根目录创建 llms.txt 文件，结构示例：\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)",
+                "create_full_file": "创建 llms-full.txt 提供扩展内容——它是 llms.txt 的详细版本，\n包含完整说明、完整资源清单以及为 AI 模型准备的更深层上下文。",
+                "expand_content": "扩充 llms.txt 的内容，加入站点定位、核心页面与重要资源等有实际价值的信息。"
+              },
+              "meta": {
+                "add_canonical": "在 <head> 中添加 canonical 链接：\n  <link rel=\"canonical\" href=\"https://yoursite.com/current-page\" />\n以告知 AI 引擎哪一个版本的页面才是权威版本。",
+                "add_description": "在 <head> 中添加 meta description：\n  <meta name=\"description\" content=\"A 120-160 character summary of your page content, including key topics and value proposition.\">\nAI 引擎在概括站点时通常会引用这段描述。",
+                "add_hreflang": "多语言站点请添加 hreflang 标签：\n  <link rel=\"alternate\" hreflang=\"en\" href=\"https://yoursite.com/en/page\" />\n  <link rel=\"alternate\" hreflang=\"zh\" href=\"https://yoursite.com/zh/page\" />\n  <link rel=\"alternate\" hreflang=\"x-default\" href=\"https://yoursite.com/page\" />",
+                "add_lang": "为 <html> 标签添加 lang 属性：\n  <html lang=\"en\">",
+                "add_og": "在 <head> 中添加 Open Graph meta 标签：\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />",
+                "add_title": "在 <head> 中添加 <title> 标签：\n  <title>Your Page Title — Your Brand</title>\n建议控制在 60 字符内，并包含主要关键词。",
+                "expand_description": "将 meta description 扩展至 120–160 字符，包含明确的价值主张和主要关键词。"
+              },
+              "mobile": {
+                "add_cache_headers": "添加缓存响应头以提升重复抓取效率：\n  Cache-Control: public, max-age=3600\n  ETag:（多数服务器会自动生成）\n这能让 AI 爬虫使用条件请求（If-None-Match），\n避免重复下载未变更页面。",
+                "add_viewport": "在 <head> 中添加 viewport meta：\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n移动优先索引意味着 AI 爬虫期望页面对移动端友好。",
+                "externalize_inline": "将行内样式与脚本拆分到外部文件，减小 HTML 体积，\n并提升重复抓取时的缓存效率。",
+                "reduce_weight": "减小页面体积：\n  1. 将行内 CSS 拆分到外部样式表\n  2. 将行内 JS 拆分到外部脚本并使用 defer/async\n  3. 移除无用 HTML 与注释\n  4. 在服务器开启 gzip/brotli 压缩",
+                "reduce_weight_critical": "页面过大，影响抓取效率。建议：\n  1. 将所有行内 CSS 与 JS 拆分到外部文件\n  2. 移除行内 SVG 与 base64 图片，改用外部文件\n  3. 在服务器开启 gzip/brotli 压缩\n  4. JS 较重的页面考虑代码分包",
+                "set_viewport_responsive": "将 viewport 设置为响应式：\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
+              },
+              "multi_page": {
+                "boost_google_authority": "提升 Google 权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建 Wikipedia 词条\n  - 创建 Wikidata 实体并通过 sameAs 关联\n  - 认领 Google Business Profile\n  - 从权威域名获取高质量反向链接",
+                "common_crawl_inbound_links": "Common Crawl 尚未抓取你的站点。\n对新站或小站这是正常现象。可通过获取更多反向链接来提升被发现的概率。",
+                "duplicate_descriptions": "为每个页面撰写独立的 meta description。重复的描述会让\nAI 引擎在引用时无法判断哪一个页面与主题更相关。",
+                "increase_platform_presence": "扩大在权威平台上的存在感：\n  - 创建公司 Crunchbase 资料\n  - 维护活跃的 GitHub 组织\n  - 如适用，向 npm/PyPI 发布开源包\n  - 在 Hacker News 上发布 Show HN 帖\n  - 提交到创业公司目录（Product Hunt、AngelList/Wellfound）\n  - 争取出现在行业媒体和对比类文章中",
+                "list_review_platforms": "在评测平台上架产品以累积信任信号：\n  - Trustpilot（https://business.trustpilot.com）——通用评测\n  - G2（https://sell.g2.com）——B2B/SaaS 评测\n  - Product Hunt（https://producthunt.com）——发布与曝光\n  - Capterra（https://capterra.com）——软件评测\n再为站点添加 AggregateRating 结构化数据，以便在搜索结果中展示星级。",
+                "low_word_count": "正文不足 100 字的页面内容过少，无法满足 AI 引擎需求。请补充实质性、独特的文本。",
+                "missing_alt_text": "为这些页面上的所有图片补充描述性 alt 文本。",
+                "missing_canonical": "为每个页面添加指向优选 URL 的 <link rel=\"canonical\" href=\"...\">。",
+                "missing_description": "为每个页面添加唯一的 meta description（120–160 字符）概括页面内容。",
+                "missing_h1": "为每个页面添加唯一的 <h1> 标签，概括页面的主要主题。",
+                "missing_og": "为每个页面添加 Open Graph 标签（og:title、og:description、og:image）。",
+                "missing_structured_data": "为内容页面添加 JSON-LD 结构化数据（Article、Product、FAQPage 等）。",
+                "missing_title": "为每个页面添加唯一、具有描述性的 <title> 标签（不超过 60 字符）。",
+                "register_search_engines": "在 Google Search Console 和 Bing Webmaster Tools 注册以获得索引。\n在两个平台分别提交 sitemap.xml。\n确保 robots.txt 没有屏蔽 AI 爬虫。\n检查 CDN/WAF 设置——部分服务默认会拦截 bot 流量。",
+                "strengthen_trust": "强化信任信号：\n  - 在显眼位置展示认证（SOC2、GDPR、ISO、PCI-DSS）\n  - 为奖项徽章添加 alt 文本：<img alt='2025 Best Fintech Award' ...>\n  - 展示合作伙伴/隶属机构 Logo（Y Combinator、加速器、行业组织）\n  - 在结构化数据中标注奖项：\n    {\"@type\": \"Organization\", \"award\": [\"Best Fintech 2025\", ...]}",
+                "unblock_core_bots": "这些是核心 AI 爬虫。若被屏蔽，你的内容可能无法出现在对应 AI 产品中。\n请确认已在对应搜索平台完成注册。\n检查 robots.txt 没有屏蔽这些 user agent。\n在 Google Search Console 和 Bing Webmaster Tools 提交 sitemap。",
+                "unblock_robots_bots": "以下 bot 被 robots.txt 屏蔽：{bots}\n如希望 AI 引擎索引你的内容，请移除或修改对应规则：\n  User-agent: BotName\n  Disallow: /\n将 'Disallow: /' 改为 'Allow: /' 或直接移除该规则。",
+                "unblock_waf_bots": "部分 AI bot 被你的服务器、CDN 或 WAF 拦截。\n检查 Cloudflare/AWS WAF/Nginx 规则，将这些 user agent 加入白名单。\n常见原因：\n  - Cloudflare Bot Fight Mode 拦截非浏览器 user agent\n  - 限速规则过于激进\n  - 安全插件（Wordfence、Sucuri）启用了严格的 bot 拦截"
+              },
+              "multilingual": {
+                "expand_alt_pages": "其它语言页面内容过少。请确保翻译完整，而不是占位或机器翻译片段；\nAI 引擎可能会跳过内容过薄的多语言页面。",
+                "fix_hreflang": "修复失效的 hreflang URL——它们当前返回错误。要么创建对应页面，\n要么移除 hreflang 标签，避免误导 AI 爬虫。"
+              },
+              "outbound": {
+                "add_authoritative_links": "在合适位置链接权威外部资源（学术论文、.gov/.edu 站点、行业标准）。\n指向权威来源的外链会向 AI 引擎传递「内容研究充分」的信号。",
+                "add_dfn_abbr": "为关键术语与缩写添加语义标记：\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\n这能帮助 AI 引擎理解并定义内容中的术语。",
+                "add_outbound_links": "添加指向权威来源的外链以支撑你的论述。\nAI 引擎会将这视为内容经过充分研究、值得信赖的信号。",
+                "add_table_headers_semantic": "为表格添加语义化表头，便于 AI 提取：\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>",
+                "add_table_thead": "为所有数据表格添加 <thead> 与 <th>：\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>",
+                "add_video_schema": "为视频内容添加 VideoObject 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>",
+                "add_video_transcripts": "为视频内容添加文字转录，便于 AI 爬虫索引语音内容。\n将转录文本放在视频下方可见区域。"
+              },
+              "robots": {
+                "add_sitemap_directive": "在 robots.txt 中添加 Sitemap 指令：\n  Sitemap: https://yoursite.com/sitemap.xml",
+                "create": "在站点根目录创建 robots.txt 文件。\n最简示例：\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
+                "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行 GPTBot 示例：\n  User-agent: GPTBot\n  Allow: /",
+                "unblock_wildcard": "如果希望 AI 爬虫索引站点，请将 'User-agent: *' 下的 'Disallow: /' 改为 'Allow: /'。\n如需限制特定 bot，可以单独配置规则而不是整体禁用。"
+              },
+              "schema_kb": {
+                "add_breadcrumb_schema": "为 HTML 面包屑添加配套的 BreadcrumbList 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
+                "add_breadcrumbs": "添加面包屑导航，帮助 AI 引擎理解站点结构：\n  1. 在页面可见处加入面包屑：Home > Category > Page\n  2. 同步添加 BreadcrumbList JSON-LD",
+                "add_org_field": "在 Organization JSON-LD 中补充 \"{field}\" 字段，以提升知识面板入选概率。",
+                "add_org_fields": "补充更多字段，强化知识面板入选条件：\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]",
+                "add_organization": "添加 Organization 结构化数据，争取进入知识面板：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>"
+              },
+              "search_reg": {
+                "bing_webmaster": "在 Bing Webmaster Tools 注册站点（https://www.bing.com/webmasters）：\n  1. 添加站点并完成所有权验证\n  2. 提交 sitemap.xml\n  3. 这一步必不可少——Bing 索引支撑 Microsoft Copilot、ChatGPT（基于 Bing 检索）\n     以及其他以 Bing 为搜索后端的 AI 助手。",
+                "google_console": "在 Google Search Console 注册站点（https://search.google.com/search-console）：\n  1. 添加资源（URL 前缀或域名）\n  2. 通过 meta 标签、DNS 或 HTML 文件完成所有权验证\n  3. 在 Sitemaps 一栏提交 sitemap.xml\n  4. 监控索引状态并修复抓取错误\n这一步非常关键——Google AI Overviews 与 SGE 都从 Google 索引中取数据。",
+                "indexnow": "配置 IndexNow，让 Bing、Yandex 等搜索引擎即时索引新内容：\n  1. 在 https://www.indexnow.org/ 申请 API key\n  2. 将密钥文件放在站点根目录：https://yoursite.com/{key}.txt\n  3. 内容变更时通知搜索引擎：\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. 许多 CMS 插件（例如 WordPress）已内置 IndexNow 支持。",
+                "submit_all": "仅有 sitemap.xml 和 robots.txt 文件是不够的。\n还需要在各平台注册并主动提交：\n  \n  Google Search Console → 提交 sitemap → 支撑 Google AI Overviews / SGE\n  Bing Webmaster Tools  → 提交 sitemap → 支撑 Copilot、ChatGPT（Bing 后端）\n  IndexNow              → 自动通知    → Bing、Yandex、Naver 即时索引\n  \n不主动提交也可能被搜索引擎自然发现 sitemap，\n但主动提交能显著提升索引速度与可靠性。"
+              },
+              "sitemap": {
+                "add_lastmod": "为 sitemap 中每个 <url> 节点补充 <lastmod>：\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>",
+                "create_file": "在站点根目录创建 sitemap.xml，示例：\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\n大多数 CMS（WordPress、Next.js 等）可以自动生成 sitemap。"
+              },
+              "social": {
+                "add_sameas": "在 Organization JSON-LD 中通过 sameAs 关联各社交平台资料：\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\n这能帮助 AI 引擎跨平台确认你的实体身份。",
+                "add_twitter_card": "在 <head> 中添加 Twitter card 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
+              },
+              "structured": {
+                "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 Google Rich Results Test 校验：https://search.google.com/test/rich-results"
+              },
+              "tech_crawl": {
+                "add_rss_feed": "为内容添加 RSS 或 Atom feed，并在 <head> 中引用：\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\n大多数 CMS 可自动生成 feed；静态站点可使用 eleventy-rss 等工具。",
+                "broken_canonical": "canonical URL {canonical_url} 已失效。请修复目标页面，或将 canonical 更新为可访问的 URL。",
+                "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 Cloudflare 等 CDN 自动启用 HTTP/2。",
+                "fix_canonical_chain": "修复 canonical 链——每个页面的 canonical 应直接指向最终 URL，而不是经过中间跳转。\n将各页面的 canonical 设置为自身 URL 或最终目标。",
+                "reduce_redirects": "将重定向链压缩为单跳（A -> B，而不是 A -> B -> C -> D）。\n更新服务器配置，直接重定向到最终 URL。"
+              },
+              "url_norm": {
+                "lowercase_url": "确保服务器对 URL 大小写做归一化（统一为小写）。Nginx 示例：\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }",
+                "www_redirect": "配置 301 重定向，让其中一个版本指向另一个：\n  # Nginx：将 www 重定向到非 www\n  server {{ server_name www.{host}; return 301 https://{host}$request_uri; }}\n然后将 canonical 设置为优选版本。"
+              },
+              "well_known": {
+                "add_security_txt": "建议添加 .well-known/security.txt（RFC 9116）作为信任信号：\n  Contact: mailto:security@yoursite.com\n  Preferred-Languages: en\n  Canonical: https://yoursite.com/.well-known/security.txt",
+                "fix_invalid_json": "用 JSON 校验工具检查并修复 {path} 中的语法错误。"
               }
             },
             "scoreCard": {

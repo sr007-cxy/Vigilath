@@ -35,14 +35,15 @@ const VALID_MODES: AdvancedMode[] = [
 
 interface ModeVisual {
   gradient: string;
-  label: string;
   icon: ReactNode;
 }
 
+// Visual tokens per advanced mode. Display labels come from i18n via
+// `home.advanced.cards.<mode>.title` — kept out of this table so the UI
+// stays fully localizable.
 const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   compare: {
     gradient: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-    label: 'Competitive',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="10" width="5" height="11" rx="1" />
@@ -53,7 +54,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
   crawlTest: {
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
-    label: 'Crawlability',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9" />
@@ -65,7 +65,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
   authority: {
     gradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-    label: 'Authority',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -74,7 +73,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
   citation: {
     gradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
-    label: 'AI Citations',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M7 7h3v3H7z" />
@@ -86,7 +84,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
   visibility: {
     gradient: 'linear-gradient(135deg, #06b6d4 0%, #a855f7 50%, #ec4899 100%)',
-    label: 'AI Visibility',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -96,7 +93,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
   entity: {
     gradient: 'linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)',
-    label: 'Entity GEO',
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -295,7 +291,7 @@ export function Advanced() {
                     {MODE_MIN_TIER[mode]}+
                   </span>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#3f4143] text-[10px] font-mono text-secondary">
-                    {MODE_VISUALS[mode].label}
+                    {t(`home.advanced.cards.${mode}.title`)}
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-2 leading-tight">
@@ -628,6 +624,7 @@ function MetricRing({
   const r = 42;
   const c = 2 * Math.PI * r;
   const offset = c - (pct / 100) * c;
+  const isPercent = suffix === '%';
   return (
     <div className="relative w-28 h-28 shrink-0">
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
@@ -646,11 +643,16 @@ function MetricRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-bold gradient-text leading-none tabular-nums">{value}</div>
-        <div className="text-[10px] text-secondary mt-1">
-          / {max}
-          {suffix}
+        <div className="text-2xl font-bold gradient-text leading-none tabular-nums">
+          {value}
+          {isPercent && <span className="text-lg">%</span>}
         </div>
+        {!isPercent && (
+          <div className="text-[10px] text-secondary mt-1">
+            / {max}
+            {suffix}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -681,7 +683,7 @@ function CompareResult({ data }: { data: CompareResponse }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-[0.15em] text-emerald-400 font-bold mb-1">
-                Winner
+                {t('home.advanced.result.compare.winner')}
               </div>
               <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="text-lg sm:text-xl font-bold text-primary truncate">
@@ -692,7 +694,7 @@ function CompareResult({ data }: { data: CompareResponse }) {
                   <span className="text-base text-secondary">/100</span>
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
-                  Grade {data.winner.grade}
+                  {t('home.advanced.result.compare.gradePrefix')} {data.winner.grade}
                 </span>
                 {data.winner.lead > 0 && (
                   <span className="text-xs text-secondary">+{data.winner.lead} {t('home.advanced.result.lead')}</span>
@@ -857,7 +859,9 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
                         : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                       }`}
                   >
-                    {blocked ? 'Blocked' : 'Allowed'}
+                    {blocked
+                      ? t('home.advanced.result.crawl.blocked')
+                      : t('home.advanced.result.crawl.allowed')}
                   </span>
                 </li>
               );
@@ -885,7 +889,7 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap ${tone}`}
                   >
-                    {b.result}
+                    {t(`home.advanced.result.crawl.wafStatus.${b.result}`, { defaultValue: b.result })}
                     {b.status_code ? ` · ${b.status_code}` : ''}
                   </span>
                 </li>
@@ -963,9 +967,10 @@ function CrawlTestResult({ data }: { data: CrawlTestResponse }) {
 
 // --- Authority ---
 function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
+  const { t } = useTranslation();
   return (
     <>
-      <SectionCard title={`Authority Audit — ${data.brand}`}>
+      <SectionCard title={t('home.advanced.result.authority.title', { brand: data.brand })}>
         <div className="flex items-end gap-4 mb-4">
           <div>
             <div className="text-4xl font-bold gradient-text">
@@ -974,26 +979,34 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
             <div className="text-sm text-secondary">{data.grade}</div>
           </div>
           <div className="flex-1">
-            <ScoreBar label="Overall" value={data.score} max={data.max_score} />
+            <ScoreBar label={t('home.advanced.result.authority.overall')} value={data.score} max={data.max_score} />
           </div>
         </div>
       </SectionCard>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SectionCard title="Online reviews">
+        <SectionCard title={t('home.advanced.result.authority.reviewsTitle')}>
           <p className="text-sm text-secondary mb-2">
-            Review schema present: <span className={data.reviews.has_schema ? 'text-emerald-400' : 'text-amber-400'}>{data.reviews.has_schema ? 'yes' : 'no'}</span>
+            {t('home.advanced.result.authority.reviewSchema')}{' '}
+            <span className={data.reviews.has_schema ? 'text-emerald-400' : 'text-amber-400'}>
+              {data.reviews.has_schema
+                ? t('home.advanced.result.authority.yes')
+                : t('home.advanced.result.authority.no')}
+            </span>
           </p>
-          <p className="text-sm text-secondary mb-1">Platforms found:</p>
+          <p className="text-sm text-secondary mb-1">{t('home.advanced.result.authority.platformsFound')}</p>
           <ul className="text-sm">
-            {data.reviews.platforms.length === 0 && <li className="text-amber-400">None</li>}
+            {data.reviews.platforms.length === 0 && (
+              <li className="text-amber-400">{t('home.advanced.result.authority.none')}</li>
+            )}
             {data.reviews.platforms.map((p) => (
               <li key={p} className="text-emerald-400">• {p}</li>
             ))}
           </ul>
         </SectionCard>
-        <SectionCard title="Awards & trust signals">
+        <SectionCard title={t('home.advanced.result.authority.awardsTitle')}>
           <p className="text-sm text-secondary mb-2">
-            Signal count: <span className="text-primary font-semibold">{data.awards.signal_count}</span>
+            {t('home.advanced.result.authority.signalCount')}{' '}
+            <span className="text-primary font-semibold">{data.awards.signal_count}</span>
           </p>
           {data.awards.keywords.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
@@ -1005,25 +1018,31 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
             </div>
           )}
         </SectionCard>
-        <SectionCard title="Google authority">
+        <SectionCard title={t('home.advanced.result.authority.googleTitle')}>
           <p className="text-sm mb-1">
-            <span className="text-secondary">Indexed pages: </span>
-            <span className="text-primary">{data.google.indexed_pages ?? 'unknown'}</span>
+            <span className="text-secondary">{t('home.advanced.result.authority.indexedPages')} </span>
+            <span className="text-primary">
+              {data.google.indexed_pages ?? t('home.advanced.result.authority.unknown')}
+            </span>
           </p>
           <p className="text-sm mb-1">
-            <span className="text-secondary">Org schema fields: </span>
+            <span className="text-secondary">{t('home.advanced.result.authority.orgSchemaFields')} </span>
             <span className="text-primary">{data.google.kg_schema_fields}/9</span>
           </p>
           <p className="text-sm">
-            <span className="text-secondary">Wikipedia / Wikidata: </span>
+            <span className="text-secondary">{t('home.advanced.result.authority.wikiLabel')} </span>
             <span className={data.google.wikipedia_or_wikidata ? 'text-emerald-400' : 'text-amber-400'}>
-              {data.google.wikipedia_or_wikidata ? 'yes' : 'no'}
+              {data.google.wikipedia_or_wikidata
+                ? t('home.advanced.result.authority.yes')
+                : t('home.advanced.result.authority.no')}
             </span>
           </p>
         </SectionCard>
-        <SectionCard title="Authoritative mentions">
+        <SectionCard title={t('home.advanced.result.authority.mentionsTitle')}>
           <ul className="text-sm">
-            {data.mentions.platforms.length === 0 && <li className="text-amber-400">None</li>}
+            {data.mentions.platforms.length === 0 && (
+              <li className="text-amber-400">{t('home.advanced.result.authority.none')}</li>
+            )}
             {data.mentions.platforms.map((p) => (
               <li key={p} className="text-emerald-400">• {p}</li>
             ))}
@@ -1045,20 +1064,20 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
           <MetricRing value={Math.round(data.citation_rate)} max={100} suffix="%" />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
-              Citation Rate · {data.engine}
+              {t('home.advanced.result.citation.rate')} · {data.engine}
             </div>
             <h3 className="text-xl font-bold text-primary mb-3 truncate">{data.domain}</h3>
             <div className="grid grid-cols-3 gap-2.5">
               <StatTile
-                label={t('home.advanced.result.citation.cited')}
-                value={`${data.cited_queries}/${data.valid_queries}`}
-                accent="good"
-                hint={t('home.advanced.result.citation.queries')}
+                label={t('home.advanced.result.citation.questionsAsked')}
+                value={data.valid_queries}
+                hint={t('home.advanced.result.citation.questionsAskedHint')}
               />
               <StatTile
-                label={t('home.advanced.result.citation.citationCount')}
-                value={data.total_citations}
-                hint={t('home.advanced.result.citation.directCitations')}
+                label={t('home.advanced.result.citation.cited')}
+                value={data.cited_queries}
+                accent="good"
+                hint={t('home.advanced.result.citation.citedHint', { total: data.valid_queries })}
               />
               <StatTile
                 label={t('home.advanced.result.citation.grade')}
@@ -1083,7 +1102,12 @@ function CitationResult({ data }: { data: CitationCheckResponse }) {
                 : status === 'error'
                   ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                   : 'bg-rose-500/15 text-rose-400 border-rose-500/30';
-            const statusLabel = status === 'cited' ? 'CITED' : status === 'error' ? 'ERROR' : 'NOT CITED';
+            const statusLabel =
+              status === 'cited'
+                ? t('home.advanced.result.citation.statusCited')
+                : status === 'error'
+                  ? t('home.advanced.result.citation.statusError')
+                  : t('home.advanced.result.citation.statusNot');
             return (
               <li
                 key={i}
@@ -1124,13 +1148,13 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
   const { t } = useTranslation();
   const categories = useMemo(
     () => [
-      { label: 'Prompt Visibility', value: data.scores.visibility },
-      { label: 'Entity Clarity', value: data.scores.entity },
-      { label: 'Competitor Position', value: data.scores.competitor },
-      { label: 'Answer Stability', value: data.scores.stability },
-      { label: 'Content Gaps', value: data.scores.content_gap },
+      { label: t('home.advanced.result.visibility.categories.visibility'), value: data.scores.visibility },
+      { label: t('home.advanced.result.visibility.categories.entity'), value: data.scores.entity },
+      { label: t('home.advanced.result.visibility.categories.competitor'), value: data.scores.competitor },
+      { label: t('home.advanced.result.visibility.categories.stability'), value: data.scores.stability },
+      { label: t('home.advanced.result.visibility.categories.contentGap'), value: data.scores.content_gap },
     ],
-    [data.scores],
+    [data.scores, t],
   );
   const framingTotal = Object.values(data.framings).reduce((a, b) => a + b, 0);
   return (
@@ -1144,7 +1168,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
           <MetricRing value={data.total_score} max={data.max_score} />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
-              AI Visibility
+              {t('home.advanced.cards.visibility.title')}
             </div>
             <h3 className="text-xl font-bold text-primary mb-2 truncate">{data.brand}</h3>
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
@@ -1222,7 +1246,7 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
                 <li key={f}>
                   <div className="flex justify-between mb-1">
                     <span className="text-xs text-secondary capitalize">
-                      {f.replace('_', ' ')}
+                      {t(`home.advanced.result.entity.framings.${f}`, { defaultValue: f.replace('_', ' ') })}
                     </span>
                     <span className="text-xs text-primary font-mono tabular-nums">{n}</span>
                   </div>
@@ -1273,6 +1297,20 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
 }
 
 // --- Entity ---
+// Map backend-emitted English score-bar labels to frontend i18n slugs.
+// Kept here rather than in i18n so we can fall back to the raw label when the
+// backend adds a new one we haven't translated yet.
+const ENTITY_SCORE_SLUG: Record<string, string> = {
+  'Entity Recognition': 'entityRecognition',
+  'Entity Clarity': 'entityClarity',
+  'Category Association': 'categoryAssociation',
+  'Competitive Position': 'competitivePosition',
+  'Sentiment & Framing': 'sentimentFraming',
+  'Content Gap': 'contentGap',
+  'Knowledge Graph': 'knowledgeGraph',
+  'Platform Footprint': 'platformFootprint',
+};
+
 function EntityResult({ data }: { data: EntityAuditResponse }) {
   const { t } = useTranslation();
   const totalPlatforms = data.platforms.found.length + data.platforms.not_found.length;
@@ -1296,7 +1334,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
           <MetricRing value={data.total_score} max={data.max_score} />
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-[0.15em] text-secondary mb-1 font-semibold">
-              Entity GEO
+              {t('home.advanced.cards.entity.title')}
             </div>
             <h3 className="text-xl font-bold text-primary mb-2 truncate">{data.entity}</h3>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1304,7 +1342,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
                 {data.entity_type}
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full gradient-bg text-white uppercase tracking-wider">
-                Grade {data.grade}
+                {t('home.advanced.result.entity.gradePrefix')} {data.grade}
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-[#3f4143] text-secondary">
                 {data.percent}%
@@ -1313,9 +1351,13 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
           </div>
         </div>
         <div className="relative border-t border-[#2a2a2e] pt-4">
-          {Object.entries(data.scores).map(([name, v]) => (
-            <ScoreBar key={name} label={name} value={v} max={20} />
-          ))}
+          {Object.entries(data.scores).map(([name, v]) => {
+            const slug = ENTITY_SCORE_SLUG[name];
+            const label = slug
+              ? t(`home.advanced.result.entity.scoreLabels.${slug}`, { defaultValue: name })
+              : name;
+            return <ScoreBar key={name} label={label} value={v} max={20} />;
+          })}
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1375,7 +1417,9 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
                   className={`text-[10px] font-bold uppercase tracking-wider ${kg.found ? 'text-emerald-400' : 'text-rose-400'
                     }`}
                 >
-                  {kg.found ? 'Found' : 'Missing'}
+                  {kg.found
+                    ? t('home.advanced.result.entity.found')
+                    : t('home.advanced.result.entity.missing')}
                 </span>
               </li>
             ))}
@@ -1407,14 +1451,16 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.overallSentiment')}
               </span>
-              <span className="text-sm text-primary capitalize font-bold">{data.sentiment}</span>
+              <span className="text-sm text-primary capitalize font-bold">
+                {t(`home.advanced.result.entity.sentiments.${data.sentiment}`, { defaultValue: data.sentiment })}
+              </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.bestFraming')}
               </span>
               <span className="text-sm text-primary capitalize font-bold">
-                {data.best_framing.replace('_', ' ')}
+                {t(`home.advanced.result.entity.framings.${data.best_framing}`, { defaultValue: data.best_framing.replace('_', ' ') })}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#141416] border border-[#2a2a2e]">

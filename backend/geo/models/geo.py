@@ -17,6 +17,10 @@ class CheckResult(BaseModel):
     # (legacy un-migrated checks), the frontend falls back to `message`.
     message_key: Optional[str] = None
     message_params: Optional[Dict[str, Any]] = None
+    # i18n key + params for the fix recommendation, emitted by emit_fix().
+    # Same fallback: when absent the frontend renders plain `fix` text.
+    fix_key: Optional[str] = None
+    fix_params: Optional[Dict[str, Any]] = None
 
 class GeoTestResult(BaseModel):
     """Response model for GEO test result"""

@@ -179,9 +179,17 @@ def parse_geo_output(url: str, output: str, include_fix: bool) -> GeoTestResult:
 
             # For FIX lines, we need to handle differently
             if status == " FIX":
-                # This is a fix recommendation for the previous check
+                # This is a fix recommendation for the previous check.
+                # emit_fix() joins multi-line text with \x02 so the parser
+                # sees a single line — restore real newlines here.
+                restored = message.replace("\x02", "\n")
                 if checks:
-                    checks[-1].fix = message
+                    # Multiple legacy fix() calls per check all collapse onto
+                    # the last fix line, matching pre-migration behavior.
+                    checks[-1].fix = restored
+                    if message_key is not None:
+                        checks[-1].fix_key = message_key
+                        checks[-1].fix_params = message_params
             else:
                 # This is a new check result
                 check = CheckResult(
