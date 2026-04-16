@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
-import { paymentApi, shouldUseStripe } from '../services/paymentApi';
+import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 
 export function CheckoutPending() {
@@ -12,7 +12,6 @@ export function CheckoutPending() {
   const { token, isLoggedIn } = useMembership();
 
   const slug = params.get('slug') ?? '';
-  const useStripe = shouldUseStripe(i18n.language);
 
   const tierText = (tier: Membership) => {
     const slugToCardKey: Record<string, string> = { pro: 'detector' };
@@ -92,30 +91,18 @@ export function CheckoutPending() {
     setSubmitting(true);
     setPayError(null);
     try {
-      if (useStripe) {
-        const { checkout_url } = await paymentApi.createStripeCheckoutSession(
-          token,
-          tier.slug,
-          i18n.language,
-        );
-        window.location.href = checkout_url;
-        return;
-      }
-      const resp = await membershipApi.subscribe(token, tier.slug);
-      setPayError(
-        resp.message ||
-          t(
-            'checkoutPending.domesticPending',
-            '微信 / 支付宝支付即将上线，请联系销售完成订阅。',
-          ),
+      const { checkout_url } = await paymentApi.createStripeCheckoutSession(
+        token,
+        tier.slug,
+        i18n.language,
       );
+      window.location.href = checkout_url;
     } catch (err) {
       setPayError(
         err instanceof Error
           ? err.message
           : t('checkoutPending.payError', 'Failed to start payment'),
       );
-    } finally {
       setSubmitting(false);
     }
   };
@@ -238,15 +225,10 @@ export function CheckoutPending() {
                 </span>
               </div>
               <p className="text-xs text-secondary leading-relaxed">
-                {useStripe
-                  ? t(
-                      'checkoutPending.methodStripe',
-                      'You will be redirected to Stripe to complete the payment securely.',
-                    )
-                  : t(
-                      'checkoutPending.methodDomestic',
-                      '点击"立即支付"后将为您创建订单，微信 / 支付宝渠道即将上线。',
-                    )}
+                {t(
+                  'checkoutPending.methodStripe',
+                  'You will be redirected to Stripe to complete the payment securely.',
+                )}
               </p>
             </div>
 

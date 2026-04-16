@@ -461,7 +461,7 @@ class MembershipService:
             )
             if not db_user_membership:
                 return None
-            if datetime.now() < db_user_membership.end_date:
+            if datetime.utcnow() < db_user_membership.end_date:
                 return UserMembership(
                     id=db_user_membership.id,
                     user_id=db_user_membership.user_id,
@@ -506,10 +506,11 @@ class MembershipService:
             if not new_membership:
                 return None
 
-            start_date = datetime.now()
-            if "/月" in (new_membership.period or ""):
+            start_date = datetime.utcnow()
+            period = new_membership.period or ""
+            if "/月" in period or "/mo" in period.lower():
                 end_date = start_date + timedelta(days=30)
-            elif "/年" in (new_membership.period or ""):
+            elif "/年" in period or "/yr" in period.lower() or "/year" in period.lower():
                 end_date = start_date + timedelta(days=365)
             else:
                 end_date = start_date + timedelta(days=36500)

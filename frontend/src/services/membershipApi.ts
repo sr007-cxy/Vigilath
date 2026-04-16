@@ -32,8 +32,6 @@ export interface UserMembership {
   is_active: boolean;
 }
 
-export interface MembershipUpgradeResponse extends UserMembership {}
-
 export interface UsageResponse {
   quota: number;       // 0 = unlimited
   used: number;
@@ -47,12 +45,6 @@ export interface ContactSalesPayload {
   website?: string;
   tier_slug?: string;
   message?: string;
-}
-
-export interface SubscribeResponse {
-  status: 'pending' | 'active';
-  message: string;
-  tier_slug: string;
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -136,21 +128,6 @@ class MembershipApi {
     return response.json();
   }
 
-  async upgradeMembership(token: string, newMembershipId: number): Promise<MembershipUpgradeResponse> {
-    const response = await fetch(`${this.baseUrl}/upgrade-membership`, {
-      method: 'POST',
-      headers: localizedHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      }),
-      body: JSON.stringify({ new_membership_id: newMembershipId }),
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to upgrade membership'));
-    }
-    return response.json();
-  }
-
   async cancelMembership(token: string): Promise<{ message: string }> {
     const response = await fetch(`${this.baseUrl}/cancel-membership`, {
       method: 'POST',
@@ -184,20 +161,6 @@ class MembershipApi {
     return response.json();
   }
 
-  async subscribe(token: string, slug: string): Promise<SubscribeResponse> {
-    const response = await fetch(`${this.baseUrl}/subscribe`, {
-      method: 'POST',
-      headers: localizedHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      }),
-      body: JSON.stringify({ slug }),
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to subscribe'));
-    }
-    return response.json();
-  }
 }
 
 export const membershipApi = new MembershipApi();

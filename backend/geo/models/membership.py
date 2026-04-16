@@ -115,9 +115,6 @@ class UsageResponse(BaseModel):
     remaining: int    # -1 = 无限
     year_month: str
 
-class SubscribeRequest(BaseModel):
-    slug: str
-
 class UserMembership(BaseModel):
     id: int
     user_id: int

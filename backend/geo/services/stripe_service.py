@@ -140,14 +140,32 @@ class StripeService:
         finally:
             db.close()
 
-    def verify_and_fulfill_session(self, session_id: str) -> Dict[str, Any]:
+    def verify_and_fulfill_session(
+        self, session_id: str, caller_user_id: int
+    ) -> Dict[str, Any]:
         """Retrieve a session from Stripe and fulfill it if it's paid.
 
         This is the safety-net path the success page hits: if the webhook
         already ran, we return the already-fulfilled state; if not, we
         activate the membership here and mark the row paid.
+
+        Scoped to the caller: if the session doesn't belong to the caller
+        (or doesn't exist in our DB), we 404. This prevents an authenticated
+        user from probing another user's session state.
         """
         _ensure_configured()
+
+        db = SessionLocal()
+        try:
+            row = (
+                db.query(PaymentSessionORM)
+                .filter(PaymentSessionORM.stripe_session_id == session_id)
+                .first()
+            )
+            if row is None or row.user_id != caller_user_id:
+                raise AppException(status_code=404, message="Session not found")
+        finally:
+            db.close()
 
         try:
             session = stripe.checkout.Session.retrieve(session_id)

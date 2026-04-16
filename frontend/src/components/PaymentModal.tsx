@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { membershipApi, currencySymbol } from '../services/membershipApi';
-import { paymentApi, shouldUseStripe } from '../services/paymentApi';
+import { paymentApi } from '../services/paymentApi';
 
 interface Membership {
   id: number;
@@ -33,6 +33,9 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
   const [isLoading, setIsLoading] = useState(true);
   const [isPaying, setIsPaying] = useState(false);
   const [error, setError] = useState('');
+  // Activation happens after the Stripe redirect on the CheckoutSuccess page,
+  // not here — we redirect out of this modal before any state can change.
+  void onSuccess;
 
   useEffect(() => {
     (async () => {
@@ -59,22 +62,15 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
     setIsPaying(true);
     setError('');
     try {
-      if (shouldUseStripe(i18n.language)) {
-        // Overseas / English locale → redirect to Stripe Checkout.
-        const { checkout_url } = await paymentApi.createStripeCheckoutSession(
-          token,
-          tier.slug,
-          i18n.language,
-        );
-        window.location.href = checkout_url;
-        return; // navigation will unmount the modal
-      }
-      // Domestic fallback — existing behavior (stub upgrade until WeChat/Alipay ship).
-      await membershipApi.upgradeMembership(token, selectedId);
-      onSuccess();
+      const { checkout_url } = await paymentApi.createStripeCheckoutSession(
+        token,
+        tier.slug,
+        i18n.language,
+      );
+      window.location.href = checkout_url;
+      // Navigation will unmount the modal; nothing else to do here.
     } catch (err) {
       setError(err instanceof Error ? err.message : t('common.errors.paymentFailed'));
-    } finally {
       setIsPaying(false);
     }
   };

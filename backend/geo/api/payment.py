@@ -41,8 +41,14 @@ async def get_stripe_session(
     session_id: str,
     current_user: User = Depends(get_current_user),
 ):
-    """Safety-net: success page polls this to fulfill if webhook is lagging."""
-    return stripe_service.verify_and_fulfill_session(session_id)
+    """Safety-net: success page polls this to fulfill if webhook is lagging.
+
+    Scoped to the caller's own sessions — probing another user's session_id
+    returns 404 so we don't leak membership / payment state across accounts.
+    """
+    return stripe_service.verify_and_fulfill_session(
+        session_id, caller_user_id=current_user.id
+    )
 
 
 @router.post("/stripe/webhook")

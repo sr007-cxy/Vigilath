@@ -51,12 +51,3 @@ export const paymentApi = {
     return response.json();
   },
 };
-
-/**
- * All SaaS-tier subscriptions are currently routed through Stripe Checkout
- * regardless of UI language. Domestic providers (Alipay / WeChat Pay) are
- * not yet integrated, so the legacy English-only gating has been removed.
- */
-export function shouldUseStripe(_lang: string | undefined): boolean {
-  return true;
-}
