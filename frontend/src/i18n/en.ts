@@ -1530,6 +1530,7 @@ const en = {
                 "name": "Detector",
                 "description": "Full self-service checks for webmasters and indie developers",
                 "period": "/mo",
+                "originalPrice": "$9.99",
                 "features": [
                   "Account login required",
                   "23 complete checks (all sub-items)",
@@ -1638,7 +1639,7 @@ const en = {
                   "serviceCycle": "❌"
                 },
                 "detector": {
-                  "price": "$9.99/mo",
+                  "price": "$0.99/mo",
                   "type": "Self-service SaaS",
                   "loginRequired": "✅ Yes",
                   "checkItems": "23 items",

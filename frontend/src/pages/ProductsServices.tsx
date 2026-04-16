@@ -200,6 +200,11 @@ export function ProductsServices() {
                         )}
                         <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
                         <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
+                          {tier.slug === 'detector' && (
+                            <span className="text-lg text-secondary line-through mr-1">
+                              {t('productsServices.cards.detector.originalPrice')}
+                            </span>
+                          )}
                           <span className="text-3xl font-bold text-accent-primary">
                             {tier.slug === 'scale'
                               ? t('productsServices.cards.scale.getDemoPrice')
