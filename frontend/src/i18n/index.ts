@@ -251,7 +251,7 @@ if (!i18n.isInitialized) {
               "quotaExceeded": "You've used all your free checks this month. Upgrade a plan to keep checking.",
               "quotaCta": "View plans"
             },
-            "poweredBy": "Powered by GEO AI",
+            "poweredBy": "Powered by GApex",
             "contactLink": "Need expert optimization help?",
             "advanced": {
               "badge": "Members Only",
@@ -2123,7 +2123,7 @@ if (!i18n.isInitialized) {
               "quotaExceeded": "本月的免费检测次数已用完，升级会员方案后可继续检测。",
               "quotaCta": "查看会员方案"
             },
-            "poweredBy": "由 GEO AI 提供支持",
+            "poweredBy": "由 GApex 提供支持",
             "contactLink": "需要专家优化帮助？",
             "advanced": {
               "badge": "会员专享",

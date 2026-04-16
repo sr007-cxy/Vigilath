@@ -320,6 +320,19 @@
     color: var(--text-primary);
   }
 
+  .brand-logo {
+    display: block;
+    transition: filter 0.2s ease, opacity 0.2s ease;
+  }
+
+  body[data-theme="dark"] .brand-logo {
+    filter: invert(1) brightness(1.1);
+  }
+
+  .brand-logo:hover {
+    opacity: 0.85;
+  }
+
   body[data-theme="light"] .gradient-text,
   body[data-theme="dark"] .gradient-text {
     background: var(--accent-gradient);

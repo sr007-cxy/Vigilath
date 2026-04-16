@@ -109,14 +109,13 @@ export function Header() {
     >
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2.5">
-            <svg className="h-8 w-8" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="4" style={{ color: 'var(--accent-primary)' }} />
-              <path d="M30 50 L45 65 L70 35" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-primary)' }} />
-            </svg>
-            <span className="text-xl font-bold tracking-tight gradient-text">
-              GApex
-            </span>
+          <Link to="/" className="flex items-center" aria-label="GApex">
+            <img
+              src="/image/logo.png"
+              alt="GApex"
+              className="brand-logo h-9 w-auto select-none"
+              draggable={false}
+            />
           </Link>
         </div>
 
