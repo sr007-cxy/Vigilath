@@ -14,6 +14,7 @@ from geo.models.geo import GeoTestRequest, GeoTestResult
 from geo.models.membership import Membership
 from geo.utils.validator import validate_url, sanitize_url
 from geo.utils.error_handler import AppException
+from geo.utils.request_log import request_log
 from geo.api.auth import SECRET_KEY, ALGORITHM
 from geo.services.user_service import user_service
 from jose import JWTError, jwt
@@ -255,20 +256,24 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
     client_id = _ensure_anon_client_id(request, response)
     check_and_increment_anonymous_quota(client_id)
 
-    result = await asyncio.to_thread(
-        run_geo_check,
-        sanitized_url,
-        False,   # anonymous callers are always free tier — no fix text
-        None,    # no progress_callback
-        None,    # run all 25 for a realistic score
-        None,    # no user_id → L1 Redis only, no L2 DB fallback
-        "free",  # tier key
-    )
-    locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
-    result = _strip_locked_checks(result, locked)
-    result.tier = "free"
-    result.locked_categories = locked
-    return result
+    with request_log("check.anonymous", "default", sanitized_url,
+                     anon_id=client_id, tier="free") as rec:
+        result = await asyncio.to_thread(
+            run_geo_check,
+            sanitized_url,
+            False,   # anonymous callers are always free tier — no fix text
+            None,    # no progress_callback
+            None,    # run all 25 for a realistic score
+            None,    # no user_id → L1 Redis only, no L2 DB fallback
+            "free",  # tier key
+        )
+        locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+        result = _strip_locked_checks(result, locked)
+        result.tier = "free"
+        result.locked_categories = locked
+        rec["score"] = result.score
+        rec["grade"] = result.grade
+        return result
 
 
 @router.post("/check", response_model=GeoTestResult)
@@ -300,28 +305,33 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
         check_and_increment_anonymous_quota(client_id)
 
     effective_include_fix = body.include_fix and _fix_allowed(membership)
-    result = await asyncio.to_thread(
-        run_geo_check,
-        sanitized_url,
-        effective_include_fix,
-        None,             # no progress_callback
-        None,             # run all 25 regardless of tier — strip locked details below
-        user_id,          # L2 DB fallback
-        membership.slug,  # tier key
-    )
-    locked = _locked_for(membership)
-    result = _strip_locked_checks(result, locked)
-    result.tier = membership.slug
-    result.locked_categories = locked
+    with request_log("check.authenticated", "default", sanitized_url,
+                     user_id=user_id, tier=membership.slug) as rec:
+        result = await asyncio.to_thread(
+            run_geo_check,
+            sanitized_url,
+            effective_include_fix,
+            None,             # no progress_callback
+            None,             # run all 25 regardless of tier — strip locked details below
+            user_id,          # L2 DB fallback
+            membership.slug,  # tier key
+        )
+        locked = _locked_for(membership)
+        result = _strip_locked_checks(result, locked)
+        result.tier = membership.slug
+        result.locked_categories = locked
 
-    # Persist history for logged-in users only — anonymous runs have no
-    # owner to file them under. Best-effort; failures do not affect the
-    # response.
-    if user_id is not None:
-        mode = "advanced" if effective_include_fix else "free"
-        save_detection(user_id=user_id, result=result, mode=mode)
+        # Persist history for logged-in users only — anonymous runs have no
+        # owner to file them under. Best-effort; failures do not affect the
+        # response.
+        if user_id is not None:
+            mode = "advanced" if effective_include_fix else "free"
+            save_detection(user_id=user_id, result=result, mode=mode)
 
-    return result
+        rec["score"] = result.score
+        rec["grade"] = result.grade
+        rec["fix"] = effective_include_fix
+        return result
 
 
 @router.post("/geo", response_model=GeoTestResult)
@@ -340,20 +350,24 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     client_id = _ensure_anon_client_id(request, response)
     check_and_increment_anonymous_quota(client_id)
 
-    result = await asyncio.to_thread(
-        run_geo_check,
-        sanitized_url,
-        False,   # legacy anonymous alias — free tier, no fix text
-        None,    # no progress_callback
-        None,    # run all 25 for a realistic score
-        None,    # no user_id
-        "free",  # tier key
-    )
-    locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
-    result = _strip_locked_checks(result, locked)
-    result.tier = "free"
-    result.locked_categories = locked
-    return result
+    with request_log("geo.legacy", "default", sanitized_url,
+                     anon_id=client_id, tier="free") as rec:
+        result = await asyncio.to_thread(
+            run_geo_check,
+            sanitized_url,
+            False,   # legacy anonymous alias — free tier, no fix text
+            None,    # no progress_callback
+            None,    # run all 25 for a realistic score
+            None,    # no user_id
+            "free",  # tier key
+        )
+        locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
+        result = _strip_locked_checks(result, locked)
+        result.tier = "free"
+        result.locked_categories = locked
+        rec["score"] = result.score
+        rec["grade"] = result.grade
+        return result
 
 @router.get("/geo/stream")
 async def test_geo_stream(

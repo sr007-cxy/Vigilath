@@ -107,3 +107,4 @@ geo_checker.db*
 
 # Temp image scratch dirs
 temp_images/
+backend/logs/

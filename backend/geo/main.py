@@ -10,8 +10,14 @@ from fastapi.exceptions import RequestValidationError
 from jose import JWTError
 from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, advanced, account
 from geo.utils.error_handler import global_exception_handler, AppException
+from geo.utils.request_log import configure_request_log
 
 _timing_logger = logging.getLogger("geo.timing")
+
+# Per-request JSONL log for /api/check* — 独立于 geo.timing 的文件,
+# 每个 API 请求一行,含 user / tier / url / duration / status / score。
+# 日志路径 backend/logs/requests.jsonl(运行时 CWD = /backend)。
+configure_request_log()
 
 app = FastAPI(
     title="GEO Readiness Checker API",
