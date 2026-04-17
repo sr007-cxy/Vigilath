@@ -26,7 +26,14 @@ from geo.utils.timing import instrument_checks, instrument_funcs, time_block
 # Monkey-patch every check_* + the top-level generate_score with timing logs.
 # Applied once at import; subsequent imports are no-ops (idempotent via
 # _geo_timed marker inside timing._wrap).
+#
+# IMPORTANT: we must instrument BOTH _gc_checks (the source module) AND
+# _gc_orchestrate (which has local bindings via `from .checks import ...`).
+# CHECK_REGISTRY lambdas resolve `check_https(url)` against orchestrate's own
+# globals — instrumenting only _gc_checks wraps the wrong copy and per-check
+# timing disappears. Keep both or you lose visibility.
 instrument_checks(_gc_checks)
+instrument_checks(_gc_orchestrate)
 instrument_funcs(_gc_orchestrate, ["generate_score"])
 
 # Simple in-memory cache for test results

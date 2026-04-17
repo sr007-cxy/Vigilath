@@ -44,6 +44,11 @@ from geo.utils.timing import instrument_checks, instrument_funcs, time_block
 # _geo_timed marker inside timing._wrap, so running under both default and
 # advanced paths does not double-wrap.
 instrument_checks(_gc_checks)
+# Also wrap orchestrate's local bindings — CHECK_REGISTRY lambdas resolve
+# `check_https(url)` against orchestrate's globals, not _gc_checks. Missing
+# this means per-check timing disappears from logs even though check_* in
+# _gc_checks IS wrapped.
+instrument_checks(_gc_orchestrate)
 instrument_funcs(_gc_orchestrate, ["generate_score"])
 instrument_funcs(_mode_compare, ["compare_urls"])
 instrument_funcs(_mode_crawl_test, ["crawl_test"])
