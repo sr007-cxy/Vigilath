@@ -246,15 +246,13 @@ export function Result() {
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
+        setRerunLoading(false);
         if (err instanceof ApiError && err.status === 429) {
           setRerunQuotaExceeded(true);
           setRerunError(err.message || (t('home.error.quotaExceeded') as string));
         } else {
           setRerunError(err instanceof Error ? err.message : (t('home.error.failed') as string));
         }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setRerunLoading(false);
       });
 
     return () => controller.abort();
