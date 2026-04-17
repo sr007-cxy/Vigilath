@@ -253,7 +253,9 @@ export function Result() {
           setRerunError(err instanceof Error ? err.message : (t('home.error.failed') as string));
         }
       })
-      .finally(() => setRerunLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setRerunLoading(false);
+      });
 
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps

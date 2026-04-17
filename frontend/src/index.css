@@ -205,14 +205,14 @@
     border-radius: 8px;
     padding: 0.75rem 1.25rem;
     transition: all 0.5s ease;
-    border: none;
+    border: 1px solid var(--border-color);
     background-color: var(--bg-card);
     color: var(--text-primary);
   }
 
   input:focus {
     outline: none;
-    box-shadow: none;
+    border-color: var(--accent-primary, #4f46e5);
   }
 
   input::placeholder {
