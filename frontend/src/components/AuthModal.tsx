@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
 import { oauthApi } from '../services/oauthApi';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
   const [forgotMessage, setForgotMessage] = useState('');
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { setToken } = useAuth();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,8 +89,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
       const googleUser = await auth2.signIn();
       const idToken = googleUser.getAuthResponse().id_token;
       const response = await oauthApi.googleLogin(idToken);
-      localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email: googleUser.getBasicProfile().getEmail() }));
+      setToken(response.access_token);  // 广播到所有 useAuth / useMembership
       onClose();
       if (onSuccess) {
         onSuccess();
@@ -109,8 +111,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
 
     try {
       const response = await authApi.login(email, password);
-      localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
+      setToken(response.access_token);
       onClose();
       if (onSuccess) {
         onSuccess();
@@ -138,8 +140,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     try {
       await authApi.register(email, password);
       const loginRes = await authApi.login(email, password);
-      localStorage.setItem('token', loginRes.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
+      setToken(loginRes.access_token);
       onClose();
       if (onSuccess) {
         onSuccess();
