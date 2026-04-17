@@ -13,6 +13,42 @@ const BASE_CHAIN_ID = 8453;
 const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const PAY_EXECUTE_URL = '/pay/execute';
 
+// Resolve a single injected EIP-1193 provider in the presence of multiple
+// wallet extensions. Passing `window.ethereum` directly to ethers
+// `BrowserProvider` can recurse through a chain of proxies (MetaMask +
+// Phantom / Coinbase / OKX etc. wrap each other on window.ethereum), which
+// manifests as `Maximum call stack size exceeded` during `eth_requestAccounts`.
+//
+// Strategy:
+//   1. EIP-6963: ask wallets to announce themselves, prefer MetaMask.
+//   2. Legacy `window.ethereum.providers[]` array (MetaMask populates it when
+//      it detects peers), prefer MetaMask.
+//   3. Fall back to raw `window.ethereum`.
+async function pickInjectedProvider(): Promise<any> {
+  const discovered: Array<{ info: { rdns: string; name: string }; provider: any }> = [];
+  const handler = (event: any) => {
+    if (event?.detail?.provider) discovered.push(event.detail);
+  };
+  window.addEventListener('eip6963:announceProvider', handler as EventListener);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  // Give wallets a tick to respond. 100ms is enough in practice; we
+  // unregister the handler afterwards so late announcers don't leak.
+  await new Promise((r) => setTimeout(r, 100));
+  window.removeEventListener('eip6963:announceProvider', handler as EventListener);
+
+  const metaMaskAnnounced = discovered.find((p) => p.info?.rdns === 'io.metamask');
+  if (metaMaskAnnounced) return metaMaskAnnounced.provider;
+  if (discovered.length > 0) return discovered[0].provider;
+
+  const legacy = (window as any).ethereum;
+  if (legacy?.providers?.length) {
+    const mm = legacy.providers.find((p: any) => p.isMetaMask && !p.isBraveWallet);
+    if (mm) return mm;
+    return legacy.providers[0];
+  }
+  return legacy ?? null;
+}
+
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -115,11 +151,6 @@ export function CheckoutPending() {
 
   const handleUsdcPay = async () => {
     if (!tier || !token || submitting) return;
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) {
-      setPayError(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
-      return;
-    }
 
     const serviceId = slugToServiceId[tier.slug];
     if (!serviceId) {
@@ -135,9 +166,18 @@ export function CheckoutPending() {
       const order = await paymentApi.createMoltsPaySession(token, tier.slug);
       setUsdcAmount(order.amount_usdc);
 
-      // 2. Connect wallet & switch to Base
+      // 2. Resolve a single injected provider (works with multiple wallets)
+      const ethereum = await pickInjectedProvider();
+      if (!ethereum) {
+        throw new Error(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
+      }
+
+      // Initial connect request goes through the native provider rather than
+      // BrowserProvider.send(...) — the latter is where the `Maximum call
+      // stack size exceeded` recursion triggers when wallet proxies chain.
+      await ethereum.request({ method: 'eth_requestAccounts' });
+
       const provider = new BrowserProvider(ethereum);
-      await provider.send('eth_requestAccounts', []);
       const network = await provider.getNetwork();
       if (Number(network.chainId) !== BASE_CHAIN_ID) {
         try {
