@@ -24,6 +24,7 @@ from geo.models.payment import PaymentSessionORM
 from geo.models.membership import MembershipORM
 from geo.models.user import UserORM
 from geo.services.membership_service import membership_service
+from geo.services.price_override import get_test_price_override
 from geo.utils.error_handler import AppException
 
 
@@ -106,10 +107,7 @@ class StripeService:
             currency = (membership.currency or "usd").lower()
             amount_cents = _to_smallest_unit(float(membership.price), currency)
 
-            _PRICE_OVERRIDES = {
-                "guotielong@hotmail.com": 60,  # $0.60 for testing
-            }
-            override = _PRICE_OVERRIDES.get(user.email)
+            override = get_test_price_override(user.email, currency)
             if override is not None:
                 amount_cents = override
 
