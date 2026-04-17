@@ -717,6 +717,7 @@ export function Result() {
               </div>
             )}
           </main>
+          {rerunLoading && <CheckProgress mode={rerunMode} />}
         </div>
       );
     }

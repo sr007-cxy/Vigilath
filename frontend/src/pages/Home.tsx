@@ -257,7 +257,7 @@ export function Home() {
           </section>
 
           {/* Advanced Detection Section */}
-          <section className="mt-12 sm:mt-32">
+          <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
