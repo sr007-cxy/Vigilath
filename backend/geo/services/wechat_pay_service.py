@@ -32,6 +32,7 @@ from geo.models.membership import MembershipORM
 from geo.models.payment import PaymentSessionORM
 from geo.models.user import UserORM
 from geo.services.membership_service import membership_service
+from geo.services.price_override import get_test_price_override
 from geo.utils.error_handler import AppException
 
 logger = logging.getLogger("geo.wechat_pay")
@@ -179,6 +180,16 @@ class WechatPayService:
                 # USD → CNY rough conversion (server-side, adjustable)
                 usd_to_cny_rate = 7.2
                 amount_fen = int(round(float(membership.price) * usd_to_cny_rate * 100))
+
+            # WeChat always settles in CNY, regardless of the membership's
+            # nominal currency — so look up the test-account override in CNY.
+            override = get_test_price_override(user.email, "cny")
+            if override is not None:
+                logger.warning(
+                    "WeChat test-price override: user=%s tier=%s amount %d fen -> %d fen",
+                    user.email, membership_slug, amount_fen, override,
+                )
+                amount_fen = override
 
             out_trade_no = f"wechat_{uuid.uuid4().hex[:16]}"
 
