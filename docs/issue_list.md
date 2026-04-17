@@ -19,7 +19,6 @@
 |---|---|---|---|---|
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
 | [#11](#11-check_authority_trust-16-秒耗时) | **P0** | backend | `check_authority_trust` 16–22 s | **估 -15 s** |
-| [#12](#12-三份核心引擎文件不同步) | **P0** | infra | 三份核心引擎文件不同步 | 消除"改错文件不生效"bug |
 | [#13](#13-check_technical_crawlability-可达-44-s) | P1 | backend | `check_technical_crawlability` 可达 44 s | -30 s(最坏情况) |
 | [#4](#4-check_brand_entity_kg-wiki-调用串行) | P1 | backend | `check_brand_entity_kg` Wiki 串行 | -5 到 -10 s |
 | [#5](#5-check_authority_trust-认证源串行) | —— | —— | (merged into #11) | —— |
@@ -32,6 +31,7 @@
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
+| [#12](#12-核心引擎文件分叉-3-份-→-1-份-package) | `refactor/geo-checker-package` branch | P0:geo_checker 重构成 package,3 份副本合 1 |
 | [#10](#10-check_trust_safety-23-url-并行化) | `e8b4b04` | P0:check_trust_safety 23 URL 并发 batch(-48 s) |
 | [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
 | [#1](#1-check_cross_platform-串行探测-收益不及预期) | `7610d4b` / `e8b4b04` | P0:check_cross_platform 并发化(原改漏了 backend 副本,已补) |
@@ -73,35 +73,6 @@
 
 ---
 
-### #12 核心引擎文件不同步(剩 2 份 A ↔ C 待合)
-
-- **Priority**: **P0**(blocker — 仍然会导致改代码漏到一边)
-- **Status**: Open(**已阶段性收敛**,见下)
-- **Area**: infra
-
-**历史背景**:项目根曾并存**三份**核心副本(`/geo_checker.py` + `/geo_checker/__main__.py` + `/backend/geo_checker/__main__.py`)。第二份是 `pyproject.toml` 里 CLI entry point 指向的"半同步"副本,运行时没人加载。
-
-**2026-04-17 `ed0e3f2` 先收敛到 2 份**:
-- 删除了 orphan `/geo_checker/` 目录
-- `pyproject.toml` 的 entry point 改为 `geo-checker = "geo_checker:main"`,直接指向根的单文件 module
-- 新增 `[tool.setuptools] py-modules = ["geo_checker"]` 声明根为单文件模块
-- 清理了 `geo_checker.egg-info/` 旧 build 缓存
-- 验证:`pip install -e .` 后的 `geo-checker` CLI 命中**完整版**(根文件),不再是半残版
-
-**仍未解决**:
-- `/geo_checker.py`(A)vs `/backend/geo_checker/__main__.py`(C)的 i18n 风格分叉 —— 根用 `print()` + `_tr()` + `_ZH` 字典,backend 用 `emit_check()` 嵌入 key marker。两种风格不能直接相互替换。
-- 改 `check_*` 核心仍然要**同步改两份**。
-
-**下一步**(升级到新子 issue 跟踪):
-
-1. 把根 `geo_checker.py` 的 `print()` / `fix()` 逐个替换为 `emit_check()` / `emit_fix()`,内容与 C 保持一致
-2. 替换完成后:`backend/geo/services/geo_checker.py` 改用 `spec_from_file_location` 加载根(与 `advanced_runners.py` 同款)
-3. 删 `/backend/geo_checker/` 目录
-4. 预估工时 ~3–4 小时,改动涉及几千行 `print` 调用
-
-预计在做完 P0 其余性能项后开工(#2 `/visibility`、#11 `check_authority_trust`)。
-
----
 
 ### #13 `check_technical_crawlability` 可达 44 s
 
@@ -236,6 +207,42 @@
 ---
 
 ## Closed
+
+### #12 核心引擎文件分叉:3 份 → 1 份 package
+
+- **Closed**: branch `refactor/geo-checker-package`(2026-04-17)—— 待 merge 到 develop
+- **Area**: infra(重大重构)
+
+**症状**:根 `/geo_checker.py`(8065 行)+ `/geo_checker/__main__.py`(4311 行,orphan)+ `/backend/geo_checker/__main__.py`(4341 行)三份核心副本并存。改代码容易漏文件,合 upstream 困难。
+
+**根因**:fork 自 `Yaqing2023/GEO`(纯 CLI 工具),我们在 fork 里 fork 了一份加 i18n 后变成 backend 副本(C),根文件(A)继续镜像 upstream。orphan(B)是 `pyproject.toml` 的 CLI entry 指向的半同步版本。
+
+**修复**(7 阶段,每阶段独立 commit):
+
+1. **阶段 0**(`pre-refactor-package-2026-04-17` tag):切 `refactor/geo-checker-package` 分支
+2. **阶段 1**(`[commit sha]`):抽 4 个低风险模块到 `backend/geo_checker/`
+   - `constants.py` / `state.py` / `io.py` / `output.py`
+3. **阶段 2**(`31adcc5`):抽 25 个 `check_*` 到 `checks.py`(2958 行)
+4. **阶段 3**(`[sha]`):抽 `orchestrate.py` + 7 个 mode 文件到 `modes/` + `ai.py`
+5. **阶段 4**(`e3d9eae`):抽 `reports.py` + `output.py` 追加 _ZH 翻译表
+6. **阶段 5**(`fe202b5`):重写 `__main__.py` 为 CLI 入口 + `__init__.py` re-export
+7. **阶段 6**(`5fad751`):切换 `backend/geo/services/{geo_checker,advanced_runners}.py` 到新 package
+8. **阶段 7**(本 commit):删根 `/geo_checker.py`、`pyproject.toml` 改 `packages.find where=["backend"]`,package version 1.0.0 → 2.0.0
+
+**结果**:
+- 3 份核心代码 → **1 份** `backend/geo_checker/` package(12 文件,每份 100-2900 行)
+- i18n 风格统一为 `emit_check` / `emit_fix`(upstream 的 `_ZH` 翻译表作为 CLI 中文模式的补充保留)
+- `advanced_runners` 不再 `spec_from_file_location`,直接 `from geo_checker.modes import ...`
+- `pip install -e .` 的 CLI entry 指向完整版
+- **回归冒烟通过**:default check + advanced/aeo(200)+ advanced 付费 4 端点(402 tier gate,正确)+ `python -m geo_checker` 可用
+
+**经验**:
+- fork 项目的单文件 CLI + web 化后天然会分叉;最终不得不 package 化
+- 一个干净的 i18n 层(`emit_check` 带 key marker)是前后端分离的关键
+- 分 7 阶段 / 独立 commit 的重构策略,任何一步出错都能 revert 到上一阶段
+- 发现 2 个隐藏遗漏:`_pad` 在 4 个 mode 里缺导入;`flesch_kincaid_grade` 在 aeo 缺导入。`python -c "from geo_checker import *"` 测试无法发现这种问题,只有实际 HTTP 调用才能暴露 —— 下次重构要准备一份"每个 mode 跑一次最小请求"的脚本
+
+---
 
 ### #10 `check_trust_safety` 23 URL 并行化
 
