@@ -30,7 +30,7 @@
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
-| [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | 待补 commit | P0:前端检测触发改到 Result 页 + AbortController |
+| [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
 | [#R1](#r1-usdc-支付钱包爆栈) | `b9306e4` | USDC 支付钱包爆栈 `Maximum call stack size exceeded` |
 | [#R2](#r2-后端缺少-per-check-耗时可观测性) | `da3a8d9` | 后端缺少 per-check 耗时可观测性 |
 | [#R3](#r3-性能文档膨胀难以区分事件与参考) | `fae9152` / `c97dd49` / `c8466ee` | 性能文档体系重构 |
@@ -205,7 +205,7 @@
 
 ### #3 前端检测仍在 Home 页触发,用户返回/刷新即断连
 
-- **Closed**: 待补 commit(2026-04-17)
+- **Closed**: `e036bcb`(2026-04-17)
 - **Area**: frontend
 
 **症状**:近两天 nginx 16 次 499 里 13 次来自 `/api/check(anonymous)`,全部是用户在 Home 等待期间按返回键 / 刷新导致。axios 请求被浏览器中断,nginx 记 499,后端 continues 空跑到检测完成(baidu 实测 166 s)。
