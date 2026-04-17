@@ -115,7 +115,7 @@ const buildScoreBlock = (args: ExportArgs): string => {
     `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">/ 100</div>` +
     `</div>` +
     `</div>` +
-    `<div style="margin-top:10px;display:inline-block;padding:4px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:16px;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
+    `<div style="margin-top:10px;display:inline-flex;align-items:center;justify-content:center;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:16px;line-height:1;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
     `</div>` +
     // Right: interpretation + summary counts
     `<div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">` +

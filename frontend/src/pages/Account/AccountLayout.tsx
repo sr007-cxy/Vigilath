@@ -96,13 +96,13 @@ export function AccountLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+                className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center"
                 style={({ isActive }) =>
                   isActive
                     ? {
-                        background: 'var(--bg-tertiary)',
-                        color: 'var(--accent-primary)',
-                      }
+                      background: 'var(--bg-tertiary)',
+                      color: 'var(--accent-primary)',
+                    }
                     : { color: 'var(--text-secondary)' }
                 }
               >

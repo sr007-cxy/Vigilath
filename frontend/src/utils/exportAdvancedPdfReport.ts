@@ -94,7 +94,7 @@ const scoreHero = (args: {
   rightCaption?: string;
 }): string => {
   const grade = args.grade
-    ? `<div style="margin-top:10px;display:inline-block;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:15px;font-weight:700;color:#22d3ee;">${escapeHtml(args.grade)}${args.gradeNote ? ` · ${escapeHtml(args.gradeNote)}` : ''}</div>`
+    ? `<div style="margin-top:10px;display:inline-flex;align-items:center;justify-content:center;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:15px;line-height:1;font-weight:700;color:#22d3ee;">${escapeHtml(args.grade)}${args.gradeNote ? ` · ${escapeHtml(args.gradeNote)}` : ''}</div>`
     : '';
   const tiles = (args.rightStats || [])
     .map((s) => {
