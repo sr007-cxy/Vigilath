@@ -1,4 +1,4 @@
-// Shared primitives for PDF report generation. The default 23-category
+// Shared primitives for PDF report generation. The default 25-category
 // exporter (exportPdfReport.ts) and the 6 advanced-mode exporters
 // (exportAdvancedPdfReport.ts) both build a list of HTML "blocks" and
 // hand them to composeAndSavePdf, which captures, paginates, decorates

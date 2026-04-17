@@ -7,7 +7,7 @@ import {
   type UsageResponse,
 } from '../../services/membershipApi';
 
-const ALL_CATEGORIES_TOTAL = 23;
+const ALL_CATEGORIES_TOTAL = 25;
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -139,7 +139,7 @@ export function UsageTab() {
         </div>
         <p className="text-sm text-secondary mt-3">
           {unlockedCount === ALL_CATEGORIES_TOTAL
-            ? t('account.usage.allUnlocked', '您已解锁全部 23 项检测能力。')
+            ? t('account.usage.allUnlocked', '您已解锁全部 25 项检测能力。')
             : t('account.usage.partialUnlocked', '升级套餐可解锁更多检测类目。')}
         </p>
       </div>

@@ -8,7 +8,7 @@ const zhResult = {
               "hint": "请保持此页面打开",
               "almostDone": "即将完成…",
               "subtitle": {
-                "default": "正在运行 23 项 GEO 全量检测",
+                "default": "正在运行 25 项 GEO 全量检测",
                 "compare": "多站点并排打分对比",
                 "crawlTest": "测试 AI 爬虫可达性",
                 "authority": "审计外部权威信号",
@@ -29,7 +29,7 @@ const zhResult = {
                 "compare": {
                   "fetch": "抓取所有对比站点",
                   "parse": "解析各站点页面",
-                  "score": "对 23 项 GEO 类目打分",
+                  "score": "对 25 项 GEO 类目打分",
                   "diff": "计算类目差距",
                   "finalize": "生成对比表"
                 },

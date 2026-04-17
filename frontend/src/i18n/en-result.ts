@@ -8,7 +8,7 @@ const enResult = {
               "hint": "Please keep this page open",
               "almostDone": "Almost done…",
               "subtitle": {
-                "default": "Running all 23 GEO categories",
+                "default": "Running all 25 GEO categories",
                 "compare": "Scoring multiple sites side-by-side",
                 "crawlTest": "Testing AI crawler reachability",
                 "authority": "Auditing off-page authority signals",
@@ -29,7 +29,7 @@ const enResult = {
                 "compare": {
                   "fetch": "Fetching all target sites",
                   "parse": "Parsing each site",
-                  "score": "Scoring all 23 GEO categories",
+                  "score": "Scoring all 25 GEO categories",
                   "diff": "Computing category differences",
                   "finalize": "Building comparison table"
                 },

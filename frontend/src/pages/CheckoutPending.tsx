@@ -172,33 +172,43 @@ export function CheckoutPending() {
         throw new Error(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
       }
 
-      // Initial connect request goes through the native provider rather than
-      // BrowserProvider.send(...) — the latter is where the `Maximum call
-      // stack size exceeded` recursion triggers when wallet proxies chain.
-      await ethereum.request({ method: 'eth_requestAccounts' });
+      // ALL wallet RPC calls go through the native EIP-1193 `request` method
+      // rather than ethers `BrowserProvider.send()`. BrowserProvider wraps the
+      // provider's `request` in its own JSON-RPC layer which re-triggers the
+      // proxy chain recursion (`Maximum call stack size exceeded`).
+      // BrowserProvider is only used to obtain a Signer for signTypedData.
+      const accounts: string[] = await ethereum.request({ method: 'eth_requestAccounts' });
+      const fromAddr = accounts[0];
 
-      const provider = new BrowserProvider(ethereum);
-      const network = await provider.getNetwork();
-      if (Number(network.chainId) !== BASE_CHAIN_ID) {
+      const chainIdHex: string = await ethereum.request({ method: 'eth_chainId' });
+      if (parseInt(chainIdHex, 16) !== BASE_CHAIN_ID) {
         try {
-          await provider.send('wallet_switchEthereumChain', [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }]);
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }],
+          });
         } catch (switchErr: any) {
           if (switchErr.code === 4902) {
-            await provider.send('wallet_addEthereumChain', [{
-              chainId: '0x' + BASE_CHAIN_ID.toString(16),
-              chainName: 'Base',
-              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-              rpcUrls: ['https://mainnet.base.org'],
-              blockExplorerUrls: ['https://basescan.org'],
-            }]);
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x' + BASE_CHAIN_ID.toString(16),
+                chainName: 'Base',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://mainnet.base.org'],
+                blockExplorerUrls: ['https://basescan.org'],
+              }],
+            });
           } else {
             throw switchErr;
           }
         }
       }
 
-      const signer = await provider.getSigner();
-      const fromAddr = await signer.getAddress();
+      // Pass the known address to getSigner() so ethers does NOT call
+      // eth_requestAccounts again internally (which would recurse).
+      const provider = new BrowserProvider(ethereum);
+      const signer = await provider.getSigner(fromAddr);
       setWalletAddr(fromAddr);
 
       // 3. Request 402 from MoltsPayServer to get payment requirements
@@ -397,24 +407,31 @@ export function CheckoutPending() {
 
             {/* Payment method selector */}
             <div className="mb-5">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <svg className="w-4 h-4 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                <span className="text-xs font-semibold text-primary">{t('checkoutPending.methodLabel')}</span>
+                <span className="text-sm font-semibold text-primary">{t('checkoutPending.methodLabel')}</span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setPayMethod('stripe')}
                   disabled={submitting}
-                  className={`rounded-xl border-2 p-4 text-left transition-all ${
+                  className={`relative rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'stripe'
-                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
-                      : 'border-border hover:border-accent-primary/40'
+                      ? 'border-white/90 bg-white/5'
+                      : 'border-white/20 opacity-50 hover:opacity-80 hover:border-white/40'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                      payMethod === 'stripe' ? 'border-white' : 'border-white/30'
+                    }`}>
+                      {payMethod === 'stripe' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                      )}
+                    </div>
                     <span className="text-xl">💳</span>
                     <div>
                       <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
@@ -426,13 +443,20 @@ export function CheckoutPending() {
                   type="button"
                   onClick={() => setPayMethod('usdc')}
                   disabled={submitting}
-                  className={`rounded-xl border-2 p-4 text-left transition-all ${
+                  className={`relative rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'usdc'
-                      ? 'border-accent-primary bg-accent-primary/10 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
-                      : 'border-border hover:border-accent-primary/40'
+                      ? 'border-white/90 bg-white/5'
+                      : 'border-white/20 opacity-50 hover:opacity-80 hover:border-white/40'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                      payMethod === 'usdc' ? 'border-white' : 'border-white/30'
+                    }`}>
+                      {payMethod === 'usdc' && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                      )}
+                    </div>
                     <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
                       <circle cx="16" cy="16" r="16" fill="#2775CA"/>
                       <path d="M20.5 18.5c0-2.1-1.3-2.8-3.8-3.1-1.8-.3-2.2-.7-2.2-1.4s.6-1.2 1.8-1.2c1.1 0 1.6.4 1.9 1.2.1.2.2.3.4.3h1c.2 0 .4-.2.3-.4-.3-1.2-1.1-2.1-2.4-2.4v-1.4c0-.2-.2-.4-.4-.4h-.9c-.2 0-.4.2-.4.4v1.3c-1.7.3-2.8 1.3-2.8 2.7 0 2 1.2 2.7 3.7 3.1 1.7.3 2.3.7 2.3 1.5s-.8 1.3-1.9 1.3c-1.5 0-2-.6-2.2-1.3-.1-.2-.2-.3-.4-.3h-1c-.2 0-.4.2-.3.4.4 1.4 1.2 2.2 2.7 2.5v1.4c0 .2.2.4.4.4h.9c.2 0 .4-.2.4-.4v-1.4c1.7-.2 2.9-1.3 2.9-2.8z" fill="#fff"/>

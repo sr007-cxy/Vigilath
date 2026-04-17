@@ -47,7 +47,7 @@ function renderCheckFix(
   return (check.fix || '').trim();
 }
 
-// 23 categories split into 7 tabs (2 free + 5 paid) aligned with
+// 25 categories split into 7 tabs (2 free + 5 paid) aligned with
 // docs/会员功能免费与付费功能项目列表.md §检测大项分组. Free and paid
 // groups do not cross over, so a whole paid tab can show 🔒 for non-members
 // while free tabs are always visible.

@@ -1353,7 +1353,7 @@ const zh = {
                   "25 项完整检测（全部子项）",
                   "每月 20 次检测",
                   "检测项优先级排序",
-                  "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
+                  "完整 25 类报告（AI Visibility Score + 字母等级 + 可视化）",
                   "检测历史记录（可回看）",
                   "基础技术支持（工单 / 邮件）"
                 ]
@@ -1425,7 +1425,7 @@ const zh = {
                 "monthlyChecks": "每月检测次数",
                 "optimizationDetails": "优化建议（修复方案）详细度",
                 "prioritySorting": "检测项优先级排序",
-                "fullReport": "完整报告（23 类全量）",
+                "fullReport": "完整报告（25 类全量）",
                 "history": "检测历史记录",
                 "support": "技术支持",
                 "basicGeo": "基础 GEO 覆盖",

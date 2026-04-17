@@ -16,7 +16,7 @@ export interface Membership {
   not_included: string[];
   tier_type: TierType;
   monthly_check_quota: number; // 0 = unlimited
-  allowed_check_categories: string[] | null; // null = all 23
+  allowed_check_categories: string[] | null; // null = all 25
   features_json: Record<string, any> | null;
   display_order: number;
   created_at: string;
