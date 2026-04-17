@@ -85,16 +85,82 @@ FREE_CATEGORIES = [
 
 
 def _run_checks(base_url, allowed_categories=None):
-    """Execute registered checks, optionally restricted by category whitelist."""
-    sitemap_urls = []
+    """Execute registered checks concurrently, optionally restricted by
+    category whitelist.
+
+    Issue #14: the 25 check_* functions are mutually independent (each fetches
+    its own URL paths and writes its own score category), so they run in
+    parallel via ThreadPoolExecutor. Exception: check_sitemap must run first
+    because its return value (sitemap_urls) is an input to check_multi_page.
+
+    Concurrency safety:
+      - state._scores protected by state._scores_lock (track_score)
+      - state._page_cache protected by state._page_cache_lock (io.fetch)
+      - stdout: each worker task buffers its output to a LOCAL StringIO, then
+        flushes it to the parent buffer as one atomic block under a lock.
+        Without this, the parser (parse_geo_output, line-based) would see
+        interleaved `--- Category ---` headers from concurrent tasks and
+        attribute checks to the wrong category.
+
+    Default max_workers=10 strikes a balance: 25 tasks finish in ~3 batches,
+    but we don't hammer any single target host with 25 simultaneous requests
+    (some check_* hit the same target for different paths).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import io as _io
+    import sys
+    import threading
+
     allowed_set = set(allowed_categories) if allowed_categories else None
-    for label, check_fn in CHECK_REGISTRY:
-        if allowed_set is not None and label not in allowed_set:
-            continue
-        if check_fn == "__sitemap__":
-            sitemap_urls = check_sitemap(base_url)
-        else:
-            check_fn(base_url, sitemap_urls)
+
+    def _should_run(label):
+        return allowed_set is None or label in allowed_set
+
+    # check_sitemap must run first — its return value is consumed by
+    # check_multi_page. Everything else is independent.
+    sitemap_urls = []
+    if _should_run("sitemap.xml"):
+        sitemap_urls = check_sitemap(base_url)
+
+    # Collect runnable checks (excluding sitemap which already ran)
+    runnable = [
+        (label, fn) for label, fn in CHECK_REGISTRY
+        if fn != "__sitemap__" and _should_run(label)
+    ]
+
+    if not runnable:
+        return sitemap_urls
+
+    # Capture the parent thread's stdout buffer (set by the backend service
+    # to a per-request StringIO). Each worker task gets its own local buf,
+    # and flushes the full block to the parent buf under a lock.
+    _proxy = sys.stdout
+    _parent_state = getattr(_proxy, "_state", None)
+    _parent_buf = getattr(_parent_state, "buf", None) if _parent_state is not None else None
+    _flush_lock = threading.Lock()
+
+    def _run_one(fn):
+        """Wrap a check so its print output is buffered into a local StringIO,
+        then flushed to the parent buf atomically once the check finishes.
+        This keeps each check's `--- Category ---` header + its check lines
+        as one contiguous block in the output, which is what parse_geo_output
+        expects."""
+        local_buf = _parent_buf
+        if _parent_state is not None and _parent_buf is not None:
+            local_buf = _io.StringIO()
+            _proxy._state.buf = local_buf
+        try:
+            fn(base_url, sitemap_urls)
+        finally:
+            if _parent_state is not None and _parent_buf is not None:
+                with _flush_lock:
+                    _parent_buf.write(local_buf.getvalue())
+                _proxy._state.buf = None
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = [pool.submit(_run_one, fn) for _label, fn in runnable]
+        for fut in as_completed(futures):
+            fut.result()  # let exceptions propagate
     return sitemap_urls
 
 

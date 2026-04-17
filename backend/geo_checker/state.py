@@ -4,31 +4,46 @@ Migrated from /geo_checker.py lines 27 (SHOW_FIX), 125 (_page_cache),
 148-188 (_scores / track_score / get_ai_visibility_score / get_grade /
 reset_state).
 
-These globals are inherited wholesale from the upstream CLI design. They are
-what necessitates `backend/geo/services/geo_checker.py::_geo_checker_lock` —
-concurrent requests in the same process would race here. A future P2 refactor
-will migrate these to contextvars or explicit parameters; for now, everything
-runs under the lock.
+Originally these globals were single-threaded (upstream CLI design), which is
+why backend/geo/services/geo_checker.py has `_geo_checker_lock` around the
+entire request. With issue #14 (top-level generate_score concurrency), we now
+need the 25 check_* to run in parallel WITHIN a single request — so the two
+mutable globals below carry their own locks:
+
+  - `_scores_lock`        — serializes `track_score` updates
+  - `_page_cache_lock`    — serializes dict read/write in io.fetch
+
+`SHOW_FIX` is a read-mostly flag toggled once per request (before parallel
+check execution begins), so it doesn't need locking.
+
+A future P2 refactor will migrate these to contextvars / explicit parameters
+to remove the locks entirely.
 """
+
+import threading
 
 # Toggled by --fix CLI flag, and also by the backend when running a tier that
 # should include fix recommendations. Read by output.fix / output.emit_fix.
+# Read-mostly — set once before concurrent check execution starts.
 SHOW_FIX = False
 
 # URL → requests.Response cache. Populated by io.fetch; reset by reset_state.
 _page_cache = {}
+_page_cache_lock = threading.Lock()
 
 # Category → {"earned": float, "max": float}. Accumulated by track_score;
 # read by get_ai_visibility_score and generate_score's breakdown.
 _scores = {}
+_scores_lock = threading.Lock()
 
 
 def track_score(category, earned, max_points):
-    """Record earned/max points for a check category."""
-    if category not in _scores:
-        _scores[category] = {"earned": 0.0, "max": 0.0}
-    _scores[category]["earned"] += earned
-    _scores[category]["max"] += max_points
+    """Record earned/max points for a check category. Thread-safe."""
+    with _scores_lock:
+        if category not in _scores:
+            _scores[category] = {"earned": 0.0, "max": 0.0}
+        _scores[category]["earned"] += earned
+        _scores[category]["max"] += max_points
 
 
 def get_ai_visibility_score():
@@ -59,7 +74,10 @@ def get_grade(score):
 def reset_state():
     """Reset global state for a fresh run. Called at the top of each CLI /
     API invocation so accumulated scores and cached pages don't bleed across
-    requests (when the lock has been released between them)."""
+    requests. Hold both locks to guarantee no concurrent check sees a
+    half-reset state."""
     global _scores, _page_cache
-    _scores = {}
-    _page_cache = {}
+    with _scores_lock:
+        _scores = {}
+    with _page_cache_lock:
+        _page_cache = {}

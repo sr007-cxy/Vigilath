@@ -18,7 +18,7 @@ Internal structure:
     __main__.py      — argparse CLI entry (`geo-checker ...`)
 """
 
-__version__ = "2.0.0"  # package refactor — was 1.0.0 monolithic
+__version__ = "2.1.0"  # 2.0.0: package refactor | 2.1.0: top-level concurrency (baidu 124s → 37s)
 
 # State + low-level utilities
 from .state import (
