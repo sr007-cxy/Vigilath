@@ -1,12 +1,17 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+import logging
+import time
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
 from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, advanced, account
 from geo.utils.error_handler import global_exception_handler, AppException
+
+_timing_logger = logging.getLogger("geo.timing")
 
 app = FastAPI(
     title="GEO Readiness Checker API",
@@ -58,6 +63,25 @@ app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
 app.include_router(moltspay_payment.router, prefix="/api/payment", tags=["moltspay"])
 app.include_router(advanced.router, prefix="/api", tags=["advanced"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])
+
+# Endpoint-level timing. Only logs /api/check* to keep noise down — other
+# endpoints (auth, usage polling, account pages) are fast and not interesting
+# for perf analysis. Also stamps the response with X-Process-Time in ms so
+# the browser network tab / curl can see it even without tail'ing logs.
+@app.middleware("http")
+async def _log_check_timing(request: Request, call_next):
+    t0 = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    response.headers["X-Process-Time"] = str(elapsed_ms)
+    path = request.url.path
+    if path.startswith("/api/check"):
+        _timing_logger.info(
+            f"http method={request.method} path={path} "
+            f"status={response.status_code} elapsed_ms={elapsed_ms}"
+        )
+    return response
+
 
 @app.get("/")
 async def root():

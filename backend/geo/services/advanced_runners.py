@@ -38,6 +38,24 @@ def _load_geo_checker_core():
 
 _geo = _load_geo_checker_core()
 
+# Timing instrumentation: wrap every check_* and every top-level runner in the
+# core module with elapsed-time logs. Gives us per-check visibility so we can
+# see e.g. check_cross_platform=82000ms vs check_https=200ms. Applied once at
+# module load, idempotent.
+from geo.utils.timing import instrument_checks, instrument_funcs, time_block  # noqa: E402
+
+instrument_checks(_geo)
+instrument_funcs(_geo, [
+    "generate_score",
+    "compare_urls",
+    "crawl_test",
+    "authority_audit",
+    "citation_check",
+    "ai_visibility",
+    "entity_audit",
+    "aeo_visibility",
+])
+
 
 class _ThreadLocalStdout:
     """Proxy that routes writes to a thread-local buffer when one is set,
@@ -83,7 +101,11 @@ def _silent_call(fn, *args, **kwargs) -> Dict[str, Any]:
     buf = io.StringIO()
     _stdout_proxy._state.buf = buf
     try:
-        result = fn(*args, **kwargs)
+        # Extra block-level timing so we see e.g. `block=advanced:ai_visibility
+        # elapsed_ms=185320` as a single line per request, independent of the
+        # function-level wrapping.
+        with time_block(f"advanced:{fn.__name__}"):
+            result = fn(*args, **kwargs)
     finally:
         _stdout_proxy._state.buf = None
     if not isinstance(result, dict):

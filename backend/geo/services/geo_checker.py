@@ -13,6 +13,13 @@ os.environ["GEO_EMIT_STRUCTURED"] = "1"
 
 from geo_checker import __main__ as _gc_module
 from geo.models.geo import GeoTestResult, CheckResult
+from geo.utils.timing import instrument_checks, instrument_funcs, time_block
+
+# Monkey-patch every check_* + the top-level generate_score with timing logs.
+# Applied once at import; subsequent imports (e.g. uvicorn reload) are no-ops
+# thanks to the _geo_timed marker in timing._wrap.
+instrument_checks(_gc_module)
+instrument_funcs(_gc_module, ["generate_score"])
 
 # Simple in-memory cache for test results
 # In a production environment, you might want to use Redis or another caching solution
@@ -83,7 +90,7 @@ def run_geo_check(
             old_show_fix = _gc_module.SHOW_FIX
             _gc_module.SHOW_FIX = include_fix
             try:
-                with redirect_stdout(buf):
+                with redirect_stdout(buf), time_block(f"default_check url={url}"):
                     _gc_module.generate_score(
                         url, allowed_categories=allowed_categories
                     )
