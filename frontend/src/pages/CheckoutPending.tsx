@@ -507,7 +507,7 @@ export function CheckoutPending() {
                     </svg>
                     <div>
                       <div className="text-sm font-semibold text-primary">USDC</div>
-                      <div className="text-[10px] text-secondary">Coinbase</div>
+                      <div className="text-[10px] text-secondary">Moltspay / Base</div>
                     </div>
                   </div>
                 </button>
