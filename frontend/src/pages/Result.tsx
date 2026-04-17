@@ -1166,7 +1166,15 @@ export function Result() {
                   <Tooltip
                     key={g.tab}
                     disabled={!g.isTabLocked}
-                    content={t('result.paywall.unlockCategory', { defaultValue: '升级检测会员解锁本项检测 →' })}
+                    content={
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openTierModal(); }}
+                        className="cursor-pointer hover:underline"
+                      >
+                        {t('result.paywall.unlockCategory')}
+                      </button>
+                    }
                   >
                     {tabButton}
                   </Tooltip>
@@ -1219,7 +1227,7 @@ export function Result() {
                         </div>
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-primary">
-                            {t('result.paywall.memberOnly', { defaultValue: '此检测项需要开通会员' })}
+                            {t('result.paywall.memberOnly')}
                           </p>
                           <p className="text-xs text-secondary">
                             {t('result.paywall.subtitle')}
@@ -1232,7 +1240,7 @@ export function Result() {
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                           </svg>
-                          {t('result.paywall.upgradePro', { defaultValue: '订阅会员' })}
+                          {t('result.paywall.upgradePro')}
                         </button>
                       </div>
                     </div>

@@ -316,7 +316,7 @@ export function Home() {
                   className="rounded-xl p-5 sm:p-6"
                   style={{ background: 'rgba(255,255,255,0.95)', color: '#141418' }}
                 >
-                  <h3 className="font-bold text-sm sm:text-base mb-1.5">{title}</h3>
+                  <h3 className="font-bold text-sm sm:text-base mb-1.5" style={{ color: '#141418' }}>{title}</h3>
                   {desc && <p className="text-xs sm:text-sm leading-relaxed" style={{ color: '#555' }}>{desc}</p>}
                 </div>
               );

@@ -551,7 +551,10 @@ const enResult = {
               "lockedCount": "{{count}} more checks locked",
               "subtitle": "Activate a membership to unlock every check and detailed fix recommendation.",
               "viewAll": "View all →",
-              "perCategoryHint": "View 2 of {{total}} checks (membership unlocks all)"
+              "perCategoryHint": "View 2 of {{total}} checks (membership unlocks all)",
+              "unlockCategory": "Upgrade to unlock this category →",
+              "memberOnly": "This category requires a membership",
+              "upgradePro": "Subscribe"
             },
             "upgradeHint": {
               "fixPrompt": "Upgrade to get fix recommendations →"

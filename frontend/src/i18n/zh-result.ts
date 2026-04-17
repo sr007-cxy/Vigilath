@@ -551,7 +551,10 @@ const zhResult = {
               "lockedCount": "还有 {{count}} 项检测结果已锁定",
               "subtitle": "开通会员即可解锁所有检测详情与优化建议",
               "viewAll": "查看全部 →",
-              "perCategoryHint": "查看 {{total}} 项检查中的 2 项（会员可查看全部）"
+              "perCategoryHint": "查看 {{total}} 项检查中的 2 项（会员可查看全部）",
+              "unlockCategory": "升级会员解锁本项检测 →",
+              "memberOnly": "此检测项需要开通会员",
+              "upgradePro": "订阅会员"
             },
             "upgradeHint": {
               "fixPrompt": "升级会员获取修复建议 →"

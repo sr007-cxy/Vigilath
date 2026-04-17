@@ -86,7 +86,16 @@ export function CheckoutPending() {
   const [payError, setPayError] = useState<string | null>(null);
   // All 3 methods available regardless of locale. Default to Stripe since it
   // works globally for both USD and RMB cardholders.
-  const [payMethod, setPayMethod] = useState<PayMethod>('stripe');
+  const [payMethod, setPayMethodRaw] = useState<PayMethod>('stripe');
+  const setPayMethod = (method: PayMethod) => {
+    setPayMethodRaw(method);
+    // Reset WeChat state when switching away so the pay button reappears
+    if (method !== 'wechat' && wechatStep === 'polling') {
+      if (wechatPollRef.current) { clearInterval(wechatPollRef.current); wechatPollRef.current = null; }
+      setWechatStep('idle');
+      setWechatCodeUrl('');
+    }
+  };
 
   // USDC / Web3 state
   const [usdcAmount, setUsdcAmount] = useState<number>(0);
