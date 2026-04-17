@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 
 from ..constants import PASS, WARN, FAIL, INFO, FIX
 from ..io import fetch, get_soup, get_text_content
-from ..output import print, emit_check, emit_fix, fix
+from ..output import print, emit_check, emit_fix, fix, _pad
 from ..state import (
     SHOW_FIX, _scores, _page_cache, reset_state, track_score,
     get_ai_visibility_score, get_grade,

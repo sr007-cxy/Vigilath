@@ -123,8 +123,10 @@ from .ai import (
     _classify_framing,
 )
 
-# CLI entry — imported so `python -m geo_checker` works
-from .__main__ import main
+# Note: deliberately NOT importing .__main__ here — Python's `python -m geo_checker`
+# complains with a RuntimeWarning when __main__ is imported indirectly via
+# __init__.py before being run. Users who want `main` can do:
+#   from geo_checker.__main__ import main
 
 
 __all__ = [
@@ -139,7 +141,6 @@ __all__ = [
     "citation_check",
     "ai_visibility",
     "entity_audit",
-    "main",
     # Constants
     "CHECK_REGISTRY",
     "ALL_CATEGORIES",

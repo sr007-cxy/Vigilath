@@ -14,12 +14,17 @@ from bs4 import BeautifulSoup
 
 from ..constants import AI_BOTS, AI_CRAWLERS, PASS, WARN, FAIL, INFO, FIX
 from ..io import fetch, get_soup, get_text_content
-from ..output import print, emit_check, emit_fix, fix
+from ..output import print, emit_check, emit_fix, fix, _pad
 from ..state import (
     SHOW_FIX, _scores, _page_cache, reset_state, track_score,
     get_ai_visibility_score, get_grade,
 )
 from ..orchestrate import run_silent
+from ..ai import (
+    _query_perplexity, _query_openai, _query_anthropic,
+    _query_deepseek, _query_doubao,
+    _check_brand_in_result, _extract_competitors, _classify_framing,
+)
 
 
 def compare_urls(urls, return_data=False):
