@@ -50,7 +50,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from typing import Optional, Dict, Any
 
 _log = logging.getLogger("geo.request")
@@ -60,13 +60,28 @@ _log.propagate = True  # 仍然冒泡到 root logger,journald 也能看到
 _LOG_FILE: Optional[str] = None
 
 
-def configure_request_log(log_dir: str = "logs", max_bytes: int = 10_000_000, backup_count: int = 30) -> str:
+def _date_suffix_namer(default_name: str) -> str:
+    """把 TimedRotatingFileHandler 默认的 "requests.jsonl.2026-04-17" 名字
+    改成 "requests-2026-04-17.jsonl",让 .jsonl 扩展名保留,IDE 语法高亮
+    正常,`jq ... requests-2026-04-*.jsonl` 通配跨日查询方便。"""
+    directory, filename = os.path.split(default_name)
+    prefix = "requests.jsonl."
+    if filename.startswith(prefix):
+        date = filename[len(prefix):]
+        return os.path.join(directory, f"requests-{date}.jsonl")
+    return default_name
+
+
+def configure_request_log(log_dir: str = "logs", backup_count: int = 30) -> str:
     """幂等地配置 FileHandler。在 main.py app 启动时调一次即可。
+
+    轮转策略:**每日 UTC 00:00 切割**。当天活跃文件始终叫
+    `requests.jsonl`,午夜过后它会被改名成 `requests-YYYY-MM-DD.jsonl`
+    (昨天的),然后新的 `requests.jsonl` 继续写今天的数据。
 
     Args:
         log_dir: 相对于当前 CWD 的日志目录(backend 运行时 CWD 是 /backend)
-        max_bytes: 单文件大小上限,超过后 rotate(默认 10 MB)
-        backup_count: 保留的老 log 数量(10 MB × 30 = ~300 MB 上限)
+        backup_count: 保留多少天的老 log(默认 30 天)
 
     Returns:
         实际写入的完整路径。如果 handler 已经配置过,直接返回已有的路径。
@@ -78,12 +93,18 @@ def configure_request_log(log_dir: str = "logs", max_bytes: int = 10_000_000, ba
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir, "requests.jsonl")
 
-    handler = RotatingFileHandler(
+    handler = TimedRotatingFileHandler(
         path,
-        maxBytes=max_bytes,
+        when="midnight",   # 每天 0:00 切
+        interval=1,        # 每 1 天
         backupCount=backup_count,
+        utc=True,          # 服务器也是 UTC,显式声明避免未来改时区踩坑
         encoding="utf-8",
     )
+    # suffix 决定切割后文件名的日期部分格式;默认对 'midnight' 就是 %Y-%m-%d
+    handler.suffix = "%Y-%m-%d"
+    # namer 改变最终文件名:把 .jsonl.2026-04-17 改成 -2026-04-17.jsonl
+    handler.namer = _date_suffix_namer
     # 每一行就是纯 JSON,不加时间前缀(JSON 里已经有 started_at / finished_at)
     handler.setFormatter(logging.Formatter("%(message)s"))
     _log.addHandler(handler)
@@ -91,8 +112,8 @@ def configure_request_log(log_dir: str = "logs", max_bytes: int = 10_000_000, ba
     _log.info(json.dumps({
         "event": "request_log_init",
         "path": _LOG_FILE,
-        "max_bytes": max_bytes,
-        "backup_count": backup_count,
+        "rotation": "daily_utc_midnight",
+        "backup_days": backup_count,
     }, ensure_ascii=False))
     return _LOG_FILE
 
