@@ -187,7 +187,7 @@ class WechatPayService:
             request_body = {
                 "appid": settings.WECHAT_PAY_APP_ID,
                 "mchid": settings.WECHAT_PAY_MCH_ID,
-                "description": f"GEO Readiness Checker - {membership.name}",
+                "description": f"GEO Readiness Checker - {membership.name}"[:127],
                 "out_trade_no": out_trade_no,
                 "notify_url": settings.WECHAT_PAY_NOTIFY_URL,
                 "amount": {
@@ -268,7 +268,7 @@ class WechatPayService:
         except (json.JSONDecodeError, ValueError):
             raise AppException(status_code=400, message="Invalid notification payload")
 
-        event_type = payload.get("event_type") or payload.get("event_type", "")
+        event_type = payload.get("event_type", "")
         resource = payload.get("resource")
         if not resource:
             raise AppException(status_code=400, message="Missing resource in notification")

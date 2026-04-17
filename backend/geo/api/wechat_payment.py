@@ -61,7 +61,13 @@ async def get_wechat_status(
                 wx_result = wechat_pay_service.query_order(row.stripe_session_id)
                 if wx_result.get("trade_state") == "SUCCESS":
                     wechat_pay_service._fulfill_if_needed(row.stripe_session_id)
-                    db.refresh(row)
+                    # Re-query — _fulfill_if_needed uses its own DB session
+                    db.expire(row)
+                    row = (
+                        db.query(PaymentSessionORM)
+                        .filter(PaymentSessionORM.id == payment_id)
+                        .first()
+                    )
             except Exception:
                 pass  # Safety net — don't fail the polling endpoint
 

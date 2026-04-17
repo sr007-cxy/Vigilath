@@ -88,6 +88,11 @@ export function CheckoutPending() {
   const [payError, setPayError] = useState<string | null>(null);
   const [payMethod, setPayMethod] = useState<PayMethod>(isZh ? 'wechat' : 'stripe');
 
+  // Sync payMethod when language changes mid-checkout
+  useEffect(() => {
+    setPayMethod(isZh ? 'wechat' : 'stripe');
+  }, [isZh]);
+
   // USDC / Web3 state
   const [usdcAmount, setUsdcAmount] = useState<number>(0);
   const [walletAddr, setWalletAddr] = useState<string>('');
