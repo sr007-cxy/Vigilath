@@ -25,7 +25,7 @@ export function GeoKnowledgeTabs() {
             <Link
               key={tab.to}
               to={tab.to}
-              className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
+              className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center"
               style={{
                 background: active ? 'var(--accent-primary)' : 'transparent',
                 color: active ? 'var(--bg-primary)' : 'var(--text-secondary)',

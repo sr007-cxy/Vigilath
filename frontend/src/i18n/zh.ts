@@ -243,7 +243,7 @@ const zh = {
               "quotaExceeded": "本月的免费检测次数已用完，升级会员方案后可继续检测。",
               "quotaCta": "查看会员方案"
             },
-            "poweredBy": "Powered by Zen7 Labs",
+            "poweredBy": "Powered by GApex",
             "contactLink": "需要专家优化帮助？",
             "slogan": {
               "title": "让 AI 引擎看见、信任并推荐您的品牌",
