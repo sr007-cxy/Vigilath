@@ -194,7 +194,11 @@ export function Result() {
   const [rerunKeywords, setRerunKeywords] = useState<string>('');
   const [rerunEntityName, setRerunEntityName] = useState<string>('');
   const [rerunEntityType, setRerunEntityType] = useState<'brand' | 'product' | 'person'>('brand');
-  const [rerunLoading, setRerunLoading] = useState(false);
+  // Start true when Home handed off a pendingUrl so the first paint renders
+  // <CheckProgress /> instead of the "no data" error card. Without this
+  // initial value, React's first render (before useEffect runs) would briefly
+  // show the error state.
+  const [rerunLoading, setRerunLoading] = useState(!!pendingUrl && !result);
   const [rerunError, setRerunError] = useState<string>('');
   const [rerunQuotaExceeded, setRerunQuotaExceeded] = useState(false);
 

@@ -5,10 +5,7 @@ from geo.services.membership_service import (
     FREE_CHECK_CATEGORIES,
     ALL_CHECK_CATEGORIES,
 )
-from geo.services.quota_service import (
-    check_and_increment_anonymous_quota,
-    check_and_increment_quota,
-)
+from geo.services.quota_service import check_and_increment_quota
 from geo.services.detection_service import save_detection
 from geo.models.geo import GeoTestRequest, GeoTestResult
 from geo.models.membership import Membership
@@ -246,15 +243,14 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
     check details are stripped server-side before we respond, so the UI only
     sees what it's allowed to render.
 
-    Rate-limited to ANONYMOUS_MONTHLY_QUOTA checks per browser per month
-    (tracked via the `geo_anon_id` cookie set on the response).
+    No monthly quota — anonymous callers can run unlimited checks. Cookie is
+    still minted for observability (`request_log` attaches `anon_id`).
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
 
     client_id = _ensure_anon_client_id(request, response)
-    check_and_increment_anonymous_quota(client_id)
 
     with request_log("check.anonymous", "default", sanitized_url,
                      anon_id=client_id, tier="free") as rec:
@@ -295,14 +291,13 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
 
     membership, user_id = _resolve_membership_from_request(request)
 
-    # Logged-in users get the per-tier monthly quota; everyone else (no token
-    # or invalid token) falls into the per-cookie anonymous bucket so we
-    # don't leave an unlimited backdoor on the same endpoint.
+    # Logged-in users get the per-tier monthly quota. Anonymous callers (no
+    # token or invalid token) are unlimited — still mint the cookie for
+    # observability but skip quota enforcement.
     if user_id is not None:
         check_and_increment_quota(user_id, membership)
     else:
-        client_id = _ensure_anon_client_id(request, response)
-        check_and_increment_anonymous_quota(client_id)
+        _ensure_anon_client_id(request, response)
 
     effective_include_fix = body.include_fix and _fix_allowed(membership)
     with request_log("check.authenticated", "default", sanitized_url,
@@ -341,14 +336,13 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     Runs the full 25 categories and strips the 18 locked ones before
     returning (same behavior as /check/anonymous). Kept so existing frontend
     calls to `geoApi.checkGeo` continue to work during the frontend
-    migration. Same per-cookie anonymous quota applies.
+    migration. No monthly quota — unlimited anonymous checks.
     """
     if not validate_url(body.url):
         raise AppException(status_code=400, message="Invalid URL format")
     sanitized_url = sanitize_url(body.url)
 
     client_id = _ensure_anon_client_id(request, response)
-    check_and_increment_anonymous_quota(client_id)
 
     with request_log("geo.legacy", "default", sanitized_url,
                      anon_id=client_id, tier="free") as rec:
@@ -393,11 +387,11 @@ async def test_geo_stream(
 
     # Enforce quota before spawning the background task so the 429 surfaces
     # synchronously on the SSE handshake instead of inside the event stream.
-    # Authenticated callers use their tier quota; anonymous SSE callers share
-    # the per-cookie anonymous bucket. We also need to remember whether to
-    # mint a fresh `geo_anon_id` cookie so we can attach it to the
-    # StreamingResponse below (set_cookie can't be called from inside the
-    # event generator since headers are flushed before yields).
+    # Only authenticated callers have a per-tier quota; anonymous SSE is
+    # unlimited. We still mint `geo_anon_id` for observability and have to
+    # remember it here so we can attach it to the StreamingResponse below
+    # (set_cookie can't be called from inside the event generator since
+    # headers are flushed before yields).
     set_anon_cookie_value: Optional[str] = None
     if user_id is not None:
         check_and_increment_quota(user_id, membership)
@@ -406,7 +400,6 @@ async def test_geo_stream(
         if not client_id:
             client_id = uuid.uuid4().hex
             set_anon_cookie_value = client_id
-        check_and_increment_anonymous_quota(client_id)
 
     # All 25 categories run for every tier now; display gating happens via
     # `locked_categories`, which the task strips from `checks[]` before the

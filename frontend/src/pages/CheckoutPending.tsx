@@ -100,7 +100,7 @@ export function CheckoutPending() {
 
   // WeChat Pay state
   const [wechatCodeUrl, setWechatCodeUrl] = useState<string>('');
-  const [wechatPaymentId, setWechatPaymentId] = useState<number>(0);
+  const [, setWechatPaymentId] = useState<number>(0);
   const [wechatAmount, setWechatAmount] = useState<number>(0);
   const [wechatStep, setWechatStep] = useState<'idle' | 'creating' | 'polling' | 'done'>('idle');
   const wechatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);

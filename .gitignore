@@ -108,3 +108,6 @@ geo_checker.db*
 # Temp image scratch dirs
 temp_images/
 backend/logs/
+
+# Local secrets (private keys, certificates etc) — never commit
+backend/secrets/
