@@ -1949,14 +1949,21 @@ def check_cross_platform(base_url):
                 if tag and tag.get("content"):
                     on_page_links[plat_name] = tag["content"]
 
-    # --- Phase 2: Probe platforms not found on-page ---
+    # --- Phase 2: Probe platforms not found on-page (concurrent) ---
+    # Serial was the single biggest default-check bottleneck — 10 platforms
+    # × 8s timeout = up to 80s blocking on this one function. Probes are
+    # independent, so we fan them out with ThreadPoolExecutor. max_workers
+    # caps at the platform count (≤ 10) to keep thread overhead minimal.
     probed = {}  # platform_name -> (found: bool, url)
     platforms_to_probe = {k: v for k, v in platforms.items() if k not in on_page_links}
 
     browser_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
-    for plat_name, plat_info in platforms_to_probe.items():
-        found = False
+    def _probe_platform(plat_name, plat_info):
+        """Probe one platform; return (plat_name, found, url).
+
+        Pure — no prints, no shared mutation. Caller aggregates into `probed`.
+        """
         for probe_url in plat_info["probe_urls"]:
             try:
                 r = requests.get(probe_url, timeout=8, allow_redirects=True, headers={
@@ -1985,13 +1992,21 @@ def check_cross_platform(base_url):
                         "we couldn't find", "does not exist",
                     ])
                     if not is_404_page:
-                        probed[plat_name] = (True, probe_url)
-                        found = True
-                        break
+                        return plat_name, True, probe_url
             except requests.RequestException:
                 pass
-        if not found:
-            probed[plat_name] = (False, plat_info["probe_urls"][0])
+        return plat_name, False, plat_info["probe_urls"][0]
+
+    if platforms_to_probe:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=min(10, len(platforms_to_probe))) as pool:
+            futures = [
+                pool.submit(_probe_platform, name, info)
+                for name, info in platforms_to_probe.items()
+            ]
+            for fut in as_completed(futures):
+                plat_name, found, url = fut.result()
+                probed[plat_name] = (found, url)
 
     # --- Phase 3: Report results ---
     found_platforms = []

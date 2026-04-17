@@ -17,10 +17,11 @@
 
 | ID | 优先级 | 领域 | 标题 | 预期收益 |
 |---|---|---|---|---|
-| [#1](#1-check_cross_platform-串行探测-10-个社交平台) | **P0** | backend | `check_cross_platform` 串行探测 | 默认 check 120 s → 30 s |
+| [#10](#10-check_trust_safety-耗时-55-秒总时的-33) | **P0** | backend | `check_trust_safety` 55 s 耗时 | **估 -40 到 -50 s** |
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
+| [#11](#11-check_authority_trust-16-秒耗时) | **P0** | backend | `check_authority_trust` 16 s | **估 -10 s** |
 | [#4](#4-check_brand_entity_kg-wiki-调用串行) | P1 | backend | `check_brand_entity_kg` Wiki 串行 | -5 到 -10 s |
-| [#5](#5-check_authority_trust-认证源串行) | P1 | backend | `check_authority_trust` 认证源串行 | -3 到 -5 s |
+| [#5](#5-check_authority_trust-认证源串行) | —— | —— | (merged into #11) | —— |
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
 | [#7](#7-_run_or_raise-三种故障混映射-503) | P1 | backend | `_run_or_raise` 错误码混淆 | 可观测性提升 |
 | [#8](#8-_page_cache-不跨-worker进程重启丢失) | P2 | backend/infra | `_page_cache` 跨 worker 共享 | 二次检测 < 1 s |
@@ -31,6 +32,7 @@
 | ID | 关闭 commit | 标题 |
 |---|---|---|
 | [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
+| [#1](#1-check_cross_platform-串行探测-收益不及预期) | 待补 commit | P0:check_cross_platform 并发化(收益低于估算,保留代码) |
 | [#R1](#r1-usdc-支付钱包爆栈) | `b9306e4` | USDC 支付钱包爆栈 `Maximum call stack size exceeded` |
 | [#R2](#r2-后端缺少-per-check-耗时可观测性) | `da3a8d9` | 后端缺少 per-check 耗时可观测性 |
 | [#R3](#r3-性能文档膨胀难以区分事件与参考) | `fae9152` / `c97dd49` / `c8466ee` | 性能文档体系重构 |
@@ -40,32 +42,30 @@
 
 ## Open — P0 当前批次
 
-### #1 `check_cross_platform` 串行探测 10 个社交平台
+### #10 `check_trust_safety` 耗时 55 秒,总时的 33%
 
-- **Priority**: P0
+- **Priority**: P0(新发现的头号瓶颈)
 - **Status**: Open
 - **Area**: backend(核心引擎)
 
-**症状**:默认 check 对"社交矩阵弱"的站点(baidu / zh-CN 工具站)实测能跑到 2–3 分钟。journald 取样 baidu.com 为 166 秒。
+**症状**:journald 计时日志显示 baidu.com 检测中 `check_trust_safety` 单函数耗时 **54 713 ms**,占 `generate_score` 总时(165 871 ms)的 **33%**。这是目前最大的单一热点。
 
-**根因**:`check_cross_platform` 顺序探测 10 个社交平台(X / LinkedIn / YouTube / GitHub / Reddit / Facebook / Instagram / Medium / TikTok / Quora),每个 `timeout=8 s`,最坏 80 s 只花在这一个 check。
+**根因**:待读源码确认(`geo_checker.py:1620` 起)。初步猜测:多个 trust/verify 页面的串行抓取(fetch 有 15 s 超时)+ 外链认证源调用。
 
 **涉及文件**:
-- `geo_checker.py:2784`(根,高级路径)
-- `geo_checker/__main__.py:1851`(默认 API 路径)
-- **两份都要改,改动保持一致**
+- `geo_checker.py:1620`(根)
+- `geo_checker/__main__.py` 对应位置(需确认行号)
 
-**处理方案**:
-- 把主循环包成 `ThreadPoolExecutor(max_workers=10)`,每个平台独立提交 `_probe_single()`
-- `_probe_single` 内不 `print`(避免多线程输出交错),把展示逻辑放主线程按字典遍历
-- 并发数上限 = 10(平台数),不需要更高
+**处理方案**:待分析后补充。推测方向:
+- 串行 fetch 改并发 `ThreadPoolExecutor`
+- 收紧某些 probe 的 timeout(15 s → 8 s)
+- 去掉冗余 / 低价值的探测
 
 **验收**:
-- 计时日志 `func=check_cross_platform elapsed_ms` 稳定 < 10000 ms
-- 对 baidu.com 跑一次,`block=default_check elapsed_ms` 从 ~120 s 降到 < 40 s
-- 各平台"是否找到"的字段与改前一致(用一个已知多平台入驻的品牌对照)
+- `func=check_trust_safety elapsed_ms` 稳定 < 10 000 ms(baidu)
+- 检测结果字段与改前一致
 
-**详细实施**:见 [`docs/性能处理方案.md §1`](./docs/性能处理方案.md)
+**详细实施**:待后续补充到 `docs/性能处理方案.md`。
 
 ---
 
@@ -97,6 +97,26 @@
 
 ---
 
+### #11 `check_authority_trust` 16 秒耗时
+
+- **Priority**: P0(新发现的第二瓶颈,原 P1 #5 升级)
+- **Status**: Open
+- **Area**: backend
+
+**症状**:journald 计时日志显示 baidu.com 检测中 `check_authority_trust` 耗时 **15 747 ms**,占总时的 9%。
+
+**根因**:bio 页(`/about`、`/about-us`、`/team` 等)+ 多个外部认证源(Medium、Substack、Forbes、HBR、arxiv、ORCID、Google Scholar)串行探测。与原 P1 #5 同根,升级到 P0。
+
+**涉及文件**:
+- `geo_checker.py:1336`
+- `geo_checker/__main__.py` 对应位置
+
+**处理方案**:并发化,`ThreadPoolExecutor(max_workers=5)`。同 #4 / #5 的原 P1 方案。
+
+**验收**:`func=check_authority_trust elapsed_ms` 稳定 < 5 000 ms(baidu)。
+
+---
+
 ## Open — P1 下一批次
 
 ### #4 `check_brand_entity_kg` Wiki 调用串行
@@ -115,15 +135,7 @@
 
 ### #5 `check_authority_trust` 认证源串行
 
-- **Priority**: P1
-- **Status**: Open
-- **Area**: backend
-
-**根因**:`geo_checker.py:1336` 附近,bio 页抓取 + 多个认证源(Medium / Substack / Forbes / HBR / arxiv / ORCID / Google Scholar)顺序访问。
-
-**处理方案**:同 #4,`ThreadPoolExecutor(max_workers=5)` 并发。
-
-**验收**:`func=check_authority_trust elapsed_ms` 从 400–1000 ms 降到 200–400 ms。
+**Merged into [#11](#11-check_authority_trust-16-秒耗时)** —— baidu 实测后发现耗时 16 s 远高于当初估算,升级为 P0。
 
 ---
 
@@ -202,6 +214,30 @@
 ---
 
 ## Closed
+
+### #1 `check_cross_platform` 串行探测(收益不及预期)
+
+- **Closed**: 待补 commit(2026-04-17)
+- **Area**: backend(核心引擎)
+
+**症状**:原估最坏 80 s 在此单函数上(10 平台 × 8 s timeout)。
+
+**根因**:`check_cross_platform` 对未在 on-page 链接里检测到的社交平台做 probe,串行 GET。
+
+**修复**:抽出 `_probe_platform(plat_name, plat_info)` 纯函数(无 print / 无共享写),由 `ThreadPoolExecutor(max_workers=min(10, len(platforms_to_probe)))` 并发提交,主线程按 `as_completed` 汇总到 `probed` dict。根 `geo_checker.py:2784` + 影子 `geo_checker/__main__.py:1951` 两份同时改。
+
+**实测(baidu.com)**:
+- 修复前:` check_cross_platform` 预估 30–80 s(最坏情况)
+- 修复后:`check_cross_platform elapsed_ms=3785` —— 约 3.8 s
+- 但 `generate_score elapsed_ms=165871` —— **总时几乎不变**
+
+**经验**(记下来避免再犯):
+- 修前的"80 s"估算是代码阅读的最坏情况。baidu 的大多数平台 probe 其实早期就 RST/404 返回,从没真到 8 s timeout。**估算应该基于计时日志,不是代码**。
+- cross_platform 只占 baidu 总时 2%。真正头号瓶颈是 `check_trust_safety`(33%)和 `check_authority_trust`(9%)—— 见新建的 [#10](#10-check_trust_safety-耗时-55-秒总时的-33) / [#11](#11-check_authority_trust-16-秒耗时)。
+- 改动本身仍然保留:代码更干净,且对"社交矩阵空 + 所有 probe 都打满 timeout"这种最坏情况仍然有效。只是不再作为"默认 check 变快"的卖点宣传。
+- 教训:**先用计时日志看实际 top-N 再动手**,这次是反着来的。
+
+---
 
 ### #3 前端检测仍在 Home 页触发,用户返回/刷新即断连
 
