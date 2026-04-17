@@ -1231,6 +1231,7 @@ const en = {
             "notSubscribable": "This plan is not directly subscribable. Please contact sales.",
             "domesticPending": "WeChat / Alipay payment is coming soon. Please contact sales to complete your subscription.",
             "payError": "Failed to start payment",
+            "usdcServiceUnavailable": "USDC payment service is temporarily unavailable. Please try another payment method.",
             "backToPlans": "Back to plans",
             "planLabel": "Subscription Plan",
             "popular": "Popular",

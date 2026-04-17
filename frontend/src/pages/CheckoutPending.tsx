@@ -89,6 +89,7 @@ export function CheckoutPending() {
   const [payMethod, setPayMethodRaw] = useState<PayMethod>('stripe');
   const setPayMethod = (method: PayMethod) => {
     setPayMethodRaw(method);
+    setPayError(null);
     // Reset WeChat state when switching away so the pay button reappears
     if (method !== 'wechat' && wechatStep === 'polling') {
       if (wechatPollRef.current) { clearInterval(wechatPollRef.current); wechatPollRef.current = null; }
@@ -246,7 +247,9 @@ export function CheckoutPending() {
       });
 
       if (res402.status !== 402) {
-        throw new Error(`Expected 402, got ${res402.status}`);
+        const errBody = await res402.text().catch(() => '');
+        console.error(`/pay/execute: expected 402, got ${res402.status}`, errBody);
+        throw new Error(t('checkoutPending.usdcServiceUnavailable', 'USDC payment service is temporarily unavailable. Please try another payment method.'));
       }
 
       const reqHeader = res402.headers.get('x-payment-required');

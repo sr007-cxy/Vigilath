@@ -1258,7 +1258,8 @@ const zh = {
             "submitting": "正在跳转支付…",
             "payNow": "立即支付",
             "cancel": "取消",
-            "payError": "支付发起失败"
+            "payError": "支付发起失败",
+            "usdcServiceUnavailable": "USDC 支付服务暂时不可用，请尝试其他支付方式。"
           },
           "aboutUs": {
             "title": "关于我们",
