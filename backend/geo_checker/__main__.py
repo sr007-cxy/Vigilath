@@ -1665,17 +1665,36 @@ def check_trust_safety(base_url):
                 return href
         return None
 
-    def _probe(paths):
+    # Path sets for 4 trust pages.
+    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
+                     "/policies/privacy", "/privacypolicy"]
+    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
+                   "/terms.html", "/legal/terms"]
+    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
+                     "/support", "/help"]
+    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
+
+    # Fetch all 23 candidate URLs concurrently instead of 4 serial probes.
+    # Serial was ~55 s on baidu (23 × ~2.4 s average); parallel is ~3 s.
+    # _page_cache writes are GIL-safe; a duplicate fetch on miss is harmless.
+    all_probe_paths = privacy_paths + terms_paths + contact_paths + legal_paths
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(10, len(all_probe_paths))) as pool:
+        probe_results = dict(pool.map(
+            lambda p: (p, fetch(urljoin(base_url, p), timeout=6)),
+            all_probe_paths,
+        ))
+
+    def _first_match(paths):
+        """Pick the first path whose cached response is 200 + substantive."""
         for p in paths:
-            r = fetch(urljoin(base_url, p), timeout=6)
+            r = probe_results.get(p)
             if r and r.status_code == 200 and len(r.text) > 500:
                 return p
         return None
 
     # 1. Privacy policy
-    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
-                     "/policies/privacy", "/privacypolicy"]
-    privacy_found = _probe(privacy_paths) or _anchor_match(["privacy"])
+    privacy_found = _first_match(privacy_paths) or _anchor_match(["privacy"])
     if privacy_found:
         emit_check(PASS, "result.checks.trust_safety.privacy_found",
                    f"Privacy policy found: {privacy_found}", {"path": privacy_found})
@@ -1688,9 +1707,7 @@ def check_trust_safety(base_url):
                  "privacy policies as a trust red flag — required by GDPR, CCPA, and most ad networks.")
 
     # 2. Terms of service
-    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
-                   "/terms.html", "/legal/terms"]
-    terms_found = _probe(terms_paths) or _anchor_match(["terms", "tos"])
+    terms_found = _first_match(terms_paths) or _anchor_match(["terms", "tos"])
     if terms_found:
         emit_check(PASS, "result.checks.trust_safety.terms_found",
                    f"Terms of service found: {terms_found}", {"path": terms_found})
@@ -1703,9 +1720,7 @@ def check_trust_safety(base_url):
                  "and search platforms expect from legitimate sites.")
 
     # 3. Contact page
-    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
-                     "/support", "/help"]
-    contact_found = _probe(contact_paths) or _anchor_match(["contact", "get in touch"])
+    contact_found = _first_match(contact_paths) or _anchor_match(["contact", "get in touch"])
     if contact_found:
         emit_check(PASS, "result.checks.trust_safety.contact_found",
                    f"Contact page found: {contact_found}", {"path": contact_found})
@@ -1718,8 +1733,7 @@ def check_trust_safety(base_url):
                  "sites with clear contact paths higher for trust-sensitive queries.")
 
     # 4. DMCA / copyright / legal
-    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
-    legal_found = _probe(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
+    legal_found = _first_match(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
     if legal_found:
         emit_check(PASS, "result.checks.trust_safety.legal_found",
                    f"Legal/DMCA/imprint page found: {legal_found}", {"path": legal_found})
@@ -2788,28 +2802,27 @@ def check_cross_platform(base_url):
                 if tag and tag.get("content"):
                     on_page_links[plat_name] = tag["content"]
 
-    # --- Phase 2: Probe platforms not found on-page ---
+    # --- Phase 2: Probe platforms not found on-page (concurrent) ---
+    # Serial was the single biggest default-check bottleneck — 10 platforms
+    # × 8s timeout = up to 80s blocking. Fan out with ThreadPoolExecutor;
+    # max_workers caps at the platform count (≤ 10).
     probed = {}  # platform_name -> (found: bool, url)
     platforms_to_probe = {k: v for k, v in platforms.items() if k not in on_page_links}
 
     browser_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
-    for plat_name, plat_info in platforms_to_probe.items():
-        found = False
+    def _probe_platform(plat_name, plat_info):
+        """Probe one platform; return (plat_name, found, url). No prints."""
         for probe_url in plat_info["probe_urls"]:
             try:
                 r = requests.get(probe_url, timeout=8, allow_redirects=True, headers={
                     "User-Agent": browser_ua
                 })
-                # Platform-specific detection logic
                 if r.status_code == 200:
-                    # Detect login redirects (e.g. Facebook redirects to /login/ for non-existent pages)
                     final_url = r.url.lower()
                     redirected_to_login = any(seg in final_url for seg in [
                         "/login", "/signin", "/sign_in", "/accounts/login",
                     ])
-
-                    # Some platforms return 200 for "not found" pages, check content
                     text_lower = r.text.lower() if len(r.text) < 500000 else r.text[:500000].lower()
                     is_404_page = redirected_to_login or any(phrase in text_lower for phrase in [
                         "page not found", "this account doesn", "this page isn",
@@ -2824,13 +2837,21 @@ def check_cross_platform(base_url):
                         "we couldn't find", "does not exist",
                     ])
                     if not is_404_page:
-                        probed[plat_name] = (True, probe_url)
-                        found = True
-                        break
+                        return plat_name, True, probe_url
             except requests.RequestException:
                 pass
-        if not found:
-            probed[plat_name] = (False, plat_info["probe_urls"][0])
+        return plat_name, False, plat_info["probe_urls"][0]
+
+    if platforms_to_probe:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=min(10, len(platforms_to_probe))) as pool:
+            futures = [
+                pool.submit(_probe_platform, name, info)
+                for name, info in platforms_to_probe.items()
+            ]
+            for fut in as_completed(futures):
+                plat_name, found, url = fut.result()
+                probed[plat_name] = (found, url)
 
     # --- Phase 3: Report results ---
     found_platforms = []

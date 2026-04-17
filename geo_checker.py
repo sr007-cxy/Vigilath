@@ -1640,18 +1640,39 @@ def check_trust_safety(base_url):
                 return href
         return None
 
-    def _probe(paths):
-        """Fetch the first path that returns 200 with substantive content."""
+    # Path sets for 4 trust pages. Kept as separate names so the per-category
+    # scoring logic below reads naturally.
+    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
+                     "/policies/privacy", "/privacypolicy"]
+    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
+                   "/terms.html", "/legal/terms"]
+    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
+                     "/support", "/help"]
+    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
+
+    # Fetch all 23 candidate URLs in one concurrent batch instead of 4 serial
+    # probe loops. For sites where most paths return 404/403 (baidu etc.),
+    # this collapses ~55s of serial waiting into ~3s of parallel fetches.
+    # _page_cache writes are GIL-safe; worst case is a duplicate fetch if two
+    # threads miss the cache simultaneously, which is harmless.
+    all_probe_paths = privacy_paths + terms_paths + contact_paths + legal_paths
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(10, len(all_probe_paths))) as pool:
+        probe_results = dict(pool.map(
+            lambda p: (p, fetch(urljoin(base_url, p), timeout=6)),
+            all_probe_paths,
+        ))
+
+    def _first_match(paths):
+        """Pick the first path whose cached response is 200 + substantive."""
         for p in paths:
-            r = fetch(urljoin(base_url, p), timeout=6)
+            r = probe_results.get(p)
             if r and r.status_code == 200 and len(r.text) > 500:
                 return p
         return None
 
     # 1. Privacy policy
-    privacy_paths = ["/privacy", "/privacy-policy", "/privacy.html", "/legal/privacy",
-                     "/policies/privacy", "/privacypolicy"]
-    privacy_found = _probe(privacy_paths) or _anchor_match(["privacy"])
+    privacy_found = _first_match(privacy_paths) or _anchor_match(["privacy"])
     if privacy_found:
         print(f"  [{PASS}] Privacy policy found: {privacy_found}")
         ts_score += 1.5
@@ -1661,9 +1682,7 @@ def check_trust_safety(base_url):
             "privacy policies as a trust red flag — required by GDPR, CCPA, and most ad networks.")
 
     # 2. Terms of service
-    terms_paths = ["/terms", "/terms-of-service", "/tos", "/terms-of-use",
-                   "/terms.html", "/legal/terms"]
-    terms_found = _probe(terms_paths) or _anchor_match(["terms", "tos"])
+    terms_found = _first_match(terms_paths) or _anchor_match(["terms", "tos"])
     if terms_found:
         print(f"  [{PASS}] Terms of service found: {terms_found}")
         ts_score += 1
@@ -1673,9 +1692,7 @@ def check_trust_safety(base_url):
             "and search platforms expect from legitimate sites.")
 
     # 3. Contact page
-    contact_paths = ["/contact", "/contact-us", "/contactus", "/get-in-touch",
-                     "/support", "/help"]
-    contact_found = _probe(contact_paths) or _anchor_match(["contact", "get in touch"])
+    contact_found = _first_match(contact_paths) or _anchor_match(["contact", "get in touch"])
     if contact_found:
         print(f"  [{PASS}] Contact page found: {contact_found}")
         ts_score += 1
@@ -1685,8 +1702,7 @@ def check_trust_safety(base_url):
             "sites with clear contact paths higher for trust-sensitive queries.")
 
     # 4. DMCA / copyright / legal
-    legal_paths = ["/dmca", "/copyright", "/legal", "/legal-notice", "/imprint"]
-    legal_found = _probe(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
+    legal_found = _first_match(legal_paths) or _anchor_match(["dmca", "copyright", "imprint", "legal notice"])
     if legal_found:
         print(f"  [{PASS}] Legal/DMCA/imprint page found: {legal_found}")
         ts_score += 0.5
