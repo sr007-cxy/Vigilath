@@ -192,10 +192,11 @@ export function CheckoutPending() {
       // 2. Pre-flight: request 402 from MoltsPayServer to get payment
       //    requirements BEFORE touching the wallet. If the payment service
       //    is down the user sees an error instantly — no stale wallet popup.
-      const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      // user_id comes from the backend response (JWT-derived) so it's
+      // always present — localStorage['user'] only stores email.
       const executeBody = {
         service: serviceId,
-        params: { user_id: userId, membership_slug: tier.slug },
+        params: { user_id: order.user_id, membership_slug: tier.slug },
         chain: 'base',
       };
 

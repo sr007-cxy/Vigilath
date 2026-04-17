@@ -73,6 +73,7 @@ async def create_moltspay_payment(
             if age_minutes < 30:
                 return {
                     "payment_id": existing.id,
+                    "user_id": current_user.id,
                     "amount_usdc": float(membership.price),
                     "chain": MOLTSPAY_CHAIN,
                     "service_id": service_id,
@@ -102,6 +103,7 @@ async def create_moltspay_payment(
 
         return {
             "payment_id": row.id,
+            "user_id": current_user.id,
             "amount_usdc": float(membership.price),
             "chain": MOLTSPAY_CHAIN,
             "service_id": service_id,

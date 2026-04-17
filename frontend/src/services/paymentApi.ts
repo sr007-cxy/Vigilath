@@ -173,6 +173,7 @@ export const paymentApi = {
 
 export interface MoltsPayCreateResponse {
   payment_id: number;
+  user_id: number;
   amount_usdc: number;
   chain: string;
   service_id: string;
