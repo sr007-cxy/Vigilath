@@ -17,9 +17,10 @@
 
 | ID | 优先级 | 领域 | 标题 | 预期收益 |
 |---|---|---|---|---|
-| [#10](#10-check_trust_safety-耗时-55-秒总时的-33) | **P0** | backend | `check_trust_safety` 55 s 耗时 | **估 -40 到 -50 s** |
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
-| [#11](#11-check_authority_trust-16-秒耗时) | **P0** | backend | `check_authority_trust` 16 s | **估 -10 s** |
+| [#11](#11-check_authority_trust-16-秒耗时) | **P0** | backend | `check_authority_trust` 16–22 s | **估 -15 s** |
+| [#12](#12-三份核心引擎文件不同步) | **P0** | infra | 三份核心引擎文件不同步 | 消除"改错文件不生效"bug |
+| [#13](#13-check_technical_crawlability-可达-44-s) | P1 | backend | `check_technical_crawlability` 可达 44 s | -30 s(最坏情况) |
 | [#4](#4-check_brand_entity_kg-wiki-调用串行) | P1 | backend | `check_brand_entity_kg` Wiki 串行 | -5 到 -10 s |
 | [#5](#5-check_authority_trust-认证源串行) | —— | —— | (merged into #11) | —— |
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
@@ -31,8 +32,9 @@
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
+| [#10](#10-check_trust_safety-23-url-并行化) | `e8b4b04` | P0:check_trust_safety 23 URL 并发 batch(-48 s) |
 | [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
-| [#1](#1-check_cross_platform-串行探测-收益不及预期) | `7610d4b` | P0:check_cross_platform 并发化(收益低于估算,保留代码) |
+| [#1](#1-check_cross_platform-串行探测-收益不及预期) | `7610d4b` / `e8b4b04` | P0:check_cross_platform 并发化(原改漏了 backend 副本,已补) |
 | [#R1](#r1-usdc-支付钱包爆栈) | `b9306e4` | USDC 支付钱包爆栈 `Maximum call stack size exceeded` |
 | [#R2](#r2-后端缺少-per-check-耗时可观测性) | `da3a8d9` | 后端缺少 per-check 耗时可观测性 |
 | [#R3](#r3-性能文档膨胀难以区分事件与参考) | `fae9152` / `c97dd49` / `c8466ee` | 性能文档体系重构 |
@@ -42,32 +44,6 @@
 
 ## Open — P0 当前批次
 
-### #10 `check_trust_safety` 耗时 55 秒,总时的 33%
-
-- **Priority**: P0(新发现的头号瓶颈)
-- **Status**: Open
-- **Area**: backend(核心引擎)
-
-**症状**:journald 计时日志显示 baidu.com 检测中 `check_trust_safety` 单函数耗时 **54 713 ms**,占 `generate_score` 总时(165 871 ms)的 **33%**。这是目前最大的单一热点。
-
-**根因**:待读源码确认(`geo_checker.py:1620` 起)。初步猜测:多个 trust/verify 页面的串行抓取(fetch 有 15 s 超时)+ 外链认证源调用。
-
-**涉及文件**:
-- `geo_checker.py:1620`(根)
-- `geo_checker/__main__.py` 对应位置(需确认行号)
-
-**处理方案**:待分析后补充。推测方向:
-- 串行 fetch 改并发 `ThreadPoolExecutor`
-- 收紧某些 probe 的 timeout(15 s → 8 s)
-- 去掉冗余 / 低价值的探测
-
-**验收**:
-- `func=check_trust_safety elapsed_ms` 稳定 < 10 000 ms(baidu)
-- 检测结果字段与改前一致
-
-**详细实施**:待后续补充到 `docs/性能处理方案.md`。
-
----
 
 ### #2 `/visibility` 90 次 OpenRouter 调用,8 并发
 
@@ -94,6 +70,59 @@
 - 同一 URL 连续跑 3 次的 AI Visibility Score 偏差 ≤ 5 分
 
 **详细实施**:见 [`docs/性能处理方案.md §2`](./docs/性能处理方案.md)
+
+---
+
+### #12 三份核心引擎文件不同步
+
+- **Priority**: **P0**(blocker —— 会让其他修复"看似生效实则没生效")
+- **Status**: Open
+- **Area**: infra
+
+**症状**:改了核心逻辑的某些文件后,重启服务看起来正常,但实际行为没变。
+
+**根因**:项目根下存在**三份**拷贝:
+
+| 文件 | 行数 | 谁在用 |
+|---|---|---|
+| `/geo_checker.py` | 8065 | `advanced_runners.py` 通过 `importlib.util.spec_from_file_location` 加载 |
+| `/geo_checker/__main__.py` | 4311 | **orphan,没人加载** |
+| `/backend/geo_checker/__main__.py` | 4341 | 默认 API 路径加载这份(因 backend 是 uvicorn CWD,解析 `import geo_checker` 时优先命中它) |
+
+之前的 #1 `check_cross_platform` 修复只改了前两份,结果生产默认路径没生效 —— 这是 P0.1 收益看似不如预期的部分原因。
+
+**处理方案**(三选一):
+
+1. **快方案**:`/backend/geo_checker/` 改成指向项目根的 symlink。cost 5 分钟,但 git 不友好(symlink 可以跟踪但 Windows 开发会炸)
+2. **中方案**:删掉 `/backend/geo_checker/` 和 `/geo_checker/`,改 `backend/geo/services/geo_checker.py` 的 import 逻辑,用 `spec_from_file_location` 指向项目根的 `geo_checker.py`,与 `advanced_runners.py` 同一套加载逻辑。cost ~30 分钟。
+3. **终极方案**:配合第 9 节的 #9 `_geo_checker_lock` 重构,把核心拆成 package,彻底消除多文件问题。cost ~4 小时。
+
+推荐**中方案**作为本次处理,终极方案并入 P2。
+
+**涉及文件**:
+- `backend/geo/services/geo_checker.py`(import 逻辑)
+- 删除 `/backend/geo_checker/` 和 `/geo_checker/`
+
+**验收**:
+- 三份文件缩减为一份(项目根的 `geo_checker.py`)
+- 默认路径和高级路径都走同一份代码
+- 重启服务后,对已知 check 的改动立即生效(用 `check_https` 加一行 print 做烟雾测试)
+
+---
+
+### #13 `check_technical_crawlability` 可达 44 s
+
+- **Priority**: P1(偶现,网络抖动时放大)
+- **Status**: Open
+- **Area**: backend
+
+**症状**:baidu.com 二次测试中 `check_technical_crawlability` 耗时 44 243 ms(前次测试只有 1 050 ms)。网络好时秒级,网络差时可飙到 40 秒+。
+
+**根因**:待读源码(`geo_checker.py:1166` 起)。初步看有 redirect / canonical / subprocess 多轮网络交互。
+
+**处理方案**:待分析后补充。可能需要把 subprocess 调用(line 1228 的 `timeout=10`)也包进并发或干脆去掉。
+
+**验收**:`func=check_technical_crawlability elapsed_ms` 在"网络差"场景下 < 10 000 ms。
 
 ---
 
@@ -214,6 +243,30 @@
 ---
 
 ## Closed
+
+### #10 `check_trust_safety` 23 URL 并行化
+
+- **Closed**: `e8b4b04`(2026-04-17)
+- **Area**: backend(核心引擎)
+
+**症状**:baidu.com 检测中 `check_trust_safety` 单函数 **54 713 ms**,占 `generate_score` 总时 33%。
+
+**根因**:4 个 trust page 类别(privacy / terms / contact / legal),每类 5-6 个候选路径,**4 个 `_probe()` 串行**,每个内部再**顺序**探测候选。合计最多 23 次串行 HTTP(每个 `timeout=6`)。baidu 对不存在路径平均返回 2.4 s,23 × 2.4 = 55 s。
+
+**修复**:一次并发 batch `ThreadPoolExecutor(max_workers=10)` 把 23 个候选全部 fetch 完,主线程按原顺序 `_first_match()` 从结果 dict 挑第一个 200 + `len > 500`。
+- `/geo_checker.py:1620` 和 `/backend/geo_checker/__main__.py:1646` 两份都改
+- 借助 `_page_cache`(进程内 dict),GIL 保证并发写安全,最坏是重复 fetch 一次
+
+**实测(baidu.com)**:
+- 修复前:`check_trust_safety elapsed_ms=54713`
+- 修复后:`check_trust_safety elapsed_ms=6311`(**-89%,净省 48 秒**)
+- 总时:166 s → 130 s(其他 check 被同轮网络抖动拖慢,净省 36 s 落在该函数本身)
+
+**经验**:
+- 扁平化并发 > 分层并发。方案 A 的"4 个 `_probe()` 并行"只能降到 14 s,方案 B 的"全 23 并行"降到 3 s——后者多吃的 HTTP 请求在 baidu 这种慢站点是纯赚。
+- 本次又暴露了 [#12] 三文件不同步的坑:编码时必须记得两份一起改,否则默认路径没生效。
+
+---
 
 ### #1 `check_cross_platform` 串行探测(收益不及预期)
 
