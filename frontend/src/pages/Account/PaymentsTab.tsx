@@ -112,7 +112,7 @@ export function PaymentsTab() {
                         {formatAmount(row.amount_cents, row.currency)}
                       </span>
                       <span className="text-xs text-secondary">
-                        {row.provider === 'moltspay' ? 'Base USDC' : 'Stripe'}
+                        {row.provider === 'moltspay' ? 'Base USDC' : row.provider === 'wechat' ? 'WeChat Pay' : 'Stripe'}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-secondary">
@@ -182,7 +182,7 @@ export function PaymentsTab() {
                           {formatAmount(row.amount_cents, row.currency)}
                         </td>
                         <td className="px-4 py-3 text-xs text-secondary">
-                          {row.provider === 'moltspay' ? 'Base USDC' : 'Stripe'}
+                          {row.provider === 'moltspay' ? 'Base USDC' : row.provider === 'wechat' ? 'WeChat Pay' : 'Stripe'}
                         </td>
                         <td className="px-4 py-3">
                           <span
