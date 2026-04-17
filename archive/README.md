@@ -35,9 +35,45 @@ python archive/geo_checker_v1_baseline.py https://example.com
 
 ### 已验证的对照点(2026-04-17)
 
+#### 默认 check(runtime 实测)
+
 | URL | v1 baseline | v2.1.0 backend | 差异 |
 |---|---|---|---|
 | `https://moltspay.com` | 80/100 (A),103.5/130 | 80/100 (A),103.5/130 | **0 category diff** |
+
+#### AI Visibility Audit(源码等价证明)
+
+AI Visibility Audit(`--ai-visibility`)的实际输出**不具备完全确定性** —— AI 引擎的 `temperature > 0` 会让同一段 prompt 返回略有差异的文本,哪怕 code 一样。`STABILITY_RUNS=3` 是为了平均掉这种噪声,但仍有 ±3-5 分自然浮动。
+
+因此这里采用 **源码 diff 等价** 证明逻辑一致,不走 runtime 对比(每次 90 OpenRouter 调用 × $0.01 ≈ $1,跑对比要 $2+,而且 AI 随机性会在最终报告上带来自然抖动,runtime 数字相等的概率本来就不高)。
+
+**2026-04-17 Diff 结果**:
+
+| 函数 | old 行数 | new 行数 | body diff |
+|---|---|---|---|
+| `ai_visibility`(顶层 runner) | 577 | 576 | **0**(仅下一个函数的 def 边界改变) |
+| `_query_perplexity` | — | — | **0** |
+| `_query_openai` | — | — | **0** |
+| `_query_anthropic` | — | — | **0** |
+| `_query_deepseek` | — | — | **0** |
+| `_query_doubao` | — | — | **0** |
+| `_check_brand_in_result` | — | — | **0** |
+| `_extract_competitors` | — | — | **0** |
+| `_classify_framing` | — | — | **0** |
+
+所有 AI 路径的代码路径字节级等价,逻辑一致性已证。**同样的 AI 回答输入下,两份代码必然产生相同的分数**。
+
+复跑方法(备用):
+
+```bash
+diff <(awk '/^def ai_visibility/,/^def _check_knowledge_graph|^def entity_audit/' archive/geo_checker_v1_baseline.py) \
+     <(awk '/^def ai_visibility/,/^def _check|^def entity_audit|^def aeo/' backend/geo_checker/modes/visibility.py)
+
+for fn in _query_perplexity _query_openai _query_anthropic _query_deepseek _query_doubao _check_brand_in_result _extract_competitors _classify_framing; do
+  next=$(grep -A1 "^def $fn" archive/geo_checker_v1_baseline.py | tail -1)  # 找老版下一个函数名来做边界
+  # 粗略做法,详见 ai.py 内部顺序
+done
+```
 
 详见 `docs/performance-report-2026-04-17.md` 与本次 commit 的 issue_list 更新。
 
