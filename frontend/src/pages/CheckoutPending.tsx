@@ -656,11 +656,40 @@ export function CheckoutPending() {
                 <p className="text-xs text-secondary leading-relaxed">
                   {t('checkoutPending.methodUsdc', 'Pay with USDC on Base chain via your Web3 wallet (MetaMask, etc.). Click "Pay Now" to connect wallet and approve the transfer.')}
                 </p>
-                {!(window as any).ethereum && (
-                  <p className="text-xs text-yellow-400 mt-2">
-                    {t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.')}
-                  </p>
-                )}
+                {!(window as any).ethereum && (() => {
+                  // Mobile browsers don't have window.ethereum — the wallet
+                  // app is a separate process. Give mobile users a deep link
+                  // that opens MetaMask's in-app browser at this exact URL,
+                  // where window.ethereum will be injected.
+                  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+                  if (isMobile) {
+                    const host = window.location.host;
+                    const path = window.location.pathname + window.location.search;
+                    const mmDeepLink = `https://metamask.app.link/dapp/${host}${path}`;
+                    return (
+                      <div className="mt-3">
+                        <p className="text-xs text-yellow-400 mb-2">
+                          {t('checkoutPending.usdcMobileHint', 'Mobile browsers cannot access wallet extensions. Open in your wallet app:')}
+                        </p>
+                        <a
+                          href={mmDeepLink}
+                          className="inline-flex items-center gap-2 text-xs font-semibold text-[#F6851B] border border-[#F6851B]/50 rounded-lg px-3 py-2 hover:bg-[#F6851B]/10 transition-colors"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 35 33" fill="none">
+                            <path d="M32.96 1l-13.13 9.72 2.44-5.71L32.96 1z" fill="#E17726"/>
+                            <path d="M2.04 1l13.02 9.81-2.33-5.8L2.04 1zM28.23 23.53l-3.5 5.34 7.49 2.05 2.15-7.28-6.14-.11zM.64 23.64l2.14 7.28 7.48-2.05-3.49-5.34-6.13.11z" fill="#E27625"/>
+                          </svg>
+                          {t('checkoutPending.usdcOpenMetaMask', 'Open in MetaMask')}
+                        </a>
+                      </div>
+                    );
+                  }
+                  return (
+                    <p className="text-xs text-yellow-400 mt-2">
+                      {t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.')}
+                    </p>
+                  );
+                })()}
               </div>
             )}
 

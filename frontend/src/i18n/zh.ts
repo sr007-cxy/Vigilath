@@ -1255,6 +1255,8 @@ const zh = {
             "wechatWaiting": "等待扫码支付…",
             "wechatExpired": "二维码已过期，请重新发起支付",
             "reinitiate": "重新发起支付",
+            "usdcMobileHint": "移动端浏览器无法访问钱包扩展。请在钱包 App 内打开：",
+            "usdcOpenMetaMask": "在 MetaMask 中打开",
             "wechatPayNow": "生成二维码并支付",
             "submitting": "正在跳转支付…",
             "payNow": "立即支付",

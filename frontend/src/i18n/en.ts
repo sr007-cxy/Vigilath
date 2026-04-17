@@ -1257,6 +1257,8 @@ const en = {
             "wechatWaiting": "Waiting for payment...",
             "wechatExpired": "QR code expired. Please try again.",
             "reinitiate": "Restart payment",
+            "usdcMobileHint": "Mobile browsers cannot access wallet extensions. Open in your wallet app:",
+            "usdcOpenMetaMask": "Open in MetaMask",
             "wechatPayNow": "Generate QR Code & Pay",
             "submitting": "Redirecting to payment...",
             "payNow": "Pay Now",
