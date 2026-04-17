@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
 import { oauthApi } from '../services/oauthApi';
 import { PaymentModal } from '../components/PaymentModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Register() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export function Register() {
   const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { setToken } = useAuth();
 
   // 加载 Google SDK
   useEffect(() => {
@@ -54,8 +56,8 @@ export function Register() {
       const googleUser = await auth2.signIn();
       const idToken = googleUser.getAuthResponse().id_token;
       const response = await oauthApi.googleLogin(idToken);
-      localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email: googleUser.getBasicProfile().getEmail() }));
+      setToken(response.access_token);  // 走 AuthContext,所有监听组件同步
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Google login failed');
@@ -84,7 +86,7 @@ export function Register() {
     try {
       await authApi.register(email, password);
       const loginRes = await authApi.login(email, password);
-      localStorage.setItem('token', loginRes.access_token);
+      setToken(loginRes.access_token);  // 广播到所有 useAuth / useMembership
       setPaymentToken(loginRes.access_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('register.failed'));

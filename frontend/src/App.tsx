@@ -7,6 +7,7 @@ import { ContactModalProvider } from './components/ContactModalContext';
 import { ContactModal } from './components/ContactModal';
 import { TierModalProvider } from './components/TierModalContext';
 import { TierModal } from './components/TierModal';
+import { AuthProvider } from './contexts/AuthContext';
 import './i18n';
 
 // Eagerly loaded: Home is the landing page
@@ -53,6 +54,7 @@ const queryClient = new QueryClient();
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <ContactModalProvider>
       <TierModalProvider>
       <Router>
@@ -98,6 +100,7 @@ function App() {
       </Router>
       </TierModalProvider>
       </ContactModalProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

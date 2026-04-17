@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
 import { oauthApi } from '../services/oauthApi';
+import { useAuth } from '../contexts/AuthContext';
 
 // 扩展Window接口
 declare global {
@@ -25,6 +26,7 @@ export function Login() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { setToken } = useAuth();
 
   // 加载Google登录SDK
   useEffect(() => {
@@ -62,15 +64,11 @@ export function Login() {
 
     try {
       const response = await authApi.login(email, password);
-      // 存储token到localStorage
-      localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email }));
-      // 输出本地存储中的用户信息
-      console.log('Login: localStorage.user:', localStorage.getItem('user'));
-      // 登录成功，跳转到首页
-      setTimeout(() => {
-        window.location.href = '/'; // 跳转到首页
-      }, 500); // 延迟500毫秒，确保本地存储已经更新
+      setToken(response.access_token);  // 通过 AuthContext 同步所有消费者
+      // SPA 跳转首页;AuthProvider 已经广播 token 更新,无需 window.location
+      // 的整页刷新(老版靠整页刷新绕过 state 不同步问题)
+      navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -92,10 +90,8 @@ export function Login() {
       const idToken = googleUser.getAuthResponse().id_token;
 
       const response = await oauthApi.googleLogin(idToken);
-      // 存储token到localStorage
-      localStorage.setItem('token', response.access_token);
       localStorage.setItem('user', JSON.stringify({ email: googleUser.getBasicProfile().getEmail() }));
-      // 登录成功，跳转到首页
+      setToken(response.access_token);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Google login failed');
