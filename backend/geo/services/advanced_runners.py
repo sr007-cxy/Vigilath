@@ -118,39 +118,103 @@ def _silent_call(fn, *args, **kwargs) -> Dict[str, Any]:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Redis cache wrapper for advanced runs
+# ---------------------------------------------------------------------------
+# 24h TTL for all advanced modes. The paid ones (visibility / entity /
+# citation) benefit most — each miss is $0.03-$0.84 of real OpenRouter cost.
+# The free ones (aeo / compare / crawl-test / authority) also cache so we
+# don't re-fetch + re-probe on repeat hits.
+#
+# Cache key: mode name + sha1 of (identifying params). Tier is baked into
+# the key so "pro's visibility" and "scale's visibility" don't collide
+# (though in practice both run the same code — tier gate is at the API
+# layer, not here).
+from geo.services import cache_service  # noqa: E402
+
+_ADVANCED_TTL_S = 24 * 60 * 60
+
+
+def _cached_run(mode: str, identity: Dict[str, Any], runner):
+    """Generic L1 cache wrapper. `identity` is a dict that uniquely defines
+    the request (e.g. {"url": ..., "custom_queries": [...]}). On miss, calls
+    runner() and stores the dict return value. Runner must return a dict."""
+    key = cache_service.make_cache_key(mode, identity.get("url", ""), extra=identity)
+    cached = cache_service.get_cached_report(key)
+    if cached is not None:
+        return cached
+    result = runner()
+    if isinstance(result, dict):
+        cache_service.set_cached_report(key, result, ttl_s=_ADVANCED_TTL_S)
+    return result
+
+
 def run_compare(urls: List[str]) -> Dict[str, Any]:
-    return _silent_call(_mode_compare.compare_urls, urls, return_data=True)
+    # compare has no single URL — use joined list as the identity
+    identity = {"url": "+".join(sorted(urls)), "urls": sorted(urls)}
+    return _cached_run(
+        "compare",
+        identity,
+        lambda: _silent_call(_mode_compare.compare_urls, urls, return_data=True),
+    )
 
 
 def run_crawl_test(url: str) -> Dict[str, Any]:
-    return _silent_call(_mode_crawl_test.crawl_test, url, return_data=True)
+    return _cached_run(
+        "crawl-test",
+        {"url": url},
+        lambda: _silent_call(_mode_crawl_test.crawl_test, url, return_data=True),
+    )
 
 
 def run_authority_audit(url: str) -> Dict[str, Any]:
-    return _silent_call(_mode_authority.authority_audit, url, return_data=True)
+    return _cached_run(
+        "authority",
+        {"url": url},
+        lambda: _silent_call(_mode_authority.authority_audit, url, return_data=True),
+    )
 
 
 def run_citation_check(url: str) -> Dict[str, Any]:
-    return _silent_call(_mode_citation.citation_check, url, return_data=True)
+    return _cached_run(
+        "citation",
+        {"url": url},
+        lambda: _silent_call(_mode_citation.citation_check, url, return_data=True),
+    )
 
 
 def run_ai_visibility(url: str, custom_queries: Optional[List[str]] = None) -> Dict[str, Any]:
-    return _silent_call(
-        _mode_visibility.ai_visibility,
-        url,
-        custom_queries=custom_queries,
-        return_data=True,
+    identity = {"url": url, "custom_queries": sorted(custom_queries) if custom_queries else None}
+    return _cached_run(
+        "visibility",
+        identity,
+        lambda: _silent_call(
+            _mode_visibility.ai_visibility,
+            url,
+            custom_queries=custom_queries,
+            return_data=True,
+        ),
     )
 
 
 def run_entity_audit(entity_name: str, entity_type: str = "brand") -> Dict[str, Any]:
-    return _silent_call(
-        _mode_entity.entity_audit,
-        entity_name,
-        entity_type=entity_type,
-        return_data=True,
+    # Entity audit keys on entity_name+entity_type (no URL)
+    identity = {"url": entity_name, "entity_type": entity_type}
+    return _cached_run(
+        "entity",
+        identity,
+        lambda: _silent_call(
+            _mode_entity.entity_audit,
+            entity_name,
+            entity_type=entity_type,
+            return_data=True,
+        ),
     )
 
 
 def run_aeo_visibility(url: str) -> Dict[str, Any]:
-    return _silent_call(_mode_aeo.aeo_visibility, url, return_data=True)
+    return _cached_run(
+        "aeo",
+        {"url": url},
+        lambda: _silent_call(_mode_aeo.aeo_visibility, url, return_data=True),
+    )

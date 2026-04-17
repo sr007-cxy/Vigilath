@@ -177,6 +177,8 @@ async def geo_check_task(
                 include_fix,
                 progress_callback,
                 allowed_categories,
+                user_id,                                           # L2 DB cache key
+                tier if tier is not None else "free",              # L1 cache key part
             )
             # Strip locked categories before we touch `result` again: the
             # underlying run_geo_check may have returned a cached object
@@ -256,9 +258,11 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
-        False,  # anonymous callers are always free tier — no fix text
-        None,
-        None,  # run all 23 for a realistic score
+        False,   # anonymous callers are always free tier — no fix text
+        None,    # no progress_callback
+        None,    # run all 25 for a realistic score
+        None,    # no user_id → L1 Redis only, no L2 DB fallback
+        "free",  # tier key
     )
     locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
     result = _strip_locked_checks(result, locked)
@@ -300,8 +304,10 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
         run_geo_check,
         sanitized_url,
         effective_include_fix,
-        None,
-        None,  # run all 23 regardless of tier — strip locked details below
+        None,             # no progress_callback
+        None,             # run all 25 regardless of tier — strip locked details below
+        user_id,          # L2 DB fallback
+        membership.slug,  # tier key
     )
     locked = _locked_for(membership)
     result = _strip_locked_checks(result, locked)
@@ -337,9 +343,11 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     result = await asyncio.to_thread(
         run_geo_check,
         sanitized_url,
-        False,  # legacy anonymous alias — free tier, no fix text
-        None,
-        None,  # run all 23 for a realistic score
+        False,   # legacy anonymous alias — free tier, no fix text
+        None,    # no progress_callback
+        None,    # run all 25 for a realistic score
+        None,    # no user_id
+        "free",  # tier key
     )
     locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
     result = _strip_locked_checks(result, locked)
