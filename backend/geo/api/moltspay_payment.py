@@ -141,6 +141,42 @@ async def get_moltspay_status(
         db.close()
 
 
+@router.post("/moltspay/cancel/{payment_id}")
+async def cancel_moltspay_payment(
+    payment_id: int,
+    current_user: UserORM = Depends(get_current_user),
+):
+    """Cancel a pending MoltsPay session so the caller can start fresh.
+
+    Caller should only invoke this *before* they've signed the EIP-3009
+    authorization on-chain. Canceling after the USDC transfer has been
+    broadcast could strand a paid tx without a matching session to fulfill.
+    """
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(PaymentSessionORM)
+            .filter(
+                PaymentSessionORM.id == payment_id,
+                PaymentSessionORM.user_id == current_user.id,
+                PaymentSessionORM.provider == "moltspay",
+            )
+            .first()
+        )
+        if not row:
+            raise AppException(status_code=404, message="Payment not found")
+        if row.status != "pending":
+            raise AppException(
+                status_code=400,
+                message=f"Cannot cancel a {row.status} payment",
+            )
+        row.status = "canceled"
+        db.commit()
+        return {"payment_id": row.id, "status": row.status}
+    finally:
+        db.close()
+
+
 @router.post("/moltspay/fulfill")
 async def moltspay_fulfill(request: Request, body: FulfillRequest):
     client_ip = request.client.host if request.client else ""

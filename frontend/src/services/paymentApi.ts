@@ -137,6 +137,38 @@ export const paymentApi = {
     }
     return response.json();
   },
+
+  async cancelWechatPaySession(
+    token: string,
+    paymentId: number,
+  ): Promise<void> {
+    const response = await fetch(
+      `${API_BASE}/payment/wechat/cancel/${paymentId}`,
+      {
+        method: 'POST',
+        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to cancel WeChat payment'));
+    }
+  },
+
+  async cancelMoltsPaySession(
+    token: string,
+    paymentId: number,
+  ): Promise<void> {
+    const response = await fetch(
+      `${API_BASE}/payment/moltspay/cancel/${paymentId}`,
+      {
+        method: 'POST',
+        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to cancel USDC payment'));
+    }
+  },
 };
 
 export interface MoltsPayCreateResponse {

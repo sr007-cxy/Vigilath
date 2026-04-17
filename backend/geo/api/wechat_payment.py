@@ -80,6 +80,40 @@ async def get_wechat_status(
         db.close()
 
 
+@router.post("/wechat/cancel/{payment_id}")
+async def cancel_wechat_payment(
+    payment_id: int,
+    current_user: UserORM = Depends(get_current_user),
+):
+    """Cancel a pending WeChat Pay session so the caller can initiate a fresh
+    one. Safe — QR not scanned means no money has moved. Only affects rows
+    owned by the caller that are still pending.
+    """
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(PaymentSessionORM)
+            .filter(
+                PaymentSessionORM.id == payment_id,
+                PaymentSessionORM.user_id == current_user.id,
+                PaymentSessionORM.provider == "wechat",
+            )
+            .first()
+        )
+        if not row:
+            raise AppException(status_code=404, message="Payment not found")
+        if row.status != "pending":
+            raise AppException(
+                status_code=400,
+                message=f"Cannot cancel a {row.status} payment",
+            )
+        row.status = "canceled"
+        db.commit()
+        return {"payment_id": row.id, "status": row.status}
+    finally:
+        db.close()
+
+
 @router.post("/wechat/notify")
 async def wechat_notify(request: Request):
     """WeChat Pay V3 async notification callback.

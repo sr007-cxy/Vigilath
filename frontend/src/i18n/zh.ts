@@ -1254,6 +1254,7 @@ const zh = {
             "wechatStatus": "支付状态",
             "wechatWaiting": "等待扫码支付…",
             "wechatExpired": "二维码已过期，请重新发起支付",
+            "reinitiate": "重新发起支付",
             "wechatPayNow": "生成二维码并支付",
             "submitting": "正在跳转支付…",
             "payNow": "立即支付",

@@ -102,10 +102,12 @@ export function CheckoutPending() {
   const [usdcAmount, setUsdcAmount] = useState<number>(0);
   const [walletAddr, setWalletAddr] = useState<string>('');
   const [usdcStep, setUsdcStep] = useState<'idle' | 'connecting' | 'paying' | 'verifying' | 'done'>('idle');
+  // Track pending payment_id so user can cancel + re-initiate.
+  const [usdcPaymentId, setUsdcPaymentId] = useState<number>(0);
 
   // WeChat Pay state
   const [wechatCodeUrl, setWechatCodeUrl] = useState<string>('');
-  const [, setWechatPaymentId] = useState<number>(0);
+  const [wechatPaymentId, setWechatPaymentId] = useState<number>(0);
   const [wechatAmount, setWechatAmount] = useState<number>(0);
   const [wechatStep, setWechatStep] = useState<'idle' | 'creating' | 'polling' | 'done'>('idle');
   const wechatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -185,6 +187,7 @@ export function CheckoutPending() {
       setUsdcStep('connecting');
       const order = await paymentApi.createMoltsPaySession(token, tier.slug);
       setUsdcAmount(order.amount_usdc);
+      setUsdcPaymentId(order.payment_id);
 
       // 2. Pre-flight: request 402 from MoltsPayServer to get payment
       //    requirements BEFORE touching the wallet. If the payment service
@@ -404,6 +407,42 @@ export function CheckoutPending() {
       ? handleWechatPay
       : handleUsdcPay;
 
+  // Cancel the current pending session and start a fresh one. Used when the
+  // QR code expired, the wallet flow stalled, or the user just wants a do-over.
+  const handleReinitiate = async () => {
+    if (!token || submitting) return;
+    setSubmitting(true);
+    setPayError(null);
+    try {
+      if (payMethod === 'wechat' && wechatPaymentId) {
+        if (wechatPollRef.current) {
+          clearInterval(wechatPollRef.current);
+          wechatPollRef.current = null;
+        }
+        await paymentApi.cancelWechatPaySession(token, wechatPaymentId);
+        setWechatStep('idle');
+        setWechatCodeUrl('');
+        setWechatPaymentId(0);
+        setSubmitting(false);
+        await handleWechatPay();
+        return;
+      }
+      if (payMethod === 'usdc' && usdcPaymentId) {
+        await paymentApi.cancelMoltsPaySession(token, usdcPaymentId);
+        setUsdcStep('idle');
+        setUsdcPaymentId(0);
+        setWalletAddr('');
+        setSubmitting(false);
+        await handleUsdcPay();
+        return;
+      }
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6 py-16">
       <div className="max-w-xl w-full bg-card border border-border rounded-2xl p-8">
@@ -581,6 +620,14 @@ export function CheckoutPending() {
                       </span>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleReinitiate}
+                    disabled={submitting}
+                    className="mt-2 text-xs text-secondary hover:text-[#07C160] underline underline-offset-2 disabled:opacity-50"
+                  >
+                    {t('checkoutPending.reinitiate', '重新发起支付')}
+                  </button>
                 </div>
               </div>
             )}
@@ -647,6 +694,19 @@ export function CheckoutPending() {
                       {usdcStep === 'verifying' && t('checkoutPending.usdcVerifying', 'Confirming on chain...')}
                     </span>
                   </div>
+                  {/* Re-initiate is only safe before the user has signed the
+                      EIP-3009 authorization. Once `verifying`, a canceled
+                      session could strand a broadcast tx — hide the button. */}
+                  {(usdcStep === 'connecting' || usdcStep === 'paying') && (
+                    <button
+                      type="button"
+                      onClick={handleReinitiate}
+                      disabled={submitting}
+                      className="text-xs text-secondary hover:text-accent-primary underline underline-offset-2 disabled:opacity-50"
+                    >
+                      {t('checkoutPending.reinitiate', '重新发起支付')}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

@@ -1256,6 +1256,7 @@ const en = {
             "wechatStatus": "Payment Status",
             "wechatWaiting": "Waiting for payment...",
             "wechatExpired": "QR code expired. Please try again.",
+            "reinitiate": "Restart payment",
             "wechatPayNow": "Generate QR Code & Pay",
             "submitting": "Redirecting to payment...",
             "payNow": "Pay Now",
