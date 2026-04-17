@@ -186,53 +186,9 @@ export function CheckoutPending() {
       const order = await paymentApi.createMoltsPaySession(token, tier.slug);
       setUsdcAmount(order.amount_usdc);
 
-      // 2. Resolve a single injected provider (works with multiple wallets)
-      const ethereum = await pickInjectedProvider();
-      if (!ethereum) {
-        throw new Error(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
-      }
-
-      // ALL wallet RPC calls go through the native EIP-1193 `request` method
-      // rather than ethers `BrowserProvider.send()`. BrowserProvider wraps the
-      // provider's `request` in its own JSON-RPC layer which re-triggers the
-      // proxy chain recursion (`Maximum call stack size exceeded`).
-      // BrowserProvider is only used to obtain a Signer for signTypedData.
-      const accounts: string[] = await ethereum.request({ method: 'eth_requestAccounts' });
-      const fromAddr = accounts[0];
-
-      const chainIdHex: string = await ethereum.request({ method: 'eth_chainId' });
-      if (parseInt(chainIdHex, 16) !== BASE_CHAIN_ID) {
-        try {
-          await ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }],
-          });
-        } catch (switchErr: any) {
-          if (switchErr.code === 4902) {
-            await ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x' + BASE_CHAIN_ID.toString(16),
-                chainName: 'Base',
-                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                rpcUrls: ['https://mainnet.base.org'],
-                blockExplorerUrls: ['https://basescan.org'],
-              }],
-            });
-          } else {
-            throw switchErr;
-          }
-        }
-      }
-
-      // Pass the known address to getSigner() so ethers does NOT call
-      // eth_requestAccounts again internally (which would recurse).
-      const provider = new BrowserProvider(ethereum);
-      const signer = await provider.getSigner(fromAddr);
-      setWalletAddr(fromAddr);
-
-      // 3. Request 402 from MoltsPayServer to get payment requirements
-      setUsdcStep('paying');
+      // 2. Pre-flight: request 402 from MoltsPayServer to get payment
+      //    requirements BEFORE touching the wallet. If the payment service
+      //    is down the user sees an error instantly — no stale wallet popup.
       const userId = JSON.parse(localStorage.getItem('user') || '{}').id;
       const executeBody = {
         service: serviceId,
@@ -277,6 +233,52 @@ export function CheckoutPending() {
       if (!payTo || !amountRaw) throw new Error('Missing payTo or amount in requirements');
 
       const extra = req.extra && typeof req.extra === 'object' ? req.extra : { name: 'USD Coin', version: '2' };
+
+      // 3. Now connect wallet — only after we know the payment service is up
+      setUsdcStep('paying');
+      const ethereum = await pickInjectedProvider();
+      if (!ethereum) {
+        throw new Error(t('checkoutPending.usdcNoWallet', 'Please install MetaMask or another Web3 wallet.'));
+      }
+
+      // ALL wallet RPC calls go through the native EIP-1193 `request` method
+      // rather than ethers `BrowserProvider.send()`. BrowserProvider wraps the
+      // provider's `request` in its own JSON-RPC layer which re-triggers the
+      // proxy chain recursion (`Maximum call stack size exceeded`).
+      // BrowserProvider is only used to obtain a Signer for signTypedData.
+      const accounts: string[] = await ethereum.request({ method: 'eth_requestAccounts' });
+      const fromAddr = accounts[0];
+
+      const chainIdHex: string = await ethereum.request({ method: 'eth_chainId' });
+      if (parseInt(chainIdHex, 16) !== BASE_CHAIN_ID) {
+        try {
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x' + BASE_CHAIN_ID.toString(16) }],
+          });
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x' + BASE_CHAIN_ID.toString(16),
+                chainName: 'Base',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://mainnet.base.org'],
+                blockExplorerUrls: ['https://basescan.org'],
+              }],
+            });
+          } else {
+            throw switchErr;
+          }
+        }
+      }
+
+      // Pass the known address to getSigner() so ethers does NOT call
+      // eth_requestAccounts again internally (which would recurse).
+      const provider = new BrowserProvider(ethereum);
+      const signer = await provider.getSigner(fromAddr);
+      setWalletAddr(fromAddr);
 
       // 4. Sign EIP-3009 TransferWithAuthorization (gasless)
       const authorization = {
