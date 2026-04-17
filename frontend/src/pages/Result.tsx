@@ -402,6 +402,7 @@ export function Result() {
       if (rerunMode === 'default') {
         const url = normalizeUrl(rerunUrl.trim());
         const fresh = await geoApi.checkGeo({ url });
+        setAdvancedResult(null);
         navigate('/result', { state: { result: fresh }, replace: true });
         return;
       }

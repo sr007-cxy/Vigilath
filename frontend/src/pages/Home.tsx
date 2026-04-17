@@ -394,7 +394,7 @@ export function Home() {
 
           {/* CTA Row */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text" style={{ color: 'rgba(255, 255, 255, 0.55)' }}>
               {t('home.slogan.cta')}
             </p>
             <button

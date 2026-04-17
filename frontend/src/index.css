@@ -310,7 +310,8 @@
     }
 
     /* Better touch targets */
-    button, a {
+    button,
+    a {
       min-height: 44px;
     }
 
@@ -354,7 +355,9 @@
 
   .brand-logo {
     display: block;
-    transition: filter 0.2s ease, opacity 0.2s ease;
+    transition:
+      filter 0.2s ease,
+      opacity 0.2s ease;
   }
 
   body[data-theme="dark"] .brand-logo {
@@ -364,6 +367,10 @@
   .brand-logo:hover {
     opacity: 0.85;
   }
+
+  /* body[data-theme="peec"] .gradient-text {
+    color: #b0b0b8;
+  } */
 
   body[data-theme="light"] .gradient-text,
   body[data-theme="dark"] .gradient-text {
