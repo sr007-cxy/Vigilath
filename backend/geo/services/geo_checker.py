@@ -67,11 +67,11 @@ def run_geo_check(
     """Run GEO readiness check in-process and return structured result.
 
     allowed_categories: optional whitelist of category labels (e.g. the 5 free-tier
-    checks). When None, all 23 categories are run.
+    checks). When None, all 25 categories are run.
     """
     print(f"Starting run_geo_check for {url}")
     # Check cache first — cache key must include the category filter so that a
-    # free-tier 5-check run doesn't serve a cached 23-check result to a pro user
+    # free-tier 5-check run doesn't serve a cached 25-check result to a pro user
     # or vice versa.
     categories_key = ",".join(sorted(allowed_categories)) if allowed_categories else "all"
     cache_key = f"{url}_{include_fix}_{categories_key}"

@@ -13,7 +13,7 @@ Python CLI tool that checks a website's GEO (Generative Engine Optimization) rea
 ### Free (no API key required)
 All free modes work by fetching the target site and querying public APIs (Wikipedia, npm registry, GitHub search, etc.).
 
-- Default: 23-category site analysis with 0-100 AI Visibility Score
+- Default: 25-category site analysis with 0-100 AI Visibility Score
 - `--fix`: Show actionable fix recommendations
 - `--compare`: Side-by-side multi-site comparison
 - `--crawl-check`: Server log analysis for AI crawler activity

@@ -2,7 +2,7 @@
 
 A Python CLI tool that checks a website's readiness for **Generative Engine Optimization (GEO)** — the practice of optimizing web content for AI-powered search engines and assistants (ChatGPT, Google AI Overviews, Perplexity, Copilot, etc.).
 
-Performs **23 categories** of checks across content quality, technical crawlability, authority signals, AI-specific optimization, cross-platform distribution, and search engine platform registration. Produces a **0-100 AI Visibility Score** with letter grade.
+Performs **25 categories** of checks across content quality, technical crawlability, authority signals, AI-specific optimization, cross-platform distribution, and search engine platform registration. Produces a **0-100 AI Visibility Score** with letter grade.
 
 ## Installation
 

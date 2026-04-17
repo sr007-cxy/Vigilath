@@ -1,6 +1,6 @@
-# Vigilath — GEO Readiness Checker
+# GApex — GEO Readiness Checker
 
-> Vigilath audits any website for Generative Engine Optimization readiness. It returns an AI visibility score and category breakdown across 23 dimensions that determine how well ChatGPT, Perplexity, Claude, and Google AI Overviews can discover, parse, and cite the site.
+> GApex audits any website for Generative Engine Optimization readiness. It returns an AI visibility score and category breakdown across 25 dimensions that determine how well ChatGPT, Perplexity, Claude, and Google AI Overviews can discover, parse, and cite the site.
 
 ## Pages
 
@@ -17,3 +17,18 @@
 - [Sitemap](https://www.vigilath.com/sitemap.xml)
 - [robots.txt](https://www.vigilath.com/robots.txt)
 - [OpenAPI](https://www.vigilath.com/openapi.json)
+
+## FAQ
+
+- **What is GEO?** GEO is the practice of making a website discoverable and quotable by AI answer engines.
+- **How does GApex work?** It runs 100+ checks across 25 categories to produce a 0–100 AI Visibility Score.
+- **Free plan?** Yes — 3 basic checks per month at no cost.
+
+## Community
+
+- [Discord](https://discord.gg/mJVEVXyxD5)
+- [X / Twitter](https://x.com/zen7_labs)
+
+## Contact
+
+- Email: support@zen7.com

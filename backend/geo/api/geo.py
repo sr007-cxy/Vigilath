@@ -65,7 +65,7 @@ def _locked_for(membership: Membership) -> List[str]:
 def _strip_locked_checks(result: GeoTestResult, locked: List[str]) -> GeoTestResult:
     """Return a copy of `result` with locked categories hidden from `checks`.
 
-    The full 23 categories always run now — even for free / anonymous callers —
+    The full 25 categories always run now — even for free / anonymous callers —
     so that `score` reflects the real state of the site instead of an
     artificially high 5-category average. To keep the UI behavior unchanged,
     we drop the locked categories' check details before handing the response
@@ -234,7 +234,7 @@ async def geo_check_task(
 
 @router.post("/check/anonymous", response_model=GeoTestResult)
 async def check_anonymous(body: GeoTestRequest, request: Request, response: Response):
-    """Anonymous check — runs the full 23 categories but only exposes the
+    """Anonymous check — runs the full 25 categories but only exposes the
     free-tier 5 in the response.
 
     The full run is used so that `score` reflects the site's real GEO state
@@ -270,7 +270,7 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
 @router.post("/check", response_model=GeoTestResult)
 async def check_authenticated(body: GeoTestRequest, request: Request, response: Response):
     """Tiered check: uses the caller's membership to decide quota + display
-    gating. Always runs the full 23 categories so the score is tier-independent.
+    gating. Always runs the full 25 categories so the score is tier-independent.
 
     - Bearer token is optional. Without it, falls back to the free tier (same
       behavior as /check/anonymous but without writing any usage rows).
@@ -322,7 +322,7 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
 async def test_geo(body: GeoTestRequest, request: Request, response: Response):
     """Legacy alias — behaves like /check/anonymous.
 
-    Runs the full 23 categories and strips the 18 locked ones before
+    Runs the full 25 categories and strips the 18 locked ones before
     returning (same behavior as /check/anonymous). Kept so existing frontend
     calls to `geoApi.checkGeo` continue to work during the frontend
     migration. Same per-cookie anonymous quota applies.
@@ -386,7 +386,7 @@ async def test_geo_stream(
             set_anon_cookie_value = client_id
         check_and_increment_anonymous_quota(client_id)
 
-    # All 23 categories run for every tier now; display gating happens via
+    # All 25 categories run for every tier now; display gating happens via
     # `locked_categories`, which the task strips from `checks[]` before the
     # result is serialized out. This way free / pro callers get a realistic
     # score without ever seeing the paid categories' check details.

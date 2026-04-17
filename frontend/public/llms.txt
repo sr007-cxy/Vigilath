@@ -1,10 +1,10 @@
-# Vigilath — GEO Readiness Checker
+# GApex — GEO Readiness Checker
 
-> Vigilath is the GEO (Generative Engine Optimization) readiness checker for the AI search era. It audits a website across 23 categories and 100+ signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, and Copilot.
+> GApex is the GEO (Generative Engine Optimization) readiness checker for the AI search era. It audits a website across 25 categories and 100+ signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, and Copilot.
 
-Vigilath helps product teams, marketers, and agencies understand whether their website is discoverable and correctly represented by large language models. A single audit returns an AI Visibility Score (0–100), a category breakdown, and actionable fix recommendations.
+GApex helps product teams, marketers, and agencies understand whether their website is discoverable and correctly represented by large language models. A single audit returns an AI Visibility Score (0–100), a category breakdown, and actionable fix recommendations.
 
-## What Vigilath checks
+## What GApex checks
 
 - **Crawl access**: robots.txt, llms.txt, sitemap.xml, .well-known manifests, and explicit allow/deny rules for AI bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and 12 more).
 - **Content extractability**: server-side rendering vs. client-side JS, semantic HTML, heading structure, readable text ratio.
@@ -22,8 +22,36 @@ Vigilath helps product teams, marketers, and agencies understand whether their w
 - [About](https://www.vigilath.com/about): mission and background
 - [Contact](https://www.vigilath.com/contact): support and sales
 
+## Product Slogan
+
+GApex — Unified GEO+AEO for Global AI Visibility.
+
 ## Machine-readable endpoints
 
 - [Sitemap](https://www.vigilath.com/sitemap.xml)
 - [robots.txt](https://www.vigilath.com/robots.txt)
 - [OpenAPI spec](https://www.vigilath.com/openapi.json): the audit engine's public API
+
+## FAQ
+
+### What is GEO?
+GEO (Generative Engine Optimization) is the practice of making a website discoverable and quotable by AI answer engines like ChatGPT, Perplexity, Claude, and Google AI Overviews.
+
+### How does GApex work?
+GApex runs 100+ checks across 25 categories to produce a 0–100 AI Visibility Score, a category breakdown, and actionable fix recommendations.
+
+### What AI engines does GApex cover?
+ChatGPT (GPTBot), Perplexity (PerplexityBot), Claude (ClaudeBot), Google AI Overviews (Google-Extended), Copilot, and more.
+
+### Is there a free plan?
+Yes. Register and run 3 basic checks per month at no cost.
+
+## Community
+
+- [Discord](https://discord.gg/mJVEVXyxD5): join the GApex community
+- [X / Twitter](https://x.com/zen7_labs): follow for updates
+
+## Contact
+
+- Email: support@zen7.com
+- Website: https://www.vigilath.com/contact

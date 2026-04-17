@@ -1,6 +1,6 @@
-# Vigilath — GEO Readiness Checker
+# GApex — GEO Readiness Checker
 
-> Vigilath is a Generative Engine Optimization (GEO) readiness checker for the AI search era. It audits any website across 23 categories and 100+ discrete signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, Copilot, and other large-language-model answer engines. The output is a 0–100 AI Visibility Score, a category-level breakdown, and an actionable list of fixes.
+> GApex is a Generative Engine Optimization (GEO) readiness checker for the AI search era. It audits any website across 25 categories and 100+ discrete signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, Copilot, and other large-language-model answer engines. The output is a 0–100 AI Visibility Score, a category-level breakdown, and an actionable list of fixes.
 
 ## What GEO is
 
@@ -9,7 +9,7 @@ Generative Engine Optimization is the practice of making a website legible and a
 1. **Discoverability by AI crawlers.** Engines like ChatGPT's browse tool, Perplexity's search crawler, ClaudeBot, Google-Extended, and Applebot-Extended explicitly identify themselves in `User-Agent` and expect explicit allow/deny rules in `robots.txt`, machine-readable manifests in `.well-known/`, and a flat, complete sitemap.
 2. **Quotability by language models.** When an LLM answers a question, it picks passages it can attribute cleanly: definition sentences, lists, comparison tables, step-by-step instructions, quotable statistics, and FAQ blocks. Semantic HTML, JSON-LD, canonical URLs, and authorship signals raise confidence that a passage is worth citing.
 
-## What Vigilath checks
+## What GApex checks
 
 ### Crawl access
 - `robots.txt` presence, syntax, and explicit AI bot allow/deny rules
@@ -56,9 +56,40 @@ Generative Engine Optimization is the practice of making a website legible and a
 - [About](https://www.vigilath.com/about) — team and mission
 - [Contact](https://www.vigilath.com/contact) — support and sales
 
+## Product Slogan
+
+GApex — Unified GEO+AEO for Global AI Visibility.
+
 ## Machine-readable endpoints
 
 - [Sitemap](https://www.vigilath.com/sitemap.xml)
 - [robots.txt](https://www.vigilath.com/robots.txt)
 - [OpenAPI spec](https://www.vigilath.com/openapi.json)
 - [ai-plugin.json](https://www.vigilath.com/.well-known/ai-plugin.json)
+
+## FAQ
+
+### What is GEO?
+GEO (Generative Engine Optimization) is the practice of making a website discoverable and quotable by AI answer engines like ChatGPT, Perplexity, Claude, and Google AI Overviews. Unlike traditional SEO — which optimizes for keyword-based ranking — GEO optimizes for AI crawl access and for content formats that LLMs prefer to cite.
+
+### How does GApex audit a website?
+GApex runs 100+ discrete checks across 25 categories: HTTPS, robots.txt, llms.txt, sitemap.xml, .well-known manifests, platform registration, meta tags, Open Graph, JSON-LD structured data, semantic HTML, heading structure, content extractability, content quality, technical crawlability, security headers, authority signals, brand entity knowledge graphs, trust & safety signals, cross-platform presence, and AI answer-format readiness. The result is a 0–100 AI Visibility Score with a letter grade, a category breakdown, and an actionable fix list.
+
+### What AI engines does GApex cover?
+ChatGPT (GPTBot, ChatGPT-User, OAI-SearchBot), Perplexity (PerplexityBot, Perplexity-User), Claude (ClaudeBot, anthropic-ai), Google AI Overviews (Google-Extended, GoogleOther), Apple Intelligence (Applebot-Extended), Copilot, Common Crawl (CCBot), Meta (Meta-ExternalAgent), Cohere (Cohere-ai), Diffbot, and Bytespider.
+
+### Why is server-side content important for AI crawlers?
+Most AI crawlers — including GPTBot, ClaudeBot, and PerplexityBot — do not execute JavaScript. A pure client-side-rendered SPA appears almost empty to them, which means LLMs never see the content and cannot cite it. Adding server-side rendering, static-site generation, or a content-rich index.html fixes this.
+
+### Is there a free plan?
+Yes. Register and run 3 basic checks per month at no cost. Paid plans (Pro, Starter, Growth, Scale) offer more checks, full 25-category audits, managed GEO coverage, and enterprise features.
+
+## Community
+
+- [Discord](https://discord.gg/mJVEVXyxD5): join the GApex community for GEO discussions, tips, and support
+- [X / Twitter](https://x.com/zen7_labs): follow for product updates and GEO insights
+
+## Contact
+
+- Email: support@zen7.com
+- Website: https://www.vigilath.com/contact
