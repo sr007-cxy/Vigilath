@@ -8,6 +8,13 @@
 
 2026-04-17 package 重构**之前**的单文件 CLI,从 git tag `pre-refactor-package-2026-04-17` 抽取得到,与该 tag 的根 `geo_checker.py` 逐字节相同。
 
+**注意有"第二份同源文件"在 `/geo_checker.py`**(根目录,`b5b159e` 恢复):
+- 字节与本文件 100% 相同(都是 8065 行 / 396859 bytes)
+- 根文件作为 **CLI 入口**(`python geo_checker.py <url>`)
+- archive 这份作为 **只读历史归档**
+- 两份都**冻结**,不跟随 `backend/geo_checker/` package 的后续改动
+- 这两份的存在不影响 runtime:uvicorn 从 `/backend` 加载的是 `backend/geo_checker/` package(见 CLAUDE.md "三份同源文件"一节)
+
 **用途**:
 
 - **评分 drift 回归测试**:把同一 URL 喂给 v1 baseline 和当前 backend,对比 24 个 category 的分数应完全一致
