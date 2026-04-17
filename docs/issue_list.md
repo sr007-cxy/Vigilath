@@ -81,7 +81,7 @@
 
 **历史背景**:项目根曾并存**三份**核心副本(`/geo_checker.py` + `/geo_checker/__main__.py` + `/backend/geo_checker/__main__.py`)。第二份是 `pyproject.toml` 里 CLI entry point 指向的"半同步"副本,运行时没人加载。
 
-**2026-04-17 `24d50b7` 先收敛到 2 份**:
+**2026-04-17 `ed0e3f2` 先收敛到 2 份**:
 - 删除了 orphan `/geo_checker/` 目录
 - `pyproject.toml` 的 entry point 改为 `geo-checker = "geo_checker:main"`,直接指向根的单文件 module
 - 新增 `[tool.setuptools] py-modules = ["geo_checker"]` 声明根为单文件模块
