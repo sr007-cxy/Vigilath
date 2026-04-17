@@ -32,7 +32,7 @@
 | ID | 关闭 commit | 标题 |
 |---|---|---|
 | [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
-| [#1](#1-check_cross_platform-串行探测-收益不及预期) | 待补 commit | P0:check_cross_platform 并发化(收益低于估算,保留代码) |
+| [#1](#1-check_cross_platform-串行探测-收益不及预期) | `7610d4b` | P0:check_cross_platform 并发化(收益低于估算,保留代码) |
 | [#R1](#r1-usdc-支付钱包爆栈) | `b9306e4` | USDC 支付钱包爆栈 `Maximum call stack size exceeded` |
 | [#R2](#r2-后端缺少-per-check-耗时可观测性) | `da3a8d9` | 后端缺少 per-check 耗时可观测性 |
 | [#R3](#r3-性能文档膨胀难以区分事件与参考) | `fae9152` / `c97dd49` / `c8466ee` | 性能文档体系重构 |
@@ -217,7 +217,7 @@
 
 ### #1 `check_cross_platform` 串行探测(收益不及预期)
 
-- **Closed**: 待补 commit(2026-04-17)
+- **Closed**: `7610d4b`(2026-04-17)
 - **Area**: backend(核心引擎)
 
 **症状**:原估最坏 80 s 在此单函数上(10 平台 × 8 s timeout)。
