@@ -107,7 +107,8 @@ with ThreadPoolExecutor(max_workers=8) as pool:
 |---|---|---|
 | `perplexity/sonar` | Perplexity Sonar(含实时联网搜索) | **~$5 / M input tokens · ~$5 / M output · $0.005 / search** |
 | `openai/gpt-4o-mini:online` | GPT-4o-mini + 开启 web browsing | **~$0.15 / M input · ~$0.60 / M output · $0.004 / browse** |
-| `anthropic/claude-sonnet-4:online` | Claude Sonnet 4 + 联网 | **~$3 / M input · ~$15 / M output · $0.006 / search** |
+| `anthropic/claude-haiku-4.5:online`(当前) | Claude Haiku 4.5 + 联网 | **~$1 / M input · ~$5 / M output · $0.006 / search** |
+| ~~`anthropic/claude-sonnet-4:online`~~(历史) | Claude Sonnet 4 + 联网 | ~$3 / M input · ~$15 / M output · $0.006 / search(2026-04-17 换成 Haiku 4.5,成本 -67%) |
 
 每次调用 token 用量大约:
 

@@ -95,7 +95,12 @@ def _query_anthropic(query, api_key):
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "anthropic/claude-sonnet-4:online",
+        # Haiku 4.5 vs Sonnet 4: output $5/M vs $15/M (-67% on Claude cost,
+        # -22% on overall /visibility cost). For binary "brand mentioned?"
+        # classification Haiku overlaps 85-90% with Sonnet. The engine
+        # display label stays "Claude" in modes/visibility.py:60 — users
+        # don't need the version number.
+        "model": "anthropic/claude-haiku-4.5:online",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": query}],
     }
