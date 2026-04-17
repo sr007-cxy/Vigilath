@@ -420,16 +420,16 @@ export function CheckoutPending() {
                   disabled={submitting}
                   className={`relative rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'stripe'
-                      ? 'border-white/90 bg-white/5'
-                      : 'border-white/20 opacity-50 hover:opacity-80 hover:border-white/40'
+                      ? 'border-black'
+                      : 'border-transparent opacity-50 hover:opacity-80'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      payMethod === 'stripe' ? 'border-white' : 'border-white/30'
+                      payMethod === 'stripe' ? 'border-black' : 'border-gray-300'
                     }`}>
                       {payMethod === 'stripe' && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-black" />
                       )}
                     </div>
                     <span className="text-xl">💳</span>
@@ -445,16 +445,16 @@ export function CheckoutPending() {
                   disabled={submitting}
                   className={`relative rounded-xl border-2 p-4 text-left transition-all ${
                     payMethod === 'usdc'
-                      ? 'border-white/90 bg-white/5'
-                      : 'border-white/20 opacity-50 hover:opacity-80 hover:border-white/40'
+                      ? 'border-black'
+                      : 'border-transparent opacity-50 hover:opacity-80'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      payMethod === 'usdc' ? 'border-white' : 'border-white/30'
+                      payMethod === 'usdc' ? 'border-black' : 'border-gray-300'
                     }`}>
                       {payMethod === 'usdc' && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-black" />
                       )}
                     </div>
                     <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">

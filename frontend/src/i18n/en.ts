@@ -243,7 +243,7 @@ const en = {
               "quotaExceeded": "You've used all your free checks this month. Upgrade a plan to keep checking.",
               "quotaCta": "View plans"
             },
-            "poweredBy": "Powered by GApex",
+            "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "Need expert optimization help?",
             "slogan": {
               "title": "Make AI Engines See, Trust, and Recommend Your Brand",
