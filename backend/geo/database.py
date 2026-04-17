@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     MOLTSPAY_CHAIN: str = "base"
     MOLTSPAY_SERVER_URL: str = "http://127.0.0.1:3010"
 
+    # WeChat Pay (微信支付 Native Pay 扫码支付)
+    WECHAT_PAY_ENABLED: bool = False
+    WECHAT_PAY_APP_ID: str = ""             # 公众号/小程序 AppID
+    WECHAT_PAY_MCH_ID: str = ""             # 商户号
+    WECHAT_PAY_API_KEY_V3: str = ""         # APIv3 密钥 (32 字节)
+    WECHAT_PAY_CERT_SERIAL: str = ""        # 商户证书序列号
+    WECHAT_PAY_PRIVATE_KEY_PATH: str = ""   # 商户私钥 apiclient_key.pem 路径
+    WECHAT_PAY_NOTIFY_URL: str = ""         # 支付结果回调通知 URL
+
     # AI engine keys (paid detection modes — entity / ai-visibility / citation-check).
     # Read by both the backend `geo` package and the standalone CLI tool spawned
     # as a subprocess; declared here so pydantic-settings won't drop them as

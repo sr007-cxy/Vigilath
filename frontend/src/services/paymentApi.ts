@@ -103,6 +103,40 @@ export const paymentApi = {
     }
     return response.json();
   },
+
+  async createWechatPaySession(
+    token: string,
+    slug: string,
+  ): Promise<WechatPayCreateResponse> {
+    const response = await fetch(`${API_BASE}/payment/wechat/create`, {
+      method: 'POST',
+      headers: localizedHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }),
+      body: JSON.stringify({ slug }),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to create WeChat Pay order'));
+    }
+    return response.json();
+  },
+
+  async getWechatPayStatus(
+    token: string,
+    paymentId: number,
+  ): Promise<WechatPayStatusResponse> {
+    const response = await fetch(
+      `${API_BASE}/payment/wechat/status/${paymentId}`,
+      {
+        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to check WeChat payment status'));
+    }
+    return response.json();
+  },
 };
 
 export interface MoltsPayCreateResponse {
@@ -125,4 +159,17 @@ export interface MoltsPayVerifyResponse {
   success: boolean;
   payment_id: number;
   already_paid?: boolean;
+}
+
+export interface WechatPayCreateResponse {
+  payment_id: number;
+  code_url: string;
+  amount_cny: number;
+  out_trade_no: string;
+}
+
+export interface WechatPayStatusResponse {
+  payment_id: number;
+  status: string;
+  completed_at: string | null;
 }

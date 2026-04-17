@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, advanced, account
+from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account
 from geo.utils.error_handler import global_exception_handler, AppException
 
 _timing_logger = logging.getLogger("geo.timing")
@@ -61,6 +61,7 @@ app.include_router(oauth.router, prefix="/api/oauth", tags=["oauth"])
 app.include_router(contact.router, prefix="/api", tags=["contact"])
 app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
 app.include_router(moltspay_payment.router, prefix="/api/payment", tags=["moltspay"])
+app.include_router(wechat_payment.router, prefix="/api/payment", tags=["wechat"])
 app.include_router(advanced.router, prefix="/api", tags=["advanced"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])
 

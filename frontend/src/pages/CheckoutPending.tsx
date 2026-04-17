@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BrowserProvider, randomBytes, hexlify } from 'ethers';
+import { QRCodeSVG } from 'qrcode.react';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
 import { useTierModal } from '../components/TierModalContext';
 
-type PayMethod = 'stripe' | 'usdc';
+type PayMethod = 'stripe' | 'usdc' | 'wechat';
 
 const BASE_CHAIN_ID = 8453;
 const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -78,17 +79,26 @@ export function CheckoutPending() {
     return { name, description, period, features };
   };
 
+  const isZh = i18n.language.startsWith('zh');
+
   const [tier, setTier] = useState<Membership | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const [payMethod, setPayMethod] = useState<PayMethod>('stripe');
+  const [payMethod, setPayMethod] = useState<PayMethod>(isZh ? 'wechat' : 'stripe');
 
   // USDC / Web3 state
   const [usdcAmount, setUsdcAmount] = useState<number>(0);
   const [walletAddr, setWalletAddr] = useState<string>('');
   const [usdcStep, setUsdcStep] = useState<'idle' | 'connecting' | 'paying' | 'verifying' | 'done'>('idle');
+
+  // WeChat Pay state
+  const [wechatCodeUrl, setWechatCodeUrl] = useState<string>('');
+  const [wechatPaymentId, setWechatPaymentId] = useState<number>(0);
+  const [wechatAmount, setWechatAmount] = useState<number>(0);
+  const [wechatStep, setWechatStep] = useState<'idle' | 'creating' | 'polling' | 'done'>('idle');
+  const wechatPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -334,7 +344,51 @@ export function CheckoutPending() {
     }
   };
 
-  const handlePay = payMethod === 'stripe' ? handleStripePay : handleUsdcPay;
+  // Cleanup WeChat polling on unmount
+  useEffect(() => {
+    return () => {
+      if (wechatPollRef.current) clearInterval(wechatPollRef.current);
+    };
+  }, []);
+
+  const handleWechatPay = async () => {
+    if (!tier || !token || submitting) return;
+    setSubmitting(true);
+    setPayError(null);
+    setWechatStep('creating');
+    try {
+      const order = await paymentApi.createWechatPaySession(token, tier.slug);
+      setWechatCodeUrl(order.code_url);
+      setWechatPaymentId(order.payment_id);
+      setWechatAmount(order.amount_cny);
+      setWechatStep('polling');
+      setSubmitting(false);
+
+      // Poll for payment completion every 3 seconds
+      wechatPollRef.current = setInterval(async () => {
+        try {
+          const status = await paymentApi.getWechatPayStatus(token, order.payment_id);
+          if (status.status === 'paid') {
+            if (wechatPollRef.current) clearInterval(wechatPollRef.current);
+            setWechatStep('done');
+            navigate('/checkout/success?provider=wechat');
+          }
+        } catch {
+          // Polling error — continue silently
+        }
+      }, 3000);
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : t('checkoutPending.payError'));
+      setWechatStep('idle');
+      setSubmitting(false);
+    }
+  };
+
+  const handlePay = payMethod === 'stripe'
+    ? handleStripePay
+    : payMethod === 'wechat'
+      ? handleWechatPay
+      : handleUsdcPay;
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6 py-16">
@@ -413,62 +467,136 @@ export function CheckoutPending() {
                 </svg>
                 <span className="text-sm font-semibold text-primary">{t('checkoutPending.methodLabel')}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPayMethod('stripe')}
-                  disabled={submitting}
-                  className={`relative rounded-xl border-2 p-4 text-left transition-all ${
-                    payMethod === 'stripe'
-                      ? 'border-black'
-                      : 'border-transparent opacity-50 hover:opacity-80'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      payMethod === 'stripe' ? 'border-black' : 'border-gray-300'
-                    }`}>
-                      {payMethod === 'stripe' && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-black" />
-                      )}
+
+              {isZh ? (
+                /* Chinese locale: WeChat Pay only */
+                <div>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    className="w-full relative rounded-xl border-2 border-[#07C160] p-4 text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full border-2 border-[#07C160] flex items-center justify-center shrink-0">
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#07C160]" />
+                      </div>
+                      <svg className="w-7 h-7 shrink-0" viewBox="0 0 48 48" fill="none">
+                        <circle cx="24" cy="24" r="24" fill="#07C160"/>
+                        <path d="M30.2 20.4c-.3 0-.6 0-.9.1.4-3.5-3-6.5-7.3-6.5-4.1 0-7.5 2.8-7.5 6.3 0 2 1.1 3.8 2.9 5l-.7 2.2 2.6-1.3c.8.2 1.5.3 2.3.3h.4c-.1-.4-.1-.8-.1-1.2 0-3.2 2.9-5.7 6.5-5.7.6 0 1.2.1 1.8.2zm-10-2.1c.6 0 1 .5 1 1s-.4 1-1 1-1-.5-1-1 .4-1 1-1zm-4.8 2c-.6 0-1-.5-1-1s.4-1 1-1 1 .5 1 1-.4 1-1 1z" fill="#fff"/>
+                        <path d="M36 25.9c0-2.9-2.9-5.2-6.5-5.2s-6.5 2.3-6.5 5.2 2.9 5.2 6.5 5.2c.7 0 1.4-.1 2-.3l2.1 1.1-.6-1.8c1.6-1 2.5-2.5 2.5-4.2h.5zm-8.6-1c-.5 0-.8-.4-.8-.8s.4-.8.8-.8.8.4.8.8-.4.8-.8.8zm4.2 0c-.5 0-.8-.4-.8-.8s.4-.8.8-.8.8.4.8.8-.4.8-.8.8z" fill="#fff"/>
+                      </svg>
+                      <div>
+                        <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodWechatLabel')}</div>
+                        <div className="text-[10px] text-secondary">WeChat Pay</div>
+                      </div>
                     </div>
-                    <span className="text-xl">💳</span>
-                    <div>
-                      <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
-                      <div className="text-[10px] text-secondary">Stripe</div>
+                  </button>
+                </div>
+              ) : (
+                /* English locale: Stripe + USDC */
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod('stripe')}
+                    disabled={submitting}
+                    className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+                      payMethod === 'stripe'
+                        ? 'border-black'
+                        : 'border-transparent opacity-50 hover:opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                        payMethod === 'stripe' ? 'border-black' : 'border-gray-300'
+                      }`}>
+                        {payMethod === 'stripe' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-black" />
+                        )}
+                      </div>
+                      <span className="text-xl">💳</span>
+                      <div>
+                        <div className="text-sm font-semibold text-primary">{t('checkoutPending.methodStripeLabel', 'Credit Card')}</div>
+                        <div className="text-[10px] text-secondary">Stripe</div>
+                      </div>
                     </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPayMethod('usdc')}
-                  disabled={submitting}
-                  className={`relative rounded-xl border-2 p-4 text-left transition-all ${
-                    payMethod === 'usdc'
-                      ? 'border-black'
-                      : 'border-transparent opacity-50 hover:opacity-80'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      payMethod === 'usdc' ? 'border-black' : 'border-gray-300'
-                    }`}>
-                      {payMethod === 'usdc' && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-black" />
-                      )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod('usdc')}
+                    disabled={submitting}
+                    className={`relative rounded-xl border-2 p-4 text-left transition-all ${
+                      payMethod === 'usdc'
+                        ? 'border-black'
+                        : 'border-transparent opacity-50 hover:opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                        payMethod === 'usdc' ? 'border-black' : 'border-gray-300'
+                      }`}>
+                        {payMethod === 'usdc' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-black" />
+                        )}
+                      </div>
+                      <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="16" fill="#2775CA"/>
+                        <path d="M20.5 18.5c0-2.1-1.3-2.8-3.8-3.1-1.8-.3-2.2-.7-2.2-1.4s.6-1.2 1.8-1.2c1.1 0 1.6.4 1.9 1.2.1.2.2.3.4.3h1c.2 0 .4-.2.3-.4-.3-1.2-1.1-2.1-2.4-2.4v-1.4c0-.2-.2-.4-.4-.4h-.9c-.2 0-.4.2-.4.4v1.3c-1.7.3-2.8 1.3-2.8 2.7 0 2 1.2 2.7 3.7 3.1 1.7.3 2.3.7 2.3 1.5s-.8 1.3-1.9 1.3c-1.5 0-2-.6-2.2-1.3-.1-.2-.2-.3-.4-.3h-1c-.2 0-.4.2-.3.4.4 1.4 1.2 2.2 2.7 2.5v1.4c0 .2.2.4.4.4h.9c.2 0 .4-.2.4-.4v-1.4c1.7-.2 2.9-1.3 2.9-2.8z" fill="#fff"/>
+                      </svg>
+                      <div>
+                        <div className="text-sm font-semibold text-primary">USDC</div>
+                        <div className="text-[10px] text-secondary">Coinbase</div>
+                      </div>
                     </div>
-                    <svg className="w-6 h-6 shrink-0" viewBox="0 0 32 32" fill="none">
-                      <circle cx="16" cy="16" r="16" fill="#2775CA"/>
-                      <path d="M20.5 18.5c0-2.1-1.3-2.8-3.8-3.1-1.8-.3-2.2-.7-2.2-1.4s.6-1.2 1.8-1.2c1.1 0 1.6.4 1.9 1.2.1.2.2.3.4.3h1c.2 0 .4-.2.3-.4-.3-1.2-1.1-2.1-2.4-2.4v-1.4c0-.2-.2-.4-.4-.4h-.9c-.2 0-.4.2-.4.4v1.3c-1.7.3-2.8 1.3-2.8 2.7 0 2 1.2 2.7 3.7 3.1 1.7.3 2.3.7 2.3 1.5s-.8 1.3-1.9 1.3c-1.5 0-2-.6-2.2-1.3-.1-.2-.2-.3-.4-.3h-1c-.2 0-.4.2-.3.4.4 1.4 1.2 2.2 2.7 2.5v1.4c0 .2.2.4.4.4h.9c.2 0 .4-.2.4-.4v-1.4c1.7-.2 2.9-1.3 2.9-2.8z" fill="#fff"/>
-                    </svg>
-                    <div>
-                      <div className="text-sm font-semibold text-primary">USDC</div>
-                      <div className="text-[10px] text-secondary">Coinbase</div>
-                    </div>
-                  </div>
-                </button>
-              </div>
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* WeChat Pay info */}
+            {payMethod === 'wechat' && wechatStep === 'idle' && (
+              <div className="rounded-lg bg-[rgba(255,255,255,0.02)] border border-border p-4 mb-5">
+                <p className="text-xs text-secondary leading-relaxed">{t('checkoutPending.methodWechat')}</p>
+              </div>
+            )}
+
+            {/* WeChat QR code panel */}
+            {payMethod === 'wechat' && wechatStep === 'polling' && wechatCodeUrl && (
+              <div className="rounded-lg bg-[#07C160]/5 border border-[#07C160]/30 p-5 mb-5">
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-sm font-medium text-primary">{t('checkoutPending.wechatScanQr')}</p>
+                  <div className="bg-white p-3 rounded-lg">
+                    <QRCodeSVG value={wechatCodeUrl} size={200} />
+                  </div>
+                  <div className="w-full space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-secondary">{t('checkoutPending.wechatAmount')}</span>
+                      <span className="font-mono text-primary font-semibold">¥{wechatAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-secondary">{t('checkoutPending.wechatStatus')}</span>
+                      <span className="text-[#07C160] font-medium flex items-center gap-1.5">
+                        <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        {t('checkoutPending.wechatWaiting')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* WeChat creating spinner */}
+            {payMethod === 'wechat' && wechatStep === 'creating' && (
+              <div className="rounded-lg bg-[#07C160]/5 border border-[#07C160]/30 p-5 mb-5 text-center">
+                <svg className="animate-spin h-6 w-6 mx-auto mb-2 text-[#07C160]" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-xs text-secondary">{t('checkoutPending.submitting')}</p>
+              </div>
+            )}
 
             {/* Stripe info */}
             {payMethod === 'stripe' && !submitting && (
@@ -532,7 +660,7 @@ export function CheckoutPending() {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3">
-              {usdcStep === 'idle' && (
+              {usdcStep === 'idle' && wechatStep !== 'polling' && (
                 <button
                   type="button"
                   onClick={handlePay}
@@ -543,7 +671,9 @@ export function CheckoutPending() {
                     ? t('checkoutPending.submitting')
                     : payMethod === 'usdc'
                       ? t('checkoutPending.usdcPayNow', 'Connect Wallet & Pay')
-                      : t('checkoutPending.payNow')}
+                      : payMethod === 'wechat'
+                        ? t('checkoutPending.wechatPayNow')
+                        : t('checkoutPending.payNow')}
                 </button>
               )}
               <button

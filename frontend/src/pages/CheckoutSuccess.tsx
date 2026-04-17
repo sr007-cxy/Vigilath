@@ -19,8 +19,8 @@ export function CheckoutSuccess() {
   const provider = params.get('provider');
 
   useEffect(() => {
-    // MoltsPay: fulfillment already happened via /fulfill callback
-    if (provider === 'moltspay') {
+    // MoltsPay / WeChat: fulfillment already happened via webhook/callback
+    if (provider === 'moltspay' || provider === 'wechat') {
       setState('paid');
       return;
     }
