@@ -1,10 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { geoApi, ApiError } from '../services/geoApi';
 import { useContactModal } from '../components/ContactModalContext';
 import { useTierModal } from '../components/TierModalContext';
-import { CheckProgress } from '../components/result/CheckProgress';
 import { useMembership } from '../hooks/useMembership';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
@@ -55,9 +53,7 @@ export function Home() {
   const { openContact } = useContactModal();
   const { openTierModal } = useTierModal();
   const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
 
   const validateUrl = (input: string): boolean => {
     try {
@@ -70,9 +66,14 @@ export function Home() {
     }
   };
 
+  // Home doesn't call the API itself — it hands the URL off to the Result
+  // page and lets that page own the request lifecycle. This avoids the
+  // 499 cascade we saw when users hit back/refresh while Home was still
+  // awaiting a response (component unmount → axios cancel → nginx 499).
+  // Server errors (quota, upstream failures, timeouts) now surface in
+  // Result's rerun-error band, not here.
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setQuotaExceeded(false);
     if (!url.trim()) {
       setError(t('home.error.empty'));
       return;
@@ -82,28 +83,8 @@ export function Home() {
       return;
     }
 
-    setIsLoading(true);
-    setError('');
-
-    // 处理URL前缀，确保API调用时使用正确的URL格式
     const formattedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
-
-    geoApi
-      .checkGeo({ url: formattedUrl })
-      .then((result) => {
-        navigate('/result', { state: { result } });
-      })
-      .catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 429) {
-          setQuotaExceeded(true);
-          setError(err.message || t('home.error.quotaExceeded'));
-        } else {
-          setError(err instanceof Error ? err.message : t('home.error.failed'));
-        }
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    navigate('/result', { state: { pendingUrl: formattedUrl } });
   };
 
   const handleAdvancedClick = (key: AdvancedKey) => {
@@ -154,88 +135,38 @@ export function Home() {
                     placeholder={t('home.placeholder')}
                     className="flex-1 py-3 px-4 sm:px-5 text-sm sm:text-base bg-transparent focus:outline-none text-primary border-none min-w-0"
                     style={{ color: 'var(--text-primary)' }}
-                    disabled={isLoading}
                   />
                   <button
                     type="submit"
-                    disabled={isLoading}
                     className="btn-solid px-6 py-3 font-semibold flex items-center justify-center rounded-xl sm:rounded-full disabled:opacity-60 text-sm sm:text-base"
                   >
-                    {isLoading ? (
-                      <svg
-                        className="animate-spin h-5 w-5"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth={4}
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                        />
-                      </svg>
-                    ) : (
-                      t('home.button')
-                    )}
+                    {t('home.button')}
                   </button>
                 </div>
 
                 {error && (
                   <div
-                    className="mt-4 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in"
+                    className="mt-4 rounded-xl p-4 flex items-start gap-3 animate-fade-in"
                     style={{
                       background: 'rgba(239, 68, 68, 0.08)',
                       border: '1px solid rgba(239, 68, 68, 0.25)',
                     }}
                   >
-                    <div className="flex items-start gap-3 flex-1">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-rose-500 flex-shrink-0 mt-0.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
-                      <span className="text-sm font-medium" style={{ color: '#ef4444' }}>{error}</span>
-                    </div>
-                    {quotaExceeded && (
-                      <button
-                        type="button"
-                        onClick={openTierModal}
-                        className="btn-solid inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors duration-200 flex-shrink-0"
-                      >
-                        {t('home.error.quotaCta')}
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17 8l4 4m0 0l-4 4m4-4H3"
-                          />
-                        </svg>
-                      </button>
-                    )}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-rose-500 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-.633-1.964-.633-2.732 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium" style={{ color: '#ef4444' }}>{error}</span>
                   </div>
                 )}
               </form>
@@ -412,7 +343,6 @@ export function Home() {
         </div>
       </section>
 
-      {isLoading && <CheckProgress mode="default" />}
     </div>
   );
 }

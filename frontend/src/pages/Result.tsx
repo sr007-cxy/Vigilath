@@ -157,9 +157,19 @@ export function Result() {
   const location = useLocation();
   const navigate = useNavigate();
   const navState = location.state as
-    | { result?: GeoTestResult; initialMode?: AdvancedMode; initialUrl?: string }
+    | {
+        result?: GeoTestResult;
+        initialMode?: AdvancedMode;
+        initialUrl?: string;
+        // URL handed off from Home — Result kicks the default check on mount,
+        // replacing state with { result } once it resolves. Lives here (not in
+        // Home) so a user hitting back/refresh during the 30s+ detection just
+        // cancels the request via AbortController instead of orphaning it.
+        pendingUrl?: string;
+      }
     | null;
   const result = navState?.result as GeoTestResult | undefined;
+  const pendingUrl = navState?.pendingUrl;
   // "Empty advanced" entry — user clicked an advanced capability on the
   // homepage with no prior default check. We skip the score hero and
   // category tabs, and render a centered hero form pre-set to that mode.
@@ -177,7 +187,9 @@ export function Result() {
   const [feedbackKind, setFeedbackKind] = useState<'success' | 'error' | null>(null);
 
   // Rerun bar state — title-row URL input + optional advanced mode dropdown.
-  const [rerunUrl, setRerunUrl] = useState<string>(result?.url || initialAdvancedUrl);
+  // pendingUrl fallback keeps the input populated while the kickoff check
+  // runs, so the user sees the URL they just submitted.
+  const [rerunUrl, setRerunUrl] = useState<string>(result?.url || pendingUrl || initialAdvancedUrl);
   const [rerunMode, setRerunMode] = useState<RerunMode>(initialAdvancedMode || 'default');
   const [rerunKeywords, setRerunKeywords] = useState<string>('');
   const [rerunEntityName, setRerunEntityName] = useState<string>('');
@@ -197,6 +209,51 @@ export function Result() {
       advancedResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [advancedResult]);
+
+  // Guard against direct access to /result with no context (no result, no
+  // pending detection, not empty-advanced). Redirect to Home to avoid
+  // rendering an empty shell.
+  useEffect(() => {
+    if (!navState?.result && !navState?.pendingUrl && !navState?.initialMode) {
+      navigate('/', { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Home hands off a URL via `pendingUrl`; this effect owns the actual HTTP
+  // call. Using AbortController means a user bouncing back to Home or hitting
+  // F5 mid-detection cancels the request instead of leaving the backend
+  // running for 2+ minutes. Reuses rerun* state so the existing CheckProgress
+  // + error-band render path works without changes.
+  useEffect(() => {
+    if (!pendingUrl || result) return;
+    const controller = new AbortController();
+    setRerunLoading(true);
+    setRerunError('');
+    setRerunQuotaExceeded(false);
+    setRerunMode('default');
+
+    geoApi
+      .checkGeo({ url: pendingUrl }, controller.signal)
+      .then((fresh) => {
+        // Replace state so a refresh / forward-nav doesn't re-trigger the
+        // check, and so the rerun bar picks up the fresh result URL.
+        navigate('.', { state: { result: fresh }, replace: true });
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        if (err instanceof ApiError && err.status === 429) {
+          setRerunQuotaExceeded(true);
+          setRerunError(err.message || (t('home.error.quotaExceeded') as string));
+        } else {
+          setRerunError(err instanceof Error ? err.message : (t('home.error.failed') as string));
+        }
+      })
+      .finally(() => setRerunLoading(false));
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const effectiveTier = result?.tier || 'free';
   const effectiveRank = TIER_RANK[effectiveTier] ?? 0;

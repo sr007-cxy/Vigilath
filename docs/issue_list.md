@@ -19,7 +19,6 @@
 |---|---|---|---|---|
 | [#1](#1-check_cross_platform-串行探测-10-个社交平台) | **P0** | backend | `check_cross_platform` 串行探测 | 默认 check 120 s → 30 s |
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
-| [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | **P0** | frontend | 前端检测触发改到 Result 页 | UX 型 499 清零 |
 | [#4](#4-check_brand_entity_kg-wiki-调用串行) | P1 | backend | `check_brand_entity_kg` Wiki 串行 | -5 到 -10 s |
 | [#5](#5-check_authority_trust-认证源串行) | P1 | backend | `check_authority_trust` 认证源串行 | -3 到 -5 s |
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
@@ -31,6 +30,7 @@
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
+| [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | 待补 commit | P0:前端检测触发改到 Result 页 + AbortController |
 | [#R1](#r1-usdc-支付钱包爆栈) | `b9306e4` | USDC 支付钱包爆栈 `Maximum call stack size exceeded` |
 | [#R2](#r2-后端缺少-per-check-耗时可观测性) | `da3a8d9` | 后端缺少 per-check 耗时可观测性 |
 | [#R3](#r3-性能文档膨胀难以区分事件与参考) | `fae9152` / `c97dd49` / `c8466ee` | 性能文档体系重构 |
@@ -94,36 +94,6 @@
 - 同一 URL 连续跑 3 次的 AI Visibility Score 偏差 ≤ 5 分
 
 **详细实施**:见 [`docs/性能处理方案.md §2`](./docs/性能处理方案.md)
-
----
-
-### #3 前端检测仍在 Home 页触发,用户返回/刷新即断连
-
-- **Priority**: P0
-- **Status**: Open
-- **Area**: frontend
-
-**症状**:近两天 nginx 16 次 499 里,**13 次**来自 `/api/check/anonymous` 或 `/api/check`。journald 对应后端检测一路跑完,用户浏览器早就断开。
-
-**根因**:`Home.tsx` 发 axios POST 后,CheckProgress 组件挂在 Home 页;用户等不及(25 s+)按浏览器返回或刷新 → Home 卸载 → 请求取消 → nginx 记 499。后端无感知,继续空跑到完成。
-
-**涉及文件**:
-- `frontend/src/pages/Home.tsx`(提交后不再调 API,直接 navigate)
-- `frontend/src/pages/Result.tsx`(mount 时根据 `location.state` 发起检测)
-- `frontend/src/services/geoApi.ts`(加 `signal?: AbortSignal` 参数)
-
-**处理方案**:
-- Home 提交 → `navigate('/result', { state: { url } })`,用户立即进入目标页
-- Result mount 时 `useEffect` 检测 `state.url` 且无 `state.result` → 起 `AbortController` 调 API
-- 返回/卸载时 `controller.abort()`,后端仍会收到请求(无法从浏览器层取消),但前端不再认为是异常
-- `state.result` 在 API 返回后用 `navigate('.', { state, replace: true })` 写回,刷新也不重复检测
-
-**验收**:
-- 用户在 Result 页按返回键:axios `CanceledError` 被捕获,不再弹 "Failed to run GEO check"
-- nginx 上 `/api/check(anonymous)` 的 499 次数降到 0
-- 深链直接访问 `/result` 无 `state`:自动 redirect 到 `/`
-
-**详细实施**:见 [`docs/性能处理方案.md §3`](./docs/性能处理方案.md)
 
 ---
 
@@ -232,6 +202,31 @@
 ---
 
 ## Closed
+
+### #3 前端检测仍在 Home 页触发,用户返回/刷新即断连
+
+- **Closed**: 待补 commit(2026-04-17)
+- **Area**: frontend
+
+**症状**:近两天 nginx 16 次 499 里 13 次来自 `/api/check(anonymous)`,全部是用户在 Home 等待期间按返回键 / 刷新导致。axios 请求被浏览器中断,nginx 记 499,后端 continues 空跑到检测完成(baidu 实测 166 s)。
+
+**根因**:`Home.tsx` 的 submit handler 直接调 `geoApi.checkGeo()` 并在当前页渲染 `CheckProgress`。当前页就是 Home,用户本能会想回到"更显眼的位置"(点输入框改 URL / 点 logo 回首页 / 按浏览器返回),一旦导航离开,Home 卸载、axios 请求中断。
+
+**修复**:
+- `Home.tsx`:submit 仅做 URL 校验,合法就 `navigate('/result', { state: { pendingUrl } })`,本地不再管 loading / 错误 / quota。把 `CheckProgress`、`useState(isLoading)`、`useState(quotaExceeded)`、`geoApi` 导入等都移除。
+- `Result.tsx`:
+  - 在 `navState` 上加 `pendingUrl?: string`
+  - 新增 `useEffect` 一处:`pendingUrl && !result` 时起 `AbortController`,调 `geoApi.checkGeo(..., signal)`,成功后 `navigate('.', { state: { result }, replace: true })`;cleanup `controller.abort()`
+  - 另一处 `useEffect`:直达 `/result` 无任何 state 时 `navigate('/', replace: true)` 回兜底
+  - `rerunUrl` 初始值加入 `pendingUrl` 兜底,检测中输入框保持有值
+  - 复用 `rerunLoading` / `rerunError` / `rerunQuotaExceeded` 状态,`CheckProgress` 的 overlay 自动显示,错误 band 共用
+- `geoApi.ts`:`runGeoCheck` / `checkGeo` / `runAdvancedCheck` 三个方法都加 `signal?: AbortSignal` 参数,透传到 axios
+
+**经验**:
+- `navigate` 立即返回,不等 API — 这是"页面生命周期 = 请求生命周期"的反模式避坑
+- `AbortController` + `signal.aborted` 是 axios v1 官方认可的取消方式,比 CancelToken 好
+- `history.replaceState` 写回 result 后,F5 / 前进后退不会触发重新检测,但 React Router 仍然重渲染(location object identity 变了)
+- 前端无法从浏览器取消已发出的 HTTP 请求,后端一定会跑完一次 — 真正消灭"空跑"要靠后端加请求取消感知,超出本 issue 范围
 
 ### #R1 USDC 支付钱包爆栈
 

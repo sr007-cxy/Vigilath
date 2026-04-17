@@ -77,14 +77,18 @@ function resolveCheckRequest() {
 }
 
 export const geoApi = {
-  async runGeoCheck(url: string, includeFix: boolean = true): Promise<GeoTestResult> {
+  async runGeoCheck(
+    url: string,
+    includeFix: boolean = true,
+    signal?: AbortSignal,
+  ): Promise<GeoTestResult> {
     const request = {
       url,
       include_fix: includeFix,
     };
     const { path, headers } = resolveCheckRequest();
     try {
-      const response = await apiClient.post(path, request, { headers });
+      const response = await apiClient.post(path, request, { headers, signal });
       return response.data;
     } catch (error) {
       throwApiError(error, 'Failed to run GEO check');
@@ -94,21 +98,22 @@ export const geoApi = {
   async runAdvancedCheck<M extends AdvancedMode>(
     mode: M,
     body: AdvancedRequestBody<M>,
+    signal?: AbortSignal,
   ): Promise<AdvancedResponseOf<M>> {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     try {
-      const response = await apiClient.post(ADVANCED_PATH[mode], body, { headers });
+      const response = await apiClient.post(ADVANCED_PATH[mode], body, { headers, signal });
       return response.data as AdvancedResponseOf<M>;
     } catch (error) {
       throwApiError(error, 'Failed to run advanced check');
     }
   },
 
-  async checkGeo(data: any): Promise<GeoTestResult> {
+  async checkGeo(data: any, signal?: AbortSignal): Promise<GeoTestResult> {
     const { path, headers } = resolveCheckRequest();
     try {
-      const response = await apiClient.post(path, data, { headers });
+      const response = await apiClient.post(path, data, { headers, signal });
       return response.data;
     } catch (error) {
       throwApiError(error, 'Failed to run GEO check');
