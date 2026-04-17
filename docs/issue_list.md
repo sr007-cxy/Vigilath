@@ -17,10 +17,9 @@
 
 | ID | 优先级 | 领域 | 标题 | 预期收益 |
 |---|---|---|---|---|
-| **[#14](#14-顶层-generate_score-25-个-check-顺序执行)** | **P0 头号** | backend | **顶层 generate_score 顺序执行 25 check** | **baidu 124 s → 42 s** |
-| [#13](#13-check_technical_crawlability-可达-44-s) | **P0** | backend | `check_technical_crawlability` 内部 22 次 HTTP 串行 | **baidu 42 s → 10 s**(配合 #14) |
+| [#13](#13-check_technical_crawlability-可达-44-s) | **P0** | backend | `check_technical_crawlability` 内部 22 次 HTTP 串行 | **baidu 36 s → 10 s** |
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
-| [#9](#9-_geo_checker_lock-全局串行) | **P1** | backend | 去 `_geo_checker_lock`(#14 前置) | 并发化方案的局部锁覆盖 90% |
+| [#9](#9-_geo_checker_lock-全局串行) | P2 | backend | 去 `_geo_checker_lock`(#14 局部锁已覆盖 90%) | 跨请求真并发 |
 | [#11](#11-check_authority_trust-16-秒耗时) | P1 | backend | `check_authority_trust` 内部并发 | 顶层并发后收益有限 |
 | [#5](#5-check_authority_trust-认证源串行) | —— | —— | (merged into #11) | —— |
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
@@ -31,6 +30,7 @@
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
+| [#14](#14-顶层-generate_score-25-个-check-并发化) | (本次 commit) | **P0 头号**:顶层并发化,baidu 124 s → 36.8 s(-70%) |
 | [#4](#4-check_brand_entity_kg-wiki-调用串行) | 无 commit,实测关闭 | 实测 440 ms 完全不慢,无需优化 |
 | [#12](#12-核心引擎文件分叉-3-份-→-1-份-package) | `693aa6d` | P0:geo_checker 重构成 package,3 份副本合 1 |
 | [#10](#10-check_trust_safety-23-url-并行化) | `e8b4b04` | P0:check_trust_safety 23 URL 并发 batch(-48 s) |
@@ -45,51 +45,6 @@
 
 ## Open — P0 当前批次
 
-### #14 顶层 generate_score 25 个 check 顺序执行
-
-- **Priority**: **P0 头号**(post-refactor review 新发现)
-- **Status**: Open
-- **Area**: backend(核心引擎)
-
-**症状**:baidu.com 默认 check 实测 **124 秒**,其中最慢单个 check `check_technical_crawlability` 42 秒。25 个 check_* 全部串行,总时 = Σ 所有 check,对慢站尤其放大。
-
-**根因**:`backend/geo_checker/orchestrate.py::_run_checks` 里一个 for 循环顺序调用 `CHECK_REGISTRY` 上的 25 个 check。25 个 check **互相独立**(只有 `check_multi_page` 依赖 `check_sitemap` 的返回),并发跑完全可行。目前串行是历史遗留 —— 上游 CLI 设计时没考虑 web 并发需求。
-
-**前置依赖**:`state._scores` 并发写需要 `threading.Lock`;`state._page_cache` 的 get-then-set 不是原子,多线程 miss 同一 URL 会重复 fetch(无正确性问题,但浪费)。`redirect_stdout` 在 backend 层要换成 `_ThreadLocalStdout`(`advanced_runners.py` 已经有范式)。
-
-**涉及文件**:
-- `backend/geo_checker/orchestrate.py::_run_checks`(主改)
-- `backend/geo_checker/state.py`(加锁)
-- `backend/geo/services/geo_checker.py`(`redirect_stdout` → 线程局部代理)
-
-**处理方案**:
-```python
-# orchestrate.py::_run_checks 改写
-def _run_checks(base_url, allowed_categories=None):
-    # check_sitemap 必须先跑,其返回值是 check_multi_page 的入参
-    sitemap_urls = check_sitemap(base_url) if _should_run("sitemap.xml", allowed_categories) else []
-    
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        futures = [
-            pool.submit(fn, base_url, sitemap_urls)
-            for label, fn in CHECK_REGISTRY
-            if fn != "__sitemap__" and _should_run(label, allowed_categories)
-        ]
-        for f in as_completed(futures):
-            f.result()  # 让异常冒出来
-    return sitemap_urls
-```
-
-**验收**:
-- baidu.com 默认 check 总时从 124 s 降到 40-50 s(bound by 最慢的单个 check)
-- example.com 从 5 s 降到 1.5-2 s
-- 25 个 check 的 `_scores` 累积与串行版本完全一致(对同一 URL 跑 3 次,所有类别得分误差 0)
-- 无数据串扰(2-3 个并发请求同时跑,每个拿到正确的 score)
-
-**工时**:4-6 小时(含锁设计 + 回归测试)。
-
----
 
 ### #2 `/visibility` 90 次 OpenRouter 调用,8 并发
 
@@ -252,6 +207,56 @@ baidu 对不存在的路径平均 2 秒返回 404,22 × 2 = 44 s。
 ---
 
 ## Closed
+
+### #14 顶层 `generate_score` 25 个 check 并发化
+
+- **Closed**: (本次 commit)(2026-04-17)
+- **Area**: backend(核心引擎)
+
+**症状**:baidu.com 默认 check 实测 124 秒,25 个 `check_*` 全部串行,总时 = Σ 所有 check。
+
+**根因**:`orchestrate.py::_run_checks` 的 for 循环顺序调用 25 个 check。`state._scores` / `state._page_cache` 是模块级全局 dict,直接并发会数据串扰。
+
+**修复**(4 个文件):
+
+1. `backend/geo_checker/state.py`
+   - `_scores` 加 `threading.Lock`(`track_score` 并发写)
+   - `_page_cache` 加 `threading.Lock`(和 `io.fetch` 配合)
+   - `reset_state` 写加锁
+
+2. `backend/geo_checker/io.py::fetch`
+   - 两阶段锁:read 加锁 → 释放 → HTTP I/O → 写回加锁
+   - 锁内不做网络 I/O,avoid thread hog
+   - 最坏情况两线程同 miss 同一 URL → 重复 fetch 一次(无正确性问题)
+
+3. `backend/geo_checker/orchestrate.py::_run_checks`
+   - `check_sitemap` 先跑(是 `check_multi_page` 的入参)
+   - 其余 24 个用 `ThreadPoolExecutor(max_workers=10)` 并发
+   - **每个 check 有独立 local buf**,finish 后用 flush_lock 一次性原子 append 到主 buf
+   - 这样 `--- Category ---` 头 + 该 check 的所有行保持连续,`parse_geo_output` 不会把检测结果归错 category
+
+4. `backend/geo/services/geo_checker.py`
+   - 去掉 `redirect_stdout(buf)`(不安全,改 process-wide sys.stdout)
+   - 换成 `advanced_runners._stdout_proxy._state.buf = buf`(threading.local)
+   - `_geo_checker_lock` **保留**(跨请求串行 fallback)
+
+**实测**(baidu.com):
+
+| 指标 | 改前 | 改后 |
+|---|---|---|
+| baidu.com 默认 check 总时 | 124 s | **36.8 s**(**-70%**) |
+| example.com 默认 check 总时 | 5.0 s | **2.9 s**(-42%) |
+| 最慢单 check(`check_technical_crawlability`) | 42 s | 36 s |
+| 同一 URL 两次检测 score 一致 | ✓ | ✓ |
+| category 归属正确(无交叉污染) | n/a | ✓(0 leak) |
+| 2 个并发请求互不串扰 | n/a | ✓ |
+
+**经验**:
+- 第一版用 `pool.initializer` 把 parent buf 传给 worker 线程 —— 失败。parser 是行级的,并发写同一 buf 会让 `--- Category ---` 头和 check 行混乱,导致检测结果归错 category(Trust & Safety 的结果跑到 Brand Entity 下)。
+- 第二版**每个 check task 用独立 local buf,finish 后 flush_lock 下整块 append** —— 成功。这是保持 line-based parser 正确性的唯一干净方案。
+- `_geo_checker_lock` 先不去,下次做 #9 重构时再移除。
+
+---
 
 ### #4 `check_brand_entity_kg` Wiki 调用串行(实测不慢,无需优化)
 

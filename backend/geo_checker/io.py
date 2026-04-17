@@ -19,17 +19,28 @@ from . import state as _state
 def fetch(url, timeout=15, allow_redirects=True):
     """GET *url* and return the requests.Response, or None on failure.
 
-    Caches in state._page_cache. The 15-second default is an upper bound;
-    individual callers may pass smaller timeouts (e.g. 5-6s) for probes
-    that shouldn't block the whole check on a single slow host.
+    Thread-safe caching via state._page_cache_lock. Two-phase locking:
+      1. Check cache under lock.
+      2. Release lock before the HTTP call (avoid holding a lock during
+         network I/O — other threads can proceed with different URLs).
+      3. Write back under lock.
+
+    Worst case: two threads miss the same URL simultaneously and both fetch —
+    2x wasted HTTP, no correctness issue. Acceptable.
+
+    The 15-second default is an upper bound; individual callers may pass
+    smaller timeouts (e.g. 5-6s) for probes that shouldn't block the whole
+    check on a single slow host.
     """
-    if url in _state._page_cache:
-        return _state._page_cache[url]
+    with _state._page_cache_lock:
+        if url in _state._page_cache:
+            return _state._page_cache[url]
     try:
         resp = requests.get(url, timeout=timeout, allow_redirects=allow_redirects, headers={
             "User-Agent": "GEO-Readiness-Checker/1.0"
         })
-        _state._page_cache[url] = resp
+        with _state._page_cache_lock:
+            _state._page_cache[url] = resp
         return resp
     except requests.RequestException:
         return None

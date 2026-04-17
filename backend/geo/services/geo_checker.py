@@ -99,17 +99,28 @@ def run_geo_check(
 
     try:
         buf = io.StringIO()
-        # The lock protects geo_checker's module-level globals against concurrent
-        # invocations in the same process.
+        # _geo_checker_lock still protects SHOW_FIX toggling across requests.
+        # Inside a single request, the 25 check_* run concurrently (#14) but
+        # their shared state (_scores, _page_cache) is lock-protected inside
+        # the geo_checker package itself.
+        #
+        # stdout: we use the same _ThreadLocalStdout proxy as advanced_runners
+        # (installed there at module load) so two concurrent threadpool threads
+        # running check_* can each write to their own buffer without
+        # clobbering sys.stdout. redirect_stdout is NOT safe here because it
+        # mutates the process-wide sys.stdout.
+        from geo.services.advanced_runners import _stdout_proxy
         with _geo_checker_lock:
             old_show_fix = _gc_state.SHOW_FIX
             _gc_state.SHOW_FIX = include_fix
+            _stdout_proxy._state.buf = buf
             try:
-                with redirect_stdout(buf), time_block(f"default_check url={url}"):
+                with time_block(f"default_check url={url}"):
                     _gc_orchestrate.generate_score(
                         url, allowed_categories=allowed_categories
                     )
             finally:
+                _stdout_proxy._state.buf = None
                 _gc_state.SHOW_FIX = old_show_fix
 
         output = buf.getvalue()
