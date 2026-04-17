@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geo-checker"
-version = "1.0.0"
+version = "2.0.0"
 description = "Check a website's GEO (Generative Engine Optimization) readiness"
 readme = "README.md"
 license = {text = "MIT"}
@@ -25,15 +25,16 @@ classifiers = [
 ]
 
 [project.scripts]
-# Points at the single-file geo_checker.py at the repo root (the "full" copy,
-# with all advanced runners). The previous entry — geo_checker.__main__:main —
-# targeted a half-sync'd package copy that has since been removed. See
-# issue_list.md #12.
-geo-checker = "geo_checker:main"
+# 2026-04-17 refactor: geo_checker is now a package under backend/geo_checker/.
+# The CLI entry targets __main__:main within that package.
+geo-checker = "geo_checker.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/geo-checker"
 Issues = "https://github.com/yourusername/geo-checker/issues"
 
-[tool.setuptools]
-py-modules = ["geo_checker"]
+[tool.setuptools.packages.find]
+# The package now lives under backend/geo_checker/, so the package root for
+# discovery is "backend" (where the `geo_checker` package resides).
+where = ["backend"]
+include = ["geo_checker*"]
