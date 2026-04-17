@@ -165,11 +165,18 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             return _query_doubao(query, api_key, doubao_model)
         return "", [], "unknown_engine"
 
-    # ── Run all queries across all engines, 3x each for stability (parallel) ──
+    # ── Run all queries across all engines (parallel) ──
+    # STABILITY_RUNS was 3 historically (inherited from upstream) to smooth
+    # out AI temperature noise. 2026-04-17 收敛到 1:
+    # - 调用数 10 × 3 × 3 = 90 → 10 × 3 × 1 = 30(省 67% 调用 + 成本)
+    # - 耗时 120-180s → ~40-60s
+    # - 分数方差 ±2-3 → ±5-8 分(用户无感;单次 snapshot 已足够)
+    # - 单次 /visibility 成本 $0.84 → ~$0.28
+    # 详见 docs/ai-cost-analysis.md 的收敛分析。
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
-    STABILITY_RUNS = 3
+    STABILITY_RUNS = 1
 
     def _make_error_entry():
         return {
@@ -218,9 +225,12 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         for run_idx in range(STABILITY_RUNS)
     ]
 
-    print(f"\n  Running {len(tasks)} API calls in parallel (max 8 concurrent)...")
+    # max_workers 8→16: 30 calls / 16 = 2 批次 vs 之前 12 批次,进一步压低
+    # 墙钟时间;OpenRouter 60 RPM 免费档里 16 并发也在安全区(30 calls 总量
+    # 远低于 60/min 限制)。
+    print(f"\n  Running {len(tasks)} API calls in parallel (max 16 concurrent)...")
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=16) as pool:
         futures = [pool.submit(_run_one, *t) for t in tasks]
         for fut in as_completed(futures):
             eng_name, query, run_idx, result = fut.result()

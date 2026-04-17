@@ -1080,12 +1080,22 @@ def check_technical_crawlability(base_url):
         if first_href:
             feed_url = urljoin(base_url, first_href)
     else:
-        for feed_path in ["/feed", "/feed.xml", "/rss.xml", "/atom.xml", "/rss", "/blog/feed"]:
-            candidate = urljoin(base_url, feed_path)
-            feed_resp = fetch(candidate, timeout=5)
+        # issue #13: 6 个 feed 路径并发 fetch(原来串行 6 × 5s timeout
+        # 最坏 30s)。对不存在 feed 的站点 baidu 这种 2-5s/404,并发后
+        # bound by 最慢一个,典型 2-3s。保留 break-on-first-match 语义:
+        # 按原列表顺序 pick 第一个命中的。
+        feed_paths = ["/feed", "/feed.xml", "/rss.xml", "/atom.xml", "/rss", "/blog/feed"]
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=len(feed_paths)) as _pool:
+            _feed_responses = {
+                p: _pool.submit(fetch, urljoin(base_url, p), 5) for p in feed_paths
+            }
+            _feed_responses = {p: f.result() for p, f in _feed_responses.items()}
+        for feed_path in feed_paths:
+            feed_resp = _feed_responses[feed_path]
             if feed_resp and feed_resp.status_code == 200 and ("<rss" in feed_resp.text or "<feed" in feed_resp.text):
                 emit_check(PASS, "result.checks.tech_crawl.feed_found_at_path", f"Feed found at {feed_path}", {"path": feed_path})
-                feed_url = candidate
+                feed_url = urljoin(base_url, feed_path)
                 tc_score += 1.5
                 break
         if not feed_url:
@@ -1142,9 +1152,18 @@ def check_technical_crawlability(base_url):
         ("/integrations", "Integrations page"),
         ("/developers", "Developer portal"),
     ]
+    # issue #13: 10 个 API 路径并发 fetch(原来串行 10 × 5s timeout
+    # 最坏 50s)。对 baidu 这种 10 × 404 ≈ 20s 串行,并发后 ~3s。
+    # 保留 break-after-3-matches 语义:按原列表顺序取前 3 个命中。
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(api_probes)) as _pool:
+        _api_responses = {
+            p: _pool.submit(fetch, urljoin(base_url, p), 5) for p, _ in api_probes
+        }
+        _api_responses = {p: f.result() for p, f in _api_responses.items()}
     machine_readable_found = []
     for path, label in api_probes:
-        r = fetch(urljoin(base_url, path), timeout=5)
+        r = _api_responses[path]
         if r and r.status_code == 200 and len(r.text.strip()) > 100:
             machine_readable_found.append((path, label))
             if len(machine_readable_found) >= 3:

@@ -6,7 +6,7 @@
 
 | 端点 | 单次请求 AI 调用数 | 典型成本 | 耗时 |
 |---|---|---|---|
-| `/visibility` | **~90 次** | **$0.25 – $1.50** | 2-3 分钟 |
+| `/visibility` | **~30 次**(2026-04-17 `STABILITY_RUNS` 3→1 后) | **$0.08 – $0.50** | 40-60 秒 |
 | `/entity` | ~50-60 次 | $0.15 – $1.00 | 1-2 分钟 |
 | `/citation` | ~5-7 次 | $0.02 – $0.05 | 30-60 秒 |
 | `/aeo`(免费) | 0 次 | $0 | < 5 秒 |
@@ -62,7 +62,7 @@ if openrouter_key:
 
 **设计意图**:AI 引擎之间彼此训练数据 / 检索逻辑 / 排序偏好不同,一个品牌可能 Perplexity 认识、ChatGPT 不认识。只问一个引擎会偏颇。
 
-#### 乘子 C:`STABILITY_RUNS`(当前 3)
+#### 乘子 C:`STABILITY_RUNS`(**2026-04-17 已从 3 改为 1**)
 
 ```python
 STABILITY_RUNS = 3  # geo_checker/modes/visibility.py
