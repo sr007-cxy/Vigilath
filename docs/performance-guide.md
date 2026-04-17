@@ -38,18 +38,35 @@ geo_checker 核心逻辑
 
 ### 2.1 默认 `/api/check` / `/api/check/anonymous`
 
-核心是 `generate_score()`，顺序跑 25 个 `check_*` 函数。典型耗时（本文撰写时 `httpbin.org` 数据）：
+核心是 `generate_score()`，**顺序**跑 25 个 `check_*` 函数。耗时由外部 HTTP 响应速度主导，同一份代码跑不同站点差距极大:
 
-| 阶段 | 典型耗时 | 说明 |
+**2026-04-17 实测（post-refactor 基线）**:
+
+| URL | 总耗时 | Top 5 单项 |
 |---|---|---|
-| `check_trust_safety` | 2.5–3.0 s | 抓多条 trust/verify 页 |
-| `check_cross_platform` | 2.5–80 s | 10 个社交平台串行 probe（单个 hang 可达 8 s） |
-| `check_technical_crawlability` | 1.0–2.0 s | redirect / canonical 抓取 |
-| `check_authority_trust` | 0.4–1.0 s | bio 页 + 多认证源 |
-| `check_brand_entity_kg` | 0.4–0.6 s | Wikipedia/Wikidata |
-| 其他 20 个 check | 累计 1–3 s | 各自 < 500 ms |
+| example.com（快站） | **5.0 s** | cross_platform 1.1s · technical_crawl 1.0s · trust_safety 0.7s · brand_entity_kg 0.6s · authority_trust 0.4s |
+| baidu.com（慢站) | **124 s** | technical_crawl **42.1s** · authority_trust **16.7s** · well_known 12.4s · search_reg 9.6s · llms_txt 8.4s |
 
-**典型总时**：10–30 s（"干净"站点），**异常总时**：120–180 s（社交矩阵空、外链探测大量超时）。
+**慢站 top-10 耗时分布**（baidu.com,占总 95%）:
+
+| 函数 | 耗时 | 占比 | 说明 |
+|---|---|---|---|
+| `check_technical_crawlability` | 42.1 s | 34% | 最坏 22 次 HTTP（canonical + redirect + curl HTTP/2 + 6 feed 探测 + 10 API 探测） |
+| `check_authority_trust` | 16.7 s | 13% | bio 页 + 多个认证源串行 |
+| `check_well_known` | 12.4 s | 10% | `/.well-known/*` 多路径探测 |
+| `check_search_engine_registration` | 9.6 s | 8% | 搜索引擎验证文件 |
+| `check_llms_txt` | 8.4 s | 7% | llms.txt + llms-full.txt |
+| `check_robots_txt` | 7.4 s | 6% | 单一 /robots.txt |
+| `check_trust_safety` | 6.2 s | 5% | **已优化**（原 55 s） |
+| `check_url_normalization` | 6.2 s | 5% | HTTP/HTTPS + www 变体 |
+| `check_sitemap` | 6.0 s | 5% | /sitemap.xml |
+| `check_ai_optimization` | 4.2 s | 3% | meta 检查 |
+| 其他 15 项合计 | <1.5 s | <1% | |
+
+**关键洞察**:
+1. 每一项都是 HTTP fetch 类,baidu 的"慢"源自目标服务器响应慢（每个 404 都要 2-7 秒）
+2. 25 个 check **互相独立**,串行跑是最大的结构浪费 —— 见 §4.1 顶层并发
+3. 单个 check 内部的并行化收益有限,真正的银弹是 **所有 check 一起并发**
 
 ### 2.2 `/api/check/advanced/visibility`
 
@@ -141,52 +158,57 @@ sudo journalctl -u geo-checker.service --since "1 hour ago" | grep 'geo.timing:f
 
 ## 4. 当前已知瓶颈（按优先级）
 
-### 4.1 `check_cross_platform` 串行外链探测（P0）
+### 4.1 顶层 `generate_score` 顺序执行 25 个 check（**P0 头号**）
 
-**位置**：`geo_checker.py:2784`
+**位置**：`backend/geo_checker/orchestrate.py::_run_checks`
 
-10 个社交平台（X / LinkedIn / YouTube / GitHub / Reddit / Facebook / Instagram / Medium / TikTok / Quora）串行 probe，每个 `timeout=8 s`。最坏 80 s 仅此一个 check。
+`generate_score` 串行调用 25 个 `check_*`,总时 = Σ 所有 check。baidu 实测 124 s,其中最慢单个 check 42 s。
 
-**修复**：整段改 `ThreadPoolExecutor(max_workers=10)`，<20 行改动。预期默认 check 120 s → 30 s。
+**修复**：改 `ThreadPoolExecutor(max_workers=10)` 一次性 submit 所有 check。依赖:
+- `check_sitemap` 必须先跑,其返回的 `sitemap_urls` 传给 `check_multi_page`
+- 其余 24 个互相独立,全并发
 
-### 4.2 前端无 AbortController（P0）
+**前置**：`state._scores` 加 `threading.Lock`（其 `+=` 累加非线程安全）。`_geo_checker_lock` 在顶层并发后仍保留,但实际作用下降（每请求内部已并发,请求间由 threadpool 隔离）。
 
-**位置**：`frontend/src/pages/Home.tsx:91`
+**预期收益**:baidu 124 s → **~42 s**（-66%）,example 5 s → **~1.5 s**（-70%）。
 
-用户在 Home 页等待期间按浏览器返回键 / 刷新时，请求被浏览器中断，nginx 记 499。后端继续空跑到完成，浪费资源。
+### 4.2 `check_technical_crawlability` 内部 22 次 HTTP 串行（**P0**）
+
+**位置**：`backend/geo_checker/checks.py::check_technical_crawlability`
+
+最坏 22 次 HTTP（canonical 解析 + redirect test + curl HTTP/2 探测 + 6 feed 路径 + 10 API 路径）。baidu 实测 **42 s** —— 顶层并发后仍是单请求里的最慢 check,决定总时底线。
+
+**修复**：内部 4 组独立调用（redirect / curl / feed probe / api probe）拆成 `ThreadPoolExecutor`。
+
+**预期收益**:该 check 42 s → **~10 s**。配合 §4.1,baidu 总时进一步到 ~17 s。
+
+### 4.3 `/visibility` 结构性重（**P0**）
+
+**位置**：`backend/geo_checker/modes/visibility.py`（`STABILITY_RUNS=3` + `max_workers=8`）
+
+90 次 OpenRouter 调用 / 8 并发 → 自估 180 s。撞 axios 300 s 超时的概率不低。独立于默认路径,单独评估。
 
 **修复**：
-- 提交后立即 `navigate('/result', { state: { url } })`，在 Result 页触发 API
-- 使用 `AbortController` 绑定组件卸载生命周期
-- 详细方案见 `performance-report-2026-04-16.md` 第 7.1 节
-
-### 4.3 `/visibility` 结构性重（P0）
-
-**位置**：`geo_checker.py:5900`（`STABILITY_RUNS=3`）、`geo_checker.py:5951`（`max_workers=8`）
-
-90 次 OpenRouter 调用 / 8 并发 → 自估 180 s。撞 axios 300 s 的概率不低。
-
-**修复**：
-- `STABILITY_RUNS` 3 → 1：调用数 90 → 30，时间 180 s → 60 s
+- `STABILITY_RUNS` 3 → 1：调用数 90 → 30,时间 180 s → 60 s
 - `max_workers` 8 → 16：批次数减半
 
-### 4.4 外调串行未并发（P1）
+### 4.4 `_geo_checker_lock` 串行 + 模块全局态（P1,§4.1 前置）
 
-| 函数 | 串行外调数 | 潜在并发收益 |
-|---|---|---|
-| `check_brand_entity_kg` | 3（Wikipedia search + backlinks + Wikidata） | 省 5–10 s |
-| `check_authority_trust` | 多个认证源 | 省 3–5 s |
-| `/citation` 主循环 | 5–7 条 Perplexity | 60 s → 15 s |
+**位置**：`backend/geo/services/geo_checker.py::_geo_checker_lock`
 
-都是直接 `ThreadPoolExecutor` 包一下即可。
+核心 package 用模块级全局态（`state._scores` / `state._page_cache` / `state.SHOW_FIX`）+ `redirect_stdout` 改 `sys.stdout`,所以必须加锁。单 worker 内请求完全串行,4 workers → 理论并发上限 4。
 
-### 4.5 `_geo_checker_lock` 串行（P1）
+**修复(分两步)**：
+1. **局部锁**（§4.1 前置,2 h）:给 `_scores` 和 `_page_cache` 的读写各自加 `threading.Lock`,允许多个 check 同时跑。`redirect_stdout` 改成 `advanced_runners._ThreadLocalStdout` 的同款线程局部代理
+2. **彻底去全局态**（大重构,后期）:挪成 `ContextVar` / 显式参数
 
-**位置**：`backend/geo/services/geo_checker.py:26`
+### 4.5 `check_authority_trust` 内部串行（P1）
 
-核心 `geo_checker.py` 用模块级全局态（`_scores` / `_page_cache` / `SHOW_FIX`）+ `redirect_stdout` 改 `sys.stdout`，所以必须加锁。结果是单 worker 内请求完全串行，4 workers → 理论并发上限 4。
+**位置**：`backend/geo_checker/checks.py::check_authority_trust`
 
-**修复**（重构型）：把模块级全局态挪成 `ContextVar` 或函数参数，`redirect_stdout` 用线程局部代理（`advanced_runners.py` 已经用 `_ThreadLocalStdout` 做到了这点）。去锁后单 worker 可支持 threadpool 内真正的并发。
+bio 页抓取 + 多个认证源（Medium / Substack / Forbes / HBR / arxiv / ORCID / Google Scholar）顺序访问。baidu 实测 **16.7 s**。顶层并发后仍是 top-2,但不再独立影响总时（被 §4.2 覆盖）。
+
+**修复**:`ThreadPoolExecutor(max_workers=5)` 内部并行。
 
 ### 4.6 `_run_or_raise` 错误码语义失真（P1）
 
@@ -197,29 +219,33 @@ except RuntimeError as e:
     raise AppException(status_code=503, message=str(e))
 ```
 
-`RuntimeError` 被笼统映射成 503，但实际覆盖三种故障：
+`RuntimeError` 被笼统映射成 503,实际覆盖三种故障:
 
 1. API key 缺失/无效（真正的 503）
 2. 上游 AI 全失败（应是 502）
 3. 目标 URL 抓不到（应是 400/502）
 
-前端永远只看到 `"Failed to run advanced check"`，无法区分。
+前端永远只看到 `"Failed to run advanced check"`,无法区分。
 
-**修复**：定义专用异常类（`UpstreamAIError` / `TargetUnreachableError` / `MissingApiKeyError`），分别映射 502 / 400 / 503。
+**修复**：定义专用异常类（`UpstreamAIError` / `TargetUnreachableError` / `MissingApiKeyError`）,分别映射 502 / 400 / 503。
 
-### 4.7 缓存不跨 worker（P2）
+### 4.7 `/citation` 顺序 + sleep（P1）
 
-**位置**：`geo_checker.py:201`（`_page_cache` 是进程内 dict）
+`modes/citation.py` 5-7 条 Perplexity query 串行 + `time.sleep(1)` 间隔 + 429 重试 `time.sleep(5)`。**修复**:改并发 + exponential backoff。预期 60 s → 15 s。
 
-每个 uvicorn worker 一份缓存，同一 URL 被不同 worker 打到会重复抓。重启缓存全丢。
+### 4.8 缓存不跨 worker（P2）
 
-**修复**：迁 Redis / SQLite，跨 worker 共享 + 进程重启保留。
+**位置**：`backend/geo_checker/state.py::_page_cache`（进程内 dict）
 
-### 4.8 前端无耗时预估（P2）
+每个 uvicorn worker 一份缓存,同一 URL 被不同 worker 打到会重复抓。重启缓存全丢。
 
-用户不知道要等多久，焦虑 → 返回键 → 499。
+**修复**：迁 Redis / SQLite,跨 worker 共享 + 进程重启保留。
 
-**修复**：`CheckProgress` 组件已经有阶段动画，但时长是硬编码。可以根据 URL 的历史耗时数据（从计时日志反写回 DB）做动态预估。
+### 4.9 前端无耗时预估（P2）
+
+用户不知道要等多久,焦虑 → 返回键。由于 #3 前端改造已生效（Home→Result + AbortController）,499 问题已解决,本项仅为体验优化。
+
+**修复**：`CheckProgress` 按 URL 历史耗时数据（从计时日志反写回 DB）做动态预估。
 
 ---
 
@@ -276,28 +302,43 @@ sudo journalctl -u geo-checker.service | grep -E 'http_[45][0-9][0-9]' | tail
 
 ---
 
-## 6. 优化路线图
+## 6. 优化路线图（2026-04-17 重排）
 
-按实施顺序列出，每项都能独立部署：
+按"投入/收益"排序,每项可独立部署。**前 3 项做完 baidu 这类慢站从 124s 降到 17s 级别**。
 
-| 阶段 | 动作 | 预期收益 | 改动量 |
-|---|---|---|---|
-| 1 | `check_cross_platform` 改 ThreadPool(10) | 默认 check 120 s → 30 s | < 20 行 |
-| 2 | `/visibility`: `STABILITY_RUNS` 3→1, workers 8→16 | visibility 180 s → 40–60 s | < 10 行 |
-| 3 | Home 提交直接 navigate Result + AbortController | 消除 UX 型 499 | 前端 ~50 行 |
-| 4 | `check_brand_entity_kg` / `check_authority_trust` 并发化 | 默认 check -5 到 -10 s | 30–50 行 |
-| 5 | `/citation` 主循环改并发 | 60 s → 15 s | < 30 行 |
-| 6 | `_run_or_raise` 分异常类型映射 | 可观测性；前端精确提示 | < 50 行 |
-| 7 | `_page_cache` 迁 Redis | 二次检测 < 1 s；重启保留 | 需运维 |
-| 8 | 核心去全局态 → 去 `_geo_checker_lock` | 单 worker 真并发 | 重构（大） |
+| # | 阶段 | 动作 | 预期收益 | 改动量 |
+|---|---|---|---|---|
+| 1 | **顶层并发化** | `_run_checks` 改 ThreadPoolExecutor + `_scores` / `_page_cache` 加锁 | **baidu 124 s → 42 s**, example 5 s → 1.5 s | 100-150 行 |
+| 2 | **`check_technical_crawlability`** 内部并发 | redirect/curl/feed/api 4 组并行 | baidu 42 s → 10 s, 配合 #1 总时 17 s | 50-80 行 |
+| 3 | **`/visibility`** 参数收敛 | `STABILITY_RUNS` 3→1, `max_workers` 8→16 | visibility 180 s → 40-60 s | < 10 行 |
+| 4 | `check_authority_trust` 内部并发 | bio + 认证源并行 | 默认 check 再 -8 s(配合 #1 贡献显现) | 30-50 行 |
+| 5 | `/citation` 主循环改并发 | Perplexity 5-7 query 并发 + backoff | 60 s → 15 s | < 30 行 |
+| 6 | `_run_or_raise` 分异常类型映射 | 可观测性 + 前端精确提示 | 不降速,降告警噪声 | < 50 行 |
+| 7 | `_page_cache` 迁 Redis | 二次检测 < 1 s,进程重启保留 | 需运维 | |
+| 8 | 核心去全局态 | 彻底移除 `_geo_checker_lock` | 单 worker 真并发(目前被 #1 的局部锁方案覆盖 90%) | 重构(大) |
 
-完成 1-3 后，默认 check 和 visibility 都应稳定在 < 60 s，498/499/503 异常率应降到可忽略。
+### 已完成的(从路线图移除,避免歧义)
+
+- ~~`check_cross_platform` 并发化~~ ✓ `7610d4b` / `e8b4b04`,baidu 3.8 s → 0.8 s
+- ~~`check_trust_safety` 23 URL 并发~~ ✓ `e8b4b04`,baidu 55 s → 6.2 s
+- ~~Home 提交改 navigate + AbortController~~ ✓ `e036bcb`,UX 型 499 清零
+- ~~geo_checker 单文件 → package~~ ✓ `693aa6d`,3 份副本 → 1
+- ~~SQLite 5 pragma 优化~~ ✓ `64970a2`
+
+### 完成 P0(#1-3)后的预期基线
+
+| URL | 当前(post-refactor) | P0 完成后 |
+|---|---|---|
+| example.com | 5.0 s | **1.5 s** |
+| baidu.com | 124 s | **17-25 s** |
+| 极端慢站 | 数百秒 | < 60 s |
+| /visibility | 180 s+ | < 60 s |
 
 ---
 
 ## 7. 关键文件速查
 
-### 后端
+### 后端 FastAPI 层
 
 | 文件 | 作用 |
 |---|---|
@@ -305,17 +346,27 @@ sudo journalctl -u geo-checker.service | grep -E 'http_[45][0-9][0-9]' | tail
 | `backend/geo/api/geo.py` | `/check` / `/check/anonymous` / SSE 路由 |
 | `backend/geo/api/advanced.py` | 所有 `/check/advanced/*` 路由 + `_run_or_raise` |
 | `backend/geo/services/geo_checker.py` | 默认路径封装 + `_geo_checker_lock` |
-| `backend/geo/services/advanced_runners.py` | 高级路径封装 + 按文件路径加载根 `geo_checker.py` |
+| `backend/geo/services/advanced_runners.py` | 高级路径封装(原生 package import,不再 importlib) |
 | `backend/geo/utils/timing.py` | 计时装饰器与 context manager |
+| `backend/geo/database.py` | SQLAlchemy engine + SQLite pragma tuning |
 
-### 核心引擎（两份）
+### 核心引擎 Package(2026-04-17 重构后,单一来源)
 
-| 文件 | 用途 |
-|---|---|
-| `geo_checker/__main__.py` | 默认路径使用（`geo_checker.__main__`） |
-| `geo_checker.py`（项目根） | 高级路径使用（`importlib` 加载） |
+`backend/geo_checker/` 一个 package,不再有单文件副本:
 
-**注意**：这两份 **不是同步的**，`geo_checker.py` 是最新完整版，`__main__.py` 是历史残留。重构时优先合并。
+| 文件 | 行数 | 作用 |
+|---|---|---|
+| `__init__.py` | 140 | 公共 API re-export |
+| `__main__.py` | 175 | CLI 入口(`python -m geo_checker`) |
+| `constants.py` | 47 | AI_BOTS / AI_CRAWLERS / 色码 |
+| `state.py` | 67 | SHOW_FIX / _scores / _page_cache(**将加锁**) |
+| `io.py` | 77 | fetch / get_soup / get_text_content |
+| `output.py` | 738 | emit_check / emit_fix / print shim / _ZH 翻译表 |
+| `checks.py` | 2958 | 25 个 check_*(核心检测逻辑) |
+| `orchestrate.py` | 185 | **CHECK_REGISTRY + generate_score**(即将顶层并发化) |
+| `ai.py` | 275 | 5 个 _query_* AI 引擎 + 分析辅助 |
+| `reports.py` | 172 | JSON / HTML 报告生成(CLI-only) |
+| `modes/` | 8 个文件 | compare / crawl_check / crawl_test / aeo / authority_audit / citation / visibility / entity |
 
 ### 前端
 

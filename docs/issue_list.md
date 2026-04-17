@@ -17,21 +17,22 @@
 
 | ID | 优先级 | 领域 | 标题 | 预期收益 |
 |---|---|---|---|---|
+| **[#14](#14-顶层-generate_score-25-个-check-顺序执行)** | **P0 头号** | backend | **顶层 generate_score 顺序执行 25 check** | **baidu 124 s → 42 s** |
+| [#13](#13-check_technical_crawlability-可达-44-s) | **P0** | backend | `check_technical_crawlability` 内部 22 次 HTTP 串行 | **baidu 42 s → 10 s**(配合 #14) |
 | [#2](#2-visibility-90-次-openrouter-调用8-并发) | **P0** | backend | `/visibility` 90 次 AI 调用 | visibility 180 s → 40–60 s |
-| [#11](#11-check_authority_trust-16-秒耗时) | **P0** | backend | `check_authority_trust` 16–22 s | **估 -15 s** |
-| [#13](#13-check_technical_crawlability-可达-44-s) | P1 | backend | `check_technical_crawlability` 可达 44 s | -30 s(最坏情况) |
-| [#4](#4-check_brand_entity_kg-wiki-调用串行) | P1 | backend | `check_brand_entity_kg` Wiki 串行 | -5 到 -10 s |
+| [#9](#9-_geo_checker_lock-全局串行) | **P1** | backend | 去 `_geo_checker_lock`(#14 前置) | 并发化方案的局部锁覆盖 90% |
+| [#11](#11-check_authority_trust-16-秒耗时) | P1 | backend | `check_authority_trust` 内部并发 | 顶层并发后收益有限 |
 | [#5](#5-check_authority_trust-认证源串行) | —— | —— | (merged into #11) | —— |
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
 | [#7](#7-_run_or_raise-三种故障混映射-503) | P1 | backend | `_run_or_raise` 错误码混淆 | 可观测性提升 |
 | [#8](#8-_page_cache-不跨-worker进程重启丢失) | P2 | backend/infra | `_page_cache` 跨 worker 共享 | 二次检测 < 1 s |
-| [#9](#9-_geo_checker_lock-全局串行) | P2 | backend | 去 `_geo_checker_lock` | 单 worker 真并发 |
 
 ### 0.2 近期已关闭(Closed)
 
 | ID | 关闭 commit | 标题 |
 |---|---|---|
-| [#12](#12-核心引擎文件分叉-3-份-→-1-份-package) | `refactor/geo-checker-package` branch | P0:geo_checker 重构成 package,3 份副本合 1 |
+| [#4](#4-check_brand_entity_kg-wiki-调用串行) | 无 commit,实测关闭 | 实测 440 ms 完全不慢,无需优化 |
+| [#12](#12-核心引擎文件分叉-3-份-→-1-份-package) | `693aa6d` | P0:geo_checker 重构成 package,3 份副本合 1 |
 | [#10](#10-check_trust_safety-23-url-并行化) | `e8b4b04` | P0:check_trust_safety 23 URL 并发 batch(-48 s) |
 | [#3](#3-前端检测仍在-home-页触发用户返回刷新即断连) | `e036bcb` | P0:前端检测触发改到 Result 页 + AbortController |
 | [#1](#1-check_cross_platform-串行探测-收益不及预期) | `7610d4b` / `e8b4b04` | P0:check_cross_platform 并发化(原改漏了 backend 副本,已补) |
@@ -44,6 +45,51 @@
 
 ## Open — P0 当前批次
 
+### #14 顶层 generate_score 25 个 check 顺序执行
+
+- **Priority**: **P0 头号**(post-refactor review 新发现)
+- **Status**: Open
+- **Area**: backend(核心引擎)
+
+**症状**:baidu.com 默认 check 实测 **124 秒**,其中最慢单个 check `check_technical_crawlability` 42 秒。25 个 check_* 全部串行,总时 = Σ 所有 check,对慢站尤其放大。
+
+**根因**:`backend/geo_checker/orchestrate.py::_run_checks` 里一个 for 循环顺序调用 `CHECK_REGISTRY` 上的 25 个 check。25 个 check **互相独立**(只有 `check_multi_page` 依赖 `check_sitemap` 的返回),并发跑完全可行。目前串行是历史遗留 —— 上游 CLI 设计时没考虑 web 并发需求。
+
+**前置依赖**:`state._scores` 并发写需要 `threading.Lock`;`state._page_cache` 的 get-then-set 不是原子,多线程 miss 同一 URL 会重复 fetch(无正确性问题,但浪费)。`redirect_stdout` 在 backend 层要换成 `_ThreadLocalStdout`(`advanced_runners.py` 已经有范式)。
+
+**涉及文件**:
+- `backend/geo_checker/orchestrate.py::_run_checks`(主改)
+- `backend/geo_checker/state.py`(加锁)
+- `backend/geo/services/geo_checker.py`(`redirect_stdout` → 线程局部代理)
+
+**处理方案**:
+```python
+# orchestrate.py::_run_checks 改写
+def _run_checks(base_url, allowed_categories=None):
+    # check_sitemap 必须先跑,其返回值是 check_multi_page 的入参
+    sitemap_urls = check_sitemap(base_url) if _should_run("sitemap.xml", allowed_categories) else []
+    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = [
+            pool.submit(fn, base_url, sitemap_urls)
+            for label, fn in CHECK_REGISTRY
+            if fn != "__sitemap__" and _should_run(label, allowed_categories)
+        ]
+        for f in as_completed(futures):
+            f.result()  # 让异常冒出来
+    return sitemap_urls
+```
+
+**验收**:
+- baidu.com 默认 check 总时从 124 s 降到 40-50 s(bound by 最慢的单个 check)
+- example.com 从 5 s 降到 1.5-2 s
+- 25 个 check 的 `_scores` 累积与串行版本完全一致(对同一 URL 跑 3 次,所有类别得分误差 0)
+- 无数据串扰(2-3 个并发请求同时跑,每个拿到正确的 score)
+
+**工时**:4-6 小时(含锁设计 + 回归测试)。
+
+---
 
 ### #2 `/visibility` 90 次 OpenRouter 调用,8 并发
 
@@ -74,37 +120,49 @@
 ---
 
 
-### #13 `check_technical_crawlability` 可达 44 s
+### #13 `check_technical_crawlability` 内部 22 次 HTTP 串行
 
-- **Priority**: P1(偶现,网络抖动时放大)
+- **Priority**: **P0**(2026-04-17 review 从 P1 升级 —— 顶层并发后它是单请求最慢 check,直接决定 baidu 总时底线)
 - **Status**: Open
 - **Area**: backend
 
-**症状**:baidu.com 二次测试中 `check_technical_crawlability` 耗时 44 243 ms(前次测试只有 1 050 ms)。网络好时秒级,网络差时可飙到 40 秒+。
+**症状**:baidu.com 2026-04-17 post-refactor 稳定 42 s(占总时 34%)。
 
-**根因**:待读源码(`geo_checker.py:1166` 起)。初步看有 redirect / canonical / subprocess 多轮网络交互。
+**根因**(已核实,`backend/geo_checker/checks.py::check_technical_crawlability`):
 
-**处理方案**:待分析后补充。可能需要把 subprocess 调用(line 1228 的 `timeout=10`)也包进并发或干脆去掉。
+内部最坏 22 次 HTTP 调用:
+1. `get_soup(base_url)` 1 次
+2. `fetch(canonical_url)` 若 canonical 不同 1 次
+3. `requests.get(..., allow_redirects=False)` + 若重定向再 `allow_redirects=True` 共 2 次
+4. `subprocess.run(curl -sI --http2 ...)` 1 次(timeout=10)
+5. 6 个 feed 路径 `/feed`、`/feed.xml`、`/rss.xml`、`/atom.xml`、`/rss`、`/blog/feed` 串行 fetch,break on first match
+6. `fetch(feed_url, timeout=8)` 抓 feed 内容 1 次
+7. 10 个 API 路径(`/api`、`/graphql`、`/openapi.json` 等)串行 fetch,break after 3 matches
 
-**验收**:`func=check_technical_crawlability elapsed_ms` 在"网络差"场景下 < 10 000 ms。
+baidu 对不存在的路径平均 2 秒返回 404,22 × 2 = 44 s。
+
+**处理方案**:4 组独立调用(redirect / curl / feed / api)拆成 `ThreadPoolExecutor(max_workers=4)`,每组内部也可进一步 flatten 并发(feed 6 路径 + api 10 路径 = 16 并发 fetch)。
+
+**验收**:baidu `func=check_technical_crawlability elapsed_ms` < 10 000 ms。配合 #14 顶层并发,baidu 总时降到 17-25 s。
 
 ---
 
 ### #11 `check_authority_trust` 16 秒耗时
 
-- **Priority**: P0(新发现的第二瓶颈,原 P1 #5 升级)
+- **Priority**: P1(2026-04-17 review 从 P0 降级 —— 顶层并发 #14 完成后,它不再独立影响总时)
 - **Status**: Open
 - **Area**: backend
 
-**症状**:journald 计时日志显示 baidu.com 检测中 `check_authority_trust` 耗时 **15 747 ms**,占总时的 9%。
+**症状**:journald 计时日志显示 baidu.com 检测中 `check_authority_trust` 耗时 **16 667 ms**,占总时 13%(post-refactor 数据)。
 
-**根因**:bio 页(`/about`、`/about-us`、`/team` 等)+ 多个外部认证源(Medium、Substack、Forbes、HBR、arxiv、ORCID、Google Scholar)串行探测。与原 P1 #5 同根,升级到 P0。
+**根因**:bio 页(`/about`、`/about-us`、`/team` 等)+ 多个外部认证源(Medium、Substack、Forbes、HBR、arxiv、ORCID、Google Scholar)串行探测。与原 P1 #5 同根。
 
 **涉及文件**:
-- `geo_checker.py:1336`
-- `geo_checker/__main__.py` 对应位置
+- `backend/geo_checker/checks.py::check_authority_trust`
 
-**处理方案**:并发化,`ThreadPoolExecutor(max_workers=5)`。同 #4 / #5 的原 P1 方案。
+**处理方案**:并发化 `ThreadPoolExecutor(max_workers=5)`。
+
+**降级原因**:#14 顶层并发后,这个 check 与 #13 `check_technical_crawlability` 一起并发跑;#13 稳定 42 s > #11 的 17 s,所以 #11 不再是总时决定因素。优先级应让位给 #13 的内部并行化。
 
 **验收**:`func=check_authority_trust elapsed_ms` 稳定 < 5 000 ms(baidu)。
 
@@ -112,19 +170,6 @@
 
 ## Open — P1 下一批次
 
-### #4 `check_brand_entity_kg` Wiki 调用串行
-
-- **Priority**: P1
-- **Status**: Open
-- **Area**: backend
-
-**根因**:`geo_checker.py:1538` 附近,Wikipedia search / Wikipedia backlinks / Wikidata search 三个外调串行。
-
-**处理方案**:`ThreadPoolExecutor(max_workers=3)` 并发三个调用,主线程汇总结果。
-
-**验收**:`func=check_brand_entity_kg elapsed_ms` 从 400–600 ms 降到 150–250 ms。
-
----
 
 ### #5 `check_authority_trust` 认证源串行
 
@@ -207,6 +252,21 @@
 ---
 
 ## Closed
+
+### #4 `check_brand_entity_kg` Wiki 调用串行(实测不慢,无需优化)
+
+- **Closed**: 无 commit(2026-04-17 post-refactor review 实测关闭)
+- **Area**: backend
+
+**症状**:假设 Wikipedia search + Wikipedia backlinks + Wikidata search 三个串行外调会慢。
+
+**实测**:post-refactor baidu.com 基线 `check_brand_entity_kg elapsed_ms=440`,example.com 571 ms。**完全不在 top-10 瓶颈之列**。
+
+**结论**:原估算是基于"串行必然慢"的先验,实际 Wikipedia / Wikidata API 响应非常快(< 200 ms 单次),三次串行累加只有 ~500 ms。不值得投入工时。
+
+**经验**:**先看计时日志再列 issue**。上次我把 #4 列为 P1 是基于代码阅读,没用数据验证。这次 post-refactor review 补上了这个教训 —— #R2 的计时日志基础设施已经就位,issue 立项前应该先 `grep 'geo.timing:func=<name>'` 看一眼。
+
+---
 
 ### #12 核心引擎文件分叉:3 份 → 1 份 package
 

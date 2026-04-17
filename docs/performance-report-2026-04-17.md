@@ -176,3 +176,89 @@ sudo journalctl -u geo-checker.service | grep 'geo.timing' | awk -F'elapsed_ms='
 3. **`/visibility` 参数收敛**（P0，把 `STABILITY_RUNS` 3→1 是一行改动）
 
 在动手前先挂一两天计时日志，拿到真实用户流量的 `func=` 和 `block=` 分布，让后续优化有对比基线。
+
+---
+
+## 4. Post-refactor 基线 + review(当天晚些时候)
+
+package 重构、check_trust_safety / check_cross_platform 并发化、SQLite pragma 优化全部 ship 后,做了一次完整性能 review,结论颠覆了上午的优先级排序。
+
+### 4.1 实测对比
+
+| URL | 当天上午(refactor 前) | 当天晚些(refactor 后) | 变化 |
+|---|---|---|---|
+| example.com | 10.5 s | **5.0 s** | -52% |
+| baidu.com | 166 s | **124 s** | -25% |
+
+**已验证有效的修复**:
+- `check_trust_safety`: 55 s → **6.3 s**(-48 s)
+- `check_cross_platform`: 3.8 s → 0.8 s
+
+### 4.2 发现 refactor 引入的可观测性 bug(已修复)
+
+重构后第一次压测 baidu.com,计时日志里**只看到 `generate_score` 一项**,25 个 `check_*` 全部不见。
+
+**根因**:`orchestrate.py` 模块加载时 `from .checks import check_https, ...`,在自己的 `__dict__` 里建立了本地绑定。`CHECK_REGISTRY` 的 lambda `lambda url, sm: check_https(url)` 的名字解析走 orchestrate 的 globals —— **不是** `_gc_checks` 那份。而 `instrument_checks(_gc_checks)` 只包装了 `_gc_checks.__dict__`。
+
+**修复**(`f1495f2`):额外调 `instrument_checks(_gc_orchestrate)`,让 orchestrate 的本地绑定也被包装。两处 services(geo_checker.py + advanced_runners.py)都要加。
+
+**经验**:Python 的 `from foo import bar` 是把 `bar` **拷贝到当前模块的命名空间**,不是引用代理。monkey-patch 源模块的属性不会改变其他模块里的本地副本。
+
+### 4.3 baidu.com 完整 top-10(post-refactor)
+
+```
+42118 ms  check_technical_crawlability     34%  ← 新头号
+16667 ms  check_authority_trust            13%
+12377 ms  check_well_known                 10%
+ 9627 ms  check_search_engine_registration  8%
+ 8431 ms  check_llms_txt                    7%
+ 7394 ms  check_robots_txt                  6%
+ 6205 ms  check_trust_safety                5%  (已优化)
+ 6181 ms  check_url_normalization           5%
+ 5991 ms  check_sitemap                     5%
+ 4244 ms  check_ai_optimization             3%
+ 其余 15 项                                 <1%
+```
+
+Top-10 合计 95% 总时。每一项都是 HTTP fetch 类 —— baidu 对每个路径都慢 5-10 秒。
+
+### 4.4 洞察:真正的银弹是顶层并发
+
+25 个 `check_*` **互相独立**(只有 `check_multi_page` 依赖 `check_sitemap` 的返回)。串行跑是最大的结构浪费。
+
+并发化的理论收益:
+- baidu 124 s → **~42 s**(bound by 最慢的 `check_technical_crawlability`)
+- example 5 s → **~1.5 s**
+
+这比**任何单个 check 的内部优化收益都大**。上午我优化了 `check_cross_platform`(80 s 最坏 → 3.8 s),但它占 baidu 总时只有 2%。**顶层不并发,局部优化的收益天花板就定死了**。
+
+### 4.5 被事实打脸的 2 个原假设
+
+| 原假设 | 实测 | 修正 |
+|---|---|---|
+| `check_cross_platform` 是头号瓶颈(80 s 最坏) | 0.8 s | 上午改完就不再是问题 |
+| `check_brand_entity_kg` 是 P1(Wiki 串行) | **0.44 s** | 根本不慢 —— close #4,不值得投入 |
+
+两个错误都源自**代码阅读的最坏情况估算**,没先看计时日志。
+
+### 4.6 issue 重排
+
+经本次 review 更新 `issue_list.md`:
+
+- **新增 #14**:顶层 `generate_score` 并发化 —— **P0 头号**
+- **#13** 从 P1 升级到 P0:post-refactor 稳定 42 s,是顶层并发后的单请求最慢 check
+- **#11** 从 P0 降级到 P1:顶层并发后不再独立影响总时
+- **close #4**:实测 440 ms 不慢
+
+详见 `docs/performance-guide.md` §6 路线图 + `docs/issue_list.md`。
+
+### 4.7 结论
+
+今天完成的 5 项硬交付(package 重构 / trust_safety / cross_platform / SQLite pragma / 计时日志 bug 修复)**整理了房间,但真正的性能银弹还没打出**。
+
+下一批(P0):
+1. 顶层并发化 `generate_score`(#14,4-6 h)
+2. `check_technical_crawlability` 内部并发(#13,1-2 h)
+3. `/visibility` 参数收敛(#2,10 min)
+
+做完预期 baidu 124 s → **17-25 s**,example 5 s → **1.5 s**。
