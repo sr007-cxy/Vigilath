@@ -778,6 +778,9 @@ export function Result() {
         </div>
       );
     }
+    if (rerunLoading) {
+      return <CheckProgress mode={rerunMode} />;
+    }
     return (
       <div className="min-h-screen grid-background flex items-center justify-center">
         <div className="bg-card border border-border rounded-2xl p-8 max-w-md w-full text-center">
@@ -787,13 +790,24 @@ export function Result() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold mb-4">{t('common.error')}</h2>
-          <p className="text-secondary mb-6">{t('result.error.noData')}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="w-full btn-solid rounded-xl py-3.5 font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-glow"
-          >
-            {t('result.buttons.checkAnother')}
-          </button>
+          <p className="text-secondary mb-6">
+            {rerunError || (t('result.error.noData') as string)}
+          </p>
+          {rerunQuotaExceeded ? (
+            <button
+              onClick={openTierModal}
+              className="w-full btn-solid rounded-xl py-3.5 font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-glow"
+            >
+              {t('home.error.quotaCta')}
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/')}
+              className="w-full btn-solid rounded-xl py-3.5 font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-glow"
+            >
+              {t('result.buttons.checkAnother')}
+            </button>
+          )}
         </div>
       </div>
     );
