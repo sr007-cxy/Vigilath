@@ -73,40 +73,33 @@
 
 ---
 
-### #12 三份核心引擎文件不同步
+### #12 核心引擎文件不同步(剩 2 份 A ↔ C 待合)
 
-- **Priority**: **P0**(blocker —— 会让其他修复"看似生效实则没生效")
-- **Status**: Open
+- **Priority**: **P0**(blocker — 仍然会导致改代码漏到一边)
+- **Status**: Open(**已阶段性收敛**,见下)
 - **Area**: infra
 
-**症状**:改了核心逻辑的某些文件后,重启服务看起来正常,但实际行为没变。
+**历史背景**:项目根曾并存**三份**核心副本(`/geo_checker.py` + `/geo_checker/__main__.py` + `/backend/geo_checker/__main__.py`)。第二份是 `pyproject.toml` 里 CLI entry point 指向的"半同步"副本,运行时没人加载。
 
-**根因**:项目根下存在**三份**拷贝:
+**2026-04-17 `24d50b7` 先收敛到 2 份**:
+- 删除了 orphan `/geo_checker/` 目录
+- `pyproject.toml` 的 entry point 改为 `geo-checker = "geo_checker:main"`,直接指向根的单文件 module
+- 新增 `[tool.setuptools] py-modules = ["geo_checker"]` 声明根为单文件模块
+- 清理了 `geo_checker.egg-info/` 旧 build 缓存
+- 验证:`pip install -e .` 后的 `geo-checker` CLI 命中**完整版**(根文件),不再是半残版
 
-| 文件 | 行数 | 谁在用 |
-|---|---|---|
-| `/geo_checker.py` | 8065 | `advanced_runners.py` 通过 `importlib.util.spec_from_file_location` 加载 |
-| `/geo_checker/__main__.py` | 4311 | **orphan,没人加载** |
-| `/backend/geo_checker/__main__.py` | 4341 | 默认 API 路径加载这份(因 backend 是 uvicorn CWD,解析 `import geo_checker` 时优先命中它) |
+**仍未解决**:
+- `/geo_checker.py`(A)vs `/backend/geo_checker/__main__.py`(C)的 i18n 风格分叉 —— 根用 `print()` + `_tr()` + `_ZH` 字典,backend 用 `emit_check()` 嵌入 key marker。两种风格不能直接相互替换。
+- 改 `check_*` 核心仍然要**同步改两份**。
 
-之前的 #1 `check_cross_platform` 修复只改了前两份,结果生产默认路径没生效 —— 这是 P0.1 收益看似不如预期的部分原因。
+**下一步**(升级到新子 issue 跟踪):
 
-**处理方案**(三选一):
+1. 把根 `geo_checker.py` 的 `print()` / `fix()` 逐个替换为 `emit_check()` / `emit_fix()`,内容与 C 保持一致
+2. 替换完成后:`backend/geo/services/geo_checker.py` 改用 `spec_from_file_location` 加载根(与 `advanced_runners.py` 同款)
+3. 删 `/backend/geo_checker/` 目录
+4. 预估工时 ~3–4 小时,改动涉及几千行 `print` 调用
 
-1. **快方案**:`/backend/geo_checker/` 改成指向项目根的 symlink。cost 5 分钟,但 git 不友好(symlink 可以跟踪但 Windows 开发会炸)
-2. **中方案**:删掉 `/backend/geo_checker/` 和 `/geo_checker/`,改 `backend/geo/services/geo_checker.py` 的 import 逻辑,用 `spec_from_file_location` 指向项目根的 `geo_checker.py`,与 `advanced_runners.py` 同一套加载逻辑。cost ~30 分钟。
-3. **终极方案**:配合第 9 节的 #9 `_geo_checker_lock` 重构,把核心拆成 package,彻底消除多文件问题。cost ~4 小时。
-
-推荐**中方案**作为本次处理,终极方案并入 P2。
-
-**涉及文件**:
-- `backend/geo/services/geo_checker.py`(import 逻辑)
-- 删除 `/backend/geo_checker/` 和 `/geo_checker/`
-
-**验收**:
-- 三份文件缩减为一份(项目根的 `geo_checker.py`)
-- 默认路径和高级路径都走同一份代码
-- 重启服务后,对已知 check 的改动立即生效(用 `check_https` 加一行 print 做烟雾测试)
+预计在做完 P0 其余性能项后开工(#2 `/visibility`、#11 `check_authority_trust`)。
 
 ---
 

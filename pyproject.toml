@@ -25,11 +25,15 @@ classifiers = [
 ]
 
 [project.scripts]
-geo-checker = "geo_checker.__main__:main"
+# Points at the single-file geo_checker.py at the repo root (the "full" copy,
+# with all advanced runners). The previous entry — geo_checker.__main__:main —
+# targeted a half-sync'd package copy that has since been removed. See
+# issue_list.md #12.
+geo-checker = "geo_checker:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/geo-checker"
 Issues = "https://github.com/yourusername/geo-checker/issues"
 
-[tool.setuptools.packages.find]
-include = ["geo_checker*"]
+[tool.setuptools]
+py-modules = ["geo_checker"]
