@@ -9,7 +9,7 @@ if (!i18n.isInitialized) {
       en: { translation: en },
       zh: { translation: zh }
     },
-    lng: localStorage.getItem('i18nextLng') || 'zh',
+    lng: localStorage.getItem('i18nextLng') || (navigator.language?.startsWith('zh') ? 'zh' : 'en'),
     fallbackLng: 'en',
     defaultNS: 'translation',
     interpolation: {

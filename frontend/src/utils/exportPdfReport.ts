@@ -111,8 +111,8 @@ const buildScoreBlock = (args: ExportArgs): string => {
     `<div style="position:relative;width:140px;height:140px;">` +
     ringHtml +
     `<div style="position:absolute;top:0;left:0;width:140px;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
-    `<div style="font-size:40px;font-weight:800;line-height:1;color:#fff;margin-top:-14px;">${score}</div>` +
-    `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">/ 100</div>` +
+    `<div style="font-size:40px;font-weight:800;line-height:1;color:#fff;position:relative;top:-4px;">${score}</div>` +
+    `<div style="font-size:11px;color:#94a3b8;">/ 100</div>` +
     `</div>` +
     `</div>` +
     `<div style="margin-top:10px;font-size:16px;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
