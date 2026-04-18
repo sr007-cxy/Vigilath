@@ -92,10 +92,10 @@ export function ContactModal() {
     );
   }
 
-  // Expanded panel — desktop: bottom-right card; mobile: fullscreen
+  // Expanded panel — desktop: bottom-right card; mobile: fullscreen (z-50 to cover Header)
   return (
     <div
-      className="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 z-40 sm:w-[380px] sm:max-h-[80vh] flex flex-col shadow-2xl animate-fade-in sm:rounded-2xl overflow-hidden"
+      className="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 z-50 sm:w-[380px] sm:max-h-[80vh] flex flex-col shadow-2xl animate-fade-in sm:rounded-2xl overflow-hidden"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
     >
       {/* Header */}
