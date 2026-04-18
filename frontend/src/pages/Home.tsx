@@ -112,7 +112,7 @@ export function Home() {
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
 
-      <main className="flex-1 px-4 pt-24 pb-12 sm:py-28 relative z-10">
+      <main className="flex-1 px-4 pt-10 pb-12 sm:pt-14 sm:pb-28 relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero text-center">
             <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text mb-6 animate-fade-in">
