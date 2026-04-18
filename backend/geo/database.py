@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     FROM_EMAIL: str = "GEO Readiness Checker <noreply@vigilath.com>"
     FRONTEND_URL: str = "https://www.vigilath.com"
+    # Inbox that receives /contact + /contact-sales submission notifications.
+    SALES_NOTIFY_EMAIL: str = "support@zen7.com"
 
     # Stripe (used for overseas / English-locale credit card subscriptions)
     STRIPE_SECRET_KEY: str = ""

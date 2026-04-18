@@ -13,6 +13,7 @@ from geo.services.quota_service import get_usage
 from geo.database import SessionLocal
 from geo.api.auth import get_current_user
 from geo.models.user import User
+from geo.services.email_service import email_service
 from geo.utils.error_handler import AppException
 
 router = APIRouter()
@@ -76,10 +77,12 @@ async def get_my_usage(current_user: User = Depends(get_current_user)):
 async def contact_sales(body: ContactSalesRequest):
     """Accept sales leads from the /products-services contact form.
 
-    Writes the lead to the sales_leads table. Email notification is intentionally
-    a TODO — we log to stdout so ops can tail logs until the pipeline is wired.
+    Writes the lead to sales_leads, notifies the internal sales inbox, and
+    sends an acknowledgement to the submitter. Email failures are logged but
+    not fatal — the lead is persisted first.
     """
     db = SessionLocal()
+    lead_id = None
     try:
         lead = SalesLeadORM(
             name=body.name,
@@ -92,15 +95,26 @@ async def contact_sales(body: ContactSalesRequest):
         db.add(lead)
         db.commit()
         db.refresh(lead)
-        print(
-            f"[sales-lead] id={lead.id} name={body.name!r} email={body.email!r} "
-            f"tier={body.tier_slug!r} website={body.website!r}"
-        )
-        return {
-            "message": "咨询已提交，销售将在 1 个工作日内联系您。",
-            "lead_id": lead.id,
-        }
+        lead_id = lead.id
     finally:
         db.close()
+
+    email_service.send_sales_notification_email(
+        kind="sales-lead",
+        name=body.name,
+        email=body.email,
+        website=body.website,
+        message=body.message or "",
+        tier_slug=body.tier_slug,
+        submission_id=lead_id,
+    )
+    email_service.send_sales_lead_confirmation_email(
+        body.email, body.name, body.tier_slug
+    )
+
+    return {
+        "message": "咨询已提交，销售将在 1 个工作日内联系您。",
+        "lead_id": lead_id,
+    }
 
 
