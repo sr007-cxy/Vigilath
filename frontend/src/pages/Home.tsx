@@ -48,10 +48,11 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
 ];
 
 export function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const metaKey = location.pathname === '/checker' ? 'checker' : 'home';
+  const isEn = (i18n.language || 'en').startsWith('en');
   const { isLoggedIn, isUnlocked } = useMembership();
   const { openContact } = useContactModal();
   const { openTierModal } = useTierModal();
@@ -115,11 +116,13 @@ export function Home() {
       <main className="flex-1 px-4 pt-10 pb-12 sm:pt-14 sm:pb-28 relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero text-center">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text mb-6 animate-fade-in">
+            <p
+              className={`text-3xl sm:text-5xl lg:text-6xl font-bold ${isEn ? 'italic' : ''} gradient-text mb-6 animate-fade-in leading-[1.05] tracking-tight`}
+            >
               {t('home.slogan.cta')}
             </p>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up text-center">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-6 leading-tight tracking-tight animate-slide-up text-center">
               <span className="gradient-text">{t('home.title')}</span>
             </h1>
 
