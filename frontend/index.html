@@ -126,6 +126,15 @@
   </script>
 
   <style>
+    /* Critical CSS — 在主 CSS bundle 到位前给出"页面在加载"的视觉,避免白屏刺眼。
+       颜色匹配默认 peec 主题的 --bg-primary / --text-primary。 */
+    html, body {
+      margin: 0;
+      background: #f5f5f7;
+      color: #0a0a0a;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+
     /* 隐藏静态 SEO 骨架,避免 React 挂载前出现 FOUC。
        AI 爬虫(GPTBot/ClaudeBot/PerplexityBot 等)不执行 CSS,仍可抓到 #seo-skeleton 内容。 */
     #seo-skeleton { display: none; }
