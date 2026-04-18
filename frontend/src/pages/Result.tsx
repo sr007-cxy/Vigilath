@@ -242,6 +242,7 @@ export function Result() {
       .then((fresh) => {
         // Replace state so a refresh / forward-nav doesn't re-trigger the
         // check, and so the rerun bar picks up the fresh result URL.
+        setRerunLoading(false);
         navigate('.', { state: { result: fresh }, replace: true });
       })
       .catch((err) => {
