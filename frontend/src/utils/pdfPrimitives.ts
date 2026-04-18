@@ -48,7 +48,7 @@ export const blockWrapClose = `</div>`;
 export const statusBadge = (status: string, t: TFunction): string => {
   const color = STATUS_COLOR[status] || STATUS_COLOR.INFO;
   const label = t(`result.pdfReport.statusLabels.${color.key}`);
-  return `<span style="display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:999px;font-size:11px;line-height:1;vertical-align:middle;font-weight:600;background:${color.bg};color:${color.fg};">${escapeHtml(label)}</span>`;
+  return `<span style="font-size:12px;font-weight:700;color:${color.fg};">${escapeHtml(label)}</span>`;
 };
 
 // ---------- Capture & pagination pipeline ----------

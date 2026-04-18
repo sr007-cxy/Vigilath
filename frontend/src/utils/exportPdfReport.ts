@@ -111,11 +111,11 @@ const buildScoreBlock = (args: ExportArgs): string => {
     `<div style="position:relative;width:140px;height:140px;">` +
     ringHtml +
     `<div style="position:absolute;top:0;left:0;width:140px;height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
-    `<div style="font-size:40px;font-weight:800;line-height:1;color:#fff;">${score}</div>` +
+    `<div style="font-size:40px;font-weight:800;line-height:1;color:#fff;margin-top:-6px;">${score}</div>` +
     `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">/ 100</div>` +
     `</div>` +
     `</div>` +
-    `<div style="margin-top:10px;display:inline-flex;align-items:center;justify-content:center;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:16px;line-height:1;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
+    `<div style="margin-top:10px;font-size:16px;font-weight:700;color:#22d3ee;">${escapeHtml(grade)}</div>` +
     `</div>` +
     // Right: interpretation + summary counts
     `<div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">` +
@@ -124,10 +124,10 @@ const buildScoreBlock = (args: ExportArgs): string => {
     `<div style="font-size:12px;color:#334155;line-height:1.7;">${escapeHtml(interpretScore(score, t))}</div>` +
     `</div>` +
     `<div style="display:flex;gap:8px;margin-top:14px;">` +
-    `<div style="flex:1;background:#dcfce7;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#166534;">${summary.pass_count}</div><div style="font-size:9px;color:#166534;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.passed'))}</div></div>` +
-    `<div style="flex:1;background:#fef3c7;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#92400e;">${summary.warn_count}</div><div style="font-size:9px;color:#92400e;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.warnings'))}</div></div>` +
-    `<div style="flex:1;background:#fee2e2;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#991b1b;">${summary.fail_count}</div><div style="font-size:9px;color:#991b1b;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.failed'))}</div></div>` +
-    `<div style="flex:1;background:#dbeafe;border-radius:8px;padding:8px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#1e40af;">${summary.info_count}</div><div style="font-size:9px;color:#1e40af;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.info'))}</div></div>` +
+    `<div style="flex:1;background:#dcfce7;border-radius:8px;padding:5px 6px 11px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#166534;">${summary.pass_count}</div><div style="font-size:9px;color:#166534;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.passed'))}</div></div>` +
+    `<div style="flex:1;background:#fef3c7;border-radius:8px;padding:5px 6px 11px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#92400e;">${summary.warn_count}</div><div style="font-size:9px;color:#92400e;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.warnings'))}</div></div>` +
+    `<div style="flex:1;background:#fee2e2;border-radius:8px;padding:5px 6px 11px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#991b1b;">${summary.fail_count}</div><div style="font-size:9px;color:#991b1b;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.failed'))}</div></div>` +
+    `<div style="flex:1;background:#dbeafe;border-radius:8px;padding:5px 6px 11px 6px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#1e40af;">${summary.info_count}</div><div style="font-size:9px;color:#1e40af;font-weight:600;margin-top:2px;">${escapeHtml(t('result.summary.info'))}</div></div>` +
     `</div>` +
     `</div>` +
     `</div>` +

@@ -94,12 +94,12 @@ const scoreHero = (args: {
   rightCaption?: string;
 }): string => {
   const grade = args.grade
-    ? `<div style="margin-top:10px;display:inline-flex;align-items:center;justify-content:center;padding:5px 16px;border-radius:999px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.4);font-size:15px;line-height:1;font-weight:700;color:#22d3ee;">${escapeHtml(args.grade)}${args.gradeNote ? ` · ${escapeHtml(args.gradeNote)}` : ''}</div>`
+    ? `<div style="margin-top:10px;font-size:15px;font-weight:700;color:#22d3ee;">${escapeHtml(args.grade)}${args.gradeNote ? ` · ${escapeHtml(args.gradeNote)}` : ''}</div>`
     : '';
   const tiles = (args.rightStats || [])
     .map((s) => {
       const c = TONE_BG[s.tone || 'neutral'];
-      return `<div style="flex:1;background:${c.bg};border-radius:8px;padding:10px 6px;text-align:center;"><div style="font-size:18px;font-weight:800;color:${c.fg};">${escapeHtml(s.value)}</div><div style="font-size:9px;color:${c.fg};font-weight:600;margin-top:3px;">${escapeHtml(s.label)}</div></div>`;
+      return `<div style="flex:1;background:${c.bg};border-radius:8px;padding:6px 6px 12px 6px;text-align:center;"><div style="font-size:18px;font-weight:800;color:${c.fg};">${escapeHtml(s.value)}</div><div style="font-size:9px;color:${c.fg};font-weight:600;margin-top:3px;">${escapeHtml(s.label)}</div></div>`;
     })
     .join('');
   const right =
