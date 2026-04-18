@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
+import { PageHead } from '../components/PageHead';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -42,6 +43,7 @@ export function Login() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.login.title" descriptionKey="pageMeta.login.description" />
       {/* 背景发光效果 */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>

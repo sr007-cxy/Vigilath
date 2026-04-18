@@ -5,6 +5,7 @@ import { authApi } from '../services/authApi';
 import { oauthApi } from '../services/oauthApi';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAuth } from '../contexts/AuthContext';
+import { PageHead } from '../components/PageHead';
 
 export function Register() {
   const [email, setEmail] = useState('');
@@ -107,6 +108,7 @@ export function Register() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.register.title" descriptionKey="pageMeta.register.description" />
       {/* 背景发光效果 */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>

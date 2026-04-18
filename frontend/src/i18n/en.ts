@@ -1,4 +1,70 @@
 const en = {
+          "pageMeta": {
+            "home": {
+              "title": "GApex — Unified GEO+AEO Platform for AI Visibility",
+              "description": "GApex is the end-to-end GEO+AEO solution. Audit, fix, and grow your brand's presence across ChatGPT, Perplexity, Claude, and Google AI Overviews."
+            },
+            "checker": {
+              "title": "Run an AI Visibility Audit · GApex",
+              "description": "Run a free AI visibility audit on any URL. Get a 0–100 score, 25-category breakdown, and an actionable fix list."
+            },
+            "about": {
+              "title": "About GApex — The GEO+AEO Solution Partner",
+              "description": "Learn about GApex: our mission to make every brand discoverable, quotable, and citable across AI answer engines."
+            },
+            "geoKnowledge": {
+              "title": "GEO Knowledge Base · GApex",
+              "description": "Understand Generative Engine Optimization: what the 25 categories mean, how LLMs pick what to cite, and how to rank in AI answers."
+            },
+            "geoKnowledgeMetrics": {
+              "title": "GEO Metrics Explained · GApex",
+              "description": "A deep dive into every metric GApex measures — with the why, the benchmark, and the fix."
+            },
+            "productsServices": {
+              "title": "Products & Services · GApex",
+              "description": "Managed GEO coverage, AI engine inclusion, copywriting compliance, PR support — the full-stack AI visibility offering."
+            },
+            "process": {
+              "title": "How GApex Works · Process",
+              "description": "From first audit to managed growth — see how GApex delivers AI visibility in four steps."
+            },
+            "pricing": {
+              "title": "Pricing & Plans · GApex",
+              "description": "Free audit, Pro ($9.99), Starter ($999), Growth ($2,500), Scale (custom). Pick the tier that matches how you use AI visibility data."
+            },
+            "data": {
+              "title": "Insights & Data · GApex",
+              "description": "Benchmarks and trends from thousands of GApex audits — what's working across industries."
+            },
+            "contact": {
+              "title": "Contact Sales · GApex",
+              "description": "Talk to the GApex team about managed GEO coverage, custom audits, and enterprise support."
+            },
+            "login": {
+              "title": "Log in · GApex",
+              "description": "Log in to your GApex account."
+            },
+            "register": {
+              "title": "Sign up · GApex",
+              "description": "Create a free GApex account and start auditing your AI visibility."
+            },
+            "forgotPassword": {
+              "title": "Reset Password · GApex",
+              "description": "Reset your GApex account password."
+            },
+            "privacy": {
+              "title": "Privacy Policy · GApex",
+              "description": "How GApex collects, uses, and protects your personal information."
+            },
+            "terms": {
+              "title": "Terms of Use · GApex",
+              "description": "GApex terms of service for the GEO+AEO platform."
+            },
+            "cookie": {
+              "title": "Cookie Policy · GApex",
+              "description": "How GApex uses cookies and similar technologies."
+            }
+          },
           "nav": {
             "home": "Home",
             "geoKnowledge": "Resources Center",

@@ -5,6 +5,7 @@ import { membershipApi, type Membership, formatTierPrice } from '../services/mem
 import { useMembership } from '../hooks/useMembership';
 import { AuthModal } from '../components/AuthModal';
 import { useContactModal } from '../components/ContactModalContext';
+import { PageHead } from '../components/PageHead';
 
 type ContactFormState = {
   name: string;
@@ -142,6 +143,7 @@ export function ProductsServices() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.productsServices.title" descriptionKey="pageMeta.productsServices.description" />
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>

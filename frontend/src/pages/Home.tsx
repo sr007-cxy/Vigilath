@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useContactModal } from '../components/ContactModalContext';
 import { useTierModal } from '../components/TierModalContext';
 import { useMembership } from '../hooks/useMembership';
+import { PageHead } from '../components/PageHead';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
@@ -49,6 +50,8 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
 export function Home() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const metaKey = location.pathname === '/checker' ? 'checker' : 'home';
   const { isLoggedIn, isUnlocked } = useMembership();
   const { openContact } = useContactModal();
   const { openTierModal } = useTierModal();
@@ -104,6 +107,7 @@ export function Home() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey={`pageMeta.${metaKey}.title`} descriptionKey={`pageMeta.${metaKey}.description`} />
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>

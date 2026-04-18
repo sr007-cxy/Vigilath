@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
 import { GeoKnowledgeTabs } from '../components/GeoKnowledgeTabs';
+import { PageHead } from '../components/PageHead';
 
 export function GeoKnowledge() {
   useLoadNs('knowledge');
@@ -8,6 +9,7 @@ export function GeoKnowledge() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.geoKnowledge.title" descriptionKey="pageMeta.geoKnowledge.description" />
       {/* 背景发光效果 */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>

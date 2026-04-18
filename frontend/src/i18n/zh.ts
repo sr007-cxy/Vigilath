@@ -1,4 +1,70 @@
 const zh = {
+          "pageMeta": {
+            "home": {
+              "title": "GApex —— 一体化 GEO+AEO 平台,赋能 AI 可见性",
+              "description": "GApex 是端到端 GEO+AEO 解决方案,帮你审计、修复、增长在 ChatGPT、Perplexity、Claude、Google AI Overviews 的品牌曝光。"
+            },
+            "checker": {
+              "title": "AI 可见性审计 · GApex",
+              "description": "免费审计任意网址,获得 0–100 分、25 类别拆解和可执行修复清单。"
+            },
+            "about": {
+              "title": "关于 GApex —— 你的 GEO+AEO 解决方案伙伴",
+              "description": "了解 GApex:让每个品牌都能被 AI 搜索引擎发现、引用、推荐。"
+            },
+            "geoKnowledge": {
+              "title": "GEO 知识中心 · GApex",
+              "description": "读懂生成式引擎优化:25 个类别分别是什么、LLM 如何挑选引用来源、如何在 AI 答案中胜出。"
+            },
+            "geoKnowledgeMetrics": {
+              "title": "GEO 指标详解 · GApex",
+              "description": "深入理解 GApex 每一项指标 —— 来源、基准、修复方法一次讲清。"
+            },
+            "productsServices": {
+              "title": "产品与服务 · GApex",
+              "description": "托管 GEO 覆盖、AI 引擎收录、文案合规、公关支持 —— 全栈式 AI 可见性方案。"
+            },
+            "process": {
+              "title": "GApex 服务流程 · 四步落地",
+              "description": "从首次审计到托管增长 —— 了解 GApex 如何分四步交付 AI 可见性成果。"
+            },
+            "pricing": {
+              "title": "定价与方案 · GApex",
+              "description": "免费审计 / Pro ($9.99) / Starter ($999) / Growth ($2,500) / Scale (定制),按你对 AI 可见性的投入选档。"
+            },
+            "data": {
+              "title": "洞察与数据 · GApex",
+              "description": "来自数千次 GApex 审计的基准与趋势 —— 看清各行业的有效打法。"
+            },
+            "contact": {
+              "title": "联系销售 · GApex",
+              "description": "与 GApex 团队洽谈托管 GEO 覆盖、定制审计、企业支持。"
+            },
+            "login": {
+              "title": "登录 · GApex",
+              "description": "登录你的 GApex 账户。"
+            },
+            "register": {
+              "title": "注册 · GApex",
+              "description": "免费注册 GApex 账户,开始你的 AI 可见性审计。"
+            },
+            "forgotPassword": {
+              "title": "重置密码 · GApex",
+              "description": "重置你的 GApex 账户密码。"
+            },
+            "privacy": {
+              "title": "隐私政策 · GApex",
+              "description": "GApex 如何收集、使用和保护你的个人信息。"
+            },
+            "terms": {
+              "title": "服务条款 · GApex",
+              "description": "GApex GEO+AEO 平台的服务条款。"
+            },
+            "cookie": {
+              "title": "Cookie 政策 · GApex",
+              "description": "GApex 使用 cookie 及类似技术的说明。"
+            }
+          },
           "nav": {
             "home": "首页",
             "geoKnowledge": "资源中心",

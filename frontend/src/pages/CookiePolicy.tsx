@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { PageHead } from '../components/PageHead';
 
 export function CookiePolicy() {
   const { i18n } = useTranslation();
@@ -6,6 +7,7 @@ export function CookiePolicy() {
 
   return (
     <div className="min-h-screen grid-background relative">
+      <PageHead titleKey="pageMeta.cookie.title" descriptionKey="pageMeta.cookie.description" />
       <div className="max-w-3xl mx-auto px-6 py-16">
         <h1 className="text-3xl font-bold text-primary mb-8">
           {isZh ? 'Cookie 政策' : 'Cookie Policy'}

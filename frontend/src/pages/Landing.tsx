@@ -1,9 +1,17 @@
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { PageHead } from '../components/PageHead';
 
 export function Landing() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const pathToKey: Record<string, string> = {
+    '/pricing': 'pricing',
+    '/data': 'data',
+    '/process': 'process',
+  };
+  const metaKey = pathToKey[location.pathname] ?? 'process';
 
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
@@ -104,6 +112,7 @@ export function Landing() {
 
   return (
     <div className="min-h-screen">
+      <PageHead titleKey={`pageMeta.${metaKey}.title`} descriptionKey={`pageMeta.${metaKey}.description`} />
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center hero-gradient overflow-hidden pt-16">

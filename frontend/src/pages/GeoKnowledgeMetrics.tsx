@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
 import { GeoKnowledgeTabs } from '../components/GeoKnowledgeTabs';
+import { PageHead } from '../components/PageHead';
 
 type Category = {
   id: string;
@@ -104,6 +105,7 @@ export function GeoKnowledgeMetrics() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.geoKnowledgeMetrics.title" descriptionKey="pageMeta.geoKnowledgeMetrics.description" />
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>

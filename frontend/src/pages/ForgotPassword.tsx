@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
+import { PageHead } from '../components/PageHead';
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -63,6 +64,7 @@ export function ForgotPassword() {
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.forgotPassword.title" descriptionKey="pageMeta.forgotPassword.description" />
       {/* 背景发光效果 */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { PageHead } from '../components/PageHead';
 
 export function TermsOfUse() {
   const { i18n } = useTranslation();
@@ -6,6 +7,7 @@ export function TermsOfUse() {
 
   return (
     <div className="min-h-screen grid-background relative">
+      <PageHead titleKey="pageMeta.terms.title" descriptionKey="pageMeta.terms.description" />
       <div className="max-w-3xl mx-auto px-6 py-16">
         <h1 className="text-3xl font-bold text-primary mb-8">
           {isZh ? '使用条款' : 'Terms of Use'}

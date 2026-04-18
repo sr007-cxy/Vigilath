@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { PageHead } from '../components/PageHead';
 
 export function About() {
   const { t } = useTranslation();
 
   return (
     <div className="min-h-screen grid-background">
+      <PageHead titleKey="pageMeta.about.title" descriptionKey="pageMeta.about.description" />
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
