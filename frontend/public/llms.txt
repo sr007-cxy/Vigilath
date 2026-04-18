@@ -48,8 +48,10 @@ Yes. Register and run 3 basic checks per month at no cost.
 
 ## Community
 
-- [Discord](https://discord.gg/mJVEVXyxD5): join the GApex community
-- [X / Twitter](https://x.com/zen7_labs): follow for updates
+The GApex community is where GEO practitioners — product teams, SEO/AEO specialists, technical marketers, and independent operators — compare audit results, discuss AI-bot policy changes (GPTBot, ClaudeBot, PerplexityBot, Google-Extended), and request features.
+
+- [Discord](https://discord.gg/mJVEVXyxD5) — live chat with the GApex team and other users. Good place to share audit outputs, ask about specific check results, request features, and get help interpreting AI-visibility scores. English and Chinese channels.
+- [X / Twitter @zen7_labs](https://x.com/zen7_labs) — product announcements, weekly GEO tips, and notifications when AI crawler policies or algorithms change. Also mirrors new knowledge-base articles.
 
 ## Contact
 

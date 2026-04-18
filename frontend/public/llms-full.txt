@@ -86,8 +86,11 @@ Yes. Register and run 3 basic checks per month at no cost. Paid plans (Pro, Star
 
 ## Community
 
-- [Discord](https://discord.gg/mJVEVXyxD5): join the GApex community for GEO discussions, tips, and support
-- [X / Twitter](https://x.com/zen7_labs): follow for product updates and GEO insights
+GApex is backed by an active community of GEO practitioners — in-house product teams, SEO/AEO specialists, technical marketers, and independent operators — who use the audit tool to benchmark AI visibility, debug specific category failures, and track how AI-bot policies evolve (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Copilot, and newer entrants).
+
+- [Discord](https://discord.gg/mJVEVXyxD5) — real-time chat with the GApex team and other users. Typical threads: sharing audit outputs for peer review, debating which fixes move the AI Visibility Score the most, interpreting specific check results, requesting new checks/categories, and reporting bugs. Separate English and Chinese channels; product and GEO-education announcements are cross-posted.
+- [X / Twitter @zen7_labs](https://x.com/zen7_labs) — product launches, weekly GEO tips, and notifications when AI crawler policies or ranking behavior changes (e.g. a new bot user-agent, a robots.txt directive shift, llms.txt spec updates). New knowledge-base articles are mirrored here.
+- `twitter:site` / `twitter:creator` meta tags on every page are set to `@zen7_labs`, and the official Organization JSON-LD `sameAs` array lists both URLs so AI entity graphs resolve them as the canonical GApex accounts.
 
 ## Contact
 
