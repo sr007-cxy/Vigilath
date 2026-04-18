@@ -43,7 +43,6 @@ MESSAGES: Dict[str, Dict[str, str]] = {
     "User not found": {"zh": "用户不存在"},
     "Invalid Google token": {"zh": "Google 登录令牌无效"},
     "Invalid Google client ID": {"zh": "Google 客户端 ID 配置错误"},
-    "Invalid Facebook token": {"zh": "Facebook 登录令牌无效"},
 
     # Account / membership
     "Current password is incorrect": {"zh": "原密码错误"},
