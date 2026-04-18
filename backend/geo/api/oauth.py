@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from geo.models.user import Token
+from geo.models.user import Token, UserCreate
 from geo.services.user_service import user_service
 from jose import jwt
 from datetime import datetime, timedelta
@@ -38,11 +38,15 @@ async def google_login(payload: GoogleLoginRequest):
 
     user = user_service.get_user_by_email(user_info["email"])
     if not user:
-        user = user_service.create_user({
-            "email": user_info["email"],
-            "name": user_info.get("name", "Google User"),
-            "password": ""
-        })
+        # OAuth users never sign in with a password; use a random 32-byte
+        # secret so the stored bcrypt hash is unguessable. The string is
+        # discarded immediately after hashing.
+        import secrets
+        user = user_service.create_user(UserCreate(
+            email=user_info["email"],
+            name=user_info.get("name", "Google User"),
+            password=secrets.token_urlsafe(32),
+        ))
 
     access_token_expires = timedelta(minutes=30)
     access_token = jwt.encode(
