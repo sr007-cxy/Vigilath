@@ -56,7 +56,11 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     };
   }, [isOpen]);
 
-  const handleGoogleSuccess = (accessToken: string) => {
+  const handleGoogleSuccess = (accessToken: string, profile: { email: string }) => {
+    // Header reads localStorage.user (not AuthContext) to render the logged-in
+    // email, so we must mirror what the password login path writes. Skip this
+    // and the token is valid but the header still shows "Log in".
+    localStorage.setItem('user', JSON.stringify({ email: profile.email }));
     setToken(accessToken);
     onClose();
     if (onSuccess) {

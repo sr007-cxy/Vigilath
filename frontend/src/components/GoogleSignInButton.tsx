@@ -12,13 +12,32 @@ import { oauthApi } from '../services/oauthApi';
 const GSI_SRC = 'https://accounts.google.com/gsi/client';
 const GSI_SCRIPT_ID = 'gsi-client-sdk';
 
+type GoogleProfile = { email: string; name?: string };
+
 type Props = {
-  onSuccess: (accessToken: string) => void;
+  onSuccess: (accessToken: string, profile: GoogleProfile) => void;
   onError: (message: string) => void;
   /** 'signin' | 'signup' — changes the button label via GSI's `text` prop. */
   intent?: 'signin' | 'signup';
   locale?: string;
 };
+
+// GSI returns a standard JWT id_token in `credential`. We only need its
+// payload (middle segment) for the email, so a plain base64 decode is
+// enough — no signature verification on the client, since the backend
+// already re-verifies via oauth2.googleapis.com/tokeninfo.
+function decodeGsiProfile(credential: string): GoogleProfile | null {
+  try {
+    const payload = credential.split('.')[1];
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(padded);
+    const claims = JSON.parse(json);
+    if (!claims.email) return null;
+    return { email: claims.email, name: claims.name };
+  } catch {
+    return null;
+  }
+}
 
 function ensureGsiScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -67,9 +86,14 @@ export function GoogleSignInButton({ onSuccess, onError, intent = 'signin', loca
               onError('Google login failed');
               return;
             }
+            const profile = decodeGsiProfile(response.credential);
+            if (!profile) {
+              onError('Google login failed: invalid credential');
+              return;
+            }
             try {
               const res = await oauthApi.googleLogin(response.credential);
-              onSuccess(res.access_token);
+              onSuccess(res.access_token, profile);
             } catch (err) {
               onError(err instanceof Error ? err.message : 'Google login failed');
             }

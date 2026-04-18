@@ -34,7 +34,8 @@ export function Login() {
     }
   };
 
-  const handleGoogleSuccess = (accessToken: string) => {
+  const handleGoogleSuccess = (accessToken: string, profile: { email: string }) => {
+    localStorage.setItem('user', JSON.stringify({ email: profile.email }));
     setToken(accessToken);
     navigate('/');
   };
