@@ -229,6 +229,9 @@ const en = {
             "sectionTag": "Contact Us",
             "title": "Start Your GEO Journey",
             "subtitle": "Fill in the information below and our GEO experts will contact you within 24 hours.",
+            "fab": {
+              "label": "Contact Sales"
+            },
             "name": "Name",
             "email": "Email",
             "company": "Company",

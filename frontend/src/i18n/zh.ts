@@ -229,6 +229,9 @@ const zh = {
             "sectionTag": "联系我们",
             "title": "开启您的 GEO 之旅",
             "subtitle": "填写以下信息，我们的 GEO 专家将在 24 小时内与您联系。",
+            "fab": {
+              "label": "联系销售"
+            },
             "name": "姓名",
             "email": "邮箱",
             "company": "公司",
