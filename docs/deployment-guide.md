@@ -82,6 +82,14 @@ server {
     location = /humans.txt      { try_files $uri =404; default_type text/plain; }
     location ^~ /.well-known/   { try_files $uri =404; }
 
+    # /assets/* 带 hash 命名,vite 构建每次出新名,可安全长缓存
+    # 回头访问者直接从浏览器缓存读,不重新下载
+    location ^~ /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -114,6 +122,27 @@ server {
 ```
 
 改 nginx 后的操作：`sudo nginx -t && sudo systemctl reload nginx`。
+
+### Nginx 性能配置(http 块,全站生效)
+
+`/etc/nginx/nginx.conf` 顶层 `http { }` 里已开启 gzip(对文本/JS/CSS/SVG/JSON
+等压缩 ~70%),中国移动网用户首屏受益明显:
+
+```nginx
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_min_length 1024;
+gzip_http_version 1.1;
+gzip_types
+    text/plain text/css text/xml text/javascript
+    application/javascript application/json
+    application/xml application/xml+rss
+    image/svg+xml;
+```
+
+不要改回默认值(默认只压 `text/html`,JS/CSS 会裸传输)。
 
 ## 二、系统依赖
 
@@ -226,9 +255,16 @@ curl -s  https://www.vigilath.com/pay/health | head     # MoltsPayServer 健康
 
 ### 10. 上游缓存
 
-如果 Cloudflare 启用了缓存策略，发布后需要手动 Purge 相应路径（尤其是
-`/`、`/assets/*`、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/llms-full.txt`、
-`/humans.txt`）。
+本站**不做 Cloudflare Purge**。原因:
+
+- `/assets/*` 文件名带 hash(如 `index-5o6adLEE.js`),vite 每次构建出新名,
+  与上一版自动错开;配合服务器端 `Cache-Control: public, immutable, max-age=1y`,
+  旧资源继续被老客户端缓存,新资源靠新 HTML 的新引用自动拉取。
+- `index.html`、`robots.txt`、`sitemap.xml`、`llms.txt` 等非 hash 文件若被上游
+  CDN 缓存,等 TTL 自然过期即可;内容更改频率低,不值得每次发布走 Purge。
+
+如果确实需要强制刷新,浏览器侧 `Shift+F5` 即可验证本机;上游 CDN 侧按该服务
+自身控制台的 Purge 操作。
 
 ## 四、回滚
 

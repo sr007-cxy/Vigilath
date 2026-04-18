@@ -129,12 +129,49 @@
     /* 隐藏静态 SEO 骨架,避免 React 挂载前出现 FOUC。
        AI 爬虫(GPTBot/ClaudeBot/PerplexityBot 等)不执行 CSS,仍可抓到 #seo-skeleton 内容。 */
     #seo-skeleton { display: none; }
+
+    /* 首屏 slogan 骨架 — React 挂载前让用户立刻看到 slogan,
+       挂载后 createRoot().render() 会整个替换 #root 的内容。
+       颜色 #0a0a0a 匹配默认 peec 主题下 .gradient-text 的实际渲染效果,
+       挂载后 0 跳变。 */
+    #hero-skeleton {
+      margin: 0;
+      padding: 96px 16px 0;
+      text-align: center;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-weight: 700;
+      color: #0a0a0a;
+      line-height: 1.05;
+      letter-spacing: -0.025em;
+      font-size: 30px;
+    }
+    #hero-skeleton[lang="en"] { font-style: italic; }
+    @media (min-width: 640px) {
+      #hero-skeleton { font-size: 48px; padding-top: 112px; }
+    }
+    @media (min-width: 1024px) {
+      #hero-skeleton { font-size: 60px; }
+    }
   </style>
 </head>
 
 <body>
-  <!-- Static SEO skeleton — React replaces this on mount. -->
+  <!-- Static hero skeleton + SEO skeleton — React replaces both on mount. -->
   <div id="root">
+    <p id="hero-skeleton" lang="en">Be discovered globally, Be Chosen By AI</p>
+    <script>
+      // 按浏览器语言切换 slogan(放在元素之后,paint 前同步执行,无闪烁)
+      (function () {
+        var lang = (navigator.language || '').toLowerCase();
+        if (lang.indexOf('zh') === 0) {
+          var el = document.getElementById('hero-skeleton');
+          if (el) {
+            el.textContent = '被全球发现,被 AI 选择';
+            el.setAttribute('lang', 'zh');
+          }
+        }
+      })();
+    </script>
     <div id="seo-skeleton">
     <header>
       <nav aria-label="Primary">
