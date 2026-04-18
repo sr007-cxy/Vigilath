@@ -58,6 +58,10 @@ export function CheckoutPending() {
   const { token, isLoggedIn } = useMembership();
 
   const slug = params.get('slug') ?? '';
+  // Optional ?provider= hint from PaymentsTab's "Pay" button on a pending row.
+  // Lets the user drop back onto the same method they started the order with
+  // so the backend's session-reuse path (<90min wechat / <30min moltspay) is hit.
+  const providerHint = params.get('provider') ?? '';
 
   const tierText = (tier: Membership) => {
     const slugToCardKey: Record<string, string> = { pro: 'detector' };
@@ -85,8 +89,13 @@ export function CheckoutPending() {
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   // All 3 methods available regardless of locale. Default to Stripe since it
-  // works globally for both USD and RMB cardholders.
-  const [payMethod, setPayMethodRaw] = useState<PayMethod>('stripe');
+  // works globally for both USD and RMB cardholders. Honor ?provider= hint
+  // (moltspay → usdc card) when the user lands from a pending-row Pay link.
+  const [payMethod, setPayMethodRaw] = useState<PayMethod>(() => {
+    if (providerHint === 'wechat') return 'wechat';
+    if (providerHint === 'moltspay') return 'usdc';
+    return 'stripe';
+  });
   const setPayMethod = (method: PayMethod) => {
     setPayMethodRaw(method);
     setPayError(null);
@@ -284,6 +293,45 @@ export function CheckoutPending() {
       const signer = await provider.getSigner(fromAddr);
       setWalletAddr(fromAddr);
 
+      // 3.5. Pre-flight USDC balance check. CDP's verifier reports
+      // "contract execution reverted" as `invalid_payload`, which hides the
+      // real cause (usually: not enough USDC). Checking first lets us fail
+      // with a specific message *before* making the user sign anything.
+      try {
+        const balHex = await ethereum.request({
+          method: 'eth_call',
+          params: [
+            {
+              to: USDC_CONTRACT,
+              // balanceOf(address) selector + 32-byte padded address
+              data: '0x70a08231' + fromAddr.slice(2).toLowerCase().padStart(64, '0'),
+            },
+            'latest',
+          ],
+        });
+        const balance = BigInt(balHex);
+        const required = BigInt(amountRaw);
+        if (balance < required) {
+          // USDC = 6 decimals. Format with 2 decimals for user-facing message.
+          const fmt = (v: bigint) => (Number(v) / 1e6).toFixed(2);
+          throw new Error(
+            t(
+              'checkoutPending.usdcInsufficient',
+              'Insufficient USDC balance on Base: you have ${{have}} USDC, need ${{need}} USDC. Top up your wallet and try again.',
+              { have: fmt(balance), need: fmt(required) },
+            ) as string,
+          );
+        }
+      } catch (balErr: any) {
+        // If balance check itself fails (RPC hiccup, unsupported method in
+        // some wallet), don't block the flow — let the user still try, and
+        // we'll surface a best-effort error after CDP rejects.
+        if (balErr instanceof Error && balErr.message.includes('USDC balance on Base')) {
+          throw balErr;
+        }
+        console.warn('USDC balance preflight failed, continuing:', balErr);
+      }
+
       // 4. Sign EIP-3009 TransferWithAuthorization (gasless)
       const authorization = {
         from: fromAddr,
@@ -344,7 +392,21 @@ export function CheckoutPending() {
 
       if (!paidRes.ok) {
         const errData = await paidRes.json().catch(() => ({}));
-        throw new Error(errData.error || `Payment failed (${paidRes.status})`);
+        const rawErr: string = errData.error || '';
+        // CDP classifies any on-chain revert of `transferWithAuthorization`
+        // as `invalid_payload`. In practice the common cause is insufficient
+        // USDC balance — rewrite to something actionable. (The proactive
+        // balance check above usually catches this first, but the balance
+        // might change between check and sign on a busy wallet.)
+        if (/invalid_payload/i.test(rawErr) || /execution reverted/i.test(rawErr)) {
+          throw new Error(
+            t(
+              'checkoutPending.usdcRevert',
+              'On-chain verification failed. Most common cause: your USDC balance on Base is below the required amount. Please check the wallet and try again.',
+            ) as string,
+          );
+        }
+        throw new Error(rawErr || `Payment failed (${paidRes.status})`);
       }
 
       // 6. MoltsPayServer has called /fulfill — poll to confirm

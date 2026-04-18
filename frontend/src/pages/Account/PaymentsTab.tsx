@@ -25,6 +25,19 @@ const statusColors: Record<string, { bg: string; border: string; color: string }
   failed: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', color: '#ef4444' },
 };
 
+// Build the "continue paying" URL for a pending row. Stripe has a hosted
+// checkout URL we jump to directly; WeChat / Moltspay route back to our
+// CheckoutPending page with the provider preselected, where the backend's
+// pending-session reuse logic (<90min for WeChat, <30min for Moltspay) kicks in.
+function pendingPayHref(row: PaymentRecord): string | null {
+  if (row.status !== 'pending') return null;
+  if (row.provider === 'stripe') return row.checkout_url || null;
+  if (row.provider === 'wechat' || row.provider === 'moltspay') {
+    return `/checkout/pending?slug=${encodeURIComponent(row.membership_slug)}&provider=${row.provider}`;
+  }
+  return null;
+}
+
 export function PaymentsTab() {
   const { t } = useTranslation();
   const [items, setItems] = useState<PaymentRecord[]>([]);
@@ -121,15 +134,19 @@ export function PaymentsTab() {
                         <span>{new Date(row.completed_at).toLocaleString()}</span>
                       )}
                     </div>
-                    {row.status === 'pending' && row.provider === 'stripe' && row.checkout_url && (
-                      <a
-                        href={row.checkout_url}
-                        className="inline-flex text-xs font-medium px-3 py-1.5 rounded-lg transition-colors mt-1"
-                        style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
-                      >
-                        {t('account.payments.retry', 'Pay')}
-                      </a>
-                    )}
+                    {(() => {
+                      const href = pendingPayHref(row);
+                      if (!href) return null;
+                      return (
+                        <a
+                          href={href}
+                          className="inline-flex text-xs font-medium px-3 py-1.5 rounded-lg transition-colors mt-1"
+                          style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
+                        >
+                          {t('account.payments.retry', 'Pay')}
+                        </a>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -198,15 +215,19 @@ export function PaymentsTab() {
                             : '-'}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
-                          {row.status === 'pending' && row.provider === 'stripe' && row.checkout_url && (
-                            <a
-                              href={row.checkout_url}
-                              className="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
-                              style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
-                            >
-                              {t('account.payments.retry', 'Pay')}
-                            </a>
-                          )}
+                          {(() => {
+                            const href = pendingPayHref(row);
+                            if (!href) return null;
+                            return (
+                              <a
+                                href={href}
+                                className="text-xs font-medium px-3 py-1 rounded-lg transition-colors"
+                                style={{ color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)', background: 'rgba(0,240,255,0.05)' }}
+                              >
+                                {t('account.payments.retry', 'Pay')}
+                              </a>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

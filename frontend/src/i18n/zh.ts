@@ -1257,6 +1257,8 @@ const zh = {
             "reinitiate": "重新发起支付",
             "usdcMobileHint": "移动端浏览器无法访问钱包扩展。请在钱包 App 内打开：",
             "usdcOpenMetaMask": "在 MetaMask 中打开",
+            "usdcInsufficient": "Base 链上 USDC 余额不足：当前 ${{have}} USDC，需要 ${{need}} USDC。请给钱包充值后重试。",
+            "usdcRevert": "链上验证失败。最常见原因：Base 链上的 USDC 余额低于所需金额。请检查钱包余额后重试。",
             "wechatPayNow": "生成二维码并支付",
             "submitting": "正在跳转支付…",
             "payNow": "立即支付",

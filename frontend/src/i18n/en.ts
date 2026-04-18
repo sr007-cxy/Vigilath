@@ -1259,6 +1259,8 @@ const en = {
             "reinitiate": "Restart payment",
             "usdcMobileHint": "Mobile browsers cannot access wallet extensions. Open in your wallet app:",
             "usdcOpenMetaMask": "Open in MetaMask",
+            "usdcInsufficient": "Insufficient USDC balance on Base: you have ${{have}} USDC, need ${{need}} USDC. Top up your wallet and try again.",
+            "usdcRevert": "On-chain verification failed. Most common cause: your USDC balance on Base is below the required amount. Please check the wallet and try again.",
             "wechatPayNow": "Generate QR Code & Pay",
             "submitting": "Redirecting to payment...",
             "payNow": "Pay Now",
