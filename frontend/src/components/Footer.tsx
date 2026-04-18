@@ -54,12 +54,13 @@ export function Footer() {
               {link.label}
             </Link>
           ))}
-          <button
-            onClick={openContact}
-            className="text-secondary hover:text-primary transition-colors bg-transparent border-0 p-0 cursor-pointer appearance-none leading-[inherit]"
+          <a
+            href="#contact"
+            onClick={(e) => { e.preventDefault(); openContact(); }}
+            className="text-secondary hover:text-primary transition-colors cursor-pointer"
           >
             {t('footer.links.contact', 'Contact Us')}
-          </button>
+          </a>
         </div>
 
         {/* Contact */}
