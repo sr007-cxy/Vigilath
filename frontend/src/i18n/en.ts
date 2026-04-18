@@ -323,7 +323,7 @@ const en = {
                 "From audit to results — Move seamlessly from self-service checks to full manual optimization, paid placements, reputation management, and PR support",
                 "Future-proof your brand — Stay ahead as AI search becomes the default"
               ],
-              "cta": "Be discovered globally Be chosen by AI",
+              "cta": "Be discovered globally, Be Chosen By AI",
               "contactSales": "Contact Sales"
             },
             "advanced": {

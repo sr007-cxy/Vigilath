@@ -111,3 +111,6 @@ backend/logs/
 
 # Local secrets (private keys, certificates etc) — never commit
 backend/secrets/
+
+# Local backup files
+frontend/public/favicon_bk.svg
