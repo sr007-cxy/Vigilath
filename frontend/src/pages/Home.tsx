@@ -115,7 +115,9 @@ export function Home() {
       <main className="flex-1 px-4 pt-24 pb-12 sm:py-28 relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero text-center">
-
+            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text mb-6 animate-fade-in">
+              {t('home.slogan.cta')}
+            </p>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up text-center">
               <span className="gradient-text">{t('home.title')}</span>
@@ -328,10 +330,7 @@ export function Home() {
           </div>
 
           {/* CTA Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold italic gradient-text" style={{ color: 'rgba(255, 255, 255, 0.55)' }}>
-              {t('home.slogan.cta')}
-            </p>
+          <div className="flex justify-center sm:justify-end">
             <button
               type="button"
               onClick={openContact}
