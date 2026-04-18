@@ -25,6 +25,7 @@
 | [#6](#6-citation-主循环顺序执行--timesleep) | P1 | backend | `/citation` 主循环顺序执行 | 60 s → 15 s |
 | [#7](#7-_run_or_raise-三种故障混映射-503) | P1 | backend | `_run_or_raise` 错误码混淆 | 可观测性提升 |
 | [#8](#8-_page_cache-不跨-worker进程重启丢失) | P2 | backend/infra | `_page_cache` 跨 worker 共享 | 二次检测 < 1 s |
+| [#15](#15-ogimage--twitterimage-指向-faviconsvg社交分享卡片降级) | P2 | frontend/SEO | `og:image` / `twitter:image` 指向 favicon,社交分享卡片降级 | X/Facebook/LinkedIn 大图预览 |
 
 ### 0.2 近期已关闭(Closed)
 
@@ -203,6 +204,35 @@ baidu 对不存在的路径平均 2 秒返回 404,22 × 2 = 44 s。
 **处理方向**:把核心文件的模块级状态挪成 `contextvars.ContextVar` 或函数显式参数;`redirect_stdout` 改成线程局部代理(`advanced_runners.py` 里的 `_ThreadLocalStdout` 已有范式)。
 
 **前置依赖**:必须先完成 #7,让异常路径可观测,否则重构过程中的 regression 很难定位。
+
+---
+
+### #15 `og:image` / `twitter:image` 指向 `favicon.svg`,社交分享卡片降级
+
+- **Priority**: P2
+- **Status**: Open(待设计资产)
+- **Area**: frontend / SEO / 增长
+
+**症状**:在 X / Facebook / LinkedIn 粘 `https://www.vigilath.com/` 分享,预览卡片没有大图或显示很小的模糊 logo,无法触发 `twitter:card=summary_large_image` 的大图布局。
+
+**根因**:`frontend/index.html:31` 的 `og:image` 和 `frontend/index.html:41` 的 `twitter:image` 都指向 `https://www.vigilath.com/favicon.svg`。favicon 是 32×32 的 SVG 站点图标,不是分享卡片资产:
+- X `summary_large_image` 要求 PNG/JPG,推荐 1200×628(或 2:1)
+- Facebook/LinkedIn OG 规范最小 600×315,推荐 1200×630,SVG 支持不稳定
+- 其余 OG 结构(type/site_name/title/description/url/locale + twitter:card/site/creator/title/description)都齐全,**唯一短板是 image**
+
+**连带副作用**:SPA 全部路由返回同一份 `index.html`,所以 OG 是全站一套。未来做差异化分享(`/checker`、`/geo-knowledge/xxx`)需要 SSR / prerender 或 `react-helmet-async`,目前用同一张通用图够用。
+
+**处理方向**:
+1. 产出 1200×630 社交卡片图(logo + slogan "GApex — Unified GEO+AEO for Global AI Visibility"),PNG 或 JPG,< 1 MB。
+2. 放 `frontend/public/og-image.png`,构建时自动进 webroot。
+3. `index.html` 两处 `og:image` / `twitter:image` → `https://www.vigilath.com/og-image.png`。
+4. 用 Facebook Sharing Debugger、X Card Validator、LinkedIn Post Inspector 分别抓一次确认大图卡片生效。
+
+**前置依赖**:需要一张设计稿(外部资产,不在代码里)。接入是 10 分钟的事。
+
+**验收标准**:
+- 三家平台的 debugger 均识别为 `summary_large_image` / large-preview,且大图正确渲染
+- HTML 源码 `og:image` 指向一个 1200×630 的 PNG/JPG URL(不再是 SVG favicon)
 
 ---
 
