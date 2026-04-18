@@ -7,6 +7,7 @@ from geo.models.user import User, UserCreate, UserLogin, Token
 from geo.services.user_service import user_service
 from geo.services.email_service import email_service
 from geo.utils.error_handler import AppException
+from geo.database import settings
 
 router = APIRouter()
 
@@ -19,8 +20,11 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
-# Security configuration
-SECRET_KEY = "your-secret-key-here"
+# Security configuration — key comes from .env (settings.SECRET_KEY).
+# Never hard-code a fallback here: any committed placeholder becomes a
+# known signing key for anyone with the source (the repo is public),
+# letting them forge a JWT for any account.
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 # 7 days. Short TTLs (30m) silently convert every long-idle tab into a
 # "zombie login" — UI still shows the email (read from localStorage.user)
