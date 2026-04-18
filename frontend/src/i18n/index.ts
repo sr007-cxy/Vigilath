@@ -1,21 +1,31 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
 import en from './en';
 import zh from './zh';
 
 if (!i18n.isInitialized) {
-  i18n.use(initReactI18next).init({
-    resources: {
-      en: { translation: en },
-      zh: { translation: zh }
-    },
-    lng: localStorage.getItem('i18nextLng') || (navigator.language?.startsWith('zh') ? 'zh' : 'en'),
-    fallbackLng: 'en',
-    defaultNS: 'translation',
-    interpolation: {
-      escapeValue: false
-    }
-  });
+  i18n
+    .use(LanguageDetector)
+    .use(initReactI18next)
+    .init({
+      resources: {
+        en: { translation: en },
+        zh: { translation: zh }
+      },
+      supportedLngs: ['en', 'zh'],
+      load: 'languageOnly',
+      fallbackLng: 'zh',
+      defaultNS: 'translation',
+      detection: {
+        order: ['localStorage', 'navigator'],
+        lookupLocalStorage: 'i18nextLng',
+        caches: ['localStorage']
+      },
+      interpolation: {
+        escapeValue: false
+      }
+    });
 }
 
 const loaded: Record<string, boolean> = {};
