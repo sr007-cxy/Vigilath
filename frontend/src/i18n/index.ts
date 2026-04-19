@@ -63,10 +63,13 @@ export async function initI18n(): Promise<void> {
     defaultNS: 'translation',
     load: 'languageOnly',
     // Tells i18next "I know resources: {} is empty — I'll addResourceBundle
-    // later, don't look for a backend plugin and don't flash keys during
-    // changeLanguage." Required when using dynamic imports to fill bundles.
+    // later, don't look for a backend plugin." Required when using dynamic
+    // imports to fill bundles.
     partialBundledLanguages: true,
-    react: { useSuspense: false },
+    // Keep Suspense ON (default). main.tsx awaits initI18n before render
+    // so resources are attached by first paint; Suspense then guards the
+    // narrow race window inside i18next's init lifecycle that would
+    // otherwise flash raw keys.
     interpolation: { escapeValue: false },
   });
   await packPromise;
