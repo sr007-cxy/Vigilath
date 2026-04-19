@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthModal } from './AuthModal';
+import { switchLanguage } from '../i18n';
 
 export function Header() {
   const { t, i18n } = useTranslation();
@@ -43,7 +44,12 @@ export function Header() {
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'zh' : 'en';
-    i18n.changeLanguage(newLang);
+    // Must route through switchLanguage() so the target-language pack is
+    // loaded BEFORE changeLanguage flips the active lng. Calling
+    // i18n.changeLanguage() directly leaves the new lng with no resources
+    // attached → react-i18next suspends forever → Suspense fallback looks
+    // like a white screen to the user.
+    switchLanguage(newLang);
   };
 
   const loadUserFromLocalStorage = () => {
