@@ -10,9 +10,6 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'terser',
-    assetsDir: 'assets',
-    assetsInlineLimit: 4096,
-    cssCodeSplit: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -31,9 +28,12 @@ export default defineConfig({
         }
       },
       plugins: [
+        // Analysis artifact lives outside dist/ so it never ships to webroot.
+        // open:false — on headless/EC2 build env, opening a browser hangs.
+        // Run `npx vite build && xdg-open stats.html` locally to view.
         visualizer({
-          open: true,
-          filename: 'dist/stats.html'
+          open: false,
+          filename: 'stats.html'
         })
       ]
     }
