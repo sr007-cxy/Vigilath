@@ -62,6 +62,11 @@ export async function initI18n(): Promise<void> {
     fallbackLng: false,
     defaultNS: 'translation',
     load: 'languageOnly',
+    // Tells i18next "I know resources: {} is empty — I'll addResourceBundle
+    // later, don't look for a backend plugin and don't flash keys during
+    // changeLanguage." Required when using dynamic imports to fill bundles.
+    partialBundledLanguages: true,
+    react: { useSuspense: false },
     interpolation: { escapeValue: false },
   });
   await packPromise;
