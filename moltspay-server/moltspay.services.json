@@ -12,7 +12,7 @@
       "name": "Detector Membership (Monthly)",
       "description": "Full 25-category GEO check, 20 checks/month",
       "function": "purchaseMembership",
-      "price": 0.60,
+      "price": 9.99,
       "currency": "USDC",
       "input": {
         "user_id": { "type": "number", "required": true },
