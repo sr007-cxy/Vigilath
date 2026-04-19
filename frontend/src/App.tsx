@@ -59,6 +59,12 @@ function App() {
       <ContactModalProvider>
       <TierModalProvider>
       <Router>
+        {/* Outer Suspense covers Header / Footer / Modals for the brief
+            moment during language switch when react-i18next flips "ready"
+            state. Without this, any useTranslation component outside the
+            inner route Suspense would cause the whole tree to unmount
+            (white screen) when suspension bubbles past the Router. */}
+        <Suspense fallback={<PageLoader />}>
         <Header />
         <ContactModal />
         <TierModal />
@@ -98,6 +104,7 @@ function App() {
           </Suspense>
           <Footer />
         </div>
+        </Suspense>
       </Router>
       </TierModalProvider>
       </ContactModalProvider>
