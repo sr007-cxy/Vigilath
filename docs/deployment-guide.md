@@ -5,16 +5,37 @@
 
 ## 一、线上架构
 
-线上一台 EC2（Ubuntu）承载整个站点，按四层组织：
+线上一台 EC2（Ubuntu）承载整个站点，按五层组织：
 
 | 层 | 组件 | 位置 / 端口 |
 |---|---|---|
-| 入口 | nginx | `/etc/nginx/nginx.conf` 内 `server_name www.vigilath.com` 块，listen 80 |
+| DNS / 转发 | GoDaddy Domain Forwarding（apex）+ Route 53 / DNS 别名（www） | `vigilath.com` → GoDaddy 301；`www.vigilath.com` → AWS ALB |
+| 边缘 TLS | AWS Application Load Balancer（ALB） | `vigilath-alb-01-654513483.us-east-1.elb.amazonaws.com`，TLS 终止（ACM 证书：`www.vigilath.com` + SAN `vigilath.com`） |
+| 入口 | nginx | `/etc/nginx/nginx.conf` 内 `server_name www.vigilath.com` 块，listen 80（ALB 内网回源） |
 | 后端 | FastAPI + uvicorn | systemd 服务 `geo-checker.service`，监听 `127.0.0.1:8070` |
 | 支付 | MoltsPayServer (Node.js) | systemd 服务 `moltspay.service`，监听 `127.0.0.1:3010` |
 | 前端 | Vite 构建的 SPA 静态产物 | `/var/www/html/www.vigilath.com/`（属主 `www-data:www-data`） |
 
-HTTPS 在上游（Cloudflare）终止，这台机器的 nginx 只服务明文 80 端口。
+**流量路径**：
+
+- `https://www.vigilath.com/` → AWS ALB 终止 TLS（ACM 证书）→ 明文回源 EC2:80 → nginx → FastAPI / 静态资源
+- `https://vigilath.com/`（apex）→ **GoDaddy Domain Forwarding** 返回 301 → 落到 `www.vigilath.com`（见「已知问题」章节）
+
+本机 nginx 只监听 80，ALB → EC2 之间走私网明文。**没有 Cloudflare**（历史文档曾这样写，已失效）。
+
+### 已知问题：apex 301 降级到 HTTP
+
+`https://vigilath.com/` 的第一跳 301 的 `Location` 是 **http://www.vigilath.com**（明文），本地 nginx 会再 301 把它升回 HTTPS，但浏览器地址栏会瞬闪一下 `http://`。
+
+证据：
+
+- apex DNS 指向 `3.33.251.168 / 15.197.225.128`（GoDaddy 在 AWS 上托管的转发服务）
+- apex HTTPS 证书 issuer 是 **GoDaddy**（不是 ACM），与 ALB 上的 ACM 证书完全不同链路
+- 301 响应头含 `server: ip-10-*.ec2.internal` + ALB 风格 `x-request-id`，明显是 GoDaddy 内部转发服务
+
+修复位置：**GoDaddy 控制台** → My Products → Domains → vigilath.com → Forwarding → Target URL 从 `http://www.vigilath.com` 改成 `https://www.vigilath.com`。
+
+（更彻底的做法：删掉 GoDaddy forwarding，让 apex DNS 直接 Alias 到 ALB，在 ALB 里配 listener rule 做 apex → www 的 HTTPS 301，这样转发行为由我们自己控制。）
 
 ### 后端 systemd 单元
 
@@ -255,16 +276,14 @@ curl -s  https://www.vigilath.com/pay/health | head     # MoltsPayServer 健康
 
 ### 10. 上游缓存
 
-本站**不做 Cloudflare Purge**。原因:
+**当前未接入任何 CDN**(没有 Cloudflare / CloudFront)。ALB 本身不缓存应用响应,所有请求穿透到 EC2 nginx。缓存策略完全由 nginx 的 `Cache-Control` 头和浏览器自身控制:
 
 - `/assets/*` 文件名带 hash(如 `index-5o6adLEE.js`),vite 每次构建出新名,
-  与上一版自动错开;配合服务器端 `Cache-Control: public, immutable, max-age=1y`,
+  与上一版自动错开;配合 nginx 的 `Cache-Control: public, immutable, max-age=1y`,
   旧资源继续被老客户端缓存,新资源靠新 HTML 的新引用自动拉取。
-- `index.html`、`robots.txt`、`sitemap.xml`、`llms.txt` 等非 hash 文件若被上游
-  CDN 缓存,等 TTL 自然过期即可;内容更改频率低,不值得每次发布走 Purge。
+- `index.html`、`robots.txt`、`sitemap.xml`、`llms.txt` 等非 hash 文件:浏览器按默认策略缓存,发布后通常几分钟内刷新生效;不必额外操作。
 
-如果确实需要强制刷新,浏览器侧 `Shift+F5` 即可验证本机;上游 CDN 侧按该服务
-自身控制台的 Purge 操作。
+如果确实需要强制验证本机改动:浏览器 `Shift+F5` / 无痕窗口 / `curl -H 'Cache-Control: no-cache'`。未来接入 Cloudflare 或 CloudFront 后再补 Purge 章节。
 
 ## 四、回滚
 
@@ -400,9 +419,9 @@ curl -s http://localhost:3010/health
 
 ### 前端加载老版本
 
-- Cloudflare 缓存：Purge Everything 或按路径 Purge
-- 浏览器：Shift+F5 强刷
+- 浏览器:Shift+F5 强刷 / 无痕窗口验证
 - 确认 `/var/www/html/www.vigilath.com/assets/` 下带 hash 的文件名和 dist 一致
+- 若已接入 CDN(目前没有):按该 CDN 的 Purge 操作刷新
 
 ### DB schema 不一致 / ORM 报错
 
