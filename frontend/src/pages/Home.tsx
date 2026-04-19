@@ -282,12 +282,15 @@ export function Home() {
       >
         <div className="w-full max-w-5xl mx-auto">
           {/* Logo */}
-          <img
-            src="/image/logo.png"
-            alt="GApex"
-            className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
-            draggable={false}
-          />
+          <picture>
+            <source srcSet="/image/logo.webp" type="image/webp" />
+            <img
+              src="/image/logo.png"
+              alt="GApex"
+              className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
+              draggable={false}
+            />
+          </picture>
 
           {/* Heading */}
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 text-white">

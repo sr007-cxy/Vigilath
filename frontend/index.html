@@ -22,8 +22,10 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="alternate" type="application/xml" title="Sitemap" href="/sitemap.xml" />
 
-  <!-- 预加载首屏 logo(Home.tsx + Header.tsx 都用到,139 KB) -->
-  <link rel="preload" href="/image/logo.png" as="image" type="image/png" />
+  <!-- 预加载首屏 logo 的 webp(46 KB,Home.tsx + Header.tsx 都用到)。
+       带 type="image/webp":不支持 webp 的老浏览器会忽略这条 preload,
+       走 <picture> 里的 PNG fallback,不会重复拉两份。 -->
+  <link rel="preload" href="/image/logo.webp" as="image" type="image/webp" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />

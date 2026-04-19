@@ -136,12 +136,15 @@ export function Header() {
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center" aria-label="GApex">
-            <img
-              src="/image/logo.png"
-              alt="GApex"
-              className="brand-logo h-8 md:h-9 w-auto select-none"
-              draggable={false}
-            />
+            <picture>
+              <source srcSet="/image/logo.webp" type="image/webp" />
+              <img
+                src="/image/logo.png"
+                alt="GApex"
+                className="brand-logo h-8 md:h-9 w-auto select-none"
+                draggable={false}
+              />
+            </picture>
           </Link>
         </div>
 
