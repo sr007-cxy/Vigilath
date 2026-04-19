@@ -303,7 +303,7 @@ const en = {
             "title": "GEO Readiness Checker",
             "description": "Unlock professional GEO & AEO Tools and gain a complete understanding of how AI engines perceive your brand.",
             "placeholder": "example.com",
-            "button": "Start Free Check",
+            "button": "Start Check",
             "analyzing": "Analyzing...",
             "error": {
               "empty": "Please enter a URL",
