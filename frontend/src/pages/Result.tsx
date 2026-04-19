@@ -14,6 +14,7 @@ import { ADVANCED_MODES, type AdvancedMode, type RerunMode } from '../components
 import { ResultPanel as AdvancedResultPanel, type AnyAdvancedResult } from './Advanced';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { exportAdvancedPdfReport } from '../utils/exportAdvancedPdfReport';
+import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 import type { GeoTestResult, CheckResult } from '../types/geo';
 
 /**
@@ -401,18 +402,6 @@ export function Result() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory, lockedCategorySet, i18n.language]);
-
-  const normalizeUrl = (s: string): string =>
-    s.startsWith('http://') || s.startsWith('https://') ? s : `https://${s}`;
-
-  const validateUrl = (s: string): boolean => {
-    try {
-      new URL(normalizeUrl(s));
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   const handleRerunSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

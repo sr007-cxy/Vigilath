@@ -5,6 +5,7 @@ import { useContactModal } from '../components/ContactModalContext';
 import { useTierModal } from '../components/TierModalContext';
 import { useMembership } from '../hooks/useMembership';
 import { PageHead } from '../components/PageHead';
+import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
 
@@ -59,17 +60,6 @@ export function Home() {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
 
-  const validateUrl = (input: string): boolean => {
-    try {
-      // 如果输入没有http/https前缀，自动添加https://
-      const url = input.startsWith('http://') || input.startsWith('https://') ? input : `https://${input}`;
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   // Home doesn't call the API itself — it hands the URL off to the Result
   // page and lets that page own the request lifecycle. This avoids the
   // 499 cascade we saw when users hit back/refresh while Home was still
@@ -87,8 +77,7 @@ export function Home() {
       return;
     }
 
-    const formattedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
-    navigate('/result', { state: { pendingUrl: formattedUrl } });
+    navigate('/result', { state: { pendingUrl: normalizeUrl(url) } });
   };
 
   const handleAdvancedClick = (key: AdvancedKey) => {
@@ -99,10 +88,7 @@ export function Home() {
     // Member — jump straight to the Result page in "empty advanced" mode:
     // the rerun bar is centered, the dropdown is pre-selected to `key`, and
     // running it renders the result inline (no /advanced/{mode} hop).
-    let initialUrl: string | undefined;
-    if (url && validateUrl(url)) {
-      initialUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
-    }
+    const initialUrl = url && validateUrl(url) ? normalizeUrl(url) : undefined;
     navigate('/result', { state: { initialMode: key, initialUrl } });
   };
 

@@ -71,13 +71,15 @@ async def _run_check_or_400(
     """Run `run_geo_check` in a worker thread and translate any unhandled
     failure into a user-friendly 400.
 
-    The checker can blow up in many ways when handed a bogus URL (DNS failure
-    after `sanitize_url` strips non-ASCII to an empty host, empty page, mis-
-    formed HTML, etc.) and leaking "list index out of range" to end users is
-    never useful. We preserve the original exception in the request log's
-    `raw_error` field (request_log overwrites `error` with the re-raised
-    AppException, so we need a distinct key) and surface a canonical English
-    message that the i18n layer localizes for the caller.
+    `validate_url` at the endpoint entry now rejects obviously-bad input
+    (non-ASCII, bad scheme, hostless URLs) before we get here, but the checker
+    can still blow up on a well-formed URL that doesn't actually resolve /
+    returns garbage (DNS failure, timeout, empty body, malformed HTML). Leaking
+    "list index out of range" to end users is never useful, so we preserve the
+    original exception in the request log's `raw_error` field (request_log
+    overwrites `error` with the re-raised AppException, so we need a distinct
+    key) and surface a canonical English message that the i18n layer localizes
+    for the caller.
     """
     try:
         return await asyncio.to_thread(run_geo_check, *args, **kwargs)

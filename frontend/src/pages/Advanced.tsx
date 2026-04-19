@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
 import { geoApi } from '../services/geoApi';
 import { useMembership } from '../hooks/useMembership';
+import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 import { PaymentModal } from '../components/PaymentModal';
 import type {
   AdvancedMode,
@@ -118,15 +119,6 @@ const MODE_VISUALS: Record<AdvancedMode, ModeVisual> = {
   },
 };
 
-function isValidUrl(s: string): boolean {
-  try {
-    new URL(s);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export type AnyAdvancedResult =
   | AeoVisibilityResponse
   | CompareResponse
@@ -206,7 +198,7 @@ export function Advanced() {
         return;
       }
       for (const u of cleaned) {
-        if (!isValidUrl(u)) {
+        if (!validateUrl(u)) {
           setError(t('home.advanced.validation.invalidUrl', { url: u }));
           return;
         }
@@ -221,7 +213,7 @@ export function Advanced() {
         setError(t('home.error.empty', { defaultValue: 'URL is required' }));
         return;
       }
-      if (!isValidUrl(urlInput)) {
+      if (!validateUrl(urlInput)) {
         setError(t('home.error.invalid', { defaultValue: 'Invalid URL format' }));
         return;
       }
@@ -238,7 +230,7 @@ export function Advanced() {
       let data: AnyAdvancedResult;
       if (mode === 'compare') {
         data = await geoApi.runAdvancedCheck('compare', {
-          urls: compareUrls.map((u) => u.trim()).filter(Boolean),
+          urls: compareUrls.map((u) => normalizeUrl(u)).filter(Boolean),
         });
       } else if (mode === 'visibility') {
         const queries = customQueries
@@ -246,7 +238,7 @@ export function Advanced() {
           .map((q) => q.trim())
           .filter(Boolean);
         data = await geoApi.runAdvancedCheck('visibility', {
-          url: urlInput.trim(),
+          url: normalizeUrl(urlInput),
           custom_queries: queries.length ? queries : undefined,
         });
       } else if (mode === 'entity') {
@@ -255,7 +247,7 @@ export function Advanced() {
           entity_type: entityType,
         });
       } else {
-        data = await geoApi.runAdvancedCheck(mode, { url: urlInput.trim() });
+        data = await geoApi.runAdvancedCheck(mode, { url: normalizeUrl(urlInput) });
       }
       setResult(data);
     } catch (err) {
