@@ -60,6 +60,34 @@ def _locked_for(membership: Membership) -> List[str]:
     return [c for c in ALL_CATEGORIES if c not in allowed_set]
 
 
+_BAD_URL_MESSAGE = "Unable to analyze this URL. Please check the address and try again."
+
+
+async def _run_check_or_400(
+    rec: Dict[str, Any],
+    *args,
+    **kwargs,
+) -> GeoTestResult:
+    """Run `run_geo_check` in a worker thread and translate any unhandled
+    failure into a user-friendly 400.
+
+    The checker can blow up in many ways when handed a bogus URL (DNS failure
+    after `sanitize_url` strips non-ASCII to an empty host, empty page, mis-
+    formed HTML, etc.) and leaking "list index out of range" to end users is
+    never useful. We preserve the original exception in the request log's
+    `raw_error` field (request_log overwrites `error` with the re-raised
+    AppException, so we need a distinct key) and surface a canonical English
+    message that the i18n layer localizes for the caller.
+    """
+    try:
+        return await asyncio.to_thread(run_geo_check, *args, **kwargs)
+    except AppException:
+        raise
+    except Exception as exc:
+        rec["raw_error"] = f"{type(exc).__name__}: {exc}"
+        raise AppException(status_code=400, message=_BAD_URL_MESSAGE)
+
+
 def _strip_locked_checks(result: GeoTestResult, locked: List[str]) -> GeoTestResult:
     """Return a copy of `result` with locked categories hidden from `checks`.
 
@@ -254,8 +282,8 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
 
     with request_log("check.anonymous", "default", sanitized_url,
                      anon_id=client_id, tier="free") as rec:
-        result = await asyncio.to_thread(
-            run_geo_check,
+        result = await _run_check_or_400(
+            rec,
             sanitized_url,
             False,   # anonymous callers are always free tier — no fix text
             None,    # no progress_callback
@@ -302,8 +330,8 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
     effective_include_fix = body.include_fix and _fix_allowed(membership)
     with request_log("check.authenticated", "default", sanitized_url,
                      user_id=user_id, tier=membership.slug) as rec:
-        result = await asyncio.to_thread(
-            run_geo_check,
+        result = await _run_check_or_400(
+            rec,
             sanitized_url,
             effective_include_fix,
             None,             # no progress_callback
@@ -346,8 +374,8 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
 
     with request_log("geo.legacy", "default", sanitized_url,
                      anon_id=client_id, tier="free") as rec:
-        result = await asyncio.to_thread(
-            run_geo_check,
+        result = await _run_check_or_400(
+            rec,
             sanitized_url,
             False,   # legacy anonymous alias — free tier, no fix text
             None,    # no progress_callback

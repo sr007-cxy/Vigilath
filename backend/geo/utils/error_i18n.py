@@ -31,6 +31,9 @@ from typing import Dict, Iterable, List, Tuple
 MESSAGES: Dict[str, Dict[str, str]] = {
     # Validation / URL
     "Invalid URL format": {"zh": "URL 格式无效，请输入合法的网址"},
+    "Unable to analyze this URL. Please check the address and try again.": {
+        "zh": "无法分析该网址，请确认输入的地址正确且可访问后重试。"
+    },
 
     # Auth
     "Email already registered": {"zh": "邮箱已被注册"},
