@@ -13,7 +13,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="border-t" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-card)' }}>
+    <footer className="border-t mt-auto" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-card)' }}>
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* Social icons */}
         <div className="flex justify-center gap-4 mb-6">

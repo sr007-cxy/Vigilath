@@ -63,7 +63,7 @@ function App() {
         <Header />
         <ContactModal />
         <TierModal />
-        <div className="pt-16">
+        <div className="pt-16 min-h-screen flex flex-col">
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Home />} />

@@ -26,8 +26,24 @@
 | 19 | Trust & Safety Signals | ✅ DONE |
 | 20 | API & Data Feed Availability | ✅ DONE |
 | 21 | Entity GEO Audit (`--entity`) | ✅ DONE |
+| 22 | Keyword-Input → Entity Mode Upsell | ⬜ Open |
 
-**Remaining open work:** #4 (topical authority / content clusters) and #16 (page-level entity density). Both would need a deeper crawl than the current 5-page `check_multi_page` sample.
+**Remaining open work:** #4 (topical authority / content clusters), #16 (page-level entity density), and #22 (classify brand/product keywords and upsell the Entity GEO mode). #4 and #16 both would need a deeper crawl than the current 5-page `check_multi_page` sample.
+
+## 22. Keyword-Input → Entity Mode Upsell ⬜ Open
+
+When a user types a non-URL (brand / product / person name) on the home page — e.g. "超响应", "Notion", "iPhone 15" — the anonymous check currently fails with a generic "Unable to analyze this URL" error. Detect this case up front and convert the dead-end into a funnel:
+
+- **Classifier** (backend, runs before `sanitize_url`): hostname is empty / has whitespace / has no dot / has a dot but TLD not in Public Suffix List → label `entity_keyword`. Raise `AppException(422, ..., details={"kind": "entity_keyword", "keyword": "<raw>"})`.
+- **Frontend error branch** on `details.kind === "entity_keyword"`:
+  - Free / below-Pro: CTA → open TierModal highlighting the Pro tier
+  - Pro+: CTA → deep-link to `/advanced/entity` with the keyword pre-filled
+  - Always expose a secondary "input a URL instead" link back to `/`
+- **Logging**: `requests.jsonl` records `classified_as: "entity_keyword"` so we can measure CTA conversion.
+
+TLD detection: hard-code a Top-200 public-suffix set to avoid adding `tldextract` as a dependency. IP addresses get a tiny `ipaddress.ip_address()` bypass so `192.168.x.x` stays classified as a URL.
+
+Depends on: existing `error_i18n.localize()` chain, existing `TierModal`, existing `/check/advanced/entity` endpoint (all in place).
 
 ---
 
