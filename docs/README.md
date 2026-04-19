@@ -7,6 +7,7 @@
 | 文档 | 说明 |
 |---|---|
 | ⭐ [deployment-guide.md](./deployment-guide.md) | 线上真实部署指南(www.vigilath.com),含 systemd / nginx / 发布流程 / 回滚 |
+| [cloudflare-migration-plan.md](./cloudflare-migration-plan.md) | Cloudflare CDN 接入方案,分阶段迁移 + 回滚 + apex 301 降级 bug 修复 |
 | [部署文档.md](./部署文档.md) | 早期部署文档,被 `deployment-guide.md` 取代,仅作历史参考 |
 
 ## 架构与规范
