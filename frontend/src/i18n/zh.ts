@@ -303,7 +303,7 @@ const zh = {
             "title": "GEO 检测",
             "description": "解锁专业 GEO & AEO 工具，全面了解 AI 引擎如何感知您的品牌。",
             "placeholder": "example.com",
-            "button": "开始免费检测",
+            "button": "开始检测",
             "analyzing": "分析中...",
             "error": {
               "empty": "请输入 URL",

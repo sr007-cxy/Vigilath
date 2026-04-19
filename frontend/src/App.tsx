@@ -9,7 +9,6 @@ import { ContactModal } from './components/ContactModal';
 import { TierModalProvider } from './components/TierModalContext';
 import { TierModal } from './components/TierModal';
 import { AuthProvider } from './contexts/AuthContext';
-import './i18n';
 
 // Eagerly loaded: Home is the landing page
 import { Home } from './pages/Home';

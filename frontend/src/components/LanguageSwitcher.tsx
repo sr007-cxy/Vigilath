@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { switchLanguage } from '../i18n';
 
 interface LanguageSwitcherProps {
   className?: string;
@@ -8,15 +9,28 @@ interface LanguageSwitcherProps {
 export function LanguageSwitcher({ className = '' }: LanguageSwitcherProps) {
   const { i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   const languages = [
     { code: 'en', name: 'English' },
     { code: 'zh', name: '中文' },
   ];
 
-  const handleLanguageChange = (lang: string) => {
-    i18n.changeLanguage(lang);
-    setIsOpen(false);
+  // switchLanguage awaits target-language pack download before flipping,
+  // so the UI never briefly shows raw translation keys. Lock the dropdown
+  // while in-flight to avoid a double-click landing on two requests.
+  const handleLanguageChange = async (lang: string) => {
+    if (switching || lang === i18n.language) {
+      setIsOpen(false);
+      return;
+    }
+    setSwitching(true);
+    try {
+      await switchLanguage(lang as 'en' | 'zh');
+    } finally {
+      setSwitching(false);
+      setIsOpen(false);
+    }
   };
 
   const getLanguageName = (code: string) => {
