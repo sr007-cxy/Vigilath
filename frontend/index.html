@@ -143,12 +143,43 @@
     /* 隐藏静态 SEO 骨架,避免 React 挂载前出现 FOUC。
        AI 爬虫(GPTBot/ClaudeBot/PerplexityBot 等)不执行 CSS,仍可抓到 #seo-skeleton 内容。 */
     #seo-skeleton { display: none; }
+
+    /* 启动骨架——给真实用户看,消灭手机端 2-3s 白屏。内联 CSS 与 HTML
+       同步到达,不等主 bundle;React createRoot.render 挂载 <App /> 时会把
+       #root 下的所有内容(包括这个骨架和上面的 SEO 骨架)一起替换,无需
+       手动清理。 */
+    #app-boot-skeleton { min-height: 100vh; display: flex; flex-direction: column; }
+    #app-boot-skeleton .sk-header {
+      height: 64px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    #app-boot-skeleton .sk-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #app-boot-skeleton .sk-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-top-color: #0ea5e9;
+      border-radius: 50%;
+      animation: sk-spin 1s linear infinite;
+    }
+    @keyframes sk-spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 
 <body>
-  <!-- Static SEO skeleton — React replaces this on mount. -->
+  <!-- #root 下有两个兄弟骨架,React createRoot.render 挂载时整块替换:
+       - #app-boot-skeleton:对人类可见,头部条 + 中央 spinner,消除白屏
+       - #seo-skeleton:对人类 display:none,给不跑 JS 的 AI 爬虫抓语义内容 -->
   <div id="root">
+    <div id="app-boot-skeleton" role="status" aria-label="Loading">
+      <div class="sk-header" aria-hidden="true"></div>
+      <div class="sk-center" aria-hidden="true"><div class="sk-spinner"></div></div>
+    </div>
     <div id="seo-skeleton">
     <header>
       <nav aria-label="Primary">
