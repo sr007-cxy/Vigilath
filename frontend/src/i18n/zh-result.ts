@@ -85,7 +85,9 @@ const zhResult = {
                 "wildcard_blocks_all": "通配符 user-agent 阻止了所有爬虫（Disallow: /）",
                 "bots_blocked": "以下 AI 爬虫被显式屏蔽：{{bots}}",
                 "bots_with_directives": "有显式规则（未屏蔽）的 AI 爬虫：{{bots}}",
-                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}"
+                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}",
+                "ai_txt_found": "找到 {{path}} — 已声明 AI 爬虫策略",
+                "ai_txt_not_found": "未找到 ai.txt 或 .well-known/ai.txt — 这是一项新兴的 AI 专属策略标准"
               },
               "llms": {
                 "found": "找到 {{filename}}（{{lines}} 行，{{bytes}} 字节）",
@@ -126,7 +128,9 @@ const zhResult = {
                 "lang_declared": "已声明语言：{{lang}}",
                 "lang_missing": "<html> 没有 lang 属性——有助于 AI 引擎判断内容语言",
                 "hreflang_found": "找到 hreflang 标签：{{langs}}",
-                "hreflang_missing": "没有 hreflang 标签——如果是多语言站点请补上"
+                "hreflang_missing": "没有 hreflang 标签——如果是多语言站点请补上",
+                "twitter_cards_found": "找到 Twitter Card 标签：{{tags}}",
+                "twitter_cards_missing": "缺少 Twitter Card 标签：{{missing}} — 有助于改善 X/Twitter 链接预览"
               },
               "mobile": {
                 "fetch_failed": "无法抓取首页",
@@ -146,7 +150,12 @@ const zhResult = {
                 "fetch_failed": "无法抓取首页",
                 "jsonld_found": "找到 {{count}} 个 JSON-LD 结构化数据块",
                 "jsonld_missing": "没有 JSON-LD 结构化数据——有助于 AI 引擎理解你的内容",
-                "schema_ref_only": "找到 schema.org 引用（可能是 microdata 或 RDFa）"
+                "schema_ref_only": "找到 schema.org 引用（可能是 microdata 或 RDFa）",
+                "granular_types": "存在精细化 schema 类型：{{types}}",
+                "generic_only": "仅有通用 schema 类型（{{types}}）——建议添加更精细的类型以便 AI 引擎提取更多信息",
+                "nonstandard_types": "检测到非标准 @type——建议使用 schema.org 精细化类型",
+                "product_reviews": "Product schema 包含评论/评分——强 AI 信号",
+                "product_no_reviews": "Product schema 存在但缺少 review/aggregateRating 字段"
               },
               "content_access": {
                 "fetch_failed": "无法抓取首页",
@@ -204,7 +213,11 @@ const zhResult = {
                 "sources_missing": "没有明确的来源引用——引用来源会增加 AI 对内容的信任",
                 "lists_good": "找到结构化列表（{{lists}} 个列表，{{items}} 项）",
                 "lists_few": "列表内容较少（{{items}} 项）——结构化列表有助于 AI 提取要点",
-                "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点"
+                "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点",
+                "first_para_good": "首段（{{words}} 字）包含可提取的事实：{{facts}}",
+                "first_para_length": "首段有事实要点（{{facts}}），但字数为 {{words}}——建议 25–120 字",
+                "first_para_no_facts": "首段（{{words}} 字）缺少可提取的事实——建议在开头添加定义或关键数据",
+                "first_para_missing": "无法识别实质性首段——AI 引擎依赖页面前部内容进行信息提取"
               },
               "tech_crawl": {
                 "fetch_failed": "无法抓取首页",
@@ -221,7 +234,12 @@ const zhResult = {
                 "http_unknown": "无法确定 HTTP 版本",
                 "feed_declared": "找到 RSS/Atom feed：{{feeds}}",
                 "feed_found_at_path": "在 {{path}} 找到 feed",
-                "feed_missing": "没有找到 RSS/Atom feed——feed 有助于 AI 引擎监控内容更新"
+                "feed_missing": "没有找到 RSS/Atom feed——feed 有助于 AI 引擎监控内容更新",
+                "feed_full_content": "Feed 提供完整内容（平均每条 {{avg_words}} 字）——对 AI 友好",
+                "feed_excerpts": "Feed 仅提供摘要（平均每条 {{avg_words}} 字）——建议输出完整内容",
+                "feed_headlines_only": "Feed 条目非常短（平均 {{avg_words}} 字）——基本只有标题",
+                "machine_readable": "机器可读/集成端点：{{paths}}",
+                "no_machine_readable": "未检测到 API / 集成 / Webhook 文档"
               },
               "authority": {
                 "fetch_failed": "无法抓取首页",
@@ -233,7 +251,13 @@ const zhResult = {
                 "author_jsonld": "结构化数据（JSON-LD）中有作者信息",
                 "author_meta": "meta/link 标签中有作者信息",
                 "author_class_only": "HTML 中检测到 author class——建议添加 schema.org Person 标记",
-                "author_missing": "没有作者署名——作者信号会提升 AI 信任度（E-E-A-T）"
+                "author_missing": "没有作者署名——作者信号会提升 AI 信任度（E-E-A-T）",
+                "bio_page_found": "在 {{path}} 找到个人介绍/关于页面",
+                "credentials_found": "个人介绍中的资质信号：{{credentials}}",
+                "credentials_weak": "个人介绍页缺少资质描述——建议补充学历、经验等信息",
+                "external_bylines": "外部署名/资料链接：{{bylines}}",
+                "no_external_bylines": "个人介绍页未检测到外部署名链接",
+                "no_bio_page": "未找到作者介绍 / 关于我们 / 团队页面"
               },
               "ai_opt": {
                 "fetch_failed": "无法抓取首页",
@@ -244,7 +268,12 @@ const zhResult = {
                 "brand_sparse": "品牌实体「{{name}}」存在但使用偏少——一致命名有助于 AI 实体识别",
                 "brand_unknown": "无法确定主要品牌/实体名称",
                 "api_endpoint_found": "找到机器可读端点：{{path}}",
-                "api_endpoint_missing": "没有公开 API 端点——可选，但有助于 AI 系统访问结构化数据"
+                "api_endpoint_missing": "没有公开 API 端点——可选，但有助于 AI 系统访问结构化数据",
+                "sitemap_cadence": "Sitemap 含 {{total}} 条 <lastmod>（中位更新天数：{{median_days}} 天，{{fresh_90}}/{{count}} 在过去 90 天内更新）",
+                "cadence_healthy": "全站更新节奏健康",
+                "cadence_moderate": "更新节奏中等——不到一半页面在过去 90 天内更新",
+                "cadence_low": "更新节奏偏低——大多数页面已过时（中位 {{median_days}} 天）",
+                "cadence_unknown": "无法分析全站更新节奏（sitemap 中没有可解析的 <lastmod>）"
               },
               "social": {
                 "fetch_failed": "无法抓取首页",
@@ -267,7 +296,10 @@ const zhResult = {
                 "proscons_found": "检测到优劣 / pros-cons 内容",
                 "proscons_missing": "没有检测到优劣结构",
                 "summary_found": "找到摘要/关键要点区块——AI 引擎偏好简明摘要",
-                "summary_missing": "没有关键要点或 TL;DR 区块"
+                "summary_missing": "没有关键要点或 TL;DR 区块",
+                "question_headings_strong": "{{count}} 个问句式标题——对话式搜索就绪度高",
+                "question_headings_few": "仅 {{count}} 个问句式标题——建议增加更多以匹配对话式查询",
+                "question_headings_none": "未检测到问句式标题——对话式搜索就绪度低"
               },
               "platform_reg": {
                 "fetch_failed": "无法抓取首页",
@@ -322,7 +354,11 @@ const zhResult = {
                 "tables_no_headers": "找到 {{count}} 个表格但都缺少 <thead>/<th> header",
                 "no_tables": "首页没有表格",
                 "definition_markup": "找到定义标记：{{dfn}} 个 <dfn>、{{abbr}} 个 <abbr>",
-                "no_definition_markup": "没有 <dfn> 或 <abbr>——建议用它们标记技术术语和缩写"
+                "no_definition_markup": "没有 <dfn> 或 <abbr>——建议用它们标记技术术语和缩写",
+                "multi_format_coverage": "多格式覆盖：{{formats}}",
+                "multi_format_strong": "{{count}} 种内容格式——AI 触达面广",
+                "multi_format_limited": "仅检测到 {{count}} 种非文本格式——更多格式 = 更大的 AI 触达面",
+                "multi_format_none": "未检测到非文本格式——内容仅有纯文本"
               },
               "multilingual": {
                 "fetch_failed": "无法抓取首页",
@@ -353,7 +389,32 @@ const zhResult = {
                 "missing_og": "{{count}} 个页面缺少 Open Graph 标签：",
                 "missing_alt_text": "{{count}} 个页面大多数图片缺少 alt 文本：",
                 "duplicate_descriptions": "跨页面存在重复的 meta description：",
+                "duplicate_titles": "跨页面存在重复的 <title> 标签：",
+                "content_overlap": "页面间存在内容重叠 / 可能的关键词蚕食：",
                 "all_good": "所有采样页面都保持一致的 GEO 标准"
+              },
+              "brand_kg": {
+                "wikipedia_found": "找到 Wikipedia 页面：\"{{title}}\"",
+                "wikipedia_not_found": "未找到 \"{{brand}}\" 的 Wikipedia 页面",
+                "wikidata_found": "找到 Wikidata 实体：{{id}}",
+                "wikidata_not_found": "未找到 \"{{brand}}\" 的 Wikidata 实体",
+                "backlinks_strong": "Wikipedia 反向链接：{{count}}+ 个页面指向该实体——权威度强",
+                "backlinks_moderate": "Wikipedia 反向链接：{{count}} 个页面指向该实体",
+                "backlinks_weak": "仅 {{count}} 条 Wikipedia 反向链接——实体已被识别但较小众"
+              },
+              "trust_safety": {
+                "fetch_failed": "无法抓取首页",
+                "privacy_found": "找到隐私政策页面：{{path}}",
+                "privacy_missing": "未检测到隐私政策页面",
+                "terms_found": "找到服务条款页面：{{path}}",
+                "terms_missing": "未检测到服务条款页面",
+                "contact_found": "找到联系页面：{{path}}",
+                "contact_missing": "未检测到联系页面",
+                "legal_found": "找到法律/DMCA/印记页面：{{path}}",
+                "legal_missing": "未检测到 DMCA / 法律 / 印记页面",
+                "identity_strong": "页脚/结构化数据中有完善的商业身份信息：{{signals}}",
+                "identity_partial": "部分商业身份信息：{{signals}}",
+                "identity_missing": "未找到商业身份信号（邮箱、电话、地址或法律实体）"
               }
             },
             "fixes": {
@@ -361,7 +422,9 @@ const zhResult = {
                 "add_brand_meta": "通过以下方式让品牌名易于被发现：\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\n并在 <title> 中统一使用 'Brand — Page Title' 格式。",
                 "add_freshness": "添加新鲜度信号，让 AI 引擎判断内容是否最新：\n  1. 在 JSON-LD 中加入 \"dateModified\": \"2025-01-15\"\n  2. 使用 <time> 标签：<time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. 在服务器响应中设置 Last-Modified 头",
                 "unify_brand_name": "在所有位置使用同一个品牌名。确保 og:site_name、<title> 后缀、\nJSON-LD Organization 中的 name 完全一致。\n请从下列名称中选定一个：{names}",
-                "use_brand_consistently": "在页面内容中更稳定地使用品牌名 \"{name}\"。\n在标题、开头段落和结构化数据中提及该名称，以强化实体识别。"
+                "use_brand_consistently": "在页面内容中更稳定地使用品牌名 \"{name}\"。\n在标题、开头段落和结构化数据中提及该名称，以强化实体识别。",
+                "increase_cadence": "提高内容更新频率。AI 引擎偏好定期更新的站点——\n长期不更新的页面会逐渐退出训练窗口和检索索引。",
+                "refresh_stale_content": "大部分内容已数月未更新。请定期刷新高价值页面\n（更新数据、补充新案例、更新 dateModified），让 AI 引擎看到持续维护。"
               },
               "answer_format": {
                 "add_comparison_tables": "在合适的位置加入对比表格（价格、功能、对标竞品）：\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI 引擎在对比类回答中常常引用表格数据。",
@@ -369,13 +432,18 @@ const zhResult = {
                 "add_proscons": "为产品、服务或对比内容添加优缺点段落：\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI 引擎在推荐类回答中常引用平衡的优缺点。",
                 "add_steps": "在合适的位置加入编号步骤说明：\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI 引擎在 'how to' 类查询中会优先呈现分步内容。",
                 "add_summary": "在页面靠前或靠后位置加入 'Key Takeaways' 或 'TL;DR' 区块：\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI 引擎在生成快速回答时常引用摘要段落。",
-                "add_table_headers": "为表格补齐表头：\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI 引擎会从结构良好的表格中抽取对比答案。"
+                "add_question_headings": "添加更多问句式标题以匹配用户向 AI 引擎提问的方式：\n  <h2>什么是 GEO？</h2>\n  <h2>如何为 AI 搜索做优化？</h2>\n  <h2>为���么 GEO 很重要？</h2>\n每个问题后紧跟简短直接的回答，便于 AI 引擎提取。",
+                "add_question_headings_intro": "添加问句式标题，让 AI 引擎能将对话式查询匹配到你的内容：\n  <h2>什么是 GEO？</h2>\n  <h3>这是如何运作的？</h3>\n围绕 谁/什么/如何/为什么 组织的页面在 AI 答案中排名更高。",
+                "add_table_headers": "为表格补���表头：\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI 引擎会从结构良好的表格中抽取对比答案。"
               },
               "authority": {
                 "add_author": "添加作者信息以增强 E-E-A-T 信号：\n  1. 添加 <meta name=\"author\" content=\"Author Name\">\n  2. 或在 JSON-LD 中添加 author 字段：\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. 博客文章应在页面可见处展示作者姓名、简介与资历。",
                 "add_humans_txt": "在站点根目录创建 humans.txt 表明作者身份：\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\n完整规范见 humanstxt.org。",
                 "add_security_headers": "在服务器配置中补齐安全响应头：\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY",
                 "add_security_headers_nginx": "为响应添加安全头部，Nginx 示例：\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;",
+                "strengthen_bio": "用显式的 E-E-A-T 信号强化个人介绍/关于页面：\n  • 学历与资质（博士、认证等）\n  • 工作年限与职位\n  • 知名前任雇主或合作方\n  • 外部署名文章、出版物或媒体报道",
+                "add_external_bylines": "在个人介绍/关于页面中链接外部署名（Medium、Substack、行业媒体、Google Scholar、ORCID）。\n独立第三方署名比自我声明具有更强的 E-E-A-T 权重。",
+                "create_about_page": "创建一个内容丰富的 /about 或 /team 页面（200 字以上），\n说明站点背后的团队：真实姓名、资质、照片、联系方式和外部资料链接。\nAI 引擎对匿名站点的 E-E-A-T 评分较低。",
                 "upgrade_author_jsonld": "用 JSON-LD 结构化数据完善作者信息：\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }"
               },
               "content_access": {
@@ -392,6 +460,9 @@ const zhResult = {
                 "add_faq_section": "建议为页面添加 FAQ 区块，问题用标题表示：\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\n再为每个问答对补充 FAQPage JSON-LD 结构化数据。",
                 "add_lists": "使用结构化列表，便于 AI 提取关键信息：\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\n步骤/流程使用 <ol>，特性/优势使用 <ul>。",
                 "add_statistics": "在内容中加入可被引用的具体数据：\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI 引擎更倾向于引用具体数据而不是模糊表述。",
+                "tighten_first_para": "将开头段落精炼至 25–120 字，便于 AI 引擎将其作为摘要直接引用。",
+                "frontload_facts": "在首段前置事实，便于 AI 引擎直接提取：\n  '生成式引擎优化（GEO）是为 AI 搜索引擎优化网页内容的实践。\n   超过 70% 的搜索用户在点击链接之前会先咨询 AI 助手。'\n目标：首段 25–120 字内至少包含一句定义和一条具体数据。",
+                "add_opening_para": "在页面主体（<main> 或 <article>）的靠前位置放置一个实质性的开头段落，\n用定义和/或具体数字回答「这个页面关于什么？」。",
                 "simplify": "简化内容，提高 AI 可读性：\n  1. 使用更短的句子（20 个单词以内）\n  2. 用通俗表达替代专业术语\n  3. 将复杂概念拆分为列表条目\n  4. 优先使用主动语态\n  5. 控制在 8–10 年级阅读水平"
               },
               "crawl_ready": {
@@ -432,7 +503,8 @@ const zhResult = {
                 "add_lang": "为 <html> 标签添加 lang 属性：\n  <html lang=\"en\">",
                 "add_og": "在 <head> 中添加 Open Graph meta 标签：\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />",
                 "add_title": "在 <head> 中添加 <title> 标签：\n  <title>Your Page Title — Your Brand</title>\n建议控制在 60 字符内，并包含主要关键词。",
-                "expand_description": "将 meta description 扩展至 120–160 字符，包含明确的价值主张和主要关键词。"
+                "expand_description": "将 meta description 扩展至 120–160 字符，包含明确的价值主张和主要关键词。",
+                "add_twitter_cards": "在 <head> 中添加 Twitter Card meta 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
               },
               "mobile": {
                 "add_cache_headers": "添加缓存响应头以提升重复抓取效率：\n  Cache-Control: public, max-age=3600\n  ETag:（多数服务器会自动生成）\n这能让 AI 爬虫使用条件请求（If-None-Match），\n避免重复下载未变更页面。",
@@ -446,6 +518,8 @@ const zhResult = {
                 "boost_google_authority": "提升 Google 权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建 Wikipedia 词条\n  - 创建 Wikidata 实体并通过 sameAs 关联\n  - 认领 Google Business Profile\n  - 从权威域名获取高质量反向链接",
                 "common_crawl_inbound_links": "Common Crawl 尚未抓取你的站点。\n对新站或小站这是正常现象。可通过获取更多反向链接来提升被发现的概率。",
                 "duplicate_descriptions": "为每个页面撰写独立的 meta description。重复的描述会让\nAI 引擎在引用时无法判断哪一个页面与主题更相关。",
+                "duplicate_titles": "为每个页面撰写独立的 <title>。重复的标题会导致关键词蚕食——\nAI 引擎无法判断对于给定查询应该引用哪个页面。",
+                "content_overlap": "两个或多个页面覆盖高度重叠的主题。\n可选方案：\n  1. 合并为一个权威页面，其余页面 301 重定向。\n  2. 为每个页面赋予不同角度、示例和关键词加以区分。\n  3. 使用 rel=canonical 将近似重复页指向主页面。\n关键词蚕食会削弱 AI 可见性——选出最强的那个页面来展示。",
                 "increase_platform_presence": "扩大在权威平台上的存在感：\n  - 创建公司 Crunchbase 资料\n  - 维护活跃的 GitHub 组织\n  - 如适用，向 npm/PyPI 发布开源包\n  - 在 Hacker News 上发布 Show HN 帖\n  - 提交到创业公司目录（Product Hunt、AngelList/Wellfound）\n  - 争取出现在行业媒体和对比类文章中",
                 "list_review_platforms": "在评测平台上架产品以累积信任信号：\n  - Trustpilot（https://business.trustpilot.com）——通用评测\n  - G2（https://sell.g2.com）——B2B/SaaS 评测\n  - Product Hunt（https://producthunt.com）——发布与曝光\n  - Capterra（https://capterra.com）——软件评测\n再为站点添加 AggregateRating 结构化数据，以便在搜索结果中展示星级。",
                 "low_word_count": "正文不足 100 字的页面内容过少，无法满足 AI 引擎需求。请补充实质性、独特的文本。",
@@ -466,6 +540,18 @@ const zhResult = {
                 "expand_alt_pages": "其它语言页面内容过少。请确保翻译完整，而不是占位或机器翻译片段；\nAI 引擎可能会跳过内容过薄的多语言页面。",
                 "fix_hreflang": "修复失效的 hreflang URL——它们当前返回错误。要么创建对应页面，\n要么移除 hreflang 标签，避免误导 AI 爬虫。"
               },
+              "brand_kg": {
+                "create_wikipedia": "Wikipedia 页面是 AI 引擎最强的实体信号之一。如果你的品牌具有足够知名度，\n请争取在新闻/行业媒体获得独立报道，然后按照 Wikipedia 的关注度指南提交。\n切勿自行编写——会被标记为利益冲突。",
+                "create_wikidata": "Wikidata 可免费编辑，AI 引擎（尤其是 Google 知识图谱）会大量引用。\n在 https://www.wikidata.org/wiki/Special:NewItem 创建条目，填写：\n  • 标签 + 描述\n  • instance of (P31) — 如 'business'\n  • official website (P856) — 你的域名\n  • sameAs 链接到社交资料"
+              },
+              "trust_safety": {
+                "add_privacy": "在 /privacy（或 /privacy-policy）发布隐私政策。AI 引擎将缺少隐私政策\n视为信任红旗——GDPR、CCPA 和大多数广告网络均要求提供。",
+                "add_terms": "在 /terms 发布服务条款。这是 AI 引擎和搜索平台\n对正规站点的基本信任要求。",
+                "add_contact": "添加 /contact 页面，至少包含邮箱地址和/或表单。AI 引擎\n在信任敏感查询中对有明确联系方式的站点给予更高排名。",
+                "add_legal": "添加 /dmca 或 /legal 页面。在欧盟 'Impressum'（印记）是法律要求；\n其他地区 DMCA 代理页面可保护你免受版权侵权责任，同时提升信任度。",
+                "add_identity_signals": "补充缺失的信任信号，让 AI 引擎能验证站点运营者身份。",
+                "add_business_identity": "AI 引擎无法验证谁在运营此站点。请在页脚和/或 Organization JSON-LD 中添加：\n  • 实际地址（schema.org PostalAddress）\n  • 联系邮箱和电话（contactPoint）\n  • 法律实体后缀（LLC / Inc / Ltd / GmbH）及注册号（如适用）"
+              },
               "outbound": {
                 "add_authoritative_links": "在合适位置链接权威外部资源（学术论文、.gov/.edu 站点、行业标准）。\n指向权威来源的外链会向 AI 引擎传递「内容研究充分」的信号。",
                 "add_dfn_abbr": "为关键术语与缩写添加语义标记：\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\n这能帮助 AI 引擎理解并定义内容中的术语。",
@@ -473,13 +559,16 @@ const zhResult = {
                 "add_table_headers_semantic": "为表格添加语义化表头，便于 AI 提取：\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>",
                 "add_table_thead": "为所有数据表格添加 <thead> 与 <th>：\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>",
                 "add_video_schema": "为视频内容添加 VideoObject 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>",
-                "add_video_transcripts": "为视频内容添加文字转录，便于 AI 爬虫索引语音内容。\n将转录文本放在视频下方可见区域。"
+                "add_video_transcripts": "为视频内容添加文字转录，便于 AI 爬虫索引语音内容。\n将转录文本放在视频下方可见区域。",
+                "diversify_formats": "丰富内容格式，让 AI 引擎在更多场景接触到你的品牌：\n  • 播客（音频转���可被 ChatGPT、Perplexity 索引）\n  • PDF 白皮书（可被引用的文档）\n  • 信息图（配合描述�� alt 文本）\n  • SlideShare / Speaker Deck 上的演示文稿\n  • 配有转写的视频",
+                "add_alt_format": "至少添加一种替代格式（配转写的视频、播客、PDF 或信息图）。\n每种格式为 AI 引擎开辟一条新的检索通道。"
               },
               "robots": {
                 "add_sitemap_directive": "在 robots.txt 中添加 Sitemap 指令：\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "create": "在站点根目录创建 robots.txt 文件。\n最简示例：\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行 GPTBot 示例：\n  User-agent: GPTBot\n  Allow: /",
-                "unblock_wildcard": "如果希望 AI 爬虫索引站点，请将 'User-agent: *' 下的 'Disallow: /' 改为 'Allow: /'。\n如需限制特定 bot，可以单独配置规则而不是整体禁用。"
+                "unblock_wildcard": "如果希望 AI 爬虫索引站点，请将 'User-agent: *' 下的 'Disallow: /' 改为 'Allow: /'。\n如需限制特定 bot，可以单独配置规则而不是整体禁用。",
+                "add_ai_txt": "建议在站点根目录添加 ai.txt 文件（规范：spawning.ai/ai-txt），\n独立于 robots.txt 声明 AI 爬虫策略。"
               },
               "schema_kb": {
                 "add_breadcrumb_schema": "为 HTML 面包屑添加配套的 BreadcrumbList 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
@@ -503,6 +592,8 @@ const zhResult = {
                 "add_twitter_card": "在 <head> 中添加 Twitter card 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
               },
               "structured": {
+                "add_product_reviews": "为 Product schema 添加评论和综合评分：\n  \"aggregateRating\": {\"@type\": \"AggregateRating\", \"ratingValue\": \"4.6\", \"reviewCount\": \"128\"},\n  \"review\": [{\"@type\": \"Review\", \"author\": ..., \"reviewRating\": ...}]",
+                "upgrade_to_granular": "将通用的 WebPage/CreativeWork 升级为精细化类型：\n  • 教程内容 → HowTo + 步骤列表\n  • 问答页面 → FAQPage + Question/Answer 对\n  • 产品页面 → Product + offers + aggregateRating\n  • 文章页面 → NewsArticle 或 BlogPosting\n精细化类型让 AI 引擎能提取更丰富的信息。",
                 "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 Google Rich Results Test 校验：https://search.google.com/test/rich-results"
               },
               "tech_crawl": {
@@ -510,7 +601,10 @@ const zhResult = {
                 "broken_canonical": "canonical URL {canonical_url} 已失效。请修复目标页面，或将 canonical 更新为可访问的 URL。",
                 "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 Cloudflare 等 CDN 自动启用 HTTP/2。",
                 "fix_canonical_chain": "修复 canonical 链——每个页面的 canonical 应直接指向最终 URL，而不是经过中间跳转。\n将各页面的 canonical 设置为自身 URL 或最终目标。",
-                "reduce_redirects": "将重定向链压缩为单跳（A -> B，而不是 A -> B -> C -> D）。\n更新服务器配置，直接重定向到最终 URL。"
+                "reduce_redirects": "将重定向链压缩为单跳（A -> B，而不是 A -> B -> C -> D）。\n更新服务器配置，直接重定向到最终 URL。",
+                "feed_full_content": "在 feed 中发布完整内容而非摘要。AI 代理更倾向直接提取完整文本，\n无需逐条跟随链接抓取。",
+                "feed_expand_content": "你的 feed 仅发布标题/片段。请切换到完整内容，\n让 AI 代理和聚合器无需抓取 HTML 即可索引实际文章。",
+                "add_api_docs": "发布机器可读的数据 feed 和集成文档，让 AI 代理能以编程方式消费你的数据\n（如 /openapi.json、/api/v1、/developers）。"
               },
               "url_norm": {
                 "lowercase_url": "确保服务器对 URL 大小写做归一化（统一为小写）。Nginx 示例：\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }",
@@ -595,7 +689,9 @@ const zhResult = {
               "Outbound Links & Media": "出站链接与媒体",
               "Multilingual Content Depth": "多语言内容深度",
               "Cross-Platform Content Distribution": "跨平台内容分发",
-              "Multi-Page Sampling": "多页面采样"
+              "Multi-Page Sampling": "多页面采样",
+              "Brand Entity KG": "品牌实体与知识图谱",
+              "Trust & Safety": "信任与安全信号"
             },
             "header": {
               "rerunPlaceholder": "输入新的 URL 重新检测",

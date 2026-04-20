@@ -85,7 +85,9 @@ const enResult = {
                 "wildcard_blocks_all": "Wildcard user-agent blocks all crawlers (Disallow: /)",
                 "bots_blocked": "AI bots explicitly BLOCKED: {{bots}}",
                 "bots_with_directives": "AI bots with directives (not blocked): {{bots}}",
-                "bots_inherit_wildcard": "AI bots not mentioned (inherit wildcard rules): {{bots}}"
+                "bots_inherit_wildcard": "AI bots not mentioned (inherit wildcard rules): {{bots}}",
+                "ai_txt_found": "{{path}} found — strategic AI crawler policy declared",
+                "ai_txt_not_found": "No ai.txt or .well-known/ai.txt found — emerging standard for AI-specific policies"
               },
               "llms": {
                 "found": "{{filename}} found ({{lines}} lines, {{bytes}} bytes)",
@@ -126,7 +128,9 @@ const enResult = {
                 "lang_declared": "Language declared: {{lang}}",
                 "lang_missing": "No lang attribute on <html> — helps AI engines understand content language",
                 "hreflang_found": "Hreflang tags found for: {{langs}}",
-                "hreflang_missing": "No hreflang tags — add these if your site supports multiple languages"
+                "hreflang_missing": "No hreflang tags — add these if your site supports multiple languages",
+                "twitter_cards_found": "Twitter Card tags present: {{tags}}",
+                "twitter_cards_missing": "Missing Twitter Card tags: {{missing}} — improves X/Twitter link previews"
               },
               "mobile": {
                 "fetch_failed": "Could not fetch homepage",
@@ -146,7 +150,12 @@ const enResult = {
                 "fetch_failed": "Could not fetch homepage",
                 "jsonld_found": "Found {{count}} JSON-LD block(s)",
                 "jsonld_missing": "No JSON-LD structured data found — helps AI engines understand your content",
-                "schema_ref_only": "schema.org references found (possibly microdata or RDFa)"
+                "schema_ref_only": "schema.org references found (possibly microdata or RDFa)",
+                "granular_types": "Granular schema types present: {{types}}",
+                "generic_only": "Only generic schema types found ({{types}}) — add granular types for richer AI extraction",
+                "nonstandard_types": "Non-standard @types detected — consider using schema.org granular types",
+                "product_reviews": "Product schema includes reviews/ratings — strong AI signal",
+                "product_no_reviews": "Product schema present but no review/aggregateRating field"
               },
               "content_access": {
                 "fetch_failed": "Could not fetch homepage",
@@ -204,7 +213,11 @@ const enResult = {
                 "sources_missing": "No explicit source attributions — citing sources increases AI trust in your content",
                 "lists_good": "Structured lists found ({{lists}} lists, {{items}} items)",
                 "lists_few": "Some list content ({{items}} items) — structured lists help AI extract key points",
-                "lists_missing": "No list elements — structured lists help AI engines extract key points"
+                "lists_missing": "No list elements — structured lists help AI engines extract key points",
+                "first_para_good": "First paragraph ({{words}} words) contains extractable facts: {{facts}}",
+                "first_para_length": "First paragraph has facts ({{facts}}) but is {{words}} words — aim for 25-120",
+                "first_para_no_facts": "First paragraph ({{words}} words) lacks extractable facts — add a definition or key statistic up front",
+                "first_para_missing": "Could not identify a substantive first paragraph — AI engines rely on early content for extraction"
               },
               "tech_crawl": {
                 "fetch_failed": "Could not fetch homepage",
@@ -221,7 +234,12 @@ const enResult = {
                 "http_unknown": "Could not determine HTTP version",
                 "feed_declared": "RSS/Atom feed(s) found: {{feeds}}",
                 "feed_found_at_path": "Feed found at {{path}}",
-                "feed_missing": "No RSS/Atom feed found — feeds help AI engines monitor content freshness"
+                "feed_missing": "No RSS/Atom feed found — feeds help AI engines monitor content freshness",
+                "feed_full_content": "Feed provides full content (avg {{avg_words}} words/item) — AI-friendly",
+                "feed_excerpts": "Feed provides excerpts (avg {{avg_words}} words/item) — consider full content",
+                "feed_headlines_only": "Feed items are very short (avg {{avg_words}} words) — mostly headlines",
+                "machine_readable": "Machine-readable / integration endpoints: {{paths}}",
+                "no_machine_readable": "No API / integration / webhook documentation detected"
               },
               "authority": {
                 "fetch_failed": "Could not fetch homepage",
@@ -233,7 +251,13 @@ const enResult = {
                 "author_jsonld": "Author markup found in structured data (JSON-LD)",
                 "author_meta": "Author information found (meta/link tag)",
                 "author_class_only": "Author class detected in HTML — consider adding schema.org Person markup",
-                "author_missing": "No author attribution found — authorship signals boost AI trust (E-E-A-T)"
+                "author_missing": "No author attribution found — authorship signals boost AI trust (E-E-A-T)",
+                "bio_page_found": "Bio/about page found at {{path}}",
+                "credentials_found": "Credential signals in bio: {{credentials}}",
+                "credentials_weak": "Bio page has little credential language — add credentials/experience",
+                "external_bylines": "External byline/profile links: {{bylines}}",
+                "no_external_bylines": "No external bylines detected on bio page",
+                "no_bio_page": "No author bio / about / team page found"
               },
               "ai_opt": {
                 "fetch_failed": "Could not fetch homepage",
@@ -244,7 +268,12 @@ const enResult = {
                 "brand_sparse": "Brand entity \"{{name}}\" found but used sparingly — consistent naming helps AI entity recognition",
                 "brand_unknown": "Could not determine primary brand/entity name",
                 "api_endpoint_found": "Machine-readable endpoint found: {{path}}",
-                "api_endpoint_missing": "No public API endpoints found — optional, but helps AI systems access structured data"
+                "api_endpoint_missing": "No public API endpoints found — optional, but helps AI systems access structured data",
+                "sitemap_cadence": "Sitemap contains {{total}} <lastmod> entries (median age: {{median_days}} days, {{fresh_90}}/{{count}} updated in last 90d)",
+                "cadence_healthy": "Healthy sitewide update cadence",
+                "cadence_moderate": "Moderate cadence — less than half of pages updated in the last 90 days",
+                "cadence_low": "Low cadence — most pages are stale (median {{median_days}} days old)",
+                "cadence_unknown": "Could not analyze sitewide update cadence (no parseable <lastmod> in sitemap)"
               },
               "social": {
                 "fetch_failed": "Could not fetch homepage",
@@ -267,7 +296,10 @@ const enResult = {
                 "proscons_found": "Pros/cons or advantages/disadvantages content detected",
                 "proscons_missing": "No pros/cons pattern detected",
                 "summary_found": "Summary/key takeaways section found — AI engines prefer concise summaries",
-                "summary_missing": "No key takeaways or TL;DR section found"
+                "summary_missing": "No key takeaways or TL;DR section found",
+                "question_headings_strong": "{{count}} question-pattern heading(s) — strong conversational readiness",
+                "question_headings_few": "Only {{count}} question-pattern heading(s) — add more for chat-style queries",
+                "question_headings_none": "No question-pattern headings detected — low conversational readiness"
               },
               "platform_reg": {
                 "fetch_failed": "Could not fetch homepage",
@@ -322,7 +354,11 @@ const enResult = {
                 "tables_no_headers": "{{count}} table(s) but none have proper <thead>/<th> headers",
                 "no_tables": "No tables found on homepage",
                 "definition_markup": "Definition markup found: {{dfn}} <dfn>, {{abbr}} <abbr> tags",
-                "no_definition_markup": "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations"
+                "no_definition_markup": "No <dfn> or <abbr> tags — use these to mark up technical terms and abbreviations",
+                "multi_format_coverage": "Multi-format coverage: {{formats}}",
+                "multi_format_strong": "{{count}} content format(s) — broad AI surface area",
+                "multi_format_limited": "Only {{count}} non-text format(s) detected — more formats = more AI surface area",
+                "multi_format_none": "No non-text formats detected — content is text-only"
               },
               "multilingual": {
                 "fetch_failed": "Could not fetch homepage",
@@ -353,7 +389,32 @@ const enResult = {
                 "missing_og": "Missing Open Graph tags on {{count}} page(s):",
                 "missing_alt_text": "Most images missing alt text on {{count}} page(s):",
                 "duplicate_descriptions": "Duplicate meta descriptions found across pages:",
+                "duplicate_titles": "Duplicate <title> tags found across pages:",
+                "content_overlap": "Content overlap / possible cannibalization between pages:",
                 "all_good": "All sampled pages maintain consistent GEO standards"
+              },
+              "brand_kg": {
+                "wikipedia_found": "Wikipedia page found: \"{{title}}\"",
+                "wikipedia_not_found": "No Wikipedia page found for \"{{brand}}\"",
+                "wikidata_found": "Wikidata entity found: {{id}}",
+                "wikidata_not_found": "No Wikidata entity found for \"{{brand}}\"",
+                "backlinks_strong": "Wikipedia backlinks: {{count}}+ pages link to this entity — strong authority",
+                "backlinks_moderate": "Wikipedia backlinks: {{count}} pages link to this entity",
+                "backlinks_weak": "Only {{count}} Wikipedia backlink(s) — entity is recognized but niche"
+              },
+              "trust_safety": {
+                "fetch_failed": "Could not fetch homepage",
+                "privacy_found": "Privacy policy found: {{path}}",
+                "privacy_missing": "No privacy policy page detected",
+                "terms_found": "Terms of service found: {{path}}",
+                "terms_missing": "No terms of service page detected",
+                "contact_found": "Contact page found: {{path}}",
+                "contact_missing": "No contact page detected",
+                "legal_found": "Legal/DMCA/imprint page found: {{path}}",
+                "legal_missing": "No DMCA / legal / imprint page detected",
+                "identity_strong": "Strong business identity in footer/schema: {{signals}}",
+                "identity_partial": "Partial business identity: {{signals}}",
+                "identity_missing": "No business identity signals found (email, phone, address, or legal entity)"
               }
             },
             "fixes": {
@@ -361,7 +422,9 @@ const enResult = {
                 "add_brand_meta": "Make your brand name discoverable by adding:\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\nAnd use a consistent 'Brand — Page Title' format in your <title> tags.",
                 "add_freshness": "Add freshness signals so AI engines know your content is current:\n  1. Add dateModified to your JSON-LD: \"dateModified\": \"2025-01-15\"\n  2. Use <time> tags: <time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. Set Last-Modified HTTP header on your server",
                 "unify_brand_name": "Use the same brand name everywhere. Ensure og:site_name, the title tag suffix,\nand JSON-LD Organization name all use the exact same string.\nPick one: {names}",
-                "use_brand_consistently": "Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition."
+                "use_brand_consistently": "Use your brand name \"{name}\" more consistently throughout the page content.\nMention it in headings, intro paragraphs, and structured data to strengthen entity recognition.",
+                "increase_cadence": "Increase content refresh cadence. AI engines prefer sites that update regularly — stale pages\ndrop out of training windows and retrieval indexes.",
+                "refresh_stale_content": "Most of your content hasn't been touched in months. Refresh high-value pages periodically\n(update stats, add recent examples, bump dateModified) so AI engines see ongoing maintenance."
               },
               "answer_format": {
                 "add_comparison_tables": "Add comparison tables where applicable (pricing, features, vs. competitors):\n  <table>\n    <thead><tr><th>Feature</th><th>Basic</th><th>Pro</th></tr></thead>\n    <tbody>...</tbody>\n  </table>\nAI engines frequently cite tabular data in comparison answers.",
@@ -369,6 +432,8 @@ const enResult = {
                 "add_proscons": "Add pros and cons sections for products, services, or comparisons:\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI engines frequently cite balanced pros/cons in recommendation answers.",
                 "add_steps": "Add numbered how-to instructions where relevant:\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI engines surface step-by-step content for 'how to' queries.",
                 "add_summary": "Add a 'Key Takeaways' or 'TL;DR' section near the top or bottom:\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI engines often pull from summary sections for quick answers.",
+                "add_question_headings": "Add more question-pattern headings that match how people prompt AI engines:\n  <h2>What is GEO?</h2>\n  <h2>How do I optimize for AI search?</h2>\n  <h2>Why does GEO matter?</h2>\nFollow each with a short, direct answer so AI engines can extract it.",
+                "add_question_headings_intro": "Add question-pattern headings so AI engines can match chat-style queries to your content:\n  <h2>What is GEO?</h2>\n  <h3>How does this work?</h3>\nPages structured around who/what/how/why questions rank higher in AI answers.",
                 "add_table_headers": "Add proper headers to your tables:\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI engines extract well-structured tables for comparison answers."
               },
               "authority": {
@@ -376,6 +441,9 @@ const enResult = {
                 "add_humans_txt": "Create a humans.txt at your site root to signal authorship:\n  /* TEAM */\n  Name: Your Name\n  Role: Lead Developer\n  Contact: email@example.com\n  \n  /* SITE */\n  Last update: 2025/01/15\n  Standards: HTML5, CSS3\nSee humanstxt.org for the full spec.",
                 "add_security_headers": "Add missing security headers to your server config:\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY",
                 "add_security_headers_nginx": "Add security headers to your server response. In nginx:\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;",
+                "strengthen_bio": "Strengthen your bio/about page with explicit E-E-A-T signals:\n  • Credentials (PhD, MD, certifications)\n  • Years of experience and roles\n  • Notable prior affiliations\n  • External bylines, publications, or press coverage",
+                "add_external_bylines": "Link to external bylines (Medium, Substack, trade press, Google Scholar, ORCID)\nfrom your bio/about page. Independent bylines carry more E-E-A-T weight than self-claims.",
+                "create_about_page": "Create a substantive /about or /team page (200+ words) documenting who is behind\nthe site: real names, credentials, photos, contact paths, and links to external profiles.\nAI engines treat faceless sites as lower E-E-A-T.",
                 "upgrade_author_jsonld": "Upgrade your author attribution with JSON-LD:\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }"
               },
               "content_access": {
@@ -392,6 +460,9 @@ const enResult = {
                 "add_faq_section": "Consider adding an FAQ section to your page. Format questions as headings:\n  <h2>Frequently Asked Questions</h2>\n  <h3>What does your product do?</h3>\n  <p>Clear, concise answer...</p>\nThen add FAQPage structured data (JSON-LD) for each Q&A pair.",
                 "add_lists": "Add structured lists to make content easily extractable by AI:\n  <ul>\n    <li>Key feature or benefit</li>\n    <li>Another important point</li>\n  </ul>\nUse <ol> for steps/processes and <ul> for features/benefits.",
                 "add_statistics": "Add concrete, quotable statistics to your content:\n  '95% of customers report improved performance'\n  'Over 10,000 companies use our platform'\n  'Reduces processing time by 3.5x'\nAI engines prefer citing specific data points over vague claims.",
+                "tighten_first_para": "Tighten your opening paragraph to 25-120 words so AI engines can lift it as a snippet.",
+                "frontload_facts": "Front-load facts into your first paragraph so AI engines can extract it directly:\n  'GEO is the practice of optimizing content for AI-powered search engines.\n   Over 70% of search users now consult an AI assistant before clicking a link.'\nAim for one definition-style sentence and one concrete stat in the first 25-120 words.",
+                "add_opening_para": "Place a substantive opening paragraph high in the page body (inside <main> or <article>)\nthat answers 'what is this about?' with a definition and/or a concrete number.",
                 "simplify": "Simplify your content for better AI readability:\n  1. Use shorter sentences (under 20 words)\n  2. Replace jargon with plain language\n  3. Break complex ideas into bullet points\n  4. Use active voice instead of passive\n  5. Target a grade 8-10 reading level"
               },
               "crawl_ready": {
@@ -432,7 +503,8 @@ const enResult = {
                 "add_lang": "Add a lang attribute to your <html> tag:\n  <html lang=\"en\">",
                 "add_og": "Add Open Graph meta tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />",
                 "add_title": "Add a <title> tag in your <head>:\n  <title>Your Page Title — Your Brand</title>\nKeep it under 60 characters and include your primary keyword.",
-                "expand_description": "Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords."
+                "expand_description": "Expand your meta description to 120-160 characters. Include a clear value proposition and primary keywords.",
+                "add_twitter_cards": "Add Twitter Card meta tags in your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
               },
               "mobile": {
                 "add_cache_headers": "Add cache headers for efficient re-crawling:\n  Cache-Control: public, max-age=3600\n  ETag: (auto-generated by most servers)\nThis allows AI crawlers to use conditional requests (If-None-Match)\nand avoid re-downloading unchanged pages.",
@@ -446,6 +518,8 @@ const enResult = {
                 "boost_google_authority": "Boost Google authority:\n  - Complete your Organization schema (all 9 fields)\n  - Create a Wikipedia article for your brand/product\n  - Create a Wikidata entity and link it in sameAs\n  - Claim your Google Business Profile\n  - Build high-quality backlinks from authoritative domains",
                 "common_crawl_inbound_links": "Your site hasn't been crawled by Common Crawl yet.\nThis is normal for newer/smaller sites. Build inbound links to increase discovery.",
                 "duplicate_descriptions": "Write unique meta descriptions for each page. Duplicate descriptions\nconfuse AI engines about which page to cite for a given topic.",
+                "duplicate_titles": "Write unique <title> tags for each page. Identical titles cause keyword\ncannibalization — AI engines can't tell which page to cite for a given query.",
+                "content_overlap": "Two or more pages cover the same topic with highly overlapping content.\nOptions:\n  1. Consolidate into one canonical page and 301-redirect the others.\n  2. Differentiate each page with distinct angles, examples, and keywords.\n  3. Use rel=canonical to point near-duplicates to the primary page.\nCannibalization dilutes your AI visibility — pick the strongest page to surface.",
                 "increase_platform_presence": "Increase your presence on authoritative platforms:\n  - Create a Crunchbase profile for your company\n  - Maintain an active GitHub organization\n  - Publish packages on npm/PyPI if applicable\n  - Get mentioned on Hacker News (Show HN posts)\n  - Submit to startup directories (Product Hunt, AngelList/Wellfound)\n  - Seek mentions in industry publications and comparison lists",
                 "list_review_platforms": "List your product on review platforms to build trust signals:\n  - Trustpilot (https://business.trustpilot.com) — general reviews\n  - G2 (https://sell.g2.com) — B2B/SaaS reviews\n  - Product Hunt (https://producthunt.com) — launch & discovery\n  - Capterra (https://capterra.com) — software reviews\nAdd AggregateRating schema to your site to display star ratings in search.",
                 "low_word_count": "Pages with <100 words have too little content for AI engines. Add substantive, unique text.",
@@ -466,6 +540,18 @@ const enResult = {
                 "expand_alt_pages": "Alternate language pages have too little content. Ensure translations are complete\nand not just stubs or machine-translated snippets. AI engines may skip thin multilingual pages.",
                 "fix_hreflang": "Fix broken hreflang URLs — they return errors. Either create the page\nor remove the hreflang tag to avoid confusing AI crawlers."
               },
+              "brand_kg": {
+                "create_wikipedia": "A Wikipedia page is one of the strongest entity signals for AI engines. If you're\nnotable enough, seek independent coverage in news/trade press and follow Wikipedia's\nnotability guidelines. Do not write your own page — it will be flagged as COI.",
+                "create_wikidata": "Wikidata is free to edit and AI engines (especially Google Knowledge Graph) ingest it\nheavily. Create an entry at https://www.wikidata.org/wiki/Special:NewItem with:\n  • Label + description\n  • instance of (P31) — e.g. 'business'\n  • official website (P856) — your domain\n  • sameAs links to social profiles"
+              },
+              "trust_safety": {
+                "add_privacy": "Publish a Privacy Policy at /privacy (or /privacy-policy). AI engines treat missing\nprivacy policies as a trust red flag — required by GDPR, CCPA, and most ad networks.",
+                "add_terms": "Publish Terms of Service at /terms. This is a basic trust signal AI engines\nand search platforms expect from legitimate sites.",
+                "add_contact": "Add a /contact page with at least an email address and/or form. AI engines rank\nsites with clear contact paths higher for trust-sensitive queries.",
+                "add_legal": "Add a /dmca or /legal page. In the EU an 'Impressum' (imprint) is legally required;\nelsewhere a DMCA agent page protects you from copyright liability and boosts trust.",
+                "add_identity_signals": "Add missing trust signals so AI engines can verify who is behind the site.",
+                "add_business_identity": "AI engines cannot verify who runs this site. Add in the footer and/or Organization JSON-LD:\n  • Physical address (schema.org PostalAddress)\n  • Contact email and telephone (contactPoint)\n  • Legal entity suffix (LLC / Inc / Ltd / GmbH) and registration number where applicable"
+              },
               "outbound": {
                 "add_authoritative_links": "Link to authoritative external sources where relevant (research papers, .gov/.edu sites,\nindustry standards). Outbound links to reputable sources signal well-researched content to AI engines.",
                 "add_dfn_abbr": "Mark up key terms and abbreviations:\n  <dfn>Generative Engine Optimization</dfn> (GEO) is...\n  <abbr title=\"Generative Engine Optimization\">GEO</abbr>\nThis helps AI engines understand and define terms in your content.",
@@ -473,13 +559,16 @@ const enResult = {
                 "add_table_headers_semantic": "Add semantic headers to your tables for AI extraction:\n  <table>\n    <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>\n    <tbody>...</tbody>\n  </table>",
                 "add_table_thead": "Add <thead> and <th> to all data tables:\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>",
                 "add_video_schema": "Add VideoObject structured data for your video content:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>",
-                "add_video_transcripts": "Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video."
+                "add_video_transcripts": "Add text transcripts for video content so AI crawlers can index the spoken content.\nPlace the transcript in a visible section below the video.",
+                "diversify_formats": "Diversify your content formats so AI engines encounter you in more contexts:\n  • Podcast (audio transcripts feed ChatGPT, Perplexity)\n  • PDF whitepapers (citable documents)\n  • Infographics with descriptive alt text\n  • Slides on SlideShare / Speaker Deck\n  • Video with transcripts",
+                "add_alt_format": "Add at least one alternative format (video with transcript, podcast, PDF, or infographic).\nEach format opens a new retrieval channel for AI engines."
               },
               "robots": {
                 "add_sitemap_directive": "Add a Sitemap directive to your robots.txt:\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "create": "Create a robots.txt file at the root of your site.\nMinimal example:\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "unblock_bots": "To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /",
-                "unblock_wildcard": "Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others."
+                "unblock_wildcard": "Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others.",
+                "add_ai_txt": "Consider an ai.txt file at your site root (spec: spawning.ai/ai-txt) to declare\na strategic policy separate from robots.txt."
               },
               "schema_kb": {
                 "add_breadcrumb_schema": "Add BreadcrumbList structured data to match your HTML breadcrumbs:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
@@ -503,6 +592,8 @@ const enResult = {
                 "add_twitter_card": "Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
               },
               "structured": {
+                "add_product_reviews": "Add review and aggregateRating to your Product schema:\n  \"aggregateRating\": {\"@type\": \"AggregateRating\", \"ratingValue\": \"4.6\", \"reviewCount\": \"128\"},\n  \"review\": [{\"@type\": \"Review\", \"author\": ..., \"reviewRating\": ...}]",
+                "upgrade_to_granular": "Upgrade from generic WebPage/CreativeWork to specific types:\n  • How-to content → HowTo with step list\n  • Q&A pages → FAQPage with Question/Answer pairs\n  • Products → Product with offers + aggregateRating\n  • Articles → NewsArticle or BlogPosting\nGranular types give AI engines far more extractable facts than WebPage.",
                 "add_organization_jsonld": "Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results"
               },
               "tech_crawl": {
@@ -510,7 +601,10 @@ const enResult = {
                 "broken_canonical": "The canonical URL {canonical_url} is broken. Either fix the target page or update the canonical to a working URL.",
                 "enable_http2": "Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.",
                 "fix_canonical_chain": "Fix the canonical chain — each page's canonical should point directly to the final URL, not through intermediaries.\nSet the canonical on each page to its own URL or the ultimate target.",
-                "reduce_redirects": "Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL."
+                "reduce_redirects": "Reduce the redirect chain to a single hop (A -> B, not A -> B -> C -> D).\nUpdate your server config to redirect directly to the final destination URL.",
+                "feed_full_content": "Publish full content in your feed rather than excerpts. AI agents that consume feeds\nprogrammatically prefer complete text they can extract without following every link.",
+                "feed_expand_content": "Your feed publishes only headlines/snippets. Switch to full content so AI agents\nand aggregators can index the actual article without scraping the HTML page.",
+                "add_api_docs": "Publish machine-readable data feeds and integration docs so AI agents can consume\nyour data programmatically (e.g. /openapi.json, /api/v1, /developers)."
               },
               "url_norm": {
                 "lowercase_url": "Ensure your server normalizes URL case (lowercase). In nginx:\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }",
@@ -595,7 +689,9 @@ const enResult = {
               "Outbound Links & Media": "Outbound Links & Media",
               "Multilingual Content Depth": "Multilingual Content Depth",
               "Cross-Platform Content Distribution": "Cross-Platform Content Distribution",
-              "Multi-Page Sampling": "Multi-Page Sampling"
+              "Multi-Page Sampling": "Multi-Page Sampling",
+              "Brand Entity KG": "Brand Entity & Knowledge Graph",
+              "Trust & Safety": "Trust & Safety Signals"
             },
             "header": {
               "rerunPlaceholder": "Enter a URL to re-run the check",
