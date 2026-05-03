@@ -29,6 +29,8 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+deploy-test.sh
+
 # Coverage directory used by tools like istanbul
 coverage
 *.lcov
@@ -97,6 +99,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+venv/
 *.egg-info/
 
 # SQLite runtime databases
@@ -114,3 +117,16 @@ backend/secrets/
 
 # Local backup files
 frontend/public/favicon_bk.svg
+frontend/dist-old/
+
+# Browser engine: persistent Chrome user_data_dir (22MB+ runtime artifacts,
+# machine-specific cache, never share across machines)
+backend/data/browser_profiles/
+
+# Browser engine: session secrets (cookies + JWT tokens). Each developer/server
+# must run their own login script and produce their own session file. Never
+# commit — anyone with the file can sign in as that account.
+backend/data/browser_sessions/*.json
+backend/data/browser_sessions/*_profile.json
+
+play_snapshot.sh
