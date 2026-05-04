@@ -11,7 +11,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 300000, // 300 seconds timeout
+  timeout: 900000, // 900 seconds (15 min) — 慢站 25 类全跑常超 300s,后端会写 L1 缓存,
+                   // 临时拉长避免前端过早 abort;后续切 SSE 后此值可降回
   headers: {
     'Content-Type': 'application/json',
   },
