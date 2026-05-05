@@ -5,6 +5,14 @@ class GeoTestRequest(BaseModel):
     """Request model for GEO test"""
     url: str = Field(..., description="Website URL to test")
     include_fix: bool = Field(default=True, description="Include fix recommendations")
+    force_refresh: bool = Field(
+        default=False,
+        description=(
+            "Skip L1 Redis + L2 DB cache and run fresh. Used by the 'verify "
+            "after fix' flow on the result page so users see updated scores "
+            "immediately instead of the 24h-stale cached report."
+        ),
+    )
 
 class CheckResult(BaseModel):
     """Result of a single check"""

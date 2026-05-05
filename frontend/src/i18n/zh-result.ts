@@ -747,6 +747,13 @@ const zhResult = {
                 "notDetected": "{{name}} 未检测到"
               }
             },
+            "fixPackage": {
+              "download": "修复包",
+              "downloading": "生成中...",
+              "title": "下载修复包",
+              "upgradeRequired": "此功能需要 Starter 或更高级别的会员。",
+              "error": "修复包下载失败"
+            },
             "shareExport": {
               "title": "分享和导出",
               "copied": "链接已复制到剪贴板！",

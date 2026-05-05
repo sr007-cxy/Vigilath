@@ -2,7 +2,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging
+import os
 import time
+
+# Playwright browsers: use shared location so both root and claudeuser can find them
+_shared_pw = "/opt/geo/backend/.cache/ms-playwright"
+if os.path.isdir(_shared_pw) and not os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = _shared_pw
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,8 +46,9 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8070",
+        "http://123.125.194.100:12080",
     ],
-    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):\d+$",
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+):\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -202,12 +202,14 @@ export function Result() {
   const [rerunLoading, setRerunLoading] = useState(!!pendingUrl && !result);
   const [rerunError, setRerunError] = useState<string>('');
   const [rerunQuotaExceeded, setRerunQuotaExceeded] = useState(false);
+  const [downloadingFixPackage, setDownloadingFixPackage] = useState(false);
 
   // Inline advanced-mode result — when user reruns in a non-default mode,
   // render the result here instead of navigating to /advanced/{mode}.
   const [advancedResult, setAdvancedResult] = useState<
     { mode: AdvancedMode; data: AnyAdvancedResult } | null
   >(null);
+  const rerunAbortRef = useRef<AbortController | null>(null);
   const advancedResultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (advancedResult && advancedResultRef.current) {
@@ -217,12 +219,19 @@ export function Result() {
 
   // Guard against direct access to /result with no context (no result, no
   // pending detection, not empty-advanced). Redirect to Home to avoid
-  // rendering an empty shell.
+  // rendering an empty shell. Skip redirect while a rerun is in progress
+  // to avoid cancelling the in-flight request.
   useEffect(() => {
-    if (!navState?.result && !navState?.pendingUrl && !navState?.initialMode) {
+    if (rerunLoading) return;
+    if (!navState?.result && !navState?.pendingUrl && !navState?.initialMode && !advancedResult) {
       navigate('/', { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rerunLoading]);
+
+  // Abort any in-flight rerun request on unmount.
+  useEffect(() => {
+    return () => { rerunAbortRef.current?.abort(); };
   }, []);
 
   // Home hands off a URL via `pendingUrl`; this effect owns the actual HTTP
@@ -449,10 +458,19 @@ export function Result() {
     }
 
     setRerunLoading(true);
+    const controller = new AbortController();
+    rerunAbortRef.current = controller;
     try {
       if (rerunMode === 'default') {
         const url = normalizeUrl(rerunUrl.trim());
-        const fresh = await geoApi.checkGeo({ url });
+        // Same-URL re-run = "verify after fix" intent → bypass 24h cache so the
+        // user sees their fix reflected immediately. Different URL = casual
+        // peer lookup, fine to use cache.
+        const sameUrl = !!result?.url && normalizeUrl(result.url) === url;
+        const fresh = await geoApi.checkGeo(
+          { url, force_refresh: sameUrl },
+          controller.signal,
+        );
         setAdvancedResult(null);
         navigate('/result', { state: { result: fresh }, replace: true });
         return;
@@ -462,7 +480,7 @@ export function Result() {
           .split(/[,\s]+/)
           .map((p) => normalizeUrl(p.trim()))
           .filter(Boolean);
-        const data = await geoApi.runAdvancedCheck('compare', { urls });
+        const data = await geoApi.runAdvancedCheck('compare', { urls }, controller.signal);
         setAdvancedResult({ mode: 'compare', data });
         return;
       }
@@ -475,7 +493,7 @@ export function Result() {
         const data = await geoApi.runAdvancedCheck('visibility', {
           url,
           custom_queries: queries.length ? queries : undefined,
-        });
+        }, controller.signal);
         setAdvancedResult({ mode: 'visibility', data });
         return;
       }
@@ -483,15 +501,16 @@ export function Result() {
         const data = await geoApi.runAdvancedCheck('entity', {
           entity_name: rerunEntityName.trim(),
           entity_type: rerunEntityType,
-        });
+        }, controller.signal);
         setAdvancedResult({ mode: 'entity', data });
         return;
       }
       // crawlTest / authority / citation — single-URL advanced modes
       const url = normalizeUrl(rerunUrl.trim());
-      const data = await geoApi.runAdvancedCheck(rerunMode, { url });
+      const data = await geoApi.runAdvancedCheck(rerunMode, { url }, controller.signal);
       setAdvancedResult({ mode: rerunMode, data });
     } catch (err) {
+      if (controller.signal.aborted) return;
       if (err instanceof ApiError && err.status === 429) {
         setRerunQuotaExceeded(true);
         setRerunError(err.message || t('home.error.quotaExceeded'));
@@ -680,6 +699,22 @@ export function Result() {
     }
   };
 
+  const handleDownloadFixPackage = async () => {
+    if (downloadingFixPackage || !result) return;
+    setDownloadingFixPackage(true);
+    try {
+      await geoApi.downloadFixPackage(result.url);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        openTierModal();
+      } else {
+        alert(err instanceof Error ? err.message : t('result.fixPackage.error'));
+      }
+    } finally {
+      setDownloadingFixPackage(false);
+    }
+  };
+
   // ----- Early returns -----
   // No default check data yet. Either:
   //  (a) user landed here from a homepage advanced-card click → render the
@@ -751,6 +786,27 @@ export function Result() {
                       </svg>
                       <span>{t('result.shareExport.downloadReport')}</span>
                     </button>
+                    {canShowFix && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadFixPackage}
+                        disabled={downloadingFixPackage}
+                        title={t('result.fixPackage.title') as string}
+                        className="h-8 px-3 rounded-lg bg-tertiary border border-border text-secondary hover:text-accent-primary hover:border-border-strong transition-colors flex items-center gap-1.5 text-xs font-semibold disabled:opacity-60"
+                      >
+                        {downloadingFixPackage ? (
+                          <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        )}
+                        <span>{downloadingFixPackage ? t('result.fixPackage.downloading') : t('result.fixPackage.download')}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setAdvancedResult(null)}
@@ -851,6 +907,28 @@ export function Result() {
                   {exportingPdf ? t('result.shareExport.downloadReportLoading') : t('result.shareExport.downloadReport')}
                 </span>
               </button>
+              {canShowFix && (
+                <button
+                  onClick={handleDownloadFixPackage}
+                  disabled={downloadingFixPackage}
+                  title={t('result.fixPackage.title') as string}
+                  className="h-9 px-3 rounded-lg bg-card border border-border text-secondary hover:text-accent-primary hover:border-border-strong transition-colors flex items-center gap-2 text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {downloadingFixPackage ? (
+                    <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  )}
+                  <span className="hidden sm:inline">
+                    {downloadingFixPackage ? t('result.fixPackage.downloading') : t('result.fixPackage.download')}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 

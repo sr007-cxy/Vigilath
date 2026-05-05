@@ -37,6 +37,15 @@ const PaymentsTab = lazy(() => import('./pages/Account/PaymentsTab').then(m => (
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
+const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
+const DashboardHome = lazy(() => import('./pages/Dashboard/DashboardHome').then(m => ({ default: m.DashboardHome })));
+const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ default: m.Compose })));
+const DashboardInbox = lazy(() => import('./pages/Dashboard/Inbox').then(m => ({ default: m.Inbox })));
+const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
+const DashboardStats = lazy(() => import('./pages/Dashboard/Stats').then(m => ({ default: m.Stats })));
+const PolicyEditor = lazy(() => import('./pages/Dashboard/PolicyEditor').then(m => ({ default: m.PolicyEditor })));
+const PlatformAccounts = lazy(() => import('./pages/Dashboard/PlatformAccounts').then(m => ({ default: m.PlatformAccounts })));
+
 
 function PageLoader() {
   return (
@@ -83,6 +92,15 @@ function App() {
                 <Route path="usage" element={<UsageTab />} />
                 <Route path="history" element={<HistoryTab />} />
                 <Route path="payments" element={<PaymentsTab />} />
+              </Route>
+              <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route index element={<DashboardHome />} />
+                <Route path="compose" element={<Compose />} />
+                <Route path="inbox" element={<DashboardInbox />} />
+                <Route path="posts" element={<DashboardPosts />} />
+                <Route path="stats" element={<DashboardStats />} />
+                <Route path="policy" element={<PolicyEditor />} />
+                <Route path="accounts" element={<PlatformAccounts />} />
               </Route>
               <Route path="/about" element={<About />} />
               <Route path="/process" element={<Landing />} />

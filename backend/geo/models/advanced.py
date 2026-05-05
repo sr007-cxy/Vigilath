@@ -214,6 +214,8 @@ class AiVisibilityResponse(BaseModel):
     content_gaps: List[str]
     query_count: int
     stability_runs: int
+    source_trace: Optional["CISourceTrace"] = None
+    source_preference: Optional["CISourcePreference"] = None
 
 
 class EntityKnowledgeGraph(BaseModel):
@@ -221,12 +223,19 @@ class EntityKnowledgeGraph(BaseModel):
     wikidata: bool
     wikidata_id: Optional[str] = None
     google_kg: bool
+    baidu_baike: bool = False
     platforms_found: List[str]
 
 
 class EntityPlatforms(BaseModel):
     found: List[str]
     not_found: List[str]
+
+
+class EntityEngineDetail(BaseModel):
+    sentiment: str
+    framing: str
+    recognized: bool
 
 
 class EntityAuditResponse(BaseModel):
@@ -237,13 +246,18 @@ class EntityAuditResponse(BaseModel):
     max_score: int
     percent: int
     grade: str
+    engines_used: List[str] = Field(default_factory=list)
     knowledge_graph: EntityKnowledgeGraph
     platforms: EntityPlatforms
     sentiment: str
     best_framing: str
+    per_engine: Dict[str, EntityEngineDetail] = Field(default_factory=dict)
     content_gaps: List[str]
     recognition_rate: float
     stability_runs: int
+    total_runs_per_query: int = 3
+    source_trace: Optional["CISourceTrace"] = None
+    source_preference: Optional["CISourcePreference"] = None
 
 
 class AeoCategoryScore(BaseModel):
@@ -295,5 +309,121 @@ MODE_MIN_TIER: Dict[str, str] = {
     "authority": "pro",
     "citation": "pro",
     "visibility": "pro",
-    "entity": "pro",
+    "entity": "free",  # TODO: restore to "pro" after testing
+    "competitiveIntel": "free",  # TODO: restore to "pro" after testing
 }
+
+
+# ---------------------------------------------------------------------------
+# Competitive Intelligence (3-in-1: source trace + preference + competitors)
+# ---------------------------------------------------------------------------
+
+class CompetitiveIntelRequest(BaseModel):
+    """Competitive Intelligence: URL + optional competitor domains."""
+    url: str
+    competitor_domains: Optional[List[str]] = None
+
+
+class CISourceArticle(BaseModel):
+    url: str
+    title: str
+    citations: int
+
+
+class CISourceEntry(BaseModel):
+    platform: str
+    article_count: int
+    total_citations: int
+    engines: List[str]
+    queries: List[str] = Field(default_factory=list)
+    source_type: str = ""
+    articles: List[CISourceArticle] = Field(default_factory=list)
+
+
+class CISelfCitation(BaseModel):
+    url: str
+    engine: str
+    query: str
+    title: str = ""
+
+
+class CISourceTrace(BaseModel):
+    sources: List[CISourceEntry]
+    self_citations: List[CISelfCitation]
+    missing_queries: List[str]
+    total_sources: int
+    total_citations: int
+
+
+class CIEnginePreference(BaseModel):
+    engine: str
+    total_citations: int
+    type_distribution: Dict[str, float]
+    top_domains: List[Dict[str, Any]]
+
+
+class CISourcePreference(BaseModel):
+    per_engine: List[CIEnginePreference]
+    overall_distribution: Dict[str, float]
+    engine_totals: Dict[str, int]
+    recommendations: List[Dict[str, str]]
+    stats: Dict[str, Any]
+
+
+class CICompetitorEntry(BaseModel):
+    domain: str
+    name: str
+    citation_count: int
+    mention_count: int
+    rate: float
+    framing: str
+    framings: Dict[str, int] = Field(default_factory=dict)
+    engines: List[str] = Field(default_factory=list)
+
+
+class CICompetitorInsight(BaseModel):
+    competitors: List[CICompetitorEntry]
+    total_competitors: int
+    top_competitor: Optional[str] = None
+    top_competitor_rate: float = 0
+    top_competitor_mentions: int = 0
+    your_rate: float = 0
+    your_framing: str = "not_mentioned"
+    monitored_keywords: int = 1
+
+
+class BrandRankDetail(BaseModel):
+    position: Optional[int] = None
+    rank_label: str
+    mentioned: bool
+    is_first: bool
+
+
+class BrandRankingSummary(BaseModel):
+    brand: str
+    per_engine: Dict[str, BrandRankDetail] = Field(default_factory=dict)
+    avg_position: Optional[float] = None
+    best_position: Optional[int] = None
+    rank_distribution: Dict[str, int] = Field(default_factory=dict)
+    engines_checked: int = 0
+    engines_mentioned: int = 0
+
+
+class CompetitiveIntelResponse(BaseModel):
+    url: str
+    domain: str
+    brand: str
+    engines: List[str]
+    query_count: int
+    total_results: int
+    valid_results: int
+    elapsed_seconds: float
+    source_trace: CISourceTrace
+    source_preference: CISourcePreference
+    competitor_insight: CICompetitorInsight
+    brand_ranking: Optional[BrandRankingSummary] = None
+
+
+# Resolve forward references for models that use Optional["CI..."] before definition
+AiVisibilityResponse.model_rebuild()
+EntityAuditResponse.model_rebuild()

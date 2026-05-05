@@ -720,106 +720,200 @@ const buildVisibilityBlocks = (data: AiVisibilityResponse, t: TFunction, languag
 
 // ---------- entity ----------
 
-const buildEntityBlocks = (data: EntityAuditResponse, t: TFunction, language: string): string[] => {
+// ---------- Entity PDF helpers ----------
+
+const entityPill = (label: string, found: boolean): string => {
+  const bg = found ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)';
+  const fg = found ? '#059669' : '#e11d48';
+  const border = found ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)';
+  const icon = found ? '✓' : '✕';
+  return `<span style="display:inline-block;font-size:10px;font-weight:600;padding:3px 8px;border-radius:99px;background:${bg};color:${fg};border:1px solid ${border};margin:2px 3px 2px 0;white-space:nowrap;">${icon} ${escapeHtml(label)}</span>`;
+};
+
+const entityBadge = (label: string, bg: string, fg: string, border: string): string =>
+  `<span style="display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:${bg};color:${fg};border:1px solid ${border};margin:0 3px;white-space:nowrap;">${escapeHtml(label)}</span>`;
+
+const entityScoreBar = (label: string, value: number, max: number): string => {
+  const pct = Math.round((value / max) * 100);
+  const barColor = pct >= 70 ? '#22c55e' : pct >= 40 ? '#eab308' : '#ef4444';
+  return (
+    `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">` +
+    `<div style="width:110px;font-size:10px;color:#475569;flex-shrink:0;">${escapeHtml(label)}</div>` +
+    `<div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;">` +
+    `<div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px;"></div>` +
+    `</div>` +
+    `<div style="width:40px;text-align:right;font-size:10px;font-weight:700;color:${barColor};">${value}/${max}</div>` +
+    `</div>`
+  );
+};
+
+const entityKgRow = (label: string, found: boolean, statusLabel: string): string => {
+  const iconBg = found ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.08)';
+  const iconBorder = found ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)';
+  const iconColor = found ? '#059669' : '#e11d48';
+  const icon = found
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  const statusColor = found ? '#059669' : '#e11d48';
+  return (
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:6px;">` +
+    `<div style="display:flex;align-items:center;gap:10px;">` +
+    `<div style="width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:${iconBg};border:1px solid ${iconBorder};">${icon}</div>` +
+    `<span style="font-size:11px;font-weight:600;color:#0f172a;">${escapeHtml(label)}</span>` +
+    `</div>` +
+    `<span style="font-size:9px;font-weight:700;color:${statusColor};text-transform:uppercase;letter-spacing:0.08em;">${escapeHtml(statusLabel)}</span>` +
+    `</div>`
+  );
+};
+
+const buildEntityBlocks = (data: EntityAuditResponse, t: TFunction, _language: string): string[] => {
   const blocks: string[] = [];
-  const generatedAt = new Date().toLocaleString(localeFor(language));
+  const esc = escapeHtml;
+  const totalPlatforms = data.platforms.found.length + data.platforms.not_found.length;
+  const foundLabel = t('home.advanced.result.entity.found', { defaultValue: 'Found' }) as string;
+  const missingLabel = t('home.advanced.result.entity.missing', { defaultValue: 'Missing' }) as string;
+
+  // ── 1. Score hero card ────────────────────────────────────
+  // Score ring SVG
+  const pct = data.percent;
+  const ringColor = pct >= 70 ? '#22c55e' : pct >= 40 ? '#eab308' : '#ef4444';
+  const circumference = 2 * Math.PI * 40;
+  const dashOffset = circumference * (1 - pct / 100);
+  const scoreRing =
+    `<svg width="80" height="80" viewBox="0 0 100 100" style="flex-shrink:0;">` +
+    `<circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" stroke-width="7"/>` +
+    `<circle cx="50" cy="50" r="40" fill="none" stroke="${ringColor}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" transform="rotate(-90 50 50)"/>` +
+    `<text x="50" y="46" text-anchor="middle" font-size="22" font-weight="800" fill="#0f172a">${data.total_score}</text>` +
+    `<text x="50" y="62" text-anchor="middle" font-size="9" fill="#94a3b8">/${data.max_score}</text>` +
+    `</svg>`;
 
   blocks.push(
-    coverBlock({
-      badge: t('home.advanced.cards.entity.title', { defaultValue: 'Entity GEO Audit' }) as string,
-      title: t('result.advancedPdf.entity.title', { defaultValue: 'Entity Recognition Audit' }) as string,
-      subtitle: t('home.advanced.cards.entity.desc', { defaultValue: '' }) as string,
-      rows: [
-        { label: t('result.advancedPdf.entity.name', { defaultValue: 'Entity' }) as string, value: data.entity },
-        { label: t('result.advancedPdf.entity.type', { defaultValue: 'Type' }) as string, value: data.entity_type },
-        { label: t('result.pdfReport.generatedAt') as string, value: generatedAt },
-      ],
-      accent: '#ec4899',
-    }),
+    blockWrapOpen('padding:16px 18px;border:1px solid #e2e8f0;border-radius:14px;') +
+    `<div style="display:flex;align-items:center;gap:16px;">` +
+    scoreRing +
+    `<div style="flex:1;min-width:0;">` +
+    `<div style="font-size:9px;color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:2px;">${esc(t('home.advanced.cards.entity.title', { defaultValue: 'Entity GEO Audit' }))}</div>` +
+    `<div style="font-size:18px;font-weight:800;color:#0f172a;margin-bottom:4px;">${esc(data.entity)}</div>` +
+    `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">` +
+    entityBadge(data.entity_type.toUpperCase(), 'rgba(236,72,153,0.1)', '#ec4899', 'rgba(236,72,153,0.3)') +
+    entityBadge(`${t('home.advanced.result.entity.gradePrefix', { defaultValue: 'Grade' })} ${data.grade}`, 'linear-gradient(135deg,#f59e0b,#ec4899)', '#fff', 'transparent') +
+    entityBadge(`${pct}%`, '#f8fafc', '#64748b', '#e2e8f0') +
+    `</div>` +
+    `</div>` +
+    `</div>` +
+    blockWrapClose,
   );
+
+  // ── 2. Score bars ─────────────────────────────────────────
+  const SLUG: Record<string, string> = {
+    'Entity Recognition': 'entityRecognition', 'Entity Clarity': 'entityClarity',
+    'Category Association': 'categoryAssociation', 'Competitive Position': 'competitivePosition',
+    'Sentiment & Framing': 'sentimentFraming', 'Content Gap': 'contentGap',
+    'Knowledge Graph': 'knowledgeGraph', 'Platform Footprint': 'platformFootprint',
+  };
+  const bars = Object.entries(data.scores)
+    .map(([name, v]) => {
+      const slug = SLUG[name];
+      const label = slug
+        ? t(`home.advanced.result.entity.scoreLabels.${slug}`, { defaultValue: name }) as string
+        : name;
+      return entityScoreBar(label, v, 20);
+    })
+    .join('');
+  blocks.push(
+    blockWrapOpen('padding:14px 18px;border:1px solid #e2e8f0;border-radius:14px;') +
+    bars +
+    blockWrapClose,
+  );
+
+  // ── 3. Two-column: Knowledge Graph + Platforms ────────────
+  // Knowledge graph column
+  const kgItems = [
+    { label: 'Wikipedia', found: data.knowledge_graph.wikipedia },
+    { label: 'Wikidata', found: data.knowledge_graph.wikidata },
+    { label: 'Google KG', found: data.knowledge_graph.google_kg },
+    { label: 'Baidu Baike (百度百科)', found: !!data.knowledge_graph.baidu_baike },
+  ];
+  const kgHtml = kgItems.map((kg) => entityKgRow(kg.label, kg.found, kg.found ? foundLabel : missingLabel)).join('');
+
+  // Platforms column
+  const platTags = [
+    ...data.platforms.found.map((p) => entityPill(p, true)),
+    ...data.platforms.not_found.map((p) => entityPill(p, false)),
+  ].join('');
 
   blocks.push(
-    scoreHero({
-      scoreLabel: t('result.advancedPdf.entity.score', { defaultValue: 'Entity Score' }) as string,
-      scoreValue: fmtPercent(data.percent),
-      scoreSuffix: fmtScore(data.total_score, data.max_score),
-      grade: data.grade,
-      rightStats: [
-        {
-          label: t('home.advanced.result.entity.recognitionRate') as string,
-          value: fmtPercent(data.recognition_rate * 100),
-          tone: toneForPercent(data.recognition_rate * 100),
-        },
-        {
-          label: t('result.advancedPdf.entity.platformsFound', { defaultValue: 'Platforms' }) as string,
-          value: data.platforms.found.length,
-          tone: data.platforms.found.length >= 3 ? 'good' : 'warn',
-        },
-      ],
-    }),
+    blockWrapOpen('padding:0;display:flex;gap:12px;') +
+    // Left: KG
+    `<div style="flex:1;border:1px solid #e2e8f0;border-radius:14px;padding:14px 14px 8px 14px;">` +
+    `<div style="font-size:11px;font-weight:800;color:#0f172a;margin-bottom:10px;padding-left:2px;border-left:3px solid #ef4444;">&nbsp;${esc(t('home.advanced.result.entity.kgTitle', { defaultValue: 'Knowledge Graph' }))}</div>` +
+    kgHtml +
+    `</div>` +
+    // Right: Platforms
+    `<div style="flex:1;border:1px solid #e2e8f0;border-radius:14px;padding:14px;">` +
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">` +
+    `<div style="font-size:11px;font-weight:800;color:#0f172a;padding-left:2px;border-left:3px solid #ef4444;">&nbsp;${esc(t('home.advanced.result.entity.platforms', { defaultValue: 'Platform Coverage' }))}</div>` +
+    `<span style="font-size:10px;color:#94a3b8;">${data.platforms.found.length}/${totalPlatforms}</span>` +
+    `</div>` +
+    `<div style="line-height:1.8;">${platTags}</div>` +
+    `</div>` +
+    blockWrapClose,
   );
 
-  // Knowledge graph
-  blocks.push(sectionHeading(t('home.advanced.result.entity.kgTitle') as string, '#ec4899'));
-  blocks.push(
-    kvTable([
-      {
-        k: 'Wikipedia',
-        v: data.knowledge_graph.wikipedia ? '✓' : '—',
-        vColor: data.knowledge_graph.wikipedia ? '#166534' : '#991b1b',
-      },
-      {
-        k: 'Wikidata',
-        v: data.knowledge_graph.wikidata
-          ? data.knowledge_graph.wikidata_id || '✓'
-          : '—',
-        vColor: data.knowledge_graph.wikidata ? '#166534' : '#991b1b',
-      },
-      {
-        k: t('result.advancedPdf.entity.googleKg', { defaultValue: 'Google KG' }) as string,
-        v: data.knowledge_graph.google_kg ? '✓' : '—',
-        vColor: data.knowledge_graph.google_kg ? '#166534' : '#991b1b',
-      },
-    ]),
-  );
+  // ── 4. Two-column: AI怎么看你 + Content Gaps ──────────────
+  // Sentiment column — overall only (no per-engine breakdown)
+  const overallSentiment = data.per_engine
+    ? Object.values(data.per_engine).find(d => d.recognized)?.sentiment || data.sentiment
+    : data.sentiment;
+  const overallFraming = data.per_engine
+    ? Object.values(data.per_engine).find(d => d.recognized)?.framing || data.best_framing
+    : data.best_framing;
+  const sentimentHtml =
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:8px;">` +
+    `<span style="font-size:9px;color:#64748b;font-weight:600;">${esc(t('home.advanced.result.entity.overallSentiment', { defaultValue: 'Overall Sentiment' }))}</span>` +
+    `<span style="font-size:12px;font-weight:700;color:#0f172a;">${esc(t(`home.advanced.result.entity.sentiments.${overallSentiment}`, { defaultValue: overallSentiment || 'unknown' }) as string)}</span>` +
+    `</div>` +
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:8px;">` +
+    `<span style="font-size:9px;color:#64748b;font-weight:600;">${esc(t('home.advanced.result.entity.bestFraming', { defaultValue: 'Best Framing' }))}</span>` +
+    `<span style="font-size:12px;font-weight:700;color:#0f172a;">${esc(t(`home.advanced.result.entity.framings.${overallFraming}`, { defaultValue: (overallFraming || 'unknown').replace('_', ' ') }) as string)}</span>` +
+    `</div>` +
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:8px;">` +
+    `<span style="font-size:9px;color:#64748b;font-weight:600;">${esc(t('home.advanced.result.entity.recognitionRate', { defaultValue: 'Recognition Rate' }))}</span>` +
+    `<span style="font-size:12px;font-weight:800;color:#0f172a;">${Math.round(data.recognition_rate)}%</span>` +
+    `</div>`;
 
-  // Platforms
-  blocks.push(sectionHeading(t('home.advanced.result.entity.platforms') as string, '#f59e0b'));
-  blocks.push(
-    bulletList(
-      t('result.advancedPdf.entity.platformsCovered', { defaultValue: 'Covered platforms' }) as string,
-      data.platforms.found,
-      t('result.advancedPdf.entity.noPlatforms', { defaultValue: 'No platforms detected.' }) as string,
-    ),
-  );
-  if (data.platforms.not_found.length > 0) {
-    blocks.push(
-      bulletList(
-        t('result.advancedPdf.entity.platformsMissing', { defaultValue: 'Missing platforms' }) as string,
-        data.platforms.not_found,
-      ),
-    );
-  }
-
-  // Sentiment
-  blocks.push(sectionHeading(t('home.advanced.result.entity.sentimentTitle') as string, '#8b5cf6'));
-  blocks.push(
-    kvTable([
-      { k: t('home.advanced.result.entity.overallSentiment') as string, v: data.sentiment },
-      { k: t('home.advanced.result.entity.bestFraming') as string, v: data.best_framing },
-    ]),
-  );
-
-  // Content gaps
+  // Content gaps column
+  let gapsHtml = '';
   if (data.content_gaps.length > 0) {
-    blocks.push(sectionHeading(t('home.advanced.result.entity.contentGaps') as string, '#0ea5e9'));
-    blocks.push(
-      bulletList(
-        t('result.advancedPdf.entity.gapsHeader', { defaultValue: 'Topics to cover' }) as string,
-        data.content_gaps,
-      ),
-    );
+    gapsHtml = data.content_gaps
+      .map(
+        (g) =>
+          `<div style="padding:6px 10px;border-radius:8px;background:rgba(244,63,94,0.05);border:1px solid rgba(244,63,94,0.2);margin-bottom:5px;">` +
+          `<span style="font-size:10px;color:#e11d48;">· ${esc(g)}</span>` +
+          `</div>`,
+      )
+      .join('');
+  } else {
+    gapsHtml =
+      `<div style="display:flex;align-items:center;gap:6px;padding:8px;color:#059669;font-size:11px;">` +
+      `<span>✓</span><span>${esc(t('home.advanced.result.entity.noGaps', { defaultValue: 'No gaps found' }))}</span>` +
+      `</div>`;
   }
+
+  blocks.push(
+    blockWrapOpen('padding:0;display:flex;gap:12px;') +
+    // Left: Sentiment
+    `<div style="flex:1;border:1px solid #e2e8f0;border-radius:14px;padding:14px 14px 10px 14px;">` +
+    `<div style="font-size:11px;font-weight:800;color:#0f172a;margin-bottom:10px;padding-left:2px;border-left:3px solid #ef4444;">&nbsp;${esc(t('home.advanced.result.entity.sentimentTitle', { defaultValue: 'AI Sentiment' }))}</div>` +
+    sentimentHtml +
+    `</div>` +
+    // Right: Content Gaps
+    `<div style="flex:1;border:1px solid #e2e8f0;border-radius:14px;padding:14px;">` +
+    `<div style="font-size:11px;font-weight:800;color:#0f172a;margin-bottom:10px;padding-left:2px;border-left:3px solid #ef4444;">&nbsp;${esc(t('home.advanced.result.entity.contentGaps', { defaultValue: 'Content Gaps' }))}</div>` +
+    gapsHtml +
+    `</div>` +
+    blockWrapClose,
+  );
 
   return blocks;
 };

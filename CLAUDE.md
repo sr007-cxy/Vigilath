@@ -46,7 +46,7 @@ All paid modes call real AI engines to measure what they actually say about the 
 
 - `--citation-check`: AI citation check via Perplexity. Requires `PERPLEXITY_API_KEY`.
 - `--ai-visibility`: Full multi-engine AI visibility audit. Requires at least one of `PERPLEXITY_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
-- `--entity`: Entity GEO audit for brand/product/person (8 dimensions, 2 of which are free Wikipedia/Wikidata/platform checks). Requires `OPENAI_API_KEY`.
+- `--entity`: Entity GEO audit for brand/product/person (8 dimensions, 2 of which are free Wikipedia/Wikidata/Baidu Baike/platform checks). Uses 3 engines via OpenRouter (GPT-4o-mini, DeepSeek V3, Qwen3). Requires `OPENROUTER_API_KEY`.
 
 ## Key Patterns
 - `track_score(category, earned, max_points)` accumulates per-category scores

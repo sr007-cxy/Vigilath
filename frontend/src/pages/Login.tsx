@@ -69,7 +69,7 @@ export function Login() {
 
             <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
               {error && (
-                <div className="bg-red-900 border border-red-800 text-red-300 p-4 rounded-md text-sm">
+                <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900 dark:border-red-800 dark:text-red-300 p-4 rounded-md text-sm">
                   {error}
                 </div>
               )}

@@ -1,5 +1,15 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
+from fastapi.responses import StreamingResponse as FAPStreamingResponse
+from pydantic import BaseModel
+import asyncio
+import io
+import json
+import uuid
+import time
+from datetime import datetime
+from typing import Dict, Any, Optional, List, Tuple
 from geo.services.geo_checker import run_geo_check
+from geo.services.fix_package import FixPackageGenerator
 from geo.services.membership_service import (
     membership_service,
     FREE_CHECK_CATEGORIES,
@@ -292,6 +302,7 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
             None,    # run all 25 for a realistic score
             None,    # no user_id → L1 Redis only, no L2 DB fallback
             "free",  # tier key
+            force_refresh=body.force_refresh,
         )
         locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
         result = _strip_locked_checks(result, locked)
@@ -340,6 +351,7 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
             None,             # run all 25 regardless of tier — strip locked details below
             user_id,          # L2 DB fallback
             membership.slug,  # tier key
+            force_refresh=body.force_refresh,
         )
         locked = _locked_for(membership)
         result = _strip_locked_checks(result, locked)
@@ -384,6 +396,7 @@ async def test_geo(body: GeoTestRequest, request: Request, response: Response):
             None,    # run all 25 for a realistic score
             None,    # no user_id
             "free",  # tier key
+            force_refresh=body.force_refresh,
         )
         locked = [c for c in ALL_CATEGORIES if c not in FREE_CHECK_CATEGORIES]
         result = _strip_locked_checks(result, locked)
@@ -562,7 +575,7 @@ async def test_geo_stream(
             print(f"Event generator for task {task_id} completed")
 
     
-    sse_response = StreamingResponse(event_generator(), media_type="text/event-stream")
+    sse_response = FAPStreamingResponse(event_generator(), media_type="text/event-stream")
     if set_anon_cookie_value is not None:
         sse_response.set_cookie(
             key=ANON_COOKIE_NAME,
@@ -573,3 +586,95 @@ async def test_geo_stream(
             path="/",
         )
     return sse_response
+
+
+class FixPackageRequest(BaseModel):
+    url: str
+
+
+@router.post("/check/fix-package")
+async def download_fix_package(body: FixPackageRequest, request: Request):
+    """Generate and stream a ZIP fix package for the given URL.
+
+    Requires starter+ membership. Runs the full 25-category check with fixes
+    enabled, then assembles a ZIP containing:
+      - fix-manifest.json     (all fix items with metadata)
+      - robots.txt           (if robots issues found)
+      - llms.txt / llms-full.txt
+      - patches/meta-tags-patch.html
+      - patches/json-ld-patch.html
+      - patches/security-headers-nginx.conf / .htaccess
+      - humans.txt
+      - sitemap.xml.example
+      - content/gseo-suggestions.md
+      - README.md
+    """
+    if not validate_url(body.url):
+        raise AppException(status_code=400, message="Invalid URL format")
+    sanitized_url = sanitize_url(body.url)
+
+    membership, user_id = _resolve_membership_from_request(request)
+
+    if not _fix_allowed(membership):
+        raise AppException(
+            status_code=403,
+            message="This feature requires a starter or higher membership.",
+        )
+
+    with request_log(
+        "fix_package.download",
+        "default",
+        sanitized_url,
+        user_id=user_id,
+        tier=membership.slug,
+    ) as rec:
+        # Build cache key to check if we already have results
+        from geo.services.geo_checker import _build_cache_key
+        cache_key = _build_cache_key(
+            sanitized_url,
+            True,  # include_fix
+            None,  # all categories
+            membership.slug
+        )
+        
+        # Check cache first
+        from geo.services.cache_service import get_cached_report
+        cached_result = get_cached_report(cache_key)
+        
+        if cached_result:
+            # Use cached result
+            from geo.models.geo import GeoTestResult, CheckResult
+            # Convert dict to GeoTestResult, handling nested CheckResult objects
+            cached_result['checks'] = [CheckResult(**check) for check in cached_result.get('checks', [])]
+            result = GeoTestResult(**cached_result)
+            rec["score"] = result.score
+            rec["cache_hit"] = True
+        else:
+            # No cache, run the check
+            result = await _run_check_or_400(
+                rec,
+                sanitized_url,
+                True,    # always include fixes
+                None,    # no progress_callback
+                None,    # run all 25 categories
+                user_id,
+                membership.slug,
+            )
+            rec["score"] = result.score
+            rec["cache_hit"] = False
+
+    locale = request.headers.get("X-Locale", "en")
+    generator = FixPackageGenerator(result, locale=locale)
+    zip_bytes = generator.build_zip()
+
+    from urllib.parse import urlparse
+    parsed = urlparse(sanitized_url)
+    domain = (parsed.netloc or sanitized_url).replace(":", "_").replace("/", "_")
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M")
+    filename = f"geo-fix-{domain}-{timestamp}.zip"
+
+    return FAPStreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

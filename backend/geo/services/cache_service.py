@@ -51,20 +51,26 @@ _REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/7")
 
 # 全局单例 Redis client。redis-py 的 Redis 对象自带连接池,线程安全。
 # decode_responses=False 因为 value 是 gzipped bytes。
-try:
-    _client: Optional[redis.Redis] = redis.Redis.from_url(
-        _REDIS_URL,
-        decode_responses=False,
-        socket_connect_timeout=1.0,
-        socket_timeout=1.0,
-        health_check_interval=30,
-    )
-    # 连通性探测,失败时保持 _client 但后续操作会 raise RedisError → 被我们吞掉
-    _client.ping()
-    _log.info("cache_service: Redis connected at %s", _REDIS_URL)
-except redis.RedisError as e:
-    _log.warning("cache_service: Redis unavailable at %s: %s — cache disabled", _REDIS_URL, e)
-    _client = None
+_NO_CACHE = os.environ.get("GEO_NO_CACHE", "").strip().lower() in ("1", "true", "yes")
+
+if _NO_CACHE:
+    _client: Optional[redis.Redis] = None
+    _log.info("cache_service: cache disabled via GEO_NO_CACHE=1")
+else:
+    try:
+        _client = redis.Redis.from_url(
+            _REDIS_URL,
+            decode_responses=False,
+            socket_connect_timeout=1.0,
+            socket_timeout=1.0,
+            health_check_interval=30,
+        )
+        # 连通性探测,失败时保持 _client 但后续操作会 raise RedisError → 被我们吞掉
+        _client.ping()
+        _log.info("cache_service: Redis connected at %s", _REDIS_URL)
+    except redis.RedisError as e:
+        _log.warning("cache_service: Redis unavailable at %s: %s — cache disabled", _REDIS_URL, e)
+        _client = None
 
 
 def _stable_str(v: Any) -> str:

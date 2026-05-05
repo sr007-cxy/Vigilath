@@ -10,7 +10,7 @@ import type { RerunMode } from './rerunModes';
 const STAGE_WEIGHTS: Record<RerunMode, number[]> = {
   default:    [3, 4, 5, 5, 6, 6, 5],
   aeo:        [4, 6, 8, 8, 6, 5],
-  compare:    [3, 5, 6, 6, 5],
+  compare:    [30, 60, 120, 120, 60],
   crawlTest:  [3, 5, 6, 6, 4],
   authority:  [4, 6, 7, 7, 6],
   citation:   [4, 8, 8, 6],

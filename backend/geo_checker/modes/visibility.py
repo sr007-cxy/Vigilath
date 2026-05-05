@@ -28,6 +28,9 @@ from ..ai import (
     _query_deepseek, _query_doubao,
     _check_brand_in_result, _extract_competitors, _classify_framing,
 )
+from ..analyzers.source_trace import analyze_source_trace
+from ..analyzers.source_preference import analyze_source_preference
+from api_engine.base import Citation, EngineResult
 
 
 def ai_visibility(url, custom_queries=None, return_data=False):
@@ -241,6 +244,51 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             for comp, count in result.get("competitors", {}).items():
                 global_competitors[comp] = global_competitors.get(comp, 0) + count
 
+    # ── Run DeepSeek via browser service if available ──
+    deepseek_results = []
+    try:
+        from browser_engine.client import has_session, search as _browser_search
+        if has_session("deepseek"):
+            try:
+                print(f"\n  Running DeepSeek queries via browser service...")
+
+                for query in all_queries:
+                    try:
+                        r = _browser_search("deepseek", query)
+                        answer = r.get("answer", "")
+                        citations = r.get("citations") or []
+                        deepseek_results.append({
+                            "engine": "DeepSeek",
+                            "query": query,
+                            "answer": answer,
+                            "citations": citations,
+                            "error": r.get("error"),
+                            "brand_result": _check_brand_in_result(answer, citations, domain, brand),
+                            "framing": _classify_framing(answer, brand),
+                            "competitors": _extract_competitors(citations, answer, domain),
+                        })
+                    except Exception as e:
+                        deepseek_results.append({
+                            "engine": "DeepSeek",
+                            "query": query,
+                            "answer": "",
+                            "citations": [],
+                            "error": str(e),
+                            "brand_result": {"cited": False, "domain_citations": [], "mentioned_in_text": False, "all_citations": []},
+                            "framing": "not_mentioned",
+                            "competitors": {},
+                        })
+
+                print(f"  DeepSeek completed: {len([r for r in deepseek_results if not r['error']])} valid results")
+            except Exception as e:
+                print(f"  [{WARN}] DeepSeek browser service error: {e}")
+        else:
+            print(f"  [{WARN}] DeepSeek session not found. Upload session to browser service.")
+    except Exception as e:
+        print(f"  [{WARN}] Browser service unavailable: {e}")
+    except Exception as e:
+        print(f"  [{WARN}] DeepSeek Playwright not available: {e}")
+
     # Per-engine, per-query summary
     for eng_name in engines:
         print(f"\n--- Engine: {eng_name} ---")
@@ -266,6 +314,28 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                 primary_framing = max(set(framings_this), key=framings_this.count)
                 print(f"           Framing: {primary_framing}")
 
+    # DeepSeek Playwright summary
+    if deepseek_results:
+        print(f"\n--- Engine: DeepSeek (Playwright) ---")
+        for query in all_queries:
+            group = query_group_map[query]
+            print(f"  [{INFO}] [{group}] \"{query}\"")
+            run_results = [r for r in deepseek_results if r["query"] == query]
+            valid_runs = [r for r in run_results if not r.get("error")]
+            cited_runs = sum(1 for r in valid_runs if r["brand_result"]["cited"])
+            if len(valid_runs) == 0:
+                print(f"    [{FAIL}] All runs failed")
+            elif cited_runs == len(valid_runs):
+                print(f"    [{PASS}] STABLE — cited in {cited_runs}/{len(valid_runs)} runs")
+            elif cited_runs > 0:
+                print(f"    [{WARN}] UNSTABLE — cited in {cited_runs}/{len(valid_runs)} runs")
+            else:
+                print(f"    [{FAIL}] NOT CITED in any run")
+            framings_this = [r["framing"] for r in valid_runs if r["framing"] != "not_mentioned"]
+            if framings_this:
+                primary_framing = max(set(framings_this), key=framings_this.count)
+                print(f"           Framing: {primary_framing}")
+
     # ══════════════════════════════════════════════════════════════
     # ANALYSIS & SCORING
     # ══════════════════════════════════════════════════════════════
@@ -280,6 +350,7 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     total_query_count = 0
     per_engine_rates = {}
 
+    # Process API engines
     for eng_name in engines:
         eng_cited = 0
         eng_total = 0
@@ -298,6 +369,26 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         per_engine_rates[eng_name] = rate
         print(f"  {eng_name}: {eng_cited}/{eng_total} queries cited ({rate:.0f}%)")
 
+    # Process DeepSeek Playwright
+    if deepseek_results:
+        eng_name = "DeepSeek"
+        eng_cited = 0
+        eng_total = 0
+        for query in all_queries:
+            runs = [r for r in deepseek_results if r["query"] == query]
+            valid_runs = [r for r in runs if not r.get("error")]
+            if valid_runs:
+                eng_total += 1
+                # Cited if majority of runs cite it
+                cited_count = sum(1 for r in valid_runs if r["brand_result"]["cited"])
+                if cited_count > len(valid_runs) / 2:
+                    eng_cited += 1
+                    total_query_cited += 1
+                total_query_count += 1
+        rate = (eng_cited / eng_total * 100) if eng_total > 0 else 0
+        per_engine_rates[eng_name] = rate
+        print(f"  {eng_name} (Playwright): {eng_cited}/{eng_total} queries cited ({rate:.0f}%)")
+
     overall_cite_rate = (total_query_cited / total_query_count * 100) if total_query_count > 0 else 0
     visibility_score = round(overall_cite_rate / 5)  # 0-20
     print(f"  Overall: {overall_cite_rate:.0f}% → {visibility_score}/20 pts")
@@ -308,9 +399,19 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     entity_max = 20
     entity_answers = []
 
+    # Process API engines
     for eng_name in engines:
         for query in entity_queries:
             runs = all_results[eng_name].get(query, [])
+            valid_runs = [r for r in runs if not r.get("error")]
+            for r in valid_runs:
+                if r["brand_result"]["cited"] or r["brand_result"]["mentioned_in_text"]:
+                    entity_answers.append(r["answer"][:500])
+
+    # Process DeepSeek Playwright
+    if deepseek_results:
+        for query in entity_queries:
+            runs = [r for r in deepseek_results if r["query"] == query]
             valid_runs = [r for r in runs if not r.get("error")]
             for r in valid_runs:
                 if r["brand_result"]["cited"] or r["brand_result"]["mentioned_in_text"]:
@@ -383,6 +484,12 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     comp_score = 0
 
     # Show top competitors
+    # Add DeepSeek Playwright competitors
+    for r in deepseek_results:
+        if not r.get("error"):
+            for comp, count in r.get("competitors", {}).items():
+                global_competitors[comp] = global_competitors.get(comp, 0) + count
+
     sorted_comps = sorted(global_competitors.items(), key=lambda x: -x[1])[:10]
     if sorted_comps:
         print(f"  Top competitors mentioned alongside queries:")
@@ -390,6 +497,11 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             print(f"    {comp}: {count} mention(s)")
 
     # Analyze framing
+    # Add DeepSeek Playwright framings
+    for r in deepseek_results:
+        if not r.get("error"):
+            all_framings.append(r["framing"])
+
     framing_counts = {}
     for f in all_framings:
         framing_counts[f] = framing_counts.get(f, 0) + 1
@@ -437,9 +549,26 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     unstable_count = 0
     absent_count = 0
 
+    # Process API engines
     for eng_name in engines:
         for query in all_queries:
             runs = all_results[eng_name].get(query, [])
+            valid_runs = [r for r in runs if not r.get("error")]
+            if not valid_runs:
+                absent_count += 1
+                continue
+            cited_in = sum(1 for r in valid_runs if r["brand_result"]["cited"])
+            if cited_in == len(valid_runs):
+                stable_count += 1
+            elif cited_in > 0:
+                unstable_count += 1
+            else:
+                absent_count += 1
+
+    # Process DeepSeek Playwright
+    if deepseek_results:
+        for query in all_queries:
+            runs = [r for r in deepseek_results if r["query"] == query]
             valid_runs = [r for r in runs if not r.get("error")]
             if not valid_runs:
                 absent_count += 1
@@ -470,10 +599,26 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     gap_score = 20  # Start full, subtract for each gap found
     gaps_found = []
 
+    # Process API engines
     for eng_name in engines:
         for query in all_queries:
             group = query_group_map[query]
             runs = all_results[eng_name].get(query, [])
+            valid_runs = [r for r in runs if not r.get("error")]
+            if not valid_runs:
+                continue
+            cited_in = sum(1 for r in valid_runs if r["brand_result"]["cited"])
+            if cited_in == 0:
+                gap_entry = f"[{eng_name}] \"{query}\" ({group})"
+                if gap_entry not in gaps_found:
+                    gaps_found.append(gap_entry)
+
+    # Process DeepSeek Playwright
+    if deepseek_results:
+        eng_name = "DeepSeek (Playwright)"
+        for query in all_queries:
+            group = query_group_map[query]
+            runs = [r for r in deepseek_results if r["query"] == query]
             valid_runs = [r for r in runs if not r.get("error")]
             if not valid_runs:
                 continue
@@ -568,7 +713,7 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     print(f"\n  Grade: {grade_color}{grade}\033[0m")
 
     # Multi-engine comparison
-    if len(engines) > 1:
+    if len(per_engine_rates) > 1:
         print(f"\n  Per-Engine Visibility:")
         for eng_name, rate in per_engine_rates.items():
             bar_len = int(rate / 5)
@@ -587,11 +732,50 @@ def ai_visibility(url, custom_queries=None, return_data=False):
 
     if return_data:
         top_competitors = sorted(global_competitors.items(), key=lambda x: -x[1])[:10]
+
+        # ── Build EngineResult list for source analyzers ──
+        from api_engine.base import Citation, EngineResult as _ER
+
+        adapter_results = []
+        # Add API engine results
+        for eng_name in engines:
+            for query in all_queries:
+                for run in all_results[eng_name].get(query, []):
+                    if run.get("error"):
+                        continue
+                    cits = [
+                        Citation.from_url(u, position=i + 1)
+                        for i, u in enumerate(run.get("citations", []))
+                    ]
+                    adapter_results.append(_ER(
+                        engine=eng_name, query=query,
+                        answer=run.get("answer", ""), citations=cits,
+                    ))
+
+        # Add DeepSeek Playwright results
+        for r in deepseek_results:
+            if r.get("error"):
+                continue
+            cits = [
+                Citation.from_url(c.url, position=c.position)
+                for c in r.get("citations", [])
+            ]
+            adapter_results.append(_ER(
+                engine="DeepSeek", query=r["query"],
+                answer=r.get("answer", ""), citations=cits,
+            ))
+
+        source_trace = analyze_source_trace(adapter_results, target_domain=domain)
+        source_pref = analyze_source_preference(adapter_results, target_domain=domain)
+
+        # Include all engines used
+        engines_used = list(per_engine_rates.keys())
+
         return {
             "url": base_url,
             "domain": domain,
             "brand": brand,
-            "engines": list(engines.keys()),
+            "engines": engines_used,
             "scores": {
                 "visibility": visibility_score,
                 "entity": entity_score,
@@ -609,6 +793,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             "content_gaps": unique_gaps[:20],
             "query_count": len(all_queries),
             "stability_runs": STABILITY_RUNS,
+            "source_trace": source_trace,
+            "source_preference": source_pref,
         }
 
 

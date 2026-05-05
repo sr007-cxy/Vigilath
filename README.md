@@ -189,11 +189,117 @@ geo-checker --ai-visibility https://example.com --queries "best AI payment tools
 - **INFO** (blue) — Informational, optional improvement
 - **FIX** (cyan) — Actionable fix recommendation (only with `--fix`)
 
+## Browser Session Management
+
+Browser engine adapters (通义千问 / DeepSeek / 文心一言 / 豆包) require saved login sessions to query AI engines headlessly. Sessions are stored as Playwright `storage_state` JSON files in `backend/data/browser_sessions/`.
+
+### Check all sessions
+
+```bash
+# Check session health for all platforms (local analysis + online verification)
+python backend/scripts/check_sessions.py
+
+# Check specific platforms only
+python backend/scripts/check_sessions.py --only qwen deepseek
+
+# Re-login invalid sessions interactively (requires GUI)
+python backend/scripts/check_sessions.py --fix
+
+# Force re-login all platforms regardless of status
+python backend/scripts/check_sessions.py --fix --all
+```
+
+### Individual platform login
+
+Each platform also has its own login script for manual use:
+
+```bash
+# Interactive login (launches headed browser)
+python backend/scripts/qwen_login.py
+python backend/scripts/deepseek_login.py
+python backend/scripts/wenxin_login.py
+python backend/scripts/doubao_login.py
+
+# Import token directly (no GUI needed)
+python backend/scripts/deepseek_login.py --token 'eyJhbGci...'
+python backend/scripts/doubao_login.py --token 'eyJhbGci...'
+
+# Import full state from JSON export
+python backend/scripts/qwen_login.py --import state.json
+
+# Check current session status
+python backend/scripts/deepseek_login.py --status
+
+# Clear saved session
+python backend/scripts/deepseek_login.py --clear
+```
+
+## Test Environment Deployment
+
+### Server Topology
+
+```
+Internet → 123.125.194.100:12080 → 172.80.40.102:80 (nginx)
+                                       ├── /              → /opt/geo/frontend/dist (SPA)
+                                       ├── /api           → localhost:8000 (backend)
+                                       └── /api/browser-cn/     → 172.80.40.103:8092
+```
+
+> **Note**: 101 (vm01) 原部署的 Playwright Browser Service (global/海外引擎) 已于 2026-04-29 下线清理，原因：Cloudflare Turnstile 无法在服务器端通过，海外引擎浏览器自动化方案不可行。海外引擎改走 API（OpenAI/Anthropic/Perplexity）。
+
+### Services
+
+| Server | IP | Service | Port | Unit | App Path |
+|--------|-----|---------|------|------|----------|
+| vm02 | 172.80.40.102 | Backend (FastAPI + uvicorn) | 8000 | `geo-backend.service` | `/opt/geo/backend` |
+| vm02 | 172.80.40.102 | Frontend (nginx static) | 80 | `nginx.service` | `/opt/geo/frontend/dist` |
+| vm03 | 172.80.40.103 | Playwright Browser Service (cn) | 8092 | `browser-service.service` | `/opt/browser-service` |
+
+- SSH: `root` / `REDACTED_VM_PASSWORD`
+- OS: Ubuntu 22.04 (all three)
+- Python: 3.10 (browser-service), 3.12 (backend)
+
+### Deploy Commands
+
+**Backend + Frontend (102):**
+```bash
+# From local machine
+sshpass -p 'REDACTED_VM_PASSWORD' ssh root@172.80.40.102 'bash -s' << 'EOF'
+cd /opt/geo
+git pull --ff-only origin feature/playwright
+systemctl restart geo-backend.service
+cd frontend && npm ci && npm run build
+systemctl reload nginx
+EOF
+```
+
+**Playwright microservice (103 only, CN engines):**
+```bash
+sshpass -p 'REDACTED_VM_PASSWORD' rsync -avz --delete \
+  -e 'sshpass -p REDACTED_VM_PASSWORD ssh -o StrictHostKeyChecking=no' \
+  services/browser-service/app/ root@172.80.40.103:/opt/browser-service/app/
+sshpass -p 'REDACTED_VM_PASSWORD' ssh root@172.80.40.103 'systemctl restart browser-service.service'
+```
+
+### Smoke Test
+
+```bash
+# Backend health
+curl -s http://172.80.40.102:8000/health
+# → {"status":"healthy"}
+
+# Frontend
+curl -sI http://172.80.40.102/
+# → HTTP/1.1 200 OK
+
+# Playwright (cn)
+curl -s http://172.80.40.103:8092/docs
+# → Swagger UI HTML
+```
+
 ## Dependencies
 
 - `requests>=2.28` — HTTP fetching
 - `beautifulsoup4>=4.12` — HTML parsing
 
 ## License
-
-MIT

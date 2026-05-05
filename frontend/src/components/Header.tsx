@@ -55,10 +55,8 @@ export function Header() {
   const loadUserFromLocalStorage = () => {
     try {
       const storedUser = localStorage.getItem('user');
-      console.log('Header loadUserFromLocalStorage:', storedUser);
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
-        console.log('Header parsed user:', parsedUser);
         setUser(parsedUser.email);
       } else {
         setUser(null);
@@ -120,14 +118,12 @@ export function Header() {
   }, [isDropdownOpen]);
 
   useEffect(() => {
-    const intervalId = setInterval(loadUserFromLocalStorage, 1000);
+    loadUserFromLocalStorage();
 
-    return () => {
-      clearInterval(intervalId);
-    };
+    const handleStorage = () => loadUserFromLocalStorage();
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
-
-  console.log('Header user state:', user);
 
   return (
     <header
@@ -203,6 +199,17 @@ export function Header() {
                       <p className="text-sm font-medium truncate text-primary">{user}</p>
                     </div>
                     <div className="py-2">
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 bg-surface-hover"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm12 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                        </svg>
+                        {t('nav.dashboard')}
+                      </Link>
                       <Link
                         to="/account"
                         onClick={() => setIsDropdownOpen(false)}
@@ -320,6 +327,17 @@ export function Header() {
                     <p className="text-xs text-muted">{t('nav.signedInAs')}</p>
                     <p className="text-sm font-medium truncate text-primary">{user}</p>
                   </div>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm12 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                    </svg>
+                    {t('nav.dashboard')}
+                  </Link>
                   <Link
                     to="/account"
                     onClick={() => setIsMobileMenuOpen(false)}

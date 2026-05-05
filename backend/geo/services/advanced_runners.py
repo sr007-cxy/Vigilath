@@ -34,6 +34,7 @@ from geo_checker.modes import (
     visibility as _mode_visibility,
     entity as _mode_entity,
     aeo as _mode_aeo,
+    competitive_intel as _mode_competitive_intel,
 )
 from geo_checker import orchestrate as _gc_orchestrate
 
@@ -57,6 +58,7 @@ instrument_funcs(_mode_citation, ["citation_check"])
 instrument_funcs(_mode_visibility, ["ai_visibility"])
 instrument_funcs(_mode_entity, ["entity_audit"])
 instrument_funcs(_mode_aeo, ["aeo_visibility"])
+instrument_funcs(_mode_competitive_intel, ["competitive_intel"])
 
 
 class _ThreadLocalStdout:
@@ -159,6 +161,40 @@ def run_compare(urls: List[str]) -> Dict[str, Any]:
     )
 
 
+def start_compare_task(urls: List[str]) -> str:
+    """Start compare in a background thread. Returns task_id."""
+    task_id = uuid.uuid4().hex[:16]
+    identity = {"url": "+".join(sorted(urls)), "urls": sorted(urls)}
+
+    with _tasks_lock:
+        _tasks[task_id] = {
+            "status": "running",
+            "mode": "compare",
+            "urls": urls,
+            "result": None,
+            "error": None,
+        }
+
+    def _worker():
+        try:
+            result = _cached_run(
+                "compare",
+                identity,
+                lambda: _silent_call(_mode_compare.compare_urls, urls, return_data=True),
+            )
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "done"
+                _tasks[task_id]["result"] = result
+        except Exception as e:
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "error"
+                _tasks[task_id]["error"] = str(e)
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return task_id
+
+
 def run_crawl_test(url: str) -> Dict[str, Any]:
     return _cached_run(
         "crawl-test",
@@ -212,9 +248,86 @@ def run_entity_audit(entity_name: str, entity_type: str = "brand") -> Dict[str, 
     )
 
 
+# ---------------------------------------------------------------------------
+# Async task support for long-running entity audits
+# ---------------------------------------------------------------------------
+# Entity audits take 2-4 minutes (10 browser engines in parallel).  The BMS02
+# proxy layer times out before the backend finishes.  To work around this,
+# POST /entity returns a task_id immediately and the frontend polls for the
+# result.  The in-memory dict is sufficient — tasks are short-lived and a
+# server restart clears them (the frontend will retry).
+
+import uuid  # noqa: E402
+
+_tasks: Dict[str, Dict[str, Any]] = {}
+_tasks_lock = threading.Lock()
+
+
+def start_entity_task(entity_name: str, entity_type: str = "brand") -> str:
+    """Start entity audit in a background thread. Returns task_id."""
+    task_id = uuid.uuid4().hex[:16]
+    identity = {"url": entity_name, "entity_type": entity_type}
+
+    with _tasks_lock:
+        _tasks[task_id] = {
+            "status": "running",
+            "entity_name": entity_name,
+            "entity_type": entity_type,
+            "result": None,
+            "error": None,
+        }
+
+    def _worker():
+        try:
+            result = _cached_run(
+                "entity",
+                identity,
+                lambda: _silent_call(
+                    _mode_entity.entity_audit,
+                    entity_name,
+                    entity_type=entity_type,
+                    return_data=True,
+                ),
+            )
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "done"
+                _tasks[task_id]["result"] = result
+        except Exception as e:
+            with _tasks_lock:
+                _tasks[task_id]["status"] = "error"
+                _tasks[task_id]["error"] = str(e)
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return task_id
+
+
+def get_entity_task(task_id: str) -> Dict[str, Any]:
+    """Return task status and result (if done)."""
+    with _tasks_lock:
+        return _tasks.get(task_id, {"status": "not_found"})
+
+
 def run_aeo_visibility(url: str) -> Dict[str, Any]:
     return _cached_run(
         "aeo",
         {"url": url},
         lambda: _silent_call(_mode_aeo.aeo_visibility, url, return_data=True),
+    )
+
+
+def run_competitive_intel(url: str, competitor_domains: Optional[List[str]] = None) -> Dict[str, Any]:
+    identity = {
+        "url": url,
+        "competitor_domains": sorted(competitor_domains) if competitor_domains else None,
+    }
+    return _cached_run(
+        "competitive-intel",
+        identity,
+        lambda: _silent_call(
+            _mode_competitive_intel.competitive_intel,
+            url,
+            competitor_domains=competitor_domains,
+            return_data=True,
+        ),
     )

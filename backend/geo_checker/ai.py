@@ -225,54 +225,85 @@ def _extract_competitors(citations, answer, domain):
 
 
 def _classify_framing(answer, brand):
-    """Classify how the AI frames the brand in its answer."""
+    """Classify how the AI frames the brand in its answer.
+    Supports both English and Chinese response patterns."""
     answer_lower = answer.lower()
     brand_lower = brand.lower()
 
     if brand_lower not in answer_lower:
         return "not_mentioned"
 
-    # Check for recommendation language (strongest)
+    # Check for recommendation language (strongest) — EN + ZH
     rec_patterns = [
         f"recommend {brand_lower}", f"use {brand_lower}", f"consider {brand_lower}",
         f"try {brand_lower}", f"choose {brand_lower}", f"go with {brand_lower}",
         f"{brand_lower} is the best", f"{brand_lower} is a leading",
         f"{brand_lower} is a top", f"{brand_lower} stands out",
     ]
+    rec_patterns_zh = [
+        f"推荐{brand_lower}", f"建议.*{brand_lower}", f"首选.*{brand_lower}",
+        f"{brand_lower}.*最好", f"{brand_lower}.*最佳", f"{brand_lower}.*首推",
+        f"值得.*{brand_lower}", f"选择{brand_lower}",
+    ]
     for pat in rec_patterns:
         if pat in answer_lower:
             return "recommended"
+    for pat in rec_patterns_zh:
+        if re.search(pat, answer_lower):
+            return "recommended"
 
-    # Check for leader framing
+    # Check for leader framing — EN + ZH
     leader_patterns = [
         f"{brand_lower} is a leader", f"{brand_lower} is one of the leading",
         f"{brand_lower} is a major", f"{brand_lower} is a popular",
         f"{brand_lower} is well-known", f"{brand_lower} is widely used",
         f"{brand_lower} is a prominent",
     ]
+    leader_patterns_zh = [
+        f"{brand_lower}.*领先", f"{brand_lower}.*领导", f"{brand_lower}.*知名",
+        f"{brand_lower}.*著名", f"{brand_lower}.*头部", f"{brand_lower}.*顶尖",
+        f"{brand_lower}.*领军", f"{brand_lower}.*权威",
+    ]
     for pat in leader_patterns:
         if pat in answer_lower:
             return "leader"
+    for pat in leader_patterns_zh:
+        if re.search(pat, answer_lower):
+            return "leader"
 
-    # Check for option/alternative framing
+    # Check for option/alternative framing — EN + ZH
     option_patterns = [
         f"{brand_lower} is an option", f"{brand_lower} is one option",
         f"{brand_lower} is an alternative", f"alternative.*{brand_lower}",
         f"options.*{brand_lower}", f"include.*{brand_lower}",
         f"{brand_lower} is another",
     ]
+    option_patterns_zh = [
+        f"{brand_lower}.*之一", f"{brand_lower}.*可选", f"{brand_lower}.*替代",
+        f"包括.*{brand_lower}", f"其中.*{brand_lower}",
+    ]
     for pat in option_patterns:
         if re.search(pat, answer_lower):
             return "option"
+    for pat in option_patterns_zh:
+        if re.search(pat, answer_lower):
+            return "option"
 
-    # Check for niche/experimental framing
+    # Check for niche/experimental framing — EN + ZH
     niche_patterns = [
         f"{brand_lower} is a niche", f"{brand_lower} is experimental",
         f"{brand_lower} is a newer", f"{brand_lower} is a small",
         f"{brand_lower} is relatively new", f"{brand_lower} is emerging",
     ]
+    niche_patterns_zh = [
+        f"{brand_lower}.*小众", f"{brand_lower}.*新兴", f"{brand_lower}.*新锐",
+        f"{brand_lower}.*起步", f"{brand_lower}.*实验",
+    ]
     for pat in niche_patterns:
         if pat in answer_lower:
+            return "niche"
+    for pat in niche_patterns_zh:
+        if re.search(pat, answer_lower):
             return "niche"
 
     return "mentioned"

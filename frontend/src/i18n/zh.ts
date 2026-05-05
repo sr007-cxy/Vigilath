@@ -63,6 +63,10 @@ const zh = {
             "cookie": {
               "title": "Cookie 政策 · GApex",
               "description": "GApex 使用 cookie 及类似技术的说明。"
+            },
+            "dashboard": {
+              "title": "工作台 · GApex",
+              "description": "在一处管理你的多平台内容发布、监控和互动。"
             }
           },
           "nav": {
@@ -79,6 +83,7 @@ const zh = {
             "login": "登录",
             "register": "注册",
             "signedInAs": "已登录为",
+            "dashboard": "工作台",
             "account": "账户中心",
             "logout": "退出登录"
           },
@@ -463,6 +468,8 @@ const zh = {
                   "framings": "品牌情感框架",
                   "contentGaps": "内容缺口",
                   "noGaps": "没有重大缺口",
+                  "sourceTrace": "引用源追溯",
+                  "sourcePreference": "引用源偏好",
                   "categories": {
                     "visibility": "提示可见度",
                     "entity": "实体清晰度",
@@ -474,15 +481,50 @@ const zh = {
                 "entity": {
                   "kgTitle": "知识图谱覆盖",
                   "platforms": "平台覆盖",
-                  "sentimentTitle": "情感与框架",
-                  "overallSentiment": "整体情感",
-                  "bestFraming": "最佳框架",
-                  "recognitionRate": "识别率",
-                  "contentGaps": "内容缺口",
-                  "noGaps": "未发现缺口",
+                  "enginesUsed": "AI 引擎",
+                  "sentimentTitle": "AI 怎么看你",
+                  "overallSentiment": "AI 对你的态度",
+                  "bestFraming": "AI 给你的定位",
+                  "recognitionRate": "AI 认识你的概率",
+                  "contentGaps": "AI 会在这些场景推荐你",
+                  "noGaps": "未发现推荐场景",
                   "gradePrefix": "评级",
                   "found": "已找到",
                   "missing": "缺失",
+                  "engineNotRecognized": "未识别",
+                  "sourceAnalysis": "引用源分析",
+                  "sourceStats": "{{sources}} 个来源 · {{citations}} 次引用",
+                  "kgWikipedia": "维基百科",
+                  "kgWikidata": "Wikidata",
+                  "kgGoogleKg": "Google 知识图谱",
+                  "kgBaiduBaike": "百度百科",
+                  "sourceTrace": "引用源追溯",
+                  "sourcePreference": "引用源偏好",
+                  "sourcesShort": "{{count}} 个来源",
+                  "sa": {
+                    "allModels": "全部模型",
+                    "allPlatforms": "全部平台",
+                    "all": "全部",
+                    "ownArticles": "自有文章",
+                    "searchDomain": "搜索来源域名...",
+                    "searchSource": "搜索来源名称...",
+                    "sourceCount": "引用来源数",
+                    "totalCitations": "总引用次数",
+                    "avgCitations": "平均引用次数",
+                    "top10Sources": "Top 10 引用来源",
+                    "noData": "暂无数据",
+                    "platformShare": "平台引用占比",
+                    "headerPlatform": "引用平台",
+                    "headerCitations": "总引用次",
+                    "headerModels": "覆盖模型",
+                    "articles": "{{count}} 篇文章",
+                    "citedTimes": "被引 {{count}} 次",
+                    "noMatch": "没有匹配的引用源",
+                    "recommendations": "优化建议",
+                    "aiModels": "大模型：",
+                    "sourcesCount": "{{count}} 个来源",
+                    "citationsCount": "{{count}} 次引用"
+                  },
                   "scoreLabels": {
                     "entityRecognition": "实体识别",
                     "entityClarity": "实体清晰度",
@@ -494,21 +536,22 @@ const zh = {
                     "platformFootprint": "平台覆盖度"
                   },
                   "sentiments": {
-                    "unknown": "未知",
-                    "negative": "负面",
+                    "unknown": "AI 还不了解你",
+                    "negative": "偏负面",
                     "mixed": "褒贬不一",
-                    "strongly positive": "强烈正面",
+                    "strongly positive": "非常正面",
                     "positive": "正面",
-                    "neutral": "中性"
+                    "neutral": "中性（无明显倾向）"
                   },
                   "framings": {
-                    "recommended": "被推荐",
-                    "leader": "领导者",
-                    "option": "候选项",
-                    "mentioned": "被提及",
-                    "present": "出现",
-                    "niche": "小众",
-                    "not_mentioned": "未被提及"
+                    "recommended": "主动推荐你",
+                    "leader": "视为行业领袖",
+                    "option": "列为候选之一",
+                    "mentioned": "仅提及名字",
+                    "present": "出现过",
+                    "niche": "认为较小众",
+                    "not_mentioned": "完全没提到你",
+                    "unknown": "尚无定位"
                   }
                 }
               }
@@ -1696,6 +1739,119 @@ const zh = {
               "contactText": "如有任何疑问或需要更多信息，请通过以下方式联系我们。我们的专业团队将尽快回复您。",
               "emailLabel": "邮箱",
               "phoneLabel": "电话"
+            }
+          },
+          "dashboard": {
+            "title": "工作台",
+            "nav": {
+              "home": "首页",
+              "compose": "撰写",
+              "inbox": "收件箱",
+              "posts": "帖子",
+              "stats": "统计",
+              "policy": "策略",
+              "accounts": "平台账户"
+            },
+            "home": {
+              "title": "工作台",
+              "attention": "待处理事项",
+              "attentionReplies": "{{count}} 条回复等待审批",
+              "attentionDrafts": "{{count}} 篇草稿待排期",
+              "attentionToken": "LinkedIn 令牌将于 3 天后过期",
+              "review": "查看",
+              "reconnect": "重新连接",
+              "postsPublished": "已发布帖子",
+              "repliesSent": "已发送回复",
+              "approvalRate": "通过率",
+              "agentCost": "Agent 成本",
+              "recentActivity": "最近动态",
+              "activityReply": "回复已发送",
+              "activityPost": "帖子已发布",
+              "activityDraft": "内容 Agent 生成草稿待审核",
+              "activityPublish": "帖子已发布"
+            },
+            "compose": {
+              "title": "撰写",
+              "save": "保存",
+              "post": "发布",
+              "briefLabel": "简报（告诉内容 Agent 写什么）",
+              "briefPlaceholder": "例如：为 SDK v2 写发布帖。切入点：一行命令即可迁移。素材：博客文章、更新日志……",
+              "targetPlatforms": "目标平台",
+              "selectPlatforms": "选择平台...",
+              "writeOnly": "仅可发布",
+              "connect": "连接",
+              "schedule": "排期",
+              "now": "立即",
+              "scheduled": "定时",
+              "draftWithAgent": "用内容 Agent 起草",
+              "writeManually": "手动撰写"
+            },
+            "inbox": {
+              "title": "收件箱",
+              "all": "全部",
+              "needsApproval": "待审批",
+              "sent": "已发送",
+              "ignored": "已忽略",
+              "draftReady": "草稿就绪 · 置信度 {{confidence}}%",
+              "autoSent": "已自动发送",
+              "escalated": "已上报",
+              "autoFixed": "已自动修复",
+              "on": "来自",
+              "draftReplyLabel": "回复草稿（Claude Sonnet）",
+              "reasoning": "回复依据",
+              "confidenceLabel": "置信度",
+              "sendAsIs": "直接发送",
+              "edit": "编辑",
+              "ignore": "忽略",
+              "selectItem": "选择一条消息查看详情"
+            },
+            "posts": {
+              "title": "帖子管理",
+              "all": "全部",
+              "published": "已发布",
+              "scheduled": "已排期",
+              "draft": "草稿",
+              "scheduledFor": "排期时间",
+              "publishedAt": "发布时间"
+            },
+            "stats": {
+              "title": "数据分析",
+              "totalPosts": "帖子总数",
+              "totalReplies": "回复总数",
+              "avgConfidence": "平均置信度",
+              "totalCost": "总成本",
+              "vsLastWeek": "较上周",
+              "byPlatform": "按平台",
+              "platform": "平台",
+              "posts": "帖子",
+              "replies": "回复",
+              "engagement": "互动率",
+              "agentPerformance": "Agent 性能",
+              "agent": "Agent",
+              "runs": "运行次数",
+              "avgTime": "平均耗时",
+              "cost": "成本",
+              "contentAgent": "内容 Agent",
+              "publisherAgent": "发布 Agent",
+              "monitorAgent": "监控 Agent",
+              "replyAgent": "回复 Agent"
+            },
+            "policy": {
+              "title": "策略与语调",
+              "save": "保存",
+              "voice": "语调",
+              "rules": "规则",
+              "escalation": "上报",
+              "voiceDesc": "内容、发布、回复 Agent 共用的语调设定",
+              "rulesDesc": "自动回复规则与频率限制",
+              "escalationDesc": "何时、如何上报给人工处理"
+            },
+            "accounts": {
+              "title": "平台账户",
+              "addPlatform": "添加平台",
+              "connected": "已连接",
+              "expires": "过期时间",
+              "connect": "连接"
             }
           },
           "account": {

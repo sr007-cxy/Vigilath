@@ -217,7 +217,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                     </div>
 
                     {error && (
-                      <div className="bg-red-900/30 border border-red-800/50 text-red-300 p-3 rounded-md text-sm">
+                      <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
                         {error}
                       </div>
                     )}
@@ -338,7 +338,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                     </div>
 
                     {error && (
-                      <div className="bg-red-900/30 border border-red-800/50 text-red-300 p-3 rounded-md text-sm">
+                      <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
                         {error}
                       </div>
                     )}
@@ -496,7 +496,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                 </div>
 
                 {error && (
-                  <div className="bg-red-900/30 border border-red-800/50 text-red-300 p-3 rounded-md text-sm">
+                  <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
                     {error}
                   </div>
                 )}

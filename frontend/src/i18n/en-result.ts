@@ -747,6 +747,13 @@ const enResult = {
                 "notDetected": "{{name}} not detected"
               }
             },
+            "fixPackage": {
+              "download": "Fix Package",
+              "downloading": "Generating...",
+              "title": "Download Fix Package",
+              "upgradeRequired": "This feature requires a starter or higher membership.",
+              "error": "Failed to download fix package"
+            },
             "shareExport": {
               "title": "Share & Export",
               "copied": "Link copied to clipboard!",

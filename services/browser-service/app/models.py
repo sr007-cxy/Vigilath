@@ -1,0 +1,46 @@
+"""Pydantic v2 models for browser service API."""
+from __future__ import annotations
+
+from typing import List, Optional
+
+from pydantic import BaseModel
+
+
+class SearchRequest(BaseModel):
+    engine: str
+    query: str
+
+
+class CitationOut(BaseModel):
+    url: str
+    domain: str
+    title: str = ""
+    snippet: str = ""
+    position: int = 0
+
+
+class SearchResponse(BaseModel):
+    engine: str
+    query: str
+    answer: str = ""
+    citations: List[CitationOut] = []
+    error: Optional[str] = None
+    video_url: Optional[str] = None
+
+
+class SessionInfo(BaseModel):
+    engine: str
+    has_session: bool
+    name: str = ""
+
+
+class EnginesResponse(BaseModel):
+    region: str
+    engines: List[str]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    browser_connected: bool
+    region: str
+    engine_count: int

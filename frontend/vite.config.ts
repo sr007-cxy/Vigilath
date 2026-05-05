@@ -1,10 +1,232 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { join } from 'path'
+
+/**
+ * Post-build plugin: generates per-route HTML files with unique <title>,
+ * <meta description>, <canonical>, and route-specific SEO skeleton content.
+ *
+ * This solves the SPA "duplicate content" problem for GEO checkers and AI
+ * crawlers that don't execute JS: each route gets its own index.html with
+ * unique metadata. nginx's `try_files $uri $uri/ /index.html` will serve
+ * the route-specific file when it exists.
+ */
+function seoPages(): Plugin {
+  const routes: Record<string, { title: string; description: string; h1: string; content: string }> = {
+    '/geo-knowledge': {
+      title: 'GEO Knowledge Base — AI Visibility Guides | GApex',
+      description: 'Learn how Generative Engine Optimization works. Explore guides on robots.txt for AI bots, llms.txt, structured data, semantic HTML, and the 25 categories that determine your AI Visibility Score.',
+      h1: 'GEO Knowledge Base — AI Visibility Guides',
+      content: `
+        <section>
+          <h2>Understanding Generative Engine Optimization</h2>
+          <p><dfn>Generative Engine Optimization</dfn> (<abbr title="Generative Engine Optimization">GEO</abbr>) is the practice of making web content discoverable and quotable by AI answer engines. This knowledge base covers every aspect of GEO — from technical crawl access (robots.txt, llms.txt, sitemap.xml) to content formatting that <abbr title="Large Language Models">LLMs</abbr> prefer to cite.</p>
+          <h2>GEO Knowledge Categories</h2>
+          <ul>
+            <li><strong>Crawl Access</strong> — How to configure robots.txt, llms.txt, and .well-known manifests for AI bots like GPTBot, ClaudeBot, and PerplexityBot</li>
+            <li><strong>Content Extractability</strong> — Server-side rendering, semantic HTML, heading structure, and content-to-HTML ratio</li>
+            <li><strong>Meta &amp; Structured Data</strong> — JSON-LD schema markup, Open Graph, Twitter cards, and canonical URLs</li>
+            <li><strong>Authority &amp; Trust</strong> — Security headers, E-E-A-T signals, brand entity knowledge graphs, and cross-platform presence</li>
+            <li><strong>Answer-Format Readiness</strong> — Definitions, comparison tables, step-by-step instructions, FAQ blocks, and quotable statistics</li>
+          </ul>
+          <h2>GEO Metrics Explained</h2>
+          <p>The AI Visibility Score (0–100) synthesizes 25 categories and 100+ discrete checks into a single actionable number. Each category targets a specific aspect of AI readiness — from whether your robots.txt allows GPTBot to whether your content includes citable definitions and comparison tables.</p>
+        </section>`,
+    },
+    '/products-services': {
+      title: 'Products & Services — GEO Audit Plans | GApex',
+      description: 'Explore GApex membership plans: Free (3 checks/month), Pro ($9.99/mo, 20 audits), Starter ($999/mo, managed GEO), Growth ($2,500/mo, SEO placements), and Scale (enterprise). Get your AI Visibility Score today.',
+      h1: 'GApex Products &amp; Services',
+      content: `
+        <section>
+          <h2>Membership Plans</h2>
+          <p>GApex offers five tiers designed for teams of every size — from solo founders to enterprise organizations managing hundreds of domains.</p>
+          <table>
+            <thead><tr><th>Plan</th><th>Price</th><th>Checks / month</th><th>Key features</th></tr></thead>
+            <tbody>
+              <tr><td>Free</td><td>$0</td><td>3</td><td>Basic 25-category audit, AI Visibility Score</td></tr>
+              <tr><td>Pro</td><td>$9.99/mo</td><td>20</td><td>Full audit, check history, prioritized fix list, PDF export</td></tr>
+              <tr><td>Starter</td><td>$999/mo</td><td>Unlimited</td><td>Managed GEO coverage, AI inclusion spec, copywriting compliance</td></tr>
+              <tr><td>Growth</td><td>$2,500/mo</td><td>Unlimited</td><td>Starter features + paid SEO placements, priority technical support</td></tr>
+              <tr><td>Scale</td><td>Custom</td><td>Unlimited</td><td>Enterprise GEO, reputation management, PR support, dedicated advisor</td></tr>
+            </tbody>
+          </table>
+          <h2>Managed GEO Services</h2>
+          <p>For Starter, Growth, and Scale tiers, GApex provides hands-on managed services: we implement the fixes our audit identifies — configuring robots.txt for AI bots, building JSON-LD structured data, creating llms.txt, and ensuring your content is formatted for maximum AI citation potential.</p>
+        </section>`,
+    },
+    '/about': {
+      title: 'About GApex — Our Mission & Team',
+      description: 'GApex is the unified GEO+AEO platform helping websites achieve global AI visibility. Learn about our team, mission, and the technology behind the AI Visibility Score.',
+      h1: 'About GApex',
+      content: `
+        <section>
+          <h2>Our Mission</h2>
+          <p>GApex was founded to solve a new challenge in digital marketing: making websites visible to AI answer engines. As ChatGPT, Perplexity, Claude, and Google AI Overviews reshape how people find information, we provide the tools and expertise to ensure your brand is cited, quoted, and recommended by these platforms.</p>
+          <h2>What We Do</h2>
+          <p>We built the first unified <abbr title="Generative Engine Optimization">GEO</abbr>+<abbr title="Answer Engine Optimization">AEO</abbr> audit platform. GApex scans any website across 25 categories and 100+ signals, producing a 0–100 AI Visibility Score with a detailed category breakdown and prioritized fix list. Our managed services help teams implement those fixes at scale.</p>
+        </section>`,
+    },
+    '/privacy': {
+      title: 'Privacy Policy | GApex',
+      description: 'GApex Privacy Policy. Learn how we collect, use, and protect your personal information when using the GApex GEO Readiness Checker platform.',
+      h1: 'Privacy Policy',
+      content: `
+        <section>
+          <h2>1. Overview</h2>
+          <p>GApex (operated by Zen7) values your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use the GApex GEO Readiness Checker (the "Service").</p>
+          <h2>2. Information We Collect</h2>
+          <p>We collect information you provide directly (account registration, contact forms) and information collected automatically (usage data, device information, cookies). We do not sell your personal data to third parties.</p>
+          <h2>3. How We Use Information</h2>
+          <p>We use your information to provide and improve the Service, process transactions, send communications, and ensure security. For full details, please refer to the complete policy rendered on this page.</p>
+          <h2>4. Contact</h2>
+          <p>For privacy inquiries, contact us at support@zen7.com or visit our <a href="/contact">contact page</a>.</p>
+        </section>`,
+    },
+    '/terms': {
+      title: 'Terms of Service | GApex',
+      description: 'GApex Terms of Service. Read the terms governing your use of the GApex GEO+AEO platform, including membership plans, acceptable use, and intellectual property.',
+      h1: 'Terms of Service',
+      content: `
+        <section>
+          <h2>1. Acceptance of Terms</h2>
+          <p>By accessing or using GApex (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+          <h2>2. Service Description</h2>
+          <p>GApex provides a Generative Engine Optimization (GEO) readiness checking service that audits websites across 25 categories to assess AI visibility. The Service includes free and paid membership tiers.</p>
+          <h2>3. Membership &amp; Billing</h2>
+          <p>Paid plans (Pro, Starter, Growth, Scale) are billed on a recurring basis. You may cancel at any time; cancellations take effect at the end of the current billing period.</p>
+          <h2>4. Contact</h2>
+          <p>For questions about these terms, contact us at support@zen7.com or visit our <a href="/contact">contact page</a>.</p>
+        </section>`,
+    },
+    '/membership': {
+      title: 'Membership Plans — Free, Pro, Starter, Growth, Scale | GApex',
+      description: 'Compare GApex membership plans. Free plan includes 3 checks/month. Pro offers 20 full audits for $9.99/mo. Starter, Growth, and Scale tiers include managed GEO services and unlimited checks.',
+      h1: 'GApex Membership Plans',
+      content: `
+        <section>
+          <h2>Choose Your AI Visibility Plan</h2>
+          <p>Every plan includes the core GApex 25-category audit. Higher tiers unlock more checks, managed services, and enterprise features.</p>
+          <table>
+            <thead><tr><th>Plan</th><th>Price</th><th>Checks</th><th>Fix list</th><th>History</th><th>Managed GEO</th><th>Dedicated advisor</th></tr></thead>
+            <tbody>
+              <tr><td>Free</td><td>$0</td><td>3/mo</td><td>Basic</td><td>No</td><td>No</td><td>No</td></tr>
+              <tr><td>Pro</td><td>$9.99/mo</td><td>20/mo</td><td>Full</td><td>Yes</td><td>No</td><td>No</td></tr>
+              <tr><td>Starter</td><td>$999/mo</td><td>Unlimited</td><td>Full</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+              <tr><td>Growth</td><td>$2,500/mo</td><td>Unlimited</td><td>Full</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+              <tr><td>Scale</td><td>Custom</td><td>Unlimited</td><td>Full</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+            </tbody>
+          </table>
+          <h2>Frequently Asked Questions</h2>
+          <ul>
+            <li><strong>Can I upgrade anytime?</strong> — Yes, plan upgrades are prorated and take effect immediately.</li>
+            <li><strong>Is there a free trial?</strong> — The Free plan is always free. Pro offers a 7-day trial.</li>
+            <li><strong>What payment methods are accepted?</strong> — Credit cards (Visa, Mastercard, Amex) via Stripe.</li>
+          </ul>
+        </section>`,
+    },
+    '/contact': {
+      title: 'Contact Us | GApex',
+      description: 'Get in touch with the GApex team for sales inquiries, technical support, or partnership opportunities. We respond within 24 hours.',
+      h1: 'Contact GApex',
+      content: `
+        <section>
+          <h2>Get in Touch</h2>
+          <p>Have questions about GEO, need help with your AI visibility audit, or interested in our managed services? Our team is here to help.</p>
+          <ul>
+            <li><strong>Email:</strong> support@zen7.com</li>
+            <li><strong>Response time:</strong> Within 24 hours on business days</li>
+          </ul>
+          <h2>What can we help with?</h2>
+          <ul>
+            <li>Technical support for GApex audits and reports</li>
+            <li>Sales inquiries for Starter, Growth, and Scale plans</li>
+            <li>Partnership and integration opportunities</li>
+            <li>Press and media inquiries</li>
+          </ul>
+        </section>`,
+    },
+  }
+
+  return {
+    name: 'seo-pages',
+    apply: 'build',
+    closeBundle() {
+      const distDir = join(process.cwd(), 'dist')
+      let html: string
+      try {
+        html = readFileSync(join(distDir, 'index.html'), 'utf-8')
+      } catch {
+        return // dist/index.html not yet built
+      }
+
+      for (const [route, meta] of Object.entries(routes)) {
+        const dir = join(distDir, route.slice(1)) // e.g. dist/geo-knowledge
+        mkdirSync(dir, { recursive: true })
+
+        let page = html
+        // Replace <title>
+        page = page.replace(
+          /<title>[^<]*<\/title>/,
+          `<title>${meta.title}</title>`,
+        )
+        // Replace meta description
+        page = page.replace(
+          /<meta name="description" content="[^"]*"/,
+          `<meta name="description" content="${meta.description}"`,
+        )
+        // Replace canonical
+        page = page.replace(
+          /<link rel="canonical" href="[^"]*"/,
+          `<link rel="canonical" href="https://www.vigilath.com${route}"`,
+        )
+        // Replace og:title
+        page = page.replace(
+          /<meta property="og:title" content="[^"]*"/,
+          `<meta property="og:title" content="${meta.title}"`,
+        )
+        // Replace og:description
+        page = page.replace(
+          /<meta property="og:description" content="[^"]*"/,
+          `<meta property="og:description" content="${meta.description}"`,
+        )
+        // Replace og:url
+        page = page.replace(
+          /<meta property="og:url" content="[^"]*"/,
+          `<meta property="og:url" content="https://www.vigilath.com${route}"`,
+        )
+        // Replace twitter:title
+        page = page.replace(
+          /<meta name="twitter:title" content="[^"]*"/,
+          `<meta name="twitter:title" content="${meta.title}"`,
+        )
+        // Replace twitter:description
+        page = page.replace(
+          /<meta name="twitter:description" content="[^"]*"/,
+          `<meta name="twitter:description" content="${meta.description}"`,
+        )
+        // Replace SEO skeleton content (between <article> tags)
+        page = page.replace(
+          /<article>[\s\S]*?<\/article>/,
+          `<article><h1>${meta.h1}</h1>${meta.content}</article>`,
+        )
+        // Update breadcrumb
+        page = page.replace(
+          /<nav aria-label="Breadcrumb">[\s\S]*?<\/nav>/,
+          `<nav aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="${route}">${meta.h1.replace(/&amp;/g, '&')}</a></li></ol></nav>`,
+        )
+
+        writeFileSync(join(dir, 'index.html'), page)
+      }
+    },
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), seoPages()],
   cacheDir: '.vite/build-cache',
   build: {
     outDir: 'dist',

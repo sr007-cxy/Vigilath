@@ -63,6 +63,10 @@ const en = {
             "cookie": {
               "title": "Cookie Policy · GApex",
               "description": "How GApex uses cookies and similar technologies."
+            },
+            "dashboard": {
+              "title": "Dashboard · GApex",
+              "description": "Manage your multi-platform content publishing, monitoring, and engagement from one place."
             }
           },
           "nav": {
@@ -79,6 +83,7 @@ const en = {
             "login": "Log in",
             "register": "Sign up",
             "signedInAs": "Signed in as",
+            "dashboard": "Dashboard",
             "account": "Account",
             "logout": "Sign out"
           },
@@ -463,6 +468,8 @@ const en = {
                   "framings": "Brand sentiment framings",
                   "contentGaps": "Content gaps",
                   "noGaps": "No major gaps",
+                  "sourceTrace": "Source Trace",
+                  "sourcePreference": "Source Preference",
                   "categories": {
                     "visibility": "Prompt Visibility",
                     "entity": "Entity Clarity",
@@ -474,15 +481,50 @@ const en = {
                 "entity": {
                   "kgTitle": "Knowledge graph coverage",
                   "platforms": "Platform coverage",
+                  "enginesUsed": "AI engines",
                   "sentimentTitle": "Sentiment & framing",
                   "overallSentiment": "Overall sentiment",
                   "bestFraming": "Best framing",
                   "recognitionRate": "Recognition rate",
-                  "contentGaps": "Content gaps",
-                  "noGaps": "No gaps found",
+                  "contentGaps": "AI will recommend you in these scenarios",
+                  "noGaps": "No recommendation scenarios found",
                   "gradePrefix": "Grade",
                   "found": "Found",
                   "missing": "Missing",
+                  "engineNotRecognized": "Not recognized",
+                  "sourceAnalysis": "Source Analysis",
+                  "sourceStats": "{{sources}} sources · {{citations}} citations",
+                  "kgWikipedia": "Wikipedia",
+                  "kgWikidata": "Wikidata",
+                  "kgGoogleKg": "Google KG",
+                  "kgBaiduBaike": "Baidu Baike",
+                  "sourceTrace": "Source Trace",
+                  "sourcePreference": "Source Preference",
+                  "sourcesShort": "{{count}} sources",
+                  "sa": {
+                    "allModels": "All Models",
+                    "allPlatforms": "All Platforms",
+                    "all": "All",
+                    "ownArticles": "Own Articles",
+                    "searchDomain": "Search domain...",
+                    "searchSource": "Search source...",
+                    "sourceCount": "Source Count",
+                    "totalCitations": "Total Citations",
+                    "avgCitations": "Avg Citations",
+                    "top10Sources": "Top 10 Citation Sources",
+                    "noData": "No data",
+                    "platformShare": "Platform Citation Share",
+                    "headerPlatform": "Platform",
+                    "headerCitations": "Citations",
+                    "headerModels": "Models",
+                    "articles": "{{count}} articles",
+                    "citedTimes": "Cited {{count}} times",
+                    "noMatch": "No matching sources",
+                    "recommendations": "Recommendations",
+                    "aiModels": "AI Models:",
+                    "sourcesCount": "{{count}} sources",
+                    "citationsCount": "{{count}} citations"
+                  },
                   "scoreLabels": {
                     "entityRecognition": "Entity Recognition",
                     "entityClarity": "Entity Clarity",
@@ -508,7 +550,8 @@ const en = {
                     "mentioned": "mentioned",
                     "present": "present",
                     "niche": "niche",
-                    "not_mentioned": "not mentioned"
+                    "not_mentioned": "not mentioned",
+                    "unknown": "no positioning yet"
                   }
                 }
               }
@@ -1690,6 +1733,119 @@ const en = {
               "contactText": "If you have any questions or need more information, please contact us through the following methods. Our professional team will reply to you as soon as possible.",
               "emailLabel": "Email",
               "phoneLabel": "Phone"
+            }
+          },
+          "dashboard": {
+            "title": "Dashboard",
+            "nav": {
+              "home": "Home",
+              "compose": "Compose",
+              "inbox": "Inbox",
+              "posts": "Posts",
+              "stats": "Stats",
+              "policy": "Policy",
+              "accounts": "Accounts"
+            },
+            "home": {
+              "title": "Dashboard",
+              "attention": "Needs your attention",
+              "attentionReplies": "{{count}} replies awaiting approval",
+              "attentionDrafts": "{{count}} drafts ready to schedule",
+              "attentionToken": "LinkedIn token expires in 3 days",
+              "review": "Review",
+              "reconnect": "Reconnect",
+              "postsPublished": "Posts published",
+              "repliesSent": "Replies sent",
+              "approvalRate": "Approval rate",
+              "agentCost": "Agent cost",
+              "recentActivity": "Recent activity",
+              "activityReply": "Reply sent",
+              "activityPost": "Post published",
+              "activityDraft": "Draft by Content agent for review",
+              "activityPublish": "Post published"
+            },
+            "compose": {
+              "title": "Compose",
+              "save": "Save",
+              "post": "Post",
+              "briefLabel": "Brief (tell the Content agent what to write)",
+              "briefPlaceholder": "e.g. Launch post for v2 of our SDK. Angle: migration is 1 line. Sources: blog post, changelog...",
+              "targetPlatforms": "Target platforms",
+              "selectPlatforms": "Select platforms...",
+              "writeOnly": "write-only",
+              "connect": "Connect",
+              "schedule": "Schedule",
+              "now": "Now",
+              "scheduled": "Scheduled",
+              "draftWithAgent": "Draft with Content agent",
+              "writeManually": "Write manually"
+            },
+            "inbox": {
+              "title": "Inbox",
+              "all": "All",
+              "needsApproval": "Needs approval",
+              "sent": "Sent",
+              "ignored": "Ignored",
+              "draftReady": "Draft ready · {{confidence}}% confidence",
+              "autoSent": "Auto-sent",
+              "escalated": "Escalated",
+              "autoFixed": "Auto-fixed",
+              "on": "on",
+              "draftReplyLabel": "Draft reply (Claude Sonnet)",
+              "reasoning": "Why this reply",
+              "confidenceLabel": "Confidence",
+              "sendAsIs": "Send as-is",
+              "edit": "Edit",
+              "ignore": "Ignore",
+              "selectItem": "Select an item to view details"
+            },
+            "posts": {
+              "title": "Posts",
+              "all": "All",
+              "published": "Published",
+              "scheduled": "Scheduled",
+              "draft": "Draft",
+              "scheduledFor": "Scheduled for",
+              "publishedAt": "Published"
+            },
+            "stats": {
+              "title": "Analytics",
+              "totalPosts": "Total posts",
+              "totalReplies": "Total replies",
+              "avgConfidence": "Avg confidence",
+              "totalCost": "Total cost",
+              "vsLastWeek": "vs last week",
+              "byPlatform": "By platform",
+              "platform": "Platform",
+              "posts": "Posts",
+              "replies": "Replies",
+              "engagement": "Engagement",
+              "agentPerformance": "Agent performance",
+              "agent": "Agent",
+              "runs": "Runs",
+              "avgTime": "Avg time",
+              "cost": "Cost",
+              "contentAgent": "Content agent",
+              "publisherAgent": "Publisher agent",
+              "monitorAgent": "Monitor agent",
+              "replyAgent": "Reply agent"
+            },
+            "policy": {
+              "title": "Policy & Voice",
+              "save": "Save",
+              "voice": "Voice",
+              "rules": "Rules",
+              "escalation": "Escalation",
+              "voiceDesc": "Used by Content, Publisher, and Reply agents",
+              "rulesDesc": "Auto-reply rules and rate limits",
+              "escalationDesc": "When and how to escalate to humans"
+            },
+            "accounts": {
+              "title": "Platform Accounts",
+              "addPlatform": "Add platform",
+              "connected": "Connected",
+              "expires": "Expires",
+              "connect": "Connect"
             }
           },
           "account": {

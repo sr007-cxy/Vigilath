@@ -16,6 +16,9 @@ import type {
   AiVisibilityResponse,
   EntityAuditResponse,
 } from '../types/advanced';
+import { SourceTracePanel } from '../components/source-analysis/SourceTracePanel';
+import { SourcePreferencePanel } from '../components/source-analysis/SourcePreferencePanel';
+import { SourceAnalysisPanel } from '../components/source-analysis/SourceAnalysisPanel';
 
 // Must match backend MODE_MIN_TIER in app/models/advanced.py.
 const MODE_MIN_TIER: Record<AdvancedMode, 'free' | 'pro' | 'starter'> = {
@@ -25,7 +28,7 @@ const MODE_MIN_TIER: Record<AdvancedMode, 'free' | 'pro' | 'starter'> = {
   authority: 'pro',
   citation: 'pro',
   visibility: 'starter',
-  entity: 'starter',
+  entity: 'free',
 };
 
 const VALID_MODES: AdvancedMode[] = [
@@ -1388,6 +1391,29 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
           )}
         </SectionCard>
       </div>
+      {data.source_trace && data.source_trace.total_citations > 0 && (
+        <>
+          <SectionCard title={t('home.advanced.result.visibility.sourceTrace')} subtitle={t('home.advanced.result.entity.sourcesShort', { count: data.source_trace.total_sources })}>
+            <SourceTracePanel
+              sources={data.source_trace.sources}
+              selfCitations={data.source_trace.self_citations}
+              missingQueries={data.source_trace.missing_queries}
+              totalSources={data.source_trace.total_sources}
+              totalCitations={data.source_trace.total_citations}
+              engines={data.engines}
+            />
+          </SectionCard>
+          {data.source_preference && (
+            <SectionCard title={t('home.advanced.result.visibility.sourcePreference')}>
+              <SourcePreferencePanel
+                sourcePreference={data.source_preference}
+                sourceTrace={data.source_trace}
+                engines={data.engines}
+              />
+            </SectionCard>
+          )}
+        </>
+      )}
     </>
   );
 }
@@ -1411,13 +1437,14 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
   const { t } = useTranslation();
   const totalPlatforms = data.platforms.found.length + data.platforms.not_found.length;
   const kgItems = [
-    { key: 'Wikipedia', found: data.knowledge_graph.wikipedia, sub: '' },
+    { key: t('home.advanced.result.entity.kgWikipedia'), found: data.knowledge_graph.wikipedia, sub: '' },
     {
-      key: 'Wikidata',
+      key: t('home.advanced.result.entity.kgWikidata'),
       found: data.knowledge_graph.wikidata,
       sub: data.knowledge_graph.wikidata_id || '',
     },
-    { key: 'Google KG', found: data.knowledge_graph.google_kg, sub: '' },
+    { key: t('home.advanced.result.entity.kgGoogleKg'), found: data.knowledge_graph.google_kg, sub: '' },
+    { key: t('home.advanced.result.entity.kgBaiduBaike'), found: data.knowledge_graph.baidu_baike, sub: '' },
   ];
   return (
     <>
@@ -1435,7 +1462,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
             <h3 className="text-xl font-bold text-primary mb-2 truncate">{data.entity}</h3>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 border border-pink-500/30">
-                {data.entity_type}
+                {t(`home.advanced.header.entityType.${data.entity_type}`, { defaultValue: data.entity_type })}
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full gradient-bg text-white uppercase tracking-wider">
                 {t('home.advanced.result.entity.gradePrefix')} {data.grade}
@@ -1542,21 +1569,21 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
           </div>
         </SectionCard>
         <SectionCard title={t('home.advanced.result.entity.sentimentTitle')}>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.overallSentiment')}
               </span>
-              <span className="text-sm text-primary capitalize font-bold">
-                {t(`home.advanced.result.entity.sentiments.${data.sentiment}`, { defaultValue: data.sentiment })}
+              <span className="text-sm text-primary font-bold">
+                {t(`home.advanced.result.entity.sentiments.${data.per_engine ? Object.values(data.per_engine).find(d => d.recognized)?.sentiment || data.sentiment : data.sentiment}`, { defaultValue: data.sentiment || 'unknown' })}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
               <span className="text-[10px] text-secondary uppercase tracking-wider font-semibold">
                 {t('home.advanced.result.entity.bestFraming')}
               </span>
-              <span className="text-sm text-primary capitalize font-bold">
-                {t(`home.advanced.result.entity.framings.${data.best_framing}`, { defaultValue: data.best_framing.replace('_', ' ') })}
+              <span className="text-sm text-primary font-bold">
+                {t(`home.advanced.result.entity.framings.${data.per_engine ? Object.values(data.per_engine).find(d => d.recognized)?.framing || data.best_framing : data.best_framing}`, { defaultValue: (data.best_framing || 'unknown').replace('_', ' ') })}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-tertiary border border-border">
@@ -1591,7 +1618,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
               {data.content_gaps.map((g, i) => (
                 <li
                   key={i}
-                  className="text-xs text-amber-400 px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20"
+                  className="text-xs text-rose-500 px-2.5 py-1.5 rounded-lg bg-rose-500/5 border border-rose-500/20"
                 >
                   • {g}
                 </li>
@@ -1600,6 +1627,25 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
           )}
         </SectionCard>
       </div>
+      {data.source_trace && data.source_preference && (
+        <SectionCard
+          title={t('home.advanced.result.entity.sourceAnalysis')}
+          subtitle={
+            data.source_trace.total_sources > 0
+              ? t('home.advanced.result.entity.sourceStats', {
+                  sources: data.source_trace.total_sources,
+                  citations: data.source_trace.total_citations,
+                })
+              : undefined
+          }
+        >
+          <SourceAnalysisPanel
+            sourceTrace={data.source_trace}
+            sourcePreference={data.source_preference}
+            engines={data.engines_used || []}
+          />
+        </SectionCard>
+      )}
     </>
   );
 }

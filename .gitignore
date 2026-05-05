@@ -119,6 +119,14 @@ backend/secrets/
 frontend/public/favicon_bk.svg
 frontend/dist-old/
 
+# Backend env backups (timestamped snapshots of .env produced by ops scripts —
+# may contain secrets, NEVER commit)
+backend/.env.bak*
+backend/.env.bak.*
+
+# Vite/rolldown bundle visualizer output (build artifact, regenerated each build)
+frontend/stats.html
+
 # Browser engine: persistent Chrome user_data_dir (22MB+ runtime artifacts,
 # machine-specific cache, never share across machines)
 backend/data/browser_profiles/

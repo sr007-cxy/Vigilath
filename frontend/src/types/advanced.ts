@@ -1,6 +1,9 @@
 // Shapes mirror backend/app/models/advanced.py. When the backend schema
 // changes, update this file in lockstep.
 
+import type { CISourceTrace, CISourcePreference } from './sourceAnalysis';
+export type { CISourceTrace, CISourcePreference } from './sourceAnalysis';
+
 export type AdvancedMode =
   | 'aeo'
   | 'compare'
@@ -160,6 +163,8 @@ export interface AiVisibilityResponse {
   content_gaps: string[];
   query_count: number;
   stability_runs: number;
+  source_trace?: CISourceTrace;
+  source_preference?: CISourcePreference;
 }
 
 export interface EntityAuditResponse {
@@ -170,19 +175,25 @@ export interface EntityAuditResponse {
   max_score: number;
   percent: number;
   grade: string;
+  engines_used?: string[];
   knowledge_graph: {
     wikipedia: boolean;
     wikidata: boolean;
     wikidata_id: string | null;
     google_kg: boolean;
+    baidu_baike: boolean;
     platforms_found: string[];
   };
   platforms: { found: string[]; not_found: string[] };
   sentiment: string;
   best_framing: string;
+  per_engine?: Record<string, { sentiment: string; framing: string; recognized: boolean }>;
   content_gaps: string[];
   recognition_rate: number;
   stability_runs: number;
+  total_runs_per_query?: number;
+  source_trace?: CISourceTrace;
+  source_preference?: CISourcePreference;
 }
 
 export interface AeoVisibilityResponse {

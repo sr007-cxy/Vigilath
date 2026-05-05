@@ -11,8 +11,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 900000, // 900 seconds (15 min) — 慢站 25 类全跑常超 300s,后端会写 L1 缓存,
-                   // 临时拉长避免前端过早 abort;后续切 SSE 后此值可降回
+  // 15 min. Entity audit runs 10 queries × ~85s/query on each browser engine
+  // (Qwen/DeepSeek open a fresh stealth context per query and wait for the
+  // full answer stream + source drawer expansion). Real runs we've observed:
+  // ~856s on 小米汽车. 300s used to cut off around q3. 默认 25 类全跑的慢站
+  // 也会触到这个边界,后端会写 L1 缓存兜底;后续切 SSE 后此值可降回。
+  timeout: 900000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -82,10 +86,12 @@ export const geoApi = {
     url: string,
     includeFix: boolean = true,
     signal?: AbortSignal,
+    forceRefresh: boolean = false,
   ): Promise<GeoTestResult> {
     const request = {
       url,
       include_fix: includeFix,
+      force_refresh: forceRefresh,
     };
     const { path, headers } = resolveCheckRequest();
     try {
@@ -105,9 +111,69 @@ export const geoApi = {
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     try {
       const response = await apiClient.post(ADVANCED_PATH[mode], body, { headers, signal });
-      return response.data as AdvancedResponseOf<M>;
+      const data = response.data;
+
+      // Entity / compare mode: POST may return {task_id, status:"running"}
+      // instead of the full result.  Poll GET /{mode_path}/{task_id} until done.
+      if ((mode === 'entity' || mode === 'compare') && data.task_id && data.status === 'running') {
+        return this._pollTask(mode, data.task_id, headers, signal) as Promise<AdvancedResponseOf<M>>;
+      }
+
+      return data as AdvancedResponseOf<M>;
     } catch (error) {
       throwApiError(error, 'Failed to run advanced check');
+    }
+  },
+
+  async _pollTask(
+    mode: 'entity' | 'compare',
+    taskId: string,
+    headers: Record<string, string>,
+    signal?: AbortSignal,
+  ): Promise<any> {
+    const POLL_INTERVAL = 5000;
+    let retries = 0;
+    const MAX_RETRIES = 3;
+    while (true) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL + retries * 2000));
+      if (signal?.aborted) throw new ApiError('Aborted');
+      try {
+        const resp = await apiClient.get(`${ADVANCED_PATH[mode]}/${taskId}`, { headers, signal, timeout: 15000 });
+        retries = 0; // reset on success
+        if (resp.data.status === 'running') continue;
+        return resp.data;
+      } catch (error) {
+        // Retry on transient 502/503/504 from upstream proxy
+        const status = axios.isAxiosError(error) ? error.response?.status : 0;
+        if (retries < MAX_RETRIES && status && status >= 502 && status <= 504) {
+          retries++;
+          continue;
+        }
+        throwApiError(error, 'Failed to poll entity audit result');
+      }
+    }
+  },
+
+  async getEnginesStatus(): Promise<Record<string, { available: boolean; type: string; has_session?: boolean }>> {
+    try {
+      const response = await apiClient.get('/check/advanced/engines/status');
+      return response.data;
+    } catch {
+      return {};
+    }
+  },
+
+  async runCompetitiveIntel(
+    body: { url: string; competitor_domains?: string[] },
+    signal?: AbortSignal,
+  ): Promise<any> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      const response = await apiClient.post('/check/advanced/competitive-intel', body, { headers, signal });
+      return response.data;
+    } catch (error) {
+      throwApiError(error, 'Failed to run competitive intelligence check');
     }
   },
 
@@ -127,11 +193,6 @@ export const geoApi = {
     onUpdate: (data: any) => void,
     onError: (error: Error) => void,
   ): () => void {
-    // EventSource doesn't support custom headers — we can't attach Bearer auth.
-    // For authenticated-tier SSE we'd need a short-lived query token or switch
-    // to fetch streaming. For now the SSE endpoint falls through to the free
-    // tier for logged-in users, which is a minor limitation until the post-MVP
-    // SSE auth story is designed.
     const encodedUrl = encodeURIComponent(url);
     const eventSource = new EventSource(`${API_BASE_URL}/geo/stream?url=${encodedUrl}&include_fix=${includeFix}`);
 
@@ -157,5 +218,45 @@ export const geoApi = {
     });
 
     return () => eventSource.close();
+  },
+
+  async downloadFixPackage(url: string): Promise<void> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Locale': currentLocale(),
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/check/fix-package`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new ApiError('This feature requires a starter or higher membership.', response.status);
+      }
+      throw new ApiError('Failed to download fix package', response.status);
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+    const filename = filenameMatch
+      ? filenameMatch[1]
+      : `geo-fix-${url.replace(/[^a-z0-9]/gi, '-')}-${Date.now()}.zip`;
+
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
   },
 };

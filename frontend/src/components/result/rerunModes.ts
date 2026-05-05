@@ -12,5 +12,5 @@ export const ADVANCED_MODES: { key: AdvancedMode; minTier: 'free' | 'pro' | 'sta
   { key: 'crawlTest', minTier: 'pro' },
   { key: 'authority', minTier: 'pro' },
   { key: 'citation', minTier: 'pro' },
-  { key: 'entity', minTier: 'pro' },
+  { key: 'entity', minTier: 'free' },
 ];

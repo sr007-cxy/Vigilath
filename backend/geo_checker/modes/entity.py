@@ -24,19 +24,17 @@ from ..state import (
     get_ai_visibility_score, get_grade,
 )
 from ..ai import (
-    _query_perplexity, _query_openai, _query_anthropic,
-    _query_deepseek, _query_doubao,
     _check_brand_in_result, _extract_competitors, _classify_framing,
 )
 
 
 def _check_knowledge_graph(entity_name, entity_type):
-    """Check entity presence in Wikipedia, Wikidata, and Google Knowledge Panel signals.
-    Returns (score 0-20, details dict)."""
+    """Check entity presence in Wikipedia, Wikidata, Google Knowledge Panel signals,
+    and Baidu Baike. Returns (score 0-20, details dict)."""
     import urllib.parse
     score = 0
     details = {"wikipedia": False, "wikidata": False, "wikidata_id": None,
-               "google_kg": False, "platforms_found": []}
+               "google_kg": False, "baidu_baike": False, "platforms_found": []}
 
     # 1. Wikipedia check — search API
     try:
@@ -50,7 +48,7 @@ def _check_knowledge_graph(entity_name, entity_type):
                 if entity_name.lower() in result.get("title", "").lower():
                     details["wikipedia"] = True
                     details["platforms_found"].append("Wikipedia")
-                    score += 7
+                    score += 5
                     break
     except Exception:
         pass
@@ -68,22 +66,35 @@ def _check_knowledge_graph(entity_name, entity_type):
                     details["wikidata"] = True
                     details["wikidata_id"] = result.get("id")
                     details["platforms_found"].append("Wikidata")
-                    score += 7
+                    score += 5
                     break
     except Exception:
         pass
 
     # 3. Google Knowledge Panel signal — check if structured org/person data exists
-    # We probe Google via a simple search snippet (limited but free)
     try:
-        enc = urllib.parse.quote(entity_name)
-        url = f"https://kgsearch.googleapis.com/v1/entities:search?query={enc}&limit=3&indent=True&key=none"
-        # Without a valid API key this returns 403, but we can try the free tier
-        # Fallback: check if entity has a Wikipedia page (strong KG signal)
         if details["wikipedia"]:
             details["google_kg"] = True
             details["platforms_found"].append("Google KG (inferred)")
-            score += 6
+            score += 4
+    except Exception:
+        pass
+
+    # 4. Baidu Baike check — probe the Baike page directly
+    try:
+        enc = urllib.parse.quote(entity_name)
+        url = f"https://baike.baidu.com/item/{enc}"
+        r = requests.get(url, timeout=10, allow_redirects=True,
+                         headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+        if r.status_code == 200:
+            text_lower = r.text[:200000].lower()
+            # Baidu Baike returns 200 even for missing pages; check for real content
+            not_found_signals = ["百度百科尚未收录", "百度百科错误页", "页面不存在"]
+            is_real = not any(sig in text_lower for sig in not_found_signals)
+            if is_real and entity_name.lower() in text_lower:
+                details["baidu_baike"] = True
+                details["platforms_found"].append("Baidu Baike")
+                score += 6
     except Exception:
         pass
 
@@ -106,6 +117,7 @@ def _check_cross_platform_footprint(entity_name, entity_type):
     brand_slug = entity_name.lower().replace(" ", "-")
 
     # Same platform definitions as check_cross_platform() — probe real profile URLs
+    # International platforms
     platforms = {
         "X / Twitter": {
             "probe_urls": [f"https://x.com/{brand}", f"https://twitter.com/{brand}"],
@@ -134,6 +146,31 @@ def _check_cross_platform_footprint(entity_name, entity_type):
         "TikTok": {
             "probe_urls": [f"https://www.tiktok.com/@{brand}"],
         },
+        # Chinese platforms
+        "Zhihu (知乎)": {
+            "probe_urls": [f"https://www.zhihu.com/org/{brand}", f"https://www.zhihu.com/people/{brand}"]
+                if entity_type == "person"
+                else [f"https://www.zhihu.com/org/{brand}"],
+        },
+        "Bilibili (B站)": {
+            "probe_urls": [f"https://search.bilibili.com/upuser?keyword={entity_name}"],
+            "search_mode": True,
+        },
+        "Weibo (微博)": {
+            "probe_urls": [f"https://weibo.com/{brand}"],
+        },
+        "Douyin (抖音)": {
+            "probe_urls": [f"https://www.douyin.com/user/{brand}"],
+        },
+        "Xiaohongshu (小红书)": {
+            "probe_urls": [f"https://www.xiaohongshu.com/user/profile/{brand}"],
+        },
+        "CSDN": {
+            "probe_urls": [f"https://blog.csdn.net/{brand}"],
+        },
+        "Gitee": {
+            "probe_urls": [f"https://gitee.com/{brand}"],
+        },
     }
 
     # Same soft-404 detection as check_cross_platform()
@@ -148,16 +185,21 @@ def _check_cross_platform_footprint(entity_name, entity_type):
         "this user is not available", "suspended account",
         "no results found", "couldn't find this account",
         "we couldn't find", "does not exist",
+        # Chinese soft-404 signals
+        "页面不存在", "用户不存在", "内容不存在", "未找到",
+        "该页面无法访问", "账号不存在", "暂无内容", "空空如也",
+        "还没有发布", "该用户不存在",
     ]
 
     browser_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
-    for plat_name, plat_info in platforms.items():
+    def _probe_one_platform(plat_name, plat_info):
+        """Probe a single platform. Returns (plat_name, found: bool)."""
         plat_found = False
 
         # Try GitHub API first if available (more reliable)
         api_url = plat_info.get("api_url")
-        if api_url and not plat_found:
+        if api_url:
             try:
                 r = requests.get(api_url, timeout=10, headers={"User-Agent": "GEO-Checker/1.0"})
                 if r.status_code == 200:
@@ -167,8 +209,9 @@ def _check_cross_platform_footprint(entity_name, entity_type):
             except Exception:
                 pass
 
-        # Probe profile URLs (same logic as check_cross_platform)
+        # Probe profile URLs
         if not plat_found:
+            is_search = plat_info.get("search_mode", False)
             for probe_url in plat_info["probe_urls"]:
                 try:
                     r = requests.get(probe_url, timeout=8, allow_redirects=True,
@@ -178,18 +221,30 @@ def _check_cross_platform_footprint(entity_name, entity_type):
                         redirected_to_login = any(seg in final_url for seg in [
                             "/login", "/signin", "/sign_in", "/accounts/login",
                         ])
-                        text_lower = r.text[:500000].lower() if len(r.text) < 500000 else r.text[:500000].lower()
+                        text_lower = r.text[:500000].lower()
                         is_404_page = redirected_to_login or any(p in text_lower for p in soft_404_phrases)
-                        if not is_404_page:
+                        if is_search:
+                            if entity_name.lower() in text_lower and not is_404_page:
+                                plat_found = True
+                                break
+                        elif not is_404_page:
                             plat_found = True
                             break
                 except requests.RequestException:
                     pass
 
-        if plat_found:
-            found.append(plat_name)
-        else:
-            not_found.append(plat_name)
+        return plat_name, plat_found
+
+    # Probe all platforms in parallel (max 8 threads)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_probe_one_platform, name, info): name
+                   for name, info in platforms.items()}
+        for future in concurrent.futures.as_completed(futures):
+            plat_name, plat_found = future.result()
+            if plat_found:
+                found.append(plat_name)
+            else:
+                not_found.append(plat_name)
 
     total_platforms = len(platforms)
     if total_platforms == 0:
@@ -209,14 +264,62 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     """
     import os
 
-    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    if not api_key:
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+
+    # Build engine list: prefer native APIs, fallback to OpenRouter
+    engines = []  # list of (name, model_id_or_sentinel)
+    api_key = openrouter_key  # default for _query_openrouter
+
+    # ── 本地调试期:只跑 DeepSeek Playwright,其他引擎先注释。
+    #    调好 DeepSeek 的选择器后再把这里恢复。
+    # if openai_key:
+    #     engines.append(("OpenAI", "__openai_native__"))
+    # elif openrouter_key:
+    #     engines.append(("OpenAI GPT-4o-mini", "openai/gpt-4o-mini:online"))
+    #
+    # if openrouter_key:
+    #     engines.append(("DeepSeek V3", "deepseek/deepseek-chat-v3-0324:free"))
+    #     engines.append(("Qwen3 (通义千问)", "qwen/qwen3-235b-a22b:free"))
+
+    # Browser engines — via microservice HTTP API
+    _BROWSER_ENGINES = [
+        # (display_name, session_key, optional_session)
+        ("通义千问", "qwen", True),
+        ("DeepSeek", "deepseek", False),
+        ("文心一言", "wenxin", True),
+        ("元宝", "yuanbao", False),
+        ("豆包", "doubao", False),
+        ("ChatGPT", "chatgpt", False),
+        ("Gemini", "gemini", False),
+        ("Grok", "grok", False),
+        ("Claude", "claude", False),
+        ("Copilot", "copilot", True),
+    ]
+    _active_browser_engines = []  # list of (display_name, session_key)
+    for _disp, _skey, _optional in _BROWSER_ENGINES:
+        try:
+            from browser_engine.client import has_session
+            _has = has_session(_skey)
+            if _has or _optional:
+                _active_browser_engines.append((_disp, _skey))
+                engines.append((_disp, f"__browser_{_skey}__"))
+                _state = "activated" if _has else "activated (anonymous)"
+                sys.__stdout__.write(f"[{_disp}-Browser] {_state}\n")
+                sys.__stdout__.flush()
+            else:
+                sys.__stdout__.write(f"[{_disp}-Browser] session missing\n")
+                sys.__stdout__.flush()
+        except Exception as _e:
+            sys.__stdout__.write(f"[{_disp}-Browser] check failed: {_e}\n")
+            sys.__stdout__.flush()
+    PLAYWRIGHT_ENGINE_NAMES = {n for n, _ in _active_browser_engines}
+
+    if not engines:
+        msg = "No AI engines available. Set OPENAI_API_KEY or OPENROUTER_API_KEY."
         if return_data:
-            raise RuntimeError("OPENROUTER_API_KEY not set")
-        print(f"\n  [{FAIL}] OPENROUTER_API_KEY environment variable not set.")
-        print(f"  This feature requires an OpenRouter API key.")
-        print(f"  Set it with: export OPENROUTER_API_KEY='your-openrouter-api-key'")
-        print(f"  Get an API key at: https://openrouter.ai/")
+            raise RuntimeError(msg)
+        print(f"\n  [{FAIL}] {msg}")
         sys.exit(1)
 
     entity_type = entity_type.lower()
@@ -229,7 +332,8 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     print(f"\n{'='*60}")
     print(f"  ENTITY GEO AUDIT: \"{entity_name}\" ({entity_type})")
     print(f"{'='*60}\n")
-    print(f"  Engine: OpenAI GPT-4o-mini (web search)")
+    engine_names = [name for name, _ in engines]
+    print(f"  Engines: {', '.join(engine_names)}")
 
     # ── Phase 1: Free checks (no API key needed) ──────────────
     print(f"\n  Phase 1: Knowledge Graph & Platform checks...\n")
@@ -238,7 +342,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     for p in kg_details["platforms_found"]:
         print(f"    ✓ Knowledge Graph: Found on {p}")
     if not kg_details["platforms_found"]:
-        print(f"    ✗ Knowledge Graph: Not found on Wikipedia or Wikidata")
+        print(f"    ✗ Knowledge Graph: Not found on Wikipedia, Wikidata, or Baidu Baike")
 
     plat_score, plat_details = _check_cross_platform_footprint(entity_name, entity_type)
     for p in plat_details["found"]:
@@ -313,29 +417,137 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         ]
 
     # ── Run queries ────────────────────────────────────────────
-    STABILITY_RUNS = 3
+    # With multiple engines, each engine already provides diversity,
+    # so 1 run per engine is enough (3 engines × 1 run = 3 data points).
+    # With a single engine, keep 3 runs for stability.
+    STABILITY_RUNS = 1 if len(engines) >= 3 else 3
     entity_lower = entity_name.lower()
 
     all_answers = []  # flat list of all answer strings for sentiment analysis
+    # Per-engine answer tracking: {engine_name: [answers]}
+    per_engine_answers = {name: [] for name, _ in engines}
+
+    # Accumulate EngineResult objects for source analyzers
+    from api_engine.base import Citation as _Cit, EngineResult as _ER
+    _adapter_results = []  # List[_ER]
+    try:
+        from browser_engine.client import search as _browser_search
+    except Exception:
+        _browser_search = None
+
+    def _query_openrouter(query, model_id):
+        """Query any model via OpenRouter. Returns (answer, citations, error)."""
+        headers = {"Authorization": f"Bearer {openrouter_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": query}],
+        }
+        try:
+            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                              json=payload, headers=headers, timeout=45)
+            if r.status_code == 401:
+                return "", [], "invalid_key"
+            if r.status_code == 429:
+                time.sleep(5)
+                r = requests.post("https://openrouter.ai/api/v1/chat/completions",
+                                  json=payload, headers=headers, timeout=45)
+            if r.status_code != 200:
+                return "", [], f"http_{r.status_code}"
+            data = r.json()
+            answer = ""
+            choices = data.get("choices", [])
+            if choices:
+                answer = choices[0].get("message", {}).get("content", "")
+            citations = list(dict.fromkeys(re.findall(r'https?://[^\s\)\]>]+', answer)))
+            return answer, citations, None
+        except requests.RequestException as e:
+            return "", [], str(e)
+
+    def _query_openai_native(query):
+        """Query OpenAI Responses API with web_search. Returns (answer, citations, error)."""
+        headers = {"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "input": query,
+            "tools": [{"type": "web_search"}],
+        }
+        try:
+            r = requests.post("https://api.openai.com/v1/responses",
+                              json=payload, headers=headers, timeout=60)
+            if r.status_code == 401:
+                return "", [], "invalid_key"
+            if r.status_code == 429:
+                time.sleep(5)
+                r = requests.post("https://api.openai.com/v1/responses",
+                                  json=payload, headers=headers, timeout=60)
+            if r.status_code != 200:
+                return "", [], f"http_{r.status_code}"
+            data = r.json()
+            answer = ""
+            citations = []
+            for item in data.get("output", []):
+                if item.get("type") == "message":
+                    for content in item.get("content", []):
+                        if content.get("type") == "output_text":
+                            answer = content.get("text", "")
+                            for ann in content.get("annotations", []):
+                                if ann.get("type") == "url_citation":
+                                    citations.append(ann["url"])
+            if not citations:
+                citations = list(dict.fromkeys(re.findall(r'https?://[^\s\)\]>]+', answer)))
+            return answer, citations, None
+        except requests.RequestException as e:
+            return "", [], str(e)
 
     def run_queries(queries, label):
-        """Run a set of queries with stability runs, return list of (query, [answers])."""
+        """Run a set of queries across all engines in parallel.
+        Returns list of (query, [answers])."""
         results = []
         for q in queries:
             answers = []
-            for run in range(STABILITY_RUNS):
-                answer, citations, error = _query_openai(q, api_key)
-                if error == "invalid_key":
-                    if return_data:
-                        raise RuntimeError("Invalid OPENROUTER_API_KEY")
-                    print(f"  [{FAIL}] Invalid OpenRouter API key. Check your OPENROUTER_API_KEY.")
-                    sys.exit(1)
-                if error:
-                    answers.append("")
-                else:
-                    answers.append(answer)
-                    all_answers.append(answer)
-                time.sleep(1)
+
+            def _call_engine(engine_name, model_id):
+                """Call one engine, return list of answers."""
+                if model_id.startswith("__browser_"):
+                    # Browser engines handle queries in Phase B (single query per
+                    # engine).  Skipping here avoids 10× per-engine Playwright calls
+                    # that would take 15-30 min.  Phase B answers are merged into
+                    # the scoring structures below.
+                    return engine_name, []
+                engine_answers = []
+                for _ in range(STABILITY_RUNS):
+                    if model_id == "__openai_native__":
+                        answer, citations, error = _query_openai_native(q)
+                    else:
+                        answer, citations, error = _query_openrouter(q, model_id)
+                    if error == "invalid_key":
+                        print(f"    [{WARN}] {engine_name}: invalid key — skipping")
+                        return engine_name, []
+                    if error:
+                        engine_answers.append("")
+                        _adapter_results.append(_ER(
+                            engine=engine_name, query=q, error="query_error",
+                        ))
+                    else:
+                        engine_answers.append(answer)
+                        _adapter_results.append(_ER(
+                            engine=engine_name, query=q, answer=answer,
+                            citations=[
+                                _Cit.from_url(u, position=i + 1)
+                                for i, u in enumerate(citations)
+                            ],
+                        ))
+                return engine_name, engine_answers
+
+            # Run all engines in parallel for this query
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(engines)) as pool:
+                futures = [pool.submit(_call_engine, name, mid) for name, mid in engines]
+                for future in concurrent.futures.as_completed(futures):
+                    eng_name, engine_answers = future.result()
+                    answers.extend(engine_answers)
+                    all_answers.extend(a for a in engine_answers if a)
+                    per_engine_answers[eng_name].extend(a for a in engine_answers if a)
+
             results.append((q, answers))
             print(f"    ✓ {label}: \"{q[:50]}{'...' if len(q) > 50 else ''}\"")
         return results
@@ -345,7 +557,67 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     competitive_results = run_queries(competitive_queries, "Competitive")
     gap_results = run_queries(gap_queries, "Gap")
 
+    # ── Phase B: Browser engines — single query per engine, then merge ──
+    # Running all 10 queries per engine would take 15-30 min (30 Playwright
+    # calls).  Instead, run 1 identity query per engine and distribute the
+    # answer into identity / category / competitive / gap scoring buckets.
+    if _active_browser_engines and _browser_search is not None:
+        _pw_query = f"What is {entity_name}?" if entity_type != "person" else f"Who is {entity_name}?"
+        print(
+            f"\n  Phase B — {len(_active_browser_engines)} browser engine(s) "
+            f"in parallel, 1 query each: \"{_pw_query}\""
+        )
+
+        def _run_browser_engine(disp, skey):
+            """Call browser service for one engine."""
+            try:
+                r = _browser_search(skey, _pw_query)
+                answer = r.get("answer", "")
+                raw_cites = r.get("citations") or []
+                error = r.get("error")
+                _adapter_results.append(_ER(
+                    engine=disp, query=_pw_query, answer=answer,
+                    citations=[_Cit.from_url(c.get("url", ""), position=c.get("position", 0))
+                               for c in raw_cites],
+                    error=error,
+                ))
+                sys.__stdout__.write(
+                    f"[{disp}-Browser] done "
+                    f"ans_len={len(answer)} cites={len(raw_cites)} "
+                    f"err={error!r}\n"
+                )
+                sys.__stdout__.flush()
+                return disp, answer if answer and not error else ""
+            except Exception as e:
+                _adapter_results.append(_ER(engine=disp, query=_pw_query, error=str(e)))
+                sys.__stdout__.write(f"[{disp}-Browser] exception: {type(e).__name__}: {e}\n")
+                sys.__stdout__.flush()
+                return disp, ""
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(_active_browser_engines)) as pool:
+            futures = {pool.submit(_run_browser_engine, disp, skey): disp
+                       for disp, skey in _active_browser_engines}
+            for future in concurrent.futures.as_completed(futures):
+                disp = futures[future]
+                try:
+                    _disp_name, _answer = future.result()
+                    if _answer:
+                        all_answers.append(_answer)
+                        per_engine_answers[_disp_name].append(_answer)
+                        # Merge into scoring buckets so dimensions 1-6 can score
+                        identity_results.append((_pw_query, [_answer]))
+                        category_results.append((_pw_query, [_answer]))
+                        competitive_results.append((_pw_query, [_answer]))
+                        gap_results.append((_pw_query, [_answer]))
+                    sys.__stdout__.write(f"[{disp}-Browser] Phase B done\n")
+                except Exception as _e:
+                    sys.__stdout__.write(f"[{disp}-Browser] Phase B crashed: {_e}\n")
+                sys.__stdout__.flush()
+
     print(f"\n  Analysis complete. Scoring...\n")
+
+    # Total runs per query = STABILITY_RUNS * number of engines
+    total_runs_per_query = STABILITY_RUNS * len(engines)
 
     # ── 1. Entity Recognition (0-20) ──────────────────────────
     recognition_score = 0
@@ -355,6 +627,9 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         "i don't have", "i'm not sure", "i couldn't find", "no information",
         "i don't know", "not familiar with", "i cannot find", "doesn't appear",
         "does not appear", "no results", "unknown", "not widely known",
+        # Chinese not-found signals
+        "我不确定", "没有找到", "我不了解", "暂无信息", "未知",
+        "我没有", "无法确定", "不太清楚",
     ]
 
     for q, answers in identity_results:
@@ -375,7 +650,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     # ── 2. Entity Clarity (0-20) ──────────────────────────────
     clarity_score = 0
     confusion_detected = False
-    first_run_answers = [answers[0] for _, answers in identity_results if answers[0]]
+    first_run_answers = [answers[0] for _, answers in identity_results if answers and answers[0]]
 
     if len(first_run_answers) >= 2:
         primary_answers = identity_results[0][1] if identity_results else []
@@ -407,8 +682,8 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                     confusion_detected = True
 
         if primary_answers:
-            base = min(8, round((len(primary_answers) / STABILITY_RUNS) * 8))
-            consistency_bonus = min(8, round((consistency_count / STABILITY_RUNS) * 8))
+            base = min(8, round((len(primary_answers) / total_runs_per_query) * 8))
+            consistency_bonus = min(8, round((consistency_count / total_runs_per_query) * 8))
             confusion_penalty = 6 if confusion_detected else 0
             clarity_score = max(0, min(20, base + consistency_bonus - confusion_penalty + (4 if all_key_phrases else 0)))
     elif len(first_run_answers) == 1:
@@ -426,7 +701,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                 category_associations.append(ans)
 
     if category_associations:
-        assoc_rate = len(category_associations) / (len(category_queries) * STABILITY_RUNS)
+        assoc_rate = len(category_associations) / (len(category_queries) * total_runs_per_query)
         category_score = round(assoc_rate * 20)
 
     # ── 4. Competitive Position (0-20) ────────────────────────
@@ -459,16 +734,27 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         "leading", "innovative", "trusted", "reliable", "widely used",
         "popular", "well-known", "well-regarded", "respected", "acclaimed",
         "pioneering", "influential", "groundbreaking", "notable", "renowned",
+        # Chinese positive signals
+        "优秀", "杰出", "强烈推荐", "最好", "顶尖", "领先", "创新",
+        "可信赖", "可靠", "广泛使用", "知名", "著名", "受人尊敬",
+        "卓越", "有影响力", "突破性", "权威", "资深",
     ]
     negative_signals = [
         "controversial", "criticized", "problematic", "unreliable", "scam",
         "fraud", "poor", "worst", "avoid", "complaint", "lawsuit",
         "scandal", "failed", "bankrupt", "shut down", "discontinued",
+        # Chinese negative signals
+        "争议", "批评", "问题", "不可靠", "骗局", "欺诈", "差评",
+        "最差", "避免", "投诉", "诉讼", "丑闻", "失败", "倒闭",
     ]
     action_signals = [
         f"use {entity_lower}", f"try {entity_lower}", f"consider {entity_lower}",
         f"recommend {entity_lower}", f"choose {entity_lower}", f"go with {entity_lower}",
         f"check out {entity_lower}", f"look into {entity_lower}",
+        # Chinese action signals
+        f"推荐{entity_lower}", f"选择{entity_lower}", f"使用{entity_lower}",
+        f"试试{entity_lower}", f"考虑{entity_lower}", f"了解{entity_lower}",
+        f"关注{entity_lower}",
     ]
 
     pos_count = 0
@@ -538,6 +824,52 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
 
     gap_score = max(0, gap_score)
 
+    # ── Per-engine sentiment & framing breakdown ─────────────
+    def _analyze_engine_answers(engine_answers):
+        """Compute sentiment and framing for one engine's answers."""
+        if not engine_answers:
+            return {"sentiment": "unknown", "framing": "unknown", "recognized": False}
+        e_pos = e_neg = e_action = 0
+        e_recognized = False
+        for ans in engine_answers:
+            ans_lower = ans.lower()
+            if entity_lower in ans_lower:
+                e_recognized = True
+            for sig in positive_signals:
+                if sig in ans_lower:
+                    e_pos += 1
+                    break
+            for sig in negative_signals:
+                if sig in ans_lower:
+                    e_neg += 1
+                    break
+            for sig in action_signals:
+                if sig in ans_lower:
+                    e_action += 1
+                    break
+        # Sentiment
+        if e_neg > e_pos:
+            e_sent = "negative" if e_neg > e_pos * 2 else "mixed"
+        elif e_pos > 0 and e_action > 0:
+            e_sent = "strongly positive"
+        elif e_pos > 0:
+            e_sent = "positive"
+        else:
+            e_sent = "neutral"
+        # Best framing
+        e_framings = []
+        for ans in engine_answers:
+            f = _classify_framing(ans, entity_name)
+            e_framings.append(f)
+        framing_rank = {"recommended": 6, "leader": 5, "option": 4,
+                        "mentioned": 3, "present": 2, "niche": 1, "not_mentioned": 0}
+        e_best = max(e_framings, key=lambda x: framing_rank.get(x, 0)) if e_framings else "unknown"
+        return {"sentiment": e_sent, "framing": e_best, "recognized": e_recognized}
+
+    per_engine_detail = {}
+    for eng_name, eng_answers in per_engine_answers.items():
+        per_engine_detail[eng_name] = _analyze_engine_answers(eng_answers)
+
     # ── Composite Score & Report ──────────────────────────────
     scores = {
         "Entity Recognition": recognition_score,
@@ -606,15 +938,22 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                 f"Wikidata is the structured knowledge base behind Google Knowledge Panel,\n"
                 f"Wikipedia infoboxes, and many AI training pipelines.\n"
                 f"Include: description, official website, social profiles, instance-of type.")
+        if not kg_details["baidu_baike"]:
+            fix(f"Create a Baidu Baike (百度百科) entry for \"{entity_name}\".\n"
+                f"Baidu Baike is a primary knowledge source for Chinese AI engines (DeepSeek,\n"
+                f"Doubao, Kimi, Qwen). Submit at https://baike.baidu.com with references\n"
+                f"from authoritative Chinese media sources.")
     else:
-        print(f"    [{FAIL}] Not found in Knowledge Graph (Wikipedia, Wikidata)")
+        print(f"    [{FAIL}] Not found in Knowledge Graph (Wikipedia, Wikidata, Baidu Baike)")
         fix(f"Establish \"{entity_name}\" as a recognized entity:\n"
             f"1. Create a Wikidata entry at https://www.wikidata.org with structured data\n"
             f"   (description, official website, social profiles, instance-of type)\n"
             f"2. If eligible, create a Wikipedia article with third-party reliable sources\n"
-            f"3. Add JSON-LD Organization/Person schema to your website with sameAs links\n"
+            f"3. Create a Baidu Baike (百度百科) entry with authoritative Chinese media references\n"
+            f"   — this is critical for Chinese AI engines (DeepSeek, Doubao, Kimi, Qwen)\n"
+            f"4. Add JSON-LD Organization/Person schema to your website with sameAs links\n"
             f"   pointing to Wikidata, Wikipedia, and social profiles\n"
-            f"4. Ensure consistent name/description across all platforms")
+            f"5. Ensure consistent name/description across all platforms")
 
     # Platform Footprint finding
     if plat_score >= 14:
@@ -807,9 +1146,37 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     else:
         print(f"    [{PASS}] No content gaps detected — entity appears across all tested queries")
 
+    # ── 引用源追溯（CLI & API 都输出）──────────────────────────
+    from ..analyzers.source_trace import analyze_source_trace
+
+    playwright_results = [r for r in _adapter_results if r.engine in PLAYWRIGHT_ENGINE_NAMES]
+    source_trace = analyze_source_trace(playwright_results, target_domain="")
+
+    if source_trace["total_sources"] > 0:
+        print(f"\n  {'─'*50}")
+        print(f"  引用源追溯 (Playwright 引擎)")
+        print(f"  {'─'*50}")
+        print(f"    共 {source_trace['total_citations']} 条引用，来自 {source_trace['total_sources']} 个来源\n")
+        # Top 15 sources by citation count
+        for i, src in enumerate(source_trace["sources"][:15], 1):
+            engines_str = ", ".join(src["engines"])
+            print(f"    {i:>2}. {src['platform']:<30s}  引用 {src['total_citations']:>3} 次  [{engines_str}]")
+            for art in src["articles"][:3]:
+                title = art["title"][:60] + ("..." if len(art["title"]) > 60 else "")
+                print(f"        - {title}")
+        remaining = len(source_trace["sources"]) - 15
+        if remaining > 0:
+            print(f"\n    ... 还有 {remaining} 个来源未显示")
+    else:
+        print(f"\n    [{INFO}] Playwright 引擎未采集到引用源数据")
+
     print(f"\n{'='*60}\n")
 
     if return_data:
+        from ..analyzers.source_preference import analyze_source_preference
+
+        source_pref = analyze_source_preference(playwright_results, target_domain="")
+
         return {
             "entity": entity_name,
             "entity_type": entity_type,
@@ -818,11 +1185,13 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
             "max_score": max_score,
             "percent": pct,
             "grade": grade,
+            "engines_used": [name for name, _ in engines],
             "knowledge_graph": {
                 "wikipedia": kg_details["wikipedia"],
                 "wikidata": kg_details["wikidata"],
                 "wikidata_id": kg_details["wikidata_id"],
                 "google_kg": kg_details["google_kg"],
+                "baidu_baike": kg_details["baidu_baike"],
                 "platforms_found": kg_details["platforms_found"],
             },
             "platforms": {
@@ -831,9 +1200,13 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
             },
             "sentiment": sentiment_label,
             "best_framing": best_framing_label,
+            "per_engine": per_engine_detail,
             "content_gaps": content_gaps,
             "recognition_rate": round(recognition_score / 20 * 100, 1),
             "stability_runs": STABILITY_RUNS,
+            "total_runs_per_query": total_runs_per_query,
+            "source_trace": source_trace,
+            "source_preference": source_pref,
         }
 
 

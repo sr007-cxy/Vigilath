@@ -128,6 +128,7 @@ def run_geo_check(
     allowed_categories: Optional[List[str]] = None,
     user_id: Optional[int] = None,
     tier: str = "free",
+    force_refresh: bool = False,
 ) -> GeoTestResult:
     """Run GEO readiness check in-process and return structured result.
 
@@ -142,29 +143,37 @@ def run_geo_check(
     free-tier checks). When None, all 25 categories are run.
     user_id: if provided, enables L2 DB fallback. Anonymous requests get L1 only.
     tier: user's effective tier, part of the cache key (free/starter/pro/...)
+    force_refresh: when True, skip both L1 (Redis) and L2 (DB) reads and run
+        fresh. The freshly computed result is still written back to L1 so it
+        overwrites any stale entry, and (for logged-in callers) save_detection
+        in the API layer appends a new L2 row that will win subsequent
+        order_by(created_at desc) lookups. Used by the "verify after fix" UX
+        on the result page.
     """
-    print(f"Starting run_geo_check for {url}")
+    print(f"Starting run_geo_check for {url}{' [force_refresh]' if force_refresh else ''}")
 
-    # L1: Redis cache
     cache_key = _build_cache_key(url, include_fix, allowed_categories, tier)
-    cached = cache_service.get_cached_report(cache_key)
-    if cached:
-        print(f"L1 cache HIT for {url}")
-        if progress_callback:
-            progress_callback(100)
-        return GeoTestResult(**cached)
 
-    # L2: DB fallback for logged-in users
-    if user_id is not None:
-        db_result = _lookup_db_fallback(user_id, url, tier)
-        if db_result is not None:
-            print(f"L2 DB cache HIT for user={user_id} url={url}")
-            # Warm Redis so the next request (including other users on same tier)
-            # can hit L1 directly.
-            cache_service.set_cached_report(cache_key, db_result.model_dump(), ttl_s=_REPORT_TTL_S)
+    if not force_refresh:
+        # L1: Redis cache
+        cached = cache_service.get_cached_report(cache_key)
+        if cached:
+            print(f"L1 cache HIT for {url}")
             if progress_callback:
                 progress_callback(100)
-            return db_result
+            return GeoTestResult(**cached)
+
+        # L2: DB fallback for logged-in users
+        if user_id is not None:
+            db_result = _lookup_db_fallback(user_id, url, tier)
+            if db_result is not None:
+                print(f"L2 DB cache HIT for user={user_id} url={url}")
+                # Warm Redis so the next request (including other users on same tier)
+                # can hit L1 directly.
+                cache_service.set_cached_report(cache_key, db_result.model_dump(), ttl_s=_REPORT_TTL_S)
+                if progress_callback:
+                    progress_callback(100)
+                return db_result
 
     # Background ticker thread: emits a time-based progress estimate while the
     # checker is running (same semantics as the old subprocess-based reader).
