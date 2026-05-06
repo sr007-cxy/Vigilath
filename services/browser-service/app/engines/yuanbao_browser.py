@@ -346,12 +346,58 @@ class YuanbaoBrowserAdapter(EngineAdapter):
 
     # ── Network capture ────────────────────────────────────────
 
+    _CITATION_URL_KEYS = frozenset({
+        "url", "link", "href", "source_url", "web_url",
+        "redirect_url", "reference_url", "sourceUrl", "webUrl",
+    })
+    _CITATION_TITLE_KEYS = frozenset({
+        "title", "name", "source", "site_name", "siteName",
+        "sourceName", "hostName", "domain",
+    })
+    _CITATION_SNIPPET_KEYS = frozenset({
+        "snippet", "abstract", "summary", "description", "content",
+    })
+
+    def _extract_citations_from_json(
+        self, obj, out: List[dict], _depth: int = 0
+    ) -> None:
+        """Recursively extract citation-like objects from parsed SSE JSON."""
+        if _depth > 8 or not obj:
+            return
+        if isinstance(obj, dict):
+            url = ""
+            for k in self._CITATION_URL_KEYS:
+                v = obj.get(k)
+                if isinstance(v, str) and v.startswith("http"):
+                    url = v
+                    break
+            if url:
+                title = ""
+                for k in self._CITATION_TITLE_KEYS:
+                    v = obj.get(k)
+                    if isinstance(v, str) and len(v) > 1:
+                        title = v
+                        break
+                snippet = ""
+                for k in self._CITATION_SNIPPET_KEYS:
+                    v = obj.get(k)
+                    if isinstance(v, str) and len(v) > 5:
+                        snippet = v
+                        break
+                domain = obj.get("domain") or obj.get("host") or ""
+                out.append({"url": url, "title": title, "snippet": snippet, "domain": domain})
+            for v in obj.values():
+                self._extract_citations_from_json(v, out, _depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                self._extract_citations_from_json(item, out, _depth + 1)
+
     async def _capture_body(self, response, bucket: List[str]) -> None:
         try:
             text = await response.text()
         except Exception:
             return
-        if not text or "http" not in text:
+        if not text:
             return
         bucket.append(text[:400_000])
 
@@ -383,7 +429,21 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             if cit is None:
                 return
             key = cit.url or cit.domain
-            if not key or key in seen_keys:
+            if not key:
+                return
+            if key in seen_keys:
+                # Upgrade: replace existing citation if new one carries a title
+                if cit.title:
+                    for i, ex in enumerate(citations):
+                        if (ex.url or ex.domain) == key and not ex.title:
+                            citations[i] = Citation(
+                                url=cit.url,
+                                domain=cit.domain,
+                                title=cit.title,
+                                snippet=cit.snippet,
+                                position=ex.position,
+                            )
+                            return
                 return
             seen_keys.add(key)
             citations.append(
@@ -398,9 +458,26 @@ class YuanbaoBrowserAdapter(EngineAdapter):
 
         # ── 1) Network-capture: extract URLs from intercepted API responses
         net_urls: List[str] = []
+        # Structured citations from SSE JSON lines
+        net_citations: List[dict] = []
         try:
             for body in getattr(self, "_captured_bodies", []) or []:
-                # Structured JSON fields
+                # Parse SSE data lines as JSON
+                for line in body.split("\n"):
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload or payload in ("[DONE]", "[done]"):
+                        continue
+                    try:
+                        obj = json.loads(payload)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    # Walk the JSON tree for citation-like objects
+                    self._extract_citations_from_json(obj, net_citations)
+
+                # Fallback: regex for structured JSON fields
                 for m in re.finditer(
                     r'"(?:url|link|href|source_url|web_url|redirect_url|reference_url)"\s*:\s*"'
                     r'(https?://[^"\\\s]+)"',
@@ -414,6 +491,22 @@ class YuanbaoBrowserAdapter(EngineAdapter):
         except Exception:
             pass
 
+        # Add structured citations from SSE (with title)
+        for cit_data in net_citations:
+            url = cit_data.get("url", "")
+            if not url.startswith("http"):
+                continue
+            if any(b in url for b in _YUANBAO_BLOCK_HOSTS):
+                continue
+            _add(Citation(
+                url=url,
+                domain=cit_data.get("domain", ""),
+                title=cit_data.get("title", ""),
+                snippet=cit_data.get("snippet", ""),
+                position=0,
+            ))
+
+        # Add bare URLs as fallback
         net_urls = list(dict.fromkeys(net_urls))
         for u in net_urls:
             if any(b in u for b in _YUANBAO_BLOCK_HOSTS):
