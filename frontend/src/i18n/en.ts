@@ -1225,6 +1225,11 @@ const en = {
               "downloadReport": "Download Report",
               "downloadReportLoading": "Generating report…"
             },
+            "recheck": {
+              "button": "Re-check after fix",
+              "loading": "Re-checking…",
+              "tooltip": "Skip the 24h cache and run a fresh check — use this after fixing site issues to see updated scores immediately"
+            },
             "pdfReport": {
               "title": "GEO Readiness Report",
               "subtitle": "How ready your site is for AI-powered search engines",

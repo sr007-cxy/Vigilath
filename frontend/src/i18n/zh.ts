@@ -1225,6 +1225,11 @@ const zh = {
               "downloadReport": "下载报告",
               "downloadReportLoading": "正在生成报告…"
             },
+            "recheck": {
+              "button": "修复后重新检测",
+              "loading": "重新检测中…",
+              "tooltip": "跳过 24 小时缓存,重新跑完整检测,用于修复网站后立刻验证效果"
+            },
             "pdfReport": {
               "title": "GEO 就绪度检测报告",
               "subtitle": "衡量网站在 AI 搜索引擎中的可见度与优化程度",

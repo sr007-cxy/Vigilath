@@ -35,8 +35,17 @@ _SHORT_TIMEOUT = 10.0
 
 
 def _base_url(engine: str) -> str:
+    """Return the full base URL including the nginx route prefix.
+
+    Production deploys the cn / global browser-service instances behind nginx,
+    which proxies `/api/browser-cn/*` → cn instance and `/api/browser-global/*`
+    → global instance. So callers must hit `{host}/api/browser-{region}/...`,
+    not `{host}/...` (the bare path falls through to the SPA fallback and
+    returns the index.html, not JSON).
+    """
     region = ENGINE_ROUTING.get(engine, "cn")
-    return BROWSER_GLOBAL_URL if region == "global" else BROWSER_CN_URL
+    host = BROWSER_GLOBAL_URL if region == "global" else BROWSER_CN_URL
+    return f"{host.rstrip('/')}/api/browser-{region}"
 
 
 # ── Search ─────────────────────────────────────────────────────
@@ -107,10 +116,12 @@ async def has_session_async(engine: str) -> bool:
 def get_sessions() -> list[dict]:
     """Get all sessions from both service instances."""
     result = []
-    for url in [BROWSER_CN_URL, BROWSER_GLOBAL_URL]:
+    for host, region in [(BROWSER_CN_URL, "cn"), (BROWSER_GLOBAL_URL, "global")]:
+        if not host:
+            continue
         try:
             with httpx.Client(timeout=_SHORT_TIMEOUT) as client:
-                resp = client.get(f"{url}/sessions")
+                resp = client.get(f"{host.rstrip('/')}/api/browser-{region}/sessions")
                 if resp.status_code == 200:
                     result.extend(resp.json())
         except Exception:
@@ -122,9 +133,11 @@ async def get_sessions_async() -> list[dict]:
     """Async version — fetches from both instances concurrently."""
     result = []
     async with httpx.AsyncClient(timeout=_SHORT_TIMEOUT) as client:
-        for url in [BROWSER_CN_URL, BROWSER_GLOBAL_URL]:
+        for host, region in [(BROWSER_CN_URL, "cn"), (BROWSER_GLOBAL_URL, "global")]:
+            if not host:
+                continue
             try:
-                resp = await client.get(f"{url}/sessions")
+                resp = await client.get(f"{host.rstrip('/')}/api/browser-{region}/sessions")
                 if resp.status_code == 200:
                     result.extend(resp.json())
             except Exception:

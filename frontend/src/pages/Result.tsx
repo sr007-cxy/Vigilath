@@ -412,6 +412,38 @@ export function Result() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTabs, checksByCategory, lockedCategorySet, i18n.language]);
 
+  // Explicit "verify after fix" path — always bypasses the 24h cache. Distinct
+  // from the rerun bar's same-URL heuristic so users have a discoverable action
+  // rather than relying on "type the same URL again". Reuses rerunLoading /
+  // rerunError state because the visual loading + error rendering is identical
+  // to a regular rerun.
+  const handleForceRefresh = async () => {
+    if (!result?.url || rerunLoading) return;
+    setRerunError('');
+    setRerunQuotaExceeded(false);
+    setRerunLoading(true);
+    const controller = new AbortController();
+    rerunAbortRef.current = controller;
+    try {
+      const fresh = await geoApi.checkGeo(
+        { url: result.url, force_refresh: true },
+        controller.signal,
+      );
+      setAdvancedResult(null);
+      navigate('/result', { state: { result: fresh }, replace: true });
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if (err instanceof ApiError && err.status === 429) {
+        setRerunQuotaExceeded(true);
+        setRerunError(err.message || (t('home.error.quotaExceeded') as string));
+      } else {
+        setRerunError(err instanceof Error ? err.message : (t('home.error.failed') as string));
+      }
+    } finally {
+      setRerunLoading(false);
+    }
+  };
+
   const handleRerunSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setRerunError('');
@@ -1041,6 +1073,16 @@ export function Result() {
                         {t(`result.pdfReport.tierLabels.${(result.tier || 'free').toLowerCase()}`, { defaultValue: (result.tier || 'free').toUpperCase() })}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleForceRefresh}
+                      disabled={rerunLoading}
+                      title={t('result.recheck.tooltip') as string}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 disabled:opacity-50 disabled:cursor-not-allowed border border-accent-primary/30 text-accent-primary text-[11px] font-semibold transition-colors"
+                    >
+                      <span aria-hidden>↻</span>
+                      {rerunLoading ? t('result.recheck.loading') : t('result.recheck.button')}
+                    </button>
                   </div>
                 </div>
               </div>

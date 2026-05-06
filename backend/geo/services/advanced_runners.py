@@ -166,14 +166,13 @@ def start_compare_task(urls: List[str]) -> str:
     task_id = uuid.uuid4().hex[:16]
     identity = {"url": "+".join(sorted(urls)), "urls": sorted(urls)}
 
-    with _tasks_lock:
-        _tasks[task_id] = {
-            "status": "running",
-            "mode": "compare",
-            "urls": urls,
-            "result": None,
-            "error": None,
-        }
+    _task_set(task_id, {
+        "status": "running",
+        "mode": "compare",
+        "urls": urls,
+        "result": None,
+        "error": None,
+    })
 
     def _worker():
         try:
@@ -182,13 +181,21 @@ def start_compare_task(urls: List[str]) -> str:
                 identity,
                 lambda: _silent_call(_mode_compare.compare_urls, urls, return_data=True),
             )
-            with _tasks_lock:
-                _tasks[task_id]["status"] = "done"
-                _tasks[task_id]["result"] = result
+            _task_set(task_id, {
+                "status": "done",
+                "mode": "compare",
+                "urls": urls,
+                "result": result,
+                "error": None,
+            })
         except Exception as e:
-            with _tasks_lock:
-                _tasks[task_id]["status"] = "error"
-                _tasks[task_id]["error"] = str(e)
+            _task_set(task_id, {
+                "status": "error",
+                "mode": "compare",
+                "urls": urls,
+                "result": None,
+                "error": str(e),
+            })
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
@@ -254,13 +261,62 @@ def run_entity_audit(entity_name: str, entity_type: str = "brand") -> Dict[str, 
 # Entity audits take 2-4 minutes (10 browser engines in parallel).  The BMS02
 # proxy layer times out before the backend finishes.  To work around this,
 # POST /entity returns a task_id immediately and the frontend polls for the
-# result.  The in-memory dict is sufficient — tasks are short-lived and a
-# server restart clears them (the frontend will retry).
+# result.
+#
+# Task state is persisted to Redis (db=7, same instance as report cache) so
+# it's visible across all uvicorn workers — uvicorn --workers 4 means POST
+# lands on worker A but a polling GET may hit B/C/D, which used to give a
+# 75% 404 rate when state lived in a module-level dict. The fallback dict
+# is kept for the Redis-unavailable degraded mode.
 
+import json  # noqa: E402
+import logging  # noqa: E402
 import uuid  # noqa: E402
 
-_tasks: Dict[str, Dict[str, Any]] = {}
-_tasks_lock = threading.Lock()
+from geo.services import cache_service  # noqa: E402
+
+_log = logging.getLogger(__name__)
+
+# 1h TTL — entity max observed ~2-4 min (#perf-2026-04-29), plenty of headroom
+# for slow runs while letting completed-but-never-polled tasks expire on their
+# own. Polling is idempotent (frontend reads the same key repeatedly) so a long
+# TTL doesn't cause stale reads.
+_TASK_TTL_S = 3600
+_TASK_KEY_PREFIX = "geo:task:"
+
+# Degraded-mode fallback. Hit only when Redis is down — the multi-worker 404
+# issue comes back here, which is acceptable since Redis-down is itself an
+# alert-worthy event.
+_fallback_tasks: Dict[str, Dict[str, Any]] = {}
+_fallback_lock = threading.Lock()
+
+
+def _task_set(task_id: str, data: Dict[str, Any]) -> None:
+    """Write task state. Cross-worker visible via Redis."""
+    client = cache_service._client
+    if client is not None:
+        try:
+            payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            client.setex(f"{_TASK_KEY_PREFIX}{task_id}", _TASK_TTL_S, payload)
+            return
+        except Exception as e:  # pragma: no cover
+            _log.warning("task store: redis setex failed for %s: %s — using fallback", task_id, e)
+    with _fallback_lock:
+        _fallback_tasks[task_id] = data
+
+
+def _task_get(task_id: str) -> Optional[Dict[str, Any]]:
+    """Read task state. Returns None if not found in either Redis or fallback."""
+    client = cache_service._client
+    if client is not None:
+        try:
+            raw = client.get(f"{_TASK_KEY_PREFIX}{task_id}")
+            if raw is not None:
+                return json.loads(raw)
+        except Exception as e:  # pragma: no cover
+            _log.warning("task store: redis get failed for %s: %s — checking fallback", task_id, e)
+    with _fallback_lock:
+        return _fallback_tasks.get(task_id)
 
 
 def start_entity_task(entity_name: str, entity_type: str = "brand") -> str:
@@ -268,14 +324,12 @@ def start_entity_task(entity_name: str, entity_type: str = "brand") -> str:
     task_id = uuid.uuid4().hex[:16]
     identity = {"url": entity_name, "entity_type": entity_type}
 
-    with _tasks_lock:
-        _tasks[task_id] = {
-            "status": "running",
-            "entity_name": entity_name,
-            "entity_type": entity_type,
-            "result": None,
-            "error": None,
-        }
+    base = {
+        "mode": "entity",
+        "entity_name": entity_name,
+        "entity_type": entity_type,
+    }
+    _task_set(task_id, {**base, "status": "running", "result": None, "error": None})
 
     def _worker():
         try:
@@ -289,13 +343,9 @@ def start_entity_task(entity_name: str, entity_type: str = "brand") -> str:
                     return_data=True,
                 ),
             )
-            with _tasks_lock:
-                _tasks[task_id]["status"] = "done"
-                _tasks[task_id]["result"] = result
+            _task_set(task_id, {**base, "status": "done", "result": result, "error": None})
         except Exception as e:
-            with _tasks_lock:
-                _tasks[task_id]["status"] = "error"
-                _tasks[task_id]["error"] = str(e)
+            _task_set(task_id, {**base, "status": "error", "result": None, "error": str(e)})
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
@@ -304,8 +354,8 @@ def start_entity_task(entity_name: str, entity_type: str = "brand") -> str:
 
 def get_entity_task(task_id: str) -> Dict[str, Any]:
     """Return task status and result (if done)."""
-    with _tasks_lock:
-        return _tasks.get(task_id, {"status": "not_found"})
+    task = _task_get(task_id)
+    return task if task is not None else {"status": "not_found"}
 
 
 def run_aeo_visibility(url: str) -> Dict[str, Any]:
