@@ -157,6 +157,19 @@ def crawl_sina(
         ))
 
 
+def crawl_eastmoney_news(
+    *, account_id: int, keyword: str,
+    pages: int = 3,
+    timeout: int = 60,
+) -> dict:
+    """东财资讯搜索(新闻/研报/公告)."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-eastmoney-news", json=payload, headers=_headers(),
+        ))
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

@@ -85,6 +85,7 @@ from response import draft as _draft_module       # type: ignore  # noqa: E402
 from crawler.eastmoney import EastmoneyGubaClient # type: ignore  # noqa: E402
 from crawler.xueqiu import XueqiuClient          # type: ignore  # noqa: E402
 from crawler.sina_finance import SinaFinanceClient # type: ignore  # noqa: E402
+from crawler.eastmoney_news import EastmoneyNewsClient # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -234,6 +235,12 @@ class CrawlXueqiuRequest(BaseModel):
 
 
 class CrawlSinaRequest(BaseModel):
+    account_id: int
+    keyword: str
+    pages: int = 3
+
+
+class CrawlEastmoneyNewsRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
@@ -404,6 +411,24 @@ async def run_crawl_sina(req: CrawlSinaRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = SinaFinanceClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.search_pages(req.keyword, pages=req.pages):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-eastmoney-news")
+async def run_crawl_eastmoney_news(req: CrawlEastmoneyNewsRequest) -> dict:
+    """东财资讯搜索(新闻/研报/公告)."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = EastmoneyNewsClient()
             conn = _patched_connect()
             init_schema(conn)
             total = inserted = 0

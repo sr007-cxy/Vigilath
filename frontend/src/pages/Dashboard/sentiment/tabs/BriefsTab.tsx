@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 import { mockBriefs } from '../../../../mocks/sentiment';
 import { useBriefs, useBriefDetail } from '../../../../hooks/useSentiment';
@@ -46,16 +48,41 @@ export function BriefsTab({ account, usingMock }: Props) {
     [selected],
   );
 
-  const handleExportMd = () => {
-    if (!selected) return;
-    const blob = new Blob([selected.body], { type: 'text/markdown;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `brief_${selected.symbol}_${selected.date}.md`;
-    a.click();
+  const briefRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!selected || !briefRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(briefRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const contentW = pageW - margin * 2;
+      const imgH = (canvas.height / canvas.width) * contentW;
+
+      // 如果内容高度超出一页,分页
+      let yOffset = 0;
+      const availH = pageH - margin * 2;
+      while (yOffset < imgH) {
+        if (yOffset > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, margin - yOffset, contentW, imgH);
+        yOffset += availH;
+      }
+
+      pdf.save(`brief_${selected.symbol}_${selected.date}.pdf`);
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleExportPdf = () => alert('PDF 导出(演示)');
   const handleEmail = () => alert('邮件发送(演示)');
 
   if (!usingMock && briefsQuery.isLoading) {
@@ -113,17 +140,14 @@ export function BriefsTab({ account, usingMock }: Props) {
             <p className="text-sm text-muted py-12 text-center">{t('common.loading') || 'Loading...'}</p>
           ) : selected ? (
             <>
-              <BriefRenderer body={selected.body} />
+              <div ref={briefRef}>
+                <BriefRenderer body={selected.body} />
+              </div>
               <div className="flex items-center gap-2 mt-6 pt-4" style={{ borderTop: '1px solid var(--border-color)' }}>
-                <button type="button" onClick={handleExportMd}
+                <button type="button" onClick={handleExportPdf} disabled={exporting}
                   className="rounded-md px-3 py-1.5 text-sm font-semibold"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
-                  {t('dashboard.sentiment.briefs.exportMd')}
-                </button>
-                <button type="button" onClick={handleExportPdf}
-                  className="rounded-md px-3 py-1.5 text-sm font-semibold"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
-                  {t('dashboard.sentiment.briefs.exportPdf')}
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', opacity: exporting ? 0.6 : 1 }}>
+                  {exporting ? '导出中…' : t('dashboard.sentiment.briefs.exportPdf')}
                 </button>
                 <button type="button" onClick={handleEmail}
                   className="btn-solid rounded-md px-3 py-1.5 text-sm font-semibold">

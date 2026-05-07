@@ -1999,7 +1999,6 @@ const en = {
                 "list": "Briefs",
                 "newAdHoc": "+ Ad-hoc",
                 "kpiLine": "{{posts}} posts · {{risk}} high risk",
-                "exportMd": "📥 Markdown",
                 "exportPdf": "📥 PDF",
                 "email": "📧 Email",
                 "selectBrief": "Select a brief on the left",

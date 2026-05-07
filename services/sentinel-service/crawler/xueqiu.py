@@ -74,7 +74,17 @@ class XueqiuClient:
             print(f"  [xueqiu] request failed: {e}", file=sys.stderr)
             return
 
-        data = r.json()
+        # WAF 拦截时返回 HTML 而非 JSON
+        ct = r.headers.get("content-type", "")
+        if "json" not in ct and "<html" in r.text[:500].lower():
+            print("  [xueqiu] WAF blocked (got HTML instead of JSON)", file=sys.stderr)
+            return
+
+        try:
+            data = r.json()
+        except (ValueError, requests.exceptions.JSONDecodeError):
+            print("  [xueqiu] invalid JSON response", file=sys.stderr)
+            return
         items = data.get("list") or []
         for item in items:
             yield _parse_item(item, symbol)

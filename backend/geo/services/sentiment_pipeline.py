@@ -153,6 +153,17 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 log.warning("run_pipeline[%s]: sina failed: %s", account_id, e)
                 crawlers_stats["sina"] = {"error": str(e)}
 
+            # 东财资讯搜索（新闻/研报/公告，5 页）
+            try:
+                r_em_news = sentinel_client.crawl_eastmoney_news(
+                    account_id=account_id, keyword=target, pages=5,
+                )
+                crawlers_stats["eastmoney_news"] = r_em_news
+                log.info("run_pipeline[%s]: eastmoney_news +%s", account_id, r_em_news.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: eastmoney_news failed: %s", account_id, e)
+                crawlers_stats["eastmoney_news"] = {"error": str(e)}
+
             stats["crawlers"] = crawlers_stats
 
             log.info("run_pipeline[%s]: analyze begin", account_id)

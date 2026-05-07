@@ -2005,7 +2005,6 @@ const zh = {
                 "list": "简报列表",
                 "newAdHoc": "+ 临时简报",
                 "kpiLine": "{{posts}} 帖 · {{risk}} 高风险",
-                "exportMd": "📥 下载 MD",
                 "exportPdf": "📥 下载 PDF",
                 "email": "📧 发邮件",
                 "selectBrief": "请在左侧选择一份简报",
