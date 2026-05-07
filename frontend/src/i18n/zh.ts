@@ -67,6 +67,10 @@ const zh = {
             "dashboard": {
               "title": "工作台 · GApex",
               "description": "在一处管理你的多平台内容发布、监控和互动。"
+            },
+            "sentiment": {
+              "title": "舆情监控 · GApex",
+              "description": "实时监测品牌舆论动态，及时发现和应对舆情风险。"
             }
           },
           "nav": {

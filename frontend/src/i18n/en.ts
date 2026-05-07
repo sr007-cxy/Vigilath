@@ -67,6 +67,10 @@ const en = {
             "dashboard": {
               "title": "Dashboard · GApex",
               "description": "Manage your multi-platform content publishing, monitoring, and engagement from one place."
+            },
+            "sentiment": {
+              "title": "Sentinel · GApex",
+              "description": "Real-time brand sentiment monitoring — detect and respond to public opinion risks."
             }
           },
           "nav": {

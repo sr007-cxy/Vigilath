@@ -17,6 +17,7 @@ import { mockAccount, timeAgo } from '../../mocks/sentiment';
 import { isMockMode } from '../../services/sentimentApi';
 import { useSentimentAccounts, useRunNow, useRunStatus } from '../../hooks/useSentiment';
 import type { SentimentAccount } from '../../types/sentiment';
+import { PageHead } from '../../components/PageHead';
 
 import { TodayTab } from './sentiment/tabs/TodayTab';
 import { ArticlesTab } from './sentiment/tabs/ArticlesTab';
@@ -54,8 +55,11 @@ export function Sentiment() {
   // ── 加载中 ──
   if (!usingMock && isLoading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] grid-background flex items-center justify-center">
-        <div className="text-center space-y-3">
+      <div className="min-h-[calc(100vh-5rem)] grid-background relative flex items-center justify-center">
+        <div className="bg-glow bg-glow-1" />
+        <div className="bg-glow bg-glow-2" />
+        <div className="bg-glow bg-glow-3" />
+        <div className="text-center space-y-3 relative z-10">
           <div
             className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 mx-auto"
             style={{ borderColor: 'var(--accent-primary)' }}
@@ -106,8 +110,12 @@ export function Sentiment() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] grid-background">
-      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6 space-y-4">
+    <div className="min-h-[calc(100vh-5rem)] grid-background relative">
+      <PageHead titleKey="pageMeta.sentiment.title" descriptionKey="pageMeta.sentiment.description" />
+      <div className="bg-glow bg-glow-1" />
+      <div className="bg-glow bg-glow-2" />
+      <div className="bg-glow bg-glow-3" />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-4 relative z-10">
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-primary">
