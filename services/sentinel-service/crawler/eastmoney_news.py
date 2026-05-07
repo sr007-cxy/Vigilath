@@ -42,7 +42,7 @@ class EastmoneyNewsClient:
         param = json.dumps({
             "uid": "",
             "keyword": keyword,
-            "type": ["cmsArticleWebOld"],
+            "type": ["cmsArticleWebOld", "cmsArticleWebNew"],
             "client": "web",
             "clientType": "web",
             "clientVersion": "curr",
@@ -74,20 +74,16 @@ class EastmoneyNewsClient:
             print(f"  [eastmoney_news] JSON decode error: {e}", file=sys.stderr)
             return
 
-        # result 可能是 dict（按 type 分组）或 list
-        hits = data.get("hitsTotal", 0)
+        # result 是 dict，key = type 名, value = article list
+        # 把所有类型的文章都收集起来
         result = data.get("result") or {}
+        articles: list[dict] = []
         if isinstance(result, dict):
-            articles = result.get("cmsArticleWebOld") or []
+            for _type_key, items in result.items():
+                if isinstance(items, list):
+                    articles.extend(items)
         elif isinstance(result, list):
             articles = result
-        else:
-            articles = []
-
-        if not articles and hits > 0:
-            print(f"  [eastmoney_news] hitsTotal={hits} but 0 parsed articles, "
-                  f"result keys={list(result.keys()) if isinstance(result, dict) else type(result).__name__}",
-                  file=sys.stderr)
         for art in articles:
             yield _parse_article(art, keyword)
 
