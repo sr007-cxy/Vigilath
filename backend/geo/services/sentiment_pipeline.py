@@ -114,93 +114,59 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
             )
             stats["monitor"] = r1
 
-            # 直接爬虫 — 每次都跑，不只是 fallback，确保数据量
-            log.info("run_pipeline[%s]: crawlers begin", account_id)
-            crawlers_stats: dict = {}
+            # 直接爬虫 — 全部 *并行* 执行,大幅缩短 pipeline 总时长。
+            # 每个爬虫独立 try/except,失败不影响其它。
+            log.info("run_pipeline[%s]: crawlers begin (parallel)", account_id)
             ticker = acc.ticker
             target = acc.target
 
-            # 东方财富股吧（10 页）
-            try:
-                r_em = sentinel_client.crawl_eastmoney(
-                    account_id=account_id, symbol=ticker, pages=10,
-                )
-                crawlers_stats["eastmoney"] = r_em
-                log.info("run_pipeline[%s]: eastmoney +%s", account_id, r_em.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: eastmoney failed: %s", account_id, e)
-                crawlers_stats["eastmoney"] = {"error": str(e)}
-
-            # 雪球
-            try:
-                r_xq = sentinel_client.crawl_xueqiu(
-                    account_id=account_id, symbol=ticker, pages=5,
-                )
-                crawlers_stats["xueqiu"] = r_xq
-                log.info("run_pipeline[%s]: xueqiu +%s", account_id, r_xq.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: xueqiu failed: %s", account_id, e)
-                crawlers_stats["xueqiu"] = {"error": str(e)}
-
-            # 新浪财经（用品牌名搜索）
-            try:
-                r_sina = sentinel_client.crawl_sina(
-                    account_id=account_id, keyword=target, pages=3,
-                )
-                crawlers_stats["sina"] = r_sina
-                log.info("run_pipeline[%s]: sina +%s", account_id, r_sina.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: sina failed: %s", account_id, e)
-                crawlers_stats["sina"] = {"error": str(e)}
-
-            # 东财资讯搜索（新闻/研报/公告，5 页）
-            try:
-                r_em_news = sentinel_client.crawl_eastmoney_news(
-                    account_id=account_id, keyword=target, pages=5,
-                )
-                crawlers_stats["eastmoney_news"] = r_em_news
-                log.info("run_pipeline[%s]: eastmoney_news +%s", account_id, r_em_news.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: eastmoney_news failed: %s", account_id, e)
-                crawlers_stats["eastmoney_news"] = {"error": str(e)}
-
-            # 百度贴吧
-            try:
-                r_tieba = sentinel_client.crawl_tieba(
-                    account_id=account_id, keyword=target, pages=3,
-                )
-                crawlers_stats["tieba"] = r_tieba
-                log.info("run_pipeline[%s]: tieba +%s", account_id, r_tieba.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: tieba failed: %s", account_id, e)
-                crawlers_stats["tieba"] = {"error": str(e)}
-
-            # 财联社（快讯 + 搜索）
-            try:
-                r_cls = sentinel_client.crawl_cls(
-                    account_id=account_id, keyword=target, pages=3,
-                )
-                crawlers_stats["cls"] = r_cls
-                log.info("run_pipeline[%s]: cls +%s", account_id, r_cls.get("inserted", 0))
-            except Exception as e:
-                log.warning("run_pipeline[%s]: cls failed: %s", account_id, e)
-                crawlers_stats["cls"] = {"error": str(e)}
-
-            # 批量跑剩余爬虫(格隆汇/华尔街见闻/第一财经/36kr)
-            extra_crawlers = [
-                ("gelonghui", sentinel_client.crawl_gelonghui),
-                ("wallstreetcn", sentinel_client.crawl_wallstreetcn),
-                ("yicai", sentinel_client.crawl_yicai),
-                ("36kr", sentinel_client.crawl_36kr),
+            # 每条 = (name, callable) — callable 不带参,用 lambda 捕获 args
+            crawler_tasks: list[tuple[str, callable]] = [
+                ("eastmoney",
+                 lambda: sentinel_client.crawl_eastmoney(account_id=account_id, symbol=ticker, pages=10)),
+                ("eastmoney_news",
+                 lambda: sentinel_client.crawl_eastmoney_news(account_id=account_id, keyword=target, pages=5)),
+                # 2026-05-08 新增:EastMoney 系 3 个端点(都用 ticker)
+                ("eastmoney_ann",
+                 lambda: sentinel_client.crawl_eastmoney_ann(account_id=account_id, ticker=ticker, pages=3)),
+                ("eastmoney_research",
+                 lambda: sentinel_client.crawl_eastmoney_research(account_id=account_id, ticker=ticker, pages=2)),
+                ("eastmoney_industry",
+                 lambda: sentinel_client.crawl_eastmoney_industry(account_id=account_id, ticker=ticker, pages=2)),
+                # 历史爬虫 — 多数因 WAF/API 变更失效,继续保留,失败被捕获不影响其它
+                ("xueqiu",
+                 lambda: sentinel_client.crawl_xueqiu(account_id=account_id, symbol=ticker, pages=5)),
+                ("sina",
+                 lambda: sentinel_client.crawl_sina(account_id=account_id, keyword=target, pages=3)),
+                ("tieba",
+                 lambda: sentinel_client.crawl_tieba(account_id=account_id, keyword=target, pages=3)),
+                ("cls",
+                 lambda: sentinel_client.crawl_cls(account_id=account_id, keyword=target, pages=3)),
+                ("gelonghui",
+                 lambda: sentinel_client.crawl_gelonghui(account_id=account_id, keyword=target, pages=3)),
+                ("wallstreetcn",
+                 lambda: sentinel_client.crawl_wallstreetcn(account_id=account_id, keyword=target, pages=3)),
+                ("yicai",
+                 lambda: sentinel_client.crawl_yicai(account_id=account_id, keyword=target, pages=3)),
+                ("36kr",
+                 lambda: sentinel_client.crawl_36kr(account_id=account_id, keyword=target, pages=3)),
             ]
-            for name, fn in extra_crawlers:
-                try:
-                    r_extra = fn(account_id=account_id, keyword=target, pages=3)
-                    crawlers_stats[name] = r_extra
-                    log.info("run_pipeline[%s]: %s +%s", account_id, name, r_extra.get("inserted", 0))
-                except Exception as e:
-                    log.warning("run_pipeline[%s]: %s failed: %s", account_id, name, e)
-                    crawlers_stats[name] = {"error": str(e)}
+            crawlers_stats: dict = {}
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            # 13 个 crawler,并发 8 是个合理上限(避免同时打太多 sentinel HTTP 请求,
+            # 也避免 sentinel-service 内部把上游站点打挂导致整体被风控)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                future_to_name = {pool.submit(fn): name for name, fn in crawler_tasks}
+                for fut in as_completed(future_to_name):
+                    name = future_to_name[fut]
+                    try:
+                        r = fut.result()
+                        crawlers_stats[name] = r
+                        log.info("run_pipeline[%s]: %s +%s",
+                                 account_id, name, r.get("inserted", 0))
+                    except Exception as e:
+                        log.warning("run_pipeline[%s]: %s failed: %s", account_id, name, e)
+                        crawlers_stats[name] = {"error": str(e)}
 
             stats["crawlers"] = crawlers_stats
 

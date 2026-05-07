@@ -223,6 +223,22 @@ def crawl_36kr(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 
     return _crawl_generic("run-crawl-36kr", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
 
 
+# 2026-05-08 新增 EastMoney 系:这 3 个使用 6 位 A 股 ticker(不是品牌名)
+def crawl_eastmoney_ann(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
+    """A 股公告流(财报/复牌/增减持)。ticker 必须是 6 位代码,非 A 股自动跳过返回 0."""
+    return _crawl_generic("run-crawl-eastmoney-ann", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+
+
+def crawl_eastmoney_research(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
+    """个股券商研报(评级/目标价)。仅 A 股,需 6 位 ticker."""
+    return _crawl_generic("run-crawl-eastmoney-research", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+
+
+def crawl_eastmoney_industry(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
+    """行业研究报告(基于 ticker 反查行业)。仅 A 股,需 6 位 ticker."""
+    return _crawl_generic("run-crawl-eastmoney-industry", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

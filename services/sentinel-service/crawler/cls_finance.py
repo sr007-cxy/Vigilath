@@ -1,7 +1,7 @@
 """财联社 (cls.cn) 快讯爬虫 — 中国最快的财经快讯源.
 
 财联社有公开的电报/快讯 API，实时性极强，是专业投资者常用数据源。
-API: https://www.cls.cn/nodeapi/updateTelegraph
+API: https://www.cls.cn/nodeapi/updateTelegraphList
 
 返回格式统一: [{source, post_id, symbol, author, title, content, ...}]
 """
@@ -20,9 +20,10 @@ _UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-# 财联社电报 API（公开）
-_TELEGRAPH_URL = "https://www.cls.cn/nodeapi/updateTelegraph"
-# 财联社搜索 API
+# 财联社电报 API（公开,实测可用 endpoint）
+# 历史 endpoint `updateTelegraph` 已 404,需要用 `updateTelegraphList`
+_TELEGRAPH_URL = "https://www.cls.cn/nodeapi/updateTelegraphList"
+# 公开搜索 API 已下线(404),保留站点搜索页 fallback,但优先用 telegraph 关键词过滤
 _SEARCH_URL = "https://www.cls.cn/api/search"
 
 
@@ -38,8 +39,15 @@ class ClsFinanceClient:
         """拉取最新财联社电报（快讯）.
 
         无需登录，公开 API。可选按关键词过滤。
+        参数 type 留空表示拉所有类别(否则可指定 jbl=精选)。
         """
-        params = {"rn": min(count, 100), "os": "web", "sv": "8.4.6"}
+        params = {
+            "type": "",
+            "rn": min(count, 100),
+            "os": "web",
+            "sv": "8.4.6",
+            "app": "CailianpressWeb",
+        }
         try:
             r = self.session.get(_TELEGRAPH_URL, params=params, timeout=15)
             r.raise_for_status()
@@ -85,7 +93,9 @@ class ClsFinanceClient:
             }
 
     def search_news(self, keyword: str, page: int = 1, page_size: int = 20) -> Iterator[dict]:
-        """搜索财联社文章."""
+        """搜索财联社文章 — 公开 API 已下线,只在第 1 页 silently 试一下,失败立即返回."""
+        if page > 1:
+            return
         params = {
             "keyword": keyword,
             "page": page,
@@ -93,16 +103,16 @@ class ClsFinanceClient:
             "type": "article",
         }
         try:
-            r = self.session.get(_SEARCH_URL, params=params, timeout=15)
+            r = self.session.get(_SEARCH_URL, params=params, timeout=10)
+            if r.status_code == 404:
+                return  # 静默 — 已下线,fetch_telegraph 是主要路径
             r.raise_for_status()
-        except requests.RequestException as e:
-            print(f"  [cls] search failed: {e}", file=sys.stderr)
-            return
+        except requests.RequestException:
+            return  # 静默,主路径已经是 telegraph
 
         try:
             data = r.json()
         except (ValueError, requests.exceptions.JSONDecodeError):
-            print("  [cls] search invalid JSON", file=sys.stderr)
             return
 
         items = data.get("data", {}).get("list") or data.get("data") or []
