@@ -90,6 +90,17 @@ def analyze_symbol(symbol: str, limit: int | None = None,
                 "input": 0, "output": 0}
 
     _ensure_key()
+
+    # 并发数: 付费 LLM RPM 高可并发更多, 免费档保守一些
+    concurrency = int(os.environ.get("LLM_ANALYZE_CONCURRENCY", "5"))
+
+    if concurrency <= 1:
+        return _analyze_serial(conn, posts, symbol, sleep_s)
+    return _analyze_concurrent(conn, posts, symbol, concurrency)
+
+
+def _analyze_serial(conn, posts, symbol, sleep_s):
+    """原始串行分析 — 兼容低 RPM 的免费 LLM."""
     analyzed = skipped = 0
     cached = inp = outp = 0
 
@@ -122,6 +133,52 @@ def analyze_symbol(symbol: str, limit: int | None = None,
 
         if sleep_s:
             time.sleep(sleep_s)
+
+    return {
+        "analyzed": analyzed, "skipped": skipped,
+        "cached": cached, "input": inp, "output": outp,
+    }
+
+
+def _analyze_concurrent(conn, posts, symbol, concurrency):
+    """并发批量分析 — 显著加速, 适合付费 LLM 或高 RPM."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    analyzed = skipped = 0
+    cached = inp = outp = 0
+
+    def _safe_analyze(post):
+        try:
+            analysis, usage = _analyze_one(post)
+            return post, analysis, usage, None
+        except (json.JSONDecodeError, openai.APIStatusError) as e:
+            return post, None, None, e
+
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = {pool.submit(_safe_analyze, p): p for p in posts}
+        done = 0
+        for fut in as_completed(futures):
+            post, analysis, usage, err = fut.result()
+            done += 1
+            if err:
+                print(f"  [{done}/{len(posts)}] {post['post_id']} error: {err}",
+                      file=sys.stderr)
+                skipped += 1
+                continue
+
+            upsert_analysis(conn, post["source"], post["post_id"],
+                            post["symbol"], analysis, ANALYZE_MODEL)
+            analyzed += 1
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached += getattr(details, "cached_tokens", 0) or 0
+            inp += usage.prompt_tokens
+            outp += usage.completion_tokens
+
+            if done % 10 == 0 or done == len(posts):
+                print(f"  [{done}/{len(posts)}] analyzed; "
+                      f"in={inp} out={outp} cached={cached}")
+
+    conn.commit()
 
     return {
         "analyzed": analyzed, "skipped": skipped,

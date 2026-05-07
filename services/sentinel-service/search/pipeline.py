@@ -122,31 +122,45 @@ def _gap_to_timelimit(last_run_at: str | None, floor: str = "d") -> str:
     return bucket if order.index(bucket) >= order.index(floor) else floor
 
 
+def _call_engine(eng: str, query: str, max_results: int,
+                 region: str, timelimit: str | None) -> tuple[str, list[dict]]:
+    """Call a single engine, return (engine_name, results). Thread-safe."""
+    try:
+        if eng == "ddg":
+            r = ddg_search(query, max_results=max_results,
+                           region=region, timelimit=timelimit)
+        elif eng == "cnbing":
+            r = cnbing_search(query, max_results=max_results,
+                              timelimit=timelimit)
+        elif eng == "baidu":
+            r = baidu_search(query, max_results=max_results,
+                             timelimit=timelimit)
+        else:
+            print(f"  [search] unknown engine: {eng!r}", file=sys.stderr)
+            return eng, []
+    except Exception as e:
+        print(f"  [{eng}] error: {e}", file=sys.stderr)
+        r = []
+    return eng, r
+
+
 def _search_engines(query: str, engines: tuple[str, ...],
                     max_results: int, region: str,
                     timelimit: str | None) -> tuple[list[dict], dict[str, int]]:
-    """Fan out to each engine, concat results, return (results, per-engine counts)."""
+    """Fan out to each engine IN PARALLEL, concat results."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     out: list[dict] = []
     counts: dict[str, int] = {}
-    for eng in engines:
-        try:
-            if eng == "ddg":
-                r = ddg_search(query, max_results=max_results,
-                               region=region, timelimit=timelimit)
-            elif eng == "cnbing":
-                r = cnbing_search(query, max_results=max_results,
-                                  timelimit=timelimit)
-            elif eng == "baidu":
-                r = baidu_search(query, max_results=max_results,
-                                 timelimit=timelimit)
-            else:
-                print(f"  [search] unknown engine: {eng!r}", file=sys.stderr)
-                continue
-        except Exception as e:
-            print(f"  [{eng}] error: {e}", file=sys.stderr)
-            r = []
-        counts[eng] = len(r)
-        out.extend(r)
+    with ThreadPoolExecutor(max_workers=len(engines)) as pool:
+        futures = {
+            pool.submit(_call_engine, eng, query, max_results, region, timelimit): eng
+            for eng in engines
+        }
+        for fut in as_completed(futures):
+            eng_name, results = fut.result()
+            counts[eng_name] = len(results)
+            out.extend(results)
     return out, counts
 
 
