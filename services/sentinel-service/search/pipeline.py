@@ -18,10 +18,11 @@ from storage import (
 )
 
 from .baidu import baidu_search
+from .cnbing import cnbing_search
 from .ddg import ddg_search, throttle
 
 
-DEFAULT_ENGINES = ("ddg", "baidu")
+DEFAULT_ENGINES = ("ddg", "cnbing", "baidu")
 
 
 # DDG occasionally returns titles where the `&` of an HTML numeric entity has
@@ -132,6 +133,9 @@ def _search_engines(query: str, engines: tuple[str, ...],
             if eng == "ddg":
                 r = ddg_search(query, max_results=max_results,
                                region=region, timelimit=timelimit)
+            elif eng == "cnbing":
+                r = cnbing_search(query, max_results=max_results,
+                                  timelimit=timelimit)
             elif eng == "baidu":
                 r = baidu_search(query, max_results=max_results,
                                  timelimit=timelimit)
