@@ -75,6 +75,7 @@ class EastmoneyNewsClient:
             return
 
         # result 可能是 dict（按 type 分组）或 list
+        hits = data.get("hitsTotal", 0)
         result = data.get("result") or {}
         if isinstance(result, dict):
             articles = result.get("cmsArticleWebOld") or []
@@ -82,6 +83,11 @@ class EastmoneyNewsClient:
             articles = result
         else:
             articles = []
+
+        if not articles and hits > 0:
+            print(f"  [eastmoney_news] hitsTotal={hits} but 0 parsed articles, "
+                  f"result keys={list(result.keys()) if isinstance(result, dict) else type(result).__name__}",
+                  file=sys.stderr)
         for art in articles:
             yield _parse_article(art, keyword)
 
