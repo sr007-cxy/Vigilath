@@ -53,6 +53,7 @@ export function AccountLayout() {
 
   const menu = [
     { to: '/account/profile', label: t('account.menu.profile', '个人资料') },
+    { to: '/account/brand', label: t('account.menu.brand', '品牌与监控') },
     { to: '/account/membership', label: t('account.menu.membership', '会员信息') },
     { to: '/account/usage', label: t('account.menu.usage', '使用情况') },
     { to: '/account/history', label: t('account.menu.history', '检测记录') },

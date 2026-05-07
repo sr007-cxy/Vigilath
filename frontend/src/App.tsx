@@ -33,6 +33,7 @@ const MembershipTab = lazy(() => import('./pages/Account/MembershipTab').then(m 
 const UsageTab = lazy(() => import('./pages/Account/UsageTab').then(m => ({ default: m.UsageTab })));
 const HistoryTab = lazy(() => import('./pages/Account/HistoryTab').then(m => ({ default: m.HistoryTab })));
 const PaymentsTab = lazy(() => import('./pages/Account/PaymentsTab').then(m => ({ default: m.PaymentsTab })));
+const BrandSettingsTab = lazy(() => import('./pages/Account/BrandSettingsTab').then(m => ({ default: m.BrandSettingsTab })));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
@@ -100,6 +101,7 @@ function App() {
               <Route path="/account" element={<AccountLayout />}>
                 <Route index element={<Navigate to="profile" replace />} />
                 <Route path="profile" element={<ProfileTab />} />
+                <Route path="brand" element={<BrandSettingsTab />} />
                 <Route path="membership" element={<MembershipTab />} />
                 <Route path="usage" element={<UsageTab />} />
                 <Route path="history" element={<HistoryTab />} />

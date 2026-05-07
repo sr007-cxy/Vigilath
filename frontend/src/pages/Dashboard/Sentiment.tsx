@@ -2,7 +2,7 @@
 //
 // 访问控制流程:
 //   1. 未登录 → Navigate 到 / (首页)
-//   2. 已登录但无账号 → Navigate 到 /sentiment/settings (品牌配置页)
+//   2. 已登录但无账号 → Navigate 到 /account/brand (品牌配置页)
 //   3. 已登录且有账号 → 展示数据监测面板 (4 Tabs)
 //
 // 数据来源:
@@ -64,7 +64,7 @@ export function Sentiment() {
 
   // ── 守卫 2: 已登录但无配置的品牌 → 品牌设置页 ──
   if (!usingMock && !account) {
-    return <Navigate to="/sentiment/settings" replace />;
+    return <Navigate to="/account/brand" replace />;
   }
 
   // guard 2 已经处理了无账号场景,这里 account 一定存在
@@ -159,7 +159,7 @@ export function Sentiment() {
               {t('dashboard.sentiment.refresh')}
             </button>
             <Link
-              to="/sentiment/settings"
+              to="/account/brand"
               className="text-xs font-semibold rounded-md px-3 py-1.5"
               style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
             >

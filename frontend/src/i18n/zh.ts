@@ -2116,6 +2116,7 @@ const zh = {
             },
             "menu": {
               "profile": "个人资料",
+              "brand": "品牌与监控",
               "membership": "会员信息",
               "usage": "使用情况",
               "history": "检测记录",
@@ -2141,6 +2142,33 @@ const zh = {
               "failed": "修改失败",
               "minLength": "新密码至少 6 位",
               "mismatch": "两次输入的新密码不一致"
+            },
+            "brand": {
+              "sections": {
+                "brandInfo": "品牌信息",
+                "monitoring": "监控配置",
+                "notify": "通知设置",
+                "knowledge": "知识库"
+              },
+              "fields": {
+                "target": "品牌名",
+                "ticker": "股票代码",
+                "aliases": "别名(选填)",
+                "intent": "监测重点",
+                "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
+                "excludes": "排除词(选填)",
+                "emails": "通知邮箱(≤10)",
+                "tagPlaceholder": "输入后回车添加"
+              },
+              "save": "保存",
+              "saveAndRun": "保存并立即执行",
+              "delete": "删除监测",
+              "saved": "保存成功",
+              "saveFailed": "保存失败:",
+              "runNowQueued": "已开始执行",
+              "deleted": "已删除监测",
+              "deleteFailed": "删除失败:",
+              "deleteConfirm": "确定要删除这个监测账号吗?(数据库内的舆情数据不会被立即清除)"
             },
             "membership": {
               "currentPlan": "当前套餐",

@@ -2110,6 +2110,7 @@ const en = {
             },
             "menu": {
               "profile": "Profile",
+              "brand": "Brand & Monitoring",
               "membership": "Membership",
               "usage": "Usage",
               "history": "Detection history",
@@ -2135,6 +2136,33 @@ const en = {
               "failed": "Password update failed",
               "minLength": "New password must be at least 6 characters",
               "mismatch": "New passwords do not match"
+            },
+            "brand": {
+              "sections": {
+                "brandInfo": "Brand Information",
+                "monitoring": "Monitoring Configuration",
+                "notify": "Notifications",
+                "knowledge": "Knowledge Base"
+              },
+              "fields": {
+                "target": "Brand name",
+                "ticker": "Stock ticker",
+                "aliases": "Aliases (optional)",
+                "intent": "Monitoring focus",
+                "intentPlaceholder": "e.g. short-selling reports / earnings rumors / overseas ops",
+                "excludes": "Exclude terms (optional)",
+                "emails": "Notification emails (max 10)",
+                "tagPlaceholder": "Type and press Enter to add"
+              },
+              "save": "Save",
+              "saveAndRun": "Save & run now",
+              "delete": "Delete monitoring",
+              "saved": "Saved successfully",
+              "saveFailed": "Save failed: ",
+              "runNowQueued": "Task started",
+              "deleted": "Monitoring deleted",
+              "deleteFailed": "Delete failed: ",
+              "deleteConfirm": "Delete this monitoring account? (Historical data will not be immediately removed)"
             },
             "membership": {
               "currentPlan": "Current plan",
