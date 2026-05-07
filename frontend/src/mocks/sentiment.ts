@@ -3,10 +3,11 @@
 //
 // 字段类型从 types/sentiment.ts 重导出,保持与后端契约一致.
 
-import type { RiskLevel, RunStatus, SentimentPost } from '../types/sentiment';
+import type { KeywordGroup, RiskLevel, RunStatus, SentimentPost } from '../types/sentiment';
 
 export type {
   RunStatus, SentimentLabel, RiskLevel, RiskSignal, SentimentPost,
+  KeywordGroup,
 } from '../types/sentiment';
 
 // Draft mock 形态 — 比真实 API 富一点(把 GenerateResult + DraftRow 揉一起方便 UI 测试).
@@ -42,6 +43,7 @@ export interface SentimentAccountMock {
   aliases: string[];
   intent: string;
   keywords: string[];
+  keyword_groups?: KeywordGroup[];
   excludes: string[];
   notify_emails: string[];
   active: boolean;
@@ -83,7 +85,6 @@ export const mockEmptyAccount: SentimentAccountMock | null = null;
 
 // ───── 真实客户配置规模演示(数据来自 20260408 版 VNET 关键词表)─────
 // 6 大类、~85 个关键词条目,模拟客户实际复杂度.
-import type { KeywordGroup } from '../types/sentiment';
 
 export const mockKeywordGroups: KeywordGroup[] = [
   {

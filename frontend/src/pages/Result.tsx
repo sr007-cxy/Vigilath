@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { PaymentModal } from '../components/PaymentModal';
 import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
@@ -157,6 +158,7 @@ export function Result() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const navState = location.state as
     | {
         result?: GeoTestResult;
@@ -298,7 +300,7 @@ export function Result() {
 
   const handleUnlockClick = () => {
     if (!isLoggedIn) {
-      navigate('/login');
+      openAuthModal('login');
       return;
     }
     setShowPaymentModal(true);
@@ -452,7 +454,7 @@ export function Result() {
     // Safety net — dropdown already disables locked modes, but double-check.
     if (rerunMode !== 'default' && isModeLocked(rerunMode)) {
       if (!isLoggedIn) {
-        navigate('/login');
+        openAuthModal('login');
         return;
       }
       setShowPaymentModal(true);
@@ -1451,7 +1453,7 @@ export function Result() {
                       {!canShowFix && (check.status === 'FAIL' || check.status === 'WARN') && (
                         <button
                           onClick={() => {
-                            if (!isLoggedIn) { navigate('/login'); return; }
+                            if (!isLoggedIn) { openAuthModal('login'); return; }
                             openTierModal();
                           }}
                           className="mt-2 ml-[4.25rem] flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
@@ -1550,7 +1552,7 @@ export function Result() {
                       {visual && !canShowFix && checksForCategory.some((c) => c.status === 'FAIL' || c.status === 'WARN') && (
                         <button
                           onClick={() => {
-                            if (!isLoggedIn) { navigate('/login'); return; }
+                            if (!isLoggedIn) { openAuthModal('login'); return; }
                             openTierModal();
                           }}
                           className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
@@ -9,6 +9,7 @@ import { ContactModal } from './components/ContactModal';
 import { TierModalProvider } from './components/TierModalContext';
 import { TierModal } from './components/TierModal';
 import { AuthProvider } from './contexts/AuthContext';
+import { AuthModalProvider, useAuthModal } from './contexts/AuthModalContext';
 
 // Eagerly loaded: Home is the landing page
 import { Home } from './pages/Home';
@@ -20,8 +21,6 @@ const Contact = lazy(() => import('./pages/Contact').then(m => ({ default: m.Con
 const GeoKnowledge = lazy(() => import('./pages/GeoKnowledge').then(m => ({ default: m.GeoKnowledge })));
 const GeoKnowledgeMetrics = lazy(() => import('./pages/GeoKnowledgeMetrics').then(m => ({ default: m.GeoKnowledgeMetrics })));
 const ProductsServices = lazy(() => import('./pages/ProductsServices').then(m => ({ default: m.ProductsServices })));
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
 const Advanced = lazy(() => import('./pages/Advanced').then(m => ({ default: m.Advanced })));
@@ -62,14 +61,25 @@ function PageLoader() {
 
 const queryClient = new QueryClient();
 
+/** Visit /login or /register → redirect home + open auth modal. */
+function LoginRedirect({ tab }: { tab: 'login' | 'register' }) {
+  const { openAuthModal } = useAuthModal();
+  // Defer to next tick so the route renders first, then opens modal
+  React.useEffect(() => {
+    openAuthModal(tab);
+  }, [tab, openAuthModal]);
+  return <Navigate to="/" replace />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
+      <Router>
       <AuthProvider>
+      <AuthModalProvider>
       <ContactModalProvider>
       <TierModalProvider>
-      <Router>
         {/* Outer Suspense covers Header / Footer / Modals for the brief
             moment during language switch when react-i18next flips "ready"
             state. Without this, any useTranslation component outside the
@@ -132,8 +142,8 @@ function App() {
               <Route path="/result" element={<Result />} />
               <Route path="/advanced/:mode" element={<Advanced />} />
               <Route path="/contact" element={<Contact />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              <Route path="/login" element={<LoginRedirect tab="login" />} />
+              <Route path="/register" element={<LoginRedirect tab="register" />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/checkout/pending" element={<CheckoutPending />} />
               <Route path="/checkout/success" element={<CheckoutSuccess />} />
@@ -146,10 +156,11 @@ function App() {
           <Footer />
         </div>
         </Suspense>
-      </Router>
       </TierModalProvider>
       </ContactModalProvider>
+      </AuthModalProvider>
       </AuthProvider>
+      </Router>
       </HelmetProvider>
     </QueryClientProvider>
   );

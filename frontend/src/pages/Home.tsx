@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useContactModal } from '../components/ContactModalContext';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { useTierModal } from '../components/TierModalContext';
 import { useMembership } from '../hooks/useMembership';
 import { PageHead } from '../components/PageHead';
@@ -73,6 +74,7 @@ export function Home() {
   const isEn = (i18n.language || 'en').startsWith('en');
   const { isLoggedIn, isUnlocked } = useMembership();
   const { openContact } = useContactModal();
+  const { openAuthModal } = useAuthModal();
   const { openTierModal } = useTierModal();
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
@@ -101,7 +103,7 @@ export function Home() {
     // 舆情监测是订阅式服务,跳工作台而不是单次检测的 Result 页
     if (key === 'sentiment') {
       if (!isLoggedIn) {
-        navigate('/login?from=/sentiment');
+        openAuthModal('login');
         return;
       }
       if (!isUnlocked) {

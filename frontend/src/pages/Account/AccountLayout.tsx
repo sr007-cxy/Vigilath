@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/authApi';
+import { useAuthModal } from '../../contexts/AuthModalContext';
 
 interface StoredUser {
   id: number;
@@ -12,6 +13,7 @@ interface StoredUser {
 
 export function AccountLayout() {
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
   const [user, setUser] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,7 +21,8 @@ export function AccountLayout() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/login', { state: { from: '/account' } });
+      openAuthModal('login');
+      navigate('/', { replace: true });
       return;
     }
     let cancelled = false;
@@ -33,13 +36,14 @@ export function AccountLayout() {
       .catch(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/login', { state: { from: '/account' } });
+        openAuthModal('login');
+        navigate('/', { replace: true });
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, openAuthModal]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
 import { paymentApi } from '../services/paymentApi';
 import { useMembership } from '../hooks/useMembership';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { useTierModal } from '../components/TierModalContext';
 
 type PayMethod = 'stripe' | 'usdc' | 'wechat';
@@ -53,6 +54,7 @@ async function pickInjectedProvider(): Promise<any> {
 export function CheckoutPending() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const { openTierModal } = useTierModal();
   const [params] = useSearchParams();
   const { token, isLoggedIn } = useMembership();
@@ -123,9 +125,8 @@ export function CheckoutPending() {
 
   useEffect(() => {
     if (!isLoggedIn) {
-      navigate('/login', {
-        state: { from: `/checkout/pending?slug=${encodeURIComponent(slug)}` },
-      });
+      openAuthModal('login');
+      navigate('/', { replace: true });
       return;
     }
     if (!slug) {

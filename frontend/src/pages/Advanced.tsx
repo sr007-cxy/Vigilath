@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { geoApi } from '../services/geoApi';
 import { useMembership } from '../hooks/useMembership';
 import { validateUrl, normalizeUrl } from '../utils/validateUrl';
@@ -135,6 +136,7 @@ export function Advanced() {
   useLoadNs('result');
   const { mode: modeParam } = useParams<{ mode: string }>();
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const location = useLocation();
   const { t } = useTranslation();
   const { token, isLoggedIn, isUnlocked, refresh } = useMembership();
@@ -166,9 +168,9 @@ export function Advanced() {
 
   useEffect(() => {
     if (mode !== 'aeo' && !isLoggedIn) {
-      navigate('/login', { replace: true });
+      openAuthModal('login');
     }
-  }, [isLoggedIn, mode, navigate]);
+  }, [isLoggedIn, mode, openAuthModal]);
 
   if (!mode) {
     return (

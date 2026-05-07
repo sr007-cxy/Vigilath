@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { PageHead } from '../components/PageHead';
 
 export function ForgotPassword() {
@@ -14,6 +15,7 @@ export function ForgotPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   
@@ -51,9 +53,10 @@ export function ForgotPassword() {
     try {
       await authApi.resetPassword(resetToken!, newPassword);
       setSuccess(t('forgotPassword.success.resetSuccess'));
-      // Redirect to login after 2 seconds
+      // Redirect to home + open login modal after 2 seconds
       setTimeout(() => {
-        navigate('/login');
+        navigate('/');
+        openAuthModal('login');
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('forgotPassword.error.resetFailed'));
@@ -224,8 +227,9 @@ export function ForgotPassword() {
 
             <div className="mt-6 text-center">
               <Link
-                to="/login"
-                className="font-medium text-accent-primary hover:text-primary transition-colors duration-200"
+                to="/"
+                onClick={(e) => { e.preventDefault(); navigate('/'); openAuthModal('login'); }}
+                className="font-medium text-accent-primary hover:text-primary transition-colors duration-200 cursor-pointer"
               >
                 {t('forgotPassword.backToLogin')}
               </Link>

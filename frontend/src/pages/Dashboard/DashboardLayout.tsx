@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { authApi } from '../../services/authApi';
+import { useAuthModal } from '../../contexts/AuthModalContext';
 import { PageHead } from '../../components/PageHead';
 
 interface StoredUser {
@@ -74,6 +75,7 @@ function SidebarIcon({ name }: { name: string }) {
 
 export function DashboardLayout() {
   const navigate = useNavigate();
+  const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
   const [user, setUser] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,8 @@ export function DashboardLayout() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/login', { state: { from: '/dashboard' } });
+      openAuthModal('login');
+      navigate('/', { replace: true });
       return;
     }
     let cancelled = false;
@@ -95,13 +98,14 @@ export function DashboardLayout() {
       .catch(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/login', { state: { from: '/dashboard' } });
+        openAuthModal('login');
+        navigate('/', { replace: true });
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, openAuthModal]);
 
   if (loading) {
     return (

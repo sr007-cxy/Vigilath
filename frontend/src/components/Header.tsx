@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ThemeToggle } from './ThemeToggle';
-import { AuthModal } from './AuthModal';
+import { useAuth } from '../contexts/AuthContext';
+import { useAuthModal } from '../contexts/AuthModalContext';
 import { switchLanguage } from '../i18n';
 
 export function Header() {
@@ -37,8 +38,8 @@ export function Header() {
     return null;
   });
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+  const { isLoggedIn } = useAuth();
+  const { openAuthModal } = useAuthModal();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -79,8 +80,7 @@ export function Header() {
   };
 
   const toggleAuthModal = (tab: 'login' | 'register' = 'login') => {
-    setAuthModalTab(tab);
-    setIsAuthModalOpen(!isAuthModalOpen);
+    openAuthModal(tab);
     setIsMobileMenuOpen(false);
   };
 
@@ -124,6 +124,11 @@ export function Header() {
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // Reactive: when login state changes (same tab), refresh user display immediately
+  useEffect(() => {
+    loadUserFromLocalStorage();
+  }, [isLoggedIn]);
 
   return (
     <header
@@ -403,11 +408,6 @@ export function Header() {
         </>
       )}
 
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={toggleAuthModal}
-        defaultTab={authModalTab}
-      />
     </header>
   );
 }
