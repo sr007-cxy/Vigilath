@@ -133,6 +133,8 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                  lambda: sentinel_client.crawl_eastmoney_research(account_id=account_id, ticker=ticker, pages=2)),
                 ("eastmoney_industry",
                  lambda: sentinel_client.crawl_eastmoney_industry(account_id=account_id, ticker=ticker, pages=2)),
+                ("sina_stock",
+                 lambda: sentinel_client.crawl_sina_stock(account_id=account_id, ticker=ticker, pages=1)),
                 # 历史爬虫 — 多数因 WAF/API 变更失效,继续保留,失败被捕获不影响其它
                 ("xueqiu",
                  lambda: sentinel_client.crawl_xueqiu(account_id=account_id, symbol=ticker, pages=5)),

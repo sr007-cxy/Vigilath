@@ -239,6 +239,14 @@ def crawl_eastmoney_industry(*, account_id: int, ticker: str, pages: int = 3, ti
     return _crawl_generic("run-crawl-eastmoney-industry", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
 
 
+def crawl_sina_stock(*, account_id: int, ticker: str, pages: int = 1, timeout: int = 30) -> dict:
+    """新浪财经个股新闻聚合页(server-rendered HTML)。
+    A 股(6 位代码自动加 sh/sz)和美股(纯字母)都支持;港股暂不支持。
+    单次返回约 30 条最近新闻,pages 被忽略(sina 这页无分页)。
+    """
+    return _crawl_generic("run-crawl-sina-stock", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

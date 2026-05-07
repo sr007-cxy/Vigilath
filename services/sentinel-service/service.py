@@ -95,6 +95,7 @@ from crawler.kr36 import Kr36Client                   # type: ignore  # noqa: E4
 from crawler.eastmoney_announcement import EastmoneyAnnouncementClient  # type: ignore  # noqa: E402
 from crawler.eastmoney_research import EastmoneyResearchClient          # type: ignore  # noqa: E402
 from crawler.eastmoney_industry import EastmoneyIndustryClient          # type: ignore  # noqa: E402
+from crawler.sina_stock_news import SinaStockNewsClient                  # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -540,6 +541,7 @@ app.post("/run-crawl-36kr")(_generic_crawl_endpoint(Kr36Client, "kr36"))
 app.post("/run-crawl-eastmoney-ann")(_generic_crawl_endpoint(EastmoneyAnnouncementClient, "eastmoney_ann"))
 app.post("/run-crawl-eastmoney-research")(_generic_crawl_endpoint(EastmoneyResearchClient, "eastmoney_research"))
 app.post("/run-crawl-eastmoney-industry")(_generic_crawl_endpoint(EastmoneyIndustryClient, "eastmoney_industry"))
+app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "sina_stock"))
 
 
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
