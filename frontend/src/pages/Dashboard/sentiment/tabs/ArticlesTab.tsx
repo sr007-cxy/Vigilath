@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { mockPosts } from '../../../../mocks/sentiment';
-import { usePosts } from '../../../../hooks/useSentiment';
+import { usePosts, useGenerateDraft } from '../../../../hooks/useSentiment';
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
@@ -35,6 +35,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
 
+  const generateDraft = useGenerateDraft();
   const { data: postsResp, isLoading, error } = usePosts(
     usingMock ? null : account.id,
     usingMock ? null : account.ticker,
