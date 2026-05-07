@@ -114,19 +114,46 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
             )
             stats["monitor"] = r1
 
-            # 搜索引擎抓不到帖子时,用东方财富股吧兜底
-            monitor_inserted = (r1.get("stats") or r1).get("inserted", 0)
-            if monitor_inserted == 0 and acc.ticker:
-                log.info("run_pipeline[%s]: monitor got 0 posts, trying eastmoney crawl", account_id)
-                try:
-                    r_em = sentinel_client.crawl_eastmoney(
-                        account_id=account_id, symbol=acc.ticker, pages=3,
-                    )
-                    stats["eastmoney"] = r_em
-                    log.info("run_pipeline[%s]: eastmoney crawled %s posts", account_id, r_em.get("inserted", 0))
-                except Exception as e:
-                    log.warning("run_pipeline[%s]: eastmoney fallback failed: %s", account_id, e)
-                    stats["eastmoney"] = {"error": str(e)}
+            # 直接爬虫 — 每次都跑，不只是 fallback，确保数据量
+            log.info("run_pipeline[%s]: crawlers begin", account_id)
+            crawlers_stats: dict = {}
+            ticker = acc.ticker
+            target = acc.target
+
+            # 东方财富股吧（10 页）
+            try:
+                r_em = sentinel_client.crawl_eastmoney(
+                    account_id=account_id, symbol=ticker, pages=10,
+                )
+                crawlers_stats["eastmoney"] = r_em
+                log.info("run_pipeline[%s]: eastmoney +%s", account_id, r_em.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: eastmoney failed: %s", account_id, e)
+                crawlers_stats["eastmoney"] = {"error": str(e)}
+
+            # 雪球
+            try:
+                r_xq = sentinel_client.crawl_xueqiu(
+                    account_id=account_id, symbol=ticker, pages=5,
+                )
+                crawlers_stats["xueqiu"] = r_xq
+                log.info("run_pipeline[%s]: xueqiu +%s", account_id, r_xq.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: xueqiu failed: %s", account_id, e)
+                crawlers_stats["xueqiu"] = {"error": str(e)}
+
+            # 新浪财经（用品牌名搜索）
+            try:
+                r_sina = sentinel_client.crawl_sina(
+                    account_id=account_id, keyword=target, pages=3,
+                )
+                crawlers_stats["sina"] = r_sina
+                log.info("run_pipeline[%s]: sina +%s", account_id, r_sina.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: sina failed: %s", account_id, e)
+                crawlers_stats["sina"] = {"error": str(e)}
+
+            stats["crawlers"] = crawlers_stats
 
             log.info("run_pipeline[%s]: analyze begin", account_id)
             r2 = sentinel_client.run_analyze(account_id=account_id, ticker=acc.ticker)

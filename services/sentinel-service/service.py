@@ -83,6 +83,8 @@ from brief import generate_brief                  # type: ignore  # noqa: E402
 from response import generate_drafts              # type: ignore  # noqa: E402
 from response import draft as _draft_module       # type: ignore  # noqa: E402
 from crawler.eastmoney import EastmoneyGubaClient # type: ignore  # noqa: E402
+from crawler.xueqiu import XueqiuClient          # type: ignore  # noqa: E402
+from crawler.sina_finance import SinaFinanceClient # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -224,6 +226,19 @@ class CrawlEastmoneyRequest(BaseModel):
     pages: int = 2
 
 
+class CrawlXueqiuRequest(BaseModel):
+    account_id: int
+    symbol: str
+    pages: int = 3
+    count: int = 50
+
+
+class CrawlSinaRequest(BaseModel):
+    account_id: int
+    keyword: str
+    pages: int = 3
+
+
 # ── FastAPI app ────────────────────────────────────────────────
 app = FastAPI(
     title="Sentinel (yuqin) Service",
@@ -360,6 +375,42 @@ async def run_crawl_eastmoney(req: CrawlEastmoneyRequest) -> dict:
                     if upsert_post(conn, r):
                         inserted += 1
                     total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-xueqiu")
+async def run_crawl_xueqiu(req: CrawlXueqiuRequest) -> dict:
+    """直接抓雪球讨论帖(无需 OpenAI)."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = XueqiuClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.fetch_pages(req.symbol, pages=req.pages, count=req.count):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-sina")
+async def run_crawl_sina(req: CrawlSinaRequest) -> dict:
+    """抓新浪财经搜索新闻."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = SinaFinanceClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.search_pages(req.keyword, pages=req.pages):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
             conn.commit()
             return {"total": total, "inserted": inserted}
         return await asyncio.to_thread(_wrap, _do)

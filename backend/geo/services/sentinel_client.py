@@ -131,6 +131,32 @@ def crawl_eastmoney(
         ))
 
 
+def crawl_xueqiu(
+    *, account_id: int, symbol: str,
+    pages: int = 3,
+    timeout: int = 60,
+) -> dict:
+    """直接抓雪球讨论帖."""
+    payload = {"account_id": account_id, "symbol": symbol, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-xueqiu", json=payload, headers=_headers(),
+        ))
+
+
+def crawl_sina(
+    *, account_id: int, keyword: str,
+    pages: int = 3,
+    timeout: int = 60,
+) -> dict:
+    """抓新浪财经搜索新闻."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-sina", json=payload, headers=_headers(),
+        ))
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,
