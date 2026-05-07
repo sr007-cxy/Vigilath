@@ -42,6 +42,10 @@ export function Sentiment() {
     ? (demo === 'onboarding' && !mockCreated ? null : (mockAccount as SentimentAccount))
     : (accounts.find(a => a.id === (selectedId ?? accounts[0]?.id)) ?? null);
 
+  // hooks 必须在所有 early return 之前调用 — React Rules of Hooks
+  const runStatusQuery = useRunStatus(usingMock ? null : (account?.id ?? null));
+  const runNowMutation = useRunNow();
+
   // ── 守卫 1: 未登录 → 首页 ──
   if (!usingMock && !isLoggedIn) {
     return <Navigate to="/" replace />;
@@ -69,9 +73,6 @@ export function Sentiment() {
 
   // guard 2 已经处理了无账号场景,这里 account 一定存在
   const acct = account!;
-
-  const runStatusQuery = useRunStatus(usingMock ? null : acct.id);
-  const runNowMutation = useRunNow();
 
   const status = demo === 'running' ? 'running'
               : demo === 'failed' ? 'failed'
