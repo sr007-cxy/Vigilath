@@ -13,6 +13,8 @@ interface StoredUser {
 
 const sidebarItems = [
   { to: '/dashboard', end: true, icon: 'home', labelKey: 'dashboard.nav.home' },
+  // 舆情监控已独立成顶级路由 /sentiment(在 Header 头像下拉里入口),
+  // 工作台 sidebar 不再展示,避免双入口和误导.
   { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
   { to: '/dashboard/inbox', end: false, icon: 'inbox', labelKey: 'dashboard.nav.inbox' },
   { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },

@@ -45,6 +45,8 @@ const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({
 const DashboardStats = lazy(() => import('./pages/Dashboard/Stats').then(m => ({ default: m.Stats })));
 const PolicyEditor = lazy(() => import('./pages/Dashboard/PolicyEditor').then(m => ({ default: m.PolicyEditor })));
 const PlatformAccounts = lazy(() => import('./pages/Dashboard/PlatformAccounts').then(m => ({ default: m.PlatformAccounts })));
+const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
+const SentimentSettings = lazy(() => import('./pages/Dashboard/sentiment/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 
 function PageLoader() {
@@ -102,6 +104,27 @@ function App() {
                 <Route path="policy" element={<PolicyEditor />} />
                 <Route path="accounts" element={<PlatformAccounts />} />
               </Route>
+              {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
+              <Route
+                path="/sentiment"
+                element={
+                  <div className="min-h-[calc(100vh-4rem)] grid-background">
+                    <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
+                      <Sentiment />
+                    </div>
+                  </div>
+                }
+              />
+              <Route
+                path="/sentiment/settings"
+                element={
+                  <div className="min-h-[calc(100vh-4rem)] grid-background">
+                    <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
+                      <SentimentSettings />
+                    </div>
+                  </div>
+                }
+              />
               <Route path="/about" element={<About />} />
               <Route path="/process" element={<Landing />} />
               <Route path="/pricing" element={<Landing />} />

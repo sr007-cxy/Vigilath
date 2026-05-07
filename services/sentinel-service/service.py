@@ -1,0 +1,577 @@
+"""Sentinel(yuqin)微服务 — FastAPI 包装.
+
+GEO backend 通过 HTTP 调本服务,本服务再调 yuqin 的 4 个核心函数.
+
+设计要点:
+- 多租户隔离:每个 account_id 一个独立 SQLite(data/{account_id}/yuqing.db).
+  这样不必改 yuqin schema,简单可靠.
+- API key 注入:client 在 header 里传 X-OpenAI-Key,本服务设到 env 后透传.
+- 异常包成 dict 返回,不抛给 client(yuqin 内部用 sys.exit 的地方在主入口拦截).
+
+环境变量:
+- SENTINEL_DATA_DIR    数据目录(默认 ./data)
+- SENTINEL_PORT        端口(默认 8090)
+- OPENAI_API_KEY       平台 fallback(client 没传时用)
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel, Field
+
+# 把当前目录加到 sys.path,这样 yuqin 模块可以直接 import
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+# ── 数据目录隔离 ────────────────────────────────────────────────
+DATA_DIR = Path(os.environ.get("SENTINEL_DATA_DIR", str(ROOT / "data"))).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+_current_account: ContextVar[Optional[int]] = ContextVar("current_account", default=None)
+
+
+def _account_db_path(account_id: int) -> Path:
+    """每个 account 一个独立 SQLite 文件,简单可靠地多租户隔离."""
+    p = DATA_DIR / f"account_{account_id}" / "yuqing.db"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+# 给 yuqin 的 storage.connect 打补丁:让它读上下文变量自动选 db 路径.
+#
+# 注意 import 顺序的陷阱:
+# - `import storage.db` 会先 trigger `storage/__init__.py` 加载,而 __init__.py
+#   有 `from .db import connect` —— 这是按值拷贝函数引用,不是 alias.
+# - 所以仅改 `storage.db.connect` 不够,`storage.connect` 仍指向原始函数.
+# - 下面所有子模块 (search.pipeline / analyzer.pipeline / brief.generate /
+#   response.draft) 都用 `from storage import connect`,加载时拿到的是
+#   `storage.connect` 的快照.必须**在它们 import 之前**把 storage.connect
+#   也替换掉,否则数据会全部写到默认 DEFAULT_DB_PATH 而非 account_id 子目录.
+import storage as _yuqin_pkg     # type: ignore  # noqa: E402
+import storage.db as _yuqin_db   # type: ignore  # noqa: E402
+
+_orig_connect = _yuqin_db.connect
+
+
+def _patched_connect(db_path=None):
+    if db_path is None:
+        aid = _current_account.get()
+        if aid is not None:
+            db_path = _account_db_path(aid)
+    return _orig_connect(db_path) if db_path else _orig_connect()
+
+
+_yuqin_db.connect = _patched_connect
+_yuqin_pkg.connect = _patched_connect   # KEY: 包级别也替换,否则下面 from storage
+                                        # import connect 会拿到原始引用
+
+# import yuqin 的入口函数(此时 storage 包级别 + 模块级 connect 都已经被打补丁)
+from search import (                              # type: ignore  # noqa: E402
+    generate_monitoring_plan, run_plan,
+)
+from analyzer import analyze_symbol               # type: ignore  # noqa: E402
+from brief import generate_brief                  # type: ignore  # noqa: E402
+from response import generate_drafts              # type: ignore  # noqa: E402
+from response import draft as _draft_module       # type: ignore  # noqa: E402
+from crawler.eastmoney import EastmoneyGubaClient # type: ignore  # noqa: E402
+from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
+
+# Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
+# response.draft 在 import 时通过 `from storage import connect` 各自拷贝了一份
+# 引用,即便 storage 包级别 + storage.db 模块级都已 patch,这些副本仍指向原始
+# connect → 数据全写到 DEFAULT_DB_PATH(顶层 yuqing.db)而不是 account_*/.
+# 显式把每个子模块的 connect 引用都覆盖成 _patched_connect.
+import search.pipeline as _yuqin_search_pipeline   # type: ignore  # noqa: E402
+import analyzer.pipeline as _yuqin_analyzer_pipeline  # type: ignore  # noqa: E402
+import brief.generate as _yuqin_brief              # type: ignore  # noqa: E402
+import response.draft as _yuqin_response_draft     # type: ignore  # noqa: E402
+for _m in (_yuqin_search_pipeline, _yuqin_analyzer_pipeline,
+           _yuqin_brief, _yuqin_response_draft):
+    if getattr(_m, "connect", None) is _orig_connect:
+        _m.connect = _patched_connect
+
+# Sanity log: 让启动日志立刻能验证 patch 状态(避免下次再排错半小时)
+def _patch_status(m) -> str:
+    return "PATCHED" if getattr(m, "connect", None) is _patched_connect else "ORIG"
+
+print(
+    f"[patch] storage.db={_patch_status(_yuqin_db)} "
+    f"storage={_patch_status(_yuqin_pkg)} "
+    f"search.pipeline={_patch_status(_yuqin_search_pipeline)} "
+    f"analyzer.pipeline={_patch_status(_yuqin_analyzer_pipeline)} "
+    f"brief.generate={_patch_status(_yuqin_brief)} "
+    f"response.draft={_patch_status(_yuqin_response_draft)}",
+    flush=True,
+)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("sentinel")
+
+
+# ── 工具:运行环境 + 异常包装 ──────────────────────────────────
+def _is_plausible_openai_key(key: Optional[str]) -> bool:
+    """合法 OpenAI key 一定 'sk-' 前缀.过滤上游 backend 传过来的占位垃圾
+    (例如 'api-key-...-duze' 这种内部 token 被错配到 OPENAI_API_KEY 上,
+    会覆盖 sentinel-service 自己 env 里的真 key 导致 401)."""
+    return bool(key) and key.startswith("sk-")
+
+
+@asynccontextmanager
+async def _account_context(account_id: int, api_key: Optional[str]):
+    """设当前账号 + OpenAI API Key,函数返回时清理.
+
+    只接受看起来像合法 OpenAI key 的值;空 / 占位垃圾被忽略,从而保留
+    sentinel-service 进程自己 env 的 OPENAI_API_KEY,让 llm_client 走
+    OpenAI → Qwen fallback 链.
+    """
+    token = _current_account.set(account_id)
+    prev_key = os.environ.get("OPENAI_API_KEY")
+    overrode = False
+    if _is_plausible_openai_key(api_key):
+        os.environ["OPENAI_API_KEY"] = api_key  # type: ignore[assignment]
+        overrode = True
+    elif api_key:
+        log.warning(
+            "ignoring upstream X-OpenAI-Key (not 'sk-' prefixed); "
+            "falling back to service-local key chain",
+        )
+    try:
+        yield
+    finally:
+        _current_account.reset(token)
+        if overrode:
+            if prev_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = prev_key
+
+
+def _wrap(fn, *args, **kwargs) -> dict:
+    """yuqin 函数有用 sys.exit 的地方,这里不能让进程退出.
+    把 SystemExit 也包成 failed."""
+    try:
+        result = fn(*args, **kwargs)
+        return {"status": "success", "data": result}
+    except SystemExit as e:
+        log.warning("sentinel SystemExit: %s", e)
+        return {"status": "failed", "error": str(e), "category": "business"}
+    except RuntimeError as e:
+        log.warning("sentinel RuntimeError: %s", e)
+        return {"status": "failed", "error": str(e), "category": "business"}
+    except Exception as e:
+        log.exception("sentinel crashed: %s", e)
+        return {"status": "failed", "error": str(e), "category": "system"}
+
+
+# ── Pydantic 请求模型 ──────────────────────────────────────────
+class MonitorRequest(BaseModel):
+    account_id: int
+    target: str = Field(..., description="品牌名,例:世纪互联")
+    ticker: Optional[str] = None
+    intent: Optional[str] = None
+    aliases: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list, description="AND 修饰词")
+    excludes: list[str] = Field(default_factory=list, description="预留,目前 yuqin 未直接支持")
+    media_allowlist: list[str] = Field(default_factory=list, description="域名白名单")
+    force_all: bool = False
+    max_results_per_query: int = 10
+    timelimit: Optional[str] = "d"
+    auto_widen: bool = True
+    region: str = "wt-wt"
+    engines: list[str] = Field(default_factory=lambda: ["ddg", "baidu"])
+
+
+class AnalyzeRequest(BaseModel):
+    account_id: int
+    ticker: str
+    limit: Optional[int] = None
+    sleep_s: float = 0.0
+
+
+class BriefRequest(BaseModel):
+    account_id: int
+    ticker: str
+    date: Optional[str] = None
+    batch_size: int = 20
+    top_noteworthy: int = 5
+
+
+class RespondRequest(BaseModel):
+    account_id: int
+    ticker: str
+    source: Optional[str] = None
+    post_id: Optional[str] = None
+    topic: Optional[str] = None
+    situation: Optional[str] = None
+    knowledge: Optional[dict[str, str]] = Field(
+        default=None,
+        description="{'brand_voice': str, 'legal_redlines': str, 'response_playbook': str}.None=用容器内默认文件",
+    )
+
+
+class CrawlEastmoneyRequest(BaseModel):
+    account_id: int
+    symbol: str
+    pages: int = 2
+
+
+# ── FastAPI app ────────────────────────────────────────────────
+app = FastAPI(
+    title="Sentinel (yuqin) Service",
+    description="LLM-native sentiment monitoring microservice",
+    version="0.1.0",
+)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "data_dir": str(DATA_DIR)}
+
+
+@app.post("/run-monitor")
+async def run_monitor(
+    req: MonitorRequest,
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+) -> dict:
+    """生成 plan + 多引擎抓取 + 写 posts.
+
+    返回:{"status": "success"|"failed", "data": stats, "error": "..."}
+    stats: {"queries": N, "inserted": N, "total": N, "by_source": {...}, "by_engine": {...}}
+    """
+    async with _account_context(req.account_id, x_openai_key):
+        targets = [req.target] + req.aliases
+        targets = [t for t in targets if t]
+
+        def _do() -> dict:
+            plan = generate_monitoring_plan(
+                target=targets,
+                ticker=req.ticker,
+                intent=req.intent,
+                media=req.media_allowlist or None,
+                keywords=req.keywords or None,
+                force_all=req.force_all,
+            )
+            symbol = req.ticker or req.target
+            stats = run_plan(
+                plan, symbol,
+                max_results_per_query=req.max_results_per_query,
+                timelimit=req.timelimit,
+                auto_widen=req.auto_widen,
+                region=req.region,
+                engines=req.engines or None,
+                verbose=False,
+            )
+            return {"plan_summary": _summarize_plan(plan), "stats": stats}
+
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-analyze")
+async def run_analyze(
+    req: AnalyzeRequest,
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+) -> dict:
+    """对未分析帖子做 LLM 分析,写 analyses."""
+    async with _account_context(req.account_id, x_openai_key):
+        def _do():
+            return analyze_symbol(req.ticker, limit=req.limit, sleep_s=req.sleep_s)
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-brief")
+async def run_brief(
+    req: BriefRequest,
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+) -> dict:
+    """生成日度简报 Markdown 入库,返回 brief 内容."""
+    async with _account_context(req.account_id, x_openai_key):
+        # brief/generate.py 把 MD 写到 data/brief_*.md;我们让它输出到账号目录
+        out_dir = _account_db_path(req.account_id).parent / "briefs"
+
+        def _do():
+            path = generate_brief(
+                req.ticker,
+                date=req.date,
+                out_dir=out_dir,
+                batch_size=req.batch_size,
+                top_noteworthy=req.top_noteworthy,
+            )
+            body = Path(path).read_text(encoding="utf-8")
+            return {"path": str(path), "body": body, "date": req.date}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-respond")
+async def run_respond(
+    req: RespondRequest,
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+) -> dict:
+    """生成三档草稿,写 drafts."""
+    if not (req.post_id or req.topic):
+        raise HTTPException(400, "post_id 或 topic 至少传一个")
+
+    async with _account_context(req.account_id, x_openai_key):
+        # 临时覆盖 KNOWLEDGE_DIR 让 yuqin _load_knowledge() 读账号知识库
+        # MVP:如果 client 传了 knowledge,落到临时目录;否则用容器默认 knowledge/
+        original_dir = _draft_module.KNOWLEDGE_DIR
+        if req.knowledge:
+            kdir = _account_db_path(req.account_id).parent / "knowledge"
+            kdir.mkdir(parents=True, exist_ok=True)
+            for key, body in req.knowledge.items():
+                if key in ("brand_voice", "legal_redlines", "response_playbook"):
+                    (kdir / f"{key}.md").write_text(body, encoding="utf-8")
+            _draft_module.KNOWLEDGE_DIR = kdir
+
+        def _do():
+            return generate_drafts(
+                req.ticker,
+                source=req.source,
+                post_id=req.post_id,
+                topic=req.topic,
+                situation=req.situation,
+            )
+        try:
+            return await asyncio.to_thread(_wrap, _do)
+        finally:
+            _draft_module.KNOWLEDGE_DIR = original_dir
+
+
+@app.post("/run-crawl-eastmoney")
+async def run_crawl_eastmoney(req: CrawlEastmoneyRequest) -> dict:
+    """直接抓东财股吧(无需 OpenAI)."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = EastmoneyGubaClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for page in range(1, req.pages + 1):
+                records = list(client.fetch_list(req.symbol, page=page))
+                for r in records:
+                    if upsert_post(conn, r):
+                        inserted += 1
+                    total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+# ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
+@app.get("/accounts/{account_id}/posts")
+def list_posts(account_id: int, ticker: str, limit: int = 50) -> dict:
+    """返回 posts JOIN analyses(给文章 Tab 用)."""
+    from storage import analyses_for_symbol  # type: ignore
+    with _account_db_context(account_id):
+        conn = _patched_connect()
+        init_schema(conn)
+        rows = analyses_for_symbol(conn, ticker)
+        out = [_row_to_dict(r) for r in rows[:limit]]
+    return {"count": len(out), "items": out}
+
+
+@app.get("/accounts/{account_id}/briefs")
+def list_briefs(account_id: int, ticker: str) -> dict:
+    """返回该 account 的所有简报(metadata only,body 由 /briefs/{id} 取)."""
+    with _account_db_context(account_id):
+        conn = _patched_connect()
+        init_schema(conn)
+        rows = list(conn.execute(
+            "SELECT id, symbol, date, model, generated_at FROM briefs "
+            "WHERE symbol = ? ORDER BY id DESC", (ticker,),
+        ))
+        return {"count": len(rows), "items": [dict(r) for r in rows]}
+
+
+@app.get("/accounts/{account_id}/briefs/{brief_id}")
+def get_brief(account_id: int, brief_id: int) -> dict:
+    with _account_db_context(account_id):
+        conn = _patched_connect()
+        row = conn.execute("SELECT * FROM briefs WHERE id = ?", (brief_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "brief not found")
+        return dict(row)
+
+
+@app.get("/accounts/{account_id}/drafts")
+def list_drafts(account_id: int, ticker: str) -> dict:
+    with _account_db_context(account_id):
+        conn = _patched_connect()
+        init_schema(conn)
+        rows = list(conn.execute(
+            "SELECT * FROM drafts WHERE symbol = ? ORDER BY id DESC", (ticker,),
+        ))
+        return {"count": len(rows), "items": [dict(r) for r in rows]}
+
+
+@app.get("/accounts/{account_id}/today")
+def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
+    """Tab 1 数据聚合 — 一次请求拿到所有渲染所需:KPI / 7 天趋势 / 风险分布 / 最新简报 / 高风险 Top5.
+
+    在 sentinel-service 里聚合,前端不必拉几百条 posts 自己算.
+    """
+    from collections import Counter
+    from datetime import date, datetime, timedelta
+
+    with _account_db_context(account_id):
+        conn = _patched_connect()
+        init_schema(conn)
+
+        today = date.today().isoformat()
+        cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+
+        # 当日 KPI:posts × analyses(仅 is_relevant=1)
+        kpi_row = conn.execute("""
+            SELECT
+                count(*) AS total_today,
+                sum(CASE WHEN a.risk_level IN ('medium','high') THEN 1 ELSE 0 END) AS high_risk,
+                avg(a.sentiment_score) AS avg_sentiment,
+                count(DISTINCT p.source) AS active_sources
+            FROM posts p LEFT JOIN analyses a
+              ON p.source = a.source AND p.post_id = a.post_id
+            WHERE p.symbol = ?
+              AND substr(coalesce(p.publish_time, p.ingested_at), 1, 10) = ?
+        """, (ticker, today)).fetchone()
+
+        # N 天情感堆叠柱:按日期 group + sentiment_label 分桶
+        trend_rows = list(conn.execute("""
+            SELECT
+                substr(coalesce(p.publish_time, p.ingested_at), 1, 10) AS d,
+                a.sentiment_label AS sl,
+                count(*) AS c
+            FROM posts p JOIN analyses a
+              ON p.source = a.source AND p.post_id = a.post_id
+            WHERE p.symbol = ? AND a.is_relevant = 1
+              AND substr(coalesce(p.publish_time, p.ingested_at), 1, 10) >= ?
+            GROUP BY d, sl
+            ORDER BY d ASC
+        """, (ticker, cutoff)))
+
+        trend_dict: dict[str, dict] = {}
+        for r in trend_rows:
+            d = r["d"]
+            if not d:
+                continue
+            bucket = trend_dict.setdefault(d, {"date": d[5:], "bullish": 0, "neutral": 0, "bearish": 0, "mixed": 0})
+            label = (r["sl"] or "").lower()
+            if label in bucket:
+                bucket[label] = (bucket[label] or 0) + r["c"]
+            else:
+                bucket["neutral"] += r["c"]
+
+        # 补齐 N 天连续(没有数据的日期填 0)
+        trend = []
+        for i in range(days - 1, -1, -1):
+            d = (date.today() - timedelta(days=i)).isoformat()
+            if d in trend_dict:
+                trend.append(trend_dict[d])
+            else:
+                trend.append({"date": d[5:], "bullish": 0, "neutral": 0, "bearish": 0, "mixed": 0})
+
+        # 风险分布(全量,所有时间):用于饼图
+        risk_rows = list(conn.execute("""
+            SELECT a.risk_level AS lvl, count(*) AS c
+            FROM analyses a JOIN posts p
+              ON a.source = p.source AND a.post_id = p.post_id
+            WHERE a.symbol = ? AND a.is_relevant = 1
+            GROUP BY lvl
+        """, (ticker,)))
+        RISK_COLORS = {"none": "#94a3b8", "low": "#fbbf24", "medium": "#fb923c", "high": "#ef4444"}
+        risk_dist = []
+        for lvl in ("none", "low", "medium", "high"):
+            count = next((r["c"] for r in risk_rows if (r["lvl"] or "none") == lvl), 0)
+            risk_dist.append({"level": lvl, "count": count, "color": RISK_COLORS[lvl]})
+
+        # 最新简报
+        brief = conn.execute(
+            "SELECT * FROM briefs WHERE symbol = ? ORDER BY id DESC LIMIT 1", (ticker,),
+        ).fetchone()
+        latest_brief = dict(brief) if brief else None
+
+        # 高风险 Top 5(按 yuqin chat agent top_posts 同款公式)
+        top_rows = list(conn.execute("""
+            SELECT a.source, a.post_id, p.title, p.author, p.publish_time, p.url,
+                   p.view_count, p.reply_count, p.content,
+                   a.summary, a.sentiment_label, a.sentiment_score,
+                   a.topics_json, a.entities_json, a.emotions_json,
+                   a.stance, a.intent, a.factuality,
+                   a.risk_level, a.risk_signals_json,
+                   a.influence_potential, a.hidden_meaning, a.citations_json,
+                   a.reasoning, a.is_relevant
+            FROM analyses a JOIN posts p
+              ON p.source = a.source AND p.post_id = a.post_id
+            WHERE a.symbol = ? AND a.is_relevant = 1
+            ORDER BY (coalesce(a.influence_potential,0)
+                     * abs(coalesce(a.sentiment_score,0)) + 0.01) DESC,
+                     coalesce(p.view_count,0) DESC
+            LIMIT 5
+        """, (ticker,)))
+        top_posts = [_row_to_dict(r) for r in top_rows]
+
+        return {
+            "ticker": ticker,
+            "kpi": {
+                "total_today": kpi_row["total_today"] or 0,
+                "high_risk": kpi_row["high_risk"] or 0,
+                "avg_sentiment": float(kpi_row["avg_sentiment"]) if kpi_row["avg_sentiment"] is not None else 0.0,
+                "active_sources": kpi_row["active_sources"] or 0,
+                # 趋势对比 — 简化版,用 trend 数据计算
+                "trend_total_pct": 0,
+                "trend_risk_pct": 0,
+                "trend_sentiment_pct": 0,
+            },
+            "sentiment_trend": trend,
+            "risk_dist": risk_dist,
+            "latest_brief": latest_brief,
+            "top_posts": top_posts,
+        }
+
+
+# ── helpers ────────────────────────────────────────────────────
+from contextlib import contextmanager
+
+
+@contextmanager
+def _account_db_context(account_id: int):
+    token = _current_account.set(account_id)
+    try:
+        yield
+    finally:
+        _current_account.reset(token)
+
+
+def _summarize_plan(plan: dict) -> dict:
+    """精简 plan 给客户端,避免传整个 LLM 输出."""
+    return {
+        "target": plan.get("target"),
+        "ticker": plan.get("ticker"),
+        "platforms_count": len(plan.get("platforms") or []),
+        "queries_count": len(plan.get("queries") or []),
+    }
+
+
+def _row_to_dict(r) -> dict:
+    """sqlite3.Row → dict,JSON 字段反序列化."""
+    d = dict(r)
+    for k in ("emotions_json", "topics_json", "entities_json", "risk_signals_json", "citations_json"):
+        if k in d and d[k]:
+            try:
+                d[k.replace("_json", "")] = json.loads(d[k])
+            except Exception:
+                pass
+            del d[k]
+    return d
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("SENTINEL_PORT", "8090"))
+    uvicorn.run("service:app", host="0.0.0.0", port=port, log_level="info")

@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account
+from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment
 from geo.utils.error_handler import global_exception_handler, AppException
 from geo.utils.request_log import configure_request_log
 
@@ -77,6 +77,27 @@ app.include_router(moltspay_payment.router, prefix="/api/payment", tags=["moltsp
 app.include_router(wechat_payment.router, prefix="/api/payment", tags=["wechat"])
 app.include_router(advanced.router, prefix="/api", tags=["advanced"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])
+app.include_router(sentiment.router, prefix="/api", tags=["sentiment"])
+
+# 舆情定时任务 — 仅 leader 进程启动 APScheduler.
+# 部署:多 worker 时给一个独立 systemd unit 设 GEO_SCHEDULER_LEADER=1,
+# web worker 不设 → web 流量与定时任务进程隔离.
+@app.on_event("startup")
+def _start_sentiment_scheduler() -> None:
+    try:
+        from geo.services.sentiment_scheduler import maybe_start_from_env
+        maybe_start_from_env()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("sentiment scheduler failed to start: %s", e)
+
+
+@app.on_event("shutdown")
+def _stop_sentiment_scheduler() -> None:
+    try:
+        from geo.services.sentiment_scheduler import shutdown
+        shutdown()
+    except Exception:  # noqa: BLE001
+        pass
 
 # Endpoint-level timing. Only logs /api/check* to keep noise down — other
 # endpoints (auth, usage polling, account pages) are fast and not interesting

@@ -84,6 +84,7 @@ const zh = {
             "register": "注册",
             "signedInAs": "已登录为",
             "dashboard": "工作台",
+            "sentiment": "舆情监控",
             "account": "账户中心",
             "logout": "退出登录"
           },
@@ -375,6 +376,10 @@ const zh = {
                 "entity": {
                   "title": "实体 GEO 审计",
                   "desc": "无需 URL，审计 AI 对品牌/产品/人物的认知度。"
+                },
+                "sentiment": {
+                  "title": "舆情监测",
+                  "desc": "持续监测品牌在社交媒体/新闻的讨论 — 每日 LLM 分析 + 智能简报 + 三档回应草稿。"
                 }
               },
               "result": {
@@ -559,6 +564,36 @@ const zh = {
             "buttons": {
               "geoKnowledge": "了解 GEO 知识",
               "services": "查看服务套餐"
+            },
+            "sentiment": {
+              "badge": "NEW",
+              "title": "舆情监测",
+              "subtitle": "AI 时代的品牌声誉守护者",
+              "description": "每天自动抓取全网讨论 · LLM 深度分析 · 直接生成可发布的回应草稿",
+              "features": {
+                "monitor": {
+                  "title": "📡 持续监测",
+                  "desc": "关键词 + 多平台抓取,实时输出情感 / 风险 / 影响力分析"
+                },
+                "brief": {
+                  "title": "📄 智能日报",
+                  "desc": "每日 7:00 邮件送达,概览 + 主题 + 风险 + 建议动作"
+                },
+                "alert": {
+                  "title": "⚠️ 风险预警",
+                  "desc": "高风险事件即时识别,影响力 + 传播路径分析"
+                },
+                "respond": {
+                  "title": "✏️ 一键回应",
+                  "desc": "保守 / 标准 / 进取三档草稿,HITL 审核工作流"
+                }
+              },
+              "cta": {
+                "enter": "🚀 进入工作台 →",
+                "upgrade": "💎 升级开通 →",
+                "login": "登录使用 →",
+                "contact": "💬 联系销售"
+              }
             }
           },
           "result": {
@@ -1750,6 +1785,7 @@ const zh = {
             "title": "工作台",
             "nav": {
               "home": "首页",
+              "sentiment": "舆情监测",
               "compose": "撰写",
               "inbox": "收件箱",
               "posts": "帖子",
@@ -1857,6 +1893,220 @@ const zh = {
               "connected": "已连接",
               "expires": "过期时间",
               "connect": "连接"
+            },
+            "sentiment": {
+              "title": "舆情监测",
+              "lastUpdate": "上次更新 {{ago}}",
+              "refresh": "刷新",
+              "settingsLink": "设置",
+              "tabs": {
+                "today": "今日",
+                "articles": "文章",
+                "briefs": "简报",
+                "drafts": "草稿"
+              },
+              "status": {
+                "pending": "任务排队中,即将开始",
+                "running": "任务运行中,数据可能不完整。完成后请刷新查看。",
+                "success": "✓ 数据已更新",
+                "failed": "上次任务失败:{{error}}",
+                "firstRun": "⏳ 首次抓取与分析中,通常需要 5-10 分钟。任务完成后请手动刷新页面。",
+                "retry": "重试",
+                "neverRun": "账号已配置,但尚未执行过抓取。点击立即开始首次抓取分析。",
+                "runNow": "立即抓取",
+                "queueing": "正在入队..."
+              },
+              "today": {
+                "kpi": {
+                  "total": "今日帖子",
+                  "highRisk": "高风险",
+                  "avgSentiment": "平均情感",
+                  "activeSources": "活跃媒体",
+                  "vsYesterday": "较昨日"
+                },
+                "sentimentTrend": "7 天情感趋势",
+                "riskDist": "风险分布",
+                "latestBrief": "今日简报",
+                "topRisk": "高风险帖 Top 5",
+                "viewFull": "完整查看 →",
+                "writeReply": "写回应",
+                "viewDetail": "查看"
+              },
+              "articles": {
+                "filters": {
+                  "title": "筛选",
+                  "date": "日期",
+                  "today": "今日",
+                  "week": "本周",
+                  "month": "本月",
+                  "sentiment": "情感",
+                  "risk": "风险",
+                  "source": "媒体",
+                  "topic": "主题",
+                  "topicPlaceholder": "输入主题关键字",
+                  "influence": "影响力",
+                  "onlyRelevant": "仅相关帖",
+                  "reset": "重置"
+                },
+                "sort": {
+                  "label": "排序",
+                  "influence": "影响力",
+                  "newest": "最新",
+                  "views": "浏览量"
+                },
+                "labels": {
+                  "bullish": "看多",
+                  "bearish": "看空",
+                  "neutral": "中性",
+                  "mixed": "复杂",
+                  "unknown": "未知"
+                },
+                "risk": {
+                  "none": "无风险",
+                  "low": "低",
+                  "medium": "中",
+                  "high": "高"
+                },
+                "detail": {
+                  "title": "帖子详情",
+                  "selectPost": "请在左侧选择一条帖子",
+                  "originalText": "原文",
+                  "openOriginal": "打开原文 ↗",
+                  "aiAnalysis": "AI 分析",
+                  "summary": "摘要",
+                  "sentiment": "情感",
+                  "emotions": "情绪",
+                  "topics": "主题",
+                  "entities": "实体",
+                  "stance": "立场",
+                  "intent": "意图",
+                  "factuality": "事实性",
+                  "riskLevel": "风险等级",
+                  "riskSignals": "风险信号",
+                  "influence": "影响力",
+                  "hidden": "隐含意",
+                  "citations": "AI 引用片段",
+                  "reasoning": "AI 推理依据",
+                  "writeDraft": "✏ 写回应草稿",
+                  "expandReasoning": "查看推理依据"
+                },
+                "empty": "没有匹配筛选条件的帖子",
+                "count": "{{count}} 条"
+              },
+              "briefs": {
+                "list": "简报列表",
+                "newAdHoc": "+ 临时简报",
+                "kpiLine": "{{posts}} 帖 · {{risk}} 高风险",
+                "exportMd": "📥 下载 MD",
+                "exportPdf": "📥 下载 PDF",
+                "email": "📧 发邮件",
+                "selectBrief": "请在左侧选择一份简报",
+                "anchorTitle": "目录"
+              },
+              "drafts": {
+                "list": "草稿列表",
+                "newTopic": "+ 主题草稿",
+                "selectDraft": "请在左侧选择一份草稿",
+                "recommended": "推荐",
+                "hitlRequired": "⚠ 需要审核",
+                "hitlNotes": "审核要点",
+                "summary": "概要",
+                "variants": {
+                  "conservative": "保守版",
+                  "standard": "标准版",
+                  "proactive": "进取版"
+                },
+                "fields": {
+                  "body": "正文",
+                  "rationale": "依据",
+                  "predicted_effect": "预期效果",
+                  "cautions": "注意事项"
+                },
+                "copy": "📋 复制",
+                "copied": "已复制",
+                "edit": "✏ 编辑",
+                "save": "保存",
+                "cancel": "取消",
+                "approve": "批准",
+                "approved": "已批准",
+                "pendingReview": "待审核",
+                "archived": "已归档"
+              },
+              "settings": {
+                "title": "舆情设置",
+                "back": "← 返回工作台",
+                "sections": {
+                  "target": "监测目标",
+                  "keywords": "关键词",
+                  "notify": "通知",
+                  "knowledge": "知识库",
+                  "actions": "操作"
+                },
+                "fields": {
+                  "target": "品牌名",
+                  "ticker": "股票代码",
+                  "aliases": "别名(选填)",
+                  "intent": "监测意图",
+                  "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
+                  "keywords": "重点关注词",
+                  "excludes": "排除词(选填)",
+                  "emails": "通知邮箱(≤10)",
+                  "tagPlaceholder": "输入后回车添加"
+                },
+                "knowledge": {
+                  "brand_voice": "品牌语调",
+                  "legal_redlines": "法务红线",
+                  "response_playbook": "响应剧本",
+                  "edit": "编辑",
+                  "save": "保存",
+                  "cancel": "取消",
+                  "wordCount": "{{count}} 字"
+                },
+                "save": "💾 保存",
+                "saveAndRun": "💾 保存并立即跑一次",
+                "delete": "🗑 删除监测",
+                "saved": "已保存(演示)",
+                "deleted": "已删除监测(演示)",
+                "runNowQueued": "已开始执行(演示)"
+              },
+              "onboarding": {
+                "title": "开始监测您的品牌",
+                "subtitle": "1 分钟完成配置,系统会自动每天为您生成舆情简报。",
+                "field": {
+                  "target": "品牌 / 公司名",
+                  "ticker": "股票代码(选填)",
+                  "intent": "监测重点(选填)",
+                  "keywords": "重点关键词",
+                  "emails": "通知邮箱"
+                },
+                "submit": "🚀 保存并立即开始抓取",
+                "running": "首次任务已开始,稍后请刷新查看结果"
+              },
+              "keywordGroups": {
+                "groupsHeader": "分组({{count}} 启用)",
+                "addGroup": "新建分组",
+                "newGroupPrompt": "请输入分组名称(例:产品负面、服务负面)",
+                "renamePrompt": "重命名分组",
+                "rename": "重命名",
+                "removeGroup": "删除分组",
+                "removeGroupConfirm": "确定删除分组「{{name}}」及其全部关键词?",
+                "addItem": "添加",
+                "addItemPlaceholder": "输入关键词后回车添加",
+                "noItems": "本分组尚无关键词。",
+                "selectOrAdd": "选择左侧分组或新建一个分组开始添加关键词。",
+                "empty": "尚未配置关键词分组。",
+                "remove": "删除",
+                "clearNew": "点击清除 NEW 标记",
+                "enabledHint": "启用 / 暂停该关键词",
+                "kinds": {
+                  "entity": "公司主体",
+                  "legal": "法院诉讼",
+                  "exec": "高管",
+                  "project": "项目",
+                  "competitor": "友商",
+                  "custom": "自定义"
+                }
+              }
             }
           },
           "account": {

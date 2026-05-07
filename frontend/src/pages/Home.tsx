@@ -8,8 +8,15 @@ import { PageHead } from '../components/PageHead';
 import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
+type CardKey = AdvancedKey | 'sentiment';
 
-const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
+const advancedCards: { key: CardKey; icon: ReactNode; isNew?: boolean }[] = [
+  {
+    key: 'aeo',
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+    ),
+  },
   {
     key: 'compare',
     icon: (
@@ -46,6 +53,16 @@ const advancedCards: { key: AdvancedKey; icon: ReactNode }[] = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
     ),
   },
+  {
+    key: 'sentiment',
+    isNew: true,
+    icon: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+        <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+      </>
+    ),
+  },
 ];
 
 export function Home() {
@@ -80,7 +97,20 @@ export function Home() {
     navigate('/result', { state: { pendingUrl: normalizeUrl(url) } });
   };
 
-  const handleAdvancedClick = (key: AdvancedKey) => {
+  const handleAdvancedClick = (key: CardKey) => {
+    // 舆情监测是订阅式服务,跳工作台而不是单次检测的 Result 页
+    if (key === 'sentiment') {
+      if (!isLoggedIn) {
+        navigate('/login?from=/sentiment');
+        return;
+      }
+      if (!isUnlocked) {
+        openTierModal();
+        return;
+      }
+      navigate('/sentiment');
+      return;
+    }
     if (!isLoggedIn || !isUnlocked) {
       openTierModal();
       return;
@@ -224,14 +254,25 @@ export function Home() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {advancedCards.map(({ key, icon }) => (
+              {advancedCards.map(({ key, icon, isNew }) => (
                 <div
                   role="button"
                   key={key}
                   onClick={() => handleAdvancedClick(key)}
                   className="group flex gap-4 relative text-left card p-6 hover:-translate-y-0.5"
                 >
-                  {!isUnlocked && (
+                  {isNew && (
+                    <div
+                      className="absolute top-4 right-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide"
+                      style={{
+                        background: 'linear-gradient(90deg, #7c3aed, #ec4899)',
+                        color: '#ffffff',
+                      }}
+                    >
+                      NEW
+                    </div>
+                  )}
+                  {!isNew && !isUnlocked && (
                     <div className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-surface border border-soft">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"

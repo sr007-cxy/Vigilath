@@ -84,6 +84,7 @@ const en = {
             "register": "Sign up",
             "signedInAs": "Signed in as",
             "dashboard": "Dashboard",
+            "sentiment": "Sentinel",
             "account": "Account",
             "logout": "Sign out"
           },
@@ -375,6 +376,10 @@ const en = {
                 "entity": {
                   "title": "Entity GEO Audit",
                   "desc": "Audit how AI recognizes a brand, product, or person — no URL required."
+                },
+                "sentiment": {
+                  "title": "Brand Sentinel",
+                  "desc": "Always-on brand monitoring — daily LLM analysis, smart briefs and ready-to-publish reply drafts."
                 }
               },
               "result": {
@@ -559,6 +564,36 @@ const en = {
             "buttons": {
               "geoKnowledge": "Learn about GEO Knowledge",
               "services": "View Service Packages"
+            },
+            "sentiment": {
+              "badge": "NEW",
+              "title": "Brand Sentinel",
+              "subtitle": "AI-era brand reputation guardian",
+              "description": "Daily web sweep · LLM analysis · ready-to-publish reply drafts",
+              "features": {
+                "monitor": {
+                  "title": "📡 Always-on monitor",
+                  "desc": "Keyword-driven multi-platform recall with sentiment / risk / influence"
+                },
+                "brief": {
+                  "title": "📄 Smart briefs",
+                  "desc": "Daily 7am email — overview, themes, risks, recommended actions"
+                },
+                "alert": {
+                  "title": "⚠️ Risk alerts",
+                  "desc": "Real-time detection of high-impact events with propagation analysis"
+                },
+                "respond": {
+                  "title": "✏️ One-click responses",
+                  "desc": "Conservative / Standard / Proactive drafts with HITL workflow"
+                }
+              },
+              "cta": {
+                "enter": "🚀 Open workspace →",
+                "upgrade": "💎 Upgrade →",
+                "login": "Sign in to use →",
+                "contact": "💬 Contact sales"
+              }
             }
           },
           "result": {
@@ -1744,6 +1779,7 @@ const en = {
             "title": "Dashboard",
             "nav": {
               "home": "Home",
+              "sentiment": "Sentinel",
               "compose": "Compose",
               "inbox": "Inbox",
               "posts": "Posts",
@@ -1851,6 +1887,220 @@ const en = {
               "connected": "Connected",
               "expires": "Expires",
               "connect": "Connect"
+            },
+            "sentiment": {
+              "title": "Brand Sentinel",
+              "lastUpdate": "Updated {{ago}}",
+              "refresh": "Refresh",
+              "settingsLink": "Settings",
+              "tabs": {
+                "today": "Today",
+                "articles": "Mentions",
+                "briefs": "Briefs",
+                "drafts": "Drafts"
+              },
+              "status": {
+                "pending": "Task queued, starting soon",
+                "running": "Task running. Data may be incomplete; refresh once it finishes.",
+                "success": "✓ Up to date",
+                "failed": "Last run failed: {{error}}",
+                "firstRun": "⏳ First-time scan in progress (5–10 min). Refresh manually when done.",
+                "retry": "Retry",
+                "neverRun": "Account is configured but has never been scanned. Click to start the first scan now.",
+                "runNow": "Run scan now",
+                "queueing": "Queuing…"
+              },
+              "today": {
+                "kpi": {
+                  "total": "Posts today",
+                  "highRisk": "High risk",
+                  "avgSentiment": "Avg sentiment",
+                  "activeSources": "Active sources",
+                  "vsYesterday": "vs yesterday"
+                },
+                "sentimentTrend": "Sentiment (7 days)",
+                "riskDist": "Risk distribution",
+                "latestBrief": "Today's brief",
+                "topRisk": "Top 5 high-risk posts",
+                "viewFull": "View full →",
+                "writeReply": "Draft reply",
+                "viewDetail": "View"
+              },
+              "articles": {
+                "filters": {
+                  "title": "Filters",
+                  "date": "Date",
+                  "today": "Today",
+                  "week": "This week",
+                  "month": "This month",
+                  "sentiment": "Sentiment",
+                  "risk": "Risk",
+                  "source": "Source",
+                  "topic": "Topic",
+                  "topicPlaceholder": "Topic keyword",
+                  "influence": "Influence",
+                  "onlyRelevant": "Only relevant",
+                  "reset": "Reset"
+                },
+                "sort": {
+                  "label": "Sort",
+                  "influence": "Influence",
+                  "newest": "Newest",
+                  "views": "Views"
+                },
+                "labels": {
+                  "bullish": "Bullish",
+                  "bearish": "Bearish",
+                  "neutral": "Neutral",
+                  "mixed": "Mixed",
+                  "unknown": "Unknown"
+                },
+                "risk": {
+                  "none": "None",
+                  "low": "Low",
+                  "medium": "Med",
+                  "high": "High"
+                },
+                "detail": {
+                  "title": "Post detail",
+                  "selectPost": "Select a post on the left",
+                  "originalText": "Original",
+                  "openOriginal": "Open original ↗",
+                  "aiAnalysis": "AI analysis",
+                  "summary": "Summary",
+                  "sentiment": "Sentiment",
+                  "emotions": "Emotions",
+                  "topics": "Topics",
+                  "entities": "Entities",
+                  "stance": "Stance",
+                  "intent": "Intent",
+                  "factuality": "Factuality",
+                  "riskLevel": "Risk level",
+                  "riskSignals": "Risk signals",
+                  "influence": "Influence",
+                  "hidden": "Hidden meaning",
+                  "citations": "AI citations",
+                  "reasoning": "AI reasoning",
+                  "writeDraft": "✏ Draft reply",
+                  "expandReasoning": "View reasoning"
+                },
+                "empty": "No posts match the current filters",
+                "count": "{{count}} posts"
+              },
+              "briefs": {
+                "list": "Briefs",
+                "newAdHoc": "+ Ad-hoc",
+                "kpiLine": "{{posts}} posts · {{risk}} high risk",
+                "exportMd": "📥 Markdown",
+                "exportPdf": "📥 PDF",
+                "email": "📧 Email",
+                "selectBrief": "Select a brief on the left",
+                "anchorTitle": "Sections"
+              },
+              "drafts": {
+                "list": "Drafts",
+                "newTopic": "+ Topic draft",
+                "selectDraft": "Select a draft on the left",
+                "recommended": "Recommended",
+                "hitlRequired": "⚠ Review required",
+                "hitlNotes": "Review notes",
+                "summary": "Summary",
+                "variants": {
+                  "conservative": "Conservative",
+                  "standard": "Standard",
+                  "proactive": "Proactive"
+                },
+                "fields": {
+                  "body": "Body",
+                  "rationale": "Rationale",
+                  "predicted_effect": "Predicted effect",
+                  "cautions": "Cautions"
+                },
+                "copy": "📋 Copy",
+                "copied": "Copied",
+                "edit": "✏ Edit",
+                "save": "Save",
+                "cancel": "Cancel",
+                "approve": "Approve",
+                "approved": "Approved",
+                "pendingReview": "Pending review",
+                "archived": "Archived"
+              },
+              "settings": {
+                "title": "Sentinel settings",
+                "back": "← Back to workspace",
+                "sections": {
+                  "target": "Monitoring target",
+                  "keywords": "Keywords",
+                  "notify": "Notifications",
+                  "knowledge": "Knowledge base",
+                  "actions": "Actions"
+                },
+                "fields": {
+                  "target": "Brand / company",
+                  "ticker": "Ticker",
+                  "aliases": "Aliases (optional)",
+                  "intent": "Monitoring intent",
+                  "intentPlaceholder": "e.g. short reports / earnings rumors / overseas business",
+                  "keywords": "Watch keywords",
+                  "excludes": "Exclude keywords (optional)",
+                  "emails": "Notify emails (≤10)",
+                  "tagPlaceholder": "Type and press enter"
+                },
+                "knowledge": {
+                  "brand_voice": "Brand voice",
+                  "legal_redlines": "Legal redlines",
+                  "response_playbook": "Response playbook",
+                  "edit": "Edit",
+                  "save": "Save",
+                  "cancel": "Cancel",
+                  "wordCount": "{{count}} chars"
+                },
+                "save": "💾 Save",
+                "saveAndRun": "💾 Save & run now",
+                "delete": "🗑 Delete monitor",
+                "saved": "Saved (demo)",
+                "deleted": "Deleted (demo)",
+                "runNowQueued": "Run started (demo)"
+              },
+              "onboarding": {
+                "title": "Start monitoring your brand",
+                "subtitle": "Configure in 1 minute. The system runs daily and emails you a brief.",
+                "field": {
+                  "target": "Brand / company name",
+                  "ticker": "Ticker (optional)",
+                  "intent": "Focus (optional)",
+                  "keywords": "Watch keywords",
+                  "emails": "Notify emails"
+                },
+                "submit": "🚀 Save & start first scan",
+                "running": "First scan started. Refresh later to see results."
+              },
+              "keywordGroups": {
+                "groupsHeader": "Groups ({{count}} active)",
+                "addGroup": "New group",
+                "newGroupPrompt": "Enter a group name (e.g. Product negative, Service negative)",
+                "renamePrompt": "Rename group",
+                "rename": "Rename",
+                "removeGroup": "Remove group",
+                "removeGroupConfirm": "Remove group \"{{name}}\" and all its keywords?",
+                "addItem": "Add",
+                "addItemPlaceholder": "Type a keyword and press Enter",
+                "noItems": "No keywords in this group yet.",
+                "selectOrAdd": "Select a group on the left or create a new one.",
+                "empty": "No keyword groups configured.",
+                "remove": "Remove",
+                "clearNew": "Click to clear NEW marker",
+                "enabledHint": "Enable / pause this keyword",
+                "kinds": {
+                  "entity": "Entity",
+                  "legal": "Legal",
+                  "exec": "Executives",
+                  "project": "Projects",
+                  "competitor": "Competitors",
+                  "custom": "Custom"
+                }
+              }
             }
           },
           "account": {

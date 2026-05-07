@@ -20,3 +20,32 @@ services:
       - "8070:8070"
     environment:
       - PYTHONUNBUFFERED=1
+      # backend → sentinel-service 通过容器名解析
+      - SENTINEL_SERVICE_URL=http://sentinel-service:8090
+      # 平台 fallback OpenAI key(scheduler 跑定时任务时用)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - sentinel-service
+
+  sentinel-service:
+    build:
+      context: ./services/sentinel-service
+      dockerfile: Dockerfile
+    # 默认仅 backend 内部访问,调试时把下面 ports 放开
+    expose:
+      - "8090"
+    # ports:
+    #   - "8090:8090"
+    volumes:
+      - sentinel-data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SENTINEL_DATA_DIR=/app/data
+      - SENTINEL_PORT=8090
+      # 平台默认 key(client 可用 X-OpenAI-Key header 覆盖)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - BAIDU_COOKIE=${BAIDU_COOKIE:-}
+    restart: unless-stopped
+
+volumes:
+  sentinel-data:
