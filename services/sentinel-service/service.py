@@ -88,6 +88,10 @@ from crawler.sina_finance import SinaFinanceClient # type: ignore  # noqa: E402
 from crawler.eastmoney_news import EastmoneyNewsClient # type: ignore  # noqa: E402
 from crawler.baidu_tieba import BaiduTiebaClient     # type: ignore  # noqa: E402
 from crawler.cls_finance import ClsFinanceClient      # type: ignore  # noqa: E402
+from crawler.gelonghui import GelonghuiClient         # type: ignore  # noqa: E402
+from crawler.wallstreetcn import WallstreetcnClient   # type: ignore  # noqa: E402
+from crawler.yicai import YicaiClient                 # type: ignore  # noqa: E402
+from crawler.kr36 import Kr36Client                   # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -255,6 +259,13 @@ class CrawlTiebaRequest(BaseModel):
 
 
 class CrawlClsRequest(BaseModel):
+    account_id: int
+    keyword: str
+    pages: int = 3
+
+
+class CrawlGenericRequest(BaseModel):
+    """通用搜索型爬虫请求."""
     account_id: int
     keyword: str
     pages: int = 3
@@ -482,12 +493,10 @@ async def run_crawl_cls(req: CrawlClsRequest) -> dict:
             conn = _patched_connect()
             init_schema(conn)
             total = inserted = 0
-            # 电报（按关键词过滤）
             for rec in client.fetch_telegraph(keyword=req.keyword, count=100):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
-            # 搜索文章
             for rec in client.search_pages(req.keyword, pages=req.pages):
                 if upsert_post(conn, rec):
                     inserted += 1
@@ -495,6 +504,33 @@ async def run_crawl_cls(req: CrawlClsRequest) -> dict:
             conn.commit()
             return {"total": total, "inserted": inserted}
         return await asyncio.to_thread(_wrap, _do)
+
+
+def _generic_crawl_endpoint(client_cls, source_name: str):
+    """工厂函数: 生成通用搜索型爬虫 endpoint."""
+    async def handler(req: CrawlGenericRequest) -> dict:
+        async with _account_context(req.account_id, None):
+            def _do():
+                client = client_cls()
+                conn = _patched_connect()
+                init_schema(conn)
+                total = inserted = 0
+                for rec in client.search_pages(req.keyword, pages=req.pages):
+                    if upsert_post(conn, rec):
+                        inserted += 1
+                    total += 1
+                conn.commit()
+                return {"total": total, "inserted": inserted}
+            return await asyncio.to_thread(_wrap, _do)
+    handler.__name__ = f"run_crawl_{source_name}"
+    handler.__doc__ = f"抓取{source_name}."
+    return handler
+
+
+app.post("/run-crawl-gelonghui")(_generic_crawl_endpoint(GelonghuiClient, "gelonghui"))
+app.post("/run-crawl-wallstreetcn")(_generic_crawl_endpoint(WallstreetcnClient, "wallstreetcn"))
+app.post("/run-crawl-yicai")(_generic_crawl_endpoint(YicaiClient, "yicai"))
+app.post("/run-crawl-36kr")(_generic_crawl_endpoint(Kr36Client, "kr36"))
 
 
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────

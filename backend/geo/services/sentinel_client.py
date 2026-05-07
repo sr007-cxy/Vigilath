@@ -196,6 +196,33 @@ def crawl_cls(
         ))
 
 
+def _crawl_generic(
+    endpoint: str, *, account_id: int, keyword: str,
+    pages: int = 3, timeout: int = 60,
+) -> dict:
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/{endpoint}", json=payload, headers=_headers(),
+        ))
+
+
+def crawl_gelonghui(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-gelonghui", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+
+
+def crawl_wallstreetcn(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-wallstreetcn", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+
+
+def crawl_yicai(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-yicai", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+
+
+def crawl_36kr(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-36kr", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

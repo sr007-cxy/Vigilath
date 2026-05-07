@@ -186,6 +186,22 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 log.warning("run_pipeline[%s]: cls failed: %s", account_id, e)
                 crawlers_stats["cls"] = {"error": str(e)}
 
+            # 批量跑剩余爬虫(格隆汇/华尔街见闻/第一财经/36kr)
+            extra_crawlers = [
+                ("gelonghui", sentinel_client.crawl_gelonghui),
+                ("wallstreetcn", sentinel_client.crawl_wallstreetcn),
+                ("yicai", sentinel_client.crawl_yicai),
+                ("36kr", sentinel_client.crawl_36kr),
+            ]
+            for name, fn in extra_crawlers:
+                try:
+                    r_extra = fn(account_id=account_id, keyword=target, pages=3)
+                    crawlers_stats[name] = r_extra
+                    log.info("run_pipeline[%s]: %s +%s", account_id, name, r_extra.get("inserted", 0))
+                except Exception as e:
+                    log.warning("run_pipeline[%s]: %s failed: %s", account_id, name, e)
+                    crawlers_stats[name] = {"error": str(e)}
+
             stats["crawlers"] = crawlers_stats
 
             log.info("run_pipeline[%s]: analyze begin", account_id)
