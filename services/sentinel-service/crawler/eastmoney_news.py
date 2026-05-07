@@ -62,9 +62,10 @@ class EastmoneyNewsClient:
             return
 
         # 解析 JSONP: j({...})
-        m = re.search(r"j\((.+)\)$", r.text, re.DOTALL)
+        text = r.text.strip()
+        m = re.search(r"^j\((.+)\)\s*$", text, re.DOTALL)
         if not m:
-            print(f"  [eastmoney_news] JSONP parse failed, len={len(r.text)}", file=sys.stderr)
+            print(f"  [eastmoney_news] JSONP parse failed, len={len(text)}, start={text[:50]!r}", file=sys.stderr)
             return
 
         try:
@@ -73,7 +74,14 @@ class EastmoneyNewsClient:
             print(f"  [eastmoney_news] JSON decode error: {e}", file=sys.stderr)
             return
 
-        articles = data.get("result") or []
+        # result 可能是 dict（按 type 分组）或 list
+        result = data.get("result") or {}
+        if isinstance(result, dict):
+            articles = result.get("cmsArticleWebOld") or []
+        elif isinstance(result, list):
+            articles = result
+        else:
+            articles = []
         for art in articles:
             yield _parse_article(art, keyword)
 
@@ -105,7 +113,7 @@ def _parse_article(art: dict, keyword: str) -> dict:
 
     return {
         "source": "eastmoney_news",
-        "post_id": art.get("artCode") or _url_hash(url),
+        "post_id": art.get("code") or art.get("artCode") or _url_hash(url),
         "symbol": keyword,
         "author": art.get("mediaName"),
         "title": title[:200],
