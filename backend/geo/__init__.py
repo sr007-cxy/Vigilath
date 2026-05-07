@@ -9,6 +9,11 @@ from geo.models.membership import (
 )
 from geo.models.payment import PaymentSessionORM  # noqa: F401 (register ORM)
 from geo.models.detection import DetectionRecordORM  # noqa: F401 (register ORM)
+from geo.models.sentiment import (  # noqa: F401 (register ORM so create_all builds it)
+    SentimentAccountORM,
+    SentimentKnowledgeORM,
+    SentimentRunLogORM,
+)
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
