@@ -75,6 +75,7 @@
 | **东方财富公告** ★ | `crawler/eastmoney_announcement.py` | A 股公告 | 3 页 | ✅ 新增 (2026-05-08) | 20-40 | A 股代码必需,披露原文 |
 | **东方财富个股研报** ★ | `crawler/eastmoney_research.py` | 券商研报 | 2 页 | ✅ 新增 (2026-05-08) | 10-20 | 含评级/目标价/EPS 预测 |
 | **东方财富行业研究** ★ | `crawler/eastmoney_industry.py` | 行业研报 | 2 页 | ✅ 新增 (2026-05-08) | 20-40 | 行业景气度+龙头观点 |
+| **新浪个股新闻** ★ | `crawler/sina_stock_news.py` | 个股新闻 | 单页 | ✅ 新增 (2026-05-08) | ~9-30 | server-rendered HTML/GB18030,A 股+美股 |
 | **财联社** | `crawler/cls_finance.py` | 实时快讯 | 3 页 | ✅ 修好 (2026-05-08) | 0-多 | endpoint 改 `updateTelegraphList`,关键词过滤命中即返回 |
 | 雪球 | `crawler/xueqiu.py` | 投资社区 | 5 页 | ❌ WAF | 0 | 阿里云 WAF 封机房 IP |
 | 新浪财经 | `crawler/sina_finance.py` | 新闻搜索 | 3 页 | ❌ SPA | 0 | 搜索结果页改 Vue,HTML 抓不到 |
@@ -86,7 +87,7 @@
 
 ★ = 2026-05-08 本次新增,基于实测可用的 EastMoney API 体系。
 
-**实测代码可用性**:**6/13 真正可用**(eastmoney 5 个 + cls 1 个)。其余 7 个保留代码,失败被 try/except 捕获不影响其它 crawler,后续按需修(雪球需代理/cookie,贴吧需真实账号 cookie,格隆/华尔街/36kr 需重新逆向其 SPA 的 AJAX endpoint)。
+**实测代码可用性**:**7/14 真正可用**(eastmoney 5 个 + cls 1 个 + sina_stock 1 个)。其余 7 个保留代码,失败被 try/except 捕获不影响其它 crawler,后续按需修(雪球需代理/cookie,贴吧需真实账号 cookie,格隆/华尔街/36kr 需重新逆向其 SPA 的 AJAX endpoint)。
 
 **Pipeline 并行化**(2026-05-08):
 - `backend/geo/services/sentiment_pipeline.py` 中 13 个 crawler 由顺序执行改为 `ThreadPoolExecutor` 并发(`max_workers=8`)。
@@ -290,10 +291,28 @@ Sentinel 模式（先搜后存）：
 | eastmoney_ann(2 页) | 40 | 20 |
 | eastmoney_research(2 页) | 18 | 18 |
 | eastmoney_industry(2 页) | 40 | 40 |
+| sina_stock(1 页) | 9 | 9 |
 | cls(1 页) | 0(关键词当前无匹配) | 0 |
-| **合计** | **258** | **237** |
+| **合计** | **267** | **246** |
 
 每个 endpoint < 1s。并行后整体爬虫阶段 ≈ 1-2s(主要受最慢源 timeout)。
+
+### Phase 1.6:运维工程化(2026-05-08 跟进项)
+
+**已知 footgun**:测试机上 sentinel-service **不在 systemd 下**,目前是
+`setsid -f` 起的脱离会话进程。后果:VM 重启后不会自启,需要再手起一次。
+完整启动命令(`.claude/deploy-test-env.md` 第五节也有记录):
+
+```bash
+cd /opt/geo/services/sentinel-service
+setsid -f bash -c "exec /opt/geo/backend/venv/bin/python -m uvicorn service:app \\
+  --host 127.0.0.1 --port 8090 \\
+  >> /opt/geo/services/sentinel-service/sentinel.log 2>&1"
+```
+
+**收尾建议(下一轮)**:做成 `geo-sentinel.service` systemd unit,
+`Restart=always` + `ExecStart` 同上,`After=geo-backend.service`。这样 VM 重启
+后整套环境自启。
 
 ### Phase 2：继续扩充数据源 + 搜索增强（进行中）
 
