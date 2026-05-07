@@ -1,7 +1,14 @@
+// 舆情品牌设置页 — 认证守卫 + 品牌配置/编辑.
+//
+// 访问控制流程:
+//   1. 未登录 → Navigate 到 / (首页)
+//   2. 已登录但无账号 → 展示品牌创建表单 (OnboardingWizard)
+//   3. 已登录且有账号 → 展示完整设置面板 (编辑模式)
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import { useAuth } from '../../../contexts/AuthContext';
 import { mockAccount, mockKeywordGroups, mockKnowledge } from '../../../mocks/sentiment';
 import { isMockMode } from '../../../services/sentimentApi';
 import {
@@ -13,6 +20,7 @@ import type { KeywordGroup } from '../../../types/sentiment';
 import { TagInput } from './components/TagInput';
 import { KeywordGroupsEditor } from './components/KeywordGroupsEditor';
 import { KnowledgeEditor } from './components/KnowledgeEditor';
+import { OnboardingWizard } from './OnboardingWizard';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -22,11 +30,11 @@ const cardStyle: React.CSSProperties = {
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const usingMock = isMockMode();
 
   const accountsQuery = useSentimentAccounts();
   const accounts = accountsQuery.data ?? [];
-  // MVP:取首个账号(后续支持多账号选择 — 加 ?id= URL 参数)
   const account = usingMock ? mockAccount : accounts[0];
 
   const updateAccount = useUpdateAccount();
@@ -36,7 +44,6 @@ export function SettingsPage() {
   const knowledgeQuery = useKnowledge(usingMock ? null : (account?.id ?? null));
   const upsertKnowledge = useUpsertKnowledge();
 
-  // ── form state(从账号 / mock 初始化) ──
   const [target, setTarget] = useState('');
   const [ticker, setTicker] = useState('');
   const [aliases, setAliases] = useState<string[]>([]);
@@ -51,8 +58,6 @@ export function SettingsPage() {
     setTicker(account.ticker);
     setAliases(account.aliases ?? []);
     setIntent(account.intent ?? '');
-    // 优先用结构化分组,空则用扁平 keywords 兜底为单一"自定义"组,
-    // mock 模式直接展示完整的 mockKeywordGroups.
     if (usingMock) {
       setKeywordGroups(mockKeywordGroups);
     } else if (account.keyword_groups && account.keyword_groups.length > 0) {
@@ -68,7 +73,6 @@ export function SettingsPage() {
     setEmails(account.notify_emails ?? []);
   }, [account, usingMock]);
 
-  // ── 知识库:用 API 数据 vs mock 数据 ──
   const knowledgeFromApi = (knowledgeQuery.data ?? []).reduce(
     (acc, k) => ({ ...acc, [k.key]: k.body }),
     { brand_voice: '', legal_redlines: '', response_playbook: '' } as Record<string, string>,
@@ -86,25 +90,40 @@ export function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [knowledgeQuery.data, usingMock]);
 
-  if (!usingMock && accountsQuery.isLoading) {
-    return <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
-      {t('common.loading') || 'Loading...'}
-    </div>;
+  // ── 守卫 1: 未登录 → 首页 ──
+  if (!usingMock && !isLoggedIn) {
+    return <Navigate to="/" replace />;
   }
-  if (!account) {
+
+  if (!usingMock && accountsQuery.isLoading) {
     return (
-      <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
-        没有舆情账号。请先在工作台创建。
-        <div className="mt-3">
-          <Link to="/sentiment" className="btn-solid rounded-md px-4 py-2 text-sm font-semibold">
-            返回工作台
-          </Link>
+      <div className="min-h-[calc(100vh-4rem)] grid-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div
+            className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 mx-auto"
+            style={{ borderColor: 'var(--accent-primary)' }}
+          />
+          <p className="text-sm text-secondary">{t('common.loading') || 'Loading...'}</p>
         </div>
       </div>
     );
   }
 
-  // ── 保存动作 ──
+  // ── 守卫 2: 已登录但无品牌配置 → 展示创建表单 (品牌配置入口) ──
+  if (!usingMock && !account) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] grid-background">
+        <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
+          <OnboardingWizard
+            onSubmit={() => {
+              accountsQuery.refetch();
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const buildPayload = () => ({
     target, ticker,
     aliases, intent: intent.trim() || undefined,
@@ -119,7 +138,7 @@ export function SettingsPage() {
       const newBody = localKnowledge[key] ?? '';
       const oldBody = knowledgeFromApi[key] ?? '';
       if (newBody !== oldBody) {
-        tasks.push(upsertKnowledge.mutateAsync({ accountId: account.id, key, body: newBody }));
+        tasks.push(upsertKnowledge.mutateAsync({ accountId: account!.id, key, body: newBody }));
       }
     }
     await Promise.all(tasks);
@@ -131,7 +150,7 @@ export function SettingsPage() {
       return;
     }
     try {
-      await updateAccount.mutateAsync({ id: account.id, payload: buildPayload() });
+      await updateAccount.mutateAsync({ id: account!.id, payload: buildPayload() });
       await persistKnowledge();
       alert(t('dashboard.sentiment.settings.saved'));
     } catch (e) {
@@ -145,9 +164,9 @@ export function SettingsPage() {
       return;
     }
     try {
-      await updateAccount.mutateAsync({ id: account.id, payload: buildPayload() });
+      await updateAccount.mutateAsync({ id: account!.id, payload: buildPayload() });
       await persistKnowledge();
-      await runNowMutation.mutateAsync(account.id);
+      await runNowMutation.mutateAsync(account!.id);
       alert(`${t('dashboard.sentiment.settings.saved')}\n${t('dashboard.sentiment.settings.runNowQueued')}`);
       navigate('/sentiment');
     } catch (e) {
@@ -162,7 +181,7 @@ export function SettingsPage() {
       return;
     }
     try {
-      await deleteAccount.mutateAsync(account.id);
+      await deleteAccount.mutateAsync(account!.id);
       alert(t('dashboard.sentiment.settings.deleted'));
       navigate('/sentiment');
     } catch (e) {
@@ -174,72 +193,74 @@ export function SettingsPage() {
   const running = runNowMutation.isPending;
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <Link to="/sentiment" className="text-xs text-secondary hover:text-primary">
-            {t('dashboard.sentiment.settings.back')}
-          </Link>
-          <h1 className="text-2xl font-bold text-primary mt-1">
-            {t('dashboard.sentiment.settings.title')}
-          </h1>
-        </div>
-      </header>
+    <div className="min-h-[calc(100vh-4rem)] grid-background">
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6 space-y-4">
+        <header className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <Link to="/sentiment" className="text-xs text-secondary hover:text-primary">
+              {t('dashboard.sentiment.settings.back')}
+            </Link>
+            <h1 className="text-2xl font-bold text-primary mt-1">
+              {t('dashboard.sentiment.settings.title')}
+            </h1>
+          </div>
+        </header>
 
-      <Section title={t('dashboard.sentiment.settings.sections.target')}>
-        <Grid>
-          <Field label={t('dashboard.sentiment.settings.fields.target')} required>
-            <Input value={target} onChange={setTarget} />
+        <Section title={t('dashboard.sentiment.settings.sections.target')}>
+          <Grid>
+            <Field label={t('dashboard.sentiment.settings.fields.target')} required>
+              <Input value={target} onChange={setTarget} />
+            </Field>
+            <Field label={t('dashboard.sentiment.settings.fields.ticker')}>
+              <Input value={ticker} onChange={setTicker} mono />
+            </Field>
+          </Grid>
+          <Field label={t('dashboard.sentiment.settings.fields.aliases')}>
+            <TagInput value={aliases} onChange={setAliases} placeholder={t('dashboard.sentiment.settings.fields.tagPlaceholder')} />
           </Field>
-          <Field label={t('dashboard.sentiment.settings.fields.ticker')}>
-            <Input value={ticker} onChange={setTicker} mono />
+          <Field label={t('dashboard.sentiment.settings.fields.intent')}>
+            <textarea value={intent} onChange={(e) => setIntent(e.target.value)} rows={2}
+              className="w-full px-3 py-2 rounded text-sm resize-y"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              placeholder={t('dashboard.sentiment.settings.fields.intentPlaceholder')} />
           </Field>
-        </Grid>
-        <Field label={t('dashboard.sentiment.settings.fields.aliases')}>
-          <TagInput value={aliases} onChange={setAliases} placeholder={t('dashboard.sentiment.settings.fields.tagPlaceholder')} />
-        </Field>
-        <Field label={t('dashboard.sentiment.settings.fields.intent')}>
-          <textarea value={intent} onChange={(e) => setIntent(e.target.value)} rows={2}
-            className="w-full px-3 py-2 rounded text-sm resize-y"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            placeholder={t('dashboard.sentiment.settings.fields.intentPlaceholder')} />
-        </Field>
-      </Section>
+        </Section>
 
-      <Section title={t('dashboard.sentiment.settings.sections.keywords')}>
-        <KeywordGroupsEditor value={keywordGroups} onChange={setKeywordGroups} />
-        <Field label={t('dashboard.sentiment.settings.fields.excludes')}>
-          <TagInput value={excludes} onChange={setExcludes} placeholder={t('dashboard.sentiment.settings.fields.tagPlaceholder')} />
-        </Field>
-      </Section>
+        <Section title={t('dashboard.sentiment.settings.sections.keywords')}>
+          <KeywordGroupsEditor value={keywordGroups} onChange={setKeywordGroups} />
+          <Field label={t('dashboard.sentiment.settings.fields.excludes')}>
+            <TagInput value={excludes} onChange={setExcludes} placeholder={t('dashboard.sentiment.settings.fields.tagPlaceholder')} />
+          </Field>
+        </Section>
 
-      <Section title={t('dashboard.sentiment.settings.sections.notify')}>
-        <Field label={t('dashboard.sentiment.settings.fields.emails')}>
-          <TagInput value={emails} onChange={setEmails} placeholder="ir@yourcompany.com" max={10} />
-        </Field>
-      </Section>
+        <Section title={t('dashboard.sentiment.settings.sections.notify')}>
+          <Field label={t('dashboard.sentiment.settings.fields.emails')}>
+            <TagInput value={emails} onChange={setEmails} placeholder="ir@yourcompany.com" max={10} />
+          </Field>
+        </Section>
 
-      <Section title={t('dashboard.sentiment.settings.sections.knowledge')}>
-        <KnowledgeEditor knowledge={localKnowledge} onChange={setLocalKnowledge} />
-      </Section>
+        <Section title={t('dashboard.sentiment.settings.sections.knowledge')}>
+          <KnowledgeEditor knowledge={localKnowledge} onChange={setLocalKnowledge} />
+        </Section>
 
-      <section className="rounded-xl p-5 flex items-center justify-between flex-wrap gap-3" style={cardStyle}>
-        <div className="flex gap-2">
-          <button type="button" onClick={handleSave} disabled={saving}
-            className="rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
-            {saving ? '...' : t('dashboard.sentiment.settings.save')}
+        <section className="rounded-xl p-5 flex items-center justify-between flex-wrap gap-3" style={cardStyle}>
+          <div className="flex gap-2">
+            <button type="button" onClick={handleSave} disabled={saving}
+              className="rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
+              {saving ? '...' : t('dashboard.sentiment.settings.save')}
+            </button>
+            <button type="button" onClick={handleSaveAndRun} disabled={saving || running}
+              className="btn-solid rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50">
+              {(saving || running) ? '...' : t('dashboard.sentiment.settings.saveAndRun')}
+            </button>
+          </div>
+          <button type="button" onClick={handleDelete}
+            className="text-xs font-semibold" style={{ color: '#dc2626' }}>
+            {t('dashboard.sentiment.settings.delete')}
           </button>
-          <button type="button" onClick={handleSaveAndRun} disabled={saving || running}
-            className="btn-solid rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-50">
-            {(saving || running) ? '...' : t('dashboard.sentiment.settings.saveAndRun')}
-          </button>
-        </div>
-        <button type="button" onClick={handleDelete}
-          className="text-xs font-semibold" style={{ color: '#dc2626' }}>
-          {t('dashboard.sentiment.settings.delete')}
-        </button>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

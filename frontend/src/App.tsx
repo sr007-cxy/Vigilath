@@ -105,26 +105,8 @@ function App() {
                 <Route path="accounts" element={<PlatformAccounts />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
-              <Route
-                path="/sentiment"
-                element={
-                  <div className="min-h-[calc(100vh-4rem)] grid-background">
-                    <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
-                      <Sentiment />
-                    </div>
-                  </div>
-                }
-              />
-              <Route
-                path="/sentiment/settings"
-                element={
-                  <div className="min-h-[calc(100vh-4rem)] grid-background">
-                    <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-6">
-                      <SentimentSettings />
-                    </div>
-                  </div>
-                }
-              />
+              <Route path="/sentiment" element={<Sentiment />} />
+              <Route path="/sentiment/settings" element={<SentimentSettings />} />
               <Route path="/about" element={<About />} />
               <Route path="/process" element={<Landing />} />
               <Route path="/pricing" element={<Landing />} />
