@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+
 import { useTranslation } from 'react-i18next';
 
 import { mockPosts } from '../../../../mocks/sentiment';
-import { usePosts, useGenerateDraft } from '../../../../hooks/useSentiment';
+import { usePosts } from '../../../../hooks/useSentiment';
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
@@ -32,7 +33,6 @@ interface Props {
 
 export function ArticlesTab({ account, usingMock }: Props) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
   const { data: postsResp, isLoading, error } = usePosts(
@@ -106,8 +106,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return posts.find(p => p.source === src && p.post_id === pid) || filtered[0] || null;
   }, [selectedKey, filtered, posts]);
 
-  const generateDraft = useGenerateDraft();
-
   const toggle = <T,>(s: Set<T>, v: T): Set<T> => {
     const n = new Set(s);
     if (n.has(v)) n.delete(v); else n.add(v);
@@ -117,28 +115,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const reset = () => {
     setSentiments(new Set()); setRisks(new Set()); setSources(new Set());
     setTopic(''); setOnlyRelevant(true); setSortBy('influence');
-  };
-
-  const handleWriteDraft = (post: SentimentPost) => {
-    if (usingMock) {
-      navigate(`/sentiment?tab=drafts&from=${post.source}-${post.post_id}`);
-      return;
-    }
-    generateDraft.mutate(
-      {
-        account_id: account.id,
-        source: post.source,
-        post_id: post.post_id,
-      },
-      {
-        onSuccess: () => {
-          navigate('/sentiment?tab=drafts');
-        },
-        onError: (err) => {
-          alert(`生成草稿失败:${err instanceof Error ? err.message : err}`);
-        },
-      },
-    );
   };
 
   if (!usingMock && isLoading) {
@@ -201,8 +177,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
         </label>
       </aside>
 
-      <section className="space-y-3">
-        <header className="flex items-center justify-between flex-wrap gap-2">
+      <section className="space-y-3 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
+        <header className="flex items-center justify-between flex-wrap gap-2 xl:sticky xl:top-0 xl:z-10" style={{ background: 'var(--bg-primary)' }}>
           <span className="text-xs text-muted">
             {t('dashboard.sentiment.articles.count', { count: filtered.length })}
           </span>
@@ -239,8 +215,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
         )}
       </section>
 
-      <aside className="self-start xl:sticky xl:top-20">
-        <PostDetail post={selected} onWriteDraft={handleWriteDraft} />
+      <aside className="self-start xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
+        <PostDetail post={selected} />
         {generateDraft.isPending && (
           <div className="mt-2 text-xs text-muted text-center">⏳ 正在生成草稿...</div>
         )}
