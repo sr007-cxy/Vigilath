@@ -1,6 +1,6 @@
 # 舆情监控系统对比分析：Sentinel vs WisersOne
 
-> 文档日期：2026-05-07
+> 文档日期：2026-05-07(2026-05-08 更新:实测 + 新增 EastMoney 系 3 爬虫 + 并行化)
 > 目的：全面对比我方 Sentinel 舆情监控系统与慧科 WisersOne 的能力差距，明确改进路径
 
 ---
@@ -63,20 +63,34 @@
 | 百度搜索 | 可用（需 Cookie） | 已配 BAIDU_COOKIE，支持 `site:` 定向搜索 |
 | DuckDuckGo | 不稳定 | 国内机房经常返回空，作为备选 |
 
-#### 直接爬虫（7 个，每次 pipeline 全量执行）
+#### 直接爬虫(13 个,2026-05-08 实测后真实状态)
 
-| 数据源 | 模块 | 类型 | 页数 | 状态 | 说明 |
-|--------|------|------|------|------|------|
-| **东方财富股吧** | `crawler/eastmoney.py` | 论坛帖子 | 10 页 | 稳定 | 主力数据源，散户讨论 |
-| **东方财富资讯** | `crawler/eastmoney_news.py` | 新闻/研报/公告 | 5 页 | 已通 | JSONP 搜索 API，覆盖专业财经内容 |
-| **雪球** | `crawler/xueqiu.py` | 投资社区 | 5 页 | WAF 拦截 | 阿里云 WAF 封机房 IP，需代理或 Cookie |
-| **新浪财经** | `crawler/sina_finance.py` | 新闻搜索 | 3 页 | 待调试 | 页面结构可能变更，CSS 选择器需适配 |
-| **百度贴吧** | `crawler/baidu_tieba.py` | 论坛帖子 | 3 页 | 新增 | 无 WAF，国内直连，覆盖散户讨论 |
-| **财联社** | `crawler/cls_finance.py` | 快讯+文章 | 3 页 | 新增 | 电报 API 公开，实时性最强 |
-| **格隆汇** | `crawler/gelonghui.py` | 港美股深度分析 | 3 页 | 新增 | 搜索 API，专注中概股/港股 |
-| **华尔街见闻** | `crawler/wallstreetcn.py` | 专业财经资讯 | 3 页 | 新增 | 搜索 API，全球财经覆盖 |
-| **第一财经** | `crawler/yicai.py` | 主流财经媒体 | 3 页 | 新增 | HTML 搜索页抓取 |
-| **36kr** | `crawler/kr36.py` | 科技财经深度 | 3 页 | 新增 | POST 搜索 API |
+> **2026-05-08 实测纪要**:在测试环境 vm02 上对所有爬虫做端到端验证(关键词"宁德时代",ticker 300750)。
+> 结论是文档之前列的"已通"多数已不可用 — 财经站近一年多变 SPA / API 限速 / 改 endpoint。本节用实测覆盖之前的描述。
+
+| 数据源 | 模块 | 类型 | 页数 | **实测状态** | 单次条数 | 备注 |
+|--------|------|------|------|---|------|------|
+| **东方财富股吧** | `crawler/eastmoney.py` | 论坛帖子 | 10 页 | ✅ 稳定 | 158/页 × N | 主力,质量最高 |
+| **东方财富资讯** | `crawler/eastmoney_news.py` | 新闻/研报/公告 | 5 页 | ✅ 稳定 | 1-5 | JSONP API |
+| **东方财富公告** ★ | `crawler/eastmoney_announcement.py` | A 股公告 | 3 页 | ✅ 新增 (2026-05-08) | 20-40 | A 股代码必需,披露原文 |
+| **东方财富个股研报** ★ | `crawler/eastmoney_research.py` | 券商研报 | 2 页 | ✅ 新增 (2026-05-08) | 10-20 | 含评级/目标价/EPS 预测 |
+| **东方财富行业研究** ★ | `crawler/eastmoney_industry.py` | 行业研报 | 2 页 | ✅ 新增 (2026-05-08) | 20-40 | 行业景气度+龙头观点 |
+| **财联社** | `crawler/cls_finance.py` | 实时快讯 | 3 页 | ✅ 修好 (2026-05-08) | 0-多 | endpoint 改 `updateTelegraphList`,关键词过滤命中即返回 |
+| 雪球 | `crawler/xueqiu.py` | 投资社区 | 5 页 | ❌ WAF | 0 | 阿里云 WAF 封机房 IP |
+| 新浪财经 | `crawler/sina_finance.py` | 新闻搜索 | 3 页 | ❌ SPA | 0 | 搜索结果页改 Vue,HTML 抓不到 |
+| 百度贴吧 | `crawler/baidu_tieba.py` | 论坛帖子 | 3 页 | ❌ 403 | 0 | 百度安全验证页拦截,需真实 cookie |
+| 格隆汇 | `crawler/gelonghui.py` | 港美股深度 | 3 页 | ❌ 404 | 0 | `/api/search` 端点已下线 |
+| 华尔街见闻 | `crawler/wallstreetcn.py` | 专业财经 | 3 页 | ❌ DNS | 0 | `api-one.wallstreetcn.com` NXDOMAIN |
+| 第一财经 | `crawler/yicai.py` | 主流财经 | 3 页 | ❌ SPA | 0 | 搜索结果改 SPA |
+| 36kr | `crawler/kr36.py` | 科技财经 | 3 页 | ❌ 500 | 0 | gateway 返回 5xx,API 改了 |
+
+★ = 2026-05-08 本次新增,基于实测可用的 EastMoney API 体系。
+
+**实测代码可用性**:**6/13 真正可用**(eastmoney 5 个 + cls 1 个)。其余 7 个保留代码,失败被 try/except 捕获不影响其它 crawler,后续按需修(雪球需代理/cookie,贴吧需真实账号 cookie,格隆/华尔街/36kr 需重新逆向其 SPA 的 AJAX endpoint)。
+
+**Pipeline 并行化**(2026-05-08):
+- `backend/geo/services/sentiment_pipeline.py` 中 13 个 crawler 由顺序执行改为 `ThreadPoolExecutor` 并发(`max_workers=8`)。
+- 单 crawler 失败 60s timeout 不再阻塞剩余 12 个 — 总耗时 ≈ 最慢的那个 + 队列时间(<20s),而非累加。
 
 #### 数据源覆盖对比
 
@@ -116,6 +130,21 @@
 - **Map-Reduce 架构**：大语料分批处理，最终合并
 - **输出结构**：概览 → 关键主题 → 风险信号 → 值得关注的帖子 → 建议动作
 - **格式**：Markdown，支持下载/邮件推送
+
+### 2.4b PDF 导出(2026-05-08 增强)
+
+> 之前是简单 html2canvas 截图 brief div → 一张大图扔进 PDF。问题:不可搜、缺数据维度。
+
+新版 PDF 在 `frontend/src/pages/Dashboard/sentiment/tabs/BriefsTab.tsx`:
+
+- **封面**:股票 / 日期 / 数据范围(最早 ~ 最新 publish_time)/ 总条数 / 主源 Top3 / 模型
+- **情感分布卡片**:看多 / 中性 / 看空 / 混合 各自计数 + 百分比 + 颜色编码
+- **数据来源分布表**:13 个源按命中数排序,每行附水平 bar(按最高源等比例)
+- **高风险高亮 Top5**:`risk_level=high` 的帖子,显示来源/标题/`risk_signals` 前两个原因
+- **简报正文**:沿用 `BriefRenderer` 的 markdown HTML
+- **页脚**:Sentinel 时间戳 + 股票/日期
+
+实现走"临时 off-screen DOM + html2canvas",保留现有打包技术,不引新依赖。源代码常量 `SOURCE_LABEL` 把内部源名(`eastmoney_ann` 等)翻译成中文(`东财公告`)。
 
 ### 2.5 回应草稿生成
 
@@ -223,19 +252,48 @@ Sentinel 模式（先搜后存）：
 | **东财资讯搜索** | 已完成 | 新闻/研报/公告，JSONP API 已通 |
 | **cn.bing.com 搜索引擎** | 已完成 | 国内直连，已集成到搜索引擎并行列表 |
 | **百度搜索 Cookie** | 已完成 | 已配置 BAIDU_COOKIE，绕过验证码 |
-| **百度贴吧** | 已完成 | 搜索 + 贴吧列表，无 WAF |
-| **财联社** | 已完成 | 电报 API（实时快讯）+ 文章搜索 |
-| **格隆汇** | 已完成 | 搜索 API，港美股深度分析 |
-| **华尔街见闻** | 已完成 | 搜索 API，全球财经资讯 |
-| **第一财经** | 已完成 | HTML 搜索页抓取，主流财经媒体 |
-| **36kr** | 已完成 | POST 搜索 API，科技财经 |
+| **百度贴吧** | 已完成 | 搜索 + 贴吧列表,无 WAF (**实测后已失效:403**) |
+| **财联社** | 已完成 | 电报 API(实时快讯)+ 文章搜索 (**2026-05-08 修复 endpoint**) |
+| **格隆汇** | 已完成 | 搜索 API,港美股深度分析 (**实测后已失效:404**) |
+| **华尔街见闻** | 已完成 | 搜索 API,全球财经资讯 (**实测后已失效:DNS**) |
+| **第一财经** | 已完成 | HTML 搜索页抓取,主流财经媒体 (**实测后已失效:SPA**) |
+| **36kr** | 已完成 | POST 搜索 API,科技财经 (**实测后已失效:500**) |
 | **雪球** | 代码已写，WAF 拦截 | 需代理或浏览器 Cookie 解决 |
-| **新浪财经** | 代码已写，待调试 | CSS 选择器需适配新版页面 |
+| **新浪财经** | 代码已写，待调试 | CSS 选择器需适配新版页面 (**实测确认仍 SPA**) |
 
 **性能优化（同步完成）：**
 - 搜索引擎并行化（ddg+cnbing+baidu 同时请求）
 - LLM 分析并发化（默认 5 并发，可通过 `LLM_ANALYZE_CONCURRENCY` 调整）
 - Pipeline 总时长从 ~470s 降至 ~120s
+
+### Phase 1.5:实测勘误 + EastMoney 体系扩展(2026-05-08)
+
+**问题**:Phase 1 文档把"代码写完"当成"已通",但实测发现 8/10 不工作。
+**应对**:
+
+1. 修 `cls_finance.py`: telegraph endpoint 改 `updateTelegraphList`(实测 200) → 财联社快讯恢复
+2. 新增 3 个 EastMoney 系爬虫(共享同一组实测稳定的 `*.eastmoney.com` API):
+   - `eastmoney_announcement.py` — A 股公告流
+   - `eastmoney_research.py` — 个股券商研报(评级/目标价)
+   - `eastmoney_industry.py` — 行业研究报告
+3. Pipeline 并行化:`ThreadPoolExecutor(max_workers=8)`,失败 crawler 不再阻塞
+4. PDF 增强:封面 KPI / 数据源分布 bar / 风险高亮 / 时间范围
+
+**为什么是 EastMoney 系**:测试机机房 DNS 受限(`api-one.wallstreetcn.com` NXDOMAIN),且 cls/gelonghui/36kr 的搜索 API 已下线。EastMoney 的 `search-api-web` / `np-anotice-stock` / `reportapi` 几个 endpoint 实测稳定且 schema 明确,扩展同源最经济。
+
+**单源条数实测**(关键词"宁德时代"/300750):
+
+| 源 | total | inserted |
+|---|---|---|
+| eastmoney 股吧(2 页) | 158 | 158 |
+| eastmoney_news(2 页) | 2 | 1 |
+| eastmoney_ann(2 页) | 40 | 20 |
+| eastmoney_research(2 页) | 18 | 18 |
+| eastmoney_industry(2 页) | 40 | 40 |
+| cls(1 页) | 0(关键词当前无匹配) | 0 |
+| **合计** | **258** | **237** |
+
+每个 endpoint < 1s。并行后整体爬虫阶段 ≈ 1-2s(主要受最慢源 timeout)。
 
 ### Phase 2：继续扩充数据源 + 搜索增强（进行中）
 
