@@ -86,6 +86,8 @@ from crawler.eastmoney import EastmoneyGubaClient # type: ignore  # noqa: E402
 from crawler.xueqiu import XueqiuClient          # type: ignore  # noqa: E402
 from crawler.sina_finance import SinaFinanceClient # type: ignore  # noqa: E402
 from crawler.eastmoney_news import EastmoneyNewsClient # type: ignore  # noqa: E402
+from crawler.baidu_tieba import BaiduTiebaClient     # type: ignore  # noqa: E402
+from crawler.cls_finance import ClsFinanceClient      # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -241,6 +243,18 @@ class CrawlSinaRequest(BaseModel):
 
 
 class CrawlEastmoneyNewsRequest(BaseModel):
+    account_id: int
+    keyword: str
+    pages: int = 3
+
+
+class CrawlTiebaRequest(BaseModel):
+    account_id: int
+    keyword: str
+    pages: int = 3
+
+
+class CrawlClsRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
@@ -432,6 +446,48 @@ async def run_crawl_eastmoney_news(req: CrawlEastmoneyNewsRequest) -> dict:
             conn = _patched_connect()
             init_schema(conn)
             total = inserted = 0
+            for rec in client.search_pages(req.keyword, pages=req.pages):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-tieba")
+async def run_crawl_tieba(req: CrawlTiebaRequest) -> dict:
+    """百度贴吧搜索."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = BaiduTiebaClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.search_pages(req.keyword, pages=req.pages):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-cls")
+async def run_crawl_cls(req: CrawlClsRequest) -> dict:
+    """财联社快讯+搜索."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            client = ClsFinanceClient()
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            # 电报（按关键词过滤）
+            for rec in client.fetch_telegraph(keyword=req.keyword, count=100):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            # 搜索文章
             for rec in client.search_pages(req.keyword, pages=req.pages):
                 if upsert_post(conn, rec):
                     inserted += 1

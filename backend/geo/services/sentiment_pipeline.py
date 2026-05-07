@@ -164,6 +164,28 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 log.warning("run_pipeline[%s]: eastmoney_news failed: %s", account_id, e)
                 crawlers_stats["eastmoney_news"] = {"error": str(e)}
 
+            # 百度贴吧
+            try:
+                r_tieba = sentinel_client.crawl_tieba(
+                    account_id=account_id, keyword=target, pages=3,
+                )
+                crawlers_stats["tieba"] = r_tieba
+                log.info("run_pipeline[%s]: tieba +%s", account_id, r_tieba.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: tieba failed: %s", account_id, e)
+                crawlers_stats["tieba"] = {"error": str(e)}
+
+            # 财联社（快讯 + 搜索）
+            try:
+                r_cls = sentinel_client.crawl_cls(
+                    account_id=account_id, keyword=target, pages=3,
+                )
+                crawlers_stats["cls"] = r_cls
+                log.info("run_pipeline[%s]: cls +%s", account_id, r_cls.get("inserted", 0))
+            except Exception as e:
+                log.warning("run_pipeline[%s]: cls failed: %s", account_id, e)
+                crawlers_stats["cls"] = {"error": str(e)}
+
             stats["crawlers"] = crawlers_stats
 
             log.info("run_pipeline[%s]: analyze begin", account_id)

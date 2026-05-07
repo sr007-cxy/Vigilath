@@ -170,6 +170,32 @@ def crawl_eastmoney_news(
         ))
 
 
+def crawl_tieba(
+    *, account_id: int, keyword: str,
+    pages: int = 3,
+    timeout: int = 60,
+) -> dict:
+    """百度贴吧搜索."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-tieba", json=payload, headers=_headers(),
+        ))
+
+
+def crawl_cls(
+    *, account_id: int, keyword: str,
+    pages: int = 3,
+    timeout: int = 60,
+) -> dict:
+    """财联社快讯+搜索."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-cls", json=payload, headers=_headers(),
+        ))
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,
