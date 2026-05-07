@@ -10,10 +10,9 @@ const cardStyle: React.CSSProperties = {
 
 interface Props {
   post: SentimentPost | null;
-  onWriteDraft?: (post: SentimentPost) => void;
 }
 
-export function PostDetail({ post, onWriteDraft }: Props) {
+export function PostDetail({ post }: Props) {
   const { t } = useTranslation();
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
@@ -178,17 +177,6 @@ export function PostDetail({ post, onWriteDraft }: Props) {
         </details>
       </section>
 
-      {onWriteDraft && (
-        <div className="pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
-          <button
-            type="button"
-            onClick={() => onWriteDraft(post)}
-            className="btn-solid rounded-md px-4 py-2 text-sm font-semibold"
-          >
-            {t('dashboard.sentiment.articles.detail.writeDraft')}
-          </button>
-        </div>
-      )}
     </article>
   );
 }

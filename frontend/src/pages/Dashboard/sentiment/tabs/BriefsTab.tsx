@@ -96,7 +96,6 @@ export function BriefsTab({ account, usingMock }: Props) {
                   }}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium">📄 {b.date}</span>
-                    <span className="text-[10px] text-muted">{b.model}</span>
                   </div>
                   <div className="text-[11px] text-muted mt-0.5">
                     {new Date(b.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}

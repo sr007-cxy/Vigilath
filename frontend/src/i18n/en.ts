@@ -1918,9 +1918,13 @@ const en = {
                 "kpi": {
                   "total": "Posts today",
                   "highRisk": "High risk",
-                  "avgSentiment": "Avg sentiment",
+                  "avgSentiment": "Sentiment",
                   "activeSources": "Active sources",
-                  "vsYesterday": "vs yesterday"
+                  "vsYesterday": "vs yesterday",
+                  "tipTotal": "Total number of posts detected today across all sources and sentiment types.",
+                  "tipHighRisk": "Posts with negative sentiment and high influence potential. Risk level is determined by sentiment score and reach.",
+                  "tipAvgSentiment": "Average sentiment score of all posts. Range: -1 (very negative) to +1 (very positive), 0 is neutral.",
+                  "tipActiveSources": "Number of distinct media platforms that produced content today (e.g. Weibo, Baidu, Xueqiu)."
                 },
                 "sentimentTrend": "Sentiment (7 days)",
                 "riskDist": "Risk distribution",

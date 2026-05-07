@@ -1922,11 +1922,15 @@ const zh = {
               },
               "today": {
                 "kpi": {
-                  "total": "今日帖子",
+                  "total": "今日舆情",
                   "highRisk": "高风险",
-                  "avgSentiment": "平均情感",
+                  "avgSentiment": "舆论倾向",
                   "activeSources": "活跃媒体",
-                  "vsYesterday": "较昨日"
+                  "vsYesterday": "较昨日",
+                  "tipTotal": "今日监测到的舆情帖子总数，包含所有来源和情感类型。",
+                  "tipHighRisk": "情感偏负面且传播影响力较高的帖子数量。风险等级由情感评分和影响力综合判定。",
+                  "tipAvgSentiment": "所有帖子情感评分的平均值。范围 -1（极负面）到 +1（极正面），0 为中性。",
+                  "tipActiveSources": "今日产出舆情内容的不同媒体平台数量（如微博、百度、雪球等）。"
                 },
                 "sentimentTrend": "7 天情感趋势",
                 "riskDist": "风险分布",

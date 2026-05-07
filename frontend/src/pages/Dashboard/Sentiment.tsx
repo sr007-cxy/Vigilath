@@ -22,11 +22,10 @@ import { PageHead } from '../../components/PageHead';
 import { TodayTab } from './sentiment/tabs/TodayTab';
 import { ArticlesTab } from './sentiment/tabs/ArticlesTab';
 import { BriefsTab } from './sentiment/tabs/BriefsTab';
-import { DraftsTab } from './sentiment/tabs/DraftsTab';
 import { StatusBanner, FirstRunWaiting } from './sentiment/components/StatusBanner';
 
-type TabKey = 'today' | 'articles' | 'briefs' | 'drafts';
-const TAB_KEYS: TabKey[] = ['today', 'articles', 'briefs', 'drafts'];
+type TabKey = 'today' | 'articles' | 'briefs';
+const TAB_KEYS: TabKey[] = ['today', 'articles', 'briefs'];
 
 export function Sentiment() {
   const { t } = useTranslation();
@@ -234,7 +233,6 @@ export function Sentiment() {
             {tab === 'today' && <TodayTab account={acct} usingMock={usingMock} />}
             {tab === 'articles' && <ArticlesTab account={acct} usingMock={usingMock} />}
             {tab === 'briefs' && <BriefsTab account={acct} usingMock={usingMock} />}
-            {tab === 'drafts' && <DraftsTab account={acct} usingMock={usingMock} />}
           </>
         )}
       </div>

@@ -5,9 +5,11 @@ interface Props {
   onChange: (next: string[]) => void;
   placeholder?: string;
   max?: number;
+  /** Clickable suggestion chips shown below the input */
+  suggestions?: string[];
 }
 
-export function TagInput({ value, onChange, placeholder, max }: Props) {
+export function TagInput({ value, onChange, placeholder, max, suggestions }: Props) {
   const [draft, setDraft] = useState('');
 
   const add = () => {
@@ -33,42 +35,66 @@ export function TagInput({ value, onChange, placeholder, max }: Props) {
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
+  const remainingSuggestions = suggestions?.filter(s => !value.includes(s));
+
+  const addSuggestion = (s: string) => {
+    if (max && value.length >= max) return;
+    if (!value.includes(s)) onChange([...value, s]);
+  };
+
   return (
-    <div
-      className="rounded-md flex flex-wrap items-center gap-1.5 p-2 min-h-10"
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
-      onClick={(e) => {
-        const input = (e.currentTarget as HTMLDivElement).querySelector('input');
-        input?.focus();
-      }}
-    >
-      {value.map((tag, i) => (
-        <span
-          key={`${tag}-${i}`}
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
-          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-        >
-          {tag}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); remove(i); }}
-            className="text-muted hover:text-primary"
-            aria-label="remove"
+    <div>
+      <div
+        className="rounded-md flex flex-wrap items-center gap-1.5 p-2 min-h-10"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}
+        onClick={(e) => {
+          const input = (e.currentTarget as HTMLDivElement).querySelector('input');
+          input?.focus();
+        }}
+      >
+        {value.map((tag, i) => (
+          <span
+            key={`${tag}-${i}`}
+            className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
           >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={handleKey}
-        onBlur={add}
-        placeholder={placeholder}
-        className="flex-1 min-w-32 bg-transparent text-sm outline-none border-none"
-        style={{ color: 'var(--text-primary)' }}
-      />
+            {tag}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); remove(i); }}
+              className="text-muted hover:text-primary"
+              aria-label="remove"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKey}
+          onBlur={add}
+          placeholder={placeholder}
+          className="flex-1 min-w-32 bg-transparent text-sm outline-none border-none"
+          style={{ color: 'var(--text-primary)' }}
+        />
+      </div>
+      {remainingSuggestions && remainingSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {remainingSuggestions.map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => addSuggestion(s)}
+              className="rounded px-2 py-0.5 text-xs transition-colors"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px dashed var(--border-color)' }}
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

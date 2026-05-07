@@ -49,7 +49,7 @@ export function BrandSettingsTab() {
   const [target, setTarget] = useState('');
   const [ticker, setTicker] = useState('');
   const [aliases, setAliases] = useState<string[]>([]);
-  const [intent, setIntent] = useState('');
+  const [intents, setIntents] = useState<string[]>([]);
   const [keywordGroups, setKeywordGroups] = useState<KeywordGroup[]>([]);
   const [excludes, setExcludes] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
@@ -59,7 +59,7 @@ export function BrandSettingsTab() {
     setTarget(account.target);
     setTicker(account.ticker);
     setAliases(account.aliases ?? []);
-    setIntent(account.intent ?? '');
+    setIntents(account.intent ? account.intent.split(/[,，、;\s]+/).filter(Boolean) : []);
     if (usingMock) {
       setKeywordGroups(mockKeywordGroups);
     } else if (account.keyword_groups && account.keyword_groups.length > 0) {
@@ -116,7 +116,7 @@ export function BrandSettingsTab() {
 
   const buildPayload = () => ({
     target, ticker,
-    aliases, intent: intent.trim() || undefined,
+    aliases, intent: intents.length > 0 ? intents.join('、') : undefined,
     keyword_groups: keywordGroups,
     excludes, notify_emails: emails,
   });
@@ -208,10 +208,8 @@ export function BrandSettingsTab() {
       {/* ── 区块 2: 监控配置 ── */}
       <Section title={t('account.brand.sections.monitoring')}>
         <Field label={t('account.brand.fields.intent')}>
-          <textarea value={intent} onChange={(e) => setIntent(e.target.value)} rows={2}
-            className="w-full px-3 py-2 rounded text-sm resize-y"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            placeholder={t('account.brand.fields.intentPlaceholder')} />
+          <TagInput value={intents} onChange={setIntents} placeholder={t('account.brand.fields.intentPlaceholder')}
+            suggestions={['做空报告', '业绩传闻', '高管变动', '海外业务', '竞品动态', '政策监管', '诉讼纠纷', '股价异动']} />
         </Field>
         <KeywordGroupsEditor value={keywordGroups} onChange={setKeywordGroups} />
         <Field label={t('account.brand.fields.excludes')}>

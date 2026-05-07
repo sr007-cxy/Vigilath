@@ -20,7 +20,7 @@ export function OnboardingWizard({ onSubmit }: Props) {
 
   const [target, setTarget] = useState('');
   const [ticker, setTicker] = useState('');
-  const [intent, setIntent] = useState('');
+  const [intents, setIntents] = useState<string[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export function OnboardingWizard({ onSubmit }: Props) {
       await createAccount.mutateAsync({
         target: target.trim(),
         ticker: ticker.trim(),
-        intent: intent.trim() || undefined,
+        intent: intents.length > 0 ? intents.join('、') : undefined,
         keywords,
         notify_emails: emails,
         run_now: true,
@@ -100,18 +100,8 @@ export function OnboardingWizard({ onSubmit }: Props) {
         </Field>
 
         <Field label={t('dashboard.sentiment.onboarding.field.intent')}>
-          <input
-            type="text"
-            value={intent}
-            onChange={(e) => setIntent(e.target.value)}
-            placeholder={t('dashboard.sentiment.settings.fields.intentPlaceholder')}
-            className="w-full px-3 py-2 rounded text-sm"
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
-            }}
-          />
+          <TagInput value={intents} onChange={setIntents} placeholder={t('account.brand.fields.intentPlaceholder')}
+            suggestions={['做空报告', '业绩传闻', '高管变动', '海外业务', '竞品动态', '政策监管', '诉讼纠纷', '股价异动']} />
         </Field>
 
         <Field label={t('dashboard.sentiment.onboarding.field.keywords')}>

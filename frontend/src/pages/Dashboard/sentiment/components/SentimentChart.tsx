@@ -33,7 +33,7 @@ export function SentimentChart({ data }: { data: Row[] }) {
   const keys: (keyof Row)[] = ['bullish', 'neutral', 'mixed', 'bearish'];
 
   return (
-    <section className="rounded-xl p-5" style={cardStyle}>
+    <section className="rounded-xl p-5 h-full" style={cardStyle}>
       <header className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-primary uppercase tracking-wide">
           {t('dashboard.sentiment.today.sentimentTrend')}
@@ -77,10 +77,10 @@ export function SentimentChart({ data }: { data: Row[] }) {
             );
           })}
         </svg>
-        {/* x 轴标签 */}
-        <div className="flex justify-between mt-1.5 text-[10px] text-muted px-1">
-          {data.map(r => <span key={r.date} className="font-mono">{r.date}</span>)}
-        </div>
+      </div>
+      {/* x 轴标签 — 放在 chart 容器外,避免贴底 */}
+      <div className="flex justify-between mt-2 pb-1 text-[10px] text-muted px-1">
+        {data.map(r => <span key={r.date} className="font-mono">{r.date}</span>)}
       </div>
     </section>
   );
