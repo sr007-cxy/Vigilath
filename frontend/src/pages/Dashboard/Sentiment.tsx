@@ -36,7 +36,7 @@ export function Sentiment() {
 
   const { data: accounts = [], isLoading, refetch: refetchAccounts } = useSentimentAccounts();
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [mockCreated, setMockCreated] = useState(false);
+  const [mockCreated, _setMockCreated] = useState(false);
 
   const account: SentimentAccount | null = usingMock
     ? (demo === 'onboarding' && !mockCreated ? null : (mockAccount as SentimentAccount))
