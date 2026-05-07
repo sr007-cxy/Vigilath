@@ -156,7 +156,13 @@ export function BrandSettingsTab() {
     try {
       await updateAccount.mutateAsync({ id: account!.id, payload: buildPayload() });
       await persistKnowledge();
-      await runNowMutation.mutateAsync(account!.id);
+      // update 若检测到关键词/intent 变化会自动入队 pipeline,
+      // 此时 /run-now 返回 409 是正常的 — 忽略即可.
+      try {
+        await runNowMutation.mutateAsync(account!.id);
+      } catch {
+        // 409 = task already running/queued — 不影响保存成功
+      }
       alert(`${t('account.brand.saved')}\n${t('account.brand.runNowQueued')}`);
       navigate('/sentiment');
     } catch (e) {

@@ -79,6 +79,11 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
             log.info("run_pipeline: account %s is inactive, skip", account_id)
             return {"status": "skipped", "reason": "inactive"}
 
+        # 防重入 — 另一个 pipeline 正在跑就跳过
+        if acc.last_run_status == "running":
+            log.info("run_pipeline: account %s already running, skip duplicate", account_id)
+            return {"status": "skipped", "reason": "already running"}
+
         log_row = SentimentRunLogORM(
             account_id=account_id, trigger=trigger,
             started_at=datetime.utcnow(), status="running",
