@@ -118,6 +118,19 @@ def run_brief(
         ))
 
 
+def crawl_eastmoney(
+    *, account_id: int, symbol: str,
+    pages: int = 2,
+    timeout: int = 60,
+) -> dict:
+    """直接抓东方财富股吧,不依赖搜索引擎."""
+    payload = {"account_id": account_id, "symbol": symbol, "pages": pages}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-eastmoney", json=payload, headers=_headers(),
+        ))
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

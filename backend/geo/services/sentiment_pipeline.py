@@ -114,6 +114,20 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
             )
             stats["monitor"] = r1
 
+            # 搜索引擎抓不到帖子时,用东方财富股吧兜底
+            monitor_inserted = (r1.get("stats") or r1).get("inserted", 0)
+            if monitor_inserted == 0 and acc.ticker:
+                log.info("run_pipeline[%s]: monitor got 0 posts, trying eastmoney crawl", account_id)
+                try:
+                    r_em = sentinel_client.crawl_eastmoney(
+                        account_id=account_id, symbol=acc.ticker, pages=3,
+                    )
+                    stats["eastmoney"] = r_em
+                    log.info("run_pipeline[%s]: eastmoney crawled %s posts", account_id, r_em.get("inserted", 0))
+                except Exception as e:
+                    log.warning("run_pipeline[%s]: eastmoney fallback failed: %s", account_id, e)
+                    stats["eastmoney"] = {"error": str(e)}
+
             log.info("run_pipeline[%s]: analyze begin", account_id)
             r2 = sentinel_client.run_analyze(account_id=account_id, ticker=acc.ticker)
             stats["analyze"] = r2
