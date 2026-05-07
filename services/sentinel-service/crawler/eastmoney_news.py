@@ -61,9 +61,9 @@ class EastmoneyNewsClient:
             print(f"  [eastmoney_news] request failed: {e}", file=sys.stderr)
             return
 
-        # 解析 JSONP: j({...})
+        # 解析 JSONP: callback({...}) — callback 名可能是 j 或 jQuery...
         text = r.text.strip()
-        m = re.search(r"^j\((.+)\)\s*$", text, re.DOTALL)
+        m = re.search(r"^\w+\((.+)\)\s*$", text, re.DOTALL)
         if not m:
             print(f"  [eastmoney_news] JSONP parse failed, len={len(text)}, start={text[:50]!r}", file=sys.stderr)
             return
