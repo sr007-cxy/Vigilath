@@ -605,20 +605,24 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
         init_schema(conn)
 
         today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
 
-        # 当日 KPI:posts × analyses(仅 is_relevant=1)
-        kpi_row = conn.execute("""
+        # 当日 KPI:posts × analyses(仅 is_relevant=1,与下方趋势图/风险饼/文章列表保持一致)
+        kpi_sql = """
             SELECT
-                count(*) AS total_today,
+                count(*) AS total,
                 sum(CASE WHEN a.risk_level IN ('medium','high') THEN 1 ELSE 0 END) AS high_risk,
                 avg(a.sentiment_score) AS avg_sentiment,
                 count(DISTINCT p.source) AS active_sources
-            FROM posts p LEFT JOIN analyses a
+            FROM posts p JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
             WHERE p.symbol = ?
+              AND a.is_relevant = 1
               AND substr(p.ingested_at, 1, 10) = ?
-        """, (ticker, today)).fetchone()
+        """
+        kpi_row = conn.execute(kpi_sql, (ticker, today)).fetchone()
+        prev_row = conn.execute(kpi_sql, (ticker, yesterday)).fetchone()
 
         # N 天情感堆叠柱:按日期 group + sentiment_label 分桶
         trend_rows = list(conn.execute("""
@@ -695,17 +699,29 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
         """, (ticker,)))
         top_posts = [_row_to_dict(r) for r in top_rows]
 
+        total_today = kpi_row["total"] or 0
+        high_risk_today = kpi_row["high_risk"] or 0
+        avg_sentiment_today = float(kpi_row["avg_sentiment"]) if kpi_row["avg_sentiment"] is not None else 0.0
+        total_prev = prev_row["total"] or 0
+        high_risk_prev = prev_row["high_risk"] or 0
+        avg_sentiment_prev = float(prev_row["avg_sentiment"]) if prev_row["avg_sentiment"] is not None else 0.0
+
+        def _pct(curr: float, prev: float) -> int:
+            if prev == 0:
+                return 0
+            return round((curr - prev) / abs(prev) * 100)
+
         return {
             "ticker": ticker,
             "kpi": {
-                "total_today": kpi_row["total_today"] or 0,
-                "high_risk": kpi_row["high_risk"] or 0,
-                "avg_sentiment": float(kpi_row["avg_sentiment"]) if kpi_row["avg_sentiment"] is not None else 0.0,
+                "total_today": total_today,
+                "high_risk": high_risk_today,
+                "avg_sentiment": avg_sentiment_today,
                 "active_sources": kpi_row["active_sources"] or 0,
-                # 趋势对比 — 简化版,用 trend 数据计算
-                "trend_total_pct": 0,
-                "trend_risk_pct": 0,
-                "trend_sentiment_pct": 0,
+                "trend_total_pct": _pct(total_today, total_prev),
+                "trend_risk_pct": _pct(high_risk_today, high_risk_prev),
+                # 情感分数本身就在 -1..+1,差值 × 100 当百分点更直观
+                "trend_sentiment_pct": round((avg_sentiment_today - avg_sentiment_prev) * 100),
             },
             "sentiment_trend": trend,
             "risk_dist": risk_dist,
