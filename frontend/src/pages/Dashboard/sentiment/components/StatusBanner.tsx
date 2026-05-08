@@ -18,13 +18,15 @@ export function StatusBanner({ status, error, onRefresh, onRetry }: Props) {
   const { t } = useTranslation();
 
   // failed 也静默 — 用户要求:舆情监控任务异常不在前端暴露,继续展示历史数据即可。
+  // 经此早 return 后,余下 status 类型只能是 'pending' | 'running'。
   if (status === 'success' || status === null || status === 'failed') return null;
 
+  // onRetry 现在不再触发(failed 已 silent),保留参数避免破坏调用方签名
+  void onRetry;
+
   const s = STYLE[status] || STYLE.pending;
-  const message =
-    status === 'failed'
-      ? t('dashboard.sentiment.status.failed', { error: error ?? 'unknown' })
-      : t(`dashboard.sentiment.status.${status}`);
+  const message = t(`dashboard.sentiment.status.${status}`);
+  void error;  // failed 静默后不再展示具体错误
 
   return (
     <div
@@ -32,28 +34,16 @@ export function StatusBanner({ status, error, onRefresh, onRetry }: Props) {
       style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}` }}
     >
       <span>{message}</span>
-      <div className="flex items-center gap-2">
-        {onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="text-xs font-semibold px-2.5 py-1 rounded-md"
-            style={{ background: 'rgba(255,255,255,0.4)', color: s.fg }}
-          >
-            🔄 {t('dashboard.sentiment.refresh')}
-          </button>
-        )}
-        {status === 'failed' && onRetry && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="text-xs font-semibold px-2.5 py-1 rounded-md"
-            style={{ background: 'rgba(255,255,255,0.4)', color: s.fg }}
-          >
-            {t('dashboard.sentiment.status.retry')}
-          </button>
-        )}
-      </div>
+      {onRefresh && (
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-xs font-semibold px-2.5 py-1 rounded-md"
+          style={{ background: 'rgba(255,255,255,0.4)', color: s.fg }}
+        >
+          🔄 {t('dashboard.sentiment.refresh')}
+        </button>
+      )}
     </div>
   );
 }
