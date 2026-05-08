@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 
@@ -18,9 +18,58 @@ import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
 
 type SortKey = 'influence' | 'newest' | 'views';
-type TimePreset = 'today' | 'd7' | 'd30' | 'all' | 'custom';
+// 时间筛选预设 — 与参考竞品对齐
+type TimePreset = 'today' | 'h24' | 'd3' | 'd7' | 'd14' | 'd30' | 'd90' | 'all' | 'custom';
+
+// preset → 显示文案的 i18n key 后缀
+const TIME_PRESETS: { key: TimePreset; labelKey: string }[] = [
+  { key: 'today', labelKey: 'timeToday' },
+  { key: 'h24',   labelKey: 'timeH24' },
+  { key: 'd3',    labelKey: 'time3d' },
+  { key: 'd7',    labelKey: 'time7d' },
+  { key: 'd14',   labelKey: 'time14d' },
+  { key: 'd30',   labelKey: 'time30d' },
+  { key: 'd90',   labelKey: 'time90d' },
+  { key: 'all',   labelKey: 'timeAll' },
+  { key: 'custom', labelKey: 'timeCustom' },
+];
+
+// 把本地 Date 格式化为 'YYYY-MM-DDTHH:MM:SS'(ISO 但不带时区)— 后端按 lex 比较
+function fmtLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// 计算预设对应的 (start, end);'all' 返回 {} 不过滤;'custom' 由调用方处理。
+function presetRange(preset: TimePreset): { start?: string; end?: string } {
+  if (preset === 'all' || preset === 'custom') return {};
+  const now = new Date();
+  if (preset === 'today') {
+    const s = new Date(now); s.setHours(0, 0, 0, 0);
+    const e = new Date(now); e.setHours(23, 59, 59, 999);
+    return { start: fmtLocal(s), end: fmtLocal(e) };
+  }
+  const hoursMap: Record<string, number> = {
+    h24: 24, d3: 24 * 3, d7: 24 * 7, d14: 24 * 14, d30: 24 * 30, d90: 24 * 90,
+  };
+  const h = hoursMap[preset];
+  if (!h) return {};
+  return {
+    start: fmtLocal(new Date(now.getTime() - h * 3600 * 1000)),
+    end: fmtLocal(now),
+  };
+}
 
 const PAGE_SIZE = 50;
+
+// 热门媒体段位的固定平台顺序(对标 WisersOne "热门媒体" 一栏的"高频露出"思路).
+// 取这 9 个是因为 A 股散户/机构舆情场景里它们 90% 命中率最高;
+// 全平台仍可从下方 媒体分类/媒体类型 段位下钻到。
+const POPULAR_PLATFORMS: readonly string[] = [
+  'weibo', 'weixin', 'xueqiu',
+  'eastmoney', 'zhihu', 'toutiao',
+  'bilibili', 'douyin', 'xiaohongshu',
+];
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -30,23 +79,8 @@ const cardStyle: React.CSSProperties = {
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
 
-function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-}
-
 function noteworthy(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
-}
-
-function presetToDays(preset: TimePreset): number | undefined {
-  switch (preset) {
-    case 'today': return 1;
-    case 'd7': return 7;
-    case 'd30': return 30;
-    case 'all': return 0;
-    default: return undefined;
-  }
 }
 
 interface Props {
@@ -75,6 +109,20 @@ export function ArticlesTab({ account, usingMock }: Props) {
   useEffect(() => {
     setToolbarSlot(document.getElementById('sentiment-tab-toolbar'));
   }, []);
+
+  // 时间选择器弹层 — 点外部关闭
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [pickerOpen]);
 
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
@@ -107,14 +155,24 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const customRangeError = customStart && customEnd && customStart > customEnd;
 
+  // 把当前 preset / 自定义区间统一翻成 (start, end) 传给后端
+  const effectiveRange = useMemo(() => {
+    if (timePreset === 'custom') {
+      return {
+        start: appliedStart || undefined,
+        end: appliedEnd || undefined,
+      };
+    }
+    return presetRange(timePreset);
+  }, [timePreset, appliedStart, appliedEnd]);
+
   const postsQuery = useInfinitePosts(
     usingMock ? null : account.id,
     usingMock ? null : account.ticker,
     {
       pageSize: PAGE_SIZE,
-      days: timePreset === 'custom' ? undefined : presetToDays(timePreset),
-      start: timePreset === 'custom' ? appliedStart || undefined : undefined,
-      end: timePreset === 'custom' ? appliedEnd || undefined : undefined,
+      start: effectiveRange.start,
+      end: effectiveRange.end,
       startOffset,
     },
   );
@@ -141,7 +199,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [topic, setTopic] = useState('');
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
-  const [expandedMt, setExpandedMt] = useState<Set<string>>(new Set());
 
   // source code → (media_type, industry) 查找表 — 用于按双轴 chip 收窄 sources
   const platformAxes = useMemo(() => {
@@ -292,13 +349,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setTopic(''); setOnlyRelevant(true); setSortBy('influence');
   };
 
-  const handleApplyCustom = () => {
-    if (customRangeError) return;
-    // datetime-local 是分钟精度;落到后端时补秒,end 用 :59 包含整分钟
-    setAppliedStart(customStart ? `${customStart}:00` : '');
-    setAppliedEnd(customEnd ? `${customEnd}:59` : '');
-  };
-
   const handleJumpPage = () => {
     const n = parseInt(jumpInput, 10);
     if (!Number.isFinite(n) || n < 1) return;
@@ -317,52 +367,130 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>;
   }
 
+  // 把 ISO 'YYYY-MM-DDTHH:MM[:SS]' 缩成 'M/D HH:MM' 在按钮上展示
+  const shortFmt = (s: string): string => {
+    const m = s.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    return m ? `${parseInt(m[1])}/${parseInt(m[2])} ${m[3]}:${m[4]}` : s;
+  };
+
+  const triggerLabel = useMemo(() => {
+    if (timePreset === 'custom' && (appliedStart || appliedEnd)) {
+      return `${shortFmt(appliedStart)} → ${shortFmt(appliedEnd)}`;
+    }
+    const found = TIME_PRESETS.find(p => p.key === timePreset);
+    return t(`dashboard.sentiment.articles.filters.${found?.labelKey ?? 'timeToday'}`);
+  }, [timePreset, appliedStart, appliedEnd, t]);
+
+  const handleConfirmCustom = () => {
+    if (customRangeError) return;
+    setAppliedStart(customStart ? `${customStart}:00` : '');
+    setAppliedEnd(customEnd ? `${customEnd}:59` : '');
+    setTimePreset('custom');
+    setPickerOpen(false);
+  };
+
+  const handlePickPreset = (key: TimePreset) => {
+    setTimePreset(key);
+    if (key !== 'custom') setPickerOpen(false);
+  };
+
   // 时间筛选 — portal 到 Sentiment.tsx Tab 栏右侧
-  // 下拉选择 preset;选 "custom" 时同行展开 datetime-local 区间面板。
+  // 触发按钮 + 弹出面板(左 datetime 输入 / 右 preset 列表)
   const timeChips = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <label className="text-xs text-muted">{t('dashboard.sentiment.articles.filters.time')}:</label>
-      <select
-        value={timePreset}
-        onChange={(e) => setTimePreset(e.target.value as TimePreset)}
-        className="text-xs px-2 py-1 rounded"
+    <div ref={pickerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setPickerOpen(v => !v)}
+        className="text-xs px-3 py-1.5 rounded inline-flex items-center gap-1.5 transition-colors"
         style={{
-          background: 'var(--bg-surface)',
+          background: pickerOpen ? 'var(--accent-primary)' : 'var(--bg-surface)',
+          color: pickerOpen ? '#ffffff' : 'var(--text-primary)',
           border: '1px solid var(--border-color)',
-          color: 'var(--text-primary)',
         }}
       >
-        <option value="today">{t('dashboard.sentiment.articles.filters.timeToday')}</option>
-        <option value="d7">{t('dashboard.sentiment.articles.filters.time7d')}</option>
-        <option value="d30">{t('dashboard.sentiment.articles.filters.time30d')}</option>
-        <option value="all">{t('dashboard.sentiment.articles.filters.timeAll')}</option>
-        <option value="custom">{t('dashboard.sentiment.articles.filters.timeCustom')}</option>
-      </select>
-      {timePreset === 'custom' && (
-        <>
-          <input type="datetime-local" value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
-            aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
-            className="text-xs px-2 py-1 rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-          <span className="text-xs text-muted">→</span>
-          <input type="datetime-local" value={customEnd}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
-            className="text-xs px-2 py-1 rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-          <button type="button" onClick={handleApplyCustom}
-            disabled={!!customRangeError || (!customStart && !customEnd)}
-            className="text-xs px-3 py-1 rounded disabled:opacity-50"
-            style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-            {t('dashboard.sentiment.articles.filters.timeApply')}
-          </button>
-          {customRangeError && (
-            <span className="text-[11px]" style={{ color: '#dc2626' }}>
-              {t('dashboard.sentiment.articles.filters.timeRangeError')}
-            </span>
-          )}
-        </>
+        <span>📅</span>
+        <span>{triggerLabel}</span>
+        <span style={{ fontSize: 10 }}>{pickerOpen ? '▴' : '▾'}</span>
+      </button>
+
+      {pickerOpen && (
+        <div
+          className="absolute right-0 mt-1 rounded-lg shadow-2xl"
+          style={{
+            zIndex: 50,
+            width: 520,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div className="grid grid-cols-[1fr_160px]">
+            {/* 左:datetime 输入 */}
+            <div className="p-4 space-y-3" style={{ borderRight: '1px solid var(--border-color)' }}>
+              <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
+                {t('dashboard.sentiment.articles.filters.timeCustom')}
+              </div>
+              <div>
+                <label className="text-[11px] text-muted block mb-1">
+                  {t('dashboard.sentiment.articles.filters.timeStart')}
+                </label>
+                <input type="datetime-local" value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="w-full text-xs px-2 py-1.5 rounded"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted block mb-1">
+                  {t('dashboard.sentiment.articles.filters.timeEnd')}
+                </label>
+                <input type="datetime-local" value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="w-full text-xs px-2 py-1.5 rounded"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              </div>
+              {customRangeError && (
+                <p className="text-[11px]" style={{ color: '#dc2626' }}>
+                  {t('dashboard.sentiment.articles.filters.timeRangeError')}
+                </p>
+              )}
+            </div>
+
+            {/* 右:preset 列表 */}
+            <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
+              {TIME_PRESETS.map(({ key, labelKey }) => {
+                const active = timePreset === key;
+                return (
+                  <button key={key} type="button"
+                    onClick={() => handlePickPreset(key)}
+                    className="w-full text-left text-xs px-2.5 py-1.5 rounded transition-colors"
+                    style={{
+                      background: active ? 'var(--accent-primary)' : 'transparent',
+                      color: active ? '#ffffff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {active ? '✓ ' : '  '}
+                    {t(`dashboard.sentiment.articles.filters.${labelKey}`)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 底部 取消 / 确定 */}
+          <div className="flex justify-end gap-2 px-3 py-2"
+            style={{ borderTop: '1px solid var(--border-color)' }}>
+            <button type="button" onClick={() => setPickerOpen(false)}
+              className="text-xs px-3 py-1 rounded"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+              {t('common.cancel') === 'common.cancel' ? '取消' : t('common.cancel')}
+            </button>
+            <button type="button" onClick={handleConfirmCustom}
+              disabled={!!customRangeError || (!customStart && !customEnd)}
+              className="text-xs px-3 py-1 rounded disabled:opacity-50"
+              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+              {t('common.confirm') === 'common.confirm' ? '确定' : t('common.confirm')}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -380,108 +508,124 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </button>
         </header>
 
-        {/* 时间筛选已挪到中间列 header 右上角 — 见下方 <header> */}
+        {/* 风险 / 情感 — 项数少,继续用 flex-wrap 小 chip,不强行套 3 列 grid */}
+        <Section title={t('dashboard.sentiment.articles.filters.risk')}
+          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
+          <div className="flex flex-wrap gap-1">
+            {ALL_RISKS.map(r => (
+              <FilterChip key={r} label={t(`dashboard.sentiment.articles.risk.${r}`)}
+                active={risks.has(r)} onClick={() => setRisks(toggle(risks, r))} />
+            ))}
+          </div>
+        </Section>
 
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.risk')}>
-          {ALL_RISKS.map(r => (
-            <FilterChip key={r} label={t(`dashboard.sentiment.articles.risk.${r}`)}
-              active={risks.has(r)} onClick={() => setRisks(toggle(risks, r))} />
-          ))}
-        </FilterGroup>
+        <Section title={t('dashboard.sentiment.articles.filters.sentiment')}
+          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
+          <div className="flex flex-wrap gap-1">
+            {ALL_SENTIMENTS.map(s => (
+              <FilterChip key={s} label={t(`dashboard.sentiment.articles.labels.${s}`)}
+                active={sentiments.has(s)} onClick={() => setSentiments(toggle(sentiments, s))} />
+            ))}
+          </div>
+        </Section>
 
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
-          {ALL_SENTIMENTS.map(s => (
-            <FilterChip key={s} label={t(`dashboard.sentiment.articles.labels.${s}`)}
-              active={sentiments.has(s)} onClick={() => setSentiments(toggle(sentiments, s))} />
-          ))}
-        </FilterGroup>
+        {/* 热门媒体 — 固定 9 个高频平台,3 列 grid,直接 toggle source */}
+        <Section title={t('dashboard.sentiment.articles.filters.popular')}
+          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
+          <ChipGrid>
+            <GridChip
+              label={t('dashboard.sentiment.articles.filters.all')}
+              count={posts.length}
+              active={!sources.size}
+              onClick={() => setSources(new Set())}
+            />
+            {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
+              const fromDb = platformNames.get(s);
+              const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+              const localized = fromDb || t(labelKey);
+              const display = (!fromDb && localized === labelKey) ? s : localized;
+              return (
+                <GridChip key={s} label={display}
+                  count={sourceCounts.get(s) ?? 0}
+                  active={sources.has(s)}
+                  onClick={() => setSources(toggle(sources, s))} />
+              );
+            })}
+          </ChipGrid>
+        </Section>
 
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.industry')}>
-          {INDUSTRY_ORDER.map(i => {
-            const c = axisCounts.industry.get(i) ?? 0;
-            return (
-              <FilterChip key={i}
-                label={`${t(`dashboard.sentiment.articles.industries.${i}`)} ${c}`}
-                active={industries.has(i)}
-                onClick={() => setIndustries(toggle(industries, i as Industry))} />
-            );
-          })}
-        </FilterGroup>
+        {/* 媒体分类 — 行业 chip,▾ 展开该行业下的全部平台供细选 */}
+        <Section title={t('dashboard.sentiment.articles.filters.industry')}
+          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
+          <ChipGrid>
+            <GridChip
+              label={t('dashboard.sentiment.articles.filters.all')}
+              count={posts.length}
+              active={!industries.size}
+              onClick={() => setIndustries(new Set())}
+            />
+            {INDUSTRY_ORDER.map(ind => {
+              const c = axisCounts.industry.get(ind) ?? 0;
+              const codes = platforms.filter(p => p.industry === ind).map(p => p.code);
+              return (
+                <ExpandableGridChip key={ind}
+                  label={t(`dashboard.sentiment.articles.industries.${ind}`)}
+                  count={c}
+                  active={industries.has(ind)}
+                  onToggleSelf={() => setIndustries(toggle(industries, ind as Industry))}
+                  codes={codes}
+                  platformLabel={(code) => {
+                    const fromDb = platformNames.get(code);
+                    const labelKey = `dashboard.sentiment.articles.sourceLabels.${code}`;
+                    const localized = fromDb || t(labelKey);
+                    return (!fromDb && localized === labelKey) ? code : localized;
+                  }}
+                  countOf={(code) => sourceCounts.get(code) ?? 0}
+                  isSourceActive={(code) => sources.has(code)}
+                  onToggleSource={(code) => setSources(toggle(sources, code))}
+                />
+              );
+            })}
+          </ChipGrid>
+        </Section>
 
-        {/* ── 媒体类型 + 平台 竖列折叠分组 ── */}
-        <div>
-          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">
-            {t('dashboard.sentiment.articles.filters.mediaType')}
-          </p>
-          <div className="flex flex-col w-full gap-1">
+        {/* 媒体类型 — 全部媒体类型 chip,▾ 展开该类型下平台 */}
+        <Section title={t('dashboard.sentiment.articles.filters.mediaType')}
+          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
+          <ChipGrid>
+            <GridChip
+              label={t('dashboard.sentiment.articles.filters.all')}
+              count={posts.length}
+              active={!mediaTypes.size}
+              onClick={() => setMediaTypes(new Set())}
+            />
             {sourceGroups.map(({ mediaType, codes }) => {
               const mtLabelKey = `dashboard.sentiment.articles.mediaTypes.${mediaType}`;
               const mtLabel = t(mtLabelKey);
               const mtDisplay = mtLabel === mtLabelKey ? mediaType : mtLabel;
               const groupCount = axisCounts.mediaType.get(mediaType) ?? 0;
-              const mtActive = mediaTypes.has(mediaType);
-              const isOpen = expandedMt.has(mediaType) || mtActive;
-              const expanded = expandedMt.has(mediaType);
+              const isOther = mediaType === 'other';
               return (
-                <div key={mediaType}>
-                  <div className="flex items-center justify-between text-xs px-2 py-1 rounded"
-                    style={{
-                      background: mtActive ? 'rgba(99,102,241,0.10)' : 'transparent',
-                    }}>
-                    <button type="button"
-                      onClick={() => setExpandedMt(toggle(expandedMt, mediaType as string))}
-                      className="flex-1 text-left flex items-center gap-1"
-                      style={{ color: 'var(--text-secondary)' }}>
-                      <span style={{ display: 'inline-block', width: 10 }}>{expanded ? '▾' : '▸'}</span>
-                      <span className="font-semibold" style={{ color: mtActive ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>
-                        {mtDisplay}
-                      </span>
-                      <span className="text-muted ml-1">{formatCount(groupCount)}</span>
-                    </button>
-                    {mediaType !== 'other' && (
-                      <button type="button"
-                        onClick={() => setMediaTypes(toggle(mediaTypes, mediaType as MediaType))}
-                        className="text-[10px] px-1.5 py-0.5 rounded ml-1"
-                        style={{
-                          background: mtActive ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                          color: mtActive ? '#fff' : 'var(--text-muted)',
-                        }}
-                        title={mtActive ? '取消筛选该媒体类型' : '只看该媒体类型'}>
-                        {mtActive ? '✓' : '+'}
-                      </button>
-                    )}
-                  </div>
-                  {isOpen && (
-                    <div className="flex flex-col gap-0.5 pl-4 mt-0.5">
-                      {codes.map(s => {
-                        const fromDb = platformNames.get(s);
-                        const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
-                        const localized = fromDb || t(labelKey);
-                        const display = (!fromDb && localized === labelKey) ? s : localized;
-                        const count = sourceCounts.get(s) ?? 0;
-                        const active = sources.has(s);
-                        return (
-                          <button key={s} type="button"
-                            onClick={() => setSources(toggle(sources, s))}
-                            className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
-                            style={{
-                              background: active ? 'var(--accent-primary)' : 'transparent',
-                              color: active ? '#ffffff' : 'var(--text-secondary)',
-                            }}>
-                            <span>{display}</span>
-                            <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
-                              {formatCount(count)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <ExpandableGridChip key={mediaType}
+                  label={mtDisplay}
+                  count={groupCount}
+                  active={!isOther && mediaTypes.has(mediaType)}
+                  onToggleSelf={isOther ? null : (() => setMediaTypes(toggle(mediaTypes, mediaType as MediaType)))}
+                  codes={codes}
+                  platformLabel={(code) => {
+                    const fromDb = platformNames.get(code);
+                    const labelKey = `dashboard.sentiment.articles.sourceLabels.${code}`;
+                    const localized = fromDb || t(labelKey);
+                    return (!fromDb && localized === labelKey) ? code : localized;
+                  }}
+                  countOf={(code) => sourceCounts.get(code) ?? 0}
+                  isSourceActive={(code) => sources.has(code)}
+                  onToggleSource={(code) => setSources(toggle(sources, code))}
+                />
               );
             })}
-          </div>
-        </div>
+          </ChipGrid>
+        </Section>
 
         <div>
           <label className="text-xs font-semibold text-secondary uppercase tracking-wider block mb-1">
@@ -599,15 +743,18 @@ export function ArticlesTab({ account, usingMock }: Props) {
   );
 }
 
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">{label}</p>
-      <div className="flex flex-wrap gap-1">{children}</div>
-    </div>
-  );
-}
+/* ── 侧栏 UI 原子(对标竞品 WisersOne 文章列表筛选区)───────────
+ *
+ * Section: 段标题 + "(可多选)" 灰提示 + 一条横分隔线;视觉层级清晰.
+ * ChipGrid: 3 列等宽 grid + 行间小间距;chip 数量增长时只多几行,不会撑爆侧栏.
+ * GridChip: 单 chip — 选中 = 浅紫底+紫字,未选 = 透明底+灰字 + 末尾灰色 count.
+ * ExpandableGridChip: 在 GridChip 基础上加个 ▾ 触发器,点开内联展开下属平台
+ *   list(每个 list 项也是可勾选 chip),关上又收回.UX 与竞品的"medical
+ *   /3C/...下拉细分"等价 — 但实现成内联,避免 popover 在窄侧栏里的定位坑.
+ */
 
+/* 小 chip — 风险/情感 这种 4-5 项的 enum 不套 grid,走原有的 flex-wrap 风格,
+ *  视觉上跟 grid chip 区分开:实色背景 = "硬筛子",grid chip = "媒体维度切片". */
 function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
@@ -619,5 +766,104 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       }}>
       {label}
     </button>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-1.5 pb-1.5 mb-2"
+        style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <span className="text-xs font-semibold text-primary">{title}</span>
+        {hint && <span className="text-[11px] text-muted">({hint})</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChipGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-3 gap-x-1 gap-y-0.5">
+      {children}
+    </div>
+  );
+}
+
+const chipBase = "text-xs px-1.5 py-1 rounded transition-colors text-left flex items-center justify-between";
+function activeChipStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
+    color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
+    fontWeight: active ? 600 : 400,
+  };
+}
+
+function GridChip({ label, count, active, onClick }:
+  { label: string; count?: number; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={chipBase}
+      style={activeChipStyle(active)} title={label}>
+      <span className="truncate">{label}</span>
+      {count !== undefined && (
+        <span className="ml-1 text-[10px]" style={{ color: active ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
+          {count >= 1000 ? `${(count/1000).toFixed(1)}K` : count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ExpandableGridChip({
+  label, count, active, onToggleSelf,
+  codes, platformLabel, countOf, isSourceActive, onToggleSource,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onToggleSelf: (() => void) | null;
+  codes: string[];
+  platformLabel: (code: string) => string;
+  countOf: (code: string) => number;
+  isSourceActive: (code: string) => boolean;
+  onToggleSource: (code: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasChildren = codes.length > 0;
+  return (
+    <>
+      <div className="flex items-center" style={activeChipStyle(active)}>
+        <button type="button"
+          onClick={() => onToggleSelf ? onToggleSelf() : setOpen(v => !v)}
+          className="text-xs pl-1.5 py-1 truncate flex-1 text-left"
+          style={{ color: 'inherit' }}
+          title={label}>
+          {label}
+        </button>
+        <span className="text-[10px] mr-1" style={{ color: active ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
+          {count >= 1000 ? `${(count/1000).toFixed(1)}K` : count}
+        </span>
+        {hasChildren && (
+          <button type="button" onClick={() => setOpen(v => !v)}
+            className="text-[10px] pr-1.5 py-1 hover:text-primary"
+            style={{ color: 'var(--text-muted)' }}
+            aria-label={open ? '收起' : '展开'}>
+            {open ? '▴' : '▾'}
+          </button>
+        )}
+      </div>
+      {open && hasChildren && (
+        <div className="col-span-3 ml-2 mb-1 mt-0.5 grid grid-cols-3 gap-x-1 gap-y-0.5"
+          style={{ paddingLeft: 6, borderLeft: '2px solid var(--border-color)' }}>
+          {codes.map(c => (
+            <GridChip key={c}
+              label={platformLabel(c)}
+              count={countOf(c)}
+              active={isSourceActive(c)}
+              onClick={() => onToggleSource(c)} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
