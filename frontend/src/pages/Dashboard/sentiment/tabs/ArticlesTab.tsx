@@ -114,14 +114,40 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // 时间选择器弹层 — 点外部关闭
+  // 弹层 portal 到 document.body 避免被 <nav overflow-x-auto> 等祖先裁掉,
+  // 用 position:fixed 跟随触发按钮 getBoundingClientRect 定位。
   const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const triggerBtnRef = useRef<HTMLButtonElement | null>(null);
+  const popupContentRef = useRef<HTMLDivElement | null>(null);
+  const [popupPos, setPopupPos] = useState<{ top: number; right: number } | null>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const updatePos = () => {
+      const el = triggerBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setPopupPos({
+        top: rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);  // 捕获嵌套滚动
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [pickerOpen]);
+
   useEffect(() => {
     if (!pickerOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
+      const target = e.target as Node;
+      const inTrigger = triggerBtnRef.current?.contains(target);
+      const inPopup = popupContentRef.current?.contains(target);
+      if (!inTrigger && !inPopup) setPickerOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -420,34 +446,39 @@ export function ArticlesTab({ account, usingMock }: Props) {
   };
 
   // 时间筛选 — portal 到 Sentiment.tsx Tab 栏右侧
-  // 触发按钮 + 弹出面板(左 datetime 输入 / 右 preset 列表)
-  const timeChips = (
-    <div ref={pickerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setPickerOpen(v => !v)}
-        className="text-xs px-3 py-1.5 rounded inline-flex items-center gap-1.5 transition-colors"
-        style={{
-          background: pickerOpen ? 'var(--accent-primary)' : 'var(--bg-surface)',
-          color: pickerOpen ? '#ffffff' : 'var(--text-primary)',
-          border: '1px solid var(--border-color)',
-        }}
-      >
-        <span>📅</span>
-        <span>{triggerLabel}</span>
-        <span style={{ fontSize: 10 }}>{pickerOpen ? '▴' : '▾'}</span>
-      </button>
+  // 触发按钮在 toolbar slot;弹出面板再 portal 到 document.body 避免被裁
+  const timeTrigger = (
+    <button
+      ref={triggerBtnRef}
+      type="button"
+      onClick={() => setPickerOpen(v => !v)}
+      className="text-xs px-3 py-1.5 rounded inline-flex items-center gap-1.5 transition-colors"
+      style={{
+        background: pickerOpen ? 'var(--accent-primary)' : 'var(--bg-surface)',
+        color: pickerOpen ? '#ffffff' : 'var(--text-primary)',
+        border: '1px solid var(--border-color)',
+      }}
+    >
+      <span>📅</span>
+      <span>{triggerLabel}</span>
+      <span style={{ fontSize: 10 }}>{pickerOpen ? '▴' : '▾'}</span>
+    </button>
+  );
 
-      {pickerOpen && (
-        <div
-          className="absolute right-0 mt-1 rounded-lg shadow-2xl"
-          style={{
-            zIndex: 50,
-            width: 520,
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-          }}
-        >
+  const timePopup = pickerOpen && popupPos && (
+    <div
+      ref={popupContentRef}
+      className="rounded-lg shadow-2xl"
+      style={{
+        position: 'fixed',
+        top: popupPos.top,
+        right: popupPos.right,
+        zIndex: 1000,
+        width: 520,
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+      }}
+    >
           <div className="grid grid-cols-[1fr_160px]">
             {/* 左:datetime 输入 */}
             <div className="p-4 space-y-3" style={{ borderRight: '1px solid var(--border-color)' }}>
@@ -500,29 +531,28 @@ export function ArticlesTab({ account, usingMock }: Props) {
             </div>
           </div>
 
-          {/* 底部 取消 / 确定 */}
-          <div className="flex justify-end gap-2 px-3 py-2"
-            style={{ borderTop: '1px solid var(--border-color)' }}>
-            <button type="button" onClick={() => setPickerOpen(false)}
-              className="text-xs px-3 py-1 rounded"
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-              {t('common.cancel') === 'common.cancel' ? '取消' : t('common.cancel')}
-            </button>
-            <button type="button" onClick={handleConfirmCustom}
-              disabled={!!customRangeError || (!customStart && !customEnd)}
-              className="text-xs px-3 py-1 rounded disabled:opacity-50"
-              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-              {t('common.confirm') === 'common.confirm' ? '确定' : t('common.confirm')}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 底部 取消 / 确定 */}
+      <div className="flex justify-end gap-2 px-3 py-2"
+        style={{ borderTop: '1px solid var(--border-color)' }}>
+        <button type="button" onClick={() => setPickerOpen(false)}
+          className="text-xs px-3 py-1 rounded"
+          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+          {t('common.cancel') === 'common.cancel' ? '取消' : t('common.cancel')}
+        </button>
+        <button type="button" onClick={handleConfirmCustom}
+          disabled={!!customRangeError || (!customStart && !customEnd)}
+          className="text-xs px-3 py-1 rounded disabled:opacity-50"
+          style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+          {t('common.confirm') === 'common.confirm' ? '确定' : t('common.confirm')}
+        </button>
+      </div>
     </div>
   );
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
-      {toolbarSlot && createPortal(timeChips, toolbarSlot)}
+      {toolbarSlot && createPortal(timeTrigger, toolbarSlot)}
+      {timePopup && createPortal(timePopup, document.body)}
       <aside className="rounded-xl p-4 space-y-4 self-start" style={cardStyle}>
         <header className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-primary">
