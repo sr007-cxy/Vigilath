@@ -110,6 +110,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setToolbarSlot(document.getElementById('sentiment-tab-toolbar'));
   }, []);
 
+  // 滚动到底部 sentinel — 用 IntersectionObserver 自动触发 fetchNextPage
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
   // 时间选择器弹层 — 点外部关闭
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +126,25 @@ export function ArticlesTab({ account, usingMock }: Props) {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [pickerOpen]);
+
+  // 滚动到 sentinel 自动加载下一页 — 提前 200px 触发,避免用户等待。
+  // mock 模式没有分页,跳过。
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || usingMock) return;
+    if (!postsQuery.hasNextPage || postsQuery.isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isVisible = entries[0]?.isIntersecting;
+        if (isVisible && postsQuery.hasNextPage && !postsQuery.isFetchingNextPage) {
+          postsQuery.fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [usingMock, postsQuery.hasNextPage, postsQuery.isFetchingNextPage, postsQuery.fetchNextPage]);
 
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
@@ -687,25 +709,22 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </div>
         )}
 
-        {/* ── 分页控件:加载更多 + 跳到第 N 页 ── */}
-        {!usingMock && (
+        {/* ── 滚动到底自动加载的 sentinel + 状态指示 ── */}
+        {!usingMock && filtered.length > 0 && (
+          <div ref={loadMoreRef} className="py-3 text-center text-xs text-muted">
+            {postsQuery.isFetchingNextPage
+              ? `⏳ ${t('dashboard.sentiment.articles.page.loading')}`
+              : postsQuery.hasNextPage
+                ? `↓ ${t('dashboard.sentiment.articles.page.scrollHint')}`
+                : `· ${t('dashboard.sentiment.articles.page.noMore')} ·`}
+          </div>
+        )}
+
+        {/* ── 跳到第 N 页(可选,精确定位用)── */}
+        {!usingMock && totalPages > 1 && (
           <div className="rounded-xl p-3 flex items-center justify-between flex-wrap gap-2"
             style={cardStyle}>
             <div className="flex items-center gap-2">
-              {postsQuery.hasNextPage ? (
-                <button type="button"
-                  disabled={postsQuery.isFetchingNextPage}
-                  onClick={() => postsQuery.fetchNextPage()}
-                  className="btn-solid rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
-                  {postsQuery.isFetchingNextPage
-                    ? t('dashboard.sentiment.articles.page.loading')
-                    : t('dashboard.sentiment.articles.page.loadMore')}
-                </button>
-              ) : (
-                <span className="text-xs text-muted">
-                  {t('dashboard.sentiment.articles.page.noMore')}
-                </span>
-              )}
               <span className="text-[11px] text-muted">
                 {t('dashboard.sentiment.articles.page.jumpHint', { size: PAGE_SIZE, pages: totalPages })}
               </span>

@@ -1979,6 +1979,7 @@ const zh = {
                   "loadMore": "加载更多",
                   "loading": "加载中…",
                   "noMore": "已全部加载",
+                  "scrollHint": "滚动到底自动加载",
                   "totalCount": "共 {{total}} 条 · 已显示 {{loaded}} 条",
                   "jumpTo": "跳到第",
                   "jumpToUnit": "页",

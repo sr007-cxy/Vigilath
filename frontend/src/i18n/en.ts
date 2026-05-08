@@ -1973,6 +1973,7 @@ const en = {
                   "loadMore": "Load more",
                   "loading": "Loading…",
                   "noMore": "All loaded",
+                  "scrollHint": "Scroll for more",
                   "totalCount": "{{loaded}} of {{total}} loaded",
                   "jumpTo": "Page",
                   "jumpToUnit": "",
