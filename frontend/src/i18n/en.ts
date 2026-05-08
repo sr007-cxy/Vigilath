@@ -1943,6 +1943,8 @@ const en = {
                   "month": "This month",
                   "sentiment": "Sentiment",
                   "risk": "Risk",
+                  "mediaType": "Media type",
+                  "industry": "Media category",
                   "source": "Source",
                   "topic": "Topic",
                   "topicPlaceholder": "Topic keyword",
@@ -2053,6 +2055,30 @@ const en = {
                   "video": "Video platforms",
                   "news": "News portals",
                   "overseas": "Overseas"
+                },
+                "mediaTypes": {
+                  "web": "Web",
+                  "weibo": "Microblog",
+                  "wechat": "WeChat",
+                  "app": "App",
+                  "forum": "Forum",
+                  "short_video": "Short video",
+                  "long_video": "Long video",
+                  "broadcast": "Broadcast / TV",
+                  "newspaper": "Newspaper",
+                  "magazine": "Magazine",
+                  "blog": "Blog",
+                  "ecommerce": "E-commerce",
+                  "review": "User reviews"
+                },
+                "industries": {
+                  "finance": "Finance",
+                  "general": "General news",
+                  "tech": "Tech",
+                  "science": "Science",
+                  "party_media": "State media",
+                  "health": "Health",
+                  "overseas_en": "Overseas (EN)"
                 },
                 "regions": {
                   "mainland": "Mainland China",
@@ -2228,6 +2254,10 @@ const en = {
                 "mediaAllowlistAll": "All",
                 "mediaAllowlistSelectGroup": "Select all",
                 "mediaAllowlistClearGroup": "Clear",
+                "mediaAllowlistAdvanced": "Advanced options",
+                "mediaAllowlistReset": "Reset",
+                "mediaAllowlistAllOn": "Crawling all {{total}} platforms (default)",
+                "mediaAllowlistPartialStatus": "{{count}}/{{total}} platforms selected",
                 "emails": "Notification emails (max 10)",
                 "tagPlaceholder": "Type and press Enter to add"
               },

@@ -9,8 +9,8 @@ import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
 import {
-  PLATFORM_CATEGORY_ORDER,
-  type PlatformCategory,
+  MEDIA_TYPE_ORDER, INDUSTRY_ORDER,
+  type MediaType, type Industry,
 } from '../../../../constants/sentimentPlatforms';
 
 import { PostCard } from '../components/PostCard';
@@ -69,14 +69,58 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const [sentiments, setSentiments] = useState<Set<string>>(new Set());
   const [risks, setRisks] = useState<Set<string>>(new Set());
+  const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
+  const [industries, setIndustries] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
   const [topic, setTopic] = useState('');
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
 
+  // source code → (media_type, industry) 查找表 — 用于按双轴 chip 收窄 sources
+  const platformAxes = useMemo(() => {
+    const m = new Map<string, { media_type: string; industry: string }>();
+    for (const p of platforms) m.set(p.code, { media_type: p.media_type, industry: p.industry });
+    return m;
+  }, [platforms]);
+
+  // sources 经 mediaTypes/industries chip 收窄后的有效 source 白名单
+  const allowedSources = useMemo(() => {
+    if (!mediaTypes.size && !industries.size) return null;  // null = 不收窄
+    const allowed = new Set<string>();
+    for (const p of platforms) {
+      if (mediaTypes.size && !mediaTypes.has(p.media_type)) continue;
+      if (industries.size && !industries.has(p.industry)) continue;
+      allowed.add(p.code);
+    }
+    return allowed;
+  }, [mediaTypes, industries, platforms]);
+
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const src of platformCodes) counts.set(src, 0);
+    for (const p of posts) {
+      if (onlyRelevant && !p.is_relevant) continue;
+      const sl = (p.sentiment_label as string) || 'unknown';
+      if (sentiments.size && !sentiments.has(sl)) continue;
+      const rl = (p.risk_level as string) || 'none';
+      if (risks.size && !risks.has(rl)) continue;
+      if (allowedSources && !allowedSources.has(p.source)) continue;
+      if (topic.trim()) {
+        const tt = topic.trim();
+        const inTopics = (p.topics ?? []).some(x => x.includes(tt));
+        const inTitle = (p.title ?? '').includes(tt);
+        const inSummary = (p.summary ?? '').includes(tt);
+        if (!inTopics && !inTitle && !inSummary) continue;
+      }
+      counts.set(p.source, (counts.get(p.source) ?? 0) + 1);
+    }
+    return counts;
+  }, [posts, sentiments, risks, topic, onlyRelevant, platformCodes, allowedSources]);
+
+  // 双轴 chip 计数:每个 media_type / industry 对应多少篇当前 posts(已过 sentiment/risk/topic 上层筛子)
+  const axisCounts = useMemo(() => {
+    const mt = new Map<string, number>();
+    const ind = new Map<string, number>();
     for (const p of posts) {
       if (onlyRelevant && !p.is_relevant) continue;
       const sl = (p.sentiment_label as string) || 'unknown';
@@ -90,30 +134,34 @@ export function ArticlesTab({ account, usingMock }: Props) {
         const inSummary = (p.summary ?? '').includes(tt);
         if (!inTopics && !inTitle && !inSummary) continue;
       }
-      counts.set(p.source, (counts.get(p.source) ?? 0) + 1);
+      const ax = platformAxes.get(p.source);
+      if (!ax) continue;
+      mt.set(ax.media_type, (mt.get(ax.media_type) ?? 0) + 1);
+      ind.set(ax.industry, (ind.get(ax.industry) ?? 0) + 1);
     }
-    return counts;
-  }, [posts, sentiments, risks, topic, onlyRelevant, platformCodes]);
+    return { mediaType: mt, industry: ind };
+  }, [posts, sentiments, risks, topic, onlyRelevant, platformAxes]);
 
-  // 把平台按 category 分组,sourceCounts 里出现但不在 catalog 的源(后端
-  // 透传的自定义域名)单独归到 "其他" 组,与 WisersOne 的分类侧栏一致。
+  // 来源列表按 media_type 分组(WisersOne 的"媒体类型"轴 — 与白名单编辑器一致)。
+  // 后端透传的未知 source(catalog 之外)归到 'other' 组。
   const sourceGroups = useMemo(() => {
-    const byCat = new Map<PlatformCategory | 'other', string[]>();
+    const byMt = new Map<MediaType | 'other', string[]>();
     for (const p of platforms) {
-      const list = byCat.get(p.category as PlatformCategory) ?? [];
+      const mt = (p.media_type as MediaType) || 'other';
+      const list = byMt.get(mt) ?? [];
       list.push(p.code);
-      byCat.set(p.category as PlatformCategory, list);
+      byMt.set(mt, list);
     }
     const known = new Set<string>(platformCodes);
     const extras = Array.from(sourceCounts.keys())
       .filter(s => !known.has(s))
       .sort();
-    if (extras.length) byCat.set('other', extras);
+    if (extras.length) byMt.set('other', extras);
 
-    const order: (PlatformCategory | 'other')[] = [...PLATFORM_CATEGORY_ORDER, 'other'];
+    const order: (MediaType | 'other')[] = [...MEDIA_TYPE_ORDER, 'other'];
     return order
-      .filter(c => byCat.has(c))
-      .map(c => ({ category: c, codes: byCat.get(c)! }));
+      .filter(m => byMt.has(m))
+      .map(m => ({ mediaType: m, codes: byMt.get(m)! }));
   }, [sourceCounts, platforms, platformCodes]);
 
   const initialKey = params.get('post');
@@ -137,6 +185,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       if (sentiments.size && !sentiments.has(sl)) return false;
       const rl = (p.risk_level as string) || 'none';
       if (risks.size && !risks.has(rl)) return false;
+      if (allowedSources && !allowedSources.has(p.source)) return false;
       if (sources.size && !sources.has(p.source)) return false;
       if (topic.trim()) {
         const tt = topic.trim();
@@ -155,7 +204,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       list = list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
     }
     return list;
-  }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy]);
+  }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy, allowedSources]);
 
   const selected: SentimentPost | null = useMemo(() => {
     if (!selectedKey) return filtered[0] ?? null;
@@ -171,7 +220,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
   };
 
   const reset = () => {
-    setSentiments(new Set()); setRisks(new Set()); setSources(new Set());
+    setSentiments(new Set()); setRisks(new Set());
+    setMediaTypes(new Set()); setIndustries(new Set());
+    setSources(new Set());
     setTopic(''); setOnlyRelevant(true); setSortBy('influence');
   };
 
@@ -212,18 +263,42 @@ export function ArticlesTab({ account, usingMock }: Props) {
           ))}
         </FilterGroup>
 
+        <FilterGroup label={t('dashboard.sentiment.articles.filters.mediaType')}>
+          {MEDIA_TYPE_ORDER.map(m => {
+            const c = axisCounts.mediaType.get(m) ?? 0;
+            return (
+              <FilterChip key={m}
+                label={`${t(`dashboard.sentiment.articles.mediaTypes.${m}`)} ${c}`}
+                active={mediaTypes.has(m)}
+                onClick={() => setMediaTypes(toggle(mediaTypes, m as MediaType))} />
+            );
+          })}
+        </FilterGroup>
+
+        <FilterGroup label={t('dashboard.sentiment.articles.filters.industry')}>
+          {INDUSTRY_ORDER.map(i => {
+            const c = axisCounts.industry.get(i) ?? 0;
+            return (
+              <FilterChip key={i}
+                label={`${t(`dashboard.sentiment.articles.industries.${i}`)} ${c}`}
+                active={industries.has(i)}
+                onClick={() => setIndustries(toggle(industries, i as Industry))} />
+            );
+          })}
+        </FilterGroup>
+
         <FilterGroup label={t('dashboard.sentiment.articles.filters.source')}>
           <div className="flex flex-col w-full gap-2">
-            {sourceGroups.map(({ category, codes }) => {
-              const catLabelKey = `dashboard.sentiment.articles.categories.${category}`;
-              const catLabel = t(catLabelKey);
-              const catDisplay = catLabel === catLabelKey ? category : catLabel;
+            {sourceGroups.map(({ mediaType, codes }) => {
+              const mtLabelKey = `dashboard.sentiment.articles.mediaTypes.${mediaType}`;
+              const mtLabel = t(mtLabelKey);
+              const mtDisplay = mtLabel === mtLabelKey ? mediaType : mtLabel;
               const groupCount = codes.reduce((sum, s) => sum + (sourceCounts.get(s) ?? 0), 0);
               return (
-                <div key={category}>
+                <div key={mediaType}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-                      {catDisplay}
+                      {mtDisplay}
                     </span>
                     <span className="text-[10px] text-muted">{formatCount(groupCount)}</span>
                   </div>

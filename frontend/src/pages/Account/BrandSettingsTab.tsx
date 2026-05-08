@@ -8,7 +8,7 @@
 //
 // 未配置时展示 OnboardingWizard(品牌创建表单).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +24,7 @@ import { TagInput } from '../Dashboard/sentiment/components/TagInput';
 import { KeywordGroupsEditor } from '../Dashboard/sentiment/components/KeywordGroupsEditor';
 import { KnowledgeEditor } from '../Dashboard/sentiment/components/KnowledgeEditor';
 import { OnboardingWizard } from '../Dashboard/sentiment/OnboardingWizard';
-import { groupByCategory } from '../../constants/sentimentPlatforms';
+import { groupByMediaType } from '../../constants/sentimentPlatforms';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -219,9 +219,6 @@ export function BrandSettingsTab() {
           <TagInput value={excludes} onChange={setExcludes} placeholder={t('account.brand.fields.tagPlaceholder')} />
         </Field>
         <Field label={t('account.brand.fields.mediaAllowlist')}>
-          <p className="text-xs text-muted mb-3">
-            {t('account.brand.fields.mediaAllowlistHint')}
-          </p>
           <MediaAllowlistEditor value={mediaAllowlist} onChange={setMediaAllowlist} />
         </Field>
       </Section>
@@ -294,26 +291,48 @@ function Input({ value, onChange, mono }: { value: string; onChange: (v: string)
   );
 }
 
-/* ── 媒体白名单分组编辑器 — 参照 WisersOne 的分类导航,把平台按
-   财经/社交/论坛/视频/资讯/海外 6 类组织,每组一行小标题 + chip + 全选/清空。
-   平台目录从 useSentimentPlatforms() 拉,DB 是 single source of truth。 */
+/* ── 媒体白名单分组编辑器 — 参照 WisersOne 的"媒体类型"轴(网媒/微博/微信/
+   APP/论坛/短视频/长视频/...),每组一行小标题 + chip + 全选/清空。
+   平台目录从 useSentimentPlatforms() 拉,DB 是 single source of truth。
+
+   value 语义:`[]` = 全部平台(canonical "all"),非空数组 = 仅勾选的子集。
+   折叠态默认隐藏 chip 区,只展示"高级选择"入口 + 当前状态摘要。 */
 function MediaAllowlistEditor({
   value, onChange,
 }: { value: string[]; onChange: (next: string[]) => void }) {
   const { t, i18n } = useTranslation();
   const platformsQuery = useSentimentPlatforms();
   const platforms = platformsQuery.data ?? [];
-  const groups = groupByCategory(platforms);
+  const groups = groupByMediaType(platforms);
+  const allCodes = useMemo(() => platforms.map(p => p.code), [platforms]);
+  const total = allCodes.length;
+
+  const [expanded, setExpanded] = useState(false);
+
+  // value=[] 视为"全选"——chip 全亮,但保持后端语义不变(空数组 = 全部)。
+  const isAll = value.length === 0;
+  const effective = isAll ? allCodes : value;
+  const selectedSet = useMemo(() => new Set(effective), [effective]);
+
+  // 写回:全部勾上时 normalize 回 `[]`,与"留空 = 全部"对齐。
+  const commit = (next: string[]) => {
+    if (next.length === total && allCodes.every(c => next.includes(c))) {
+      onChange([]);
+    } else {
+      onChange(next);
+    }
+  };
 
   const toggle = (code: string) => {
-    onChange(value.includes(code) ? value.filter(c => c !== code) : [...value, code]);
+    if (selectedSet.has(code)) commit(effective.filter(c => c !== code));
+    else commit([...effective, code]);
   };
   const setGroup = (codes: string[], select: boolean) => {
-    const set = new Set(value);
+    const set = new Set(effective);
     for (const c of codes) {
       if (select) set.add(c); else set.delete(c);
     }
-    onChange(Array.from(set));
+    commit(Array.from(set));
   };
   // 优先 DB 里的本地化名;空再回 i18n sourceLabels;再回 code。
   const platformLabel = (p: SentimentPlatform): string => {
@@ -324,54 +343,87 @@ function MediaAllowlistEditor({
     return v === k ? p.code : v;
   };
 
+  const status = isAll
+    ? t('account.brand.fields.mediaAllowlistAllOn', { total })
+    : t('account.brand.fields.mediaAllowlistPartialStatus', { count: value.length, total });
+
   return (
     <div className="space-y-3">
-      {groups.map(({ category, items }) => {
-        const codes = items.map(i => i.code);
-        const allOn = codes.every(c => value.includes(c));
-        const someOn = codes.some(c => value.includes(c));
-        return (
-          <div key={category}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
-                {t(`dashboard.sentiment.articles.categories.${category}`)}
-                <span className="ml-1.5 text-muted normal-case font-normal">
-                  {someOn ? `${codes.filter(c => value.includes(c)).length}/${codes.length}` : codes.length}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setGroup(codes, !allOn)}
-                className="text-[11px] text-muted hover:text-primary"
-              >
-                {allOn
-                  ? t('account.brand.fields.mediaAllowlistClearGroup')
-                  : t('account.brand.fields.mediaAllowlistSelectGroup')}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {items.map(p => {
-                const active = value.includes(p.code);
-                return (
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="text-xs font-semibold inline-flex items-center gap-1 hover:text-primary"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          <span style={{ display: 'inline-block', width: 10 }}>{expanded ? '▾' : '▸'}</span>
+          {t('account.brand.fields.mediaAllowlistAdvanced')}
+        </button>
+        <span className="text-[11px] text-muted">{status}</span>
+        {expanded && !isAll && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="ml-auto text-[11px] text-muted hover:text-primary"
+          >
+            {t('account.brand.fields.mediaAllowlistReset')}
+          </button>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            {t('account.brand.fields.mediaAllowlistHint')}
+          </p>
+          {groups.map(({ mediaType, items }) => {
+            const codes = items.map(i => i.code);
+            const allOn = codes.every(c => selectedSet.has(c));
+            const someOn = codes.some(c => selectedSet.has(c));
+            return (
+              <div key={mediaType}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
+                    {t(`dashboard.sentiment.articles.mediaTypes.${mediaType}`)}
+                    <span className="ml-1.5 text-muted normal-case font-normal">
+                      {someOn ? `${codes.filter(c => selectedSet.has(c)).length}/${codes.length}` : codes.length}
+                    </span>
+                  </span>
                   <button
-                    key={p.code}
                     type="button"
-                    onClick={() => toggle(p.code)}
-                    className="text-xs px-2.5 py-1 rounded transition-colors"
-                    style={{
-                      background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                      color: active ? '#ffffff' : 'var(--text-secondary)',
-                      border: '1px solid transparent',
-                    }}
+                    onClick={() => setGroup(codes, !allOn)}
+                    className="text-[11px] text-muted hover:text-primary"
                   >
-                    {platformLabel(p)}
+                    {allOn
+                      ? t('account.brand.fields.mediaAllowlistClearGroup')
+                      : t('account.brand.fields.mediaAllowlistSelectGroup')}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {items.map(p => {
+                    const active = selectedSet.has(p.code);
+                    return (
+                      <button
+                        key={p.code}
+                        type="button"
+                        onClick={() => toggle(p.code)}
+                        className="text-xs px-2.5 py-1 rounded transition-colors"
+                        style={{
+                          background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                          color: active ? '#ffffff' : 'var(--text-secondary)',
+                          border: '1px solid transparent',
+                        }}
+                      >
+                        {platformLabel(p)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

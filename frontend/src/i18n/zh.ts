@@ -1949,6 +1949,8 @@ const zh = {
                   "month": "本月",
                   "sentiment": "情感",
                   "risk": "风险",
+                  "mediaType": "媒体类型",
+                  "industry": "媒体分类",
                   "source": "媒体",
                   "topic": "主题",
                   "topicPlaceholder": "输入主题关键字",
@@ -2059,6 +2061,30 @@ const zh = {
                   "video": "视频平台",
                   "news": "资讯门户",
                   "overseas": "海外"
+                },
+                "mediaTypes": {
+                  "web": "网媒",
+                  "weibo": "微博",
+                  "wechat": "微信",
+                  "app": "APP",
+                  "forum": "论坛",
+                  "short_video": "短视频",
+                  "long_video": "长视频",
+                  "broadcast": "广播电视",
+                  "newspaper": "报纸",
+                  "magazine": "杂志",
+                  "blog": "博客",
+                  "ecommerce": "电商",
+                  "review": "用户评价"
+                },
+                "industries": {
+                  "finance": "金融财经",
+                  "general": "综合资讯",
+                  "tech": "科技",
+                  "science": "科普",
+                  "party_media": "党政央媒",
+                  "health": "医药健康",
+                  "overseas_en": "海外英文"
                 },
                 "regions": {
                   "mainland": "中国大陆",
@@ -2234,6 +2260,10 @@ const zh = {
                 "mediaAllowlistAll": "全部",
                 "mediaAllowlistSelectGroup": "全选",
                 "mediaAllowlistClearGroup": "清空",
+                "mediaAllowlistAdvanced": "高级选择",
+                "mediaAllowlistReset": "重置",
+                "mediaAllowlistAllOn": "默认抓取全部 {{total}} 个平台",
+                "mediaAllowlistPartialStatus": "已选 {{count}}/{{total}} 个平台",
                 "emails": "通知邮箱(≤10)",
                 "tagPlaceholder": "输入后回车添加"
               },
