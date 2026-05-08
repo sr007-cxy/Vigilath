@@ -165,14 +165,31 @@ def main():
         if not new_rows:
             print(f"[migrate] sentiment_platforms already has all {len(SEED)} seed codes — nothing to insert")
         else:
-            cur.executemany(
-                """
-                INSERT INTO sentiment_platforms
-                  (code, domain, category, region, name_zh, name_en, sort_order, enabled, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                """,
-                [(*row, now, now) for row in new_rows],
-            )
+            # 011 加了 media_type / industry 两列且 NOT NULL — 若表结构已是 011 版,
+            # 010 的 INSERT 必须显式提供这两列(空串占位,让 011 之后回填),否则
+            # 原始 010 schema 的表(只有 11 列)用窄 INSERT。
+            cur.execute("PRAGMA table_info(sentiment_platforms)")
+            cols = {row[1] for row in cur.fetchall()}
+            has_axes = "media_type" in cols and "industry" in cols
+            if has_axes:
+                cur.executemany(
+                    """
+                    INSERT INTO sentiment_platforms
+                      (code, domain, category, region, name_zh, name_en, sort_order,
+                       media_type, industry, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 1, ?, ?)
+                    """,
+                    [(*row, now, now) for row in new_rows],
+                )
+            else:
+                cur.executemany(
+                    """
+                    INSERT INTO sentiment_platforms
+                      (code, domain, category, region, name_zh, name_en, sort_order, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    """,
+                    [(*row, now, now) for row in new_rows],
+                )
             conn.commit()
             print(f"[migrate] inserted {len(new_rows)} new platform rows ({len(existing)} pre-existing left untouched)")
     finally:
