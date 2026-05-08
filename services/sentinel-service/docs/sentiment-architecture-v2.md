@@ -50,62 +50,44 @@
 
 ## 2. 物理拓扑
 
-```
-┌────────────────────────────┐    HTTPS     ┌──────────────────────────────────────┐
-│  Frontend (React/Vite)     │  ─────────▶  │  GEO backend (FastAPI, 8070)         │
-│  Dashboard/sentiment/      │              │  ─────────────────────────────────── │
-│   ├─ TodayTab              │              │  geo/api/sentiment.py                │
-│   ├─ ArticlesTab           │              │   - 账号 CRUD(本地真值)            │
-│   ├─ BriefsTab             │              │   - 状态读 → 转发到 sentinel        │
-│   └─ StatusBanner(stage 级)│              │   - 邮件推送 endpoint(给 sentinel) │
-└────────────────────────────┘              │  geo/services/                       │
-                                            │   sentinel_client.py        ★ 大瘦身 │
-                                            │     356 行 → ~80 行(只剩配置同步 + │
-                                            │     状态读 + 手动触发 + 邮件接入)  │
-                                            │   sentiment_pipeline.py     ★ 删除  │
-                                            │   sentiment_scheduler.py    ★ 删除  │
-                                            │  Postgres/SQLite 主库:               │
-                                            │   sentiment_accounts(配置真值)     │
-                                            │   sentiment_knowledge                │
-                                            │   sentiment_run_logs        ★ 删除  │ → 迁 sentinel
-                                            └──────────────┬───────────────────────┘
-                                                           │
-                                            HTTP(双向,薄):
-                                              backend → sentinel:
-                                                POST /accounts/{id}        配置同步
-                                                DELETE /accounts/{id}      停用
-                                                POST /accounts/{id}/runs   手动触发
-                                                GET  /accounts/{id}/runs/latest   状态读
-                                                GET  /accounts/{id}/runs/{run_id} run 详情
-                                                GET  /accounts/{id}/posts/briefs/... 业务读(保留)
-                                              sentinel → backend:
-                                                POST /api/internal/sentiment/email-push   邮件推送回调
-                                                           │
-                                                           ▼
-                                            ┌──────────────────────────────────────┐
-                                            │  sentinel-service (FastAPI, 8090)    │
-                                            │  ─────────────────────────────────── │
-                                            │  uvicorn --workers 1 强制单进程       │
-                                            │                                      │
-                                            │  scheduler.py    ★ 新增              │
-                                            │     asyncio cron loop,每小时 :05    │
-                                            │     遍历本地 active accounts → 入队  │
-                                            │  runner.py       ★ 新增,DAG 解释执行│
-                                            │  pipeline.py     ★ 新增,DAG 静态声明│
-                                            │  stages/         ★ 新增              │
-                                            │   ├─ monitor.py(plan + 3 引擎)      │
-                                            │   ├─ crawl_fanout.py(14 crawler)    │
-                                            │   ├─ analyze.py                      │
-                                            │   ├─ brief.py                        │
-                                            │   └─ notify.py(回调 backend)        │
-                                            │  service.py      入口收敛到 ~10 个   │
-                                            │  storage:                            │
-                                            │   data/account_{id}/yuqing.db   不动 │
-                                            │   runner.db                ★ 新增    │
-                                            │     accounts(配置缓存)              │
-                                            │     pipeline_runs                    │
-                                            │     pipeline_stage_runs              │
-                                            └──────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph FE["Frontend (React/Vite)"]
+        direction TB
+        FE_tabs["TodayTab / ArticlesTab / BriefsTab"]
+        FE_status["StatusBanner<br/>(stage 级 ★)"]
+    end
+
+    subgraph BE["GEO backend (FastAPI :8070)"]
+        direction TB
+        BE_api["geo/api/sentiment.py<br/>账号 CRUD + 状态转发<br/>+ 内部邮件 endpoint"]
+        BE_client["sentinel_client.py<br/>★ 356 → ~80 行"]
+        BE_del["sentiment_pipeline.py<br/>sentiment_scheduler.py<br/>★ 整体删除"]
+        BE_db[("主库<br/>sentiment_accounts (真值)<br/>sentiment_knowledge")]
+    end
+
+    subgraph SEN["sentinel-service (FastAPI :8090, uvicorn --workers 1)"]
+        direction TB
+        SEN_svc["service.py<br/>入口收敛 ~10 端点"]
+        SEN_sched["scheduler.py ★<br/>asyncio cron loop<br/>每小时 :05"]
+        SEN_runner["runner.py ★<br/>DAG runner + reaper"]
+        SEN_pipe["pipeline.py ★<br/>DAG 静态声明"]
+        SEN_stages["stages/ ★<br/>monitor / crawl_fanout<br/>analyze / brief / notify"]
+        SEN_biz_db[("data/account_id/yuqing.db<br/>per-account 业务库 (不动)")]
+        SEN_run_db[("runner.db ★<br/>accounts (配置缓存)<br/>pipeline_runs<br/>pipeline_stage_runs")]
+    end
+
+    FE -- HTTPS --> BE_api
+    BE_api --- BE_db
+    BE_api --- BE_client
+    BE_client -->|"配置同步 / 状态读<br/>手动触发"| SEN_svc
+    SEN_svc --> SEN_runner
+    SEN_sched --> SEN_runner
+    SEN_runner --> SEN_pipe
+    SEN_pipe --> SEN_stages
+    SEN_runner --- SEN_run_db
+    SEN_stages --- SEN_biz_db
+    SEN_stages -. "brief 完成 → 推邮件" .-> BE_api
 ```
 
 **职责切分(post-refactor)**:
@@ -120,87 +102,93 @@
 
 ### 3.1 触发路径(三种)
 
-```
-[路径 A · cron]
-[sentinel] scheduler.py 内 asyncio loop,每小时 :05 触发
-   │  扫 sentinel runner.db 的 accounts(active=true)
-   ▼
-[sentinel] runner.execute(account_id, kind="hourly", trigger="cron")
-
-[路径 B · 手动触发]
-[FE]      点击"立即运行"
-   │
-   ▼
-[backend] POST /api/sentiment/{id}/run
-   │  鉴权 + 校验
-   ▼
-[backend] sentinel_client.trigger_run(account_id)
-   │
-   ▼
-[sentinel] POST /accounts/{id}/runs  → runner.execute(account_id, kind="manual", trigger="user")
-
-[路径 C · 配置变更]
-[FE]      改 keywords / aliases / notify_emails / active 等
-   │
-   ▼
-[backend] PUT /api/sentiment/{id}
-   │  ① 写主库 sentiment_accounts(真值)
-   │  ② 同步推 sentinel: POST /accounts/{id} (失败重试 + 告警)
-   │  ③ 返回 FE
+```mermaid
+flowchart LR
+    subgraph A["路径 A · cron 触发"]
+        direction TB
+        a1["⏰ 每小时 :05"]
+        a2["sentinel<br/>scheduler.py asyncio loop"]
+        a3["扫 runner.db.accounts<br/>(active=true)"]
+        a4["runner.execute<br/>kind=hourly, trigger=cron"]
+        a1 --> a2 --> a3 --> a4
+    end
+    subgraph B["路径 B · 手动触发"]
+        direction TB
+        b1["FE: 立即运行"]
+        b2["backend<br/>POST /api/sentiment/id/run"]
+        b3["sentinel_client.trigger_run"]
+        b4["sentinel<br/>POST /accounts/id/runs"]
+        b5["runner.execute<br/>kind=manual, trigger=user"]
+        b1 --> b2 --> b3 --> b4 --> b5
+    end
+    subgraph C["路径 C · 配置变更"]
+        direction TB
+        c1["FE: 改 keywords / aliases<br/>notify_emails / active"]
+        c2["backend<br/>PUT /api/sentiment/id"]
+        c3[("写主库 sentiment_accounts<br/>(真值)")]
+        c4["sentinel<br/>POST /accounts/id<br/>(失败重试 + 告警)"]
+        c5[("runner.db.accounts<br/>(配置缓存)")]
+        c1 --> c2 --> c3 --> c4 --> c5
+    end
 ```
 
 ### 3.2 单次 run 执行(在 sentinel 内)
 
-```
-[sentinel] runner.execute(account_id, kind, trigger)
-   │  ① 唯一索引校验:同一 (account_id, kind) 是否已有 in-flight run
-   │     冲突 → 直接返回 "already_running"
-   │
-   │  ② 在 runner.db 写一行 pipeline_runs(status=running, run_id, started_at)
-   │
-   │  ③ 拓扑排序 SENTIMENT_DAG → 逐 stage 执行:
-   │       - 写 pipeline_stage_runs(stage_id, attempt, status=running)
-   │       - 调 stages/<name>.run(ctx) — 直接调本地业务模块,无跨进程
-   │       - 失败按 retry_policy 重试,attempt 用尽则按 on_failure 决定下游
-   │       - 成功 / 失败实时回写 pipeline_stage_runs
-   │
-   │  ④ DAG 跑完 → 聚合 stage 结果决定 run.status
-   │
-   │  ⑤ notify_emails 非空时,sentinel HTTP 调 backend
-   │       POST /api/internal/sentiment/email-push {account_id, brief_id, recipients}
-   │     backend 用 Resend 发送(secret 仍在 backend)
-   │
-   └─▶ runner.db pipeline_runs.status = success / failed
+```mermaid
+sequenceDiagram
+    participant Trigger as 触发源<br/>(cron / API)
+    participant Runner as sentinel<br/>runner.py
+    participant DB as runner.db
+    participant Stage as stages/*
+    participant BE as backend<br/>(内部 API)
+
+    Trigger->>Runner: execute(account_id, kind, trigger)
+    Runner->>DB: 唯一索引校验<br/>(account_id, kind) in-flight?
+    Note over Runner,DB: 冲突 → 直接返回<br/>"already_running"
+    Runner->>DB: INSERT pipeline_runs<br/>(status=running, run_id)
+    loop SENTIMENT_DAG 拓扑顺序
+        Runner->>DB: INSERT pipeline_stage_runs<br/>(status=running, lease_until)
+        Runner->>Stage: stage.run(ctx)<br/>本地调用,无跨进程
+        Stage-->>Runner: StageResult
+        Note over Runner: 失败 → retry / on_failure<br/>(fail_run / skip_downstream / continue)
+        Runner->>DB: UPDATE pipeline_stage_runs<br/>(success / failed / skipped)
+    end
+    opt notify_emails 非空
+        Runner->>BE: POST /api/internal/sentiment/email-push<br/>{account_id, brief_id, recipients}
+        Note over BE: backend 用 Resend 发送<br/>(secret 仍在 backend)
+        BE-->>Runner: 200
+    end
+    Runner->>DB: UPDATE pipeline_runs<br/>(success / failed / cancelled)
 ```
 
 ### 3.3 DAG 形态
 
-```
-[Run] ── stage: monitor ──┐
-        (本地调 search/pipeline.run_plan,        │
-         plan + cnbing + baidu + ddg 串行)      │
-                                                 ├──▶ posts(写 per-account SQLite)
-        stage: crawl_fanout ──────────────────────┘
-        (本地调 14 个 crawler client,
-         stage 内 ThreadPoolExecutor max_workers=8)
-                                                            │
-                                                            ▼
-                                                   stage: analyze
-                                                   (本地调 analyzer.pipeline.analyze_symbol,
-                                                    LLM_ANALYZE_CONCURRENCY=5)
-                                                            │
-                                                            ▼
-                                                   stage: brief (reduce)
-                                                   (本地调 brief.generate.generate_brief)
-                                                            │
-                                                            ▼
-                                                   stage: notify
-                                                   (sentinel 调 backend 内部邮件 endpoint)
+```mermaid
+flowchart TD
+    Run([Run])
+    Monitor["monitor<br/>本地调 search.pipeline.run_plan<br/>plan + cnbing + baidu + ddg 串行"]
+    Crawl["crawl_fanout<br/>本地调 14 个 crawler client<br/>ThreadPoolExecutor max=8"]
+    Posts[("posts<br/>per-account SQLite")]
+    Analyze["analyze<br/>本地调 analyzer.pipeline.analyze_symbol<br/>LLM_ANALYZE_CONCURRENCY=5"]
+    Analyses[("analyses")]
+    Brief["brief (reduce)<br/>本地调 brief.generate.generate_brief"]
+    Briefs[("briefs")]
+    Notify["notify<br/>sentinel 调 backend 内部邮件 endpoint"]
 
-draft 是独立子 DAG,前端按需触发(走 backend → sentinel `POST /accounts/{id}/draft`),不在 hourly 路径
+    Draft["draft<br/>独立子 DAG, FE 按需触发<br/>backend → sentinel POST /accounts/id/draft"]
+
+    Run --> Monitor
+    Run --> Crawl
+    Monitor --> Posts
+    Crawl --> Posts
+    Posts --> Analyze
+    Analyze --> Analyses
+    Analyses --> Brief
+    Brief --> Briefs
+    Briefs --> Notify
 ```
 
-**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief → notify` = **5 节点**
+**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief → notify` = **5 节点**(draft 独立,不计入)
 
 **关键差异 vs v1**:
 
