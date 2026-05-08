@@ -127,25 +127,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [pickerOpen]);
 
-  // 滚动到 sentinel 自动加载下一页 — 提前 200px 触发,避免用户等待。
-  // mock 模式没有分页,跳过。
-  useEffect(() => {
-    const el = loadMoreRef.current;
-    if (!el || usingMock) return;
-    if (!postsQuery.hasNextPage || postsQuery.isFetchingNextPage) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const isVisible = entries[0]?.isIntersecting;
-        if (isVisible && postsQuery.hasNextPage && !postsQuery.isFetchingNextPage) {
-          postsQuery.fetchNextPage();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [usingMock, postsQuery.hasNextPage, postsQuery.isFetchingNextPage, postsQuery.fetchNextPage]);
-
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
   // datetime-local 格式:YYYY-MM-DDTHH:MM(无秒)
@@ -198,6 +179,24 @@ export function ArticlesTab({ account, usingMock }: Props) {
       startOffset,
     },
   );
+
+  // 滚动到 sentinel 自动加载下一页 — 提前 200px 触发。mock 模式没分页,跳过。
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || usingMock) return;
+    if (!postsQuery.hasNextPage || postsQuery.isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isVisible = entries[0]?.isIntersecting;
+        if (isVisible && postsQuery.hasNextPage && !postsQuery.isFetchingNextPage) {
+          postsQuery.fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [usingMock, postsQuery.hasNextPage, postsQuery.isFetchingNextPage, postsQuery.fetchNextPage]);
 
   const posts: SentimentPost[] = useMemo(() => {
     if (usingMock) return mockPosts as SentimentPost[];
