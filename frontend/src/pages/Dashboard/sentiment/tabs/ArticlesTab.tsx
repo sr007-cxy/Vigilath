@@ -307,59 +307,19 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </button>
         </header>
 
-        {/* ── 时间筛选 ── */}
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.time')}>
-          {([
-            ['today', 'timeToday'],
-            ['d7', 'time7d'],
-            ['d30', 'time30d'],
-            ['all', 'timeAll'],
-            ['custom', 'timeCustom'],
-          ] as const).map(([key, label]) => (
-            <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
-              active={timePreset === key}
-              onClick={() => setTimePreset(key)} />
-          ))}
-        </FilterGroup>
-        {timePreset === 'custom' && (
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-1.5">
-              <input type="date" value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
-                className="text-xs px-2 py-1 rounded"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-              <input type="date" value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
-                className="text-xs px-2 py-1 rounded"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-            </div>
-            {customRangeError && (
-              <p className="text-[11px]" style={{ color: '#dc2626' }}>
-                {t('dashboard.sentiment.articles.filters.timeRangeError')}
-              </p>
-            )}
-            <button type="button" onClick={handleApplyCustom}
-              disabled={!!customRangeError || (!customStart && !customEnd)}
-              className="text-xs px-3 py-1 rounded disabled:opacity-50"
-              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-              {t('dashboard.sentiment.articles.filters.timeApply')}
-            </button>
-          </div>
-        )}
-
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
-          {ALL_SENTIMENTS.map(s => (
-            <FilterChip key={s} label={t(`dashboard.sentiment.articles.labels.${s}`)}
-              active={sentiments.has(s)} onClick={() => setSentiments(toggle(sentiments, s))} />
-          ))}
-        </FilterGroup>
+        {/* 时间筛选已挪到中间列 header 右上角 — 见下方 <header> */}
 
         <FilterGroup label={t('dashboard.sentiment.articles.filters.risk')}>
           {ALL_RISKS.map(r => (
             <FilterChip key={r} label={t(`dashboard.sentiment.articles.risk.${r}`)}
               active={risks.has(r)} onClick={() => setRisks(toggle(risks, r))} />
+          ))}
+        </FilterGroup>
+
+        <FilterGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
+          {ALL_SENTIMENTS.map(s => (
+            <FilterChip key={s} label={t(`dashboard.sentiment.articles.labels.${s}`)}
+              active={sentiments.has(s)} onClick={() => setSentiments(toggle(sentiments, s))} />
           ))}
         </FilterGroup>
 
@@ -476,20 +436,65 @@ export function ArticlesTab({ account, usingMock }: Props) {
               </span>
             )}
           </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
-            {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
-              <button key={k} type="button" onClick={() => setSortBy(k)}
-                className={`text-xs px-2 py-1 rounded ${sortBy === k ? 'font-bold' : ''}`}
-                style={{
-                  background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
-                  color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                }}>
-                {t(`dashboard.sentiment.articles.sort.${k}`)}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* 时间筛选(原在左侧栏,挪到右上角)*/}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted mr-0.5">{t('dashboard.sentiment.articles.filters.time')}:</span>
+              {([
+                ['today', 'timeToday'],
+                ['d7', 'time7d'],
+                ['d30', 'time30d'],
+                ['all', 'timeAll'],
+                ['custom', 'timeCustom'],
+              ] as const).map(([key, label]) => (
+                <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
+                  active={timePreset === key}
+                  onClick={() => setTimePreset(key)} />
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
+              {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
+                <button key={k} type="button" onClick={() => setSortBy(k)}
+                  className={`text-xs px-2 py-1 rounded ${sortBy === k ? 'font-bold' : ''}`}
+                  style={{
+                    background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
+                    color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  }}>
+                  {t(`dashboard.sentiment.articles.sort.${k}`)}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
+
+        {/* 自定义时间区间 — 仅当 timePreset='custom' 时显示在 header 下方 */}
+        {timePreset === 'custom' && (
+          <div className="rounded-md p-2 flex items-center gap-2 flex-wrap" style={cardStyle}>
+            <input type="date" value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
+              className="text-xs px-2 py-1 rounded"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+            <span className="text-xs text-muted">→</span>
+            <input type="date" value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
+              className="text-xs px-2 py-1 rounded"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+            <button type="button" onClick={handleApplyCustom}
+              disabled={!!customRangeError || (!customStart && !customEnd)}
+              className="text-xs px-3 py-1 rounded disabled:opacity-50"
+              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+              {t('dashboard.sentiment.articles.filters.timeApply')}
+            </button>
+            {customRangeError && (
+              <span className="text-[11px]" style={{ color: '#dc2626' }}>
+                {t('dashboard.sentiment.articles.filters.timeRangeError')}
+              </span>
+            )}
+          </div>
+        )}
 
         {filtered.length === 0 ? (
           <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
