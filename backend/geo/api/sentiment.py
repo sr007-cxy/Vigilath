@@ -335,12 +335,13 @@ def _proxy(fn, *args, **kwargs):
 
 @router.get("/accounts/{account_id}/posts")
 def proxy_posts(
-    account_id: int, ticker: str, limit: int = 50,
+    account_id: int, ticker: str, limit: int = 50, days: int = 1,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """days: 1=今日(默认,与 KPI 一致),0=全部历史,N>1=最近 N 天."""
     _get_account_or_404(db, account_id, current_user.id)
-    return _proxy(sentinel_client.list_posts, account_id, ticker, limit)
+    return _proxy(sentinel_client.list_posts, account_id, ticker, limit, days)
 
 
 @router.get("/accounts/{account_id}/briefs")

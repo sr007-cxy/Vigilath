@@ -271,10 +271,12 @@ def run_respond(
 # ────────────────────── 数据查询(给前端用)────────────────────
 
 
-def list_posts(account_id: int, ticker: str, limit: int = 50) -> dict:
+def list_posts(account_id: int, ticker: str, limit: int = 50,
+               days: int = 1) -> dict:
+    """days: 1=今日(默认),0=全部历史,N>1=最近 N 天."""
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
         r = client.get(f"{SENTINEL_URL}/accounts/{account_id}/posts",
-                       params={"ticker": ticker, "limit": limit})
+                       params={"ticker": ticker, "limit": limit, "days": days})
         r.raise_for_status()
         return r.json()
 

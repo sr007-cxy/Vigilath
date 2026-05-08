@@ -239,7 +239,32 @@ def posts_missing_analysis(conn: sqlite3.Connection, symbol: str,
     return list(conn.execute(sql, params))
 
 
-def analyses_for_symbol(conn: sqlite3.Connection, symbol: str) -> list[sqlite3.Row]:
+def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
+                        days: int | None = 1) -> list[sqlite3.Row]:
+    """文章列表(舆情 Tab 用).
+
+    days 语义(基于 ingested_at,即 "我们何时看到"):
+        1   → 仅今日(默认,跟今日 KPI 对齐)
+        N>1 → 最近 N 天
+        0/None → 不过滤,全部历史
+
+    排序:max(publish_time, ingested_at) DESC — 真新发或刚抓到的都靠顶。
+    """
+    if days and days > 0:
+        from datetime import date, timedelta
+        cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+        return list(conn.execute(
+            """
+            SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
+                   p.reply_count, p.url, p.content
+            FROM analyses a
+            JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
+            WHERE a.symbol = ?
+              AND substr(p.ingested_at, 1, 10) >= ?
+            ORDER BY max(coalesce(p.publish_time, ''), p.ingested_at) DESC
+            """,
+            (symbol, cutoff),
+        ))
     return list(conn.execute(
         """
         SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
@@ -247,7 +272,7 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str) -> list[sqlite3.R
         FROM analyses a
         JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
         WHERE a.symbol = ?
-        ORDER BY p.publish_time DESC
+        ORDER BY max(coalesce(p.publish_time, ''), p.ingested_at) DESC
         """,
         (symbol,),
     ))

@@ -546,15 +546,20 @@ app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "
 
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
 @app.get("/accounts/{account_id}/posts")
-def list_posts(account_id: int, ticker: str, limit: int = 50) -> dict:
-    """返回 posts JOIN analyses(给文章 Tab 用)."""
+def list_posts(account_id: int, ticker: str, limit: int = 50,
+               days: int = 1) -> dict:
+    """返回 posts JOIN analyses(给文章 Tab 用)。
+
+    days 默认 1 = 仅今日(基于 ingested_at,与"今日舆情" KPI 一致)。
+    days=0 → 不过滤,展示全部历史。days=N → 最近 N 天。
+    """
     from storage import analyses_for_symbol  # type: ignore
     with _account_db_context(account_id):
         conn = _patched_connect()
         init_schema(conn)
-        rows = analyses_for_symbol(conn, ticker)
+        rows = analyses_for_symbol(conn, ticker, days=days)
         out = [_row_to_dict(r) for r in rows[:limit]]
-    return {"count": len(out), "items": out}
+    return {"count": len(out), "items": out, "days": days}
 
 
 @app.get("/accounts/{account_id}/briefs")
