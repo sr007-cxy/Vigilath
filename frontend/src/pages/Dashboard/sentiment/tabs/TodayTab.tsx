@@ -67,11 +67,11 @@ export function TodayTab({ account, usingMock }: Props) {
     <div className="space-y-4">
       <KpiCards data={today.kpi} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <div className="lg:col-span-2 flex">
           <SentimentChart data={today.sentiment_trend} />
         </div>
-        <div>
+        <div className="flex">
           <RiskPie data={today.risk_dist} />
         </div>
       </div>

@@ -39,7 +39,7 @@ export function RiskPie({ data }: { data: Slice[] }) {
     : null;
 
   return (
-    <section className="rounded-xl p-5 h-full flex flex-col" style={cardStyle}>
+    <section className="rounded-xl p-5 flex-1 flex flex-col min-w-0" style={cardStyle}>
       <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
         {t('dashboard.sentiment.today.riskDist')}
       </h3>

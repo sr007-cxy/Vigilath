@@ -114,7 +114,7 @@ export function Sentiment() {
       <div className="bg-glow bg-glow-1" />
       <div className="bg-glow bg-glow-2" />
       <div className="bg-glow bg-glow-3" />
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-4 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-4 relative z-10">
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-primary">

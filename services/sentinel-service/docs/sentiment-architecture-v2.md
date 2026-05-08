@@ -1,50 +1,47 @@
-# 舆情系统架构 v2(重构目标 · sentinel 自治版)
+# 舆情系统架构 v2(重构目标 · sentinel 自治 + MySQL 一统)
 
 > 状态:方向已确认,细节待重构期落地
 > 创建日期:2026-05-08
 > 上一版:[`sentiment-architecture.md`](./sentiment-architecture.md)(描述重构前现状,**不要原地覆盖**)
-> 配套文档:[`../../docs/sentiment-gap-analysis-vs-wisersone.md`](../../docs/sentiment-gap-analysis-vs-wisersone.md)(对标慧科,本次重构暂不并入)
+> 配套文档:[`../../docs/sentiment-gap-analysis-vs-wisersone.md`](../../docs/sentiment-gap-analysis-vs-wisersone.md)
 >
-> **核心切面**:sentinel-service 从 v1 的 "被动加工厂(被 backend 用 18 RPC 串起来)" 升级为 **"自主舆情引擎"**(自跑 cron + 自管 DAG + 自持运行时状态);GEO backend 退化为 **"账号配置 + FE API 网关"**,**不再做调度、不再做 pipeline 编排**。
+> **核心切面**:
+> 1. **sentinel-service 自治**:自跑 cron + 自管 DAG runner;backend 退化为账号 / FE 网关
+> 2. **MySQL 8.0 一统**:废弃 per-account SQLite + 主库 SQLite/Postgres + sentinel runner.db,**全部进同一 MySQL 库**(`gapex` @ `123.125.194.100:53306`,8.0.35,utf8mb4)
 >
-> 预计工作量 15-25 工作日,**分 phase 灰度上线,不是单 PR**。
+> 预计工作量 12-20 工作日,**分 phase 灰度上线**。
 
 ---
 
 ## 0. 重构动机
 
-把 v1 散在 backend `sentiment_scheduler.py` + `sentiment_pipeline.py` + `sentinel_client.py` 三处的"调度 / 编排 / 状态"逻辑,**整体下沉到 sentinel-service**;backend 只剩下 "拥有账号配置 + 给 FE 提供 API"。
+把 v1 散在 backend `sentiment_scheduler.py` + `sentiment_pipeline.py` + `sentinel_client.py` 三处的"调度 / 编排 / 状态"逻辑,**整体下沉到 sentinel-service**;**所有持久化数据收敛到一个 MySQL 库**,废弃 per-account SQLite 文件 + 主库 / runner.db 多库分裂。
 
-**一句话**:让 sentinel 真正成为"舆情引擎",backend 不再知道"什么时候跑、跑到哪一步、哪个 stage 失败了"。
+| 痛点 | v1 现状 | v2 是否覆盖 |
+|---|---|---|
+| 调度与执行跨进程,语义割裂 | scheduler 在 backend、执行在 sentinel,跨 18 RPC 串起来 | ✓ 全在 sentinel 内 |
+| 隐式 DAG | 14 crawler + 4 主 RPC 顺序、并行、容错策略,全靠 200 行 if-else | ✓ 显式 DAG |
+| HTTP 长连接 + 业务级超时 | `run_analyze=1800s` 等,任一卡住整 pipeline | ✓ 没有跨进程长连接 |
+| 三层防重入语义重复 | scheduler `max_instances=1` + 主库 `last_run_status` + `sentinel_cleanup` | ✓ MySQL functional unique index 一处 |
+| stage 级失败粒度缺失 | 14 crawler 失败被吞,无独立 retry | ✓ stage 级 retry + 状态留痕 |
+| 数据散在多库多文件 | 主库 + per-account SQLite × N + (本设计原 runner.db) | ✓ 单 MySQL 库,所有表加 `account_id` 列 |
+| monkey-patch `connect()` fragile | sentinel 用 ContextVar 切 per-account SQLite 文件 | ✓ **直接消失**(单库单连接池) |
+| 跨账号查询 / 运维统计困难 | per-account SQLite 文件隔离 | ✓ 单库自然支持 |
 
-要解决的具体痛点:
+**非目标**:
 
-| 痛点 | v1 现状 | 锚点 | v2 是否覆盖 |
-|---|---|---|---|
-| 调度与执行跨进程,语义割裂 | scheduler 在 backend、执行在 sentinel,跨 18 RPC 串起来,失败语义难收敛 | `sentiment_scheduler.py` + `sentiment_pipeline.py` | ✓ 全在 sentinel 内 |
-| 隐式 DAG | 14 crawler + 4 主 RPC 顺序、并行、容错策略,全靠 200 行 if-else 表达 | `sentiment_pipeline.run_pipeline_for_account()` | ✓ 显式 DAG 声明 |
-| HTTP 长连接 + 业务级超时 | `run_analyze=1800s`、`run_brief=1200s`、`run_monitor=1200s`,任一卡住整个 pipeline 卡住 | `sentinel_client.py` | ✓ 没有跨进程长连接,sentinel 内部 await |
-| 三层防重入语义重复 | scheduler `max_instances=1` + 主库 `last_run_status='running'` + `sentinel_cleanup` 60 分钟僵尸回收 | scheduler + pipeline + cleanup job | ✓ 收敛为 sentinel runner 内一处 + DB 唯一索引 |
-| stage 级失败粒度缺失 | 14 crawler 失败被吞,无独立 retry / 跳过 / 补跑 | `sentiment_pipeline._run_crawlers()` | ✓ stage 级 retry + 状态留痕 |
-| 前端无中段进度 | UI 只能拿到 `last_run_status` 顶层四态 | `Sentiment.tsx` / `StatusBanner` | ✓ stage 级进度 |
-| backend 持有运行时状态(reconcile 困难) | `sentiment_accounts.last_run_status` + `sentiment_run_logs` 都在 backend,sentinel 跑完要回写 | 主库 + sentinel API | ✓ 运行时状态全在 sentinel,backend 通过 API 读 |
-
-**非目标**(明确不在本次重构范围):
-
-- monkey-patch `connect()` 多租户隔离逻辑(`service.py:35-127`)— **保留并适配 cron 入口**,不做底层重写(归到下一轮)
-- 现有 5 张业务表 schema(已是 ETL-friendly,不动)
-- LLM provider / 搜索引擎 / 爬虫源切换
-- 引入 Redis / Celery / Airflow / Prefect / Dagster 等新基础设施
-- 把 `sentiment_accounts` 表整体迁到 sentinel(本轮采用"backend 是源 + sentinel 缓存"双写)
-- Resend 邮件 secret 下放(本轮采用"sentinel 完成 brief 后回调 backend 推送"反向调用)
+- 现有 5 张业务表 schema 字段(只换底座 SQLite → MySQL,字段不变)
+- LLM provider / 搜索引擎 / 爬虫源
+- 引入 Redis / Celery / Airflow / Prefect / Dagster / ES
+- 邮件通知功能(本轮砍掉)
 
 ---
 
 ## 1. 一句话定位
 
-**Sentinel v2 = 自主舆情引擎**:内置 cron 调度、内置 DAG runner、自持运行时状态(`runner.db`)、自做僵尸回收。
+**Sentinel v2 = 自主舆情引擎**:内置 cron 调度、内置 DAG runner、写入共享 MySQL。
 
-**GEO backend v2 = 账号配置中心 + FE API 网关**:拥有 `sentiment_accounts` 真值;FE 写配置 → backend 同步推 sentinel 一份缓存;FE 读状态 → backend 转发 sentinel 的 `runner.db` 查询。
+**GEO backend v2 = 账号配置中心 + FE API 网关**:写入同一 MySQL;FE 读 / 触发请求经过 backend;状态查询 backend 直查 MySQL,**不再走 sentinel HTTP**。
 
 ---
 
@@ -55,91 +52,129 @@ flowchart LR
     subgraph FE["Frontend (React/Vite)"]
         direction TB
         FE_tabs["TodayTab / ArticlesTab / BriefsTab"]
-        FE_status["StatusBanner<br/>(stage 级 ★)"]
+        FE_status["StatusBanner<br/>('上次成功更新于 X')"]
     end
 
     subgraph BE["GEO backend (FastAPI :8070)"]
         direction TB
-        BE_api["geo/api/sentiment.py<br/>账号 CRUD + 状态转发"]
-        BE_client["sentinel_client.py<br/>★ 356 → ~80 行"]
+        BE_api["geo/api/sentiment.py<br/>账号 CRUD + 状态读 + 触发"]
+        BE_client["sentinel_client.py<br/>★ 356 → ~50 行<br/>(只剩 trigger / cancel / draft)"]
         BE_del["sentiment_pipeline.py<br/>sentiment_scheduler.py<br/>★ 整体删除"]
-        BE_db[("主库<br/>sentiment_accounts (真值)<br/>sentiment_knowledge")]
     end
 
-    subgraph SEN["sentinel-service (FastAPI :8090, uvicorn --workers 1)"]
+    subgraph SEN["sentinel-service (FastAPI :8090, --workers 1)"]
         direction TB
-        SEN_svc["service.py<br/>入口收敛 ~10 端点"]
-        SEN_sched["scheduler.py ★<br/>asyncio cron loop<br/>每小时 :05"]
+        SEN_svc["service.py<br/>~3 写端点"]
+        SEN_sched["scheduler.py ★<br/>asyncio cron loop"]
         SEN_runner["runner.py ★<br/>DAG runner + reaper"]
         SEN_pipe["pipeline.py ★<br/>DAG 静态声明"]
-        SEN_stages["stages/ ★<br/>monitor / crawl_fanout<br/>analyze / brief / notify"]
-        SEN_biz_db[("data/account_id/yuqing.db<br/>per-account 业务库 (不动)")]
-        SEN_run_db[("runner.db ★<br/>accounts (配置缓存)<br/>pipeline_runs<br/>pipeline_stage_runs")]
+        SEN_stages["stages/ ★<br/>monitor / crawl_fanout<br/>analyze / brief"]
+    end
+
+    subgraph DB[("MySQL 8.0 共享库 (gapex @ 远程)")]
+        direction TB
+        T_acc[("sentiment_accounts<br/>sentiment_knowledge")]
+        T_run[("pipeline_runs<br/>pipeline_stage_runs")]
+        T_biz[("posts / analyses / briefs<br/>drafts / query_runs<br/>(全部加 account_id 列)")]
     end
 
     FE -- HTTPS --> BE_api
-    BE_api --- BE_db
-    BE_api --- BE_client
-    BE_client -->|"写: 配置同步 / 手动触发"| SEN_svc
-    BE_client -->|"读: 状态查询<br/>(低频, 页面加载)"| SEN_svc
+    BE_api -- "读 / 写" --> DB
+    BE_client -- "trigger / cancel / draft" --> SEN_svc
     SEN_svc --> SEN_runner
     SEN_sched --> SEN_runner
     SEN_runner --> SEN_pipe
     SEN_pipe --> SEN_stages
-    SEN_runner --- SEN_run_db
-    SEN_stages --- SEN_biz_db
+    SEN_stages -- "读 / 写" --> DB
+    SEN_runner -- "读 / 写 状态" --> DB
 ```
 
-**职责切分(post-refactor)**:
+**职责切分**:
 
-- **Frontend**:不变,但 StatusBanner 可消费 stage 级进度
-- **GEO backend**:拥有 `sentiment_accounts` 真值;不做调度、不做编排、不做状态聚合;状态读由 sentinel 转发
-- **sentinel-service**:**自主跑**(cron + runner + state),**对 backend 弱依赖**(只在写配置 / 推邮件时跨进程通信)
+- **Frontend**:不变;StatusBanner 显示"上次成功更新于 X"(页面加载时拉一次,不轮询)
+- **GEO backend**:拥有 `sentiment_accounts` CRUD;状态查询直查 MySQL,不经过 sentinel
+- **sentinel-service**:自跑 cron + DAG;HTTP 入口收到 ~3 个写端点(trigger / cancel / draft);**所有数据写共享 MySQL**
 
 ---
 
 ## 3. 端到端数据流
 
-### 3.1 触发与查询路径(四种)
+### 3.0 整体流程(时间线)
+
+**T0 启动**:backend 起 :8070;sentinel 起 :8090(`--workers 1`),启动 cron loop + reaper 协程
+
+**T1 配置**:FE 改账号 → backend `UPDATE sentiment_accounts`(MySQL),完事(无同步)
+
+**T2 触发**(三选一):
+- cron :05 → sentinel 扫 `sentiment_accounts WHERE active=true` → `runner.execute(account_id, kind="hourly")`
+- FE 立即运行 → backend → sentinel HTTP → 同上
+- 取消 → backend → sentinel HTTP → 写 `pipeline_runs.status=cancelled`
+
+**T3 防重入**:`INSERT pipeline_runs` 触发 functional unique index 校验,同账号同 kind 已 in-flight 则被 SQL 直接拒,返回 `already_running`
+
+**T4 DAG 执行**(全本地函数,sentinel 进程内):
+
+```
+(monitor ∥ crawl_fanout) → analyze → brief
+```
+
+每 stage:
+1. `INSERT pipeline_stage_runs (running, lease_until=now+30min)`
+2. 调对应业务模块,读 / 写共享 MySQL(`posts` / `analyses` / `briefs`)
+3. 失败按 `retry_policy`(crawler 单点失败 `continue`,LLM 失败重试 2 次)
+4. `UPDATE pipeline_stage_runs (success/failed/skipped)`
+
+stage 耗时:monitor 1 分 / crawl_fanout 1-2 分 / **analyze 20-30 分**(主导) / brief 几分钟
+
+**T5 收尾**:`UPDATE pipeline_runs (success/failed)`,functional unique index 自动释放(表达式变 NULL),下次触发可入
+
+**T6 状态查询**:FE 页面加载 → backend `SELECT * FROM pipeline_runs WHERE account_id=? ORDER BY started_at DESC LIMIT 1`(直查 MySQL,**不经过 sentinel**)→ 显示"上次成功更新于 X 分钟前"
+
+**T7 自愈**:reaper 每 5 分钟扫 `status='running' AND lease_until < now()` → 重置 pending(attempt 还有)或 failed;sentinel 进程重启时启动同样的扫描接续
+
+**T8 业务数据访问**:FE 看 posts / briefs → backend 直查 MySQL(带 `WHERE account_id=?` 过滤),与运行时状态完全解耦
+
+**没有的事**:跨进程 HTTP 长连接、邮件通知、配置双写同步、monkey-patch 切 connection、FE 实时轮询、leader 选举、僵尸 cleanup cron
+
+### 3.1 触发与查询路径
 
 ```mermaid
 flowchart LR
     subgraph A["路径 A · cron 触发(写)"]
         direction TB
         a1["⏰ 每小时 :05"]
-        a2["sentinel<br/>scheduler.py asyncio loop"]
-        a3["扫 runner.db.accounts<br/>(active=true)"]
+        a2["sentinel scheduler<br/>asyncio loop"]
+        a3["SELECT * FROM sentiment_accounts<br/>WHERE active=true"]
         a4["runner.execute<br/>kind=hourly, trigger=cron"]
         a1 --> a2 --> a3 --> a4
     end
     subgraph B["路径 B · 手动触发(写)"]
         direction TB
         b1["FE: 立即运行"]
-        b2["backend<br/>POST /api/sentiment/id/run"]
-        b3["sentinel_client.trigger_run"]
-        b4["sentinel<br/>POST /accounts/id/runs"]
-        b5["runner.execute<br/>kind=manual, trigger=user"]
-        b1 --> b2 --> b3 --> b4 --> b5
+        b2["backend POST /api/sentiment/id/run"]
+        b3["sentinel POST /accounts/id/runs"]
+        b4["runner.execute<br/>kind=manual, trigger=user"]
+        b1 --> b2 --> b3 --> b4
     end
     subgraph C["路径 C · 配置变更(写)"]
         direction TB
-        c1["FE: 改 keywords / aliases<br/>notify_emails / active"]
-        c2["backend<br/>PUT /api/sentiment/id"]
-        c3[("写主库 sentiment_accounts<br/>(真值)")]
-        c4["sentinel<br/>POST /accounts/id<br/>(失败重试 + 告警)"]
-        c5[("runner.db.accounts<br/>(配置缓存)")]
-        c1 --> c2 --> c3 --> c4 --> c5
+        c1["FE: 改 keywords / aliases / active"]
+        c2["backend PUT /api/sentiment/id"]
+        c3[("UPDATE sentiment_accounts")]
+        c1 --> c2 --> c3
     end
     subgraph D["路径 D · 状态查询(读, 低频)"]
         direction TB
-        d1["FE: 页面加载 / 手动刷新<br/>(不实时轮询)"]
-        d2["backend<br/>GET /api/sentiment/id/runs/latest"]
-        d3["sentinel_client.get_latest_run<br/>(纯透传, 无缓存)"]
-        d4["sentinel<br/>GET /accounts/id/runs/latest"]
-        d5[("runner.db<br/>SELECT pipeline_runs")]
-        d1 --> d2 --> d3 --> d4 --> d5
+        d1["FE: 页面加载 / 手动刷新"]
+        d2["backend GET /api/sentiment/id/runs/latest"]
+        d3[("SELECT pipeline_runs<br/>WHERE account_id=? ORDER BY started_at DESC LIMIT 1")]
+        d1 --> d2 --> d3
     end
 ```
+
+**vs 上一版的关键简化**:
+- 路径 C 不再"backend 写主库 + 推 sentinel 缓存"两步,**只写一次**(共享 MySQL)
+- 路径 D 不再经过 sentinel HTTP,**backend 直查共享 MySQL**
 
 ### 3.2 单次 run 执行(在 sentinel 内)
 
@@ -147,19 +182,19 @@ flowchart LR
 sequenceDiagram
     participant Trigger as 触发源<br/>(cron / API)
     participant Runner as sentinel<br/>runner.py
-    participant DB as runner.db
+    participant DB as MySQL<br/>(共享库)
     participant Stage as stages/*
 
     Trigger->>Runner: execute(account_id, kind, trigger)
-    Runner->>DB: 唯一索引校验<br/>(account_id, kind) in-flight?
+    Runner->>DB: functional unique index 校验<br/>(account_id, kind) in-flight?
     Note over Runner,DB: 冲突 → 直接返回<br/>"already_running"
     Runner->>DB: INSERT pipeline_runs<br/>(status=running, run_id)
     loop SENTIMENT_DAG 拓扑顺序
         Runner->>DB: INSERT pipeline_stage_runs<br/>(status=running, lease_until)
         Runner->>Stage: stage.run(ctx)<br/>本地调用,无跨进程
+        Stage->>DB: 读账号配置 / 写 posts / analyses / briefs
         Stage-->>Runner: StageResult
-        Note over Runner: 失败 → retry / on_failure<br/>(fail_run / skip_downstream / continue)
-        Runner->>DB: UPDATE pipeline_stage_runs<br/>(success / failed / skipped)
+        Runner->>DB: UPDATE pipeline_stage_runs
     end
     Runner->>DB: UPDATE pipeline_runs<br/>(success / failed / cancelled)
 ```
@@ -171,7 +206,7 @@ flowchart TD
     Run([Run])
     Monitor["monitor<br/>本地调 search.pipeline.run_plan<br/>plan + cnbing + baidu + ddg 串行"]
     Crawl["crawl_fanout<br/>本地调 14 个 crawler client<br/>ThreadPoolExecutor max=8"]
-    Posts[("posts<br/>per-account SQLite")]
+    Posts[("posts<br/>(MySQL 共享库)")]
     Analyze["analyze<br/>本地调 analyzer.pipeline.analyze_symbol<br/>LLM_ANALYZE_CONCURRENCY=5"]
     Analyses[("analyses")]
     Brief["brief (reduce)<br/>本地调 brief.generate.generate_brief"]
@@ -189,18 +224,16 @@ flowchart TD
     Brief --> Briefs
 ```
 
-**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief` = **4 节点**(draft 独立,不计入)
+**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief` = **4 节点**(draft 独立)
 
 **关键差异 vs v1**:
+- 全部 stage 是**本地函数调用**,不再有跨进程 HTTP RPC
+- 14 crawler 仍在 `crawl_fanout` 一个 stage 内 fanout(行为一致)
+- 单 stage 失败由 runner retry_policy 决定
 
-- 全部 stage 是**本地函数调用**,不再有跨进程 HTTP RPC,`run_analyze=1800s` 这种业务级超时不存在了
-- 14 crawler 仍在 `crawl_fanout` 一个 stage 内 fanout(与 v1 行为一致,简化 DAG 节点数)
-- 单 stage 失败由 runner retry_policy 决定,不靠 backend try/except
-- 整个 pipeline 跑完不需要 backend 醒着(backend 短暂宕机不影响)
+### 3.4 状态查询接口(backend 直查 MySQL,不经 sentinel)
 
-### 3.4 任务执行状态查询接口
-
-**核心原则**:sentinel 是运行时状态的唯一真值(`runner.db`),backend 不缓存。**FE 不实时轮询**(只在页面加载 / 手动刷新时拉一次,作为"上次成功更新于 X"这类数据新鲜度提示);运行时状态主要服务于运维 / 调试。**本轮不暴露历史查询**,只关心"当前 / 最新"。
+**核心原则**:运行时状态在共享 MySQL,backend 拥有读权限,**不需要 sentinel 中转**。FE 不实时轮询(只在页面加载 / 手动刷新时拉一次)。**本轮不暴露历史查询**。
 
 **调用时序**:
 
@@ -208,82 +241,44 @@ flowchart TD
 sequenceDiagram
     participant FE as Frontend
     participant BE as backend
-    participant SEN as sentinel<br/>service.py
-    participant DB as runner.db
+    participant DB as MySQL
 
     Note over FE: 页面加载 / 手动刷新<br/>(非实时轮询)
     FE->>BE: GET /api/sentiment/{id}/runs/latest
     Note over BE: 鉴权 + account 归属校验
-    BE->>SEN: GET /accounts/{id}/runs/latest<br/>X-Internal-Token: ***
-    Note over SEN: 校验 token<br/>校验 account_id 存在
-    SEN->>DB: SELECT * FROM pipeline_runs<br/>WHERE account_id=? ORDER BY started_at DESC LIMIT 1
-    DB-->>SEN: run 行
-    SEN-->>BE: 200 {run_id, status, started_at, ended_at}
-    BE-->>FE: 透传响应(无加工 / 无缓存)
+    BE->>DB: SELECT * FROM pipeline_runs<br/>WHERE account_id=? ORDER BY started_at DESC LIMIT 1
+    DB-->>BE: run 行
+    BE-->>FE: 200 {run_id, status, started_at, ended_at}
 ```
 
 **端点清单**:
 
-| 端点 | 用途 | 调用方 | 频率 |
+| 端点 | 用途 | 调用方 | 实现 |
 |---|---|---|---|
-| `GET /accounts/{id}/runs/latest` | 该账号最近一次 run(顶层状态) | FE 经 backend(页面加载)+ 运维 | 低 |
-| `GET /accounts/{id}/runs/{run_id}` | 单个 run 详情(含 stage 列表),供调试 | 运维 / 调试 | 低 |
-| `GET /runs/active` | 全局所有 in-flight runs | 运维监控 / 告警 | 低 |
-| `GET /scheduler/health` | cron loop 健康(下一次预计触发、上次 tick 时间) | 运维健康检查 | 低 |
-| `GET /reaper/health` | reaper 健康(最近回收数、过期 lease 队列长度) | 同上 | 低 |
+| `GET /api/sentiment/{id}/runs/latest` | 顶层 run 状态 | FE 经 backend(页面加载) | backend 直查 MySQL |
+| `GET /api/sentiment/{id}/runs/{run_id}` | 单 run 详情(含 stages),供调试 | 运维 | backend 直查 MySQL |
+| `POST /api/sentiment/{id}/run` | 手动触发 | FE | backend → sentinel HTTP |
+| `POST /api/sentiment/{id}/runs/{run_id}/cancel` | 取消 | 运维 | backend → sentinel HTTP |
+| `POST /api/sentiment/{id}/draft` | 生成回应草稿 | FE | backend → sentinel HTTP |
 
-**FE 消费的响应**(`runs/latest`,顶层即可,不含 stage 详情):
-
-```json
-{
-  "run_id": 12345,
-  "account_id": 7,
-  "kind": "hourly",
-  "status": "success",
-  "started_at": "2026-05-08T10:05:00Z",
-  "ended_at": "2026-05-08T10:38:14Z"
-}
-```
-
-**运维消费的响应**(`runs/{run_id}`,完整 stage 详情):
-
-```json
-{
-  "run_id": 12345, "account_id": 7, "status": "failed", ...,
-  "stages": [
-    {"stage_id": "monitor",      "status": "success", "attempts": 1, "duration_ms": 12500},
-    {"stage_id": "crawl_fanout", "status": "success", "attempts": 1, "duration_ms": 45000,
-     "summary": {"failed_sources": ["xueqiu"]}},
-    {"stage_id": "analyze",      "status": "failed",  "attempts": 3, "error": "..."}
-  ]
-}
-```
-
-**backend 转发策略**:**纯透传不缓存**。FE 不轮询,sentinel 单点 SQLite 读 latest 完全够用,缓存收益不值复杂度。
-
-**鉴权**:backend ↔ sentinel 所有调用走 `X-Internal-Token` header,密钥从 env(`SENTINEL_INTERNAL_TOKEN`)读;sentinel reject 缺 token 或 token 不对的请求。
-
-**stage 内部不实时回写 progress**:stage 只在 enter / exit 写两次状态(running → success / failed),不必边跑边更新 `done/total` 字段。这让 stage 实现更简单,SQLite 写压力也低。
+sentinel 端 HTTP API 现在只有 ~3-4 个写端点 + `/health`;**读全部走 backend 直查 MySQL**。
 
 ---
 
 ## 4. 模块清单
 
-### 4.1 sentinel-service(本次主战场)
+### 4.1 sentinel-service
 
 | 模块 | 关键文件 | 入口 | v1→v2 |
 |---|---|---|---|
-| Cron 调度 ★ | `scheduler.py` | startup hook 启动 asyncio loop | **新增 ~150 行**(替代 backend `sentiment_scheduler.py` 的 187 行) |
-| DAG runner ★ | `runner.py` | `runner.execute(account_id, kind, trigger)` | **新增 ~600 行**:节点遍历 + retry + lease + reaper + 状态写入 |
+| Cron 调度 ★ | `scheduler.py` | startup hook 启动 asyncio loop | **新增 ~150 行**(替代 backend `sentiment_scheduler.py`)|
+| DAG runner ★ | `runner.py` | `runner.execute(account_id, kind, trigger)` | **新增 ~600 行**:节点遍历 + retry + lease + reaper |
 | DAG 声明 ★ | `pipeline.py` | `SENTIMENT_DAG: DAG = ...` | **新增 ~100 行** |
-| Stage 实现 ★ | `stages/{monitor,crawl_fanout,analyze,brief}.py` | `def run(ctx) -> StageResult` | **新增 ~350 行**(薄 wrapper,调本地 search/crawler/analyzer/brief 模块) |
-| HTTP 入口 | `service.py` | 见下方端点表 | 779 行 → ~400 行;**18 写 RPC 缩到 ~3 写 + 5 状态查询 + N 业务读** |
-| 配置缓存 ★ | `storage/runner_db.py` 中的 `accounts` 表 | runner.db | **新增** |
-| DAG 状态 ★ | `storage/runner_db.py` 中的 `pipeline_runs` / `pipeline_stage_runs` | runner.db | **新增** |
-| 业务存储 | `storage/db.py` | `connect()` | **不动** |
+| Stage 实现 ★ | `stages/{monitor,crawl_fanout,analyze,brief}.py` | `def run(ctx) -> StageResult` | **新增 ~350 行**(薄 wrapper) |
+| HTTP 入口 | `service.py` | `POST /accounts/{id}/runs`, `/cancel`, `/draft`, `GET /health` | 779 行 → **~150 行**;**18 写 RPC → 3** |
 | 业务模块 | `search/` `crawler/` `analyzer/` `brief/` `response/` | 各自原入口 | **不动**(被 stages/ 调用) |
-| LLM 抽象 | `llm_client.py` | `chat_create()` | **不动** |
-| 知识库 | `knowledge/*.md` × 3 | draft stage 加载 | **不动** |
+| 数据访问 ★ | `storage/db.py` | `get_session()`(SQLAlchemy) | **重写**:从 SQLite per-file 改成 MySQL 单连接池;monkey-patch 删除 |
+| LLM 抽象 / 知识库 | `llm_client.py` / `knowledge/*.md` | — | **不动** |
 
 ### 4.2 GEO backend
 
@@ -291,62 +286,71 @@ sequenceDiagram
 |---|---|
 | `sentiment_pipeline.py` | **整体删除**(223 行) |
 | `sentiment_scheduler.py` | **整体删除**(187 行) |
-| `sentinel_client.py` | 356 行 → **~80 行**(保留:配置同步、状态读转发、手动触发、邮件接入回调) |
-| `geo/api/sentiment.py` | 484 → ~520(加内部邮件 endpoint + 状态转发改写,共 ~50 行变化) |
-| `geo/models/sentiment.py` | 删 `last_run_status` / `last_run_error` 等运行时字段(保留作废,迁移期不删避免回滚断裂);`sentiment_run_logs` 表删除 |
+| `sentinel_client.py` | 356 行 → **~50 行**(`trigger_run` / `cancel_run` / `gen_draft` + 健康检查) |
+| `geo/api/sentiment.py` | 484 → ~520(状态读改成本地 SQL,新增 `runs/latest` endpoint) |
+| `geo/database.py` / models | 沿用 SQLAlchemy;迁到共享 MySQL `gapex`;**与 sentinel 共用 schema** |
 
 ### 4.3 Frontend
 
 | 模块 | v1→v2 |
 |---|---|
-| `StatusBanner.tsx` | 74 → ~120,加 stage 级进度展示;`failed` 仍静默 |
-| API 调用 | endpoint 路径不变,backend 内部转发到 sentinel |
+| `StatusBanner.tsx` | 74 → ~120,显示"上次成功更新于 X";`failed` 静默 |
+| 其它 | 不动 |
 
 ---
 
 ## 5. 数据模型
 
-### 5.1 主库(GEO backend,Postgres/SQLite)
+**全部表都在共享 MySQL `gapex` 库,utf8mb4 / utf8mb4_unicode_ci**。
 
-| 表 | 变化 |
-|---|---|
-| `sentiment_accounts` | **保留**,继续作为账号配置真值;**删除运行时字段**(`last_run_status`、`last_run_error`、`last_run_at` 等;Phase 0 期间保留作展示,Phase 4 清理) |
-| `sentiment_knowledge` | **保留** |
-| `sentiment_run_logs` | **删除**,运行时状态全在 sentinel `runner.db.pipeline_runs` |
+### 5.1 配置表(backend 拥有写权限)
 
-migration:1 个 alembic(drop `sentiment_run_logs` + drop 几个运行时字段),Phase 4 时执行。
+| 表 | 主键 | 用途 |
+|---|---|---|
+| `sentiment_accounts` | `id` | 用户 ↔ 账号 1:N;`(user_id, ticker)` 唯一 |
+| `sentiment_knowledge` | `(account_id, kind)` | 每账号 3 条:brand_voice / legal_redlines / response_playbook |
 
-### 5.2 业务库(per-account SQLite)— 不动
+### 5.2 业务表(sentinel 写,backend 读)
 
-`posts` / `analyses` / `briefs` / `drafts` / `query_runs` 5 张表 schema **完全不动**。
+**v1 是 per-account SQLite 文件,v2 是 MySQL 单库,所有表加 `account_id` 列**。
 
-### 5.3 sentinel `runner.db`(新增,共享 SQLite)
+| 表 | 主键 | 关键字段 |
+|---|---|---|
+| `posts` | `(account_id, source, post_id)` | `ingested_at`(今日筛选键) |
+| `analyses` | `(account_id, source, post_id)` | `is_relevant`、`risk_level`、`sentiment_*` |
+| `briefs` | `id`,索引 `(account_id, symbol, date)` | Markdown |
+| `drafts` | `id` | `variant`、可挂 post 或 topic |
+| `query_runs` | `(account_id, symbol, query)` | adaptive timelimit |
 
-| 表 | 主键 | 用途 | 关键字段 |
-|---|---|---|---|
-| `accounts` | `account_id` | 配置缓存(backend 推送同步) | `ticker`, `aliases`, `keywords`, `keyword_groups`, `excludes`, `media_allowlist`, `notify_emails`, `active`, `synced_at` |
-| `pipeline_runs` | `run_id`(自增) | 一次 DAG 执行 | `account_id`, `kind`, `trigger`, `status`, `started_at`, `ended_at`, `error` |
-| `pipeline_stage_runs` | `(run_id, stage_id, attempt)` | 单 stage 单次执行 | `status`, `started_at`, `ended_at`, `error`, `output_summary` (json), `lease_until` |
+JSON 数组字段(`emotions[]` / `topics[]` / `entities[]` / `risk_signals[]`)用 MySQL `JSON` 类型 + 多值索引(8.0.17+)支持 `MEMBER OF` / `JSON_OVERLAPS` 查询。
 
-**唯一约束**(收敛 v1 三层防重入到一处):
+### 5.3 运行时状态(sentinel 写,backend 读)
+
+| 表 | 主键 | 关键字段 |
+|---|---|---|
+| `pipeline_runs` | `id`(自增,即 run_id) | `account_id`, `kind`, `trigger`, `status`, `started_at`, `ended_at`, `error` |
+| `pipeline_stage_runs` | `(run_id, stage_id, attempt)` | `status`, `started_at`, `ended_at`, `error`, `output_summary` (JSON), `lease_until` |
+
+### 5.4 防重入唯一索引(MySQL 8.0 functional index)
+
+MySQL 8.0 没有原生 partial unique index,但有 functional unique index,可用 `CASE` 表达式实现等效约束:
 
 ```sql
-CREATE UNIQUE INDEX idx_run_active
-  ON pipeline_runs(account_id, kind)
-  WHERE status IN ('pending', 'running');
+ALTER TABLE pipeline_runs ADD UNIQUE KEY uniq_active_run (
+  (CASE
+     WHEN status IN ('pending','running')
+     THEN CONCAT(account_id,'|',kind)
+   END)
+);
 ```
 
-同一 `(account_id, kind)` 只能有一个未完成 run。cron / 手动 / 用户重复触发都会因约束冲突直接拒绝。
+`status` 不在 (pending, running) 时表达式为 NULL,MySQL 唯一索引允许多个 NULL → 历史 run 不冲突。`status` 进入 (pending, running) 时表达式产生具体值,同一 `(account_id, kind)` 重复入队会被 SQL 层直接拒。
 
-**历史保留**:本轮不做历史查询能力,`pipeline_runs` / `pipeline_stage_runs` 仅用于 in-flight 状态 + 最近一次 run 的展示。**不引入归档 / 分区表 / 冷热分离**;若未来表过大,简单 cron 删除超过 N 天的旧 run 即可(N 待定,先观察)。
+### 5.5 多租户隔离
 
-### 5.4 多租户隔离(本轮不重写,适配 cron 入口)
+**v1 的 monkey-patch `connect()` 完全消失**。单 MySQL 库 + 单连接池;隔离靠应用层 `WHERE account_id = ?` 强制带过滤条件。每个 stage 实现入口拿 `account_id` 作为参数,SQL 必带条件。
 
-`service.py:35-127` 的 monkey-patch `connect()` 保留。**新增问题**:cron 入口不是 HTTP 请求,没有现成的中间件去 set `_current_account: ContextVar`。
-
-**适配做法**:cron loop 在每个 account 处理边界手工 `_current_account.set(account_id)`(类似 HTTP 请求中间件做的事),runner.execute 入口同理。`runner.db` 的 connection 走独立的 `runner_connect()`,不经过 monkey-patch。
-
-记 known issue:任何新子模块在 import 时早期捕获 `connect()` 仍会绕过隔离。归到下一轮重构。
+ORM 层(SQLAlchemy)可加一个 query helper 强制注入 `account_id` filter,降低漏写风险。
 
 ---
 
@@ -354,70 +358,35 @@ CREATE UNIQUE INDEX idx_run_active
 
 ### 6.1 状态机
 
-`pipeline_runs.status`:
 ```
-pending ─▶ running ─┬─▶ success
-                    ├─▶ failed
-                    └─▶ cancelled
-```
-
-`pipeline_stage_runs.status`:
-```
-pending ─▶ running ─┬─▶ success
-                    ├─▶ failed (attempt < max → 自动回 pending 重试)
-                    └─▶ skipped (上游失败 + on_failure=skip_downstream)
+pipeline_runs.status:        pending → running → success / failed / cancelled
+pipeline_stage_runs.status:  pending → running → success / failed (重试) / skipped
 ```
 
 ### 6.2 重入控制(从三层归一)
 
 | v1 守卫 | v2 |
 |---|---|
-| backend scheduler `max_instances=1` | **删除**(scheduler 整体下沉到 sentinel) |
-| 主库 `last_run_status='running'` | **删除**(运行时状态全在 sentinel) |
-| backend `sentinel_cleanup` 60 分钟僵尸回收 | **删除**(sentinel runner 内置 reaper 取代) |
-| **新增**:sentinel runner.db 唯一索引 + lease reaper |
+| backend scheduler `max_instances=1` | **删除**(scheduler 整体下沉) |
+| 主库 `last_run_status='running'` | **删除** |
+| backend `sentinel_cleanup` 60min 僵尸回收 | **删除**(sentinel runner reaper 取代) |
+| **新增**:MySQL functional unique index + lease reaper | |
 
 ### 6.3 stage 失败策略
 
-每个 stage 在 DAG 声明里带 `retry_policy`:
+每 stage 在 DAG 声明里带 `retry_policy`:`max_attempts` / `backoff` / `on_failure`(`fail_run` / `skip_downstream` / `continue`)。
 
-- `max_attempts`(默认 1;analyze / brief 设 2)
-- `backoff`(指数,封顶 60s)
-- `on_failure`:
-  - `fail_run`:整 run 失败(plan / monitor / analyze / brief)
-  - `skip_downstream`:下游标 skipped,run 状态 = `success_with_warnings`
-  - `continue`:run 继续,失败留痕(crawl_fanout 内部各 crawler 用此 — 与 v1 "失败被吞" 行为一致)
-
-**14 crawler 失败处理**:在 `crawl_fanout` stage 内部用 ThreadPoolExecutor 并行 + 老 try/except 兜底。`stage.output_summary` 字段记录"哪几个 crawler 挂了",FE 可展示但**不算 stage 失败**。
+14 crawler 失败处理:在 `crawl_fanout` stage 内 ThreadPoolExecutor + try/except 兜底,失败留痕在 `output_summary.failed_sources`。
 
 ### 6.4 lease + reaper
 
-每个 stage 进入 running 时写 `lease_until = now + lease_duration`(默认 30 分钟,analyze 设 45 分钟)。runner 内置 reaper 协程每 5 分钟扫一次:
-
-- 找出 `status='running' AND lease_until < now()` 的 stage
-- 把它改回 `pending`(若 attempt < max)或 `failed`
-- 同步处理 run 级别的 lease
-
-取代 v1 的 `sentinel_cleanup` cron job。
-
-### 6.5 取消 / cancel
-
-`POST /accounts/{id}/runs/{run_id}/cancel` 写 `status=cancelled`,runner 在每 stage 边界检查;长 LLM 调用允许"标记取消但跑完当次",**不强 kill**。
+每 stage 进入 running 时写 `lease_until = now + N min`(默认 30,analyze 设 45)。runner 内置 reaper 协程每 5 分钟扫 `status='running' AND lease_until < now()`,重置回 pending(若 attempt 还有)或 failed。
 
 ---
 
 ## 7. LLM 用法
 
-不变。重构只调用方式,不调模型 / prompt / 并发。
-
-| 阶段 | 模型 | 并发 | 超时 | 缓存 |
-|---|---|---|---|---|
-| plan(monitor stage 内) | gpt-4o-mini / glm-4.5-flash | 1 | per-call 60s | system prompt 走 prompt cache |
-| analyze(analyze stage) | glm-4.5-flash(默认) | `LLM_ANALYZE_CONCURRENCY=5` | per-call 60s | `ANALYZER_SYSTEM` 稳定吃 cache |
-| brief(brief stage) | gpt-4o-mini / glm-4.5-flash | map 阶段并发 5 | per-call 90s | `MAP_SYSTEM` / `REDUCE_SYSTEM` 稳定吃 cache |
-| draft(独立子 DAG) | gpt-4.1 | 1 | per-call 60s | `DRAFT_SYSTEM_HEADER` + knowledge 稳定吃 cache |
-
-**关键变化**:LLM 超时下移到单次 call,**不再有 1200/1800s 的 stage 级跨进程超时**。stage 总耗时由 runner 用 `lease_until` 控制。
+不变。重构只改调用方式,不改模型 / prompt / 并发。
 
 ---
 
@@ -425,71 +394,49 @@ pending ─▶ running ─┬─▶ success
 
 | 入口 | v1→v2 |
 |---|---|
-| `Sentiment.tsx` / `StatusBanner` | **不实时显示任务进度**;只在页面加载 / 手动刷新时拉一次顶层 run 状态,显示成"上次成功更新于 X 分钟前"或类似数据新鲜度提示;`failed` 静默(尊重 `feedback_sentiment_failed_silent.md`)。**用户感知靠业务数据 + 邮件通知**,任务执行细节不在 UI 暴露 |
-| `TodayTab` / `ArticlesTab` / `BriefsTab` | **不动**(数据源仍是 per-account SQLite,展示格式不变) |
-| `OnboardingWizard` / `SettingsPage` | **不动**(写入路径仍是 backend `PUT /api/sentiment/{id}`,backend 内部多一个"同步推 sentinel"的步骤) |
-
-backend 路由变化(对 FE 透明):
-
-- `GET /api/sentiment/{id}/today` → backend 转发 `sentinel:GET /accounts/{id}/today`
-- `GET /api/sentiment/{id}/posts/briefs/...` → 转发
-- `GET /api/sentiment/{id}/runs/latest` ★ 新增 → 转发 `sentinel:GET /accounts/{id}/runs/latest`
-- `POST /api/sentiment/{id}/run` → 转发 `sentinel:POST /accounts/{id}/runs`
-- `PUT /api/sentiment/{id}` → backend 写主库 + **同步推** `sentinel:POST /accounts/{id}`
+| `Sentiment.tsx` / `StatusBanner` | 不实时显示进度;页面加载时拉一次顶层 run 状态,显示"上次成功更新于 X";`failed` 静默 |
+| 其它 tab / wizard | **不动** |
 
 ---
 
 ## 9. 关键设计决策
 
-1. **scheduler 整体下沉到 sentinel,backend 不再调度**
-   - **决策**:cron loop 在 sentinel 内,asyncio task 启动时挂上去,uvicorn 强制 `--workers 1`
-   - **理由**:调度与执行同进程,失败语义在一处收敛;backend 不再持有运行时状态,reconcile 困难消失
-   - **取舍**:sentinel 必须单进程部署(规模够);backend 短暂宕机不影响 sentinel 跑 cron
+1. **scheduler 整体下沉到 sentinel**(uvicorn `--workers 1` + asyncio cron)
+   - **理由**:调度与执行同进程,失败语义在一处收敛
+   - **取舍**:sentinel 必须单进程;backend 短暂宕机不影响
 
-2. **配置:backend 是源,sentinel 持本地缓存(双写)**
-   - **决策**:`sentiment_accounts` 留 backend 主库,FE 改配置 → backend 写主库 + 同步推 sentinel
-   - **理由**:鉴权 / 用户 / 计费等仍在 backend,账号配置和这些紧耦合不宜整体迁;但 sentinel 自治需要本地配置(否则 cron 每 tick 拉 backend,backend 宕则 cron 死)
-   - **取舍**:有同步失败窗口(失败重试 + 告警);不一致风险接受
-   - **未来口子**:如果业务上"账号配置完全不在 backend 持有"成立(纯舆情产品),可以走 axis 1 (c) 方案整体迁
+2. **MySQL 8.0 一统持久化**
+   - **决策**:废弃 v1 的"主库 + per-account SQLite × N";所有表(配置 / 业务 / 运行时状态)进一个 MySQL 库,业务表加 `account_id` 列
+   - **理由**:实测远端 MySQL 8.0.35,utf8mb4,functional index / JSON 多值索引齐备,完全够用;单库 = 单连接池 = monkey-patch 直接消失;跨账号查询 / 备份 / 监控天然集中
+   - **取舍**:跨进程访问同一库,sentinel 与 backend 共享 schema,任一方改 schema 要双方协调(用 alembic 集中管理)
+   - **不选 ES / Postgres / SQLite**:ES 不擅长状态机,Postgres 需新部署,SQLite per-file 是当前痛点
 
-3. **运行时状态:sentinel 是唯一真值,backend 纯透传不缓存**
-   - **决策**:`pipeline_runs` / `pipeline_stage_runs` 全在 sentinel `runner.db`;backend 收到状态查询请求(FE 低频或运维)立即调 sentinel 转发,自身无 cache、无回写
-   - **理由**:单一真值,不存在 reconcile / 不一致问题;FE 又不实时轮询,sentinel 单点 SQLite 读 latest 完全够用
-   - **取舍**:sentinel 短暂宕机时,FE 看不到状态(直接 5xx 或读到旧数据);可以接受
+3. **配置不再"双写同步"**
+   - **决策**:`sentiment_accounts` 是共享表,backend 写 / sentinel 读;无 cache、无 sync API
+   - **理由**:单库 → 一致性问题消失
+   - **取舍**:sentinel 每 cron tick 都 SELECT 一次配置(便宜,有索引)
 
-5. **本轮不暴露历史查询能力**
-   - **决策**:状态查询接口只支持"当前/最新"(`runs/latest` + `runs/{run_id}` 稳定 URL),不提供"按账号查所有 runs"或"按 stage 查 attempt 历史"
-   - **理由**:产品上没有"看历史"的需求;少做的端点 = 少维护的 schema 兼容包袱
-   - **取舍**:`pipeline_runs` 表会逐步增长,但只用于 in-flight + latest 展示;未来若需要历史 view,加端点不影响现 schema
+4. **状态查询不经 sentinel HTTP**
+   - **决策**:backend 直查共享 MySQL 的 `pipeline_runs` / `pipeline_stage_runs`
+   - **理由**:省一跳 + sentinel HTTP 收敛到只剩"trigger / cancel / draft"3 个写端点
+   - **取舍**:backend 知道 sentinel 的状态表 schema,有耦合;通过共享 ORM 模型缓解
 
 5. **FE 不实时显示任务执行状态**
-   - **决策**:FE 不轮询、不显示 stage 级进度、不显示 in-flight 任务;StatusBanner 只在页面加载时拉一次顶层 run 状态,显示成"上次成功更新于 X"
-   - **理由**:用户感知靠业务数据(posts / briefs);少一条高频查询 = 少一类性能 / 一致性问题;`failed` 本来就静默(memory)
-   - **取舍**:用户不知道"任务正在跑";运维侧仍可查 stage 级状态(`runs/{run_id}` 端点)用于调试
+   - **决策**:不轮询、不显示 stage 级进度;StatusBanner 只在页面加载时拉一次
+   - **理由**:用户感知靠业务数据;少一条高频查询
+   - **取舍**:用户不知道"任务正在跑"(可接受)
 
-6. **DIY runner,不引入 framework**
-   - **决策**:写 ~600 行 `runner.py`,不用 Prefect / Dagster / Airflow / Celery
-   - **理由**:量级不匹配;framework 概念会反客为主
-   - **取舍**:未来若需 asset lineage,迁 Dagster
+6. **不暴露历史查询能力**
+   - **决策**:只 `runs/latest` + `runs/{run_id}` 稳定 URL
+   - **取舍**:`pipeline_runs` 表会缓慢增长,定期 cron 删旧
 
-7. **14 crawler 不拆 DAG 节点,留在一个 stage 内 fanout**
-   - **决策**:`crawl_fanout` stage 内部用 ThreadPoolExecutor + 14 次本地 client 调用
-   - **理由**:与 v1 行为一致,迁移风险最小;14 节点拆出来的收益("贴吧爬虫挂了 3 次"这种粒度)在 `output_summary` 里也能给到
-   - **取舍**:单个 crawler 不能独立 retry / 补跑(只能整个 fanout 重跑)
+7. **DIY runner,不引入 framework**
 
-8. **DAG 是静态 Python 对象,声明式**
-   - **决策**:`pipeline.py:SENTIMENT_DAG = DAG([...])`,import 时确定
-   - **理由**:可读、可 diff、IDE 友好;不需要"按账号配置生成不同 DAG"的灵活性
+8. **14 crawler 不拆 DAG 节点,留在一个 stage 内 fanout**
 
-9. **monkey-patch `connect()` 不在本轮重写**
-   - **决策**:保留 v1 实现,在 cron 入口和 runner 入口手工 set `ContextVar`
-   - **理由**:重写需改 search/analyzer/brief/response 4 个子模块,工作量大;不在本轮关键路径
-   - **取舍**:已知 fragile 持续存在,记 known issue,归下一轮
+9. **DAG 是静态 Python 对象,声明式**
 
-10. **不做邮件通知**
-    - **决策**:本轮不实现邮件推送;`notify_emails` 字段保留在 schema 但无消费者
-    - **理由**:用户感知靠业务数据 + FE"上次成功更新于 X"提示已足够
-    - **取舍**:用户不会被主动通知到新简报,需要主动打开 FE 查看;`notify_emails` 字段后续可重新启用
+10. **不做邮件通知**:`notify_emails` 字段保留 schema 但本轮无消费者
 
 ---
 
@@ -497,16 +444,14 @@ backend 路由变化(对 FE 透明):
 
 | v1 节 | v1 现状 | v2 |
 |---|---|---|
-| §2 物理拓扑 | sentinel 是 18 写 RPC server,backend 编排 | sentinel 自跑 cron + DAG runner;backend 退化为账号 + FE 网关 |
-| §3 数据流 | scheduler 在 backend,逐 stage HTTP RPC | scheduler 在 sentinel,DAG 内本地函数调用 |
-| §4 模块清单 | backend 三大编排文件 + sentinel 6 子模块 | backend 三大文件删除 / 大瘦身;sentinel 加 scheduler + runner + pipeline + stages |
-| §5.1 backend 编排 | 调用 18 RPC + try/except 14 次 | backend 不再编排;调用 ~4 个 sentinel API(配置同步 / 状态读 / 手动触发 / 业务读) |
-| §5.2 scheduler | APScheduler + leader 选举 + SQLAlchemyJobStore | sentinel asyncio loop + 强制单进程,无需 leader |
-| §6.1 主库 | `sentiment_run_logs` + `sentiment_accounts.last_run_*` | `sentiment_run_logs` 删除;`last_run_*` 字段废弃 |
-| §6.2 业务库 | 5 表 | 5 表(不动) |
-| §6.3 多租户隔离 | monkey-patch connect | 保留,适配 cron 入口手工 set ContextVar |
-| §7 前端 | StatusBanner 顶层 4 态 | StatusBanner + stage 级进度 |
-| §8.6 状态机三层守卫 | scheduler / pipeline / cleanup | sentinel runner 唯一索引 + 内置 reaper |
+| §2 物理拓扑 | sentinel 是 18 写 RPC server,backend 编排 | sentinel 自跑 cron + DAG;backend 退化 |
+| §3 数据流 | backend 调度,逐 stage HTTP RPC | sentinel 调度,DAG 内本地函数 |
+| §4 模块 | backend 三大编排文件 + sentinel 6 子模块 | backend 三大文件删除;sentinel 加 scheduler / runner / pipeline / stages |
+| §5 backend 编排 | 调用 18 RPC + try/except 14 次 | 调用 ~3 RPC(trigger / cancel / draft) |
+| §5 调度 | APScheduler + leader 选举 + SQLAlchemyJobStore | sentinel asyncio loop + 单进程 |
+| §6 持久化 | 主库 + per-account SQLite × N + monkey-patch connect | **共享 MySQL 一库,加 `account_id` 列;monkey-patch 消失** |
+| §6 状态机三层守卫 | scheduler / pipeline / cleanup | functional unique index + reaper |
+| §7 前端 | StatusBanner 顶层 4 态 | 同 v1 但显示"上次成功更新于 X" |
 
 ---
 
@@ -516,57 +461,58 @@ backend 路由变化(对 FE 透明):
 
 ### Phase 0:基础设施(不影响线上)
 
-- sentinel 写 `runner.py` + `pipeline.py` + `stages/` + `runner.db` schema + 单测
-- sentinel 加 `POST /accounts/{id}` 配置同步端点 + `accounts` 表
-- backend `sentinel_client.py` 加 `sync_account_config` / `trigger_run` / `get_latest_run` 方法(并行 dual-write,老路径仍跑)
+- 在 `gapex` 库建 v2 全套 schema(配置 / 业务 / 运行时状态),用 alembic 管理
+- 编写 SQLite → MySQL 数据迁移脚本(per-account SQLite 文件 → MySQL 单库,加 `account_id` 列)
+- sentinel 写 `runner.py` + `pipeline.py` + `stages/` + 单测;数据访问层从 SQLite per-file 改成 MySQL ORM
+- backend `sentinel_client.py` 加新 3 个方法(老 18 个并存)
 
-### Phase 1:配置同步双写(无业务影响)
+### Phase 1:数据双写(无业务影响)
 
-- backend `PUT /api/sentiment/{id}` 在写主库后,**同步推 sentinel**(失败仅告警,不阻塞用户)
-- 验证 sentinel `accounts` 表与主库一致
+- v1 仍跑(写 per-account SQLite),**同时**写一份到 MySQL 共享库
+- 验证两边数据一致(对账脚本)
 
-### Phase 2:sentinel 内部 runner 影子运行(无业务影响)
+### Phase 2:sentinel 内部 runner 影子运行
 
-- sentinel 加 cron loop,但**不真的 run pipeline**,只走 DAG 模拟跑(stage = no-op)写状态
-- 对照 v1 hourly 触发,验证 sentinel cron 时序、唯一索引、reaper 工作正常
-- 1-2 周观察,无异常进 phase 3
+- sentinel 加 cron loop,但 **DAG 模拟跑**(stage = no-op)只写状态表
+- 验证 cron 时序、unique index、reaper 工作正常
 
 ### Phase 3:hourly run 完整切过(热路径)
 
 - sentinel cron 真正执行完整 DAG,backend 关闭老 scheduler + pipeline
-- 双轨并存 1 周(backend 老 scheduler 设 `enabled=false` 但代码留着,可一键回滚)
-- 验证:run 失败率、单 run 总耗时、stage 级耗时分布
-- 主库 `sentiment_run_logs` 数据迁移到 sentinel(或保留只读快照,不再写入)
+- 双轨并存 1 周(老 scheduler 设 `enabled=false` 但代码留)
+- 验证 run 失败率 / 单 run 总耗时 / stage 级耗时分布
+- per-account SQLite 文件继续保留只读 1 周作为回滚兜底
 
 ### Phase 4:清理
 
 - 删 backend `sentiment_pipeline.py` + `sentiment_scheduler.py`
-- 删 backend `sentinel_client.py` 老 18 个 RPC 方法 + 老的 Resend 邮件代码(若仅用于舆情)
-- 主库 schema 清理:drop `sentiment_run_logs`,drop `sentiment_accounts.last_run_*` 字段
-- sentinel `service.py` 删除 v1 写 RPC(若仍有未被引用)
+- 删 backend `sentinel_client.py` 老 18 个 RPC 方法
+- 删 sentinel `service.py` v1 写 RPC
+- 删 per-account SQLite 文件;sentinel `storage/` 旧 monkey-patch 代码删除
+- alembic drop v1 残留字段
 
 ### 回滚
 
-每个 phase 独立可回滚:
-
-- Phase 1:停同步推送
+- Phase 1:停双写
 - Phase 2:disable cron loop
-- Phase 3:**关键回滚点** — 重启 backend scheduler,sentinel cron 关闭。运行时状态短暂不一致(几小时)
+- Phase 3:**关键回滚点** — 重启 backend scheduler,sentinel cron 关闭;运行时状态短暂不一致(几小时)
 - Phase 4 不可逆,只在 Phase 3 稳定 4 周以上后执行
 
 ---
 
 ## 12. 风险与未决项
 
-- [ ] **sentinel 单进程 = 单点**:cron 在这一个进程里,sentinel 崩溃 = 调度停。**缓解**:k8s/systemd 自动拉起 + 启动时扫 `runner.db` 接续未完成 run(reaper 兜底);进程级监控告警
-- [ ] **配置同步不一致**:backend 写主库成功但推 sentinel 失败 → sentinel 用旧配置跑下一轮。**缓解**:同步推送失败队列 + 重试;每小时 sentinel 启动时跟 backend 对账(`GET /api/internal/sentiment/accounts/sync`);差异告警
-- [ ] **runner.db 单点写**:SQLite 写并发受限。预估每小时 N 账号 × ~4 stage × 平均 1.x attempt ≈ 几十行/h,SQLite 撑得住。**升级路径**:迁 Postgres 时改 connection string,schema 不变
-- [ ] **monkey-patch `connect()` 在 cron 入口要适配**:不是 HTTP 请求 → 没有中间件 set ContextVar。**缓解**:cron loop 处理每个 account 时显式 set + try/finally reset;runner.execute 入口同理。**残留风险**:未来新子模块若早期捕获 connect 仍会绕过隔离,本轮不解
-- [ ] **lease 时长**:默认 30 分钟,analyze 实测 20–30 分钟,临界。**待办**:监控 stage 实际耗时分布,定 P99 × 2 作 lease 默认值;为 analyze stage 单独设 45 分钟
-- [ ] **DAG 学习成本**:开发者从"读代码顺序"变成"读 DAG 拓扑"。**缓解**:`pipeline.py` 顶部画 ASCII DAG 注释 + 维护本文档 §3.3
-- [ ] **stage_id 命名稳定性**:一旦发布,stage_id 不能改名,否则历史 stage_runs 对不上账。**约定**:stage_id 在 `pipeline.py` 顶部常量化,变更走 deprecate 流程
-- [ ] **sentinel 部署边界变化**:之前可以多 worker(无内部状态),现在强制单进程。**缓解**:容量评估 → 单进程足够 N 账号 × 每小时 × ~3-5 分钟 / 账号 = 每小时占用 N×4 分钟,N=100 时占用率 ~7%,够用
-- [ ] **跨进程鉴权**:backend → sentinel 调用要做内网 token 鉴权,避免外网误调。**缓解**:`X-Internal-Token` header,共享密钥从环境变量读
+- [ ] **共享 MySQL 单实例 = 单点**:崩了 backend / sentinel 全停;**缓解**:production 用 RDS + 主从 + 自动 failover;dev 现状(单 MySQL container)接受单点
+- [ ] **`innodb_buffer_pool_size=128MB` 太小**:实测远端 MySQL 默认值,数据上来后 IO 飙;**待办**:DBA 调到 ≥ 1-2 GB(实例内存 50%)
+- [ ] **`innodb_flush_log_at_trx_commit=1` + `sync_binlog=1`**:每次 commit 都 fsync,DAG 高频小 commit 时是瓶颈;**待办**:评估能否放宽到 `sync_binlog=100`(损失少量崩溃恢复换性能)
+- [ ] **跨账号数据集中 = 多租户漏写风险**:any SQL 漏 `WHERE account_id=?` 就跨租户;**缓解**:ORM helper 强制注入;code review checklist;集成测试覆盖
+- [ ] **`pipeline_runs` 增长**:每小时 N 账号 ≈ 24N 行/天;`pipeline_stage_runs` 4 倍;N=100 时 ~10k 行/天;**待办**:cron 定期 DELETE 30 天前
+- [ ] **lease 时长**:默认 30 分钟,analyze 实测 20–30 分钟,临界;**待办**:监控 P99 × 2 调
+- [ ] **DAG 学习成本**:`pipeline.py` 顶部画 ASCII DAG 注释 + 维护本文档 §3.3
+- [ ] **stage_id 命名稳定性**:发布后不能改名,常量化 + deprecate 流程
+- [ ] **sentinel 单进程**:容量 N×4min/h ≈ N=100 时占 7%,够;真不够再分账号 sharding
+- [ ] **跨进程鉴权**:backend → sentinel HTTP 用 `X-Internal-Token`(env)
+- [ ] **schema 变更协调**:backend 与 sentinel 共享表,任一方改 schema 要 alembic + 双方部署同步
 
 ---
 
@@ -576,13 +522,14 @@ backend 路由变化(对 FE 透明):
 |---|---|
 | Cron 在哪触发 | `services/sentinel-service/scheduler.py` |
 | DAG 长什么样 | `services/sentinel-service/pipeline.py` |
-| DAG runner 怎么调度 / 重试 / lease / reaper | `services/sentinel-service/runner.py` |
-| 加 / 改一个 stage 的实现 | `services/sentinel-service/stages/<name>.py` |
-| 加 / 改 stage 的 retry / lease | `pipeline.py` 节点声明里的 `retry_policy=...` |
-| run / stage 当前状态 | sentinel `runner.db` 的 `pipeline_runs` / `pipeline_stage_runs` |
-| 账号配置真值(增删改) | backend 主库 `sentiment_accounts` |
-| 账号配置缓存(读) | sentinel `runner.db.accounts` |
-| backend 同步推 sentinel | `geo/services/sentinel_client.py:sync_account_config()` |
-| FE 拉顶层 run 状态 | backend `GET /api/sentiment/{id}/runs/latest` → sentinel `GET /accounts/{id}/runs/latest` |
+| DAG runner / 重试 / lease / reaper | `services/sentinel-service/runner.py` |
+| stage 实现 | `services/sentinel-service/stages/<name>.py` |
+| stage retry / lease 配置 | `pipeline.py` 节点声明里的 `retry_policy=...` |
+| run / stage 当前状态 | MySQL `pipeline_runs` / `pipeline_stage_runs` |
+| 账号配置 | MySQL `sentiment_accounts`(backend 写 / sentinel 读) |
+| backend 触发 sentinel | `geo/services/sentinel_client.py:trigger_run()` |
+| FE 拉 run 顶层状态 | backend `GET /api/sentiment/{id}/runs/latest`(直查 MySQL,不经 sentinel) |
 | LLM prompt | `services/sentinel-service/analyzer/prompts.py`(不动) |
-| 业务库 schema | per-account `data/account_{id}/yuqing.db`(不动) |
+| 业务表 schema | MySQL `gapex` 库 `posts` / `analyses` / `briefs` / `drafts` / `query_runs` |
+| MySQL 连接信息 | `.env` 的 `DB_HOST` / `DB_PORT` / `DB_NAME=gapex` 等 |
+| schema 迁移 | `backend/migrations/`(alembic) |
