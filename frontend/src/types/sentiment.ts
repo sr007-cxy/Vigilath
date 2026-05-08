@@ -203,12 +203,27 @@ export interface KnowledgeDoc {
   updated_at: string;
 }
 
+export type MediaType =
+  | 'web' | 'weibo' | 'wechat' | 'app' | 'forum'
+  | 'short_video' | 'long_video' | 'broadcast'
+  | 'newspaper' | 'magazine' | 'blog' | 'ecommerce' | 'review';
+
+export type Industry =
+  | 'finance' | 'general' | 'tech' | 'science'
+  | 'party_media' | 'health' | 'overseas_en';
+
 /** 媒体平台目录条目(全局只读,GET /api/sentiment/platforms 返回)。
- *  category / region 用于在 UI 上分组。 */
+ *  - media_type:载体形态(网媒/微博/微信/APP/论坛/短视频/长视频/...)
+ *  - industry:主题/行业(金融财经/综合资讯/科技/科普/党政央媒/...)
+ *  - region:地区
+ *  category 是 legacy 单轴,前端不再消费(后端 SentimentPlatformOut 仍输出
+ *  以兼容外部),保留为可选 string。 */
 export interface SentimentPlatform {
   code: string;
   domain: string;
-  category: 'finance' | 'social' | 'forum' | 'video' | 'news' | 'overseas' | string;
+  category?: string;                            // legacy
+  media_type: MediaType | string;
+  industry: Industry | string;
   region: 'mainland' | 'hk' | 'overseas' | string;
   name_zh: string;
   name_en: string;

@@ -19,6 +19,8 @@ function fallbackPlatforms(): SentimentPlatform[] {
     code: p.code,
     domain: p.domain,
     category: p.category,
+    media_type: p.media_type,
+    industry: p.industry,
     region: p.region,
     name_zh: '', name_en: '',  // 让消费者回退到 i18n sourceLabels 翻译
   }));

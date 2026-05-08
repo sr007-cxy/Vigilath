@@ -8,13 +8,19 @@
 // 加 / 改平台请改 backend/migrations/010_sentiment_platforms.py 的 SEED 数组,
 // 不要只改这里 — 否则线上(走 DB)和 mock(走这里)就会偏离。
 
+// Legacy 单轴(010 引入,前端不再用作分组,保留为字段兼容旧 fallback 数据)
 export type PlatformCategory =
-  | 'finance'   // 财经媒体
-  | 'social'    // 社交媒体
-  | 'forum'     // 论坛社区
-  | 'video'     // 视频平台
-  | 'news'      // 资讯门户
-  | 'overseas'; // 海外
+  | 'finance' | 'social' | 'forum' | 'video' | 'news' | 'overseas';
+
+// 011 起的正交两轴 — UI 用这两个画 filter
+export type MediaType =
+  | 'web' | 'weibo' | 'wechat' | 'app' | 'forum'
+  | 'short_video' | 'long_video' | 'broadcast'
+  | 'newspaper' | 'magazine' | 'blog' | 'ecommerce' | 'review';
+
+export type Industry =
+  | 'finance' | 'general' | 'tech' | 'science'
+  | 'party_media' | 'health' | 'overseas_en';
 
 export type PlatformRegion = 'mainland' | 'hk' | 'overseas';
 
@@ -22,11 +28,99 @@ export interface PlatformEntry {
   code: string;
   domain: string;
   category: PlatformCategory;
+  media_type: MediaType;
+  industry: Industry;
   region: PlatformRegion;
 }
 
-// 顺序按"category 分组、组内按重要度"排,前端分组渲染时按 category 重新归类。
-export const SENTIMENT_PLATFORMS: readonly PlatformEntry[] = [
+/** code → (media_type, industry) — 与 backend/migrations/011 的 AXES_MAP 对齐。
+ *  常量数组只手维护 (category, region),其余两轴在模块加载时从此表派生,
+ *  减少行数据重复;与 backend/api 返回的字段一致。 */
+const AXES_MAP: Record<string, [MediaType, Industry]> = {
+  xueqiu:       ['app',         'finance'],
+  eastmoney:    ['forum',       'finance'],
+  caixin:       ['web',         'finance'],
+  '36kr':       ['web',         'tech'],
+  sina_finance: ['web',         'finance'],
+  qq_finance:   ['web',         'finance'],
+  '163_finance':['web',         'finance'],
+  ths:          ['app',         'finance'],
+  wallstreetcn: ['web',         'finance'],
+  yicai:        ['web',         'finance'],
+  cls:          ['app',         'finance'],
+  gelonghui:    ['web',         'finance'],
+  jrj:          ['web',         'finance'],
+  hexun:        ['web',         'finance'],
+  jin10:        ['web',         'finance'],
+  nbd:          ['web',         'finance'],
+  jingji21:     ['web',         'finance'],
+  stcn:         ['web',         'finance'],
+  cs_com:       ['web',         'finance'],
+  cnstock:      ['web',         'finance'],
+  p5w:          ['web',         'finance'],
+  caijing:      ['web',         'finance'],
+  iyiou:        ['web',         'tech'],
+  futunn:       ['app',         'finance'],
+  itiger:       ['app',         'finance'],
+  zhitong:      ['web',         'finance'],
+  weibo:        ['weibo',       'general'],
+  weixin:       ['wechat',      'general'],
+  xiaohongshu:  ['app',         'general'],
+  zhihu:        ['app',         'general'],
+  tieba:        ['forum',       'general'],
+  zhidao:       ['forum',       'general'],
+  hupu:         ['forum',       'general'],
+  douban:       ['forum',       'general'],
+  v2ex:         ['forum',       'tech'],
+  guokr:        ['forum',       'science'],
+  csdn:         ['forum',       'tech'],
+  juejin:       ['forum',       'tech'],
+  bilibili:     ['long_video',  'general'],
+  douyin:       ['short_video', 'general'],
+  kuaishou:     ['short_video', 'general'],
+  toutiao:      ['app',         'general'],
+  vqq:          ['long_video',  'general'],
+  iqiyi:        ['long_video',  'general'],
+  ixigua:       ['short_video', 'general'],
+  baidu_news:   ['web',         'general'],
+  ifeng:        ['web',         'general'],
+  sina_main:    ['web',         'general'],
+  sohu:         ['web',         'general'],
+  chinanews:    ['web',         'party_media'],
+  xinhuanet:    ['web',         'party_media'],
+  people:       ['web',         'party_media'],
+  huanqiu:      ['web',         'party_media'],
+  guancha:      ['web',         'general'],
+  ce_cn:        ['web',         'party_media'],
+  thepaper:     ['web',         'general'],
+  jiemian:      ['web',         'finance'],
+  huxiu:        ['web',         'tech'],
+  tmtpost:      ['web',         'tech'],
+  pingwest:     ['web',         'tech'],
+  ifanr:        ['web',         'tech'],
+  qbitai:       ['web',         'tech'],
+  jiqizhixin:   ['web',         'tech'],
+  reddit:       ['forum',       'overseas_en'],
+  twitter:      ['weibo',       'overseas_en'],
+  seekingalpha: ['web',         'finance'],
+  bloomberg:    ['web',         'finance'],
+  reuters:      ['web',         'finance'],
+};
+
+interface RawEntry {
+  code: string;
+  domain: string;
+  category: PlatformCategory;
+  region: PlatformRegion;
+}
+
+function deriveAxes(entry: RawEntry): PlatformEntry {
+  const [mt, ind] = AXES_MAP[entry.code] ?? ['web', 'general'];
+  return { ...entry, media_type: mt, industry: ind };
+}
+
+// 顺序按"category 分组、组内按重要度"排,前端分组渲染时按 media_type / industry 重新归类。
+const RAW_ENTRIES: readonly RawEntry[] = [
   // ─── 财经媒体(主力)───
   { code: 'xueqiu',       domain: 'xueqiu.com',           category: 'finance',  region: 'mainland' },
   { code: 'eastmoney',    domain: 'guba.eastmoney.com',   category: 'finance',  region: 'mainland' },
@@ -109,25 +203,53 @@ export const SENTIMENT_PLATFORMS: readonly PlatformEntry[] = [
   { code: 'reuters',      domain: 'reuters.com',          category: 'overseas', region: 'overseas' },
 ];
 
+export const SENTIMENT_PLATFORMS: readonly PlatformEntry[] = RAW_ENTRIES.map(deriveAxes);
+
 export const SENTIMENT_PLATFORM_CODES = SENTIMENT_PLATFORMS.map(p => p.code);
 
 export const PLATFORM_CATEGORY_ORDER: readonly PlatformCategory[] = [
   'finance', 'social', 'forum', 'video', 'news', 'overseas',
 ];
 
-/** 把任何带 `category` 字段的条目数组按 PLATFORM_CATEGORY_ORDER 分组。
- *  既能消费 PlatformEntry(本文件常量)又能消费 SentimentPlatform(API 返回),
- *  因为两者都满足 `{ category: string }`。 */
-export function groupByCategory<T extends { category: string }>(
+// 011 起 UI 渲染优先用这两个轴
+export const MEDIA_TYPE_ORDER: readonly MediaType[] = [
+  'web', 'weibo', 'wechat', 'app', 'forum',
+  'short_video', 'long_video', 'broadcast',
+  'newspaper', 'magazine', 'blog', 'ecommerce', 'review',
+];
+
+export const INDUSTRY_ORDER: readonly Industry[] = [
+  'finance', 'tech', 'general', 'science', 'party_media', 'health', 'overseas_en',
+];
+
+/** Legacy(category 单轴)— 仍被尚未迁移的代码调用。 */
+export function groupByCategory<T extends { category?: string }>(
   entries: readonly T[],
 ): { category: PlatformCategory; items: T[] }[] {
   const buckets = new Map<string, T[]>();
   for (const e of entries) {
-    const list = buckets.get(e.category) ?? [];
+    const c = e.category;
+    if (!c) continue;
+    const list = buckets.get(c) ?? [];
     list.push(e);
-    buckets.set(e.category, list);
+    buckets.set(c, list);
   }
   return PLATFORM_CATEGORY_ORDER
     .filter(c => buckets.has(c))
     .map(c => ({ category: c, items: buckets.get(c)! }));
+}
+
+/** 按 media_type 分组(WisersOne 的"媒体类型"轴)。 */
+export function groupByMediaType<T extends { media_type: string }>(
+  entries: readonly T[],
+): { mediaType: MediaType; items: T[] }[] {
+  const buckets = new Map<string, T[]>();
+  for (const e of entries) {
+    const list = buckets.get(e.media_type) ?? [];
+    list.push(e);
+    buckets.set(e.media_type, list);
+  }
+  return MEDIA_TYPE_ORDER
+    .filter(m => buckets.has(m))
+    .map(m => ({ mediaType: m, items: buckets.get(m)! }));
 }

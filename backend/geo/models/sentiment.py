@@ -138,7 +138,12 @@ class SentimentPlatformORM(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String, nullable=False, unique=True, index=True)  # 'xueqiu', 'eastmoney' …
     domain = Column(String, nullable=False)                          # 'xueqiu.com',传给 sentinel `site:` 用
-    category = Column(String, nullable=False)                        # finance / social / forum / video / news / overseas
+    # category 是 010 的 legacy 单轴(finance/social/forum/video/news/overseas),
+    # 011 起拆为正交两维 media_type + industry — UI 只读后两个,category 仅作为
+    # legacy 列存在以避免破坏既有 INSERT 行;新代码不要依赖。
+    category = Column(String, nullable=False)
+    media_type = Column(String, nullable=False, default="")          # web/weibo/wechat/app/forum/short_video/long_video/...
+    industry = Column(String, nullable=False, default="")            # finance/general/tech/science/party_media/health/overseas_en
     region = Column(String, nullable=False)                          # mainland / hk / overseas
     name_zh = Column(String, nullable=False, default="")
     name_en = Column(String, nullable=False, default="")
@@ -245,7 +250,11 @@ class KnowledgeOut(BaseModel):
 class SentimentPlatformOut(BaseModel):
     code: str
     domain: str
+    # category 是 legacy 单轴,前端不再消费;保留输出供调试 / 旧客户端兼容。
     category: str
+    # 011 起的正交两维 — UI 渲染 filter 用这两个。空字符串表示后端未跑 011。
+    media_type: str = ""
+    industry: str = ""
     region: str
     name_zh: str
     name_en: str
@@ -254,6 +263,9 @@ class SentimentPlatformOut(BaseModel):
     def from_orm_row(cls, row: SentimentPlatformORM) -> "SentimentPlatformOut":
         return cls(
             code=row.code, domain=row.domain,
-            category=row.category, region=row.region,
+            category=row.category,
+            media_type=row.media_type or "",
+            industry=row.industry or "",
+            region=row.region,
             name_zh=row.name_zh or "", name_en=row.name_en or "",
         )
