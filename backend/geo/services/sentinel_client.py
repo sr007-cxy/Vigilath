@@ -21,6 +21,7 @@ PLATFORM_OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 # 真正的 source of truth 是 sentiment_platforms 表(由 migration 010 seed)。
 # 改 / 加平台不要改这里 — 改 DB(或重跑 migration)。
 _PLATFORM_FALLBACK_MAP: dict[str, str] = {
+    # finance(主力)
     "xueqiu":       "xueqiu.com",
     "eastmoney":    "guba.eastmoney.com",
     "caixin":       "caixin.com",
@@ -33,21 +34,68 @@ _PLATFORM_FALLBACK_MAP: dict[str, str] = {
     "yicai":        "yicai.com",
     "cls":          "cls.cn",
     "gelonghui":    "gelonghui.com",
+    # finance(扩展)
+    "jrj":          "jrj.com.cn",
+    "hexun":        "hexun.com",
+    "jin10":        "jin10.com",
+    "nbd":          "nbd.com.cn",
+    "jingji21":     "21jingji.com",
+    "stcn":         "stcn.com",
+    "cs_com":       "cs.com.cn",
+    "cnstock":      "cnstock.com",
+    "p5w":          "p5w.net",
+    "caijing":      "caijing.com.cn",
+    "iyiou":        "iyiou.com",
+    "futunn":       "futunn.com",
+    "itiger":       "itiger.com",
+    "zhitong":      "zhitongcaijing.com",
+    # social
     "weibo":        "weibo.com",
     "weixin":       "mp.weixin.qq.com",
     "xiaohongshu":  "xiaohongshu.com",
     "zhihu":        "zhihu.com",
+    # forum
     "tieba":        "tieba.baidu.com",
     "zhidao":       "zhidao.baidu.com",
     "hupu":         "hupu.com",
     "douban":       "douban.com",
+    "v2ex":         "v2ex.com",
+    "guokr":        "guokr.com",
+    "csdn":         "csdn.net",
+    "juejin":       "juejin.cn",
+    # video
     "bilibili":     "bilibili.com",
     "douyin":       "douyin.com",
     "kuaishou":     "kuaishou.com",
     "toutiao":      "toutiao.com",
+    "vqq":          "v.qq.com",
+    "iqiyi":        "iqiyi.com",
+    "ixigua":       "ixigua.com",
+    # news
     "baidu_news":   "news.baidu.com",
     "ifeng":        "ifeng.com",
+    "sina_main":    "sina.com.cn",
+    "sohu":         "sohu.com",
+    "chinanews":    "chinanews.com",
+    "xinhuanet":    "xinhuanet.com",
+    "people":       "people.com.cn",
+    "huanqiu":      "huanqiu.com",
+    "guancha":      "guancha.cn",
+    "ce_cn":        "ce.cn",
+    "thepaper":     "thepaper.cn",
+    "jiemian":      "jiemian.com",
+    "huxiu":        "huxiu.com",
+    "tmtpost":      "tmtpost.com",
+    "pingwest":     "pingwest.com",
+    "ifanr":        "ifanr.com",
+    "qbitai":       "qbitai.com",
+    "jiqizhixin":   "jiqizhixin.com",
+    # overseas
     "reddit":       "reddit.com",
+    "twitter":      "twitter.com",
+    "seekingalpha": "seekingalpha.com",
+    "bloomberg":    "bloomberg.com",
+    "reuters":      "reuters.com",
 }
 
 # 60s 内存缓存 — pipeline 一次跑会调多个 RPC,避免每次都打 DB。

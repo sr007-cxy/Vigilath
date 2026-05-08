@@ -31,7 +31,7 @@ MAX_TOKENS = 2000
 # DO NOT edit this list to add a platform — instead INSERT into the
 # `sentiment_platforms` table on the GEO backend (or rerun migration 010).
 PLATFORM_CATALOG: list[tuple[str, str]] = [
-    # ── 财经媒体 ──
+    # ── 财经媒体(主力)──
     ("xueqiu",       "xueqiu.com"),
     ("eastmoney",    "guba.eastmoney.com"),
     ("caixin",       "caixin.com"),
@@ -44,6 +44,21 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("yicai",        "yicai.com"),
     ("cls",          "cls.cn"),
     ("gelonghui",    "gelonghui.com"),
+    # ── 财经媒体(扩展)──
+    ("jrj",          "jrj.com.cn"),
+    ("hexun",        "hexun.com"),
+    ("jin10",        "jin10.com"),
+    ("nbd",          "nbd.com.cn"),
+    ("jingji21",     "21jingji.com"),
+    ("stcn",         "stcn.com"),
+    ("cs_com",       "cs.com.cn"),
+    ("cnstock",      "cnstock.com"),
+    ("p5w",          "p5w.net"),
+    ("caijing",      "caijing.com.cn"),
+    ("iyiou",        "iyiou.com"),
+    ("futunn",       "futunn.com"),
+    ("itiger",       "itiger.com"),
+    ("zhitong",      "zhitongcaijing.com"),
     # ── 社交媒体 ──
     ("weibo",        "weibo.com"),
     ("weixin",       "mp.weixin.qq.com"),
@@ -54,16 +69,43 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("zhidao",       "zhidao.baidu.com"),
     ("hupu",         "hupu.com"),
     ("douban",       "douban.com"),
+    ("v2ex",         "v2ex.com"),
+    ("guokr",        "guokr.com"),
+    ("csdn",         "csdn.net"),
+    ("juejin",       "juejin.cn"),
     # ── 视频平台 ──
     ("bilibili",     "bilibili.com"),
     ("douyin",       "douyin.com"),
     ("kuaishou",     "kuaishou.com"),
     ("toutiao",      "toutiao.com"),
+    ("vqq",          "v.qq.com"),
+    ("iqiyi",        "iqiyi.com"),
+    ("ixigua",       "ixigua.com"),
     # ── 资讯门户 ──
     ("baidu_news",   "news.baidu.com"),
     ("ifeng",        "ifeng.com"),
+    ("sina_main",    "sina.com.cn"),
+    ("sohu",         "sohu.com"),
+    ("chinanews",    "chinanews.com"),
+    ("xinhuanet",    "xinhuanet.com"),
+    ("people",       "people.com.cn"),
+    ("huanqiu",      "huanqiu.com"),
+    ("guancha",      "guancha.cn"),
+    ("ce_cn",        "ce.cn"),
+    ("thepaper",     "thepaper.cn"),
+    ("jiemian",      "jiemian.com"),
+    ("huxiu",        "huxiu.com"),
+    ("tmtpost",      "tmtpost.com"),
+    ("pingwest",     "pingwest.com"),
+    ("ifanr",        "ifanr.com"),
+    ("qbitai",       "qbitai.com"),
+    ("jiqizhixin",   "jiqizhixin.com"),
     # ── 海外 ──
     ("reddit",       "reddit.com"),
+    ("twitter",      "twitter.com"),
+    ("seekingalpha", "seekingalpha.com"),
+    ("bloomberg",    "bloomberg.com"),
+    ("reuters",      "reuters.com"),
 ]
 
 PLAN_SYSTEM = """你是一名舆情监测分析师。给定一个公司 / 品牌 / 股票，生成一份"监测计划"——一组可直接发给搜索引擎（DuckDuckGo / Google / Bing）的查询，用于召回该目标在公开平台上的讨论。
