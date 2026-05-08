@@ -40,6 +40,33 @@ function fmtLocal(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+// ── 双月范围选择器辅助 ─────────────────────────────────────
+// dateKey: 'YYYY-MM-DD'(只取年月日,不带时间)
+function dateKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// 从 'YYYY-MM-DDTHH:MM[:SS]' 中拆 date / time
+function splitDt(s: string): { date: string; time: string } {
+  if (!s) return { date: '', time: '' };
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  return m ? { date: m[1], time: m[2] } : { date: '', time: '' };
+}
+
+// 构造某月的 42 cell 网格(6 周 × 7 天,周一开头),含上下月填充
+function buildMonth(year: number, month: number): Date[] {
+  const first = new Date(year, month, 1);
+  const startWeekday = (first.getDay() + 6) % 7;  // Mon=0, Sun=6
+  const cells: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    cells.push(new Date(year, month, i - startWeekday + 1));
+  }
+  return cells;
+}
+
+const WEEKDAYS_ZH = ['一', '二', '三', '四', '五', '六', '日'];
+
 // 计算预设对应的 (start, end);'all' 返回 {} 不过滤;'custom' 由调用方处理。
 function presetRange(preset: TimePreset): { start?: string; end?: string } {
   if (preset === 'all' || preset === 'custom') return {};
@@ -183,6 +210,55 @@ export function ArticlesTab({ account, usingMock }: Props) {
   }, [timePreset, customStart, customEnd]);
 
   const customRangeError = customStart && customEnd && customStart > customEnd;
+
+  // 双月日历的"左月"位置 — 默认聚焦到 customStart 那一月
+  const [calNav, setCalNav] = useState<{ y: number; m: number }>(() => {
+    const d = new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+  // 切到 custom 且已有起始日期 → 把日历滚到那一月
+  useEffect(() => {
+    if (timePreset !== 'custom') return;
+    const { date } = splitDt(customStart);
+    if (!date) return;
+    const [y, m] = date.split('-').map(Number);
+    setCalNav({ y, m: m - 1 });
+  }, [timePreset]);  // 只在切到 custom 时跑;手动翻月不会被覆盖
+
+  const startDt = splitDt(customStart);
+  const endDt = splitDt(customEnd);
+
+  // 点日历某天:依次选 start / end,选完两个再点重置 start
+  const handlePickDay = (d: Date) => {
+    const k = dateKey(d);
+    const haveStart = !!customStart;
+    const haveEnd = !!customEnd;
+    if (!haveStart || (haveStart && haveEnd)) {
+      // 重置:仅有 start
+      setCustomStart(`${k}T00:00`);
+      setCustomEnd('');
+      return;
+    }
+    // haveStart && !haveEnd
+    if (k < startDt.date) {
+      // 倒选了 → 反过来:把原 start 当 end,新点的当 start
+      setCustomEnd(`${startDt.date}T${startDt.time || '23:59'}`);
+      setCustomStart(`${k}T00:00`);
+    } else {
+      setCustomEnd(`${k}T23:59`);
+    }
+  };
+
+  const handleStartTime = (t: string) => {
+    if (!startDt.date) return;
+    setCustomStart(`${startDt.date}T${t}`);
+  };
+  const handleEndTime = (t: string) => {
+    if (!endDt.date) return;
+    setCustomEnd(`${endDt.date}T${t}`);
+  };
+
+  const calNext = (m: number) => (m === 11 ? { y: calNav.y + 1, m: 0 } : { y: calNav.y, m: m + 1 });
 
   // 把当前 preset / 自定义区间统一翻成 (start, end) 传给后端
   const effectiveRange = useMemo(() => {
@@ -465,6 +541,11 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </button>
   );
 
+  const showCustomPanel = timePreset === 'custom';
+  const popupWidth = showCustomPanel ? 660 : 200;
+  const leftMonth = calNav;
+  const rightMonth = calNext(calNav.m);
+
   const timePopup = pickerOpen && popupPos && (
     <div
       ref={popupContentRef}
@@ -474,62 +555,95 @@ export function ArticlesTab({ account, usingMock }: Props) {
         top: popupPos.top,
         right: popupPos.right,
         zIndex: 1000,
-        width: 520,
+        width: popupWidth,
         background: 'var(--bg-card)',
         border: '1px solid var(--border-color)',
       }}
     >
-          <div className="grid grid-cols-[1fr_160px]">
-            {/* 左:datetime 输入 */}
-            <div className="p-4 space-y-3" style={{ borderRight: '1px solid var(--border-color)' }}>
-              <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
-                {t('dashboard.sentiment.articles.filters.timeCustom')}
+      <div className="flex">
+        {/* 左:日历范围选择器(仅 custom 显示) */}
+        {showCustomPanel && (
+          <div className="p-3 flex-1" style={{ borderRight: '1px solid var(--border-color)' }}>
+            {/* 头部:start/end 概览 + 翻月按钮 */}
+            <div className="flex items-center justify-between mb-2 text-xs">
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setCalNav({ y: calNav.y - 1, m: calNav.m })}
+                  className="px-1.5 py-0.5 rounded hover:bg-tertiary" style={{ color: 'var(--text-secondary)' }}>«</button>
+                <button type="button" onClick={() => setCalNav(calNav.m === 0 ? { y: calNav.y - 1, m: 11 } : { y: calNav.y, m: calNav.m - 1 })}
+                  className="px-1.5 py-0.5 rounded hover:bg-tertiary" style={{ color: 'var(--text-secondary)' }}>‹</button>
               </div>
-              <div>
-                <label className="text-[11px] text-muted block mb-1">
-                  {t('dashboard.sentiment.articles.filters.timeStart')}
-                </label>
-                <input type="datetime-local" value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="w-full text-xs px-2 py-1.5 rounded"
-                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              <div className="flex-1 text-center font-medium" style={{ color: 'var(--text-primary)' }}>
+                {leftMonth.y}年{leftMonth.m + 1}月  ·  {rightMonth.y}年{rightMonth.m + 1}月
               </div>
-              <div>
-                <label className="text-[11px] text-muted block mb-1">
-                  {t('dashboard.sentiment.articles.filters.timeEnd')}
-                </label>
-                <input type="datetime-local" value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="w-full text-xs px-2 py-1.5 rounded"
-                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setCalNav(calNav.m === 11 ? { y: calNav.y + 1, m: 0 } : { y: calNav.y, m: calNav.m + 1 })}
+                  className="px-1.5 py-0.5 rounded hover:bg-tertiary" style={{ color: 'var(--text-secondary)' }}>›</button>
+                <button type="button" onClick={() => setCalNav({ y: calNav.y + 1, m: calNav.m })}
+                  className="px-1.5 py-0.5 rounded hover:bg-tertiary" style={{ color: 'var(--text-secondary)' }}>»</button>
               </div>
-              {customRangeError && (
-                <p className="text-[11px]" style={{ color: '#dc2626' }}>
-                  {t('dashboard.sentiment.articles.filters.timeRangeError')}
-                </p>
-              )}
             </div>
 
-            {/* 右:preset 列表 */}
-            <div className="p-2 space-y-0.5 max-h-[280px] overflow-y-auto">
-              {TIME_PRESETS.map(({ key, labelKey }) => {
-                const active = timePreset === key;
-                return (
-                  <button key={key} type="button"
-                    onClick={() => handlePickPreset(key)}
-                    className="w-full text-left text-xs px-2.5 py-1.5 rounded transition-colors"
-                    style={{
-                      background: active ? 'var(--accent-primary)' : 'transparent',
-                      color: active ? '#ffffff' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {active ? '✓ ' : '  '}
-                    {t(`dashboard.sentiment.articles.filters.${labelKey}`)}
-                  </button>
-                );
-              })}
+            {/* 双月日历 */}
+            <div className="grid grid-cols-2 gap-3">
+              {[leftMonth, rightMonth].map(({ y, m }) => (
+                <CalendarMonth key={`${y}-${m}`}
+                  year={y} month={m}
+                  startKey={startDt.date} endKey={endDt.date}
+                  onPick={handlePickDay} />
+              ))}
             </div>
+
+            {/* 时间输入 */}
+            <div className="grid grid-cols-2 gap-3 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+              <div>
+                <label className="text-[11px] text-muted block mb-1">
+                  {t('dashboard.sentiment.articles.filters.timeStart')} {startDt.date && <span className="text-primary">{startDt.date}</span>}
+                </label>
+                <input type="time" value={startDt.time || '00:00'}
+                  onChange={(e) => handleStartTime(e.target.value)}
+                  disabled={!startDt.date}
+                  className="w-full text-xs px-2 py-1.5 rounded disabled:opacity-50"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted block mb-1">
+                  {t('dashboard.sentiment.articles.filters.timeEnd')} {endDt.date && <span className="text-primary">{endDt.date}</span>}
+                </label>
+                <input type="time" value={endDt.time || '23:59'}
+                  onChange={(e) => handleEndTime(e.target.value)}
+                  disabled={!endDt.date}
+                  className="w-full text-xs px-2 py-1.5 rounded disabled:opacity-50"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              </div>
+            </div>
+            {customRangeError && (
+              <p className="text-[11px] mt-2" style={{ color: '#dc2626' }}>
+                {t('dashboard.sentiment.articles.filters.timeRangeError')}
+              </p>
+            )}
           </div>
+        )}
+
+        {/* 右:preset 列表 */}
+        <div className="p-2 space-y-0.5 max-h-[360px] overflow-y-auto" style={{ width: 160, flexShrink: 0 }}>
+          {TIME_PRESETS.map(({ key, labelKey }) => {
+            const active = timePreset === key;
+            return (
+              <button key={key} type="button"
+                onClick={() => handlePickPreset(key)}
+                className="w-full text-left text-xs px-2.5 py-1.5 rounded transition-colors"
+                style={{
+                  background: active ? 'var(--accent-primary)' : 'transparent',
+                  color: active ? '#ffffff' : 'var(--text-secondary)',
+                }}
+              >
+                {active ? '✓ ' : '  '}
+                {t(`dashboard.sentiment.articles.filters.${labelKey}`)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 底部 取消 / 确定 */}
       <div className="flex justify-end gap-2 px-3 py-2"
@@ -917,5 +1031,58 @@ function ExpandableGridChip({
         </div>
       )}
     </>
+  );
+}
+
+// 单月日历(7×6 网格,周一开头)— 双月选择器中两次复用
+function CalendarMonth({
+  year, month, startKey, endKey, onPick,
+}: {
+  year: number; month: number;
+  startKey: string; endKey: string;
+  onPick: (d: Date) => void;
+}) {
+  const cells = buildMonth(year, month);
+  const todayKey = dateKey(new Date());
+  return (
+    <div>
+      <div className="text-[11px] text-center font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+        {year}年{month + 1}月
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {WEEKDAYS_ZH.map(w => (
+          <div key={w} className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>{w}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((d, i) => {
+          const k = dateKey(d);
+          const inMonth = d.getMonth() === month;
+          const isStart = !!startKey && k === startKey;
+          const isEnd = !!endKey && k === endKey;
+          const inRange = !!startKey && !!endKey && k > startKey && k < endKey;
+          const isToday = k === todayKey;
+          let bg = 'transparent';
+          let color = inMonth ? 'var(--text-primary)' : 'var(--text-muted)';
+          if (isStart || isEnd) {
+            bg = '#0ea5e9'; color = '#ffffff';
+          } else if (inRange) {
+            bg = 'rgba(14,165,233,0.18)'; color = 'var(--text-primary)';
+          }
+          return (
+            <button key={i} type="button" onClick={() => onPick(d)}
+              className="text-[11px] py-1 rounded transition-colors hover:brightness-110"
+              style={{
+                background: bg,
+                color,
+                opacity: inMonth ? 1 : 0.4,
+                border: isToday && !isStart && !isEnd ? '1px solid var(--accent-primary)' : '1px solid transparent',
+              }}>
+              {d.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
