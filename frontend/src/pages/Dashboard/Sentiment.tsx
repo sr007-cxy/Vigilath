@@ -207,7 +207,10 @@ export function Sentiment() {
           </div>
         )}
 
-        {status === 'pending' || status === 'running' ? (
+        {/* 只有真正首次运行(从未跑过 → lastRunAt 为空)才用全屏占位.
+            已有历史数据时,StatusBanner 已在上方提示"运行中",
+            数据 Tabs 继续展示历史数据,不能整片遮起来. */}
+        {(status === 'pending' || status === 'running') && !lastRunAt ? (
           <FirstRunWaiting onRefresh={handleRefresh} />
         ) : (
           <>

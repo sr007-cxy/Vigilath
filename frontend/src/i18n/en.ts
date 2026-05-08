@@ -1905,7 +1905,7 @@ const en = {
               },
               "status": {
                 "pending": "Task queued, starting soon",
-                "running": "Task running. Data may be incomplete; refresh once it finishes.",
+                "running": "Task running. Showing previous results — page will auto-update when complete.",
                 "success": "✓ Up to date",
                 "failed": "Last run failed: {{error}}",
                 "firstRun": "⏳ First-time scan in progress (5–10 min). Refresh manually when done.",

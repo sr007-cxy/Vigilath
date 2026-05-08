@@ -50,11 +50,32 @@ export function useDeleteAccount() {
 
 export function useRunStatus(accountId: number | null) {
   const { token } = useAuth();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['sentiment', 'run-status', accountId],
-    queryFn: () => sentimentApi.getRunStatus(accountId!, token!),
+    queryFn: async () => {
+      const data = await sentimentApi.getRunStatus(accountId!, token!);
+      // 状态从 running/pending 翻到 terminal(success/failed)时,
+      // 主动让数据查询失效 — 用户不必手动刷新就能看到新结果.
+      const prev = qc.getQueryData<{ status?: string }>(['sentiment', 'run-status', accountId]);
+      const wasRunning = prev?.status === 'running' || prev?.status === 'pending';
+      const nowDone = data?.status === 'success' || data?.status === 'failed';
+      if (wasRunning && nowDone) {
+        qc.invalidateQueries({ queryKey: ['sentiment', 'today', accountId] });
+        qc.invalidateQueries({ queryKey: ['sentiment', 'posts', accountId] });
+        qc.invalidateQueries({ queryKey: ['sentiment', 'briefs', accountId] });
+        qc.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+      }
+      return data;
+    },
     enabled: !!token && accountId !== null && accountId > 0,
-    staleTime: 30_000,
+    staleTime: 5_000,
+    // 任务运行中每 15s 轮询;终态停止轮询(返回 false)
+    refetchInterval: (query) => {
+      const s = (query.state.data as { status?: string } | undefined)?.status;
+      return s === 'running' || s === 'pending' ? 15_000 : false;
+    },
+    refetchIntervalInBackground: false,
   });
 }
 
