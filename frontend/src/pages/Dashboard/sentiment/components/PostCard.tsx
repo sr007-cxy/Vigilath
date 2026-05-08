@@ -41,7 +41,7 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
       )}
 
       <div className="flex items-center gap-3 flex-wrap">
-        <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
+        <SentimentBadge label={post.sentiment_label} />
         <InfluenceBar value={post.influence_potential} />
         {post.view_count != null && (
           <span className="text-[11px] text-muted">👁 {post.view_count.toLocaleString()}</span>

@@ -1921,9 +1921,9 @@ const en = {
                   "avgSentiment": "Sentiment",
                   "activeSources": "Active sources",
                   "vsYesterday": "vs yesterday",
-                  "tipTotal": "Total number of posts detected today across all sources and sentiment types.",
+                  "tipTotal": "Number of brand-relevant posts detected today (matches the trend chart, risk pie and articles list — only posts the LLM judged relevant).",
                   "tipHighRisk": "Posts with negative sentiment and high influence potential. Risk level is determined by sentiment score and reach.",
-                  "tipAvgSentiment": "Average sentiment score of all posts. Range: -1 (very negative) to +1 (very positive), 0 is neutral.",
+                  "tipAvgSentiment": "Average sentiment score of all posts. Range: -100% (very negative) to +100% (very positive), 0% is neutral.",
                   "tipActiveSources": "Number of distinct media platforms that produced content today (e.g. Weibo, Baidu, Xueqiu)."
                 },
                 "sentimentTrend": "Sentiment (7 days)",
@@ -1983,6 +1983,29 @@ const en = {
                   "stance": "Stance",
                   "intent": "Intent",
                   "factuality": "Factuality",
+                  "stanceLabels": {
+                    "supportive": "Supportive",
+                    "skeptical": "Skeptical",
+                    "neutral": "Neutral",
+                    "hostile": "Hostile"
+                  },
+                  "intentLabels": {
+                    "complaint": "Complaint",
+                    "praise": "Praise",
+                    "question": "Question",
+                    "rumor": "Rumor",
+                    "promo": "Promo",
+                    "analysis": "Analysis",
+                    "fud": "FUD",
+                    "pump": "Pump",
+                    "off_topic": "Off-topic"
+                  },
+                  "factualityLabels": {
+                    "factual_claim": "Factual claim",
+                    "opinion": "Opinion",
+                    "mixed": "Fact + opinion",
+                    "unverifiable": "Unverifiable"
+                  },
                   "riskLevel": "Risk level",
                   "riskSignals": "Risk signals",
                   "influence": "Influence",

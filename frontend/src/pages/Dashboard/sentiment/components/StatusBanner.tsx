@@ -17,7 +17,8 @@ const STYLE: Record<string, { bg: string; fg: string; border: string }> = {
 export function StatusBanner({ status, error, onRefresh, onRetry }: Props) {
   const { t } = useTranslation();
 
-  if (status === 'success' || status === null) return null;
+  // failed 也静默 — 用户要求:舆情监控任务异常不在前端暴露,继续展示历史数据即可。
+  if (status === 'success' || status === null || status === 'failed') return null;
 
   const s = STYLE[status] || STYLE.pending;
   const message =

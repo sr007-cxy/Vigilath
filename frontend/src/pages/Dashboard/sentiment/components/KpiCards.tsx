@@ -38,7 +38,7 @@ export function KpiCards({ data }: { data: KpiData }) {
       <Card
         label={t('dashboard.sentiment.today.kpi.avgSentiment')}
         tip={t('dashboard.sentiment.today.kpi.tipAvgSentiment')}
-        value={(data.avg_sentiment >= 0 ? '+' : '') + data.avg_sentiment.toFixed(2)}
+        value={(data.avg_sentiment >= 0 ? '+' : '') + Math.round(data.avg_sentiment * 100) + '%'}
         delta={data.trend_sentiment_pct}
         deltaLabel={t('dashboard.sentiment.today.kpi.vsYesterday')}
         valueColor={data.avg_sentiment < 0 ? '#dc2626' : '#16a34a'}

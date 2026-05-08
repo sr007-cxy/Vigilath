@@ -97,9 +97,9 @@ export function PostDetail({ post }: Props) {
         </Field>
 
         <div className="grid grid-cols-3 gap-3 my-2">
-          <MicroField label={t('dashboard.sentiment.articles.detail.stance')} value={post.stance ?? '—'} />
-          <MicroField label={t('dashboard.sentiment.articles.detail.intent')} value={post.intent ?? '—'} />
-          <MicroField label={t('dashboard.sentiment.articles.detail.factuality')} value={post.factuality ?? '—'} />
+          <MicroField label={t('dashboard.sentiment.articles.detail.stance')} value={localizeEnum(t, 'stanceLabels', post.stance)} />
+          <MicroField label={t('dashboard.sentiment.articles.detail.intent')} value={localizeEnum(t, 'intentLabels', post.intent)} />
+          <MicroField label={t('dashboard.sentiment.articles.detail.factuality')} value={localizeEnum(t, 'factualityLabels', post.factuality)} />
         </div>
 
         <Field label={t('dashboard.sentiment.articles.detail.riskSignals')}>
@@ -216,6 +216,20 @@ function ChipList({ items }: { items: string[] }) {
       ))}
     </div>
   );
+}
+
+/** stance/intent/factuality 是 sentinel 上游的英文 enum,前端按 i18n 字典翻译;
+ *  字典里没有该 key 时 i18next 会回显 key 本身,这里检测后 fallback 到 raw,
+ *  防止后端新增 enum 时前端出现长串 key 路径。 */
+function localizeEnum(
+  t: (k: string) => string,
+  group: 'stanceLabels' | 'intentLabels' | 'factualityLabels',
+  raw: string | null | undefined,
+): string {
+  if (!raw) return '—';
+  const key = `dashboard.sentiment.articles.detail.${group}.${raw}`;
+  const translated = t(key);
+  return translated === key ? raw : translated;
 }
 
 /** 把 citations 在 content 里高亮(简单 split + replace)。 */

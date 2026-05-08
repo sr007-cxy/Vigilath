@@ -1927,9 +1927,9 @@ const zh = {
                   "avgSentiment": "舆论倾向",
                   "activeSources": "活跃媒体",
                   "vsYesterday": "较昨日",
-                  "tipTotal": "今日监测到的舆情帖子总数，包含所有来源和情感类型。",
+                  "tipTotal": "今日监测到的相关帖子总数（仅 LLM 判定与本品牌相关的帖子，与下方趋势图、风险饼、文章列表口径一致）。",
                   "tipHighRisk": "情感偏负面且传播影响力较高的帖子数量。风险等级由情感评分和影响力综合判定。",
-                  "tipAvgSentiment": "所有帖子情感评分的平均值。范围 -1（极负面）到 +1（极正面），0 为中性。",
+                  "tipAvgSentiment": "所有帖子情感评分的平均值。范围 -100%（极负面）到 +100%（极正面），0% 为中性。",
                   "tipActiveSources": "今日产出舆情内容的不同媒体平台数量（如微博、百度、雪球等）。"
                 },
                 "sentimentTrend": "7 天情感趋势",
@@ -1989,6 +1989,29 @@ const zh = {
                   "stance": "立场",
                   "intent": "意图",
                   "factuality": "事实性",
+                  "stanceLabels": {
+                    "supportive": "支持",
+                    "skeptical": "质疑",
+                    "neutral": "中立",
+                    "hostile": "敌对"
+                  },
+                  "intentLabels": {
+                    "complaint": "投诉",
+                    "praise": "赞扬",
+                    "question": "提问",
+                    "rumor": "传闻",
+                    "promo": "推广",
+                    "analysis": "分析",
+                    "fud": "唱空",
+                    "pump": "拉盘",
+                    "off_topic": "无关"
+                  },
+                  "factualityLabels": {
+                    "factual_claim": "事实陈述",
+                    "opinion": "观点",
+                    "mixed": "事实+观点",
+                    "unverifiable": "无法核实"
+                  },
                   "riskLevel": "风险等级",
                   "riskSignals": "风险信号",
                   "influence": "影响力",

@@ -45,8 +45,9 @@ export function SentimentBadge({ label, score, t }: {
     >
       <span>{labelText}</span>
       {typeof score === 'number' && (
+        // 分数原始范围 -1..+1,按百分比展示更直观(用户反馈:小数看不懂)
         <span className="font-mono text-[10px] opacity-80">
-          {score >= 0 ? '+' : ''}{score.toFixed(2)}
+          {score >= 0 ? '+' : ''}{Math.round(score * 100)}%
         </span>
       )}
     </span>
