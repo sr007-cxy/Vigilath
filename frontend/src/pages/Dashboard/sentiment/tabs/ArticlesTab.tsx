@@ -377,6 +377,24 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setStartOffset((target - 1) * PAGE_SIZE);
   };
 
+  // 把 ISO 'YYYY-MM-DDTHH:MM[:SS]' 缩成 'M/D HH:MM' 在按钮上展示。
+  // 注意:必须在所有 hooks 之后、early return 之前的 hook 调用都已结束 ——
+  // 这里是普通函数,不是 hook,可以在任意位置。
+  const shortFmt = (s: string): string => {
+    const m = s.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    return m ? `${parseInt(m[1])}/${parseInt(m[2])} ${m[3]}:${m[4]}` : s;
+  };
+
+  // triggerLabel 是 hook,必须在 isLoading/error 早 return *之前* 调用,
+  // 否则不同渲染分支 hook 数量不一致 → React Rules of Hooks violation。
+  const triggerLabel = useMemo(() => {
+    if (timePreset === 'custom' && (appliedStart || appliedEnd)) {
+      return `${shortFmt(appliedStart)} → ${shortFmt(appliedEnd)}`;
+    }
+    const found = TIME_PRESETS.find(p => p.key === timePreset);
+    return t(`dashboard.sentiment.articles.filters.${found?.labelKey ?? 'timeToday'}`);
+  }, [timePreset, appliedStart, appliedEnd, t]);
+
   if (isLoading && !posts.length) {
     return <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
       {t('common.loading') || 'Loading...'}
@@ -387,20 +405,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
       ⚠ {error instanceof Error ? error.message : 'Failed to load posts'}
     </div>;
   }
-
-  // 把 ISO 'YYYY-MM-DDTHH:MM[:SS]' 缩成 'M/D HH:MM' 在按钮上展示
-  const shortFmt = (s: string): string => {
-    const m = s.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-    return m ? `${parseInt(m[1])}/${parseInt(m[2])} ${m[3]}:${m[4]}` : s;
-  };
-
-  const triggerLabel = useMemo(() => {
-    if (timePreset === 'custom' && (appliedStart || appliedEnd)) {
-      return `${shortFmt(appliedStart)} → ${shortFmt(appliedEnd)}`;
-    }
-    const found = TIME_PRESETS.find(p => p.key === timePreset);
-    return t(`dashboard.sentiment.articles.filters.${found?.labelKey ?? 'timeToday'}`);
-  }, [timePreset, appliedStart, appliedEnd, t]);
 
   const handleConfirmCustom = () => {
     if (customRangeError) return;
