@@ -1,9 +1,25 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SentimentPost } from '../../../../types/sentiment';
-import { timeAgo } from '../../../../mocks/sentiment';
 import { useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import { SentimentBadge, RiskBadge, SourceBadge, InfluenceBar } from './badges';
+
+// 显示绝对日期 — 去掉 "X 天前" 相对时间。
+// 今年:'5/8 14:30';跨年:'2025-12-31 14:30'。
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return sameYear
+    ? `${m}/${day} ${hh}:${mm}`
+    : `${d.getFullYear()}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')} ${hh}:${mm}`;
+}
 
 interface Props {
   post: SentimentPost;
@@ -45,7 +61,7 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
           </span>
         )}
         <span className="text-[11px] text-muted ml-auto">
-          {post.publish_time ? timeAgo(post.publish_time) : '—'}
+          {fmtDate(post.publish_time)}
         </span>
       </header>
 

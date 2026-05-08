@@ -248,8 +248,10 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
                         ) -> list[sqlite3.Row]:
     """文章列表(舆情 Tab 用).
 
-    时间过滤,基于 ingested_at(我们何时看到),三选一:
-        - start/end:YYYY-MM-DD,闭区间。任意一端 None 表示该侧不限。
+    时间过滤,基于 publish_time(文章实际发表时间)。publish_time IS NULL
+    的记录在有时间范围时不计入(没有时间无法判定);days=0 全部历史则不过滤。
+    三选一:
+        - start/end:ISO 时间戳,闭区间。任意一端 None 表示该侧不限。
                      start/end 同时 None 时回退到 days 语义。
         - days: 1=今日(默认), N>1=最近 N 天, 0/None=全部历史
 
@@ -259,19 +261,22 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
     where = ["a.symbol = ?"]
     params: list = [symbol]
 
+    # 时间过滤改为基于 publish_time(文章实际发表时间)而不是 ingested_at —
+    # publish_time IS NULL 的帖子被排除(无法定位到时间段);"全部历史" 不过滤,仍包含。
+    # ISO 8601 字符串可直接 lex 比较,保留小时/分钟精度。
     if start or end:
-        # ISO 8601 字符串可直接 lex 比较,不再 substr(...,1,10) — 保留小时/分钟精度。
-        # 前端可传 'YYYY-MM-DD' 当天起点 / 'YYYY-MM-DDTHH:MM:SS' 精确时刻。
+        where.append("p.publish_time IS NOT NULL")
         if start:
-            where.append("p.ingested_at >= ?")
+            where.append("p.publish_time >= ?")
             params.append(start)
         if end:
-            where.append("p.ingested_at <= ?")
+            where.append("p.publish_time <= ?")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("p.ingested_at >= ?")
+        where.append("p.publish_time IS NOT NULL")
+        where.append("p.publish_time >= ?")
         params.append(cutoff)
 
     sql = f"""
@@ -297,17 +302,20 @@ def analyses_count_for_symbol(conn: sqlite3.Connection, symbol: str,
     where = ["a.symbol = ?"]
     params: list = [symbol]
 
+    # 同 analyses_for_symbol — 按 publish_time 过滤,NULL 不计入有时间范围的查询。
     if start or end:
+        where.append("p.publish_time IS NOT NULL")
         if start:
-            where.append("p.ingested_at >= ?")
+            where.append("p.publish_time >= ?")
             params.append(start)
         if end:
-            where.append("p.ingested_at <= ?")
+            where.append("p.publish_time <= ?")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("p.ingested_at >= ?")
+        where.append("p.publish_time IS NOT NULL")
+        where.append("p.publish_time >= ?")
         params.append(cutoff)
 
     sql = f"""
