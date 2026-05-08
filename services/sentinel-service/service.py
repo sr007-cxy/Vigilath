@@ -200,7 +200,9 @@ class MonitorRequest(BaseModel):
     timelimit: Optional[str] = "d"
     auto_widen: bool = True
     region: str = "wt-wt"
-    engines: list[str] = Field(default_factory=lambda: ["ddg", "baidu"])
+    engines: list[str] = Field(default_factory=lambda: ["cnbing", "baidu", "ddg"])
+    # 顺序:cnbing 国内直连最稳放第一;baidu 有 cookie 次之;
+    # ddg 在国内机房经常返空,放最后兜底
 
 
 class AnalyzeRequest(BaseModel):
