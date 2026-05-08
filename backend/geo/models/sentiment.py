@@ -125,6 +125,29 @@ class SentimentRunLogORM(Base):
     account = relationship("SentimentAccountORM", back_populates="run_logs")
 
 
+class SentimentPlatformORM(Base):
+    """媒体平台目录(全局配置,非用户私有).
+    取代之前散落在 3 处的硬编码:
+      - frontend/src/constants/sentimentPlatforms.ts
+      - services/sentinel-service/search/plan.py PLATFORM_CATALOG
+      - backend/geo/services/sentinel_client.py _PLATFORM_CODE_TO_DOMAIN
+    新增平台 / 改 domain / 调地区分类只需 INSERT/UPDATE 此表 — 不用改代码、不用重启。
+    Seed 由 migrations/010_sentiment_platforms.py 注入。"""
+    __tablename__ = "sentiment_platforms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, nullable=False, unique=True, index=True)  # 'xueqiu', 'eastmoney' …
+    domain = Column(String, nullable=False)                          # 'xueqiu.com',传给 sentinel `site:` 用
+    category = Column(String, nullable=False)                        # finance / social / forum / video / news / overseas
+    region = Column(String, nullable=False)                          # mainland / hk / overseas
+    name_zh = Column(String, nullable=False, default="")
+    name_en = Column(String, nullable=False, default="")
+    sort_order = Column(Integer, nullable=False, default=0)          # 同分类内排序
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # ─────────────────────────── Pydantic ─────────────────────────
 
 
@@ -217,3 +240,20 @@ class KnowledgeOut(BaseModel):
     key: str
     body: str
     updated_at: datetime
+
+
+class SentimentPlatformOut(BaseModel):
+    code: str
+    domain: str
+    category: str
+    region: str
+    name_zh: str
+    name_en: str
+
+    @classmethod
+    def from_orm_row(cls, row: SentimentPlatformORM) -> "SentimentPlatformOut":
+        return cls(
+            code=row.code, domain=row.domain,
+            category=row.category, region=row.region,
+            name_zh=row.name_zh or "", name_en=row.name_en or "",
+        )

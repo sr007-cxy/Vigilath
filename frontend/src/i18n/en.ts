@@ -2032,7 +2032,32 @@ const en = {
                   "tieba": "Baidu Tieba",
                   "zhidao": "Baidu Zhidao",
                   "baidu_news": "Baidu News",
-                  "reddit": "Reddit"
+                  "reddit": "Reddit",
+                  "sina_finance": "Sina Finance",
+                  "qq_finance": "Tencent Finance",
+                  "163_finance": "NetEase Finance",
+                  "ths": "10jqka",
+                  "wallstreetcn": "Wallstreet CN",
+                  "yicai": "Yicai",
+                  "cls": "CLS",
+                  "gelonghui": "Gelonghui",
+                  "hupu": "Hupu",
+                  "douban": "Douban",
+                  "douyin": "Douyin",
+                  "ifeng": "Ifeng"
+                },
+                "categories": {
+                  "finance": "Financial media",
+                  "social": "Social media",
+                  "forum": "Forums",
+                  "video": "Video platforms",
+                  "news": "News portals",
+                  "overseas": "Overseas"
+                },
+                "regions": {
+                  "mainland": "Mainland China",
+                  "hk": "Hong Kong",
+                  "overseas": "Overseas"
                 }
               },
               "briefs": {
@@ -2199,7 +2224,10 @@ const en = {
                 "intentPlaceholder": "e.g. short-selling reports / earnings rumors / overseas ops",
                 "excludes": "Exclude terms (optional)",
                 "mediaAllowlist": "Media platforms (optional)",
-                "mediaAllowlistHint": "When set, only the selected platforms will be crawled; leave empty to crawl all 15. Changing this triggers a re-run.",
+                "mediaAllowlistHint": "Pick platforms by category; leave empty to crawl all. Changing this triggers a re-run.",
+                "mediaAllowlistAll": "All",
+                "mediaAllowlistSelectGroup": "Select all",
+                "mediaAllowlistClearGroup": "Clear",
                 "emails": "Notification emails (max 10)",
                 "tagPlaceholder": "Type and press Enter to add"
               },

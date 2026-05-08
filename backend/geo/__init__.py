@@ -13,6 +13,7 @@ from geo.models.sentiment import (  # noqa: F401 (register ORM so create_all bui
     SentimentAccountORM,
     SentimentKnowledgeORM,
     SentimentRunLogORM,
+    SentimentPlatformORM,
 )
 
 # Create all tables

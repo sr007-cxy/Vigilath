@@ -203,6 +203,17 @@ export interface KnowledgeDoc {
   updated_at: string;
 }
 
+/** 媒体平台目录条目(全局只读,GET /api/sentiment/platforms 返回)。
+ *  category / region 用于在 UI 上分组。 */
+export interface SentimentPlatform {
+  code: string;
+  domain: string;
+  category: 'finance' | 'social' | 'forum' | 'video' | 'news' | 'overseas' | string;
+  region: 'mainland' | 'hk' | 'overseas' | string;
+  name_zh: string;
+  name_en: string;
+}
+
 export interface TodayKpi {
   total_today: number;
   high_risk: number;

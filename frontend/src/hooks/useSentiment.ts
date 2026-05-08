@@ -3,12 +3,48 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { sentimentApi } from '../services/sentimentApi';
+import { sentimentApi, isMockMode } from '../services/sentimentApi';
+import { SENTIMENT_PLATFORMS as PLATFORM_FALLBACK } from '../constants/sentimentPlatforms';
 import type {
-  AccountCreatePayload, AccountUpdatePayload,
+  AccountCreatePayload, AccountUpdatePayload, SentimentPlatform,
 } from '../types/sentiment';
 
 const ACCOUNTS_KEY = ['sentiment', 'accounts'] as const;
+const PLATFORMS_KEY = ['sentiment', 'platforms'] as const;
+
+/** 把 constants/sentimentPlatforms.ts 里的本地静态条目"升级"为完整 SentimentPlatform 形态。
+ *  仅用于 (a) mock 模式 (b) 后端 /platforms 拉取失败时的兜底,确保页面不至于空白。 */
+function fallbackPlatforms(): SentimentPlatform[] {
+  return PLATFORM_FALLBACK.map(p => ({
+    code: p.code,
+    domain: p.domain,
+    category: p.category,
+    region: p.region,
+    name_zh: '', name_en: '',  // 让消费者回退到 i18n sourceLabels 翻译
+  }));
+}
+
+/** 拉媒体平台目录(全局只读,几乎不变)。
+ *  - mock 模式:直接用 constants
+ *  - 真实模式:走 GET /api/sentiment/platforms,失败兜底 constants
+ *  - staleTime: 1h(平台目录改完最多 1 小时生效;通常用户重新登录就拿到新版) */
+export function useSentimentPlatforms() {
+  const { token } = useAuth();
+  return useQuery<SentimentPlatform[]>({
+    queryKey: PLATFORMS_KEY,
+    queryFn: async () => {
+      if (isMockMode() || !token) return fallbackPlatforms();
+      try {
+        const data = await sentimentApi.listPlatforms(token);
+        return data.length > 0 ? data : fallbackPlatforms();
+      } catch {
+        return fallbackPlatforms();
+      }
+    },
+    staleTime: 60 * 60_000,
+    initialData: fallbackPlatforms,  // 首次渲染就有数据,避免 UI 闪空
+  });
+}
 
 export function useSentimentAccounts() {
   const { token } = useAuth();

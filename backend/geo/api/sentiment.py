@@ -26,6 +26,7 @@ from geo.database import SessionLocal
 from geo.models.sentiment import (
     KeywordGroup, SentimentAccountCreate, SentimentAccountORM, SentimentAccountOut,
     SentimentAccountUpdate, SentimentKnowledgeORM, SentimentRunLogORM,
+    SentimentPlatformORM, SentimentPlatformOut,
     RunStatusOut, KnowledgeOut, _as_utc, flatten_keyword_groups,
 )
 from geo.models.user import User
@@ -117,6 +118,31 @@ def _resolve_keywords_for_storage(
     if keywords is not None:
         return keywords
     return fallback_keywords
+
+
+# ─────────────────────────── 平台目录 ──────────────────────────
+
+
+@router.get("/platforms", response_model=list[SentimentPlatformOut])
+def list_platforms(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """媒体平台目录(全局只读).
+    用户登录后即可拉,不限会员档位 — 这是用来渲染白名单选择器和文章页过滤器的元数据,
+    不暴露用户私有信息。返回顺序:category 默认顺序 → 组内 sort_order。
+    """
+    category_rank = {
+        "finance": 1, "social": 2, "forum": 3,
+        "video": 4, "news": 5, "overseas": 6,
+    }
+    rows = (
+        db.query(SentimentPlatformORM)
+          .filter_by(enabled=True)
+          .all()
+    )
+    rows.sort(key=lambda r: (category_rank.get(r.category, 99), r.sort_order, r.code))
+    return [SentimentPlatformOut.from_orm_row(r) for r in rows]
 
 
 # ─────────────────────────── 账号 CRUD ────────────────────────

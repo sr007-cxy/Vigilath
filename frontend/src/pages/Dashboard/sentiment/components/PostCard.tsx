@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SentimentPost } from '../../../../types/sentiment';
 import { timeAgo } from '../../../../mocks/sentiment';
+import { useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import { SentimentBadge, RiskBadge, SourceBadge, InfluenceBar } from './badges';
 
 interface Props {
@@ -18,6 +20,11 @@ function countChars(s: string): number {
 
 export function PostCard({ post, selected, onClick, compact }: Props) {
   const { t } = useTranslation();
+  const platforms = useSentimentPlatforms().data ?? [];
+  const sourceRegion = useMemo(
+    () => new Map(platforms.map(p => [p.code, p.region] as const)),
+    [platforms],
+  );
   const topics = post.topics ?? [];
   return (
     <article
@@ -30,6 +37,7 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
     >
       <header className="flex items-center gap-2 flex-wrap mb-1.5">
         <SourceBadge source={post.source} />
+        <RegionTag source={post.source} sourceRegion={sourceRegion} t={t} />
         <RiskBadge level={post.risk_level} t={t} />
         {post.author && (
           <span className="text-[11px] text-muted truncate max-w-[8rem]" title={post.author}>
@@ -76,5 +84,27 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         </div>
       )}
     </article>
+  );
+}
+
+function RegionTag({
+  source, sourceRegion, t,
+}: {
+  source: string;
+  sourceRegion: Map<string, string>;
+  t: (k: string) => string;
+}) {
+  const region = sourceRegion.get(source);
+  if (!region) return null;
+  const key = `dashboard.sentiment.articles.regions.${region}`;
+  const label = t(key);
+  if (label === key) return null;
+  return (
+    <span
+      className="text-[10px] px-1.5 py-0.5 rounded"
+      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+    >
+      {label}
+    </span>
   );
 }

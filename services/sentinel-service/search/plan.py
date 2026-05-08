@@ -22,26 +22,48 @@ from llm_client import chat_create, has_openai, has_qwen
 PLAN_MODEL = os.environ.get("YUQING_PLAN_MODEL", "gpt-4o-mini")
 MAX_TOKENS = 2000
 
-# Canonical platform catalog. The system prompt above describes these as
-# *examples* the LLM may pick from; this list is also the source of truth used
-# by `ensure_all_platforms()` to deterministically backfill missing platforms
-# when the caller passes `force_all=True`.
+# Legacy fallback catalog — used by `ensure_all_platforms()` only when the
+# backend pipeline does NOT pass `allowed_domains` explicitly. As of
+# migration 010, the GEO backend reads `sentiment_platforms` from its own DB
+# and always sends the full domain list to /run-monitor, so this constant is
+# only consulted in standalone / manual-test scenarios.
+#
+# DO NOT edit this list to add a platform — instead INSERT into the
+# `sentiment_platforms` table on the GEO backend (or rerun migration 010).
 PLATFORM_CATALOG: list[tuple[str, str]] = [
-    ("xueqiu",      "xueqiu.com"),
-    ("eastmoney",   "guba.eastmoney.com"),
-    ("weibo",       "weibo.com"),
-    ("zhihu",       "zhihu.com"),
-    ("36kr",        "36kr.com"),
-    ("caixin",      "caixin.com"),
-    ("bilibili",    "bilibili.com"),
-    ("toutiao",     "toutiao.com"),
-    ("weixin",      "mp.weixin.qq.com"),
-    ("xiaohongshu", "xiaohongshu.com"),
-    ("kuaishou",    "kuaishou.com"),
-    ("tieba",       "tieba.baidu.com"),
-    ("zhidao",      "zhidao.baidu.com"),
-    ("baidu_news",  "news.baidu.com"),
-    ("reddit",      "reddit.com"),
+    # ── 财经媒体 ──
+    ("xueqiu",       "xueqiu.com"),
+    ("eastmoney",    "guba.eastmoney.com"),
+    ("caixin",       "caixin.com"),
+    ("36kr",         "36kr.com"),
+    ("sina_finance", "finance.sina.com.cn"),
+    ("qq_finance",   "finance.qq.com"),
+    ("163_finance",  "money.163.com"),
+    ("ths",          "10jqka.com.cn"),
+    ("wallstreetcn", "wallstreetcn.com"),
+    ("yicai",        "yicai.com"),
+    ("cls",          "cls.cn"),
+    ("gelonghui",    "gelonghui.com"),
+    # ── 社交媒体 ──
+    ("weibo",        "weibo.com"),
+    ("weixin",       "mp.weixin.qq.com"),
+    ("xiaohongshu",  "xiaohongshu.com"),
+    ("zhihu",        "zhihu.com"),
+    # ── 论坛社区 ──
+    ("tieba",        "tieba.baidu.com"),
+    ("zhidao",       "zhidao.baidu.com"),
+    ("hupu",         "hupu.com"),
+    ("douban",       "douban.com"),
+    # ── 视频平台 ──
+    ("bilibili",     "bilibili.com"),
+    ("douyin",       "douyin.com"),
+    ("kuaishou",     "kuaishou.com"),
+    ("toutiao",      "toutiao.com"),
+    # ── 资讯门户 ──
+    ("baidu_news",   "news.baidu.com"),
+    ("ifeng",        "ifeng.com"),
+    # ── 海外 ──
+    ("reddit",       "reddit.com"),
 ]
 
 PLAN_SYSTEM = """你是一名舆情监测分析师。给定一个公司 / 品牌 / 股票，生成一份"监测计划"——一组可直接发给搜索引擎（DuckDuckGo / Google / Bing）的查询，用于召回该目标在公开平台上的讨论。

@@ -7,7 +7,7 @@ import type {
   AccountCreatePayload, AccountUpdatePayload,
   Brief, BriefsResponse, DraftGenerateResult, DraftsResponse,
   KnowledgeDoc, PostsResponse, RunStatusPayload,
-  SentimentAccount, TodayResponse,
+  SentimentAccount, SentimentPlatform, TodayResponse,
 } from '../types/sentiment';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
@@ -46,6 +46,10 @@ async function request<T>(
 // ─────────────────────────── 账号 CRUD ────────────────────────
 
 export const sentimentApi = {
+  listPlatforms(token: string): Promise<SentimentPlatform[]> {
+    return request<SentimentPlatform[]>('GET', '/platforms', token);
+  },
+
   listAccounts(token: string): Promise<SentimentAccount[]> {
     return request<SentimentAccount[]>('GET', '/accounts', token);
   },

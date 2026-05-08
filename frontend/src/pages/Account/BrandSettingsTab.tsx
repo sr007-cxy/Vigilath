@@ -16,15 +16,15 @@ import { mockAccount, mockKeywordGroups, mockKnowledge } from '../../mocks/senti
 import { isMockMode } from '../../services/sentimentApi';
 import {
   useSentimentAccounts, useUpdateAccount, useDeleteAccount, useRunNow,
-  useKnowledge, useUpsertKnowledge,
+  useKnowledge, useUpsertKnowledge, useSentimentPlatforms,
 } from '../../hooks/useSentiment';
-import type { KeywordGroup } from '../../types/sentiment';
+import type { KeywordGroup, SentimentPlatform } from '../../types/sentiment';
 
 import { TagInput } from '../Dashboard/sentiment/components/TagInput';
 import { KeywordGroupsEditor } from '../Dashboard/sentiment/components/KeywordGroupsEditor';
 import { KnowledgeEditor } from '../Dashboard/sentiment/components/KnowledgeEditor';
 import { OnboardingWizard } from '../Dashboard/sentiment/OnboardingWizard';
-import { SENTIMENT_PLATFORMS } from '../../constants/sentimentPlatforms';
+import { groupByCategory } from '../../constants/sentimentPlatforms';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -219,29 +219,10 @@ export function BrandSettingsTab() {
           <TagInput value={excludes} onChange={setExcludes} placeholder={t('account.brand.fields.tagPlaceholder')} />
         </Field>
         <Field label={t('account.brand.fields.mediaAllowlist')}>
-          <p className="text-xs text-muted mb-2">
+          <p className="text-xs text-muted mb-3">
             {t('account.brand.fields.mediaAllowlistHint')}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {SENTIMENT_PLATFORMS.map(p => {
-              const active = mediaAllowlist.includes(p.code);
-              const label = t(`dashboard.sentiment.articles.sourceLabels.${p.code}`);
-              return (
-                <button key={p.code} type="button"
-                  onClick={() => setMediaAllowlist(active
-                    ? mediaAllowlist.filter(c => c !== p.code)
-                    : [...mediaAllowlist, p.code])}
-                  className="text-xs px-2.5 py-1 rounded transition-colors"
-                  style={{
-                    background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                    color: active ? '#ffffff' : 'var(--text-secondary)',
-                    border: '1px solid transparent',
-                  }}>
-                  {label === `dashboard.sentiment.articles.sourceLabels.${p.code}` ? p.code : label}
-                </button>
-              );
-            })}
-          </div>
+          <MediaAllowlistEditor value={mediaAllowlist} onChange={setMediaAllowlist} />
         </Field>
       </Section>
 
@@ -310,5 +291,87 @@ function Input({ value, onChange, mono }: { value: string; onChange: (v: string)
     <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
       className={`w-full px-3 py-2 rounded text-sm ${mono ? 'font-mono' : ''}`}
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+  );
+}
+
+/* ── 媒体白名单分组编辑器 — 参照 WisersOne 的分类导航,把平台按
+   财经/社交/论坛/视频/资讯/海外 6 类组织,每组一行小标题 + chip + 全选/清空。
+   平台目录从 useSentimentPlatforms() 拉,DB 是 single source of truth。 */
+function MediaAllowlistEditor({
+  value, onChange,
+}: { value: string[]; onChange: (next: string[]) => void }) {
+  const { t, i18n } = useTranslation();
+  const platformsQuery = useSentimentPlatforms();
+  const platforms = platformsQuery.data ?? [];
+  const groups = groupByCategory(platforms);
+
+  const toggle = (code: string) => {
+    onChange(value.includes(code) ? value.filter(c => c !== code) : [...value, code]);
+  };
+  const setGroup = (codes: string[], select: boolean) => {
+    const set = new Set(value);
+    for (const c of codes) {
+      if (select) set.add(c); else set.delete(c);
+    }
+    onChange(Array.from(set));
+  };
+  // 优先 DB 里的本地化名;空再回 i18n sourceLabels;再回 code。
+  const platformLabel = (p: SentimentPlatform): string => {
+    const fromDb = i18n.language === 'zh' ? p.name_zh : p.name_en;
+    if (fromDb) return fromDb;
+    const k = `dashboard.sentiment.articles.sourceLabels.${p.code}`;
+    const v = t(k);
+    return v === k ? p.code : v;
+  };
+
+  return (
+    <div className="space-y-3">
+      {groups.map(({ category, items }) => {
+        const codes = items.map(i => i.code);
+        const allOn = codes.every(c => value.includes(c));
+        const someOn = codes.some(c => value.includes(c));
+        return (
+          <div key={category}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
+                {t(`dashboard.sentiment.articles.categories.${category}`)}
+                <span className="ml-1.5 text-muted normal-case font-normal">
+                  {someOn ? `${codes.filter(c => value.includes(c)).length}/${codes.length}` : codes.length}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setGroup(codes, !allOn)}
+                className="text-[11px] text-muted hover:text-primary"
+              >
+                {allOn
+                  ? t('account.brand.fields.mediaAllowlistClearGroup')
+                  : t('account.brand.fields.mediaAllowlistSelectGroup')}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {items.map(p => {
+                const active = value.includes(p.code);
+                return (
+                  <button
+                    key={p.code}
+                    type="button"
+                    onClick={() => toggle(p.code)}
+                    className="text-xs px-2.5 py-1 rounded transition-colors"
+                    style={{
+                      background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                      color: active ? '#ffffff' : 'var(--text-secondary)',
+                      border: '1px solid transparent',
+                    }}
+                  >
+                    {platformLabel(p)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

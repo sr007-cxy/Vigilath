@@ -2038,7 +2038,32 @@ const zh = {
                   "tieba": "百度贴吧",
                   "zhidao": "百度知道",
                   "baidu_news": "百度新闻",
-                  "reddit": "Reddit"
+                  "reddit": "Reddit",
+                  "sina_finance": "新浪财经",
+                  "qq_finance": "腾讯财经",
+                  "163_finance": "网易财经",
+                  "ths": "同花顺",
+                  "wallstreetcn": "华尔街见闻",
+                  "yicai": "第一财经",
+                  "cls": "财联社",
+                  "gelonghui": "格隆汇",
+                  "hupu": "虎扑",
+                  "douban": "豆瓣",
+                  "douyin": "抖音",
+                  "ifeng": "凤凰网"
+                },
+                "categories": {
+                  "finance": "财经媒体",
+                  "social": "社交媒体",
+                  "forum": "论坛社区",
+                  "video": "视频平台",
+                  "news": "资讯门户",
+                  "overseas": "海外"
+                },
+                "regions": {
+                  "mainland": "中国大陆",
+                  "hk": "中国香港",
+                  "overseas": "海外"
                 }
               },
               "briefs": {
@@ -2205,7 +2230,10 @@ const zh = {
                 "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
                 "excludes": "排除词(选填)",
                 "mediaAllowlist": "媒体平台(选填)",
-                "mediaAllowlistHint": "勾选后只在所选平台抓取;留空 = 全部 15 个平台都抓。改动会触发下次重新抓取。",
+                "mediaAllowlistHint": "按分类勾选要抓取的平台,留空 = 全部平台。改动会触发下次重新抓取。",
+                "mediaAllowlistAll": "全部",
+                "mediaAllowlistSelectGroup": "全选",
+                "mediaAllowlistClearGroup": "清空",
                 "emails": "通知邮箱(≤10)",
                 "tagPlaceholder": "输入后回车添加"
               },

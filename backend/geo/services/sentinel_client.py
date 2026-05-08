@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from typing import Any, Optional
 
 import httpx
@@ -15,39 +17,106 @@ log = logging.getLogger(__name__)
 SENTINEL_URL = os.environ.get("SENTINEL_SERVICE_URL", "http://localhost:8090")
 PLATFORM_OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 
-# 平台 code → 域名映射,与 services/sentinel-service/search/plan.py 的
-# PLATFORM_CATALOG 对齐. FE / 用户存的是 code(可读、可在 UI 上展示),
-# sentinel 接收的 media_allowlist 是域名(用于 site: 过滤),所以这里翻译一道.
-# 不在表中的字符串(例如用户手写的 "xhslink.com")原样透传.
-_PLATFORM_CODE_TO_DOMAIN: dict[str, str] = {
-    "xueqiu":      "xueqiu.com",
-    "eastmoney":   "guba.eastmoney.com",
-    "weibo":       "weibo.com",
-    "zhihu":       "zhihu.com",
-    "36kr":        "36kr.com",
-    "caixin":      "caixin.com",
-    "bilibili":    "bilibili.com",
-    "toutiao":     "toutiao.com",
-    "weixin":      "mp.weixin.qq.com",
-    "xiaohongshu": "xiaohongshu.com",
-    "kuaishou":    "kuaishou.com",
-    "tieba":       "tieba.baidu.com",
-    "zhidao":      "zhidao.baidu.com",
-    "baidu_news":  "news.baidu.com",
-    "reddit":      "reddit.com",
+# Hardcoded fallback — 仅当 DB 查询失败时使用(冷启动 / 表缺失 / 异常),
+# 真正的 source of truth 是 sentiment_platforms 表(由 migration 010 seed)。
+# 改 / 加平台不要改这里 — 改 DB(或重跑 migration)。
+_PLATFORM_FALLBACK_MAP: dict[str, str] = {
+    "xueqiu":       "xueqiu.com",
+    "eastmoney":    "guba.eastmoney.com",
+    "caixin":       "caixin.com",
+    "36kr":         "36kr.com",
+    "sina_finance": "finance.sina.com.cn",
+    "qq_finance":   "finance.qq.com",
+    "163_finance":  "money.163.com",
+    "ths":          "10jqka.com.cn",
+    "wallstreetcn": "wallstreetcn.com",
+    "yicai":        "yicai.com",
+    "cls":          "cls.cn",
+    "gelonghui":    "gelonghui.com",
+    "weibo":        "weibo.com",
+    "weixin":       "mp.weixin.qq.com",
+    "xiaohongshu":  "xiaohongshu.com",
+    "zhihu":        "zhihu.com",
+    "tieba":        "tieba.baidu.com",
+    "zhidao":       "zhidao.baidu.com",
+    "hupu":         "hupu.com",
+    "douban":       "douban.com",
+    "bilibili":     "bilibili.com",
+    "douyin":       "douyin.com",
+    "kuaishou":     "kuaishou.com",
+    "toutiao":      "toutiao.com",
+    "baidu_news":   "news.baidu.com",
+    "ifeng":        "ifeng.com",
+    "reddit":       "reddit.com",
 }
+
+# 60s 内存缓存 — pipeline 一次跑会调多个 RPC,避免每次都打 DB。
+# admin 改了平台后最多 60s 生效。
+_PLATFORM_CACHE: Optional[tuple[dict[str, str], list[str]]] = None
+_PLATFORM_CACHE_AT: float = 0.0
+_PLATFORM_CACHE_TTL = 60.0
+_PLATFORM_CACHE_LOCK = threading.Lock()
+
+
+def _load_platform_map() -> tuple[dict[str, str], list[str]]:
+    """从 DB 读 (code→domain map, 全部 enabled 域名 list)。
+    DB 不可达时回落到 _PLATFORM_FALLBACK_MAP — 这样 sentinel-service 即使在
+    backend cold start / 表损坏的极端情况下仍能跑(用 27 个内置平台)。"""
+    global _PLATFORM_CACHE, _PLATFORM_CACHE_AT
+    now = time.time()
+    if _PLATFORM_CACHE is not None and (now - _PLATFORM_CACHE_AT) < _PLATFORM_CACHE_TTL:
+        return _PLATFORM_CACHE
+    with _PLATFORM_CACHE_LOCK:
+        if _PLATFORM_CACHE is not None and (now - _PLATFORM_CACHE_AT) < _PLATFORM_CACHE_TTL:
+            return _PLATFORM_CACHE
+        try:
+            # 延迟 import 避免 services/* ↔ models/* 之间的循环引用。
+            from geo.database import SessionLocal
+            from geo.models.sentiment import SentimentPlatformORM
+            db = SessionLocal()
+            try:
+                rows = db.query(SentimentPlatformORM).filter_by(enabled=True).all()
+            finally:
+                db.close()
+            if not rows:
+                # 表存在但还没 seed — 用 fallback 顶住,管理员稍后跑 migration
+                log.warning("sentiment_platforms table is empty; using fallback (run migration 010)")
+                m = dict(_PLATFORM_FALLBACK_MAP)
+            else:
+                m = {r.code: r.domain for r in rows}
+        except Exception as e:
+            log.warning("could not load sentiment_platforms from DB (%s); using fallback", e)
+            m = dict(_PLATFORM_FALLBACK_MAP)
+        result = (m, list(m.values()))
+        _PLATFORM_CACHE = result
+        _PLATFORM_CACHE_AT = now
+        return result
+
+
+def invalidate_platform_cache() -> None:
+    """admin 改完平台目录后调一下,下一次 RPC 立即生效(可选,不调也最多 60s 后生效)。"""
+    global _PLATFORM_CACHE, _PLATFORM_CACHE_AT
+    with _PLATFORM_CACHE_LOCK:
+        _PLATFORM_CACHE = None
+        _PLATFORM_CACHE_AT = 0.0
 
 
 def _resolve_media_allowlist(items: Optional[list[str]]) -> list[str]:
-    """把 ['xueqiu','weibo'] 解析成 ['xueqiu.com','weibo.com'];未识别的字符串原样保留."""
+    """codes → domains。
+    - items 含已识别 code → 翻成 domain
+    - items 含未识别字符串(例如用户手写 'xhslink.com')→ 原样透传
+    - items 空 / None → **展开为全部 enabled 平台域名**,这样 sentinel 永远拿到非空列表,
+      不再回落到自己的 PLATFORM_CATALOG — DB 真正成为 single source of truth。
+    """
+    code_map, all_domains = _load_platform_map()
     if not items:
-        return []
+        return list(all_domains)
     out: list[str] = []
     for s in items:
         s = (s or "").strip()
         if not s:
             continue
-        out.append(_PLATFORM_CODE_TO_DOMAIN.get(s, s))
+        out.append(code_map.get(s, s))
     return out
 
 # 不同操作的合理超时:

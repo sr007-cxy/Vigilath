@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SentimentPost } from '../../../../types/sentiment';
+import { useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import { SentimentBadge, RiskBadge, SourceBadge } from './badges';
 
 const cardStyle: React.CSSProperties = {
@@ -21,6 +22,11 @@ interface Props {
 
 export function PostDetail({ post }: Props) {
   const { t } = useTranslation();
+  const platforms = useSentimentPlatforms().data ?? [];
+  const sourceRegion = useMemo(
+    () => new Map(platforms.map(p => [p.code, p.region] as const)),
+    [platforms],
+  );
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
   if (!post) {
@@ -56,6 +62,13 @@ export function PostDetail({ post }: Props) {
         <h2 className="text-lg font-bold text-primary leading-snug">{post.title || '(无标题)'}</h2>
         <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
           <span>{post.author || '—'}</span>
+          {(() => {
+            const region = sourceRegion.get(post.source);
+            if (!region) return null;
+            const k = `dashboard.sentiment.articles.regions.${region}`;
+            const v = t(k);
+            return v === k ? null : <span>📍 {v}</span>;
+          })()}
           <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
           {content && <span>📝 {countChars(content).toLocaleString()} 字</span>}
           {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}

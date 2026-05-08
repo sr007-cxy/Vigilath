@@ -4,11 +4,14 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { mockPosts } from '../../../../mocks/sentiment';
-import { usePosts, useGenerateDraft } from '../../../../hooks/useSentiment';
+import { usePosts, useGenerateDraft, useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
-import { SENTIMENT_PLATFORM_CODES } from '../../../../constants/sentimentPlatforms';
+import {
+  PLATFORM_CATEGORY_ORDER,
+  type PlatformCategory,
+} from '../../../../constants/sentimentPlatforms';
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
@@ -22,7 +25,6 @@ const cardStyle: React.CSSProperties = {
 
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
-const FIXED_SOURCES = SENTIMENT_PLATFORM_CODES;
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
@@ -39,10 +41,21 @@ interface Props {
 }
 
 export function ArticlesTab({ account, usingMock }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [params, setParams] = useSearchParams();
 
   const generateDraft = useGenerateDraft();
+  const platforms = useSentimentPlatforms().data ?? [];
+  const platformCodes = useMemo(() => platforms.map(p => p.code), [platforms]);
+  const platformNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of platforms) {
+      const n = i18n.language === 'zh' ? p.name_zh : p.name_en;
+      if (n) m.set(p.code, n);
+    }
+    return m;
+  }, [platforms, i18n.language]);
+
   const { data: postsResp, isLoading, error } = usePosts(
     usingMock ? null : account.id,
     usingMock ? null : account.ticker,
@@ -63,7 +76,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const src of FIXED_SOURCES) counts.set(src, 0);
+    for (const src of platformCodes) counts.set(src, 0);
     for (const p of posts) {
       if (onlyRelevant && !p.is_relevant) continue;
       const sl = (p.sentiment_label as string) || 'unknown';
@@ -80,15 +93,28 @@ export function ArticlesTab({ account, usingMock }: Props) {
       counts.set(p.source, (counts.get(p.source) ?? 0) + 1);
     }
     return counts;
-  }, [posts, sentiments, risks, topic, onlyRelevant]);
+  }, [posts, sentiments, risks, topic, onlyRelevant, platformCodes]);
 
-  const sourceList = useMemo(() => {
-    const fixed = FIXED_SOURCES as readonly string[];
+  // 把平台按 category 分组,sourceCounts 里出现但不在 catalog 的源(后端
+  // 透传的自定义域名)单独归到 "其他" 组,与 WisersOne 的分类侧栏一致。
+  const sourceGroups = useMemo(() => {
+    const byCat = new Map<PlatformCategory | 'other', string[]>();
+    for (const p of platforms) {
+      const list = byCat.get(p.category as PlatformCategory) ?? [];
+      list.push(p.code);
+      byCat.set(p.category as PlatformCategory, list);
+    }
+    const known = new Set<string>(platformCodes);
     const extras = Array.from(sourceCounts.keys())
-      .filter(s => !fixed.includes(s))
+      .filter(s => !known.has(s))
       .sort();
-    return [...fixed, ...extras];
-  }, [sourceCounts]);
+    if (extras.length) byCat.set('other', extras);
+
+    const order: (PlatformCategory | 'other')[] = [...PLATFORM_CATEGORY_ORDER, 'other'];
+    return order
+      .filter(c => byCat.has(c))
+      .map(c => ({ category: c, codes: byCat.get(c)! }));
+  }, [sourceCounts, platforms, platformCodes]);
 
   const initialKey = params.get('post');
   const [selectedKey, setSelectedKey] = useState<string | null>(initialKey);
@@ -187,26 +213,46 @@ export function ArticlesTab({ account, usingMock }: Props) {
         </FilterGroup>
 
         <FilterGroup label={t('dashboard.sentiment.articles.filters.source')}>
-          <div className="flex flex-col w-full gap-0.5">
-            {sourceList.map(s => {
-              const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
-              const localized = t(labelKey);
-              const display = localized === labelKey ? s : localized;
-              const count = sourceCounts.get(s) ?? 0;
-              const active = sources.has(s);
+          <div className="flex flex-col w-full gap-2">
+            {sourceGroups.map(({ category, codes }) => {
+              const catLabelKey = `dashboard.sentiment.articles.categories.${category}`;
+              const catLabel = t(catLabelKey);
+              const catDisplay = catLabel === catLabelKey ? category : catLabel;
+              const groupCount = codes.reduce((sum, s) => sum + (sourceCounts.get(s) ?? 0), 0);
               return (
-                <button key={s} type="button"
-                  onClick={() => setSources(toggle(sources, s))}
-                  className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
-                  style={{
-                    background: active ? 'var(--accent-primary)' : 'transparent',
-                    color: active ? '#ffffff' : 'var(--text-secondary)',
-                  }}>
-                  <span>{display}</span>
-                  <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
-                    {formatCount(count)}
-                  </span>
-                </button>
+                <div key={category}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+                      {catDisplay}
+                    </span>
+                    <span className="text-[10px] text-muted">{formatCount(groupCount)}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {codes.map(s => {
+                      // 优先用 DB 的本地化名;否则回 i18n sourceLabels;再回 code
+                      const fromDb = platformNames.get(s);
+                      const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+                      const localized = fromDb || t(labelKey);
+                      const display = (!fromDb && localized === labelKey) ? s : localized;
+                      const count = sourceCounts.get(s) ?? 0;
+                      const active = sources.has(s);
+                      return (
+                        <button key={s} type="button"
+                          onClick={() => setSources(toggle(sources, s))}
+                          className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
+                          style={{
+                            background: active ? 'var(--accent-primary)' : 'transparent',
+                            color: active ? '#ffffff' : 'var(--text-secondary)',
+                          }}>
+                          <span>{display}</span>
+                          <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
+                            {formatCount(count)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
