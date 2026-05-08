@@ -617,19 +617,19 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             FROM posts p LEFT JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
             WHERE p.symbol = ?
-              AND substr(coalesce(p.publish_time, p.ingested_at), 1, 10) = ?
+              AND substr(p.ingested_at, 1, 10) = ?
         """, (ticker, today)).fetchone()
 
         # N 天情感堆叠柱:按日期 group + sentiment_label 分桶
         trend_rows = list(conn.execute("""
             SELECT
-                substr(coalesce(p.publish_time, p.ingested_at), 1, 10) AS d,
+                substr(p.ingested_at, 1, 10) AS d,
                 a.sentiment_label AS sl,
                 count(*) AS c
             FROM posts p JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
             WHERE p.symbol = ? AND a.is_relevant = 1
-              AND substr(coalesce(p.publish_time, p.ingested_at), 1, 10) >= ?
+              AND substr(p.ingested_at, 1, 10) >= ?
             GROUP BY d, sl
             ORDER BY d ASC
         """, (ticker, cutoff)))

@@ -255,6 +255,13 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str) -> list[sqlite3.R
 
 def analyses_for_day(conn: sqlite3.Connection, symbol: str,
                      date: str) -> list[sqlite3.Row]:
+    """日度简报数据源.
+
+    匹配规则:**用 ingested_at 当 "今日"** —— 我们今天看到的,就是今天的舆情。
+    不再单看 publish_time;crawler 拿回的多数是历史帖,publish_time 可能
+    是几天/几月前,但今天才发现该计入今天。ingested_at 是 NOT NULL 字段,
+    精确反映 "我们何时看到这条数据"。
+    """
     return list(conn.execute(
         """
         SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
@@ -262,8 +269,8 @@ def analyses_for_day(conn: sqlite3.Connection, symbol: str,
         FROM analyses a
         JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
         WHERE a.symbol = ?
-          AND substr(coalesce(p.publish_time, p.ingested_at), 1, 10) = ?
-        ORDER BY coalesce(p.publish_time, p.ingested_at)
+          AND substr(p.ingested_at, 1, 10) = ?
+        ORDER BY coalesce(p.publish_time, p.ingested_at) DESC
         """,
         (symbol, date),
     ))
