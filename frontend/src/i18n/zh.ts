@@ -2024,14 +2024,21 @@ const zh = {
                 "empty": "没有匹配筛选条件的帖子",
                 "count": "{{count}} 条",
                 "sourceLabels": {
-                  "douyin": "抖音",
-                  "bilibili": "哔哩哔哩",
+                  "xueqiu": "雪球",
+                  "eastmoney": "东方财富",
                   "weibo": "微博",
-                  "weixin": "微信",
-                  "kuaishou": "快手",
-                  "xiaohongshu": "小红书",
+                  "zhihu": "知乎",
+                  "36kr": "36氪",
+                  "caixin": "财新",
+                  "bilibili": "哔哩哔哩",
                   "toutiao": "今日头条",
-                  "twitter": "Twitter"
+                  "weixin": "微信公众号",
+                  "xiaohongshu": "小红书",
+                  "kuaishou": "快手",
+                  "tieba": "百度贴吧",
+                  "zhidao": "百度知道",
+                  "baidu_news": "百度新闻",
+                  "reddit": "Reddit"
                 }
               },
               "briefs": {
@@ -2090,6 +2097,8 @@ const zh = {
                   "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
                   "keywords": "重点关注词",
                   "excludes": "排除词(选填)",
+                  "mediaAllowlist": "媒体平台(选填)",
+                  "mediaAllowlistHint": "勾选后只在所选平台抓取;留空 = 全部 15 个平台都抓。改动会触发下次重新抓取。",
                   "emails": "通知邮箱(≤10)",
                   "tagPlaceholder": "输入后回车添加"
                 },

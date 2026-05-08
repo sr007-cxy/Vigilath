@@ -42,6 +42,8 @@ export interface SentimentAccount {
   excludes: string[];
   /** 结构化关键词分组 — 6+ 类别,每类多条目. */
   keyword_groups?: KeywordGroup[];
+  /** 媒体白名单(平台 code 列表,空数组 = 全平台). */
+  media_allowlist: string[];
   notify_emails: string[];
   active: boolean;
   last_run_at: string | null;
@@ -58,6 +60,7 @@ export interface AccountCreatePayload {
   keywords?: string[];
   keyword_groups?: KeywordGroup[];
   excludes?: string[];
+  media_allowlist?: string[];
   notify_emails?: string[];
   run_now?: boolean;
 }
@@ -70,6 +73,7 @@ export type AccountUpdatePayload = Partial<{
   keywords: string[];
   keyword_groups: KeywordGroup[];
   excludes: string[];
+  media_allowlist: string[];
   notify_emails: string[];
   active: boolean;
 }>;

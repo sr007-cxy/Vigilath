@@ -15,6 +15,41 @@ log = logging.getLogger(__name__)
 SENTINEL_URL = os.environ.get("SENTINEL_SERVICE_URL", "http://localhost:8090")
 PLATFORM_OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 
+# 平台 code → 域名映射,与 services/sentinel-service/search/plan.py 的
+# PLATFORM_CATALOG 对齐. FE / 用户存的是 code(可读、可在 UI 上展示),
+# sentinel 接收的 media_allowlist 是域名(用于 site: 过滤),所以这里翻译一道.
+# 不在表中的字符串(例如用户手写的 "xhslink.com")原样透传.
+_PLATFORM_CODE_TO_DOMAIN: dict[str, str] = {
+    "xueqiu":      "xueqiu.com",
+    "eastmoney":   "guba.eastmoney.com",
+    "weibo":       "weibo.com",
+    "zhihu":       "zhihu.com",
+    "36kr":        "36kr.com",
+    "caixin":      "caixin.com",
+    "bilibili":    "bilibili.com",
+    "toutiao":     "toutiao.com",
+    "weixin":      "mp.weixin.qq.com",
+    "xiaohongshu": "xiaohongshu.com",
+    "kuaishou":    "kuaishou.com",
+    "tieba":       "tieba.baidu.com",
+    "zhidao":      "zhidao.baidu.com",
+    "baidu_news":  "news.baidu.com",
+    "reddit":      "reddit.com",
+}
+
+
+def _resolve_media_allowlist(items: Optional[list[str]]) -> list[str]:
+    """把 ['xueqiu','weibo'] 解析成 ['xueqiu.com','weibo.com'];未识别的字符串原样保留."""
+    if not items:
+        return []
+    out: list[str] = []
+    for s in items:
+        s = (s or "").strip()
+        if not s:
+            continue
+        out.append(_PLATFORM_CODE_TO_DOMAIN.get(s, s))
+    return out
+
 # 不同操作的合理超时:
 #   monitor 涉及 LLM 生成 plan + N 个搜索引擎调用 — 即使限定 backend + 走代理,
 #           30+ query × 6-8s/query 加上 LLM 限速重试可能跑到 10-15 分钟
@@ -78,7 +113,8 @@ def run_monitor(
     payload = {
         "account_id": account_id, "target": target, "ticker": ticker,
         "intent": intent, "aliases": aliases or [], "keywords": keywords or [],
-        "excludes": excludes or [], "media_allowlist": media_allowlist or [],
+        "excludes": excludes or [],
+        "media_allowlist": _resolve_media_allowlist(media_allowlist),
     }
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(

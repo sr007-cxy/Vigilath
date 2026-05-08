@@ -8,6 +8,7 @@ import { usePosts, useGenerateDraft } from '../../../../hooks/useSentiment';
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
+import { SENTIMENT_PLATFORM_CODES } from '../../../../constants/sentimentPlatforms';
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
@@ -21,10 +22,7 @@ const cardStyle: React.CSSProperties = {
 
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
-const FIXED_SOURCES = [
-  'douyin', 'bilibili', 'weibo', 'weixin',
-  'kuaishou', 'xiaohongshu', 'toutiao', 'twitter',
-] as const;
+const FIXED_SOURCES = SENTIMENT_PLATFORM_CODES;
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;

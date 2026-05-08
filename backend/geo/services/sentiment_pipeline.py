@@ -102,6 +102,7 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
         else:
             keywords = json.loads(acc.keywords_json or "[]")
         excludes = json.loads(acc.excludes_json or "[]")
+        media_allowlist = json.loads(acc.media_allowlist_json or "[]")
 
         stats: dict = {}
         try:
@@ -111,6 +112,7 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 target=acc.target, ticker=acc.ticker,
                 intent=acc.intent, aliases=aliases,
                 keywords=keywords, excludes=excludes,
+                media_allowlist=media_allowlist,
             )
             stats["monitor"] = r1
 

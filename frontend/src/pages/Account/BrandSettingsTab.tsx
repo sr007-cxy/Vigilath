@@ -24,6 +24,7 @@ import { TagInput } from '../Dashboard/sentiment/components/TagInput';
 import { KeywordGroupsEditor } from '../Dashboard/sentiment/components/KeywordGroupsEditor';
 import { KnowledgeEditor } from '../Dashboard/sentiment/components/KnowledgeEditor';
 import { OnboardingWizard } from '../Dashboard/sentiment/OnboardingWizard';
+import { SENTIMENT_PLATFORMS } from '../../constants/sentimentPlatforms';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -52,6 +53,7 @@ export function BrandSettingsTab() {
   const [intents, setIntents] = useState<string[]>([]);
   const [keywordGroups, setKeywordGroups] = useState<KeywordGroup[]>([]);
   const [excludes, setExcludes] = useState<string[]>([]);
+  const [mediaAllowlist, setMediaAllowlist] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export function BrandSettingsTab() {
       setKeywordGroups([]);
     }
     setExcludes(account.excludes ?? []);
+    setMediaAllowlist(account.media_allowlist ?? []);
     setEmails(account.notify_emails ?? []);
   }, [account, usingMock]);
 
@@ -118,7 +121,7 @@ export function BrandSettingsTab() {
     target, ticker,
     aliases, intent: intents.length > 0 ? intents.join('、') : undefined,
     keyword_groups: keywordGroups,
-    excludes, notify_emails: emails,
+    excludes, media_allowlist: mediaAllowlist, notify_emails: emails,
   });
 
   const persistKnowledge = async () => {
@@ -214,6 +217,31 @@ export function BrandSettingsTab() {
         <KeywordGroupsEditor value={keywordGroups} onChange={setKeywordGroups} />
         <Field label={t('account.brand.fields.excludes')}>
           <TagInput value={excludes} onChange={setExcludes} placeholder={t('account.brand.fields.tagPlaceholder')} />
+        </Field>
+        <Field label={t('account.brand.fields.mediaAllowlist')}>
+          <p className="text-xs text-muted mb-2">
+            {t('account.brand.fields.mediaAllowlistHint')}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {SENTIMENT_PLATFORMS.map(p => {
+              const active = mediaAllowlist.includes(p.code);
+              const label = t(`dashboard.sentiment.articles.sourceLabels.${p.code}`);
+              return (
+                <button key={p.code} type="button"
+                  onClick={() => setMediaAllowlist(active
+                    ? mediaAllowlist.filter(c => c !== p.code)
+                    : [...mediaAllowlist, p.code])}
+                  className="text-xs px-2.5 py-1 rounded transition-colors"
+                  style={{
+                    background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                    color: active ? '#ffffff' : 'var(--text-secondary)',
+                    border: '1px solid transparent',
+                  }}>
+                  {label === `dashboard.sentiment.articles.sourceLabels.${p.code}` ? p.code : label}
+                </button>
+              );
+            })}
+          </div>
         </Field>
       </Section>
 

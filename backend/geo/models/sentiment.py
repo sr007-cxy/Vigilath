@@ -70,6 +70,9 @@ class SentimentAccountORM(Base):
     # 旧字段 keywords_json 保留为扁平回退;pipeline 优先用 keyword_groups_json 展平后的结果.
     keyword_groups_json = Column(Text, default="[]")
     excludes_json = Column(Text, default="[]")
+    # 媒体白名单(平台 code 列表,例:["xueqiu","weibo"]).空 list = 全 15 个平台都跑.
+    # 与 services/sentinel-service/search/plan.py 的 PLATFORM_CATALOG 对齐.
+    media_allowlist_json = Column(Text, default="[]")
     notify_emails_json = Column(Text, default="[]")
 
     active = Column(Boolean, nullable=False, default=True)
@@ -133,6 +136,7 @@ class SentimentAccountCreate(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     keyword_groups: list[KeywordGroup] = Field(default_factory=list)
     excludes: list[str] = Field(default_factory=list)
+    media_allowlist: list[str] = Field(default_factory=list)
     notify_emails: list[EmailStr] = Field(default_factory=list, max_length=10)
     run_now: bool = True
 
@@ -145,6 +149,7 @@ class SentimentAccountUpdate(BaseModel):
     keywords: Optional[list[str]] = None
     keyword_groups: Optional[list[KeywordGroup]] = None
     excludes: Optional[list[str]] = None
+    media_allowlist: Optional[list[str]] = None
     notify_emails: Optional[list[EmailStr]] = None
     active: Optional[bool] = None
 
@@ -159,6 +164,7 @@ class SentimentAccountOut(BaseModel):
     keywords: list[str]
     keyword_groups: list[KeywordGroup] = Field(default_factory=list)
     excludes: list[str]
+    media_allowlist: list[str]
     notify_emails: list[str]
     active: bool
     last_run_at: Optional[datetime]
@@ -178,6 +184,7 @@ class SentimentAccountOut(BaseModel):
             keywords=json.loads(row.keywords_json or "[]"),
             keyword_groups=groups,
             excludes=json.loads(row.excludes_json or "[]"),
+            media_allowlist=json.loads(row.media_allowlist_json or "[]"),
             notify_emails=json.loads(row.notify_emails_json or "[]"),
             active=row.active,
             last_run_at=_as_utc(row.last_run_at),

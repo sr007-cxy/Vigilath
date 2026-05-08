@@ -2018,14 +2018,21 @@ const en = {
                 "empty": "No posts match the current filters",
                 "count": "{{count}} posts",
                 "sourceLabels": {
-                  "douyin": "Douyin",
-                  "bilibili": "Bilibili",
+                  "xueqiu": "Xueqiu",
+                  "eastmoney": "Eastmoney",
                   "weibo": "Weibo",
-                  "weixin": "WeChat",
-                  "kuaishou": "Kuaishou",
-                  "xiaohongshu": "Xiaohongshu",
+                  "zhihu": "Zhihu",
+                  "36kr": "36Kr",
+                  "caixin": "Caixin",
+                  "bilibili": "Bilibili",
                   "toutiao": "Toutiao",
-                  "twitter": "Twitter"
+                  "weixin": "WeChat MP",
+                  "xiaohongshu": "Xiaohongshu",
+                  "kuaishou": "Kuaishou",
+                  "tieba": "Baidu Tieba",
+                  "zhidao": "Baidu Zhidao",
+                  "baidu_news": "Baidu News",
+                  "reddit": "Reddit"
                 }
               },
               "briefs": {
@@ -2191,6 +2198,8 @@ const en = {
                 "intent": "Monitoring focus",
                 "intentPlaceholder": "e.g. short-selling reports / earnings rumors / overseas ops",
                 "excludes": "Exclude terms (optional)",
+                "mediaAllowlist": "Media platforms (optional)",
+                "mediaAllowlistHint": "When set, only the selected platforms will be crawled; leave empty to crawl all 15. Changing this triggers a re-run.",
                 "emails": "Notification emails (max 10)",
                 "tagPlaceholder": "Type and press Enter to add"
               },

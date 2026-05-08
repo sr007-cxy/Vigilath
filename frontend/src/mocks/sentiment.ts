@@ -45,6 +45,7 @@ export interface SentimentAccountMock {
   keywords: string[];
   keyword_groups?: KeywordGroup[];
   excludes: string[];
+  media_allowlist: string[];
   notify_emails: string[];
   active: boolean;
   last_run_at: string | null;
@@ -72,6 +73,7 @@ export const mockAccount: SentimentAccountMock = {
   intent: '关注做空报告 / 业绩传闻 / 海外业务 / 数据中心需求',
   keywords: ['业绩', '做空', '管理层', '财报', '数据中心'],
   excludes: ['招聘', '实习'],
+  media_allowlist: [],
   notify_emails: ['ir@vnet.com', 'pr@vnet.com'],
   active: true,
   last_run_at: '2026-05-06T05:00:00+08:00',

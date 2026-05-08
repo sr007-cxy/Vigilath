@@ -86,7 +86,7 @@ def _has_meaningful_change(acc: SentimentAccountORM, payload: SentimentAccountUp
             return True
     list_fields = (
         ("keywords", "keywords_json"), ("excludes", "excludes_json"),
-        ("aliases", "aliases_json"),
+        ("aliases", "aliases_json"), ("media_allowlist", "media_allowlist_json"),
     )
     for in_name, db_name in list_fields:
         v = getattr(payload, in_name, None)
@@ -177,6 +177,7 @@ def create_account(
             ensure_ascii=False,
         ),
         excludes_json=json.dumps(payload.excludes, ensure_ascii=False),
+        media_allowlist_json=json.dumps(payload.media_allowlist, ensure_ascii=False),
         notify_emails_json=json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False),
         active=True,
         last_run_status="pending" if payload.run_now else None,
@@ -219,6 +220,8 @@ def update_account(
     if payload.aliases is not None: acc.aliases_json = json.dumps(payload.aliases, ensure_ascii=False)
     if payload.intent is not None: acc.intent = payload.intent
     if payload.excludes is not None: acc.excludes_json = json.dumps(payload.excludes, ensure_ascii=False)
+    if payload.media_allowlist is not None:
+        acc.media_allowlist_json = json.dumps(payload.media_allowlist, ensure_ascii=False)
     if payload.notify_emails is not None:
         acc.notify_emails_json = json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False)
     if payload.active is not None: acc.active = payload.active
