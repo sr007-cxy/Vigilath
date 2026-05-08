@@ -2097,8 +2097,6 @@ const zh = {
                   "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
                   "keywords": "重点关注词",
                   "excludes": "排除词(选填)",
-                  "mediaAllowlist": "媒体平台(选填)",
-                  "mediaAllowlistHint": "勾选后只在所选平台抓取;留空 = 全部 15 个平台都抓。改动会触发下次重新抓取。",
                   "emails": "通知邮箱(≤10)",
                   "tagPlaceholder": "输入后回车添加"
                 },
@@ -2206,6 +2204,8 @@ const zh = {
                 "intent": "监测重点",
                 "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
                 "excludes": "排除词(选填)",
+                "mediaAllowlist": "媒体平台(选填)",
+                "mediaAllowlistHint": "勾选后只在所选平台抓取;留空 = 全部 15 个平台都抓。改动会触发下次重新抓取。",
                 "emails": "通知邮箱(≤10)",
                 "tagPlaceholder": "输入后回车添加"
               },

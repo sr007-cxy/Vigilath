@@ -8,6 +8,13 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid var(--border-color)',
 };
 
+// 中文按字符,英文按近似词(空白分割)。两者并存时取最大值,避免中英混排时低估。
+function countChars(s: string): number {
+  const stripped = s.replace(/\s+/g, '');
+  const wordCount = s.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(stripped.length, wordCount);
+}
+
 interface Props {
   post: SentimentPost | null;
 }
@@ -50,6 +57,7 @@ export function PostDetail({ post }: Props) {
         <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
           <span>{post.author || '—'}</span>
           <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
+          {content && <span>📝 {countChars(content).toLocaleString()} 字</span>}
           {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
           {post.reply_count != null && <span>💬 {post.reply_count.toLocaleString()}</span>}
           {post.url && (

@@ -10,6 +10,12 @@ interface Props {
   compact?: boolean;
 }
 
+function countChars(s: string): number {
+  const stripped = s.replace(/\s+/g, '');
+  const wordCount = s.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(stripped.length, wordCount);
+}
+
 export function PostCard({ post, selected, onClick, compact }: Props) {
   const { t } = useTranslation();
   const topics = post.topics ?? [];
@@ -25,6 +31,11 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
       <header className="flex items-center gap-2 flex-wrap mb-1.5">
         <SourceBadge source={post.source} />
         <RiskBadge level={post.risk_level} t={t} />
+        {post.author && (
+          <span className="text-[11px] text-muted truncate max-w-[8rem]" title={post.author}>
+            @{post.author}
+          </span>
+        )}
         <span className="text-[11px] text-muted ml-auto">
           {post.publish_time ? timeAgo(post.publish_time) : '—'}
         </span>
@@ -43,6 +54,9 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
       <div className="flex items-center gap-3 flex-wrap">
         <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
         <InfluenceBar value={post.influence_potential} />
+        {post.content && (
+          <span className="text-[11px] text-muted">📝 {countChars(post.content).toLocaleString()}</span>
+        )}
         {post.view_count != null && (
           <span className="text-[11px] text-muted">👁 {post.view_count.toLocaleString()}</span>
         )}
