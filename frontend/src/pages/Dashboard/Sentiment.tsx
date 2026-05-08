@@ -215,22 +215,26 @@ export function Sentiment() {
         ) : (
           <>
             <nav
-              className="flex gap-1 border-b overflow-x-auto"
+              className="flex justify-between items-end gap-3 border-b overflow-x-auto flex-wrap"
               style={{ borderColor: 'var(--border-color)' }}
             >
-              {TAB_KEYS.map(k => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setTab(k)}
-                  className="px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
-                  style={tab === k
-                    ? { borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }
-                    : { borderColor: 'transparent', color: 'var(--text-secondary)' }}
-                >
-                  {t(`dashboard.sentiment.tabs.${k}`)}
-                </button>
-              ))}
+              <div className="flex gap-1">
+                {TAB_KEYS.map(k => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setTab(k)}
+                    className="px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
+                    style={tab === k
+                      ? { borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }
+                      : { borderColor: 'transparent', color: 'var(--text-secondary)' }}
+                  >
+                    {t(`dashboard.sentiment.tabs.${k}`)}
+                  </button>
+                ))}
+              </div>
+              {/* 子 Tab 通过 portal 把工具条渲染到这里 — 比如文章 Tab 的时间筛选 chip */}
+              <div id="sentiment-tab-toolbar" className="flex items-center gap-2 pb-2" />
             </nav>
 
             {tab === 'today' && <TodayTab account={acct} usingMock={usingMock} />}

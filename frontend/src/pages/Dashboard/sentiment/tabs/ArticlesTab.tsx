@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 
 import { useTranslation } from 'react-i18next';
@@ -68,6 +69,12 @@ export function ArticlesTab({ account, usingMock }: Props) {
     }
     return m;
   }, [platforms, i18n.language]);
+
+  // 时间筛选 chip 通过 portal 渲染到 Sentiment.tsx 顶部 Tab 栏右侧的 slot
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setToolbarSlot(document.getElementById('sentiment-tab-toolbar'));
+  }, []);
 
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
@@ -295,8 +302,27 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>;
   }
 
+  // 时间筛选 chips — portal 到 Sentiment.tsx Tab 栏右侧
+  const timeChips = (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-muted mr-0.5">{t('dashboard.sentiment.articles.filters.time')}:</span>
+      {([
+        ['today', 'timeToday'],
+        ['d7', 'time7d'],
+        ['d30', 'time30d'],
+        ['all', 'timeAll'],
+        ['custom', 'timeCustom'],
+      ] as const).map(([key, label]) => (
+        <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
+          active={timePreset === key}
+          onClick={() => setTimePreset(key)} />
+      ))}
+    </div>
+  );
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
+      {toolbarSlot && createPortal(timeChips, toolbarSlot)}
       <aside className="rounded-xl p-4 space-y-4 self-start" style={cardStyle}>
         <header className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-primary">
@@ -436,35 +462,18 @@ export function ArticlesTab({ account, usingMock }: Props) {
               </span>
             )}
           </span>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* 时间筛选(原在左侧栏,挪到右上角)*/}
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted mr-0.5">{t('dashboard.sentiment.articles.filters.time')}:</span>
-              {([
-                ['today', 'timeToday'],
-                ['d7', 'time7d'],
-                ['d30', 'time30d'],
-                ['all', 'timeAll'],
-                ['custom', 'timeCustom'],
-              ] as const).map(([key, label]) => (
-                <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
-                  active={timePreset === key}
-                  onClick={() => setTimePreset(key)} />
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
-              {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
-                <button key={k} type="button" onClick={() => setSortBy(k)}
-                  className={`text-xs px-2 py-1 rounded ${sortBy === k ? 'font-bold' : ''}`}
-                  style={{
-                    background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
-                    color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  }}>
-                  {t(`dashboard.sentiment.articles.sort.${k}`)}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
+            {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
+              <button key={k} type="button" onClick={() => setSortBy(k)}
+                className={`text-xs px-2 py-1 rounded ${sortBy === k ? 'font-bold' : ''}`}
+                style={{
+                  background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
+                  color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                }}>
+                {t(`dashboard.sentiment.articles.sort.${k}`)}
+              </button>
+            ))}
           </div>
         </header>
 
