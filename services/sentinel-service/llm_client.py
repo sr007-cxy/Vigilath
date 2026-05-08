@@ -54,6 +54,11 @@ def _bootstrap_env_from_dotenv() -> None:
             "QWEN_API_KEY", "QWEN_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
             "OPENAI_API_KEY", "OPENAI_BASE_URL",
+            # 搜索相关 env(国内机房 fallback / cookie)
+            "DDG_REMOTE_URL", "DDG_REMOTE_TOKEN",
+            "DDGS_BACKENDS", "DDGS_TIMEOUT_S",
+            "BAIDU_COOKIE",
+            "HTTP_PROXY", "HTTPS_PROXY",
         ):
             if not os.environ.get(k) and vals.get(k):
                 os.environ[k] = vals[k]
