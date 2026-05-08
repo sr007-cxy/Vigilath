@@ -308,6 +308,16 @@ function MediaAllowlistEditor({
   const total = allCodes.length;
 
   const [expanded, setExpanded] = useState(false);
+  // 每个媒体类型分组独立折叠 — 默认全部折叠,避免一展开就刷出 70+ chip。
+  // 用户点小箭头才展开对应组。
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (mt: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(mt)) next.delete(mt); else next.add(mt);
+      return next;
+    });
+  };
 
   // value=[] 视为"全选"——chip 全亮,但保持后端语义不变(空数组 = 全部)。
   const isAll = value.length === 0;
@@ -372,56 +382,86 @@ function MediaAllowlistEditor({
       </div>
 
       {expanded && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <p className="text-xs text-muted">
             {t('account.brand.fields.mediaAllowlistHint')}
           </p>
-          {groups.map(({ mediaType, items }) => {
-            const codes = items.map(i => i.code);
-            const allOn = codes.every(c => selectedSet.has(c));
-            const someOn = codes.some(c => selectedSet.has(c));
-            return (
-              <div key={mediaType}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider">
-                    {t(`dashboard.sentiment.articles.mediaTypes.${mediaType}`)}
-                    <span className="ml-1.5 text-muted normal-case font-normal">
-                      {someOn ? `${codes.filter(c => selectedSet.has(c)).length}/${codes.length}` : codes.length}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setGroup(codes, !allOn)}
-                    className="text-[11px] text-muted hover:text-primary"
-                  >
-                    {allOn
-                      ? t('account.brand.fields.mediaAllowlistClearGroup')
-                      : t('account.brand.fields.mediaAllowlistSelectGroup')}
-                  </button>
+          <div
+            className="rounded-md divide-y"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-color)',
+              borderColor: 'var(--border-color)',
+            }}
+          >
+            {groups.map(({ mediaType, items }) => {
+              const codes = items.map(i => i.code);
+              const selectedCount = codes.filter(c => selectedSet.has(c)).length;
+              const allOn = selectedCount === codes.length;
+              const open = openGroups.has(mediaType);
+              return (
+                <div key={mediaType}>
+                  {/* 行头:点 caret/标题展开,右侧"全选/清空"按钮独立 */}
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(mediaType)}
+                      className="flex items-center gap-2 flex-1 min-w-0 text-left hover:text-primary"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <span style={{ display: 'inline-block', width: 10, fontSize: 10 }}>
+                        {open ? '▾' : '▸'}
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wider truncate">
+                        {t(`dashboard.sentiment.articles.mediaTypes.${mediaType}`)}
+                      </span>
+                      <span className="text-[11px] font-normal normal-case text-muted">
+                        {selectedCount > 0 && selectedCount < codes.length
+                          ? `${selectedCount}/${codes.length}`
+                          : codes.length}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setGroup(codes, !allOn); }}
+                      className="text-[11px] text-muted hover:text-primary whitespace-nowrap"
+                    >
+                      {allOn
+                        ? t('account.brand.fields.mediaAllowlistClearGroup')
+                        : t('account.brand.fields.mediaAllowlistSelectGroup')}
+                    </button>
+                  </div>
+                  {/* chip 区:等宽 grid + 截断,超过~30 个限高滚动 */}
+                  {open && (
+                    <div
+                      className={`px-3 pb-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 ${items.length > 30 ? 'max-h-56 overflow-y-auto' : ''}`}
+                    >
+                      {items.map(p => {
+                        const active = selectedSet.has(p.code);
+                        const label = platformLabel(p);
+                        return (
+                          <button
+                            key={p.code}
+                            type="button"
+                            onClick={() => toggle(p.code)}
+                            title={label}
+                            className="text-xs px-2 py-1 rounded transition-colors truncate text-center"
+                            style={{
+                              background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                              color: active ? '#ffffff' : 'var(--text-secondary)',
+                              border: '1px solid transparent',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {items.map(p => {
-                    const active = selectedSet.has(p.code);
-                    return (
-                      <button
-                        key={p.code}
-                        type="button"
-                        onClick={() => toggle(p.code)}
-                        className="text-xs px-2.5 py-1 rounded transition-colors"
-                        style={{
-                          background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                          color: active ? '#ffffff' : 'var(--text-secondary)',
-                          border: '1px solid transparent',
-                        }}
-                      >
-                        {platformLabel(p)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
