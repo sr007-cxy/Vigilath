@@ -9,6 +9,7 @@ from .db import (
     posts_for_symbol,
     posts_missing_analysis,
     analyses_for_symbol,
+    analyses_count_for_symbol,
     analyses_for_day,
     brand_post_lookup,
     ingest_jsonl_dir,

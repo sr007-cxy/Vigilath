@@ -240,42 +240,82 @@ def posts_missing_analysis(conn: sqlite3.Connection, symbol: str,
 
 
 def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
-                        days: int | None = 1) -> list[sqlite3.Row]:
+                        days: int | None = 1,
+                        start: str | None = None,
+                        end: str | None = None,
+                        limit: int | None = None,
+                        offset: int = 0,
+                        ) -> list[sqlite3.Row]:
     """文章列表(舆情 Tab 用).
 
-    days 语义(基于 ingested_at,即 "我们何时看到"):
-        1   → 仅今日(默认,跟今日 KPI 对齐)
-        N>1 → 最近 N 天
-        0/None → 不过滤,全部历史
+    时间过滤,基于 ingested_at(我们何时看到),三选一:
+        - start/end:YYYY-MM-DD,闭区间。任意一端 None 表示该侧不限。
+                     start/end 同时 None 时回退到 days 语义。
+        - days: 1=今日(默认), N>1=最近 N 天, 0/None=全部历史
 
-    排序:max(publish_time, ingested_at) DESC — 真新发或刚抓到的都靠顶。
+    排序: max(publish_time, ingested_at) DESC.
+    分页: limit/offset。limit None = 不限。
     """
-    if days and days > 0:
+    where = ["a.symbol = ?"]
+    params: list = [symbol]
+
+    if start or end:
+        if start:
+            where.append("substr(p.ingested_at, 1, 10) >= ?")
+            params.append(start)
+        if end:
+            where.append("substr(p.ingested_at, 1, 10) <= ?")
+            params.append(end)
+    elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        return list(conn.execute(
-            """
-            SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
-                   p.reply_count, p.url, p.content
-            FROM analyses a
-            JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
-            WHERE a.symbol = ?
-              AND substr(p.ingested_at, 1, 10) >= ?
-            ORDER BY max(coalesce(p.publish_time, ''), p.ingested_at) DESC
-            """,
-            (symbol, cutoff),
-        ))
-    return list(conn.execute(
-        """
+        where.append("substr(p.ingested_at, 1, 10) >= ?")
+        params.append(cutoff)
+
+    sql = f"""
         SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
                p.reply_count, p.url, p.content
         FROM analyses a
         JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
-        WHERE a.symbol = ?
+        WHERE {' AND '.join(where)}
         ORDER BY max(coalesce(p.publish_time, ''), p.ingested_at) DESC
-        """,
-        (symbol,),
-    ))
+    """
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params.extend([int(limit), int(offset)])
+    return list(conn.execute(sql, tuple(params)))
+
+
+def analyses_count_for_symbol(conn: sqlite3.Connection, symbol: str,
+                              days: int | None = 1,
+                              start: str | None = None,
+                              end: str | None = None,
+                              ) -> int:
+    """analyses_for_symbol 的 COUNT(*) — 给前端分页 total 用。"""
+    where = ["a.symbol = ?"]
+    params: list = [symbol]
+
+    if start or end:
+        if start:
+            where.append("substr(p.ingested_at, 1, 10) >= ?")
+            params.append(start)
+        if end:
+            where.append("substr(p.ingested_at, 1, 10) <= ?")
+            params.append(end)
+    elif days and days > 0:
+        from datetime import date, timedelta
+        cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+        where.append("substr(p.ingested_at, 1, 10) >= ?")
+        params.append(cutoff)
+
+    sql = f"""
+        SELECT count(*) AS c
+        FROM analyses a
+        JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
+        WHERE {' AND '.join(where)}
+    """
+    row = conn.execute(sql, tuple(params)).fetchone()
+    return int(row["c"] if row else 0)
 
 
 def analyses_for_day(conn: sqlite3.Connection, symbol: str,

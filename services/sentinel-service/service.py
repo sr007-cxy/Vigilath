@@ -549,19 +549,32 @@ app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
 @app.get("/accounts/{account_id}/posts")
 def list_posts(account_id: int, ticker: str, limit: int = 50,
-               days: int = 1) -> dict:
+               offset: int = 0, days: int = 1,
+               start: str | None = None, end: str | None = None) -> dict:
     """返回 posts JOIN analyses(给文章 Tab 用)。
 
-    days 默认 1 = 仅今日(基于 ingested_at,与"今日舆情" KPI 一致)。
-    days=0 → 不过滤,展示全部历史。days=N → 最近 N 天。
+    时间过滤(基于 ingested_at):
+      - start/end (YYYY-MM-DD,闭区间) 优先;任一端可省。
+      - 否则按 days:1=今日(默认), N>1=最近 N 天, 0=全部历史。
+
+    分页:limit + offset。返回:
+      items[]、count(本页)、total(满足时间筛选的总条数)、offset、days、start、end。
     """
-    from storage import analyses_for_symbol  # type: ignore
+    from storage import analyses_for_symbol, analyses_count_for_symbol  # type: ignore
     with _account_db_context(account_id):
         conn = _patched_connect()
         init_schema(conn)
-        rows = analyses_for_symbol(conn, ticker, days=days)
-        out = [_row_to_dict(r) for r in rows[:limit]]
-    return {"count": len(out), "items": out, "days": days}
+        total = analyses_count_for_symbol(conn, ticker, days=days, start=start, end=end)
+        rows = analyses_for_symbol(
+            conn, ticker, days=days, start=start, end=end,
+            limit=limit, offset=offset,
+        )
+        out = [_row_to_dict(r) for r in rows]
+    return {
+        "count": len(out), "items": out, "total": int(total),
+        "offset": int(offset), "limit": int(limit),
+        "days": days, "start": start, "end": end,
+    }
 
 
 @app.get("/accounts/{account_id}/briefs")

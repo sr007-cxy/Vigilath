@@ -431,12 +431,14 @@ function MediaAllowlistEditor({
                         : t('account.brand.fields.mediaAllowlistSelectGroup')}
                     </button>
                   </div>
-                  {/* chip 区:等宽 grid + 截断,超过~30 个限高滚动 */}
+                  {/* 平台列表 — 竖列 list 项,平台增多时也不会撑爆宽度;
+                     超过 ~16 项限高滚动,选中行用浅蓝底 + ✓ 标记。 */}
                   {open && (
                     <div
-                      className={`px-3 pb-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 ${items.length > 30 ? 'max-h-56 overflow-y-auto' : ''}`}
+                      className={`flex flex-col ${items.length > 16 ? 'max-h-72 overflow-y-auto' : ''}`}
+                      style={{ borderTop: '1px solid var(--border-color)' }}
                     >
-                      {items.map(p => {
+                      {items.map((p, idx) => {
                         const active = selectedSet.has(p.code);
                         const label = platformLabel(p);
                         return (
@@ -445,14 +447,20 @@ function MediaAllowlistEditor({
                             type="button"
                             onClick={() => toggle(p.code)}
                             title={label}
-                            className="text-xs px-2 py-1 rounded transition-colors truncate text-center"
+                            className="flex items-center justify-between text-xs px-3 py-1.5 transition-colors text-left"
                             style={{
-                              background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                              color: active ? '#ffffff' : 'var(--text-secondary)',
-                              border: '1px solid transparent',
+                              background: active ? 'rgba(99,102,241,0.10)' : 'transparent',
+                              color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                              borderTop: idx === 0 ? 'none' : '1px solid var(--border-color)',
                             }}
                           >
-                            {label}
+                            <span className="truncate">{label}</span>
+                            <span
+                              className="ml-2 text-[11px]"
+                              style={{ color: active ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+                            >
+                              {active ? '✓' : ''}
+                            </span>
                           </button>
                         );
                       })}

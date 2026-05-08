@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { mockPosts } from '../../../../mocks/sentiment';
-import { usePosts, useGenerateDraft, useSentimentPlatforms } from '../../../../hooks/useSentiment';
+import { useInfinitePosts, useGenerateDraft, useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
@@ -17,6 +17,9 @@ import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
 
 type SortKey = 'influence' | 'newest' | 'views';
+type TimePreset = 'today' | 'd7' | 'd30' | 'all' | 'custom';
+
+const PAGE_SIZE = 50;
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -33,6 +36,16 @@ function formatCount(n: number): string {
 
 function noteworthy(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
+}
+
+function presetToDays(preset: TimePreset): number | undefined {
+  switch (preset) {
+    case 'today': return 1;
+    case 'd7': return 7;
+    case 'd30': return 30;
+    case 'all': return 0;
+    default: return undefined;
+  }
 }
 
 interface Props {
@@ -56,17 +69,49 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return m;
   }, [platforms, i18n.language]);
 
-  const { data: postsResp, isLoading, error } = usePosts(
+  // ── 时间筛选 + 分页 状态 ─────────────────────────────────
+  const [timePreset, setTimePreset] = useState<TimePreset>('today');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+  const [appliedStart, setAppliedStart] = useState<string>('');
+  const [appliedEnd, setAppliedEnd] = useState<string>('');
+  const [startOffset, setStartOffset] = useState<number>(0);
+  const [jumpInput, setJumpInput] = useState<string>('');
+
+  // 时间筛选改变 / preset 切换 → 重置分页
+  useEffect(() => {
+    setStartOffset(0);
+    setJumpInput('');
+  }, [timePreset, appliedStart, appliedEnd]);
+
+  const customRangeError = customStart && customEnd && customStart > customEnd;
+
+  const postsQuery = useInfinitePosts(
     usingMock ? null : account.id,
     usingMock ? null : account.ticker,
-    200,
+    {
+      pageSize: PAGE_SIZE,
+      days: timePreset === 'custom' ? undefined : presetToDays(timePreset),
+      start: timePreset === 'custom' ? appliedStart || undefined : undefined,
+      end: timePreset === 'custom' ? appliedEnd || undefined : undefined,
+      startOffset,
+    },
   );
 
-  const posts: SentimentPost[] = useMemo(
-    () => usingMock ? (mockPosts as SentimentPost[]) : (postsResp?.items ?? []),
-    [usingMock, postsResp],
-  );
+  const posts: SentimentPost[] = useMemo(() => {
+    if (usingMock) return mockPosts as SentimentPost[];
+    return (postsQuery.data?.pages ?? []).flatMap(p => p.items ?? []);
+  }, [usingMock, postsQuery.data]);
 
+  const total = usingMock
+    ? (mockPosts as SentimentPost[]).length
+    : (postsQuery.data?.pages?.[0]?.total ?? posts.length);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.floor(startOffset / PAGE_SIZE) + 1;
+  const isLoading = !usingMock && postsQuery.isLoading;
+  const error = !usingMock ? postsQuery.error : null;
+
+  // ── 客户端筛选状态(在已加载页内做二次筛选)──────────────
   const [sentiments, setSentiments] = useState<Set<string>>(new Set());
   const [risks, setRisks] = useState<Set<string>>(new Set());
   const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
@@ -75,6 +120,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [topic, setTopic] = useState('');
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
+  const [expandedMt, setExpandedMt] = useState<Set<string>>(new Set());
 
   // source code → (media_type, industry) 查找表 — 用于按双轴 chip 收窄 sources
   const platformAxes = useMemo(() => {
@@ -117,7 +163,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return counts;
   }, [posts, sentiments, risks, topic, onlyRelevant, platformCodes, allowedSources]);
 
-  // 双轴 chip 计数:每个 media_type / industry 对应多少篇当前 posts(已过 sentiment/risk/topic 上层筛子)
+  // 双轴 chip 计数
   const axisCounts = useMemo(() => {
     const mt = new Map<string, number>();
     const ind = new Map<string, number>();
@@ -142,8 +188,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return { mediaType: mt, industry: ind };
   }, [posts, sentiments, risks, topic, onlyRelevant, platformAxes]);
 
-  // 来源列表按 media_type 分组(WisersOne 的"媒体类型"轴 — 与白名单编辑器一致)。
-  // 后端透传的未知 source(catalog 之外)归到 'other' 组。
+  // 来源按 media_type 分组(竖列 + 折叠)
   const sourceGroups = useMemo(() => {
     const byMt = new Map<MediaType | 'other', string[]>();
     for (const p of platforms) {
@@ -226,19 +271,32 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setTopic(''); setOnlyRelevant(true); setSortBy('influence');
   };
 
-  if (!usingMock && isLoading) {
+  const handleApplyCustom = () => {
+    if (customRangeError) return;
+    setAppliedStart(customStart);
+    setAppliedEnd(customEnd);
+  };
+
+  const handleJumpPage = () => {
+    const n = parseInt(jumpInput, 10);
+    if (!Number.isFinite(n) || n < 1) return;
+    const target = Math.min(n, totalPages);
+    setStartOffset((target - 1) * PAGE_SIZE);
+  };
+
+  if (isLoading && !posts.length) {
     return <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
       {t('common.loading') || 'Loading...'}
     </div>;
   }
-  if (!usingMock && error) {
+  if (error) {
     return <div className="rounded-xl py-6 px-4 text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
       ⚠ {error instanceof Error ? error.message : 'Failed to load posts'}
     </div>;
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
+    <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
       <aside className="rounded-xl p-4 space-y-4 self-start" style={cardStyle}>
         <header className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-primary">
@@ -248,6 +306,48 @@ export function ArticlesTab({ account, usingMock }: Props) {
             {t('dashboard.sentiment.articles.filters.reset')}
           </button>
         </header>
+
+        {/* ── 时间筛选 ── */}
+        <FilterGroup label={t('dashboard.sentiment.articles.filters.time')}>
+          {([
+            ['today', 'timeToday'],
+            ['d7', 'time7d'],
+            ['d30', 'time30d'],
+            ['all', 'timeAll'],
+            ['custom', 'timeCustom'],
+          ] as const).map(([key, label]) => (
+            <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
+              active={timePreset === key}
+              onClick={() => setTimePreset(key)} />
+          ))}
+        </FilterGroup>
+        {timePreset === 'custom' && (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <input type="date" value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
+                className="text-xs px-2 py-1 rounded"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              <input type="date" value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
+                className="text-xs px-2 py-1 rounded"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+            </div>
+            {customRangeError && (
+              <p className="text-[11px]" style={{ color: '#dc2626' }}>
+                {t('dashboard.sentiment.articles.filters.timeRangeError')}
+              </p>
+            )}
+            <button type="button" onClick={handleApplyCustom}
+              disabled={!!customRangeError || (!customStart && !customEnd)}
+              className="text-xs px-3 py-1 rounded disabled:opacity-50"
+              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+              {t('dashboard.sentiment.articles.filters.timeApply')}
+            </button>
+          </div>
+        )}
 
         <FilterGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
           {ALL_SENTIMENTS.map(s => (
@@ -263,18 +363,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
           ))}
         </FilterGroup>
 
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.mediaType')}>
-          {MEDIA_TYPE_ORDER.map(m => {
-            const c = axisCounts.mediaType.get(m) ?? 0;
-            return (
-              <FilterChip key={m}
-                label={`${t(`dashboard.sentiment.articles.mediaTypes.${m}`)} ${c}`}
-                active={mediaTypes.has(m)}
-                onClick={() => setMediaTypes(toggle(mediaTypes, m as MediaType))} />
-            );
-          })}
-        </FilterGroup>
-
         <FilterGroup label={t('dashboard.sentiment.articles.filters.industry')}>
           {INDUSTRY_ORDER.map(i => {
             const c = axisCounts.industry.get(i) ?? 0;
@@ -287,51 +375,80 @@ export function ArticlesTab({ account, usingMock }: Props) {
           })}
         </FilterGroup>
 
-        <FilterGroup label={t('dashboard.sentiment.articles.filters.source')}>
-          <div className="flex flex-col w-full gap-2">
+        {/* ── 媒体类型 + 平台 竖列折叠分组 ── */}
+        <div>
+          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">
+            {t('dashboard.sentiment.articles.filters.mediaType')}
+          </p>
+          <div className="flex flex-col w-full gap-1">
             {sourceGroups.map(({ mediaType, codes }) => {
               const mtLabelKey = `dashboard.sentiment.articles.mediaTypes.${mediaType}`;
               const mtLabel = t(mtLabelKey);
               const mtDisplay = mtLabel === mtLabelKey ? mediaType : mtLabel;
-              const groupCount = codes.reduce((sum, s) => sum + (sourceCounts.get(s) ?? 0), 0);
+              const groupCount = axisCounts.mediaType.get(mediaType) ?? 0;
+              const mtActive = mediaTypes.has(mediaType);
+              const isOpen = expandedMt.has(mediaType) || mtActive;
+              const expanded = expandedMt.has(mediaType);
               return (
                 <div key={mediaType}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-                      {mtDisplay}
-                    </span>
-                    <span className="text-[10px] text-muted">{formatCount(groupCount)}</span>
+                  <div className="flex items-center justify-between text-xs px-2 py-1 rounded"
+                    style={{
+                      background: mtActive ? 'rgba(99,102,241,0.10)' : 'transparent',
+                    }}>
+                    <button type="button"
+                      onClick={() => setExpandedMt(toggle(expandedMt, mediaType as string))}
+                      className="flex-1 text-left flex items-center gap-1"
+                      style={{ color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'inline-block', width: 10 }}>{expanded ? '▾' : '▸'}</span>
+                      <span className="font-semibold" style={{ color: mtActive ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>
+                        {mtDisplay}
+                      </span>
+                      <span className="text-muted ml-1">{formatCount(groupCount)}</span>
+                    </button>
+                    {mediaType !== 'other' && (
+                      <button type="button"
+                        onClick={() => setMediaTypes(toggle(mediaTypes, mediaType as MediaType))}
+                        className="text-[10px] px-1.5 py-0.5 rounded ml-1"
+                        style={{
+                          background: mtActive ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                          color: mtActive ? '#fff' : 'var(--text-muted)',
+                        }}
+                        title={mtActive ? '取消筛选该媒体类型' : '只看该媒体类型'}>
+                        {mtActive ? '✓' : '+'}
+                      </button>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    {codes.map(s => {
-                      // 优先用 DB 的本地化名;否则回 i18n sourceLabels;再回 code
-                      const fromDb = platformNames.get(s);
-                      const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
-                      const localized = fromDb || t(labelKey);
-                      const display = (!fromDb && localized === labelKey) ? s : localized;
-                      const count = sourceCounts.get(s) ?? 0;
-                      const active = sources.has(s);
-                      return (
-                        <button key={s} type="button"
-                          onClick={() => setSources(toggle(sources, s))}
-                          className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
-                          style={{
-                            background: active ? 'var(--accent-primary)' : 'transparent',
-                            color: active ? '#ffffff' : 'var(--text-secondary)',
-                          }}>
-                          <span>{display}</span>
-                          <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
-                            {formatCount(count)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {isOpen && (
+                    <div className="flex flex-col gap-0.5 pl-4 mt-0.5">
+                      {codes.map(s => {
+                        const fromDb = platformNames.get(s);
+                        const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+                        const localized = fromDb || t(labelKey);
+                        const display = (!fromDb && localized === labelKey) ? s : localized;
+                        const count = sourceCounts.get(s) ?? 0;
+                        const active = sources.has(s);
+                        return (
+                          <button key={s} type="button"
+                            onClick={() => setSources(toggle(sources, s))}
+                            className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
+                            style={{
+                              background: active ? 'var(--accent-primary)' : 'transparent',
+                              color: active ? '#ffffff' : 'var(--text-secondary)',
+                            }}>
+                            <span>{display}</span>
+                            <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
+                              {formatCount(count)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </FilterGroup>
+        </div>
 
         <div>
           <label className="text-xs font-semibold text-secondary uppercase tracking-wider block mb-1">
@@ -353,6 +470,11 @@ export function ArticlesTab({ account, usingMock }: Props) {
         <header className="flex items-center justify-between flex-wrap gap-2 xl:sticky xl:top-0 xl:z-10" style={{ background: 'var(--bg-primary)' }}>
           <span className="text-xs text-muted">
             {t('dashboard.sentiment.articles.count', { count: filtered.length })}
+            {!usingMock && total > posts.length && (
+              <span className="ml-2">
+                · {t('dashboard.sentiment.articles.page.totalCount', { loaded: posts.length, total })}
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
@@ -383,6 +505,51 @@ export function ArticlesTab({ account, usingMock }: Props) {
                   onClick={() => setSelectedKey(key)} />
               );
             })}
+          </div>
+        )}
+
+        {/* ── 分页控件:加载更多 + 跳到第 N 页 ── */}
+        {!usingMock && (
+          <div className="rounded-xl p-3 flex items-center justify-between flex-wrap gap-2"
+            style={cardStyle}>
+            <div className="flex items-center gap-2">
+              {postsQuery.hasNextPage ? (
+                <button type="button"
+                  disabled={postsQuery.isFetchingNextPage}
+                  onClick={() => postsQuery.fetchNextPage()}
+                  className="btn-solid rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+                  {postsQuery.isFetchingNextPage
+                    ? t('dashboard.sentiment.articles.page.loading')
+                    : t('dashboard.sentiment.articles.page.loadMore')}
+                </button>
+              ) : (
+                <span className="text-xs text-muted">
+                  {t('dashboard.sentiment.articles.page.noMore')}
+                </span>
+              )}
+              <span className="text-[11px] text-muted">
+                {t('dashboard.sentiment.articles.page.jumpHint', { size: PAGE_SIZE, pages: totalPages })}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted">
+                {t('dashboard.sentiment.articles.page.jumpTo')}
+              </span>
+              <input type="number" min={1} max={totalPages}
+                value={jumpInput}
+                onChange={(e) => setJumpInput(e.target.value)}
+                placeholder={String(currentPage)}
+                className="w-14 text-xs px-2 py-1 rounded text-center"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              <span className="text-xs text-muted">
+                {t('dashboard.sentiment.articles.page.jumpToUnit')} / {totalPages}
+              </span>
+              <button type="button" onClick={handleJumpPage}
+                className="text-xs px-2 py-1 rounded"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
+                {t('dashboard.sentiment.articles.page.jumpGo')}
+              </button>
+            </div>
           </div>
         )}
       </section>

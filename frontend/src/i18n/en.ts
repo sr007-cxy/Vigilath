@@ -1950,7 +1950,27 @@ const en = {
                   "topicPlaceholder": "Topic keyword",
                   "influence": "Influence",
                   "onlyRelevant": "Only relevant",
-                  "reset": "Reset"
+                  "reset": "Reset",
+                  "time": "Time range",
+                  "timeToday": "Today",
+                  "time7d": "Last 7d",
+                  "time30d": "Last 30d",
+                  "timeAll": "All time",
+                  "timeCustom": "Custom",
+                  "timeStart": "Start",
+                  "timeEnd": "End",
+                  "timeApply": "Apply",
+                  "timeRangeError": "Start date cannot be after end date"
+                },
+                "page": {
+                  "loadMore": "Load more",
+                  "loading": "Loading…",
+                  "noMore": "All loaded",
+                  "totalCount": "{{loaded}} of {{total}} loaded",
+                  "jumpTo": "Page",
+                  "jumpToUnit": "",
+                  "jumpGo": "Go",
+                  "jumpHint": "{{size}} per page · {{pages}} pages total"
                 },
                 "sort": {
                   "label": "Sort",

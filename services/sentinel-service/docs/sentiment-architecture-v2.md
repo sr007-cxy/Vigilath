@@ -1,51 +1,50 @@
-# 舆情系统架构 v2(重构目标 · Tier 2 / 精简版)
+# 舆情系统架构 v2(重构目标 · sentinel 自治版)
 
 > 状态:方向已确认,细节待重构期落地
 > 创建日期:2026-05-08
 > 上一版:[`sentiment-architecture.md`](./sentiment-architecture.md)(描述重构前现状,**不要原地覆盖**)
 > 配套文档:[`../../docs/sentiment-gap-analysis-vs-wisersone.md`](../../docs/sentiment-gap-analysis-vs-wisersone.md)(对标慧科,本次重构暂不并入)
 >
-> **本方案是 Tier 2(精简版)**:DAG runner 跑在 backend 进程内,sentinel-service 完全不动。预计工作量 5-8 工作日,单 PR 上线,可整体回滚。
-> **Tier 3(完整方案)**——把 runner 下放到 sentinel、把 14 crawler 拆成独立 DAG 节点、HTTP API 收窄、4 phase 灰度迁移——保留为后续可选演进,不在本轮范围。
+> **核心切面**:sentinel-service 从 v1 的 "被动加工厂(被 backend 用 18 RPC 串起来)" 升级为 **"自主舆情引擎"**(自跑 cron + 自管 DAG + 自持运行时状态);GEO backend 退化为 **"账号配置 + FE API 网关"**,**不再做调度、不再做 pipeline 编排**。
+>
+> 预计工作量 15-25 工作日,**分 phase 灰度上线,不是单 PR**。
 
 ---
 
 ## 0. 重构动机
 
-把当前散落在 `sentiment_pipeline.py` 200 行 if-else 里的**隐式 pipeline**,显式化成**类 ETL 的 DAG 工作流**。
+把 v1 散在 backend `sentiment_scheduler.py` + `sentiment_pipeline.py` + `sentinel_client.py` 三处的"调度 / 编排 / 状态"逻辑,**整体下沉到 sentinel-service**;backend 只剩下 "拥有账号配置 + 给 FE 提供 API"。
 
-**一句话**:重构不是推倒重来,是把"一串 HTTP 调用顺序"换成"一个可被 runner 解释执行的 DAG 对象",**只动 backend 编排层,sentinel 不动**。
+**一句话**:让 sentinel 真正成为"舆情引擎",backend 不再知道"什么时候跑、跑到哪一步、哪个 stage 失败了"。
 
 要解决的具体痛点:
 
-| 痛点 | v1 现状 | 锚点 | Tier 2 是否覆盖 |
+| 痛点 | v1 现状 | 锚点 | v2 是否覆盖 |
 |---|---|---|---|
-| 隐式 DAG | 14 crawler + 4 主 RPC 顺序、并行、容错策略,全靠 200 行 if-else 表达 | `sentiment_pipeline.run_pipeline_for_account()` | ✓ 显式声明 |
-| stage 级失败粒度缺失 | 14 crawler 失败被吞进 `crawlers_stats[name].error`,无独立 retry / 跳过 / 补跑能力 | `sentiment_pipeline._run_crawlers()` | ✓ stage 级 retry + 留痕 |
-| 前端无中段进度 | UI 只能拿到 `last_run_status` 顶层四态,看不到"卡在哪一步" | `Sentiment.tsx` / `StatusBanner` | ✓ stage 级进度 |
-| 三层防重入语义重复 | scheduler `max_instances=1` + 主库 `last_run_status='running'` + `sentinel_cleanup` 60 分钟僵尸回收 | `sentiment_scheduler.py` + pipeline + cleanup job | ✓ 收敛为 scheduler + 唯一索引 |
-| HTTP 长连接 + 业务级超时 | `run_analyze=1800s`、`run_brief=1200s`、`run_monitor=1200s`,任一卡住整个 pipeline 卡住 | `backend/geo/services/sentinel_client.py` | ✗ 仍在,但被 stage retry 间接缓解 |
-
-**为什么不覆盖最后一条(HTTP 超时)**:
-
-- v1 实测 analyze 20–30 分钟,1800s 够用;这是个"心理负担 > 实际 bug"的项
-- 真要去掉,得让 sentinel 端支持 async-submit + poll,那就成了 Tier 3
-- Tier 2 里每个 RPC = 一个 stage,失败可独立 retry,**不会"整 pipeline 因一次 HTTP 抖动废掉"** — 痛点被间接缓解到可接受
+| 调度与执行跨进程,语义割裂 | scheduler 在 backend、执行在 sentinel,跨 18 RPC 串起来,失败语义难收敛 | `sentiment_scheduler.py` + `sentiment_pipeline.py` | ✓ 全在 sentinel 内 |
+| 隐式 DAG | 14 crawler + 4 主 RPC 顺序、并行、容错策略,全靠 200 行 if-else 表达 | `sentiment_pipeline.run_pipeline_for_account()` | ✓ 显式 DAG 声明 |
+| HTTP 长连接 + 业务级超时 | `run_analyze=1800s`、`run_brief=1200s`、`run_monitor=1200s`,任一卡住整个 pipeline 卡住 | `sentinel_client.py` | ✓ 没有跨进程长连接,sentinel 内部 await |
+| 三层防重入语义重复 | scheduler `max_instances=1` + 主库 `last_run_status='running'` + `sentinel_cleanup` 60 分钟僵尸回收 | scheduler + pipeline + cleanup job | ✓ 收敛为 sentinel runner 内一处 + DB 唯一索引 |
+| stage 级失败粒度缺失 | 14 crawler 失败被吞,无独立 retry / 跳过 / 补跑 | `sentiment_pipeline._run_crawlers()` | ✓ stage 级 retry + 状态留痕 |
+| 前端无中段进度 | UI 只能拿到 `last_run_status` 顶层四态 | `Sentiment.tsx` / `StatusBanner` | ✓ stage 级进度 |
+| backend 持有运行时状态(reconcile 困难) | `sentiment_accounts.last_run_status` + `sentiment_run_logs` 都在 backend,sentinel 跑完要回写 | 主库 + sentinel API | ✓ 运行时状态全在 sentinel,backend 通过 API 读 |
 
 **非目标**(明确不在本次重构范围):
 
-- sentinel-service 进程内部不动(`service.py`、19 RPC、stages 拆分、`runner.db`、HTTP API 收窄,全部 Tier 3 才做)
-- monkey-patch `connect()` 多租户隔离逻辑(`service.py:35-127`)
-- 14 crawler 拆成独立 DAG 节点(Tier 2 仍在 backend 用 ThreadPoolExecutor 并行,但**收进一个 `crawl_fanout` stage 内部**)
+- monkey-patch `connect()` 多租户隔离逻辑(`service.py:35-127`)— **保留并适配 cron 入口**,不做底层重写(归到下一轮)
 - 现有 5 张业务表 schema(已是 ETL-friendly,不动)
 - LLM provider / 搜索引擎 / 爬虫源切换
 - 引入 Redis / Celery / Airflow / Prefect / Dagster 等新基础设施
+- 把 `sentiment_accounts` 表整体迁到 sentinel(本轮采用"backend 是源 + sentinel 缓存"双写)
+- Resend 邮件 secret 下放(本轮采用"sentinel 完成 brief 后回调 backend 推送"反向调用)
 
 ---
 
 ## 1. 一句话定位
 
-**Sentinel v2 (Tier 2) = backend 内的 DIY DAG runner,把 plan / search / crawl / analyze / brief / notify 声明成显式 DAG;每个 stage 内部仍调原有 sentinel RPC;sentinel-service 完全不动。**
+**Sentinel v2 = 自主舆情引擎**:内置 cron 调度、内置 DAG runner、自持运行时状态(`runner.db`)、自做僵尸回收。
+
+**GEO backend v2 = 账号配置中心 + FE API 网关**:拥有 `sentiment_accounts` 真值;FE 写配置 → backend 同步推 sentinel 一份缓存;FE 读状态 → backend 转发 sentinel 的 `runner.db` 查询。
 
 ---
 
@@ -54,175 +53,242 @@
 ```
 ┌────────────────────────────┐    HTTPS     ┌──────────────────────────────────────┐
 │  Frontend (React/Vite)     │  ─────────▶  │  GEO backend (FastAPI, 8070)         │
-│  Dashboard/sentiment/      │              │  geo/api/sentiment.py(+1 endpoint)   │
-│   ├─ TodayTab              │              │  geo/services/                       │
-│   ├─ ArticlesTab           │              │   ├─ sentiment_scheduler.py 不动     │
-│   ├─ BriefsTab             │              │   ├─ sentiment_pipeline.py    ★ 瘦身 │
-│   └─ StatusBanner(stage 级)│              │   │   223 行 → ~30 行                │
-└────────────────────────────┘              │   ├─ dag_runner.py            ★ 新增 │
-                                            │   │   ~300 行,DAG 解释执行          │
-                                            │   ├─ sentiment_dag.py         ★ 新增 │
-                                            │   │   ~80 行,DAG 静态声明           │
-                                            │   └─ sentinel_client.py 不动         │
+│  Dashboard/sentiment/      │              │  ─────────────────────────────────── │
+│   ├─ TodayTab              │              │  geo/api/sentiment.py                │
+│   ├─ ArticlesTab           │              │   - 账号 CRUD(本地真值)            │
+│   ├─ BriefsTab             │              │   - 状态读 → 转发到 sentinel        │
+│   └─ StatusBanner(stage 级)│              │   - 邮件推送 endpoint(给 sentinel) │
+└────────────────────────────┘              │  geo/services/                       │
+                                            │   sentinel_client.py        ★ 大瘦身 │
+                                            │     356 行 → ~80 行(只剩配置同步 + │
+                                            │     状态读 + 手动触发 + 邮件接入)  │
+                                            │   sentiment_pipeline.py     ★ 删除  │
+                                            │   sentiment_scheduler.py    ★ 删除  │
                                             │  Postgres/SQLite 主库:               │
-                                            │   sentiment_accounts                  │
-                                            │   sentiment_knowledge                 │
-                                            │   sentiment_run_logs(复用为 run)    │
-                                            │   pipeline_stage_runs        ★ 新增  │
-                                            └────────────────┬─────────────────────┘
-                                                             │
-                            原有 18 个写 RPC(4 主 + 14 crawler)+ 6 个读端点 全部保留
-                                                             │
-                                                             ▼
+                                            │   sentiment_accounts(配置真值)     │
+                                            │   sentiment_knowledge                │
+                                            │   sentiment_run_logs        ★ 删除  │ → 迁 sentinel
+                                            └──────────────┬───────────────────────┘
+                                                           │
+                                            HTTP(双向,薄):
+                                              backend → sentinel:
+                                                POST /accounts/{id}        配置同步
+                                                DELETE /accounts/{id}      停用
+                                                POST /accounts/{id}/runs   手动触发
+                                                GET  /accounts/{id}/runs/latest   状态读
+                                                GET  /accounts/{id}/runs/{run_id} run 详情
+                                                GET  /accounts/{id}/posts/briefs/... 业务读(保留)
+                                              sentinel → backend:
+                                                POST /api/internal/sentiment/email-push   邮件推送回调
+                                                           │
+                                                           ▼
                                             ┌──────────────────────────────────────┐
                                             │  sentinel-service (FastAPI, 8090)    │
+                                            │  ─────────────────────────────────── │
+                                            │  uvicorn --workers 1 强制单进程       │
                                             │                                      │
-                                            │   完全不动                           │
-                                            │                                      │
+                                            │  scheduler.py    ★ 新增              │
+                                            │     asyncio cron loop,每小时 :05    │
+                                            │     遍历本地 active accounts → 入队  │
+                                            │  runner.py       ★ 新增,DAG 解释执行│
+                                            │  pipeline.py     ★ 新增,DAG 静态声明│
+                                            │  stages/         ★ 新增              │
+                                            │   ├─ monitor.py(plan + 3 引擎)      │
+                                            │   ├─ crawl_fanout.py(14 crawler)    │
+                                            │   ├─ analyze.py                      │
+                                            │   ├─ brief.py                        │
+                                            │   └─ notify.py(回调 backend)        │
+                                            │  service.py      入口收敛到 ~10 个   │
+                                            │  storage:                            │
+                                            │   data/account_{id}/yuqing.db   不动 │
+                                            │   runner.db                ★ 新增    │
+                                            │     accounts(配置缓存)              │
+                                            │     pipeline_runs                    │
+                                            │     pipeline_stage_runs              │
                                             └──────────────────────────────────────┘
 ```
 
-**职责切分**:
+**职责切分(post-refactor)**:
 
-- **Frontend**:不变,但 StatusBanner 可消费 stage 级进度(见 §8)
-- **GEO backend**:新增 DAG runner,`sentiment_pipeline.py` 大幅瘦身;`sentinel_client.py` 不动
-- **sentinel-service**:**零改动**
+- **Frontend**:不变,但 StatusBanner 可消费 stage 级进度
+- **GEO backend**:拥有 `sentiment_accounts` 真值;不做调度、不做编排、不做状态聚合;状态读由 sentinel 转发
+- **sentinel-service**:**自主跑**(cron + runner + state),**对 backend 弱依赖**(只在写配置 / 推邮件时跨进程通信)
 
 ---
 
 ## 3. 端到端数据流
 
-### 3.1 DAG 形态(在 backend 进程内)
+### 3.1 触发路径(三种)
+
+```
+[路径 A · cron]
+[sentinel] scheduler.py 内 asyncio loop,每小时 :05 触发
+   │  扫 sentinel runner.db 的 accounts(active=true)
+   ▼
+[sentinel] runner.execute(account_id, kind="hourly", trigger="cron")
+
+[路径 B · 手动触发]
+[FE]      点击"立即运行"
+   │
+   ▼
+[backend] POST /api/sentiment/{id}/run
+   │  鉴权 + 校验
+   ▼
+[backend] sentinel_client.trigger_run(account_id)
+   │
+   ▼
+[sentinel] POST /accounts/{id}/runs  → runner.execute(account_id, kind="manual", trigger="user")
+
+[路径 C · 配置变更]
+[FE]      改 keywords / aliases / notify_emails / active 等
+   │
+   ▼
+[backend] PUT /api/sentiment/{id}
+   │  ① 写主库 sentiment_accounts(真值)
+   │  ② 同步推 sentinel: POST /accounts/{id} (失败重试 + 告警)
+   │  ③ 返回 FE
+```
+
+### 3.2 单次 run 执行(在 sentinel 内)
+
+```
+[sentinel] runner.execute(account_id, kind, trigger)
+   │  ① 唯一索引校验:同一 (account_id, kind) 是否已有 in-flight run
+   │     冲突 → 直接返回 "already_running"
+   │
+   │  ② 在 runner.db 写一行 pipeline_runs(status=running, run_id, started_at)
+   │
+   │  ③ 拓扑排序 SENTIMENT_DAG → 逐 stage 执行:
+   │       - 写 pipeline_stage_runs(stage_id, attempt, status=running)
+   │       - 调 stages/<name>.run(ctx) — 直接调本地业务模块,无跨进程
+   │       - 失败按 retry_policy 重试,attempt 用尽则按 on_failure 决定下游
+   │       - 成功 / 失败实时回写 pipeline_stage_runs
+   │
+   │  ④ DAG 跑完 → 聚合 stage 结果决定 run.status
+   │
+   │  ⑤ notify_emails 非空时,sentinel HTTP 调 backend
+   │       POST /api/internal/sentiment/email-push {account_id, brief_id, recipients}
+   │     backend 用 Resend 发送(secret 仍在 backend)
+   │
+   └─▶ runner.db pipeline_runs.status = success / failed
+```
+
+### 3.3 DAG 形态
 
 ```
 [Run] ── stage: monitor ──┐
-        (1 次 sentinel    │
-         run-monitor 调用,│
-         内部 plan + 3 引擎)│
-                          ├──▶ posts(写入 sentinel per-account SQLite)
-        stage: crawl_fanout─┘
-        (1 个 stage,内部用 ThreadPoolExecutor 并行调 14 个 crawl_* RPC,
-         单点失败吞进 stage_summary 但不传染 — 与 v1 行为一致)
+        (本地调 search/pipeline.run_plan,        │
+         plan + cnbing + baidu + ddg 串行)      │
+                                                 ├──▶ posts(写 per-account SQLite)
+        stage: crawl_fanout ──────────────────────┘
+        (本地调 14 个 crawler client,
+         stage 内 ThreadPoolExecutor max_workers=8)
                                                             │
                                                             ▼
                                                    stage: analyze
-                                                   (1 次 sentinel run-analyze,
-                                                    内部仍是 LLM_ANALYZE_CONCURRENCY=5)
+                                                   (本地调 analyzer.pipeline.analyze_symbol,
+                                                    LLM_ANALYZE_CONCURRENCY=5)
                                                             │
                                                             ▼
                                                    stage: brief (reduce)
-                                                   (1 次 sentinel run-brief)
+                                                   (本地调 brief.generate.generate_brief)
                                                             │
                                                             ▼
                                                    stage: notify
-                                                   (邮件推送,backend 内执行,不调 sentinel)
+                                                   (sentinel 调 backend 内部邮件 endpoint)
 
-draft 是独立子 DAG,前端按需触发,不在 hourly run 路径
+draft 是独立子 DAG,前端按需触发(走 backend → sentinel `POST /accounts/{id}/draft`),不在 hourly 路径
 ```
 
-**节点级注**:
-
-- **monitor 是一个节点,不拆 plan / search.cnbing / search.baidu / search.ddg**:Tier 2 不动 sentinel,sentinel 端 `/run-monitor` 一次调用内部完成 plan + 3 引擎 SERP,backend runner 看不到内部细节,只能整体当一个 stage。要拆是 Tier 3 的事
-- monitor 与 crawl_fanout 互不依赖,DAG 上是 sibling,可并行
-- 14 crawler 是**一个 stage 内 fanout**,不是 14 个独立节点(这是 Tier 2 vs Tier 3 的关键缩减)
-- analyze 是 stage 内 fanout(沿用 sentinel 内的 `LLM_ANALYZE_CONCURRENCY=5`)
-- brief 是 reduce stage
-
-**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief → notify` = **5 个节点**
-
-### 3.2 触发与执行
-
-```
-[backend] sentiment_scheduler.run_hourly_job()
-       │  遍历 active accounts
-       ▼
-[backend] sentiment_pipeline.run_pipeline_for_account(account_id, trigger)
-       │  ① 在主库写一行 sentiment_run_logs(status=running),id 即为 run_id
-       │
-       ├─▶ ② dag_runner.execute(SENTIMENT_DAG, ctx={account_id, run_id, ...})
-       │       runner 拓扑排序 → 逐 stage 执行:
-       │         - stage 入库 pipeline_stage_runs(run_id, stage_id, attempt, ...)
-       │         - stage body = 一次 sentinel HTTP RPC 调用(老的 sentinel_client 方法)
-       │         - 失败按 retry_policy 重试,attempt 用尽则按 on_failure 决定下游
-       │         - stage 状态实时回写 pipeline_stage_runs
-       │
-       ├─▶ ③ runner 完成 → 聚合 stage 结果决定 run 整体 status
-       │
-       └─▶ ④ 更新 sentiment_run_logs.status / ended_at / stats_json;
-              notify_emails 非空时推送邮件
-```
+**实际 DAG 节点数**:`(monitor ∥ crawl_fanout) → analyze → brief → notify` = **5 节点**
 
 **关键差异 vs v1**:
 
-- pipeline.py 不再写"if-else 调 RPC"流水账,改为"提交 run + 调 dag_runner + 写 log"骨架
-- 单 stage 失败由 runner 的 retry_policy 决定,不再靠 backend `try/except` 散落 14 次
-- stage 状态实时落库,FE 可中段查询
-
-**vs Tier 3 的差异**:
-
-- runner 跑在 backend 进程,**仍走 HTTP 调 sentinel**(每 stage 一次 RPC)
-- sentinel 端没有任何 DAG 概念,继续吃老 RPC
-- 不引入 sentinel 侧的 `runner.db` / lease / reaper / cancel 端点
+- 全部 stage 是**本地函数调用**,不再有跨进程 HTTP RPC,`run_analyze=1800s` 这种业务级超时不存在了
+- 14 crawler 仍在 `crawl_fanout` 一个 stage 内 fanout(与 v1 行为一致,简化 DAG 节点数)
+- 单 stage 失败由 runner retry_policy 决定,不靠 backend try/except
+- 整个 pipeline 跑完不需要 backend 醒着(backend 短暂宕机不影响)
 
 ---
 
 ## 4. 模块清单
 
-### 4.1 GEO backend(本次主战场)
+### 4.1 sentinel-service(本次主战场)
 
 | 模块 | 关键文件 | 入口 | v1→v2 |
 |---|---|---|---|
-| DAG runner ★ | `geo/services/dag_runner.py` | `execute(dag, ctx) -> RunResult` | **新增 ~300 行**:节点遍历 + retry + stage 状态写入 |
-| DAG 声明 ★ | `geo/services/sentiment_dag.py` | `SENTIMENT_DAG: DAG = ...` | **新增 ~80 行**:静态 DAG + 每节点 retry_policy |
-| Pipeline 编排 | `geo/services/sentiment_pipeline.py` | `run_pipeline_for_account()` | **瘦身 223 → ~30**:删 if-else,只剩"提交 + 跑 runner + 写 log" |
-| API endpoint | `geo/api/sentiment.py` | `GET /api/sentiment/{id}/runs/latest` | **新增 ~30 行** endpoint |
-| sentinel HTTP 客户端 | `geo/services/sentinel_client.py` | 18 写方法 + 6 读方法 | **不动** |
-| 调度器 | `geo/services/sentiment_scheduler.py` | cron + leader | **不动**(`max_instances=1` 保留) |
+| Cron 调度 ★ | `scheduler.py` | startup hook 启动 asyncio loop | **新增 ~150 行**(替代 backend `sentiment_scheduler.py` 的 187 行) |
+| DAG runner ★ | `runner.py` | `runner.execute(account_id, kind, trigger)` | **新增 ~600 行**:节点遍历 + retry + lease + reaper + 状态写入 |
+| DAG 声明 ★ | `pipeline.py` | `SENTIMENT_DAG: DAG = ...` | **新增 ~100 行** |
+| Stage 实现 ★ | `stages/{monitor,crawl_fanout,analyze,brief,notify}.py` | `def run(ctx) -> StageResult` | **新增 ~400 行**(薄 wrapper,调本地 search/crawler/analyzer/brief 模块) |
+| HTTP 入口 | `service.py` | `POST /accounts/{id}`、`DELETE`、`POST /runs`、`GET /runs/{id}`、`GET /runs/latest`、读端点(保留)、`/health` | 779 行 → ~400 行;**18 写 RPC 缩到 ~5**;读端点保留 |
+| 配置缓存 ★ | `storage/runner_db.py` 中的 `accounts` 表 | runner.db | **新增** |
+| DAG 状态 ★ | `storage/runner_db.py` 中的 `pipeline_runs` / `pipeline_stage_runs` | runner.db | **新增** |
+| 业务存储 | `storage/db.py` | `connect()` | **不动** |
+| 业务模块 | `search/` `crawler/` `analyzer/` `brief/` `response/` | 各自原入口 | **不动**(被 stages/ 调用) |
+| LLM 抽象 | `llm_client.py` | `chat_create()` | **不动** |
+| 知识库 | `knowledge/*.md` × 3 | draft stage 加载 | **不动** |
 
-### 4.2 sentinel-service
+### 4.2 GEO backend
 
-**全部不动**。`service.py` 779 行 + 18 写 RPC(4 主 + 14 crawler)+ 6 读端点 + analyzer/brief/response 业务逻辑,一行不改。
+| 模块 | v1→v2 |
+|---|---|
+| `sentiment_pipeline.py` | **整体删除**(223 行) |
+| `sentiment_scheduler.py` | **整体删除**(187 行) |
+| `sentinel_client.py` | 356 行 → **~80 行**(保留:配置同步、状态读转发、手动触发、邮件接入回调) |
+| `geo/api/sentiment.py` | 484 → ~520(加内部邮件 endpoint + 状态转发改写,共 ~50 行变化) |
+| `geo/models/sentiment.py` | 删 `last_run_status` / `last_run_error` 等运行时字段(保留作废,迁移期不删避免回滚断裂);`sentiment_run_logs` 表删除 |
 
 ### 4.3 Frontend
 
 | 模块 | v1→v2 |
 |---|---|
 | `StatusBanner.tsx` | 74 → ~120,加 stage 级进度展示;`failed` 仍静默 |
-| API client | 加 `getLatestRun(accountId)` 方法,~10 行 |
+| API 调用 | endpoint 路径不变,backend 内部转发到 sentinel |
 
 ---
 
 ## 5. 数据模型
 
-### 5.1 主库(GEO,Postgres/SQLite)
+### 5.1 主库(GEO backend,Postgres/SQLite)
 
-**复用** `sentiment_run_logs`:`id` 作为 `run_id`,无需加 `run_id` 列。原有 `started_at` / `ended_at` / `status` / `stats_json` 字段足够表达 run 级状态。
+| 表 | 变化 |
+|---|---|
+| `sentiment_accounts` | **保留**,继续作为账号配置真值;**删除运行时字段**(`last_run_status`、`last_run_error`、`last_run_at` 等;Phase 0 期间保留作展示,Phase 4 清理) |
+| `sentiment_knowledge` | **保留** |
+| `sentiment_run_logs` | **删除**,运行时状态全在 sentinel `runner.db.pipeline_runs` |
 
-**新增** 1 张表:
+migration:1 个 alembic(drop `sentiment_run_logs` + drop 几个运行时字段),Phase 4 时执行。
+
+### 5.2 业务库(per-account SQLite)— 不动
+
+`posts` / `analyses` / `briefs` / `drafts` / `query_runs` 5 张表 schema **完全不动**。
+
+### 5.3 sentinel `runner.db`(新增,共享 SQLite)
 
 | 表 | 主键 | 用途 | 关键字段 |
 |---|---|---|---|
-| `pipeline_stage_runs` | `(run_id, stage_id, attempt)` | 单 stage 单次执行 | `run_id` (FK→`sentiment_run_logs.id`), `stage_id`, `attempt`, `status`, `started_at`, `ended_at`, `error`, `output_summary` (json) |
+| `accounts` | `account_id` | 配置缓存(backend 推送同步) | `ticker`, `aliases`, `keywords`, `keyword_groups`, `excludes`, `media_allowlist`, `notify_emails`, `active`, `synced_at` |
+| `pipeline_runs` | `run_id`(自增) | 一次 DAG 执行 | `account_id`, `kind`, `trigger`, `status`, `started_at`, `ended_at`, `error` |
+| `pipeline_stage_runs` | `(run_id, stage_id, attempt)` | 单 stage 单次执行 | `status`, `started_at`, `ended_at`, `error`, `output_summary` (json), `lease_until` |
 
 **唯一约束**(收敛 v1 三层防重入到一处):
 
 ```sql
 CREATE UNIQUE INDEX idx_run_active
-  ON sentiment_run_logs(account_id)
+  ON pipeline_runs(account_id, kind)
   WHERE status IN ('pending', 'running');
 ```
 
-同一 `account_id` 只能有一个未完成 run,scheduler / 手动 / 用户点击重复入队都会因约束冲突直接拒绝。这一条直接取代主库 `sentiment_accounts.last_run_status='running'` 的语义。
+同一 `(account_id, kind)` 只能有一个未完成 run。cron / 手动 / 用户重复触发都会因约束冲突直接拒绝。
 
-**migration**:1 个 alembic(新增 1 表 + 1 索引,sentinel_accounts.last_run_status 字段保留作展示)。
+### 5.4 多租户隔离(本轮不重写,适配 cron 入口)
 
-### 5.2 业务库(per-account SQLite)
+`service.py:35-127` 的 monkey-patch `connect()` 保留。**新增问题**:cron 入口不是 HTTP 请求,没有现成的中间件去 set `_current_account: ContextVar`。
 
-`posts` / `analyses` / `briefs` / `drafts` / `query_runs` 5 张表 schema **完全不动**,数据仍由 sentinel 写入。
+**适配做法**:cron loop 在每个 account 处理边界手工 `_current_account.set(account_id)`(类似 HTTP 请求中间件做的事),runner.execute 入口同理。`runner.db` 的 connection 走独立的 `runner_connect()`,不经过 monkey-patch。
 
-### 5.3 多租户隔离
-
-不动。sentinel 端的 monkey-patch `connect()` 完全不在重构范围。
+记 known issue:任何新子模块在 import 时早期捕获 `connect()` 仍会绕过隔离。归到下一轮重构。
 
 ---
 
@@ -230,11 +296,11 @@ CREATE UNIQUE INDEX idx_run_active
 
 ### 6.1 状态机
 
-`sentiment_run_logs.status`:
+`pipeline_runs.status`:
 ```
 pending ─▶ running ─┬─▶ success
                     ├─▶ failed
-                    └─▶ cancelled (Tier 2 不实现,Tier 3 再加)
+                    └─▶ cancelled
 ```
 
 `pipeline_stage_runs.status`:
@@ -244,156 +310,204 @@ pending ─▶ running ─┬─▶ success
                     └─▶ skipped (上游失败 + on_failure=skip_downstream)
 ```
 
-### 6.2 重入控制
+### 6.2 重入控制(从三层归一)
 
-| v1 守卫 | v2 (Tier 2) |
+| v1 守卫 | v2 |
 |---|---|
-| scheduler `max_instances=1` | 保留 |
-| pipeline `last_run_status='running'` 主库标记 | **改为** `sentiment_run_logs` 上的 unique index |
-| `sentinel_cleanup` 60 分钟僵尸回收 | 保留(仍 cron),scope 改为扫 `sentiment_run_logs.status='running' AND started_at < now-60min` |
+| backend scheduler `max_instances=1` | **删除**(scheduler 整体下沉到 sentinel) |
+| 主库 `last_run_status='running'` | **删除**(运行时状态全在 sentinel) |
+| backend `sentinel_cleanup` 60 分钟僵尸回收 | **删除**(sentinel runner 内置 reaper 取代) |
+| **新增**:sentinel runner.db 唯一索引 + lease reaper |
 
 ### 6.3 stage 失败策略
 
 每个 stage 在 DAG 声明里带 `retry_policy`:
 
-- `max_attempts`(默认 1;crawler fanout 不重试整个 stage,内部失败靠 sentinel 自身;LLM 调用 stage 设 2)
+- `max_attempts`(默认 1;analyze / brief 设 2)
 - `backoff`(指数,封顶 60s)
 - `on_failure`:
-  - `fail_run`:整个 run 失败(plan / monitor / analyze / brief 用)
-  - `skip_downstream`:下游标 skipped,run 状态 = success_with_warnings
-  - `continue`:run 继续,失败留痕(notify 用)
+  - `fail_run`:整 run 失败(plan / monitor / analyze / brief)
+  - `skip_downstream`:下游标 skipped,run 状态 = `success_with_warnings`
+  - `continue`:run 继续,失败留痕(crawl_fanout 内部各 crawler 用此 — 与 v1 "失败被吞" 行为一致)
 
-**14 crawler 的失败处理**:仍由 `crawl_fanout` stage 内部用 ThreadPoolExecutor 并行 + 老的 `try/except` 兜底。`stage_summary` 字段记录"哪几个 crawler 挂了",FE 可展示但**不算 stage 失败**。这与 v1 行为完全一致,只是从"散在 pipeline.py 里"搬到"集中在 crawl_fanout stage 里"。
+**14 crawler 失败处理**:在 `crawl_fanout` stage 内部用 ThreadPoolExecutor 并行 + 老 try/except 兜底。`stage.output_summary` 字段记录"哪几个 crawler 挂了",FE 可展示但**不算 stage 失败**。
 
-### 6.4 单 PR 上线 + 整体回滚
+### 6.4 lease + reaper
 
-Tier 2 不分 phase。一个 PR 包含:dag_runner + sentiment_dag + sentiment_pipeline 重写 + 主库 migration + FE StatusBanner 改造。
+每个 stage 进入 running 时写 `lease_until = now + lease_duration`(默认 30 分钟,analyze 设 45 分钟)。runner 内置 reaper 协程每 5 分钟扫一次:
 
-**回滚策略**:revert PR + 回滚 migration(drop `pipeline_stage_runs` 表 + drop unique index)。新表无业务数据依赖,丢弃只损失观测能力。
+- 找出 `status='running' AND lease_until < now()` 的 stage
+- 把它改回 `pending`(若 attempt < max)或 `failed`
+- 同步处理 run 级别的 lease
+
+取代 v1 的 `sentinel_cleanup` cron job。
+
+### 6.5 取消 / cancel
+
+`POST /accounts/{id}/runs/{run_id}/cancel` 写 `status=cancelled`,runner 在每 stage 边界检查;长 LLM 调用允许"标记取消但跑完当次",**不强 kill**。
 
 ---
 
 ## 7. LLM 用法
 
-**完全不变**。模型 / 并发 / 超时 / prompt 全部由 sentinel 端管,backend runner 看不到 LLM。
+不变。重构只调用方式,不调模型 / prompt / 并发。
 
-| 阶段 | 在哪 | 备注 |
-|---|---|---|
-| plan | sentinel `search/plan.py` | runner 通过 `monitor` stage 调用 |
-| analyze | sentinel `analyzer/pipeline.py` | runner 通过 `analyze` stage 调用,LLM 内部并发不变 |
-| brief | sentinel `brief/generate.py` | runner 通过 `brief` stage 调用 |
-| draft | sentinel `response/draft.py` | 不在主 DAG,前端按需触发 |
+| 阶段 | 模型 | 并发 | 超时 | 缓存 |
+|---|---|---|---|---|
+| plan(monitor stage 内) | gpt-4o-mini / glm-4.5-flash | 1 | per-call 60s | system prompt 走 prompt cache |
+| analyze(analyze stage) | glm-4.5-flash(默认) | `LLM_ANALYZE_CONCURRENCY=5` | per-call 60s | `ANALYZER_SYSTEM` 稳定吃 cache |
+| brief(brief stage) | gpt-4o-mini / glm-4.5-flash | map 阶段并发 5 | per-call 90s | `MAP_SYSTEM` / `REDUCE_SYSTEM` 稳定吃 cache |
+| draft(独立子 DAG) | gpt-4.1 | 1 | per-call 60s | `DRAFT_SYSTEM_HEADER` + knowledge 稳定吃 cache |
+
+**关键变化**:LLM 超时下移到单次 call,**不再有 1200/1800s 的 stage 级跨进程超时**。stage 总耗时由 runner 用 `lease_until` 控制。
 
 ---
 
 ## 8. 前端切片
 
-| 入口 | v1→v2 (Tier 2) |
+| 入口 | v1→v2 |
 |---|---|
 | `Sentiment.tsx` / `StatusBanner` | 加 stage 级进度展示;`failed` 仍静默(尊重 `feedback_sentiment_failed_silent.md`),`running` 时显示 "执行中:analyze (3/5 stages 已完成)" |
-| `TodayTab` / `ArticlesTab` / `BriefsTab` | **不动**(数据源仍是 per-account SQLite,展示格式不变,见 `feedback_sentiment_display_format.md`) |
-| `OnboardingWizard` / `SettingsPage` | **不动** |
+| `TodayTab` / `ArticlesTab` / `BriefsTab` | **不动**(数据源仍是 per-account SQLite,展示格式不变) |
+| `OnboardingWizard` / `SettingsPage` | **不动**(写入路径仍是 backend `PUT /api/sentiment/{id}`,backend 内部多一个"同步推 sentinel"的步骤) |
 
-新 endpoint:`GET /api/sentiment/{id}/runs/latest`,返回:
+backend 路由变化(对 FE 透明):
 
-```json
-{
-  "run_id": 1234,
-  "status": "running",
-  "started_at": "2026-05-08T10:05:00Z",
-  "stages": [
-    {"stage_id": "monitor",      "status": "success", "started_at": "...", "ended_at": "..."},
-    {"stage_id": "crawl_fanout", "status": "success", "started_at": "...", "ended_at": "...", "summary": {"failed_sources": ["xueqiu", "tieba"]}},
-    {"stage_id": "analyze",      "status": "running", "started_at": "...", "ended_at": null}
-  ]
-}
-```
+- `GET /api/sentiment/{id}/today` → backend 转发 `sentinel:GET /accounts/{id}/today`
+- `GET /api/sentiment/{id}/posts/briefs/...` → 转发
+- `GET /api/sentiment/{id}/runs/latest` ★ 新增 → 转发 `sentinel:GET /accounts/{id}/runs/latest`
+- `POST /api/sentiment/{id}/run` → 转发 `sentinel:POST /accounts/{id}/runs`
+- `PUT /api/sentiment/{id}` → backend 写主库 + **同步推** `sentinel:POST /accounts/{id}`
 
 ---
 
 ## 9. 关键设计决策
 
-1. **runner 跑在 backend,不下放到 sentinel**
-   - **决策**:sentinel 完全不动,runner 在 backend 进程内
-   - **理由**:本轮目标是"显式化 DAG + stage 状态可见 + stage 级 retry",这三件事不需要跨进程;下放 runner 收益是"HTTP 长连接消失",但 v1 实测这不是真正的痛点
-   - **取舍**:HTTP 1200/1800s 超时仍在;sentinel API 没瘦身。未来若需要可升 Tier 3
+1. **scheduler 整体下沉到 sentinel,backend 不再调度**
+   - **决策**:cron loop 在 sentinel 内,asyncio task 启动时挂上去,uvicorn 强制 `--workers 1`
+   - **理由**:调度与执行同进程,失败语义在一处收敛;backend 不再持有运行时状态,reconcile 困难消失
+   - **取舍**:sentinel 必须单进程部署(规模够);backend 短暂宕机不影响 sentinel 跑 cron
 
-2. **DIY runner,不引入 framework**
-   - **决策**:写 ~300 行 `dag_runner.py`,不用 Prefect / Dagster / Airflow / Celery
-   - **理由**:量级不匹配(每小时 N 账号);framework 概念会反客为主
+2. **配置:backend 是源,sentinel 持本地缓存(双写)**
+   - **决策**:`sentiment_accounts` 留 backend 主库,FE 改配置 → backend 写主库 + 同步推 sentinel
+   - **理由**:鉴权 / 用户 / 计费等仍在 backend,账号配置和这些紧耦合不宜整体迁;但 sentinel 自治需要本地配置(否则 cron 每 tick 拉 backend,backend 宕则 cron 死)
+   - **取舍**:有同步失败窗口(失败重试 + 告警);不一致风险接受
+   - **未来口子**:如果业务上"账号配置完全不在 backend 持有"成立(纯舆情产品),可以走 axis 1 (c) 方案整体迁
+
+3. **邮件:sentinel 完成 brief 后回调 backend 推送**
+   - **决策**:Resend secret 留 backend,sentinel HTTP 调 backend `POST /api/internal/sentiment/email-push`
+   - **理由**:secrets 集中;backend 已有 Resend integration,不重复
+   - **取舍**:引入 sentinel → backend 反向调用(过去单向 backend → sentinel);需做内网鉴权(`X-Internal-Token` header)
+
+4. **`sentiment_run_logs` 整体迁 sentinel `runner.db`**
+   - **决策**:backend 不再持有运行时历史,FE 拉历史 → backend 转发到 sentinel
+   - **理由**:单一真值;运行时数据归属和产生方一致
+   - **取舍**:跨进程查询(对 FE 性能影响微小,反正 backend 也是一跳);"跨用户聚合分析"目前没有需求,有了再加 backend 侧 ETL
+
+5. **DIY runner,不引入 framework**
+   - **决策**:写 ~600 行 `runner.py`,不用 Prefect / Dagster / Airflow / Celery
+   - **理由**:量级不匹配;framework 概念会反客为主
    - **取舍**:未来若需 asset lineage,迁 Dagster
 
-3. **14 crawler 不拆 DAG 节点,留在一个 stage 内 fanout**
-   - **决策**:`crawl_fanout` stage 内部用 ThreadPoolExecutor + 14 次 `crawl_*` RPC
-   - **理由**:与 v1 行为一致,迁移风险最小;14 节点拆出来的收益("贴吧爬虫挂了 3 次"这种粒度)在 stage_summary 里也能给到
+6. **14 crawler 不拆 DAG 节点,留在一个 stage 内 fanout**
+   - **决策**:`crawl_fanout` stage 内部用 ThreadPoolExecutor + 14 次本地 client 调用
+   - **理由**:与 v1 行为一致,迁移风险最小;14 节点拆出来的收益("贴吧爬虫挂了 3 次"这种粒度)在 `output_summary` 里也能给到
    - **取舍**:单个 crawler 不能独立 retry / 补跑(只能整个 fanout 重跑)
 
-4. **主库复用 `sentiment_run_logs.id` 作为 run_id**
-   - **决策**:不开新表 `pipeline_runs`,沿用现有 `sentiment_run_logs`
-   - **理由**:字段已经够用(status / started_at / ended_at / error / stats_json);新增表 = 多一份 schema 同步成本
-   - **取舍**:如果未来要支持"一个 account 同时跑两个不同 kind 的 run",得加列
-
-5. **唯一索引取代 `last_run_status='running'`**
-   - **决策**:partial unique index on `sentiment_run_logs(account_id) WHERE status IN (pending, running)`
-   - **理由**:数据库层面的强约束,任何来源(scheduler / 手动 / API)重复入队都会被拒绝
-   - **取舍**:Postgres 支持 partial index,SQLite 也支持(3.8+)。若部署到不支持的库需要改用应用层校验
-
-6. **DAG 是静态 Python 对象,声明式**
-   - **决策**:`sentiment_dag.py:SENTIMENT_DAG = DAG([...])`,import 时确定
+7. **DAG 是静态 Python 对象,声明式**
+   - **决策**:`pipeline.py:SENTIMENT_DAG = DAG([...])`,import 时确定
    - **理由**:可读、可 diff、IDE 友好;不需要"按账号配置生成不同 DAG"的灵活性
+
+8. **monkey-patch `connect()` 不在本轮重写**
+   - **决策**:保留 v1 实现,在 cron 入口和 runner 入口手工 set `ContextVar`
+   - **理由**:重写需改 search/analyzer/brief/response 4 个子模块,工作量大;不在本轮关键路径
+   - **取舍**:已知 fragile 持续存在,记 known issue,归下一轮
 
 ---
 
 ## 10. 与 v1 的差异(逐点)
 
-| v1 节 | v1 现状 | v2 (Tier 2) |
+| v1 节 | v1 现状 | v2 |
 |---|---|---|
-| §2 物理拓扑 | sentinel = 14 crawler + 4 主 RPC server,backend 编排 | sentinel **完全不动**;backend 编排层换为 DAG runner |
-| §3 数据流 | 隐式 DAG 写在 backend pipeline.py | 显式 DAG 在 backend `sentiment_dag.py`,runner 解释执行 |
-| §4 模块清单 | 6 sentinel 子模块 | 6 sentinel 子模块不动;backend 加 `dag_runner.py` + `sentiment_dag.py` |
-| §5 backend 编排 | 调用 18 RPC + try/except 14 次 | 调用 18 RPC(不变)+ runner 统一管 retry / 状态 |
-| §6.1 主库 | `sentiment_run_logs` 等不变 | 加 `pipeline_stage_runs` 表 + unique index |
+| §2 物理拓扑 | sentinel 是 18 写 RPC server,backend 编排 | sentinel 自跑 cron + DAG runner;backend 退化为账号 + FE 网关 |
+| §3 数据流 | scheduler 在 backend,逐 stage HTTP RPC | scheduler 在 sentinel,DAG 内本地函数调用 |
+| §4 模块清单 | backend 三大编排文件 + sentinel 6 子模块 | backend 三大文件删除 / 大瘦身;sentinel 加 scheduler + runner + pipeline + stages |
+| §5.1 backend 编排 | 调用 18 RPC + try/except 14 次 | backend 不再编排;调用 ~5 个 sentinel API(配置同步 / 状态读 / 手动触发 / 邮件接入) |
+| §5.2 scheduler | APScheduler + leader 选举 + SQLAlchemyJobStore | sentinel asyncio loop + 强制单进程,无需 leader |
+| §6.1 主库 | `sentiment_run_logs` + `sentiment_accounts.last_run_*` | `sentiment_run_logs` 删除;`last_run_*` 字段废弃 |
 | §6.2 业务库 | 5 表 | 5 表(不动) |
-| §6.3 多租户隔离 | monkey-patch connect | 不动(sentinel 全不动) |
+| §6.3 多租户隔离 | monkey-patch connect | 保留,适配 cron 入口手工 set ContextVar |
 | §7 前端 | StatusBanner 顶层 4 态 | StatusBanner + stage 级进度 |
-| §8.6 状态机三层守卫 | scheduler / pipeline / cleanup | scheduler + unique index + cleanup(改 scope) |
+| §8.6 状态机三层守卫 | scheduler / pipeline / cleanup | sentinel runner 唯一索引 + 内置 reaper |
 
 ---
 
 ## 11. 上线路径
 
-### 单 PR(预计 5-8 工作日)
+按"低风险先建、热路径最后切"分 phase。
 
-PR 内容(从下往上):
+### Phase 0:基础设施(不影响线上)
 
-1. 主库 migration:加 `pipeline_stage_runs` 表 + `sentiment_run_logs` partial unique index
-2. backend `dag_runner.py` ~300 行 + 单元测试
-3. backend `sentiment_dag.py` ~80 行(静态 DAG 声明)
-4. backend `sentiment_pipeline.py` 瘦身 223 → ~30 行
-5. backend `geo/api/sentiment.py` 加 `GET /runs/latest` endpoint
-6. frontend `StatusBanner.tsx` 改造,加 stage 进度
+- sentinel 写 `runner.py` + `pipeline.py` + `stages/` + `runner.db` schema + 单测
+- sentinel 加 `POST /accounts/{id}` 配置同步端点 + `accounts` 表
+- backend 加内部邮件 endpoint `POST /api/internal/sentiment/email-push` + token 鉴权
+- backend `sentinel_client.py` 加 `sync_account_config` 方法(并行 dual-write,老路径仍跑)
 
-### 上线观察(2 周)
+### Phase 1:配置同步双写(无业务影响)
 
-- 指标对比:run 失败率 / 单 run 总耗时 / per-stage 耗时分布
-- 期望:run 失败率与 v1 一致;stage 级耗时与 v1 内部行为一致;stage_runs 表无意外增长
+- backend `PUT /api/sentiment/{id}` 在写主库后,**同步推 sentinel**(失败仅告警,不阻塞用户)
+- 验证 sentinel `accounts` 表与主库一致
+
+### Phase 2:sentinel 内部 runner 影子运行(无业务影响)
+
+- sentinel 加 cron loop,但**不真的 run pipeline**,只走 DAG 模拟跑(stage = no-op)写状态
+- 对照 v1 hourly 触发,验证 sentinel cron 时序、唯一索引、reaper 工作正常
+- 1-2 周观察,无异常进 phase 3
+
+### Phase 3:notify stage 切过(blast radius 最小)
+
+- sentinel runner 真正执行 notify stage(brief 仍走老路径生成,sentinel 只接邮件推送)
+- backend 在 brief 完成后改调 `sentinel:POST /accounts/{id}/runs/{run_id}/notify` 而非自己发邮件
+- 1-2 周观察
+
+### Phase 4:hourly run 完整切过(热路径)
+
+- sentinel cron 真正执行完整 DAG,backend 关闭老 scheduler + pipeline
+- 双轨并存 1 周(backend 老 scheduler 设 `enabled=false` 但代码留着,可一键回滚)
+- 验证:run 失败率、单 run 总耗时、stage 级耗时分布
+- 主库 `sentiment_run_logs` 数据迁移到 sentinel(或保留只读快照,不再写入)
+
+### Phase 5:清理
+
+- 删 backend `sentiment_pipeline.py` + `sentiment_scheduler.py`
+- 删 backend `sentinel_client.py` 老 18 个 RPC 方法
+- 主库 schema 清理:drop `sentiment_run_logs`,drop `sentiment_accounts.last_run_*` 字段
+- sentinel `service.py` 删除 v1 写 RPC(若仍有未被引用)
 
 ### 回滚
 
-- revert PR
-- 回滚 alembic(drop table + drop index);丢弃 `pipeline_stage_runs` 数据(只是观测,无业务依赖)
+每个 phase 独立可回滚:
+
+- Phase 1:停同步推送
+- Phase 2:disable cron loop
+- Phase 3:notify stage 切回 backend
+- Phase 4:**关键回滚点** — 重启 backend scheduler,sentinel cron 关闭。运行时状态短暂不一致(几小时),用户感知到的是"任务慢了一会儿"
+- Phase 5 不可逆,只在 Phase 4 稳定 4 周以上后执行
 
 ---
 
 ## 12. 风险与未决项
 
-- [ ] **runner 自身的 bug 影响所有账号**:v1 是 200 行 imperative 代码,v2 是新写 300 行 runner。**缓解**:充分单测(retry / 拓扑 / 状态写入);本周代码冻结期不上
-- [ ] **`pipeline_stage_runs` 增长率**:每 run × 5-7 stage × 平均 1.x attempt ≈ 10 行/run,每小时 N account → 每天 ~240N 行。N=100 时 24k/day,需要保留策略(建议 30 天后归档或删除)
-- [ ] **partial unique index 的兼容性**:Postgres OK;SQLite 3.8+ OK;如果部署目标包含老 SQLite 需降级方案(应用层校验)
-- [ ] **stage_id 命名稳定性**:一旦发布,stage_id 不能改名,否则历史 stage_runs 对不上账。**约定**:stage_id 在 sentiment_dag.py 顶部常量化,变更走 deprecate 流程
-- [ ] **DAG 学习成本**:开发者从"读代码顺序"变成"读 DAG 拓扑"。**缓解**:`sentiment_dag.py` 顶部画 ASCII DAG 注释 + 维护本文档 §3.1
-- [ ] **HTTP 1200/1800s 超时仍在**:Tier 2 不解决。如果未来真的频繁命中(目前几乎从没命中),则升级到 Tier 3
-- [ ] **未来升 Tier 3 的口子**:DAG 节点的 stage body 是 `def run(ctx): sentinel_client.xxx(...)` 形态,未来想把 stage body 换成"sentinel 端 worker 处理"只是函数体替换,DAG 结构不变。这是 Tier 2 的故意保留
+- [ ] **sentinel 单进程 = 单点**:cron 在这一个进程里,sentinel 崩溃 = 调度停。**缓解**:k8s/systemd 自动拉起 + 启动时扫 `runner.db` 接续未完成 run(reaper 兜底);进程级监控告警
+- [ ] **配置同步不一致**:backend 写主库成功但推 sentinel 失败 → sentinel 用旧配置跑下一轮。**缓解**:同步推送失败队列 + 重试;每小时 sentinel 启动时跟 backend 对账(`GET /api/internal/sentiment/accounts/sync`);差异告警
+- [ ] **sentinel → backend 反向调用引入新依赖**:邮件推送依赖 backend 在线。**缓解**:失败入 retry 队列,sentinel `runner.db` 加 `notify_pending` 表;backend 短暂宕机时,邮件延迟而非丢失
+- [ ] **runner.db 单点写**:SQLite 写并发受限。预估每小时 N 账号 × ~5 stage × 平均 1.x attempt ≈ 几十行/h,SQLite 撑得住。**升级路径**:迁 Postgres 时改 connection string,schema 不变
+- [ ] **monkey-patch `connect()` 在 cron 入口要适配**:不是 HTTP 请求 → 没有中间件 set ContextVar。**缓解**:cron loop 处理每个 account 时显式 set + try/finally reset;runner.execute 入口同理。**残留风险**:未来新子模块若早期捕获 connect 仍会绕过隔离,本轮不解
+- [ ] **lease 时长**:默认 30 分钟,analyze 实测 20–30 分钟,临界。**待办**:监控 stage 实际耗时分布,定 P99 × 2 作 lease 默认值;为 analyze stage 单独设 45 分钟
+- [ ] **DAG 学习成本**:开发者从"读代码顺序"变成"读 DAG 拓扑"。**缓解**:`pipeline.py` 顶部画 ASCII DAG 注释 + 维护本文档 §3.3
+- [ ] **stage_id 命名稳定性**:一旦发布,stage_id 不能改名,否则历史 stage_runs 对不上账。**约定**:stage_id 在 `pipeline.py` 顶部常量化,变更走 deprecate 流程
+- [ ] **sentinel 部署边界变化**:之前可以多 worker(无内部状态),现在强制单进程。**缓解**:容量评估 → 单进程足够 N 账号 × 每小时 × ~3-5 分钟 / 账号 = 每小时占用 N×4 分钟,N=100 时占用率 ~7%,够用
+- [ ] **跨进程鉴权**:sentinel ↔ backend 反向调用要做内网 token 鉴权,避免外网误调。**缓解**:`X-Internal-Token` header,共享密钥从环境变量读
 
 ---
 
@@ -401,26 +515,16 @@ PR 内容(从下往上):
 
 | 想看 / 改 X | 去 Y |
 |---|---|
-| DAG 长什么样 | `backend/geo/services/sentiment_dag.py` |
-| DAG runner 怎么调度 / 重试 | `backend/geo/services/dag_runner.py` |
-| 加 / 改一个 stage 的实现 | `sentiment_dag.py` 节点的 stage body(通常调一次 `sentinel_client.xxx`) |
-| 加 / 改 stage 的 retry 策略 | `sentiment_dag.py` 节点声明里的 `retry_policy=...` |
-| run / stage 当前状态 | 主库 `sentiment_run_logs` + `pipeline_stage_runs` |
-| backend 怎么提交 run | `sentiment_pipeline.run_pipeline_for_account()` |
-| FE stage 进度从哪来 | `GET /api/sentiment/{id}/runs/latest` |
-| 调度入口 | `backend/geo/services/sentiment_scheduler.py`(不动) |
-| sentinel 端任何东西 | sentinel-service 一行不改,直接看 v1 文档 |
+| Cron 在哪触发 | `services/sentinel-service/scheduler.py` |
+| DAG 长什么样 | `services/sentinel-service/pipeline.py` |
+| DAG runner 怎么调度 / 重试 / lease / reaper | `services/sentinel-service/runner.py` |
+| 加 / 改一个 stage 的实现 | `services/sentinel-service/stages/<name>.py` |
+| 加 / 改 stage 的 retry / lease | `pipeline.py` 节点声明里的 `retry_policy=...` |
+| run / stage 当前状态 | sentinel `runner.db` 的 `pipeline_runs` / `pipeline_stage_runs` |
+| 账号配置真值(增删改) | backend 主库 `sentiment_accounts` |
+| 账号配置缓存(读) | sentinel `runner.db.accounts` |
+| backend 同步推 sentinel | `geo/services/sentinel_client.py:sync_account_config()` |
+| sentinel 调 backend 发邮件 | sentinel `stages/notify.py` → backend `POST /api/internal/sentiment/email-push` |
+| FE stage 进度 | backend `GET /api/sentiment/{id}/runs/latest` → sentinel `GET /accounts/{id}/runs/latest` |
 | LLM prompt | `services/sentinel-service/analyzer/prompts.py`(不动) |
 | 业务库 schema | per-account `data/account_{id}/yuqing.db`(不动) |
-
----
-
-## 14. Tier 2 → Tier 3 演进路径(参考)
-
-如果未来 Tier 2 上线后真的需要更激进的重构,演进路径是:
-
-1. **拆 14 crawler 为独立 DAG 节点**:把 `crawl_fanout` 在 `sentiment_dag.py` 里展开成 14 个 sibling 节点,DAG 形态变化但 stage body 仍调老 RPC。无需 sentinel 改动。
-2. **stage body 从"HTTP 调用"换成"sentinel 端 worker 处理"**:在 sentinel 加 `POST /jobs` + `GET /jobs/{id}` 两个端点,stage body 从同步 HTTP 改为提交 + 轮询。HTTP 超时痛点消除。
-3. **runner 整体下沉到 sentinel**:DAG 声明、runner、stages 全部搬到 sentinel,backend 只剩"提交 run + 查 status";即原 Tier 3 完整方案。
-
-每一步独立,可分别立项,不强绑定。

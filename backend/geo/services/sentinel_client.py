@@ -425,11 +425,20 @@ def run_respond(
 
 
 def list_posts(account_id: int, ticker: str, limit: int = 50,
-               days: int = 1) -> dict:
-    """days: 1=今日(默认),0=全部历史,N>1=最近 N 天."""
+               days: int = 1, offset: int = 0,
+               start: str | None = None, end: str | None = None) -> dict:
+    """文章列表 + 分页。
+
+    时间过滤(基于 ingested_at):start/end (YYYY-MM-DD,闭区间) 优先,否则按 days。
+    分页:limit + offset。
+    """
+    params: dict = {"ticker": ticker, "limit": limit, "offset": offset, "days": days}
+    if start:
+        params["start"] = start
+    if end:
+        params["end"] = end
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
-        r = client.get(f"{SENTINEL_URL}/accounts/{account_id}/posts",
-                       params={"ticker": ticker, "limit": limit, "days": days})
+        r = client.get(f"{SENTINEL_URL}/accounts/{account_id}/posts", params=params)
         r.raise_for_status()
         return r.json()
 

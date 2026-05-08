@@ -1956,7 +1956,27 @@ const zh = {
                   "topicPlaceholder": "输入主题关键字",
                   "influence": "影响力",
                   "onlyRelevant": "仅相关帖",
-                  "reset": "重置"
+                  "reset": "重置",
+                  "time": "时间范围",
+                  "timeToday": "今日",
+                  "time7d": "近 7 天",
+                  "time30d": "近 30 天",
+                  "timeAll": "全部",
+                  "timeCustom": "自定义",
+                  "timeStart": "起始日期",
+                  "timeEnd": "结束日期",
+                  "timeApply": "应用",
+                  "timeRangeError": "起始日期不能晚于结束日期"
+                },
+                "page": {
+                  "loadMore": "加载更多",
+                  "loading": "加载中…",
+                  "noMore": "已全部加载",
+                  "totalCount": "共 {{total}} 条 · 已显示 {{loaded}} 条",
+                  "jumpTo": "跳到第",
+                  "jumpToUnit": "页",
+                  "jumpGo": "跳转",
+                  "jumpHint": "每页 {{size}} 条,共 {{pages}} 页"
                 },
                 "sort": {
                   "label": "排序",

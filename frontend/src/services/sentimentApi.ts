@@ -6,7 +6,7 @@ import { localizedHeaders, readApiError } from './apiError';
 import type {
   AccountCreatePayload, AccountUpdatePayload,
   Brief, BriefsResponse, DraftGenerateResult, DraftsResponse,
-  KnowledgeDoc, PostsResponse, RunStatusPayload,
+  KnowledgeDoc, PostsResponse, PostsQuery, RunStatusPayload,
   SentimentAccount, SentimentPlatform, TodayResponse,
 } from '../types/sentiment';
 
@@ -96,10 +96,23 @@ export const sentimentApi = {
     );
   },
 
-  listPosts(accountId: number, ticker: string, token: string, limit = 100): Promise<PostsResponse> {
+  listPosts(
+    accountId: number, ticker: string, token: string,
+    query: PostsQuery = {},
+  ): Promise<PostsResponse> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const usp = new URLSearchParams();
+    usp.set('ticker', ticker);
+    usp.set('limit', String(limit));
+    usp.set('offset', String(offset));
+    // start/end 优先;若给了 start/end 则后端忽略 days,这里仍透传 days 兼容
+    if (query.days !== undefined) usp.set('days', String(query.days));
+    if (query.start) usp.set('start', query.start);
+    if (query.end) usp.set('end', query.end);
     return request<PostsResponse>(
       'GET',
-      `/accounts/${accountId}/posts?ticker=${encodeURIComponent(ticker)}&limit=${limit}`,
+      `/accounts/${accountId}/posts?${usp.toString()}`,
       token,
     );
   },

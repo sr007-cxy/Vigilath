@@ -1,12 +1,13 @@
 // React Query hooks 包装 sentimentApi.
 // 自动注入 token,统一 staleTime,提供 invalidate 方法.
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { sentimentApi, isMockMode } from '../services/sentimentApi';
 import { SENTIMENT_PLATFORMS as PLATFORM_FALLBACK } from '../constants/sentimentPlatforms';
 import type {
-  AccountCreatePayload, AccountUpdatePayload, SentimentPlatform,
+  AccountCreatePayload, AccountUpdatePayload, PostsQuery, PostsResponse,
+  SentimentPlatform,
 } from '../types/sentiment';
 
 const ACCOUNTS_KEY = ['sentiment', 'accounts'] as const;
@@ -140,11 +141,61 @@ export function useTodayData(accountId: number | null, ticker: string | null) {
   });
 }
 
+/** 一次性拉取(BriefsTab、向后兼容)。新代码请用 useInfinitePosts。 */
 export function usePosts(accountId: number | null, ticker: string | null, limit = 200) {
   const { token } = useAuth();
   return useQuery({
     queryKey: ['sentiment', 'posts', accountId, ticker, limit],
-    queryFn: () => sentimentApi.listPosts(accountId!, ticker!, token!, limit),
+    queryFn: () => sentimentApi.listPosts(accountId!, ticker!, token!, { limit, days: 0 }),
+    enabled: !!token && !!accountId && !!ticker,
+    staleTime: 60_000,
+  });
+}
+
+/** 分页 + 时间范围 — ArticlesTab 用。
+ *  filters 改变会自动重置第一页(queryKey 含 filters);
+ *  fetchNextPage() 拼接下一段。 */
+export interface InfinitePostsFilters {
+  pageSize?: number;
+  /** 时间范围:days 与 start/end 二选一 */
+  days?: number;
+  start?: string;
+  end?: string;
+  /** 起始 offset — "跳转到第 N 页" 时设为 (N-1)*pageSize,
+   *  用 queryKey 区分,改值会重置 infinite query */
+  startOffset?: number;
+}
+
+export function useInfinitePosts(
+  accountId: number | null,
+  ticker: string | null,
+  filters: InfinitePostsFilters = {},
+) {
+  const { token } = useAuth();
+  const pageSize = filters.pageSize ?? 50;
+  const startOffset = filters.startOffset ?? 0;
+  return useInfiniteQuery<PostsResponse, Error>({
+    queryKey: [
+      'sentiment', 'posts-infinite', accountId, ticker,
+      pageSize, filters.days, filters.start, filters.end, startOffset,
+    ],
+    queryFn: ({ pageParam }) => {
+      const q: PostsQuery = { limit: pageSize, offset: (pageParam as number) ?? startOffset };
+      if (filters.start || filters.end) {
+        if (filters.start) q.start = filters.start;
+        if (filters.end) q.end = filters.end;
+      } else if (filters.days !== undefined) {
+        q.days = filters.days;
+      }
+      return sentimentApi.listPosts(accountId!, ticker!, token!, q);
+    },
+    initialPageParam: startOffset,
+    getNextPageParam: (lastPage, allPages) => {
+      const fetched = allPages.reduce((sum, p) => sum + (p.items?.length ?? 0), 0);
+      const total = lastPage.total ?? fetched;
+      const consumed = startOffset + fetched;
+      return consumed < total ? consumed : undefined;
+    },
     enabled: !!token && !!accountId && !!ticker,
     staleTime: 60_000,
   });

@@ -143,6 +143,21 @@ export interface SentimentPost {
 export interface PostsResponse {
   count: number;
   items: SentimentPost[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+  days?: number;
+  start?: string | null;
+  end?: string | null;
+}
+
+export interface PostsQuery {
+  limit?: number;
+  offset?: number;
+  /** days 与 start/end 二选一;后端 start/end 优先 */
+  days?: number;
+  start?: string;
+  end?: string;
 }
 
 export interface BriefSummary {
