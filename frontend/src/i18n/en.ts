@@ -2016,7 +2016,17 @@ const en = {
                   "expandReasoning": "View reasoning"
                 },
                 "empty": "No posts match the current filters",
-                "count": "{{count}} posts"
+                "count": "{{count}} posts",
+                "sourceLabels": {
+                  "douyin": "Douyin",
+                  "bilibili": "Bilibili",
+                  "weibo": "Weibo",
+                  "weixin": "WeChat",
+                  "kuaishou": "Kuaishou",
+                  "xiaohongshu": "Xiaohongshu",
+                  "toutiao": "Toutiao",
+                  "twitter": "Twitter"
+                }
               },
               "briefs": {
                 "list": "Briefs",

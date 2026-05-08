@@ -21,6 +21,15 @@ const cardStyle: React.CSSProperties = {
 
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
+const FIXED_SOURCES = [
+  'douyin', 'bilibili', 'weibo', 'weixin',
+  'kuaishou', 'xiaohongshu', 'toutiao', 'twitter',
+] as const;
+
+function formatCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
 
 function noteworthy(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
@@ -47,17 +56,41 @@ export function ArticlesTab({ account, usingMock }: Props) {
     [usingMock, postsResp],
   );
 
-  const allSources = useMemo(
-    () => Array.from(new Set(posts.map(p => p.source))).sort(),
-    [posts],
-  );
-
   const [sentiments, setSentiments] = useState<Set<string>>(new Set());
   const [risks, setRisks] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
   const [topic, setTopic] = useState('');
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
+
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const src of FIXED_SOURCES) counts.set(src, 0);
+    for (const p of posts) {
+      if (onlyRelevant && !p.is_relevant) continue;
+      const sl = (p.sentiment_label as string) || 'unknown';
+      if (sentiments.size && !sentiments.has(sl)) continue;
+      const rl = (p.risk_level as string) || 'none';
+      if (risks.size && !risks.has(rl)) continue;
+      if (topic.trim()) {
+        const tt = topic.trim();
+        const inTopics = (p.topics ?? []).some(x => x.includes(tt));
+        const inTitle = (p.title ?? '').includes(tt);
+        const inSummary = (p.summary ?? '').includes(tt);
+        if (!inTopics && !inTitle && !inSummary) continue;
+      }
+      counts.set(p.source, (counts.get(p.source) ?? 0) + 1);
+    }
+    return counts;
+  }, [posts, sentiments, risks, topic, onlyRelevant]);
+
+  const sourceList = useMemo(() => {
+    const fixed = FIXED_SOURCES as readonly string[];
+    const extras = Array.from(sourceCounts.keys())
+      .filter(s => !fixed.includes(s))
+      .sort();
+    return [...fixed, ...extras];
+  }, [sourceCounts]);
 
   const initialKey = params.get('post');
   const [selectedKey, setSelectedKey] = useState<string | null>(initialKey);
@@ -156,10 +189,29 @@ export function ArticlesTab({ account, usingMock }: Props) {
         </FilterGroup>
 
         <FilterGroup label={t('dashboard.sentiment.articles.filters.source')}>
-          {allSources.map(s => (
-            <FilterChip key={s} label={s}
-              active={sources.has(s)} onClick={() => setSources(toggle(sources, s))} />
-          ))}
+          <div className="flex flex-col w-full gap-0.5">
+            {sourceList.map(s => {
+              const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+              const localized = t(labelKey);
+              const display = localized === labelKey ? s : localized;
+              const count = sourceCounts.get(s) ?? 0;
+              const active = sources.has(s);
+              return (
+                <button key={s} type="button"
+                  onClick={() => setSources(toggle(sources, s))}
+                  className="flex items-center justify-between text-xs px-2 py-1 rounded transition-colors"
+                  style={{
+                    background: active ? 'var(--accent-primary)' : 'transparent',
+                    color: active ? '#ffffff' : 'var(--text-secondary)',
+                  }}>
+                  <span>{display}</span>
+                  <span style={{ color: active ? '#ffffff' : 'var(--text-muted)' }}>
+                    {formatCount(count)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </FilterGroup>
 
         <div>

@@ -2022,7 +2022,17 @@ const zh = {
                   "expandReasoning": "查看推理依据"
                 },
                 "empty": "没有匹配筛选条件的帖子",
-                "count": "{{count}} 条"
+                "count": "{{count}} 条",
+                "sourceLabels": {
+                  "douyin": "抖音",
+                  "bilibili": "哔哩哔哩",
+                  "weibo": "微博",
+                  "weixin": "微信",
+                  "kuaishou": "快手",
+                  "xiaohongshu": "小红书",
+                  "toutiao": "今日头条",
+                  "twitter": "Twitter"
+                }
               },
               "briefs": {
                 "list": "简报列表",
