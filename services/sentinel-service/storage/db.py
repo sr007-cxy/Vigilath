@@ -260,16 +260,18 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
     params: list = [symbol]
 
     if start or end:
+        # ISO 8601 字符串可直接 lex 比较,不再 substr(...,1,10) — 保留小时/分钟精度。
+        # 前端可传 'YYYY-MM-DD' 当天起点 / 'YYYY-MM-DDTHH:MM:SS' 精确时刻。
         if start:
-            where.append("substr(p.ingested_at, 1, 10) >= ?")
+            where.append("p.ingested_at >= ?")
             params.append(start)
         if end:
-            where.append("substr(p.ingested_at, 1, 10) <= ?")
+            where.append("p.ingested_at <= ?")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("substr(p.ingested_at, 1, 10) >= ?")
+        where.append("p.ingested_at >= ?")
         params.append(cutoff)
 
     sql = f"""
@@ -297,15 +299,15 @@ def analyses_count_for_symbol(conn: sqlite3.Connection, symbol: str,
 
     if start or end:
         if start:
-            where.append("substr(p.ingested_at, 1, 10) >= ?")
+            where.append("p.ingested_at >= ?")
             params.append(start)
         if end:
-            where.append("substr(p.ingested_at, 1, 10) <= ?")
+            where.append("p.ingested_at <= ?")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("substr(p.ingested_at, 1, 10) >= ?")
+        where.append("p.ingested_at >= ?")
         params.append(cutoff)
 
     sql = f"""

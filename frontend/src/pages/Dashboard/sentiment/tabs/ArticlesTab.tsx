@@ -78,6 +78,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('today');
+  // datetime-local 格式:YYYY-MM-DDTHH:MM(无秒)
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
   const [appliedStart, setAppliedStart] = useState<string>('');
@@ -90,6 +91,19 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setStartOffset(0);
     setJumpInput('');
   }, [timePreset, appliedStart, appliedEnd]);
+
+  // 切到 custom 时自动填默认范围 = 今日 00:00 ~ 23:59
+  // (用户明确没改 customStart/customEnd 时才填,避免覆盖之前输入的值)
+  useEffect(() => {
+    if (timePreset !== 'custom') return;
+    if (customStart || customEnd) return;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    setCustomStart(`${yyyy}-${mm}-${dd}T00:00`);
+    setCustomEnd(`${yyyy}-${mm}-${dd}T23:59`);
+  }, [timePreset, customStart, customEnd]);
 
   const customRangeError = customStart && customEnd && customStart > customEnd;
 
@@ -280,8 +294,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const handleApplyCustom = () => {
     if (customRangeError) return;
-    setAppliedStart(customStart);
-    setAppliedEnd(customEnd);
+    // datetime-local 是分钟精度;落到后端时补秒,end 用 :59 包含整分钟
+    setAppliedStart(customStart ? `${customStart}:00` : '');
+    setAppliedEnd(customEnd ? `${customEnd}:59` : '');
   };
 
   const handleJumpPage = () => {
@@ -302,21 +317,53 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>;
   }
 
-  // 时间筛选 chips — portal 到 Sentiment.tsx Tab 栏右侧
+  // 时间筛选 — portal 到 Sentiment.tsx Tab 栏右侧
+  // 下拉选择 preset;选 "custom" 时同行展开 datetime-local 区间面板。
   const timeChips = (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-muted mr-0.5">{t('dashboard.sentiment.articles.filters.time')}:</span>
-      {([
-        ['today', 'timeToday'],
-        ['d7', 'time7d'],
-        ['d30', 'time30d'],
-        ['all', 'timeAll'],
-        ['custom', 'timeCustom'],
-      ] as const).map(([key, label]) => (
-        <FilterChip key={key} label={t(`dashboard.sentiment.articles.filters.${label}`)}
-          active={timePreset === key}
-          onClick={() => setTimePreset(key)} />
-      ))}
+    <div className="flex items-center gap-2 flex-wrap">
+      <label className="text-xs text-muted">{t('dashboard.sentiment.articles.filters.time')}:</label>
+      <select
+        value={timePreset}
+        onChange={(e) => setTimePreset(e.target.value as TimePreset)}
+        className="text-xs px-2 py-1 rounded"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <option value="today">{t('dashboard.sentiment.articles.filters.timeToday')}</option>
+        <option value="d7">{t('dashboard.sentiment.articles.filters.time7d')}</option>
+        <option value="d30">{t('dashboard.sentiment.articles.filters.time30d')}</option>
+        <option value="all">{t('dashboard.sentiment.articles.filters.timeAll')}</option>
+        <option value="custom">{t('dashboard.sentiment.articles.filters.timeCustom')}</option>
+      </select>
+      {timePreset === 'custom' && (
+        <>
+          <input type="datetime-local" value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+          <span className="text-xs text-muted">→</span>
+          <input type="datetime-local" value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
+            className="text-xs px-2 py-1 rounded"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+          <button type="button" onClick={handleApplyCustom}
+            disabled={!!customRangeError || (!customStart && !customEnd)}
+            className="text-xs px-3 py-1 rounded disabled:opacity-50"
+            style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+            {t('dashboard.sentiment.articles.filters.timeApply')}
+          </button>
+          {customRangeError && (
+            <span className="text-[11px]" style={{ color: '#dc2626' }}>
+              {t('dashboard.sentiment.articles.filters.timeRangeError')}
+            </span>
+          )}
+        </>
+      )}
     </div>
   );
 
@@ -477,33 +524,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </div>
         </header>
 
-        {/* 自定义时间区间 — 仅当 timePreset='custom' 时显示在 header 下方 */}
-        {timePreset === 'custom' && (
-          <div className="rounded-md p-2 flex items-center gap-2 flex-wrap" style={cardStyle}>
-            <input type="date" value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              aria-label={t('dashboard.sentiment.articles.filters.timeStart')}
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-            <span className="text-xs text-muted">→</span>
-            <input type="date" value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              aria-label={t('dashboard.sentiment.articles.filters.timeEnd')}
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-            <button type="button" onClick={handleApplyCustom}
-              disabled={!!customRangeError || (!customStart && !customEnd)}
-              className="text-xs px-3 py-1 rounded disabled:opacity-50"
-              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-              {t('dashboard.sentiment.articles.filters.timeApply')}
-            </button>
-            {customRangeError && (
-              <span className="text-[11px]" style={{ color: '#dc2626' }}>
-                {t('dashboard.sentiment.articles.filters.timeRangeError')}
-              </span>
-            )}
-          </div>
-        )}
+        {/* 自定义日期区间已并入 Tab 栏右侧 timeChips,这里不再重复 */}
 
         {filtered.length === 0 ? (
           <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
