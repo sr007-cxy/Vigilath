@@ -20,9 +20,10 @@ from storage import (
 from .baidu import baidu_search
 from .cnbing import cnbing_search
 from .ddg import ddg_search, throttle
+from .sogou import sogou_search
 
 
-DEFAULT_ENGINES = ("ddg", "cnbing", "baidu")
+DEFAULT_ENGINES = ("ddg", "cnbing", "baidu", "sogou")
 
 
 # DDG occasionally returns titles where the `&` of an HTML numeric entity has
@@ -135,6 +136,11 @@ def _call_engine(eng: str, query: str, max_results: int,
         elif eng == "baidu":
             r = baidu_search(query, max_results=max_results,
                              timelimit=timelimit)
+        elif eng == "sogou":
+            # 微信公众号专用通道:query 含 site:mp.weixin 自动走 weixin.sogou.com
+            channel = "auto"
+            r = sogou_search(query, max_results=max_results,
+                             timelimit=timelimit, channel=channel)
         else:
             print(f"  [search] unknown engine: {eng!r}", file=sys.stderr)
             return eng, []
