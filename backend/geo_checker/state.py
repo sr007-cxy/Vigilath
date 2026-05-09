@@ -75,9 +75,14 @@ def reset_state():
     """Reset global state for a fresh run. Called at the top of each CLI /
     API invocation so accumulated scores and cached pages don't bleed across
     requests. Hold both locks to guarantee no concurrent check sees a
-    half-reset state."""
-    global _scores, _page_cache
+    half-reset state.
+
+    Mutate in place via .clear() — modules that did `from ..state import _scores`
+    hold a reference to this exact dict; reassigning would leave them stuck on
+    the pre-reset object and cause the read-side to see {} (e.g. aeo.py reading
+    _scores at the end produced score=0 / categories={}).
+    """
     with _scores_lock:
-        _scores = {}
+        _scores.clear()
     with _page_cache_lock:
-        _page_cache = {}
+        _page_cache.clear()
