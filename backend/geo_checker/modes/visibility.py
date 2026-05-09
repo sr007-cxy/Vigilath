@@ -256,7 +256,21 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                     try:
                         r = _browser_search("deepseek", query)
                         answer = r.get("answer", "")
-                        citations = r.get("citations") or []
+                        # browser-cn returns Citation dataclasses serialized as
+                        # dicts ({"url":..., "position":..., ...}); the rest of
+                        # this module's helpers expect plain URL strings (same
+                        # shape as the API engine path). Normalize here so
+                        # _check_brand_in_result / _extract_competitors and the
+                        # adapter_results loop below all see the same contract.
+                        raw_cits = r.get("citations") or []
+                        citations = []
+                        for _c in raw_cits:
+                            if isinstance(_c, dict):
+                                _u = _c.get("url")
+                            else:
+                                _u = _c
+                            if _u:
+                                citations.append(_u)
                         deepseek_results.append({
                             "engine": "DeepSeek",
                             "query": query,
@@ -757,8 +771,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             if r.get("error"):
                 continue
             cits = [
-                Citation.from_url(c.url, position=c.position)
-                for c in r.get("citations", [])
+                Citation.from_url(u, position=i + 1)
+                for i, u in enumerate(r.get("citations", []))
             ]
             adapter_results.append(_ER(
                 engine="DeepSeek", query=r["query"],
