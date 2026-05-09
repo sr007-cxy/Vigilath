@@ -245,10 +245,14 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                 global_competitors[comp] = global_competitors.get(comp, 0) + count
 
     # ── Run DeepSeek via browser service if available ──
+    # GEO_VISIBILITY_USE_BROWSER 默认 0:不走 browser-cn(每个 query 串行 30-60s
+    # 是 visibility 主要耗时来源),让 OpenRouter / DeepSeek API / Doubao / Qwen
+    # 全走 API 并发。要回退到 browser-cn 兜底,export GEO_VISIBILITY_USE_BROWSER=1。
     deepseek_results = []
+    use_browser = os.environ.get("GEO_VISIBILITY_USE_BROWSER", "0").strip() == "1"
     try:
         from browser_engine.client import has_session, search as _browser_search
-        if has_session("deepseek"):
+        if use_browser and has_session("deepseek"):
             try:
                 print(f"\n  Running DeepSeek queries via browser service...")
 
@@ -296,6 +300,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                 print(f"  DeepSeek completed: {len([r for r in deepseek_results if not r['error']])} valid results")
             except Exception as e:
                 print(f"  [{WARN}] DeepSeek browser service error: {e}")
+        elif not use_browser:
+            print(f"  [{INFO}] DeepSeek browser path disabled (GEO_VISIBILITY_USE_BROWSER!=1) — skipping")
         else:
             print(f"  [{WARN}] DeepSeek session not found. Upload session to browser service.")
     except Exception as e:
