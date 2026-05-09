@@ -5,7 +5,7 @@ Migrated from /geo_checker.py lines 5536-5791.
 - `_query_perplexity/openai/anthropic` route through OpenRouter so a single
   OPENROUTER_API_KEY unlocks all three engines. Each returns
   (answer, citations, error).
-- `_query_deepseek/doubao` hit native APIs for Chinese AI engines.
+- `_query_deepseek/doubao/qwen` hit native APIs for Chinese AI engines.
 - `_check_brand_in_result`, `_extract_competitors`, `_classify_framing` are
   shared response analyzers used by citation / visibility / entity modes.
 """
@@ -186,6 +186,46 @@ def _query_doubao(query, api_key, model_id):
             answer = choices[0].get("message", {}).get("content", "")
         # No built-in web search — extract URLs from answer text
         citations = list(dict.fromkeys(re.findall(r'https?://[^\s\)\]>]+', answer)))
+        return answer, citations, None
+    except requests.RequestException as e:
+        return "", [], str(e)
+
+
+def _query_qwen(query, api_key):
+    """Send a query to Qwen (DashScope) with enable_search=true. Returns (answer, citations, error)."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": "qwen-plus",
+        "messages": [{"role": "user", "content": query}],
+        "enable_search": True,
+    }
+    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        if r.status_code == 401:
+            return "", [], "invalid_key"
+        if r.status_code == 429:
+            time.sleep(5)
+            r = requests.post(url, json=payload, headers=headers, timeout=60)
+        if r.status_code != 200:
+            return "", [], f"http_{r.status_code}"
+        data = r.json()
+        choices = data.get("choices", [])
+        msg = choices[0].get("message", {}) if choices else {}
+        answer = msg.get("content", "") or ""
+
+        # DashScope returns structured search_results when enable_search=true.
+        # The field can live at the top level or nested under message.
+        search_results = data.get("search_results") or msg.get("search_results") or []
+        citations = []
+        for sr in search_results:
+            u = sr.get("url") or sr.get("link") or ""
+            if u:
+                citations.append(u)
+        # Fallback: extract URLs from answer text
+        if not citations:
+            citations = re.findall(r'https?://[^\s\)\]>]+', answer)
+        citations = list(dict.fromkeys(citations))
         return answer, citations, None
     except requests.RequestException as e:
         return "", [], str(e)

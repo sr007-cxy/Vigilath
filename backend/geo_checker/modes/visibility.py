@@ -25,7 +25,7 @@ from ..state import (
 )
 from ..ai import (
     _query_perplexity, _query_openai, _query_anthropic,
-    _query_deepseek, _query_doubao,
+    _query_deepseek, _query_doubao, _query_qwen,
     _check_brand_in_result, _extract_competitors, _classify_framing,
 )
 from ..analyzers.source_trace import analyze_source_trace
@@ -56,6 +56,7 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     doubao_key = os.environ.get("DOUBAO_API_KEY", "").strip()
     doubao_model = os.environ.get("DOUBAO_MODEL_ID", "").strip()
+    qwen_key = os.environ.get("QWEN_API_KEY", "").strip()
 
     if openrouter_key:
         engines["Perplexity"] = ("perplexity", openrouter_key)
@@ -68,6 +69,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     elif doubao_key and not doubao_model:
         print(f"  [{WARN}] DOUBAO_API_KEY set but DOUBAO_MODEL_ID missing — skipping Doubao")
         print(f"           Set your endpoint ID: export DOUBAO_MODEL_ID='ep-20240...'")
+    if qwen_key:
+        engines["Qwen"] = ("qwen", qwen_key)
 
     if not engines:
         if return_data:
@@ -76,6 +79,7 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         print(f"    export OPENROUTER_API_KEY='your-key'   (recommended — Perplexity+ChatGPT+Claude)")
         print(f"    export DEEPSEEK_API_KEY='sk-...'")
         print(f"    export DOUBAO_API_KEY='...'  + DOUBAO_MODEL_ID='ep-...'")
+        print(f"    export QWEN_API_KEY='sk-...'  (DashScope / 通义千问)")
         print(f"\n  This is a paid feature requiring AI API access.")
         sys.exit(1)
 
@@ -166,6 +170,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
             return _query_deepseek(query, api_key)
         elif engine_type == "doubao":
             return _query_doubao(query, api_key, doubao_model)
+        elif engine_type == "qwen":
+            return _query_qwen(query, api_key)
         return "", [], "unknown_engine"
 
     # ── Run all queries across all engines (parallel) ──
