@@ -25,7 +25,10 @@ except ImportError:  # pragma: no cover — older package name
 # 默认 backend="auto" 会把 yandex/yahoo/grokipedia/mojeek/wikipedia 全试一遍,
 # 国内网络下 yandex 几乎必超时、grokipedia 时不时挂.把范围收敛到稳定 + 国内
 # 可达(走代理)的几家,大幅降低单查询耗时.可用 DDGS_BACKENDS env 覆盖.
-_DEFAULT_BACKENDS = "duckduckgo,brave,bing"
+# Note: ddgs 库已移除 bing backend,实测可用列表 = brave/duckduckgo/grokipedia/
+# mojeek/wikipedia/yahoo/yandex.yahoo 在 site:xueqiu.com 这类中文 site 限定 query
+# 上能拿到结果,补它当 brave 限流时的兜底.
+_DEFAULT_BACKENDS = "duckduckgo,brave,yahoo,mojeek"
 # 单引擎调用超时(秒).ddgs 默认 10s — 偶尔超时累计起来 monitor 几十个 query
 # 会被 backend 5 分钟 TIMEOUT_MONITOR 截断,所以拉短.
 _DEFAULT_TIMEOUT = 8
