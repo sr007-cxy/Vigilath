@@ -138,9 +138,12 @@ def _call_engine(eng: str, query: str, max_results: int,
                              timelimit=timelimit)
         elif eng == "sogou":
             # 微信公众号专用通道:query 含 site:mp.weixin 自动走 weixin.sogou.com
+            # resolve_redirect=True: sogou /link?url=… → 真实目标 URL,
+            # 否则 normalize_result 会把所有 sogou 命中标成 "unknown"
             channel = "auto"
             r = sogou_search(query, max_results=max_results,
-                             timelimit=timelimit, channel=channel)
+                             timelimit=timelimit, channel=channel,
+                             resolve_redirect=True)
         else:
             print(f"  [search] unknown engine: {eng!r}", file=sys.stderr)
             return eng, []

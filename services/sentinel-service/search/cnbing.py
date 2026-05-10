@@ -30,14 +30,27 @@ def cnbing_search(query: str, max_results: int = 10,
                   timelimit: str | None = None) -> list[dict]:
     """Search cn.bing.com, return [{title, href, body}].
 
-    `timelimit`: 'd' (day), 'w' (week), 'm' (month), or None.
+    `timelimit`:
+      - 'd' (day) / 'w' (week) / 'm' (month) — 标量预设
+      - 'YYYY-MM-DD..YYYY-MM-DD' — 绝对日期范围(走 ez5 自定义 filter)
+      - None — 不过滤
     """
     params: dict[str, str | int] = {
         "q": query,
         "count": max(min(max_results, 50), 10),
         "ensearch": "0",  # Force Chinese results
     }
-    if timelimit and timelimit in _TIMELIMIT_MAP:
+    if timelimit and ".." in timelimit:
+        # Bing 自定义范围: ex1:"ez5_<days>_<days>",days = unix_seconds // 86400
+        try:
+            from datetime import datetime, timezone
+            lo_str, hi_str = timelimit.split("..", 1)
+            lo_days = int(datetime.fromisoformat(lo_str).replace(tzinfo=timezone.utc).timestamp() // 86400)
+            hi_days = int(datetime.fromisoformat(hi_str).replace(tzinfo=timezone.utc).timestamp() // 86400)
+            params["filters"] = f"ex1:\"ez5_{lo_days}_{hi_days}\""
+        except (ValueError, TypeError):
+            pass
+    elif timelimit and timelimit in _TIMELIMIT_MAP:
         params["filters"] = _TIMELIMIT_MAP[timelimit]
 
     headers = {

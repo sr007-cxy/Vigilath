@@ -32,10 +32,28 @@ _TIMELIMIT_SECONDS = {
 def _gpc_for_timelimit(timelimit: str | None) -> str | None:
     """Build Baidu's `gpc` date-range param. Returns None for no filter.
 
+    Accepts:
+      - 'd'/'w'/'m'/'y': past N days/weeks/months/years (relative)
+      - 'YYYY-MM-DD..YYYY-MM-DD': absolute date range (e.g. '2026-05-02..2026-05-08')
+
     Baidu relies on its own page-discovery date, which is not always accurate,
     but it is strictly better than no filter for "fresh content" queries.
     """
-    delta = _TIMELIMIT_SECONDS.get(timelimit) if timelimit else None
+    if not timelimit:
+        return None
+    # 绝对日期范围
+    if ".." in timelimit:
+        try:
+            from datetime import datetime, timezone
+            lo_str, hi_str = timelimit.split("..", 1)
+            lo = int(datetime.fromisoformat(lo_str).replace(tzinfo=timezone.utc).timestamp())
+            hi = int(datetime.fromisoformat(hi_str).replace(tzinfo=timezone.utc).timestamp())
+            # 加 86399 让 hi 包含到当天 23:59:59
+            return f"stf={lo},{hi + 86399}|stftype=1"
+        except (ValueError, TypeError):
+            return None
+    # 相对窗口
+    delta = _TIMELIMIT_SECONDS.get(timelimit)
     if not delta:
         return None
     end = int(time.time())
