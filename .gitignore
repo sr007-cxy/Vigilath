@@ -118,6 +118,8 @@ backend/secrets/
 # Local backup files
 frontend/public/favicon_bk.svg
 frontend/dist-old/
+frontend/dist.bak.*/
+*.py.bak.*
 
 # Backend env backups (timestamped snapshots of .env produced by ops scripts —
 # may contain secrets, NEVER commit)
