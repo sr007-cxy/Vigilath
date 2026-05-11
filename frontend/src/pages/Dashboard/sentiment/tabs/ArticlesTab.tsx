@@ -114,8 +114,6 @@ const cardStyle: React.CSSProperties = {
 
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
-// 情感类型(立场)— LLM 判定文章作者对该主体的态度
-const ALL_STANCES = ['supportive', 'skeptical', 'neutral', 'hostile'] as const;
 
 function noteworthy(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
@@ -327,8 +325,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
   const [industries, setIndustries] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
-  // 情感类型(stance):supportive/skeptical/neutral/hostile
-  const [stances, setStances] = useState<Set<string>>(new Set());
   // topic 与 ?q URL 参数同步 — 侧栏 KeywordGroup 子项点击 → 写 ?q → 这里读出
   const [topic, setTopicState] = useState(() => params.get('q') ?? '');
   useEffect(() => {
@@ -438,10 +434,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
       if (risks.size && !risks.has(rl)) return false;
       if (allowedSources && !allowedSources.has(p.source)) return false;
       if (sources.size && !sources.has(p.source)) return false;
-      if (stances.size) {
-        const st = (p.stance as string) || '';
-        if (!stances.has(st)) return false;
-      }
       if (topic.trim()) {
         const tt = topic.trim();
         const inTopics = (p.topics ?? []).some(x => x.includes(tt));
@@ -459,7 +451,20 @@ export function ArticlesTab({ account, usingMock }: Props) {
       list = list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
     }
     return list;
-  }, [posts, sentiments, risks, sources, stances, topic, onlyRelevant, sortBy, allowedSources]);
+  }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy, allowedSources]);
+
+  // 当前 filtered 集合的 stance 分布(情感类型进度条用)
+  const stanceDist = useMemo(() => {
+    const dist: Record<string, number> = {
+      supportive: 0, neutral: 0, skeptical: 0, hostile: 0, unknown: 0,
+    };
+    for (const p of filtered) {
+      const s = (p.stance as string)?.trim() || 'unknown';
+      if (s in dist) dist[s] += 1;
+      else dist.unknown += 1;
+    }
+    return dist;
+  }, [filtered]);
 
   // selected = null 时右栏显示筛选面板;明确点击文章后才显示详情
   const selected: SentimentPost | null = useMemo(() => {
@@ -488,12 +493,12 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // 活跃高级筛选数(rail 里现在全部摊开;角标仅作为"modal 内有改动"提醒)
   const advancedActive =
-    mediaTypes.size + industries.size + sources.size + stances.size;
+    mediaTypes.size + industries.size + sources.size;
 
   const reset = () => {
     setSentiments(new Set()); setRisks(new Set());
     setMediaTypes(new Set()); setIndustries(new Set());
-    setSources(new Set()); setStances(new Set());
+    setSources(new Set());
     setTopic(''); setSortBy('influence');
   };
 
@@ -707,8 +712,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       {advancedOpen && (
         <AdvancedFilterModal
           value={{
-            risks, sentiments, mediaTypes, industries,
-            sources, stances,
+            risks, sentiments, mediaTypes, industries, sources,
           }}
           platforms={platforms}
           axisCounts={axisCounts}
@@ -721,7 +725,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
             setMediaTypes(v.mediaTypes);
             setIndustries(v.industries);
             setSources(v.sources);
-            setStances(v.stances);
             setAdvancedOpen(false);
           }}
         />
@@ -829,7 +832,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
             sources={sources} setSources={setSources}
             mediaTypes={mediaTypes} setMediaTypes={setMediaTypes}
             industries={industries} setIndustries={setIndustries}
-            stances={stances} setStances={setStances}
+            stanceDist={stanceDist}
             posts={posts}
             platforms={platforms}
             platformCodes={platformCodes}
@@ -862,7 +865,7 @@ interface FilterRailProps {
   sources: Set<string>; setSources: (s: Set<string>) => void;
   mediaTypes: Set<string>; setMediaTypes: (s: Set<string>) => void;
   industries: Set<string>; setIndustries: (s: Set<string>) => void;
-  stances: Set<string>; setStances: (s: Set<string>) => void;
+  stanceDist: Record<string, number>;
   posts: SentimentPost[];
   platforms: SentimentPlatform[];
   platformCodes: string[];
@@ -879,7 +882,7 @@ function FilterRail({
   risks, setRisks, sentiments, setSentiments,
   sources, setSources,
   mediaTypes, setMediaTypes, industries, setIndustries,
-  stances, setStances,
+  stanceDist,
   posts, platforms, platformCodes, sourceCounts, axisCounts,
   platformLabel, topic, setTopic, onReset, toggle,
 }: FilterRailProps) {
@@ -1010,20 +1013,72 @@ function FilterRail({
         })}
       </RailSectionGrid>
 
-      {/* 6. 情感类型(立场)*/}
-      <RailSectionChips title={t('dashboard.sentiment.articles.filters.stance')}>
-        {ALL_STANCES.map(s => {
-          const k = `dashboard.sentiment.articles.detail.stanceLabels.${s}`;
-          const v = t(k);
-          const label = v === k ? s : v;
+      {/* 6. 情感类型 — stance 分布堆叠条(展示型,不参与 filter) */}
+      <div>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
+          {t('dashboard.sentiment.articles.filters.stance')}
+        </p>
+        <StanceDistBar dist={stanceDist} t={t} />
+      </div>
+    </div>
+  );
+}
+
+/** 情感类型(立场)分布堆叠条 ─────────────────────────────
+ * 把当前 filtered posts 按 stance 分组,展示成横向百分比堆叠条 +
+ * 下方 legend(标签+计数).空数据时显示占位文字. */
+function StanceDistBar({ dist, t }:
+  { dist: Record<string, number>; t: (k: string) => string }) {
+  const order: { key: string; color: string }[] = [
+    { key: 'supportive', color: '#22c55e' },  // 绿:支持
+    { key: 'neutral',    color: '#9ca3af' },  // 灰:中立
+    { key: 'skeptical',  color: '#f59e0b' },  // 黄:质疑
+    { key: 'hostile',    color: '#ef4444' },  // 红:敌对
+    { key: 'unknown',    color: '#d1d5db' },  // 浅灰:未知
+  ];
+  const total = order.reduce((s, x) => s + (dist[x.key] ?? 0), 0);
+
+  if (!total) {
+    return <p className="text-[11px] text-muted">—</p>;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {/* 堆叠条 */}
+      <div className="flex rounded overflow-hidden h-2.5"
+        style={{ background: 'var(--bg-tertiary)' }}>
+        {order.map(({ key, color }) => {
+          const n = dist[key] ?? 0;
+          if (!n) return null;
+          const pct = (n / total) * 100;
           return (
-            <FilterChip key={s}
-              label={label}
-              active={stances.has(s)}
-              onClick={() => setStances(toggle(stances, s))} />
+            <div key={key}
+              title={`${t(`dashboard.sentiment.articles.detail.stanceLabels.${key}`)}: ${n} (${pct.toFixed(1)}%)`}
+              style={{ width: `${pct}%`, background: color }}
+            />
           );
         })}
-      </RailSectionChips>
+      </div>
+      {/* legend:label + count */}
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]"
+        style={{ color: 'var(--text-secondary)' }}>
+        {order.map(({ key, color }) => {
+          const n = dist[key] ?? 0;
+          if (!n) return null;
+          const tk = `dashboard.sentiment.articles.detail.stanceLabels.${key}`;
+          const labelV = t(tk);
+          const label = labelV === tk ? key : labelV;
+          return (
+            <span key={key} className="inline-flex items-center gap-1">
+              <span style={{
+                display: 'inline-block', width: 8, height: 8,
+                borderRadius: 2, background: color,
+              }} />
+              {label} {n}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

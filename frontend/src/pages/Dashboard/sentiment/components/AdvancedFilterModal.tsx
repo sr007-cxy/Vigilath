@@ -17,7 +17,6 @@ import type {
 
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
-const ALL_STANCES = ['supportive', 'skeptical', 'neutral', 'hostile'] as const;
 
 export interface AdvancedFilterValue {
   risks: Set<string>;
@@ -25,7 +24,6 @@ export interface AdvancedFilterValue {
   mediaTypes: Set<string>;
   industries: Set<string>;
   sources: Set<string>;
-  stances: Set<string>;
 }
 
 interface Props {
@@ -56,7 +54,6 @@ export function AdvancedFilterModal({
   const [draftSrc, setDraftSrc] = useState<Set<string>>(() => new Set(value.sources));
   const [draftInd, setDraftInd] = useState<Set<string>>(() => new Set(value.industries));
   const [draftMt, setDraftMt] = useState<Set<string>>(() => new Set(value.mediaTypes));
-  const [draftStances, setDraftStances] = useState<Set<string>>(() => new Set(value.stances));
 
   // Esc 关闭
   useEffect(() => {
@@ -165,20 +162,6 @@ export function AdvancedFilterModal({
             })}
           </FilterRow>
 
-          {/* 6. 情感类型(立场)*/}
-          <FilterRow label={t('dashboard.sentiment.articles.filters.stance')}>
-            {ALL_STANCES.map(s => {
-              const k = `dashboard.sentiment.articles.detail.stanceLabels.${s}`;
-              const v = t(k);
-              return (
-                <CheckOption key={s}
-                  label={v === k ? s : v}
-                  checked={draftStances.has(s)}
-                  onChange={() => setDraftStances(toggle(draftStances, s))}
-                />
-              );
-            })}
-          </FilterRow>
         </div>
 
         <footer className="px-5 py-3 flex justify-end gap-2"
@@ -195,7 +178,6 @@ export function AdvancedFilterModal({
               mediaTypes: draftMt,
               industries: draftInd,
               sources: draftSrc,
-              stances: draftStances,
             })}
             className="text-xs px-3 py-1.5 rounded"
             style={{ background: 'var(--accent-primary)', color: '#fff' }}>
