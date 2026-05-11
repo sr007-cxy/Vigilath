@@ -23,6 +23,7 @@ import { TodayTab } from './sentiment/tabs/TodayTab';
 import { ArticlesTab } from './sentiment/tabs/ArticlesTab';
 import { BriefsTab } from './sentiment/tabs/BriefsTab';
 import { StatusBanner, FirstRunWaiting } from './sentiment/components/StatusBanner';
+import { AccountSidebar } from './sentiment/components/AccountSidebar';
 
 type TabKey = 'today' | 'articles' | 'briefs';
 const TAB_KEYS: TabKey[] = ['today', 'articles', 'briefs'];
@@ -114,42 +115,11 @@ export function Sentiment() {
       <div className="bg-glow bg-glow-1" />
       <div className="bg-glow bg-glow-2" />
       <div className="bg-glow bg-glow-3" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-4 relative z-10">
-        <header className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-primary">
-              {t('dashboard.sentiment.title')}
-            </h1>
-
-            {!usingMock && accounts.length > 1 ? (
-              <select
-                value={selectedId ?? ''}
-                onChange={(e) => setSelectedId(Number(e.target.value))}
-                className="px-2.5 py-1 rounded-md text-sm font-medium"
-                style={{
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.target} · {a.ticker}</option>
-                ))}
-              </select>
-            ) : (
-              <span
-                className="px-2.5 py-1 rounded-md text-sm font-medium"
-                style={{
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                <span className="font-bold text-primary">{acct.target}</span>
-                {acct.ticker && <span className="ml-2 font-mono text-xs">· {acct.ticker}</span>}
-              </span>
-            )}
-          </div>
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 md:py-8 relative z-10">
+        <header className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <h1 className="text-2xl font-bold text-primary">
+            {t('dashboard.sentiment.title')}
+          </h1>
 
           <div className="flex items-center gap-3">
             {status === 'success' && (
@@ -176,72 +146,81 @@ export function Sentiment() {
           </div>
         </header>
 
-        <StatusBanner
-          status={status as never}
-          error={error}
-          onRefresh={handleRefresh}
-          onRetry={handleRetry}
-        />
+        {/* 主体 2 列布局:左侧账户树 + 右侧 Tab 区. 移动端单列堆叠. */}
+        <div className="grid grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)] gap-4">
+          <AccountSidebar
+            accounts={usingMock ? [acct] : accounts}
+            selectedId={acct.id}
+            onSelect={(id) => setSelectedId(id)}
+          />
 
-        {status === null && (
-          <div
-            className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-sm"
-            style={{
-              background: 'rgba(59,130,246,0.10)',
-              color: '#1d4ed8',
-              border: '1px solid rgba(59,130,246,0.35)',
-            }}
-          >
-            <span>{t('dashboard.sentiment.status.neverRun')}</span>
-            <button
-              type="button"
-              onClick={handleRetry}
-              disabled={runNowMutation.isPending}
-              className="text-xs font-semibold px-2.5 py-1 rounded-md disabled:opacity-50"
-              style={{ background: 'rgba(255,255,255,0.6)', color: '#1d4ed8' }}
-            >
-              {runNowMutation.isPending
-                ? t('dashboard.sentiment.status.queueing')
-                : t('dashboard.sentiment.status.runNow')}
-            </button>
-          </div>
-        )}
+          <div className="space-y-4 min-w-0">
+            <StatusBanner
+              status={status as never}
+              error={error}
+              onRefresh={handleRefresh}
+              onRetry={handleRetry}
+            />
 
-        {/* 只有真正首次运行(从未跑过 → lastRunAt 为空)才用全屏占位.
-            已有历史数据时,StatusBanner 已在上方提示"运行中",
-            数据 Tabs 继续展示历史数据,不能整片遮起来. */}
-        {(status === 'pending' || status === 'running') && !lastRunAt ? (
-          <FirstRunWaiting onRefresh={handleRefresh} />
-        ) : (
-          <>
-            <nav
-              className="flex justify-between items-end gap-3 border-b overflow-x-auto flex-wrap"
-              style={{ borderColor: 'var(--border-color)' }}
-            >
-              <div className="flex gap-1">
-                {TAB_KEYS.map(k => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setTab(k)}
-                    className="px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
-                    style={tab === k
-                      ? { borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }
-                      : { borderColor: 'transparent', color: 'var(--text-secondary)' }}
-                  >
-                    {t(`dashboard.sentiment.tabs.${k}`)}
-                  </button>
-                ))}
+            {status === null && (
+              <div
+                className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-sm"
+                style={{
+                  background: 'rgba(59,130,246,0.10)',
+                  color: '#1d4ed8',
+                  border: '1px solid rgba(59,130,246,0.35)',
+                }}
+              >
+                <span>{t('dashboard.sentiment.status.neverRun')}</span>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  disabled={runNowMutation.isPending}
+                  className="text-xs font-semibold px-2.5 py-1 rounded-md disabled:opacity-50"
+                  style={{ background: 'rgba(255,255,255,0.6)', color: '#1d4ed8' }}
+                >
+                  {runNowMutation.isPending
+                    ? t('dashboard.sentiment.status.queueing')
+                    : t('dashboard.sentiment.status.runNow')}
+                </button>
               </div>
-              {/* 子 Tab 通过 portal 把工具条渲染到这里 — 比如文章 Tab 的时间筛选 chip */}
-              <div id="sentiment-tab-toolbar" className="flex items-center gap-2 pb-2" />
-            </nav>
+            )}
 
-            {tab === 'today' && <TodayTab account={acct} usingMock={usingMock} />}
-            {tab === 'articles' && <ArticlesTab account={acct} usingMock={usingMock} />}
-            {tab === 'briefs' && <BriefsTab account={acct} usingMock={usingMock} />}
-          </>
-        )}
+            {/* 首次运行的全屏占位 — 没历史数据时才用 */}
+            {(status === 'pending' || status === 'running') && !lastRunAt ? (
+              <FirstRunWaiting onRefresh={handleRefresh} />
+            ) : (
+              <>
+                <nav
+                  className="flex justify-between items-end gap-3 border-b overflow-x-auto flex-wrap"
+                  style={{ borderColor: 'var(--border-color)' }}
+                >
+                  <div className="flex gap-1">
+                    {TAB_KEYS.map(k => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setTab(k)}
+                        className="px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
+                        style={tab === k
+                          ? { borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }
+                          : { borderColor: 'transparent', color: 'var(--text-secondary)' }}
+                      >
+                        {t(`dashboard.sentiment.tabs.${k}`)}
+                      </button>
+                    ))}
+                  </div>
+                  {/* 子 Tab 通过 portal 把工具条渲染到这里 — 比如文章 Tab 的时间筛选 chip */}
+                  <div id="sentiment-tab-toolbar" className="flex items-center gap-2 pb-2" />
+                </nav>
+
+                {tab === 'today' && <TodayTab account={acct} usingMock={usingMock} />}
+                {tab === 'articles' && <ArticlesTab account={acct} usingMock={usingMock} />}
+                {tab === 'briefs' && <BriefsTab account={acct} usingMock={usingMock} />}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

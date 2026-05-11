@@ -51,133 +51,138 @@ export function PostDetail({ post }: Props) {
 
   const highlightedContent = renderHighlightedContent(content, citations);
 
-  return (
-    <article className="rounded-xl p-5 space-y-4" style={cardStyle}>
-      <header className="space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <SourceBadge source={post.source} />
-          <RiskBadge level={post.risk_level} t={t} />
-          <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
-        </div>
-        <h2 className="text-lg font-bold text-primary leading-snug">{post.title || '(无标题)'}</h2>
-        <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
-          <span>{post.author || '—'}</span>
-          {(() => {
-            const region = sourceRegion.get(post.source);
-            if (!region) return null;
-            const k = `dashboard.sentiment.articles.regions.${region}`;
-            const v = t(k);
-            return v === k ? null : <span>📍 {v}</span>;
-          })()}
-          <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
-          {content && <span>📝 {countChars(content).toLocaleString()} 字</span>}
-          {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
-          {post.reply_count != null && <span>💬 {post.reply_count.toLocaleString()}</span>}
-          {post.url && (
-            <a
-              href={post.url}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto"
-              style={{ color: 'var(--accent-primary)' }}
-            >
-              {t('dashboard.sentiment.articles.detail.openOriginal')}
-            </a>
-          )}
-        </div>
-      </header>
+  const region = sourceRegion.get(post.source);
+  const regionKey = region && `dashboard.sentiment.articles.regions.${region}`;
+  const regionLabel = regionKey ? t(regionKey) : '';
+  const showRegion = regionKey && regionLabel !== regionKey;
 
+  return (
+    <article className="rounded-xl p-5 space-y-3" style={cardStyle}>
+      {/* row 1: 标题(大字) */}
+      <h2 className="text-xl font-bold text-primary leading-snug">
+        {post.title || '(无标题)'}
+      </h2>
+
+      {/* row 2: 平台 · @账号 · 发布时间 · 查看原文 */}
+      <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
+        <SourceBadge source={post.source} />
+        {showRegion && <span>📍 {regionLabel}</span>}
+        {post.author && <span>@{post.author}</span>}
+        <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
+        {post.url && (
+          <a href={post.url} target="_blank" rel="noreferrer"
+            className="ml-auto text-xs px-2 py-0.5 rounded"
+            style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+            {t('dashboard.sentiment.articles.detail.openOriginal')}
+          </a>
+        )}
+      </div>
+
+      {/* row 3: 摘要 + 完整正文 */}
+      {post.summary && (
+        <p className="text-sm text-secondary italic leading-relaxed border-l-2 pl-3"
+          style={{ borderColor: 'var(--border-color)' }}>
+          {post.summary}
+        </p>
+      )}
       <section>
-        <h4 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">
+        <h4 className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
           {t('dashboard.sentiment.articles.detail.originalText')}
         </h4>
         <p className="text-sm text-primary leading-relaxed whitespace-pre-wrap">
-          {highlightedContent}
+          {highlightedContent || '—'}
         </p>
       </section>
 
-      <section className="pt-3" style={{ borderTop: '1px dashed var(--border-color)' }}>
-        <h4 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-3">
+      {/* 底部元信息 — 风险 / 情感 / 立场 / 影响力 / 话题 / 实体 / 推理 */}
+      <section className="pt-3 space-y-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+        <h4 className="text-[11px] font-semibold text-muted uppercase tracking-wider">
           {t('dashboard.sentiment.articles.detail.aiAnalysis')}
         </h4>
 
-        <Field label={t('dashboard.sentiment.articles.detail.summary')}>
-          <p className="text-sm text-primary">{post.summary || '—'}</p>
-        </Field>
-
-        <Field label={t('dashboard.sentiment.articles.detail.emotions')}>
-          <ChipList items={emotions} />
-        </Field>
-
-        <Field label={t('dashboard.sentiment.articles.detail.topics')}>
-          <ChipList items={topics.map(s => `#${s}`)} />
-        </Field>
-
-        <Field label={t('dashboard.sentiment.articles.detail.entities')}>
-          <ChipList items={entities} />
-        </Field>
-
-        <div className="grid grid-cols-3 gap-3 my-2">
-          <MicroField label={t('dashboard.sentiment.articles.detail.stance')} value={localizeEnum(t, 'stanceLabels', post.stance)} />
-          <MicroField label={t('dashboard.sentiment.articles.detail.intent')} value={localizeEnum(t, 'intentLabels', post.intent)} />
-          <MicroField label={t('dashboard.sentiment.articles.detail.factuality')} value={localizeEnum(t, 'factualityLabels', post.factuality)} />
+        {/* 风险 / 情感 — chip 行 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <RiskBadge level={post.risk_level} t={t} />
+          <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
+          {content && <span className="text-[11px] text-muted">📝 {countChars(content).toLocaleString()}</span>}
+          {post.view_count != null && <span className="text-[11px] text-muted">👁 {post.view_count.toLocaleString()}</span>}
+          {post.reply_count != null && <span className="text-[11px] text-muted">💬 {post.reply_count.toLocaleString()}</span>}
         </div>
 
-        <Field label={t('dashboard.sentiment.articles.detail.riskSignals')}>
-          {riskSignals.length === 0 ? (
-            <p className="text-xs text-muted">—</p>
-          ) : (
+        {/* 立场 / 意图 / 事实性 */}
+        <div className="grid grid-cols-3 gap-3">
+          <MicroField label={t('dashboard.sentiment.articles.detail.stance')}
+            value={localizeEnum(t, 'stanceLabels', post.stance)} />
+          <MicroField label={t('dashboard.sentiment.articles.detail.intent')}
+            value={localizeEnum(t, 'intentLabels', post.intent)} />
+          <MicroField label={t('dashboard.sentiment.articles.detail.factuality')}
+            value={localizeEnum(t, 'factualityLabels', post.factuality)} />
+        </div>
+
+        {/* 影响力 */}
+        <Field label={t('dashboard.sentiment.articles.detail.influence')}>
+          <div className="flex items-center gap-2">
+            <div className="rounded-full overflow-hidden flex-1"
+              style={{ height: 6, background: 'var(--bg-tertiary)' }}>
+              <div style={{
+                width: `${influence * 100}%`,
+                height: '100%',
+                background: 'var(--accent-primary)',
+              }} />
+            </div>
+            <span className="font-mono text-xs text-primary">{influence.toFixed(2)}</span>
+          </div>
+        </Field>
+
+        {/* 话题 / 实体 / 情绪 */}
+        {topics.length > 0 && (
+          <Field label={t('dashboard.sentiment.articles.detail.topics')}>
+            <ChipList items={topics.map(s => `#${s}`)} />
+          </Field>
+        )}
+        {entities.length > 0 && (
+          <Field label={t('dashboard.sentiment.articles.detail.entities')}>
+            <ChipList items={entities} />
+          </Field>
+        )}
+        {emotions.length > 0 && (
+          <Field label={t('dashboard.sentiment.articles.detail.emotions')}>
+            <ChipList items={emotions} />
+          </Field>
+        )}
+
+        {/* 风险信号 */}
+        {riskSignals.length > 0 && (
+          <Field label={t('dashboard.sentiment.articles.detail.riskSignals')}>
             <ul className="text-xs space-y-1">
               {riskSignals.map((r, i) => (
                 <li key={i}>
-                  <span
-                    className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1.5"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#b91c1c' }}
-                  >
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1.5"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#b91c1c' }}>
                     {r.type}
                   </span>
                   <span className="text-secondary">{r.reason}</span>
                 </li>
               ))}
             </ul>
-          )}
-        </Field>
+          </Field>
+        )}
 
-        <Field label={t('dashboard.sentiment.articles.detail.influence')}>
-          <div className="flex items-center gap-2">
-            <div
-              className="rounded-full overflow-hidden flex-1"
-              style={{ height: 6, background: 'var(--bg-tertiary)' }}
-            >
-              <div
-                style={{
-                  width: `${influence * 100}%`,
-                  height: '100%',
-                  background: 'var(--accent-primary)',
-                }}
-              />
-            </div>
-            <span className="font-mono text-xs text-primary">
-              {influence.toFixed(2)}
-            </span>
-          </div>
-        </Field>
-
+        {/* 隐含意义 */}
         {post.hidden_meaning && (
           <Field label={t('dashboard.sentiment.articles.detail.hidden')}>
             <p className="text-sm italic text-secondary">{post.hidden_meaning}</p>
           </Field>
         )}
 
+        {/* AI 引用 */}
         {citations.length > 0 && (
           <Field label={t('dashboard.sentiment.articles.detail.citations')}>
             <ul className="text-xs space-y-1">
               {citations.map((c, i) => (
                 <li key={i}>
-                  <span
-                    className="inline-block px-1.5 py-0.5 rounded font-mono"
-                    style={{ background: 'rgba(251,191,36,0.18)', color: '#854d0e' }}
-                  >
+                  <span className="inline-block px-1.5 py-0.5 rounded font-mono"
+                    style={{ background: 'rgba(251,191,36,0.18)', color: '#854d0e' }}>
                     "{c}"
                   </span>
                 </li>
@@ -186,18 +191,17 @@ export function PostDetail({ post }: Props) {
           </Field>
         )}
 
-        <details
-          open={reasoningOpen}
-          onToggle={(e) => setReasoningOpen((e.target as HTMLDetailsElement).open)}
-          className="mt-3"
-        >
-          <summary className="text-xs text-muted cursor-pointer">
-            {t('dashboard.sentiment.articles.detail.expandReasoning')}
-          </summary>
-          <p className="text-xs text-secondary mt-1.5 italic">{post.reasoning}</p>
-        </details>
+        {/* AI 推理(默认折叠) */}
+        {post.reasoning && (
+          <details open={reasoningOpen}
+            onToggle={(e) => setReasoningOpen((e.target as HTMLDetailsElement).open)}>
+            <summary className="text-xs text-muted cursor-pointer">
+              {t('dashboard.sentiment.articles.detail.expandReasoning')}
+            </summary>
+            <p className="text-xs text-secondary mt-1.5 italic">{post.reasoning}</p>
+          </details>
+        )}
       </section>
-
     </article>
   );
 }

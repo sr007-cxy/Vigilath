@@ -9,13 +9,14 @@ import { useInfinitePosts, useGenerateDraft, useSentimentPlatforms } from '../..
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
 } from '../../../../types/sentiment';
-import {
-  MEDIA_TYPE_ORDER, INDUSTRY_ORDER,
-  type MediaType, type Industry,
-} from '../../../../constants/sentimentPlatforms';
+// MEDIA_TYPE_ORDER / INDUSTRY_ORDER / MediaType / Industry 已移到 AdvancedFilterModal 使用
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
+import { FilterChip, GridChip } from '../components/filterChips';
+import {
+  AdvancedFilterModal, type AdvancedFilterValue,
+} from '../components/AdvancedFilterModal';
 
 type SortKey = 'influence' | 'newest' | 'views';
 // 时间筛选预设 — 与参考竞品对齐
@@ -67,9 +68,12 @@ function buildMonth(year: number, month: number): Date[] {
 
 const WEEKDAYS_ZH = ['一', '二', '三', '四', '五', '六', '日'];
 
-// 计算预设对应的 (start, end);'all' 返回 {} 不过滤;'custom' 由调用方处理。
-function presetRange(preset: TimePreset): { start?: string; end?: string } {
-  if (preset === 'all' || preset === 'custom') return {};
+// 计算预设对应的 (start, end) 或 days。
+// 'all' → days:0(后端约定:0 = 全部历史;不传 days 后端默认 1 = 仅今日,会显示空)
+// 'custom' → {} 由调用方处理
+function presetRange(preset: TimePreset): { start?: string; end?: string; days?: number } {
+  if (preset === 'all') return { days: 0 };
+  if (preset === 'custom') return {};
   const now = new Date();
   if (preset === 'today') {
     const s = new Date(now); s.setHours(0, 0, 0, 0);
@@ -181,7 +185,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
   }, [pickerOpen]);
 
   // ── 时间筛选 + 分页 状态 ─────────────────────────────────
-  const [timePreset, setTimePreset] = useState<TimePreset>('today');
+  const [timePreset, setTimePreset] = useState<TimePreset>('d90');
   // datetime-local 格式:YYYY-MM-DDTHH:MM(无秒)
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
@@ -278,6 +282,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       pageSize: PAGE_SIZE,
       start: effectiveRange.start,
       end: effectiveRange.end,
+      days: effectiveRange.days,
       startOffset,
     },
   );
@@ -389,27 +394,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return { mediaType: mt, industry: ind };
   }, [posts, sentiments, risks, topic, onlyRelevant, platformAxes]);
 
-  // 来源按 media_type 分组(竖列 + 折叠)
-  const sourceGroups = useMemo(() => {
-    const byMt = new Map<MediaType | 'other', string[]>();
-    for (const p of platforms) {
-      const mt = (p.media_type as MediaType) || 'other';
-      const list = byMt.get(mt) ?? [];
-      list.push(p.code);
-      byMt.set(mt, list);
-    }
-    const known = new Set<string>(platformCodes);
-    const extras = Array.from(sourceCounts.keys())
-      .filter(s => !known.has(s))
-      .sort();
-    if (extras.length) byMt.set('other', extras);
-
-    const order: (MediaType | 'other')[] = [...MEDIA_TYPE_ORDER, 'other'];
-    return order
-      .filter(m => byMt.has(m))
-      .map(m => ({ mediaType: m, codes: byMt.get(m)! }));
-  }, [sourceCounts, platforms, platformCodes]);
-
   const initialKey = params.get('post');
   const [selectedKey, setSelectedKey] = useState<string | null>(initialKey);
 
@@ -459,11 +443,18 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return posts.find(p => p.source === src && p.post_id === pid) || filtered[0] || null;
   }, [selectedKey, filtered, posts]);
 
+  // 切换 Set 中某项 — 顶部 chip 行用
   const toggle = <T,>(s: Set<T>, v: T): Set<T> => {
     const n = new Set(s);
     if (n.has(v)) n.delete(v); else n.add(v);
     return n;
   };
+
+  // 高级筛选 modal 开关
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // 计算 modal 内 4 项的活跃数(媒体分类/媒体类型/仅相关偏离默认值 → 计 1)
+  const advancedActive =
+    mediaTypes.size + industries.size + (onlyRelevant ? 0 : 1);
 
   const reset = () => {
     setSentiments(new Set()); setRisks(new Set());
@@ -664,180 +655,134 @@ export function ArticlesTab({ account, usingMock }: Props) {
   );
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4">
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3">
       {toolbarSlot && createPortal(timeTrigger, toolbarSlot)}
       {timePopup && createPortal(timePopup, document.body)}
-      <aside className="rounded-xl p-4 space-y-4 self-start" style={cardStyle}>
-        <header className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-primary">
-            {t('dashboard.sentiment.articles.filters.title')}
-          </h4>
-          <button type="button" onClick={reset} className="text-xs text-muted hover:text-primary">
-            {t('dashboard.sentiment.articles.filters.reset')}
-          </button>
-        </header>
 
-        {/* 风险 / 情感 — 项数少,继续用 flex-wrap 小 chip,不强行套 3 列 grid */}
-        <Section title={t('dashboard.sentiment.articles.filters.risk')}
-          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
-          <div className="flex flex-wrap gap-1">
-            {ALL_RISKS.map(r => (
-              <FilterChip key={r} label={t(`dashboard.sentiment.articles.risk.${r}`)}
-                active={risks.has(r)} onClick={() => setRisks(toggle(risks, r))} />
-            ))}
-          </div>
-        </Section>
+      {advancedOpen && (
+        <AdvancedFilterModal
+          value={{ mediaTypes, industries, sources, onlyRelevant }}
+          totalCount={posts.length}
+          platforms={platforms}
+          axisCounts={axisCounts}
+          sourceCounts={sourceCounts}
+          platformLabel={(code) => {
+            const fromDb = platformNames.get(code);
+            const labelKey = `dashboard.sentiment.articles.sourceLabels.${code}`;
+            const localized = fromDb || t(labelKey);
+            return (!fromDb && localized === labelKey) ? code : localized;
+          }}
+          onCancel={() => setAdvancedOpen(false)}
+          onSave={(v: AdvancedFilterValue) => {
+            setMediaTypes(v.mediaTypes);
+            setIndustries(v.industries);
+            setSources(v.sources);
+            setOnlyRelevant(v.onlyRelevant);
+            setAdvancedOpen(false);
+          }}
+        />
+      )}
 
-        <Section title={t('dashboard.sentiment.articles.filters.sentiment')}
-          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
-          <div className="flex flex-wrap gap-1">
-            {ALL_SENTIMENTS.map(s => (
-              <FilterChip key={s} label={t(`dashboard.sentiment.articles.labels.${s}`)}
-                active={sentiments.has(s)} onClick={() => setSentiments(toggle(sentiments, s))} />
-            ))}
-          </div>
-        </Section>
-
-        {/* 热门媒体 — 固定 9 个高频平台,3 列 grid,直接 toggle source */}
-        <Section title={t('dashboard.sentiment.articles.filters.popular')}
-          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
-          <ChipGrid>
-            <GridChip
-              label={t('dashboard.sentiment.articles.filters.all')}
-              count={posts.length}
-              active={!sources.size}
-              onClick={() => setSources(new Set())}
-            />
-            {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
-              const fromDb = platformNames.get(s);
-              const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
-              const localized = fromDb || t(labelKey);
-              const display = (!fromDb && localized === labelKey) ? s : localized;
-              return (
-                <GridChip key={s} label={display}
-                  count={sourceCounts.get(s) ?? 0}
-                  active={sources.has(s)}
-                  onClick={() => setSources(toggle(sources, s))} />
-              );
-            })}
-          </ChipGrid>
-        </Section>
-
-        {/* 媒体分类 — 行业 chip,▾ 展开该行业下的全部平台供细选 */}
-        <Section title={t('dashboard.sentiment.articles.filters.industry')}
-          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
-          <ChipGrid>
-            <GridChip
-              label={t('dashboard.sentiment.articles.filters.all')}
-              count={posts.length}
-              active={!industries.size}
-              onClick={() => setIndustries(new Set())}
-            />
-            {INDUSTRY_ORDER.map(ind => {
-              const c = axisCounts.industry.get(ind) ?? 0;
-              const codes = platforms.filter(p => p.industry === ind).map(p => p.code);
-              return (
-                <ExpandableGridChip key={ind}
-                  label={t(`dashboard.sentiment.articles.industries.${ind}`)}
-                  count={c}
-                  active={industries.has(ind)}
-                  onToggleSelf={() => setIndustries(toggle(industries, ind as Industry))}
-                  codes={codes}
-                  platformLabel={(code) => {
-                    const fromDb = platformNames.get(code);
-                    const labelKey = `dashboard.sentiment.articles.sourceLabels.${code}`;
-                    const localized = fromDb || t(labelKey);
-                    return (!fromDb && localized === labelKey) ? code : localized;
-                  }}
-                  countOf={(code) => sourceCounts.get(code) ?? 0}
-                  isSourceActive={(code) => sources.has(code)}
-                  onToggleSource={(code) => setSources(toggle(sources, code))}
-                />
-              );
-            })}
-          </ChipGrid>
-        </Section>
-
-        {/* 媒体类型 — 全部媒体类型 chip,▾ 展开该类型下平台 */}
-        <Section title={t('dashboard.sentiment.articles.filters.mediaType')}
-          hint={t('dashboard.sentiment.articles.filters.multiSelectHint')}>
-          <ChipGrid>
-            <GridChip
-              label={t('dashboard.sentiment.articles.filters.all')}
-              count={posts.length}
-              active={!mediaTypes.size}
-              onClick={() => setMediaTypes(new Set())}
-            />
-            {sourceGroups.map(({ mediaType, codes }) => {
-              const mtLabelKey = `dashboard.sentiment.articles.mediaTypes.${mediaType}`;
-              const mtLabel = t(mtLabelKey);
-              const mtDisplay = mtLabel === mtLabelKey ? mediaType : mtLabel;
-              const groupCount = axisCounts.mediaType.get(mediaType) ?? 0;
-              const isOther = mediaType === 'other';
-              return (
-                <ExpandableGridChip key={mediaType}
-                  label={mtDisplay}
-                  count={groupCount}
-                  active={!isOther && mediaTypes.has(mediaType)}
-                  onToggleSelf={isOther ? null : (() => setMediaTypes(toggle(mediaTypes, mediaType as MediaType)))}
-                  codes={codes}
-                  platformLabel={(code) => {
-                    const fromDb = platformNames.get(code);
-                    const labelKey = `dashboard.sentiment.articles.sourceLabels.${code}`;
-                    const localized = fromDb || t(labelKey);
-                    return (!fromDb && localized === labelKey) ? code : localized;
-                  }}
-                  countOf={(code) => sourceCounts.get(code) ?? 0}
-                  isSourceActive={(code) => sources.has(code)}
-                  onToggleSource={(code) => setSources(toggle(sources, code))}
-                />
-              );
-            })}
-          </ChipGrid>
-        </Section>
-
-        <div>
-          <label className="text-xs font-semibold text-secondary uppercase tracking-wider block mb-1">
-            {t('dashboard.sentiment.articles.filters.topic')}
-          </label>
-          <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-            placeholder={t('dashboard.sentiment.articles.filters.topicPlaceholder')}
-            className="w-full px-2 py-1.5 text-sm rounded"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-        </div>
-
-        <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={onlyRelevant} onChange={(e) => setOnlyRelevant(e.target.checked)} />
-          <span className="text-secondary">{t('dashboard.sentiment.articles.filters.onlyRelevant')}</span>
-        </label>
-      </aside>
-
+      {/* ── 中:筛选 chip 行 + 文章列表 ───────────────────────────────── */}
       <section className="space-y-3 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
-        <header className="flex items-center justify-between flex-wrap gap-2 xl:sticky xl:top-0 xl:z-10" style={{ background: 'var(--bg-primary)' }}>
-          <span className="text-xs text-muted">
+        {/* 顶部筛选 chip 行(对齐 WisersOne 原型图 1) */}
+        <div className="rounded-xl p-3 space-y-2 xl:sticky xl:top-0 xl:z-10" style={cardStyle}>
+          {/* 风险 / 情感 / 热门媒体 — 行级 flex-wrap */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <InlineGroup label={t('dashboard.sentiment.articles.filters.risk')}>
+              {ALL_RISKS.map(r => (
+                <FilterChip key={r}
+                  label={t(`dashboard.sentiment.articles.risk.${r}`)}
+                  active={risks.has(r)}
+                  onClick={() => setRisks(toggle(risks, r))} />
+              ))}
+            </InlineGroup>
+
+            <InlineGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
+              {ALL_SENTIMENTS.map(s => (
+                <FilterChip key={s}
+                  label={t(`dashboard.sentiment.articles.labels.${s}`)}
+                  active={sentiments.has(s)}
+                  onClick={() => setSentiments(toggle(sentiments, s))} />
+              ))}
+            </InlineGroup>
+          </div>
+
+          {/* 热门媒体 — 3 列 grid 紧凑展示 */}
+          <InlineGroup label={t('dashboard.sentiment.articles.filters.popular')}>
+            <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 flex-1 min-w-[12rem]">
+              <GridChip
+                label={t('dashboard.sentiment.articles.filters.all')}
+                count={posts.length}
+                active={!sources.size}
+                onClick={() => setSources(new Set())}
+              />
+              {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
+                const fromDb = platformNames.get(s);
+                const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+                const localized = fromDb || t(labelKey);
+                const display = (!fromDb && localized === labelKey) ? s : localized;
+                return (
+                  <GridChip key={s} label={display}
+                    count={sourceCounts.get(s) ?? 0}
+                    active={sources.has(s)}
+                    onClick={() => setSources(toggle(sources, s))} />
+                );
+              })}
+            </div>
+          </InlineGroup>
+
+          {/* 搜索 + 排序 + 高级筛选 + 重置 */}
+          <div className="flex flex-wrap items-center gap-2 pt-1"
+            style={{ borderTop: '1px solid var(--border-color)' }}>
+            <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+              placeholder={t('dashboard.sentiment.articles.filters.search')}
+              className="flex-1 min-w-[10rem] px-2 py-1 text-xs rounded"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+
+            <button type="button" onClick={() => setAdvancedOpen(true)}
+              className="text-xs px-2.5 py-1 rounded inline-flex items-center gap-1"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+              <span>⚙</span>
+              <span>{t('dashboard.sentiment.articles.filters.advanced')}</span>
+              {advancedActive > 0 && (
+                <span className="text-[10px] px-1 rounded"
+                  style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+                  {advancedActive}
+                </span>
+              )}
+            </button>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
+              {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
+                <button key={k} type="button" onClick={() => setSortBy(k)}
+                  className={`text-xs px-2 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
+                  style={{
+                    background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
+                    color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  }}>
+                  {t(`dashboard.sentiment.articles.sort.${k}`)}
+                </button>
+              ))}
+            </div>
+
+            <button type="button" onClick={reset}
+              className="text-xs text-muted hover:text-primary ml-auto">
+              {t('dashboard.sentiment.articles.filters.reset')}
+            </button>
+          </div>
+
+          {/* 计数 */}
+          <div className="text-[11px] text-muted">
             {t('dashboard.sentiment.articles.count', { count: filtered.length })}
             {!usingMock && total > posts.length && (
               <span className="ml-2">
                 · {t('dashboard.sentiment.articles.page.totalCount', { loaded: posts.length, total })}
               </span>
             )}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
-            {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
-              <button key={k} type="button" onClick={() => setSortBy(k)}
-                className={`text-xs px-2 py-1 rounded ${sortBy === k ? 'font-bold' : ''}`}
-                style={{
-                  background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
-                  color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                }}>
-                {t(`dashboard.sentiment.articles.sort.${k}`)}
-              </button>
-            ))}
           </div>
-        </header>
-
-        {/* 自定义日期区间已并入 Tab 栏右侧 timeChips,这里不再重复 */}
+        </div>
 
         {filtered.length === 0 ? (
           <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
@@ -909,128 +854,14 @@ export function ArticlesTab({ account, usingMock }: Props) {
   );
 }
 
-/* ── 侧栏 UI 原子(对标竞品 WisersOne 文章列表筛选区)───────────
- *
- * Section: 段标题 + "(可多选)" 灰提示 + 一条横分隔线;视觉层级清晰.
- * ChipGrid: 3 列等宽 grid + 行间小间距;chip 数量增长时只多几行,不会撑爆侧栏.
- * GridChip: 单 chip — 选中 = 浅紫底+紫字,未选 = 透明底+灰字 + 末尾灰色 count.
- * ExpandableGridChip: 在 GridChip 基础上加个 ▾ 触发器,点开内联展开下属平台
- *   list(每个 list 项也是可勾选 chip),关上又收回.UX 与竞品的"medical
- *   /3C/...下拉细分"等价 — 但实现成内联,避免 popover 在窄侧栏里的定位坑.
- */
-
-/* 小 chip — 风险/情感 这种 4-5 项的 enum 不套 grid,走原有的 flex-wrap 风格,
- *  视觉上跟 grid chip 区分开:实色背景 = "硬筛子",grid chip = "媒体维度切片". */
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+/* 顶部 chip 行内的标题 + chips 横排小组件. */
+function InlineGroup({ label, children }:
+  { label: string; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick}
-      className="text-xs px-2 py-0.5 rounded transition-colors"
-      style={{
-        background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-        color: active ? '#ffffff' : 'var(--text-secondary)',
-        border: '1px solid transparent',
-      }}>
-      {label}
-    </button>
-  );
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="flex items-baseline gap-1.5 pb-1.5 mb-2"
-        style={{ borderBottom: '1px solid var(--border-color)' }}>
-        <span className="text-xs font-semibold text-primary">{title}</span>
-        {hint && <span className="text-[11px] text-muted">({hint})</span>}
-      </div>
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span className="text-[11px] text-muted">{label}:</span>
       {children}
     </div>
-  );
-}
-
-function ChipGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-3 gap-x-1 gap-y-0.5">
-      {children}
-    </div>
-  );
-}
-
-const chipBase = "text-xs px-1.5 py-1 rounded transition-colors text-left flex items-center justify-between";
-function activeChipStyle(active: boolean): React.CSSProperties {
-  return {
-    background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
-    color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
-    fontWeight: active ? 600 : 400,
-  };
-}
-
-function GridChip({ label, count, active, onClick }:
-  { label: string; count?: number; active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className={chipBase}
-      style={activeChipStyle(active)} title={label}>
-      <span className="truncate">{label}</span>
-      {count !== undefined && (
-        <span className="ml-1 text-[10px]" style={{ color: active ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
-          {count >= 1000 ? `${(count/1000).toFixed(1)}K` : count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function ExpandableGridChip({
-  label, count, active, onToggleSelf,
-  codes, platformLabel, countOf, isSourceActive, onToggleSource,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onToggleSelf: (() => void) | null;
-  codes: string[];
-  platformLabel: (code: string) => string;
-  countOf: (code: string) => number;
-  isSourceActive: (code: string) => boolean;
-  onToggleSource: (code: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const hasChildren = codes.length > 0;
-  return (
-    <>
-      <div className="flex items-center" style={activeChipStyle(active)}>
-        <button type="button"
-          onClick={() => onToggleSelf ? onToggleSelf() : setOpen(v => !v)}
-          className="text-xs pl-1.5 py-1 truncate flex-1 text-left"
-          style={{ color: 'inherit' }}
-          title={label}>
-          {label}
-        </button>
-        <span className="text-[10px] mr-1" style={{ color: active ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
-          {count >= 1000 ? `${(count/1000).toFixed(1)}K` : count}
-        </span>
-        {hasChildren && (
-          <button type="button" onClick={() => setOpen(v => !v)}
-            className="text-[10px] pr-1.5 py-1 hover:text-primary"
-            style={{ color: 'var(--text-muted)' }}
-            aria-label={open ? '收起' : '展开'}>
-            {open ? '▴' : '▾'}
-          </button>
-        )}
-      </div>
-      {open && hasChildren && (
-        <div className="col-span-3 ml-2 mb-1 mt-0.5 grid grid-cols-3 gap-x-1 gap-y-0.5"
-          style={{ paddingLeft: 6, borderLeft: '2px solid var(--border-color)' }}>
-          {codes.map(c => (
-            <GridChip key={c}
-              label={platformLabel(c)}
-              count={countOf(c)}
-              active={isSourceActive(c)}
-              onClick={() => onToggleSource(c)} />
-          ))}
-        </div>
-      )}
-    </>
   );
 }
 

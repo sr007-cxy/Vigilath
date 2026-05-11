@@ -1903,6 +1903,12 @@ const zh = {
               "lastUpdate": "上次更新 {{ago}}",
               "refresh": "刷新",
               "settingsLink": "设置",
+              "sidebar": {
+                "title": "监测",
+                "newTask": "+ 新建监测任务",
+                "empty": "暂无监测任务",
+                "reports": "我的报告"
+              },
               "tabs": {
                 "today": "今日",
                 "articles": "文章",
@@ -1973,7 +1979,13 @@ const zh = {
                   "timeStart": "起始时间",
                   "timeEnd": "结束时间",
                   "timeApply": "应用",
-                  "timeRangeError": "起始时间不能晚于结束时间"
+                  "timeRangeError": "起始时间不能晚于结束时间",
+                  "advanced": "高级筛选",
+                  "advancedCount": "({{count}})",
+                  "advancedTitle": "高级筛选",
+                  "save": "保存",
+                  "cancel": "取消",
+                  "search": "搜索标题/摘要"
                 },
                 "page": {
                   "loadMore": "加载更多",

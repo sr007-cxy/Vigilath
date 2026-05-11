@@ -1897,6 +1897,12 @@ const en = {
               "lastUpdate": "Updated {{ago}}",
               "refresh": "Refresh",
               "settingsLink": "Settings",
+              "sidebar": {
+                "title": "Monitor",
+                "newTask": "+ New monitoring task",
+                "empty": "No monitoring tasks",
+                "reports": "My reports"
+              },
               "tabs": {
                 "today": "Today",
                 "articles": "Mentions",
@@ -1967,7 +1973,13 @@ const en = {
                   "timeStart": "Start",
                   "timeEnd": "End",
                   "timeApply": "Apply",
-                  "timeRangeError": "Start date cannot be after end date"
+                  "timeRangeError": "Start date cannot be after end date",
+                  "advanced": "Advanced",
+                  "advancedCount": "({{count}})",
+                  "advancedTitle": "Advanced filters",
+                  "save": "Save",
+                  "cancel": "Cancel",
+                  "search": "Search title/summary"
                 },
                 "page": {
                   "loadMore": "Load more",
