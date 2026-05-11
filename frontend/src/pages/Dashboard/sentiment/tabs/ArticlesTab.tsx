@@ -713,6 +713,10 @@ export function ArticlesTab({ account, usingMock }: Props) {
         <AdvancedFilterModal
           value={{
             risks, sentiments, mediaTypes, industries, sources,
+            topic,
+            // appliedStart/End 是 'YYYY-MM-DDTHH:MM:SS',modal 用 'YYYY-MM-DD'
+            startDate: appliedStart.slice(0, 10),
+            endDate: appliedEnd.slice(0, 10),
           }}
           platforms={platforms}
           axisCounts={axisCounts}
@@ -725,6 +729,19 @@ export function ArticlesTab({ account, usingMock }: Props) {
             setMediaTypes(v.mediaTypes);
             setIndustries(v.industries);
             setSources(v.sources);
+            setTopic(v.topic);
+            // 时间范围:有任一端就走 custom preset,否则清空回 d90
+            if (v.startDate || v.endDate) {
+              setTimePreset('custom');
+              setAppliedStart(v.startDate ? `${v.startDate}T00:00:00` : '');
+              setAppliedEnd(v.endDate ? `${v.endDate}T23:59:59` : '');
+              setCustomStart(v.startDate ? `${v.startDate}T00:00` : '');
+              setCustomEnd(v.endDate ? `${v.endDate}T23:59` : '');
+            } else if (timePreset === 'custom') {
+              setTimePreset('d90');
+              setAppliedStart('');
+              setAppliedEnd('');
+            }
             setAdvancedOpen(false);
           }}
         />
