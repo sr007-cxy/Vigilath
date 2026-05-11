@@ -324,7 +324,20 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
   const [industries, setIndustries] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
-  const [topic, setTopic] = useState('');
+  // topic 与 ?q URL 参数同步 — 侧栏 KeywordGroup 子项点击 → 写 ?q → 这里读出
+  const [topic, setTopicState] = useState(() => params.get('q') ?? '');
+  useEffect(() => {
+    const q = params.get('q') ?? '';
+    if (q !== topic) setTopicState(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+  const setTopic = (v: string) => {
+    setTopicState(v);
+    const next = new URLSearchParams(params);
+    if (v) next.set('q', v);
+    else next.delete('q');
+    setParams(next, { replace: true });
+  };
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
 

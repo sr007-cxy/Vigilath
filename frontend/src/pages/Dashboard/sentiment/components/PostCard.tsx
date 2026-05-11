@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import type { SentimentPost } from '../../../../types/sentiment';
 import { useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import { SentimentBadge, RiskBadge, SourceBadge, InfluenceBar } from './badges';
@@ -36,6 +37,8 @@ function countChars(s: string): number {
 
 export function PostCard({ post, selected, onClick, compact }: Props) {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
+  const highlight = params.get('q') ?? '';
   const platforms = useSentimentPlatforms().data ?? [];
   const sourceRegion = useMemo(
     () => new Map(platforms.map(p => [p.code, p.region] as const)),
@@ -63,15 +66,15 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         <span className="ml-auto">{fmtDate(post.publish_time)}</span>
       </header>
 
-      {/* 标题(粗体黑字) */}
+      {/* 标题(粗体黑字)— 命中 ?q 时黄高亮 */}
       <h4 className="font-semibold text-sm text-primary leading-snug line-clamp-2 mb-0.5">
-        {post.title || '(无标题)'}
+        {highlightText(post.title || '(无标题)', highlight)}
       </h4>
 
-      {/* 摘要 */}
+      {/* 摘要 — 同样黄高亮 */}
       {!compact && post.summary && (
         <p className="text-xs text-secondary line-clamp-2 mb-1.5">
-          {post.summary}
+          {highlightText(post.summary, highlight)}
         </p>
       )}
 
@@ -89,6 +92,18 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         ))}
       </div>
     </article>
+  );
+}
+
+/** 按 needle split text,命中片段用 <mark> 高亮。空 needle 直接返回原文。 */
+function highlightText(text: string, needle: string): React.ReactNode {
+  const n = needle.trim();
+  if (!n) return text;
+  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((p, i) => i % 2 === 1
+    ? <mark key={i} style={{ background: 'rgba(251,191,36,0.35)', color: 'inherit', padding: '0 1px' }}>{p}</mark>
+    : p,
   );
 }
 

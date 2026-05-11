@@ -1907,10 +1907,19 @@ const zh = {
                 "title": "监测",
                 "newTask": "+ 新建监测任务",
                 "empty": "暂无监测任务",
-                "reports": "我的报告"
+                "reports": "我的报告",
+                "noKeywords": "未配置检测词",
+                "kinds": {
+                  "entity": "公司主体",
+                  "legal": "法院诉讼",
+                  "exec": "高管",
+                  "project": "项目",
+                  "competitor": "友商",
+                  "custom": "自定义"
+                }
               },
               "tabs": {
-                "today": "今日",
+                "today": "任务",
                 "articles": "文章",
                 "briefs": "简报",
                 "drafts": "草稿"

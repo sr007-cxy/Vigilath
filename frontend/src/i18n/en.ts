@@ -1901,10 +1901,19 @@ const en = {
                 "title": "Monitor",
                 "newTask": "+ New monitoring task",
                 "empty": "No monitoring tasks",
-                "reports": "My reports"
+                "reports": "My reports",
+                "noKeywords": "No detection terms configured",
+                "kinds": {
+                  "entity": "Entity",
+                  "legal": "Legal",
+                  "exec": "Executive",
+                  "project": "Project",
+                  "competitor": "Competitor",
+                  "custom": "Custom"
+                }
               },
               "tabs": {
-                "today": "Today",
+                "today": "Task",
                 "articles": "Mentions",
                 "briefs": "Briefs",
                 "drafts": "Drafts"

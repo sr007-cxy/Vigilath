@@ -1,14 +1,24 @@
-// 监测任务侧栏 — 对齐 WisersOne 原型.
+// 监测任务侧栏 — 对齐 WisersOne 原型(3 级展开树).
 //
-// 数据来自 useSentimentAccounts():扁平 SentimentAccount 列表.UI 按 `target`
-// 折叠分组 — 同一品牌下多个监测任务(不同 keyword_groups / 不同媒体白名单)收到
-// 一个可展开的 group header 下;单账户 group 直接渲染叶子.
+// 层级:
+//   监测
+//   └─ 世纪互联 (=account.target, 始终展开 — 单账户也显示)
+//      ├─ 公司主体 (=keyword_group.name, 可折叠)
+//      │   ├─ 世纪互联 (=term, 点击 → ?q=世纪互联 过滤文章)
+//      │   └─ 21Vianet
+//      ├─ 法院诉讼
+//      └─ ...
 //
-// 折叠状态用 localStorage 持久化,刷新页面不丢.
+// 点击行为:
+//   - 账户头:select 账户,清空 ?q
+//   - keyword_group:toggle expand,select 账户
+//   - term:select 账户 + 设 ?q=&lt;term&gt; (ArticlesTab 读它当 topic 过滤)
+//
+// 折叠状态用 localStorage 持久化(per-account-per-group).
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { SentimentAccount } from '../../../../types/sentiment';
+import type { SentimentAccount, KeywordKind } from '../../../../types/sentiment';
 
 interface Props {
   accounts: SentimentAccount[];
@@ -16,19 +26,19 @@ interface Props {
   onSelect: (id: number) => void;
 }
 
-const EXPANDED_KEY = 'sentiment.sidebar.collapsedGroups';
+const COLLAPSED_KEY = 'sentiment.sidebar.collapsedNodes';
 
-// 单账户的「任务名」— 优先用第一个 keyword_group 的 name(更具体),否则用 target+ticker
-function leafLabel(a: SentimentAccount): string {
-  const first = a.keyword_groups?.[0]?.name?.trim();
-  if (first) return first;
-  return a.ticker ? `${a.target} · ${a.ticker}` : a.target;
+// 节点 id 编码:`acct-{id}` / `grp-{accountId}-{groupIndex}`
+function nodeId(...parts: (string | number)[]): string {
+  return parts.join('-');
 }
 
 export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
   const { t } = useTranslation();
+  const [params, setParams] = useSearchParams();
+  const activeQ = params.get('q') ?? '';
 
-  // 按 target group;Map 迭代顺序 = 插入顺序 = accounts 的原顺序
+  // 按 target group accounts(多账户时折叠到品牌 header 下)
   const groups = useMemo(() => {
     const m = new Map<string, SentimentAccount[]>();
     for (const a of accounts) {
@@ -40,10 +50,10 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
     return Array.from(m.entries());
   }, [accounts]);
 
-  // 折叠状态:存「折叠的 target」集合(默认全部展开)
+  // 折叠状态:存「折叠的节点 id」集合(默认全部展开)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
-      const raw = localStorage.getItem(EXPANDED_KEY);
+      const raw = localStorage.getItem(COLLAPSED_KEY);
       return new Set<string>(raw ? JSON.parse(raw) : []);
     } catch {
       return new Set();
@@ -52,17 +62,35 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(EXPANDED_KEY, JSON.stringify(Array.from(collapsed)));
-    } catch { /* ignore quota */ }
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(collapsed)));
+    } catch { /* quota 满,忽略 */ }
   }, [collapsed]);
 
-  const toggleGroup = (target: string) => {
+  const toggleNode = (id: string) => {
     setCollapsed(prev => {
       const next = new Set(prev);
-      if (next.has(target)) next.delete(target);
-      else next.add(target);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
+  };
+
+  const setQuery = (q: string) => {
+    const next = new URLSearchParams(params);
+    if (q) next.set('q', q);
+    else next.delete('q');
+    next.set('tab', 'articles');
+    setParams(next, { replace: false });
+  };
+
+  const handleSelectAccount = (id: number) => {
+    onSelect(id);
+    setQuery('');
+  };
+
+  const handleSelectTerm = (id: number, term: string) => {
+    onSelect(id);
+    setQuery(term);
   };
 
   if (!accounts.length) {
@@ -84,49 +112,54 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
 
       <nav className="px-2 space-y-0.5">
         {groups.map(([target, items]) => {
-          // 单账户 group:不显示 header,直接渲染叶子
-          if (items.length === 1) {
-            const a = items[0];
+          // 多账户共享 target:渲染品牌 group header + 折叠
+          const showBrandHeader = items.length > 1;
+          const brandNodeId = nodeId('brand', target);
+          const brandCollapsed = showBrandHeader && collapsed.has(brandNodeId);
+
+          if (showBrandHeader) {
             return (
-              <LeafButton
-                key={a.id}
-                label={leafLabel(a)}
-                selected={a.id === selectedId}
-                onClick={() => onSelect(a.id)}
-              />
+              <div key={target}>
+                <TreeRow
+                  level={0}
+                  expandable
+                  expanded={!brandCollapsed}
+                  selected={items.some(a => a.id === selectedId)}
+                  onToggle={() => toggleNode(brandNodeId)}
+                  onClick={() => toggleNode(brandNodeId)}
+                  label={target}
+                  bold
+                />
+                {!brandCollapsed && items.map(a => (
+                  <AccountNode key={a.id}
+                    account={a}
+                    level={1}
+                    selectedId={selectedId}
+                    activeQ={activeQ}
+                    collapsed={collapsed}
+                    onToggleNode={toggleNode}
+                    onSelectAccount={handleSelectAccount}
+                    onSelectTerm={handleSelectTerm}
+                    t={t}
+                  />
+                ))}
+              </div>
             );
           }
-
-          const isCollapsed = collapsed.has(target);
-          const groupSelected = items.some(a => a.id === selectedId);
+          // 单账户:不显示 brand header,直接渲 AccountNode
+          const a = items[0];
           return (
-            <div key={target}>
-              <button
-                type="button"
-                onClick={() => toggleGroup(target)}
-                className="w-full px-2.5 py-1.5 rounded text-left text-xs font-semibold flex items-center justify-between transition-colors"
-                style={{
-                  color: groupSelected ? 'var(--accent-primary)' : 'var(--text-primary)',
-                  background: 'transparent',
-                }}
-              >
-                <span className="truncate">{target}</span>
-                <span className="text-[10px] text-muted ml-1">{isCollapsed ? '▸' : '▾'}</span>
-              </button>
-              {!isCollapsed && (
-                <div className="ml-2 mt-0.5 mb-1 space-y-0.5"
-                  style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: 4 }}>
-                  {items.map(a => (
-                    <LeafButton
-                      key={a.id}
-                      label={leafLabel(a)}
-                      selected={a.id === selectedId}
-                      onClick={() => onSelect(a.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <AccountNode key={a.id}
+              account={a}
+              level={0}
+              selectedId={selectedId}
+              activeQ={activeQ}
+              collapsed={collapsed}
+              onToggleNode={toggleNode}
+              onSelectAccount={handleSelectAccount}
+              onSelectTerm={handleSelectTerm}
+              t={t}
+            />
           );
         })}
       </nav>
@@ -144,23 +177,151 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
   );
 }
 
-function LeafButton({ label, selected, onClick }:
-  { label: string; selected: boolean; onClick: () => void }) {
+/** 单账户节点:渲染账户名 + 嵌套 keyword_groups + terms */
+function AccountNode({
+  account, level, selectedId, activeQ, collapsed,
+  onToggleNode, onSelectAccount, onSelectTerm, t,
+}: {
+  account: SentimentAccount;
+  level: number;
+  selectedId: number | null;
+  activeQ: string;
+  collapsed: Set<string>;
+  onToggleNode: (id: string) => void;
+  onSelectAccount: (id: number) => void;
+  onSelectTerm: (id: number, term: string) => void;
+  t: (k: string) => string;
+}) {
+  const acctNodeId = nodeId('acct', account.id);
+  const isOpen = !collapsed.has(acctNodeId);
+  const isSelected = account.id === selectedId;
+  const groups = account.keyword_groups ?? [];
+  const label = account.ticker
+    ? `${account.target} · ${account.ticker}`
+    : account.target;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full px-2.5 py-1.5 rounded text-left text-xs truncate transition-colors"
+    <div>
+      <TreeRow
+        level={level}
+        expandable={groups.length > 0}
+        expanded={isOpen}
+        selected={isSelected && !activeQ}
+        onToggle={() => onToggleNode(acctNodeId)}
+        onClick={() => onSelectAccount(account.id)}
+        label={label}
+        bold
+      />
+      {isOpen && groups.length === 0 && (
+        <div className="px-3 py-1 text-[11px] text-muted"
+          style={{ marginLeft: (level + 1) * 12 }}>
+          {t('dashboard.sentiment.sidebar.noKeywords')}
+        </div>
+      )}
+      {isOpen && groups.map((g, gi) => (
+        <KeywordGroupNode key={`${account.id}-${gi}`}
+          accountId={account.id}
+          groupIndex={gi}
+          name={g.name || t(`dashboard.sentiment.sidebar.kinds.${g.kind as KeywordKind}`)}
+          terms={(g.items ?? []).filter(it => it.enabled !== false).map(it => it.term)}
+          level={level + 1}
+          activeQ={activeQ}
+          isAccountSelected={isSelected}
+          collapsed={collapsed}
+          onToggleNode={onToggleNode}
+          onSelectTerm={(term) => onSelectTerm(account.id, term)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** keyword_group 节点:折叠 header + terms list */
+function KeywordGroupNode({
+  accountId, groupIndex, name, terms, level,
+  activeQ, isAccountSelected, collapsed,
+  onToggleNode, onSelectTerm,
+}: {
+  accountId: number;
+  groupIndex: number;
+  name: string;
+  terms: string[];
+  level: number;
+  activeQ: string;
+  isAccountSelected: boolean;
+  collapsed: Set<string>;
+  onToggleNode: (id: string) => void;
+  onSelectTerm: (term: string) => void;
+}) {
+  const gNodeId = nodeId('grp', accountId, groupIndex);
+  const isOpen = !collapsed.has(gNodeId);
+  return (
+    <>
+      <TreeRow
+        level={level}
+        expandable={terms.length > 0}
+        expanded={isOpen}
+        selected={false}
+        onToggle={() => onToggleNode(gNodeId)}
+        onClick={() => onToggleNode(gNodeId)}
+        label={`${name} (${terms.length})`}
+      />
+      {isOpen && terms.map(term => {
+        const isActive = isAccountSelected && activeQ === term;
+        return (
+          <TreeRow
+            key={`${gNodeId}-${term}`}
+            level={level + 1}
+            selected={isActive}
+            onClick={() => onSelectTerm(term)}
+            label={term}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/** 通用树行 — 按 level 缩进,可选 ▸/▾ 展开标记 */
+function TreeRow({
+  level, expandable = false, expanded = false,
+  selected, onToggle, onClick, label, bold,
+}: {
+  level: number;
+  expandable?: boolean;
+  expanded?: boolean;
+  selected: boolean;
+  onToggle?: () => void;
+  onClick: () => void;
+  label: string;
+  bold?: boolean;
+}) {
+  return (
+    <div className="flex items-center"
       style={{
+        paddingLeft: level * 12,
         background: selected ? 'var(--bg-tertiary)' : 'transparent',
-        color: selected ? 'var(--accent-primary)' : 'var(--text-secondary)',
-        fontWeight: selected ? 600 : 400,
         borderLeft: selected ? '2px solid var(--accent-primary)' : '2px solid transparent',
-      }}
-      title={label}
-    >
-      {label}
-    </button>
+      }}>
+      {expandable && (
+        <button type="button"
+          onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+          className="text-[10px] px-1 py-1 text-muted hover:text-primary"
+          aria-label={expanded ? 'collapse' : 'expand'}>
+          {expanded ? '▾' : '▸'}
+        </button>
+      )}
+      {!expandable && <span style={{ width: 16 }} />}
+      <button type="button" onClick={onClick}
+        className="flex-1 px-1.5 py-1 text-left text-xs truncate transition-colors"
+        style={{
+          color: selected ? 'var(--accent-primary)' : 'var(--text-secondary)',
+          fontWeight: bold ? 600 : selected ? 600 : 400,
+        }}
+        title={label}>
+        {label}
+      </button>
+    </div>
   );
 }
 
