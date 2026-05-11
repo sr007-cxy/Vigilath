@@ -2029,6 +2029,7 @@ const zh = {
                 "detail": {
                   "title": "帖子详情",
                   "selectPost": "请在左侧选择一条帖子",
+                  "backToFilters": "返回筛选",
                   "originalText": "原文",
                   "openOriginal": "打开原文 ↗",
                   "aiAnalysis": "AI 分析",

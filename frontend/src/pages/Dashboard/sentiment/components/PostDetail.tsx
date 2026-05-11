@@ -18,9 +18,11 @@ function countChars(s: string): number {
 
 interface Props {
   post: SentimentPost | null;
+  /** 返回按钮 — 点击清空 selectedKey,右栏 swap 回 FilterRail */
+  onBack?: () => void;
 }
 
-export function PostDetail({ post }: Props) {
+export function PostDetail({ post, onBack }: Props) {
   const { t } = useTranslation();
   const platforms = useSentimentPlatforms().data ?? [];
   const sourceRegion = useMemo(
@@ -57,9 +59,16 @@ export function PostDetail({ post }: Props) {
   const showRegion = regionKey && regionLabel !== regionKey;
 
   return (
-    <article className="rounded-xl p-5 space-y-3" style={cardStyle}>
-      {/* row 0: source/region/risk badges + 打开原文 (right-aligned) */}
+    <article className="p-5 space-y-3">
+      {/* row 0: 返回 + source/region/risk badges + 打开原文 (right-aligned) */}
       <div className="flex items-center gap-2 flex-wrap text-[11px]">
+        {onBack && (
+          <button type="button" onClick={onBack}
+            className="text-xs px-2 py-0.5 rounded hover:brightness-110"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+            ← {t('dashboard.sentiment.articles.detail.backToFilters')}
+          </button>
+        )}
         <SourceBadge source={post.source} />
         {showRegion && (
           <span className="px-1.5 py-0.5 rounded text-muted"

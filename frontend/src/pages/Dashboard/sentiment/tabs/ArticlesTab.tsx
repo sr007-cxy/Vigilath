@@ -135,11 +135,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return m;
   }, [platforms, i18n.language]);
 
-  // 时间筛选 chip 通过 portal 渲染到 Sentiment.tsx 顶部 Tab 栏右侧的 slot
-  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    setToolbarSlot(document.getElementById('sentiment-tab-toolbar'));
-  }, []);
+  // 时间触发器现在 inline 渲染到右栏 FilterRail 里(不再 portal 到 tab 工具条)
 
   // 滚动到底部 sentinel — 用 IntersectionObserver 自动触发 fetchNextPage
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -449,12 +445,21 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return list;
   }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy, allowedSources]);
 
+  // selected = null 时右栏显示筛选面板;明确点击文章后才显示详情
   const selected: SentimentPost | null = useMemo(() => {
-    if (!selectedKey) return filtered[0] ?? null;
+    if (!selectedKey) return null;
     const [src, ...rest] = selectedKey.split('-');
     const pid = rest.join('-');
-    return posts.find(p => p.source === src && p.post_id === pid) || filtered[0] || null;
-  }, [selectedKey, filtered, posts]);
+    return posts.find(p => p.source === src && p.post_id === pid) || null;
+  }, [selectedKey, posts]);
+
+  // 清空 selected — PostDetail 的「← 返回」按钮调用
+  const clearSelected = () => {
+    setSelectedKey(null);
+    const next = new URLSearchParams(params);
+    next.delete('post');
+    setParams(next, { replace: true });
+  };
 
   // 切换 Set 中某项 — 顶部 chip 行用
   const toggle = <T,>(s: Set<T>, v: T): Set<T> => {
@@ -669,7 +674,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3">
-      {toolbarSlot && createPortal(timeTrigger, toolbarSlot)}
       {timePopup && createPortal(timePopup, document.body)}
 
       {advancedOpen && (
@@ -696,104 +700,30 @@ export function ArticlesTab({ account, usingMock }: Props) {
         />
       )}
 
-      {/* ── 中:筛选 chip 行 + 文章列表 ───────────────────────────────── */}
+      {/* ── 中:仅 排序/计数 header + 文章列表(筛选已搬到右栏)── */}
       <section className="space-y-2 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
-        {/* 扁平筛选条 — 单卡贴顶,去厚框,2 行紧凑布局(对齐 WisersOne) */}
-        <div className="py-2 px-1 space-y-1.5 xl:sticky xl:top-0 xl:z-10"
+        <div className="flex items-center gap-2 py-2 px-1 xl:sticky xl:top-0 xl:z-10"
           style={{
             background: 'var(--bg-primary)',
             borderBottom: '1px solid var(--border-color)',
           }}>
-          {/* 行 1: 风险 + 情感 + 热门媒体 全部 inline,横排 chip */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <InlineGroup label={t('dashboard.sentiment.articles.filters.risk')}>
-              {ALL_RISKS.map(r => (
-                <FilterChip key={r}
-                  label={t(`dashboard.sentiment.articles.risk.${r}`)}
-                  active={risks.has(r)}
-                  onClick={() => setRisks(toggle(risks, r))} />
-              ))}
-            </InlineGroup>
-
-            <span className="text-muted">·</span>
-
-            <InlineGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
-              {ALL_SENTIMENTS.map(s => (
-                <FilterChip key={s}
-                  label={t(`dashboard.sentiment.articles.labels.${s}`)}
-                  active={sentiments.has(s)}
-                  onClick={() => setSentiments(toggle(sentiments, s))} />
-              ))}
-            </InlineGroup>
-
-            <span className="text-muted">·</span>
-
-            <InlineGroup label={t('dashboard.sentiment.articles.filters.popular')}>
-              <FilterChip
-                label={t('dashboard.sentiment.articles.filters.all')}
-                active={!sources.size}
-                onClick={() => setSources(new Set())}
-              />
-              {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).slice(0, 6).map(s => {
-                const fromDb = platformNames.get(s);
-                const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
-                const localized = fromDb || t(labelKey);
-                const display = (!fromDb && localized === labelKey) ? s : localized;
-                return (
-                  <FilterChip key={s} label={display}
-                    active={sources.has(s)}
-                    onClick={() => setSources(toggle(sources, s))} />
-                );
-              })}
-            </InlineGroup>
-          </div>
-
-          {/* 行 2: 搜索 + 高级筛选 + 排序 + 重置 + 计数 */}
-          <div className="flex flex-wrap items-center gap-2">
-            <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
-              placeholder={t('dashboard.sentiment.articles.filters.search')}
-              className="flex-1 min-w-[10rem] max-w-[20rem] px-2 py-1 text-xs rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-
-            <button type="button" onClick={() => setAdvancedOpen(true)}
-              className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
-              <span>⚙</span>
-              <span>{t('dashboard.sentiment.articles.filters.advanced')}</span>
-              {advancedActive > 0 && (
-                <span className="text-[10px] px-1 rounded"
-                  style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-                  {advancedActive}
-                </span>
-              )}
-            </button>
-
-            <div className="flex items-center gap-0.5">
-              {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
-                <button key={k} type="button" onClick={() => setSortBy(k)}
-                  className={`text-xs px-1.5 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
-                  style={{
-                    background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
-                    color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  }}>
-                  {t(`dashboard.sentiment.articles.sort.${k}`)}
-                </button>
-              ))}
-            </div>
-
-            <button type="button" onClick={reset}
-              className="text-xs text-muted hover:text-primary">
-              {t('dashboard.sentiment.articles.filters.reset')}
-            </button>
-
-            <span className="text-[11px] text-muted ml-auto">
-              {t('dashboard.sentiment.articles.count', { count: filtered.length })}
-              {!usingMock && total > posts.length && (
-                <span className="ml-1.5">
-                  · {posts.length}/{total}
-                </span>
-              )}
-            </span>
+          <span className="text-[11px] text-muted">
+            {t('dashboard.sentiment.articles.count', { count: filtered.length })}
+            {!usingMock && total > posts.length && (
+              <span className="ml-1.5">· {posts.length}/{total}</span>
+            )}
+          </span>
+          <div className="ml-auto flex items-center gap-0.5">
+            {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
+              <button key={k} type="button" onClick={() => setSortBy(k)}
+                className={`text-xs px-1.5 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
+                style={{
+                  background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
+                  color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                }}>
+                {t(`dashboard.sentiment.articles.sort.${k}`)}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -857,8 +787,28 @@ export function ArticlesTab({ account, usingMock }: Props) {
         )}
       </section>
 
-      <aside className="self-start xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
-        <PostDetail post={selected} />
+      <aside className="self-start xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide rounded-xl"
+        style={cardStyle}>
+        {selected ? (
+          <PostDetail post={selected} onBack={clearSelected} />
+        ) : (
+          <FilterRail
+            timeTrigger={timeTrigger}
+            advancedActive={advancedActive}
+            onOpenAdvanced={() => setAdvancedOpen(true)}
+            t={t}
+            risks={risks} setRisks={setRisks}
+            sentiments={sentiments} setSentiments={setSentiments}
+            sources={sources} setSources={setSources}
+            posts={posts}
+            platformCodes={platformCodes}
+            platformNames={platformNames}
+            sourceCounts={sourceCounts}
+            topic={topic} setTopic={setTopic}
+            onReset={reset}
+            toggle={toggle}
+          />
+        )}
         {generateDraft.isPending && (
           <div className="mt-2 text-xs text-muted text-center">⏳ 正在生成草稿...</div>
         )}
@@ -867,13 +817,119 @@ export function ArticlesTab({ account, usingMock }: Props) {
   );
 }
 
-/* 顶部 chip 行内的标题 + chips 横排小组件. */
-function InlineGroup({ label, children }:
-  { label: string; children: React.ReactNode }) {
+/* ── 右栏筛选面板 — 时间 + 高级筛选 顶行,下面所有筛选 chip ── */
+interface FilterRailProps {
+  timeTrigger: React.ReactNode;
+  advancedActive: number;
+  onOpenAdvanced: () => void;
+  t: (k: string, opts?: Record<string, unknown>) => string;
+  risks: Set<string>;
+  setRisks: (s: Set<string>) => void;
+  sentiments: Set<string>;
+  setSentiments: (s: Set<string>) => void;
+  sources: Set<string>;
+  setSources: (s: Set<string>) => void;
+  posts: SentimentPost[];
+  platformCodes: string[];
+  platformNames: Map<string, string>;
+  sourceCounts: Map<string, number>;
+  topic: string;
+  setTopic: (v: string) => void;
+  onReset: () => void;
+  toggle: <T,>(s: Set<T>, v: T) => Set<T>;
+}
+
+function FilterRail({
+  timeTrigger, advancedActive, onOpenAdvanced, t,
+  risks, setRisks, sentiments, setSentiments,
+  sources, setSources, posts, platformCodes, platformNames,
+  sourceCounts, topic, setTopic, onReset, toggle,
+}: FilterRailProps) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-[11px] text-muted">{label}:</span>
-      {children}
+    <div className="p-3 space-y-3">
+      {/* 顶行:时间 + 高级筛选 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {timeTrigger}
+        <button type="button" onClick={onOpenAdvanced}
+          className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
+          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+          <span>⚙</span>
+          <span>{t('dashboard.sentiment.articles.filters.advanced')}</span>
+          {advancedActive > 0 && (
+            <span className="text-[10px] px-1 rounded"
+              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
+              {advancedActive}
+            </span>
+          )}
+        </button>
+        <button type="button" onClick={onReset}
+          className="ml-auto text-xs text-muted hover:text-primary">
+          {t('dashboard.sentiment.articles.filters.reset')}
+        </button>
+      </div>
+
+      {/* 搜索 */}
+      <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
+        placeholder={t('dashboard.sentiment.articles.filters.search')}
+        className="w-full px-2 py-1.5 text-xs rounded"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+
+      {/* 风险 */}
+      <div>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">
+          {t('dashboard.sentiment.articles.filters.risk')}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {ALL_RISKS.map(r => (
+            <FilterChip key={r}
+              label={t(`dashboard.sentiment.articles.risk.${r}`)}
+              active={risks.has(r)}
+              onClick={() => setRisks(toggle(risks, r))} />
+          ))}
+        </div>
+      </div>
+
+      {/* 情感 */}
+      <div>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">
+          {t('dashboard.sentiment.articles.filters.sentiment')}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {ALL_SENTIMENTS.map(s => (
+            <FilterChip key={s}
+              label={t(`dashboard.sentiment.articles.labels.${s}`)}
+              active={sentiments.has(s)}
+              onClick={() => setSentiments(toggle(sentiments, s))} />
+          ))}
+        </div>
+      </div>
+
+      {/* 热门媒体 */}
+      <div>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">
+          {t('dashboard.sentiment.articles.filters.popular')}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          <FilterChip
+            label={`${t('dashboard.sentiment.articles.filters.all')} ${posts.length}`}
+            active={!sources.size}
+            onClick={() => setSources(new Set())}
+          />
+          {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
+            const fromDb = platformNames.get(s);
+            const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
+            const localized = fromDb || t(labelKey);
+            const display = (!fromDb && localized === labelKey) ? s : localized;
+            const count = sourceCounts.get(s) ?? 0;
+            return (
+              <FilterChip key={s}
+                label={count > 0 ? `${display} ${count}` : display}
+                active={sources.has(s)}
+                onClick={() => setSources(toggle(sources, s))} />
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

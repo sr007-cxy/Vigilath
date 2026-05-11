@@ -2023,6 +2023,7 @@ const en = {
                 "detail": {
                   "title": "Post detail",
                   "selectPost": "Select a post on the left",
+                  "backToFilters": "Back to filters",
                   "originalText": "Original",
                   "openOriginal": "Open original ↗",
                   "aiAnalysis": "AI analysis",
