@@ -37,7 +37,19 @@ export interface AdvancedFilterValue {
   mediaTypes: Set<string>;
   industries: Set<string>;
   sources: Set<string>;
+  /** 关键词提及范围:'' = 全部,'title' = 仅标题,'body' = 仅正文 */
+  keywordScope: '' | 'title' | 'body';
+  /** 作者地区:'' = 全部,'domestic' = 境内,'overseas' = 境外(占位,等后端数据) */
+  authorRegion: '' | 'domestic' | 'overseas';
+  /** 文章类型:'' = 全部,'original' = 原创,'reprint' = 转载(占位,等后端数据) */
+  articleType: '' | 'original' | 'reprint';
   topic: string;
+  /** 指定媒体名称,逗号分隔(占位,后端缺字段时不参与过滤) */
+  specificMedia: string;
+  /** 版面名称(占位) */
+  column: string;
+  /** 指定作者名称(已生效:子串匹配 post.author) */
+  authorInput: string;
   startDate: string;  // 'YYYY-MM-DD',空表示不限
   endDate: string;
 }
@@ -73,6 +85,12 @@ export function AdvancedFilterModal({
   const [draftInd, setDraftInd] = useState<Set<string>>(() => new Set(value.industries));
   const [draftMt, setDraftMt] = useState<Set<string>>(() => new Set(value.mediaTypes));
   const [draftTopic, setDraftTopic] = useState<string>(value.topic);
+  const [draftKwScope, setDraftKwScope] = useState<'' | 'title' | 'body'>(value.keywordScope);
+  const [draftAuthorRegion, setDraftAuthorRegion] = useState<'' | 'domestic' | 'overseas'>(value.authorRegion);
+  const [draftArticleType, setDraftArticleType] = useState<'' | 'original' | 'reprint'>(value.articleType);
+  const [draftSpecificMedia, setDraftSpecificMedia] = useState<string>(value.specificMedia);
+  const [draftColumn, setDraftColumn] = useState<string>(value.column);
+  const [draftAuthorInput, setDraftAuthorInput] = useState<string>(value.authorInput);
   const [draftStart, setDraftStart] = useState<string>(value.startDate);
   const [draftEnd, setDraftEnd] = useState<string>(value.endDate);
 
@@ -93,6 +111,12 @@ export function AdvancedFilterModal({
       industries: draftInd,
       sources: draftSrc,
       topic: draftTopic,
+      keywordScope: draftKwScope,
+      authorRegion: draftAuthorRegion,
+      articleType: draftArticleType,
+      specificMedia: draftSpecificMedia,
+      column: draftColumn,
+      authorInput: draftAuthorInput,
       startDate: draftStart,
       endDate: draftEnd,
     });
@@ -106,6 +130,12 @@ export function AdvancedFilterModal({
     setDraftInd(new Set());
     setDraftMt(new Set());
     setDraftTopic('');
+    setDraftKwScope('');
+    setDraftAuthorRegion('');
+    setDraftArticleType('');
+    setDraftSpecificMedia('');
+    setDraftColumn('');
+    setDraftAuthorInput('');
     setDraftStart('');
     setDraftEnd('');
     // 同时也调 parent reset 让 rail 状态归零,避免保存时只重置部分
@@ -210,21 +240,68 @@ export function AdvancedFilterModal({
                   onChange={() => setDraftSent(toggle(draftSent, s))} />
               ))}
             </FilterRow>
+
+            {/* 关键词提及 — 单选(全部 / 标题 / 正文) */}
+            <FilterRow label={t('dashboard.sentiment.articles.filters.keywordMention')}>
+              <AllOption checked={!draftKwScope}
+                onClick={() => setDraftKwScope('')} t={t} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.titleMention')}
+                checked={draftKwScope === 'title'}
+                onChange={() => setDraftKwScope(draftKwScope === 'title' ? '' : 'title')} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.bodyMention')}
+                checked={draftKwScope === 'body'}
+                onChange={() => setDraftKwScope(draftKwScope === 'body' ? '' : 'body')} />
+            </FilterRow>
+
+            {/* 作者地区 */}
+            <FilterRow label={t('dashboard.sentiment.articles.filters.authorRegion')}>
+              <AllOption checked={!draftAuthorRegion}
+                onClick={() => setDraftAuthorRegion('')} t={t} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.authorRegionDomestic')}
+                checked={draftAuthorRegion === 'domestic'}
+                onChange={() => setDraftAuthorRegion(draftAuthorRegion === 'domestic' ? '' : 'domestic')} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.authorRegionOverseas')}
+                checked={draftAuthorRegion === 'overseas'}
+                onChange={() => setDraftAuthorRegion(draftAuthorRegion === 'overseas' ? '' : 'overseas')} />
+            </FilterRow>
+
+            {/* 文章类型 */}
+            <FilterRow label={t('dashboard.sentiment.articles.filters.articleType')}>
+              <AllOption checked={!draftArticleType}
+                onClick={() => setDraftArticleType('')} t={t} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.articleTypeOriginal')}
+                checked={draftArticleType === 'original'}
+                onChange={() => setDraftArticleType(draftArticleType === 'original' ? '' : 'original')} />
+              <CheckOption
+                label={t('dashboard.sentiment.articles.filters.articleTypeReprint')}
+                checked={draftArticleType === 'reprint'}
+                onChange={() => setDraftArticleType(draftArticleType === 'reprint' ? '' : 'reprint')} />
+            </FilterRow>
           </div>
 
-          {/* ── 右侧:关键字 + 时间 ─────────────────────────────────── */}
-          <div className="space-y-4"
+          {/* ── 右侧:关键字 + 指定媒体 + 版面 + 作者 + 时间 ──────────── */}
+          <div className="space-y-3"
             style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '1.25rem' }}>
-            <div>
-              <label className="block text-xs font-semibold text-primary mb-1.5">
-                {t('dashboard.sentiment.articles.filters.topic')}
-              </label>
-              <input type="text" value={draftTopic}
-                onChange={(e) => setDraftTopic(e.target.value)}
-                placeholder={t('dashboard.sentiment.articles.filters.search')}
-                className="w-full px-2 py-1.5 text-xs rounded"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-            </div>
+            <TextInputRow label={t('dashboard.sentiment.articles.filters.topic')}
+              value={draftTopic} onChange={setDraftTopic}
+              placeholder={t('dashboard.sentiment.articles.filters.search')} />
+
+            <TextInputRow label={t('dashboard.sentiment.articles.filters.specificMedia')}
+              value={draftSpecificMedia} onChange={setDraftSpecificMedia}
+              placeholder={t('dashboard.sentiment.articles.filters.specificMediaPlaceholder')} />
+
+            <TextInputRow label={t('dashboard.sentiment.articles.filters.column')}
+              value={draftColumn} onChange={setDraftColumn}
+              placeholder={t('dashboard.sentiment.articles.filters.columnPlaceholder')} />
+
+            <TextInputRow label={t('dashboard.sentiment.articles.filters.authorInput')}
+              value={draftAuthorInput} onChange={setDraftAuthorInput}
+              placeholder={t('dashboard.sentiment.articles.filters.authorInputPlaceholder')} />
 
             <div>
               <label className="block text-xs font-semibold text-primary mb-1.5">
@@ -307,6 +384,20 @@ function AllOption({ checked, count, onClick, t }:
       <span className="font-medium">{t('dashboard.sentiment.articles.filters.all')}</span>
       {count !== undefined && <span className="text-[10px] text-muted">{count}</span>}
     </label>
+  );
+}
+
+/** 右栏常规 text 输入 — 标签上 / input 下 */
+function TextInputRow({ label, value, onChange, placeholder }:
+  { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-primary mb-1.5">{label}</label>
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-2 py-1.5 text-xs rounded"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+    </div>
   );
 }
 

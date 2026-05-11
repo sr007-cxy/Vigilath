@@ -1994,7 +1994,22 @@ const en = {
                   "noAuthors": "No author data",
                   "region": "Region",
                   "noRegions": "No region data",
-                  "stance": "Stance"
+                  "stance": "Stance",
+                  "keywordMention": "Keyword mention",
+                  "titleMention": "In title",
+                  "bodyMention": "In body",
+                  "authorRegion": "Author region",
+                  "authorRegionDomestic": "Domestic",
+                  "authorRegionOverseas": "Overseas",
+                  "articleType": "Article type",
+                  "articleTypeOriginal": "Original",
+                  "articleTypeReprint": "Reprint",
+                  "specificMedia": "Specific media",
+                  "specificMediaPlaceholder": "Up to 20 media names",
+                  "column": "Column",
+                  "columnPlaceholder": "Up to 1 column name",
+                  "authorInput": "Author",
+                  "authorInputPlaceholder": "Up to 10 author names"
                 },
                 "page": {
                   "loadMore": "Load more",

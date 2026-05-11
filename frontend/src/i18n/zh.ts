@@ -2000,7 +2000,22 @@ const zh = {
                   "noAuthors": "暂无作者数据",
                   "region": "地区",
                   "noRegions": "暂无地区数据",
-                  "stance": "情感类型"
+                  "stance": "情感类型",
+                  "keywordMention": "关键词提及",
+                  "titleMention": "标题提及",
+                  "bodyMention": "正文提及",
+                  "authorRegion": "作者地区",
+                  "authorRegionDomestic": "境内",
+                  "authorRegionOverseas": "境外",
+                  "articleType": "文章类型",
+                  "articleTypeOriginal": "原创",
+                  "articleTypeReprint": "转载",
+                  "specificMedia": "指定媒体",
+                  "specificMediaPlaceholder": "请输入指定媒体名称,最多支持20个",
+                  "column": "版面",
+                  "columnPlaceholder": "请输入指定版面名称,最多1个",
+                  "authorInput": "作者",
+                  "authorInputPlaceholder": "请输入指定作者名称,最多 10 个"
                 },
                 "page": {
                   "loadMore": "加载更多",

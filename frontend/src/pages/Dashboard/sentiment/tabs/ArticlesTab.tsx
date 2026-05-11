@@ -341,6 +341,13 @@ export function ArticlesTab({ account, usingMock }: Props) {
   };
   // 相关性筛选 — 业务默认值,不暴露切换 UI(用户配过 keywords,LLM 判过相关性即可)
   const onlyRelevant = true;
+  // 高级筛选 modal 才有的几个字段(rail 不暴露)
+  const [keywordScope, setKeywordScope] = useState<'' | 'title' | 'body'>('');
+  const [authorRegion, setAuthorRegion] = useState<'' | 'domestic' | 'overseas'>('');
+  const [articleType, setArticleType] = useState<'' | 'original' | 'reprint'>('');
+  const [specificMedia, setSpecificMedia] = useState<string>('');
+  const [columnInput, setColumnInput] = useState<string>('');
+  const [authorInput, setAuthorInput] = useState<string>('');
   const [sortBy, setSortBy] = useState<SortKey>('influence');
 
   // source code → (media_type, industry, region) 查找表
@@ -436,10 +443,24 @@ export function ArticlesTab({ account, usingMock }: Props) {
       if (sources.size && !sources.has(p.source)) return false;
       if (topic.trim()) {
         const tt = topic.trim();
-        const inTopics = (p.topics ?? []).some(x => x.includes(tt));
         const inTitle = (p.title ?? '').includes(tt);
-        const inSummary = (p.summary ?? '').includes(tt);
-        if (!inTopics && !inTitle && !inSummary) return false;
+        const inBody = (p.summary ?? '').includes(tt) || (p.content ?? '').includes(tt);
+        const inTopics = (p.topics ?? []).some(x => x.includes(tt));
+        // keywordScope:'' = 全部 / 'title' = 仅标题 / 'body' = 仅正文(含摘要)
+        if (keywordScope === 'title') {
+          if (!inTitle) return false;
+        } else if (keywordScope === 'body') {
+          if (!inBody) return false;
+        } else {
+          if (!inTitle && !inBody && !inTopics) return false;
+        }
+      }
+      // 高级筛选「作者」子串匹配 — 多个用逗号或换行分割,任一命中即过
+      if (authorInput.trim()) {
+        const auth = (p.author ?? '').toLowerCase();
+        const needles = authorInput
+          .split(/[,,\n]/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        if (!needles.some(n => auth.includes(n))) return false;
       }
       return true;
     });
@@ -451,7 +472,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       list = list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
     }
     return list;
-  }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy, allowedSources]);
+  }, [posts, sentiments, risks, sources, topic, keywordScope, authorInput, onlyRelevant, sortBy, allowedSources]);
 
   // 当前 filtered 集合的 stance 分布(情感类型进度条用)
   const stanceDist = useMemo(() => {
@@ -500,6 +521,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setMediaTypes(new Set()); setIndustries(new Set());
     setSources(new Set());
     setTopic(''); setSortBy('influence');
+    setKeywordScope(''); setAuthorRegion(''); setArticleType('');
+    setSpecificMedia(''); setColumnInput(''); setAuthorInput('');
   };
 
   const handleJumpPage = () => {
@@ -714,6 +737,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
           value={{
             risks, sentiments, mediaTypes, industries, sources,
             topic,
+            keywordScope, authorRegion, articleType,
+            specificMedia, column: columnInput, authorInput,
             // appliedStart/End 是 'YYYY-MM-DDTHH:MM:SS',modal 用 'YYYY-MM-DD'
             startDate: appliedStart.slice(0, 10),
             endDate: appliedEnd.slice(0, 10),
@@ -732,6 +757,12 @@ export function ArticlesTab({ account, usingMock }: Props) {
             setIndustries(v.industries);
             setSources(v.sources);
             setTopic(v.topic);
+            setKeywordScope(v.keywordScope);
+            setAuthorRegion(v.authorRegion);
+            setArticleType(v.articleType);
+            setSpecificMedia(v.specificMedia);
+            setColumnInput(v.column);
+            setAuthorInput(v.authorInput);
             // 时间范围:有任一端就走 custom preset,否则清空回 d90
             if (v.startDate || v.endDate) {
               setTimePreset('custom');
