@@ -12,14 +12,10 @@ import type {
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
+import { FilterChip } from '../components/filterChips';
 import {
-  FilterChip, GridChip, ExpandableGridChip,
-} from '../components/filterChips';
-import {
-  MEDIA_TYPE_ORDER, INDUSTRY_ORDER,
-  type MediaType, type Industry,
-} from '../../../../constants/sentimentPlatforms';
-import type { SentimentPlatform } from '../../../../types/sentiment';
+  AdvancedFilterModal, type AdvancedFilterValue,
+} from '../components/AdvancedFilterModal';
 
 type SortKey = 'influence' | 'newest' | 'views';
 // 时间筛选预设 — 与参考竞品对齐
@@ -471,11 +467,11 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return n;
   };
 
-  // 高级筛选区(媒体分类/媒体类型/仅相关)在 FilterRail 内部折叠
-  const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  // 高级筛选区的活跃过滤数(媒体分类 + 媒体类型 + 仅相关被关 → 计 1)
+  // 高级筛选 modal 开关 — FilterRail 顶部按钮触发
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // 高级筛选 modal 内 4 项的活跃数(媒体分类 + 媒体类型 + 平台 + 仅相关关闭 → 计 1)
   const advancedActive =
-    mediaTypes.size + industries.size + (onlyRelevant ? 0 : 1);
+    mediaTypes.size + industries.size + sources.size + (onlyRelevant ? 0 : 1);
 
   const reset = () => {
     setSentiments(new Set()); setRisks(new Set());
@@ -691,6 +687,24 @@ export function ArticlesTab({ account, usingMock }: Props) {
     <div className={`grid grid-cols-1 ${gridCls} gap-3`}>
       {timePopup && createPortal(timePopup, document.body)}
 
+      {advancedOpen && (
+        <AdvancedFilterModal
+          value={{ mediaTypes, industries, sources, onlyRelevant }}
+          platforms={platforms}
+          axisCounts={axisCounts}
+          sourceCounts={sourceCounts}
+          platformLabel={platformLabel}
+          onCancel={() => setAdvancedOpen(false)}
+          onSave={(v: AdvancedFilterValue) => {
+            setMediaTypes(v.mediaTypes);
+            setIndustries(v.industries);
+            setSources(v.sources);
+            setOnlyRelevant(v.onlyRelevant);
+            setAdvancedOpen(false);
+          }}
+        />
+      )}
+
       {/* ── 中:仅 排序/计数 header + 文章列表(筛选已搬到右栏)── */}
       <section className="space-y-2 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
         <div className="flex items-center gap-2 py-2 px-1 xl:sticky xl:top-0 xl:z-10"
@@ -785,21 +799,15 @@ export function ArticlesTab({ account, usingMock }: Props) {
         ) : (
           <FilterRail
             timeTrigger={timeTrigger}
-            advancedExpanded={advancedExpanded}
             advancedActive={advancedActive}
-            onToggleAdvanced={() => setAdvancedExpanded(v => !v)}
+            onOpenAdvanced={() => setAdvancedOpen(true)}
             t={t}
             risks={risks} setRisks={setRisks}
             sentiments={sentiments} setSentiments={setSentiments}
             sources={sources} setSources={setSources}
-            mediaTypes={mediaTypes} setMediaTypes={setMediaTypes}
-            industries={industries} setIndustries={setIndustries}
-            onlyRelevant={onlyRelevant} setOnlyRelevant={setOnlyRelevant}
-            platforms={platforms}
             posts={posts}
             platformCodes={platformCodes}
             sourceCounts={sourceCounts}
-            axisCounts={axisCounts}
             platformLabel={platformLabel}
             topic={topic} setTopic={setTopic}
             onReset={reset}
@@ -815,26 +823,20 @@ export function ArticlesTab({ account, usingMock }: Props) {
 }
 
 /* ── 右栏筛选面板 ─────────────────────────────────────────
- * 顶行:时间 + 高级筛选(toggle)+ 重置
- * 常规:搜索 / 风险 / 情感 / 热门媒体
- * 高级(折叠):媒体分类 / 媒体类型 / 仅相关 */
+ * 顶行:时间 + 高级筛选(open modal)+ 重置
+ * 内容:搜索 / 风险 / 情感 / 热门媒体
+ * 媒体分类 / 媒体类型 / 仅相关 进 AdvancedFilterModal */
 interface FilterRailProps {
   timeTrigger: React.ReactNode;
-  advancedExpanded: boolean;
   advancedActive: number;
-  onToggleAdvanced: () => void;
+  onOpenAdvanced: () => void;
   t: (k: string, opts?: Record<string, unknown>) => string;
   risks: Set<string>; setRisks: (s: Set<string>) => void;
   sentiments: Set<string>; setSentiments: (s: Set<string>) => void;
   sources: Set<string>; setSources: (s: Set<string>) => void;
-  mediaTypes: Set<string>; setMediaTypes: (s: Set<string>) => void;
-  industries: Set<string>; setIndustries: (s: Set<string>) => void;
-  onlyRelevant: boolean; setOnlyRelevant: (v: boolean) => void;
-  platforms: SentimentPlatform[];
   posts: SentimentPost[];
   platformCodes: string[];
   sourceCounts: Map<string, number>;
-  axisCounts: { mediaType: Map<string, number>; industry: Map<string, number> };
   platformLabel: (code: string) => string;
   topic: string; setTopic: (v: string) => void;
   onReset: () => void;
@@ -842,51 +844,31 @@ interface FilterRailProps {
 }
 
 function FilterRail({
-  timeTrigger, advancedExpanded, advancedActive, onToggleAdvanced, t,
+  timeTrigger, advancedActive, onOpenAdvanced, t,
   risks, setRisks, sentiments, setSentiments,
-  sources, setSources,
-  mediaTypes, setMediaTypes, industries, setIndustries,
-  onlyRelevant, setOnlyRelevant,
-  platforms, posts, platformCodes, sourceCounts, axisCounts,
+  sources, setSources, posts, platformCodes, sourceCounts,
   platformLabel, topic, setTopic, onReset, toggle,
 }: FilterRailProps) {
-  // 按 media_type 分组 platforms(媒体类型段位的展开 chip 用)
-  const sourceGroups = useMemo(() => {
-    const byMt = new Map<MediaType | 'other', string[]>();
-    for (const p of platforms) {
-      const mt = (p.media_type as MediaType) || 'other';
-      const list = byMt.get(mt) ?? [];
-      list.push(p.code);
-      byMt.set(mt, list);
-    }
-    const order: (MediaType | 'other')[] = [...MEDIA_TYPE_ORDER, 'other'];
-    return order.filter(m => byMt.has(m)).map(m => ({ mediaType: m, codes: byMt.get(m)! }));
-  }, [platforms]);
-
   return (
     <div className="p-3 space-y-3">
-      {/* 顶行:时间 + 高级筛选 toggle + 重置 */}
+      {/* 顶行:时间 + 高级筛选 + 重置 */}
       <div className="flex items-center gap-2 flex-wrap">
         {timeTrigger}
-        <button type="button" onClick={onToggleAdvanced}
+        <button type="button" onClick={onOpenAdvanced}
           className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
           style={{
-            background: advancedExpanded ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-            color: advancedExpanded ? '#fff' : 'var(--text-primary)',
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-primary)',
             border: '1px solid var(--border-color)',
           }}>
           <span>⚙</span>
           <span>{t('dashboard.sentiment.articles.filters.advanced')}</span>
           {advancedActive > 0 && (
             <span className="text-[10px] px-1 rounded"
-              style={{
-                background: advancedExpanded ? 'rgba(255,255,255,0.25)' : 'var(--accent-primary)',
-                color: '#fff',
-              }}>
+              style={{ background: 'var(--accent-primary)', color: '#fff' }}>
               {advancedActive}
             </span>
           )}
-          <span className="text-[10px]">{advancedExpanded ? '▴' : '▾'}</span>
         </button>
         <button type="button" onClick={onReset}
           className="ml-auto text-xs text-muted hover:text-primary">
@@ -938,89 +920,6 @@ function FilterRail({
           );
         })}
       </RailSection>
-
-      {/* ── 高级筛选(折叠)── */}
-      {advancedExpanded && (
-        <div className="pt-3 space-y-3"
-          style={{ borderTop: '1px dashed var(--border-color)' }}>
-
-          {/* 媒体分类 */}
-          <div>
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-              {t('dashboard.sentiment.articles.filters.industry')}
-            </p>
-            <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-              <GridChip
-                label={t('dashboard.sentiment.articles.filters.all')}
-                count={posts.length}
-                active={!industries.size}
-                onClick={() => setIndustries(new Set())}
-              />
-              {INDUSTRY_ORDER.map(ind => {
-                const c = axisCounts.industry.get(ind) ?? 0;
-                const codes = platforms.filter(p => p.industry === ind).map(p => p.code);
-                return (
-                  <ExpandableGridChip key={ind}
-                    label={t(`dashboard.sentiment.articles.industries.${ind}`)}
-                    count={c}
-                    active={industries.has(ind)}
-                    onToggleSelf={() => setIndustries(toggle(industries, ind as Industry))}
-                    codes={codes}
-                    platformLabel={platformLabel}
-                    countOf={(code) => sourceCounts.get(code) ?? 0}
-                    isSourceActive={(code) => sources.has(code)}
-                    onToggleSource={(code) => setSources(toggle(sources, code))}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 媒体类型 */}
-          <div>
-            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-              {t('dashboard.sentiment.articles.filters.mediaType')}
-            </p>
-            <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
-              <GridChip
-                label={t('dashboard.sentiment.articles.filters.all')}
-                count={posts.length}
-                active={!mediaTypes.size}
-                onClick={() => setMediaTypes(new Set())}
-              />
-              {sourceGroups.map(({ mediaType, codes }) => {
-                const mtLabelKey = `dashboard.sentiment.articles.mediaTypes.${mediaType}`;
-                const mtLabel = t(mtLabelKey);
-                const mtDisplay = mtLabel === mtLabelKey ? mediaType : mtLabel;
-                const groupCount = axisCounts.mediaType.get(mediaType) ?? 0;
-                const isOther = mediaType === 'other';
-                return (
-                  <ExpandableGridChip key={mediaType}
-                    label={mtDisplay}
-                    count={groupCount}
-                    active={!isOther && mediaTypes.has(mediaType)}
-                    onToggleSelf={isOther ? null : (() => setMediaTypes(toggle(mediaTypes, mediaType as MediaType)))}
-                    codes={codes}
-                    platformLabel={platformLabel}
-                    countOf={(code) => sourceCounts.get(code) ?? 0}
-                    isSourceActive={(code) => sources.has(code)}
-                    onToggleSource={(code) => setSources(toggle(sources, code))}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 仅相关 */}
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <input type="checkbox" checked={onlyRelevant}
-              onChange={(e) => setOnlyRelevant(e.target.checked)} />
-            <span className="text-secondary">
-              {t('dashboard.sentiment.articles.filters.onlyRelevant')}
-            </span>
-          </label>
-        </div>
-      )}
     </div>
   );
 }

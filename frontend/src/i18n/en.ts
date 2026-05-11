@@ -1988,7 +1988,8 @@ const en = {
                   "advancedTitle": "Advanced filters",
                   "save": "Save",
                   "cancel": "Cancel",
-                  "search": "Search title/summary"
+                  "search": "Search title/summary",
+                  "displayOptions": "Display options"
                 },
                 "page": {
                   "loadMore": "Load more",

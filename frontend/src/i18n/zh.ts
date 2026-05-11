@@ -1994,7 +1994,8 @@ const zh = {
                   "advancedTitle": "高级筛选",
                   "save": "保存",
                   "cancel": "取消",
-                  "search": "搜索标题/摘要"
+                  "search": "搜索标题/摘要",
+                  "displayOptions": "显示选项"
                 },
                 "page": {
                   "loadMore": "加载更多",
