@@ -721,8 +721,10 @@ export function ArticlesTab({ account, usingMock }: Props) {
           platforms={platforms}
           axisCounts={axisCounts}
           sourceCounts={sourceCounts}
+          totalCount={posts.length}
           platformLabel={platformLabel}
           onCancel={() => setAdvancedOpen(false)}
+          onReset={reset}
           onSave={(v: AdvancedFilterValue) => {
             setRisks(v.risks);
             setSentiments(v.sentiments);
