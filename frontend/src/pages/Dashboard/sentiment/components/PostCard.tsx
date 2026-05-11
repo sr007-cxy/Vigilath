@@ -45,60 +45,49 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
   return (
     <article
       onClick={onClick}
-      className={`rounded-lg p-3 cursor-pointer transition-all ${selected ? 'shadow-glow' : 'hover:-translate-y-0.5'}`}
+      className="px-3 py-2.5 cursor-pointer transition-colors hover:bg-tertiary/50"
       style={{
-        background: selected ? 'var(--bg-tertiary)' : 'var(--bg-card)',
-        border: `1px solid ${selected ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+        background: selected ? 'var(--bg-tertiary)' : 'transparent',
+        borderBottom: '1px solid var(--border-color)',
+        borderLeft: selected ? '2px solid var(--accent-primary)' : '2px solid transparent',
       }}
     >
-      <header className="flex items-center gap-2 flex-wrap mb-1.5">
+      {/* 头:风险 + 平台 + 区域 + 作者 ····· 日期 */}
+      <header className="flex items-center gap-1.5 flex-wrap mb-1 text-[11px] text-muted">
+        <RiskBadge level={post.risk_level} t={t} />
         <SourceBadge source={post.source} />
         <RegionTag source={post.source} sourceRegion={sourceRegion} t={t} />
-        <RiskBadge level={post.risk_level} t={t} />
         {post.author && (
-          <span className="text-[11px] text-muted truncate max-w-[8rem]" title={post.author}>
-            @{post.author}
-          </span>
+          <span className="truncate max-w-[8rem]" title={post.author}>@{post.author}</span>
         )}
-        <span className="text-[11px] text-muted ml-auto">
-          {fmtDate(post.publish_time)}
-        </span>
+        <span className="ml-auto">{fmtDate(post.publish_time)}</span>
       </header>
 
-      <h4 className="font-semibold text-sm text-primary leading-snug line-clamp-2 mb-1">
+      {/* 标题(粗体黑字) */}
+      <h4 className="font-semibold text-sm text-primary leading-snug line-clamp-2 mb-0.5">
         {post.title || '(无标题)'}
       </h4>
 
-      {!compact && (
-        <p className="text-xs text-secondary line-clamp-2 mb-2">
-          {post.summary || ''}
+      {/* 摘要 */}
+      {!compact && post.summary && (
+        <p className="text-xs text-secondary line-clamp-2 mb-1.5">
+          {post.summary}
         </p>
       )}
 
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* 尾:情感 + 影响力 + 计数 + 话题 chip,紧凑一行 */}
+      <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted">
         <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
         <InfluenceBar value={post.influence_potential} />
-        {post.content && (
-          <span className="text-[11px] text-muted">📝 {countChars(post.content).toLocaleString()}</span>
-        )}
-        {post.view_count != null && (
-          <span className="text-[11px] text-muted">👁 {post.view_count.toLocaleString()}</span>
-        )}
+        {post.content && <span>📝 {countChars(post.content).toLocaleString()}</span>}
+        {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
+        {!compact && topics.slice(0, 2).map(tag => (
+          <span key={tag} className="px-1 rounded"
+            style={{ background: 'rgba(251,191,36,0.15)', color: '#854d0e' }}>
+            #{tag}
+          </span>
+        ))}
       </div>
-
-      {!compact && topics.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {topics.slice(0, 3).map(tag => (
-            <span
-              key={tag}
-              className="text-[10px] px-1.5 py-0.5 rounded"
-              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
-      )}
     </article>
   );
 }

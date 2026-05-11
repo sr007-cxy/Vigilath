@@ -13,7 +13,7 @@ import type {
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
-import { FilterChip, GridChip } from '../components/filterChips';
+import { FilterChip } from '../components/filterChips';
 import {
   AdvancedFilterModal, type AdvancedFilterValue,
 } from '../components/AdvancedFilterModal';
@@ -684,11 +684,15 @@ export function ArticlesTab({ account, usingMock }: Props) {
       )}
 
       {/* ── 中:筛选 chip 行 + 文章列表 ───────────────────────────────── */}
-      <section className="space-y-3 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
-        {/* 顶部筛选 chip 行(对齐 WisersOne 原型图 1) */}
-        <div className="rounded-xl p-3 space-y-2 xl:sticky xl:top-0 xl:z-10" style={cardStyle}>
-          {/* 风险 / 情感 / 热门媒体 — 行级 flex-wrap */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <section className="space-y-2 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
+        {/* 扁平筛选条 — 单卡贴顶,去厚框,2 行紧凑布局(对齐 WisersOne) */}
+        <div className="py-2 px-1 space-y-1.5 xl:sticky xl:top-0 xl:z-10"
+          style={{
+            background: 'var(--bg-primary)',
+            borderBottom: '1px solid var(--border-color)',
+          }}>
+          {/* 行 1: 风险 + 情感 + 热门媒体 全部 inline,横排 chip */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <InlineGroup label={t('dashboard.sentiment.articles.filters.risk')}>
               {ALL_RISKS.map(r => (
                 <FilterChip key={r}
@@ -698,6 +702,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
               ))}
             </InlineGroup>
 
+            <span className="text-muted">·</span>
+
             <InlineGroup label={t('dashboard.sentiment.articles.filters.sentiment')}>
               {ALL_SENTIMENTS.map(s => (
                 <FilterChip key={s}
@@ -706,42 +712,38 @@ export function ArticlesTab({ account, usingMock }: Props) {
                   onClick={() => setSentiments(toggle(sentiments, s))} />
               ))}
             </InlineGroup>
-          </div>
 
-          {/* 热门媒体 — 3 列 grid 紧凑展示 */}
-          <InlineGroup label={t('dashboard.sentiment.articles.filters.popular')}>
-            <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 flex-1 min-w-[12rem]">
-              <GridChip
+            <span className="text-muted">·</span>
+
+            <InlineGroup label={t('dashboard.sentiment.articles.filters.popular')}>
+              <FilterChip
                 label={t('dashboard.sentiment.articles.filters.all')}
-                count={posts.length}
                 active={!sources.size}
                 onClick={() => setSources(new Set())}
               />
-              {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
+              {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).slice(0, 6).map(s => {
                 const fromDb = platformNames.get(s);
                 const labelKey = `dashboard.sentiment.articles.sourceLabels.${s}`;
                 const localized = fromDb || t(labelKey);
                 const display = (!fromDb && localized === labelKey) ? s : localized;
                 return (
-                  <GridChip key={s} label={display}
-                    count={sourceCounts.get(s) ?? 0}
+                  <FilterChip key={s} label={display}
                     active={sources.has(s)}
                     onClick={() => setSources(toggle(sources, s))} />
                 );
               })}
-            </div>
-          </InlineGroup>
+            </InlineGroup>
+          </div>
 
-          {/* 搜索 + 排序 + 高级筛选 + 重置 */}
-          <div className="flex flex-wrap items-center gap-2 pt-1"
-            style={{ borderTop: '1px solid var(--border-color)' }}>
+          {/* 行 2: 搜索 + 高级筛选 + 排序 + 重置 + 计数 */}
+          <div className="flex flex-wrap items-center gap-2">
             <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
               placeholder={t('dashboard.sentiment.articles.filters.search')}
-              className="flex-1 min-w-[10rem] px-2 py-1 text-xs rounded"
+              className="flex-1 min-w-[10rem] max-w-[20rem] px-2 py-1 text-xs rounded"
               style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
 
             <button type="button" onClick={() => setAdvancedOpen(true)}
-              className="text-xs px-2.5 py-1 rounded inline-flex items-center gap-1"
+              className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
               style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
               <span>⚙</span>
               <span>{t('dashboard.sentiment.articles.filters.advanced')}</span>
@@ -753,11 +755,10 @@ export function ArticlesTab({ account, usingMock }: Props) {
               )}
             </button>
 
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.sort.label')}:</span>
+            <div className="flex items-center gap-0.5">
               {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
                 <button key={k} type="button" onClick={() => setSortBy(k)}
-                  className={`text-xs px-2 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
+                  className={`text-xs px-1.5 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
                   style={{
                     background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
                     color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
@@ -768,19 +769,18 @@ export function ArticlesTab({ account, usingMock }: Props) {
             </div>
 
             <button type="button" onClick={reset}
-              className="text-xs text-muted hover:text-primary ml-auto">
+              className="text-xs text-muted hover:text-primary">
               {t('dashboard.sentiment.articles.filters.reset')}
             </button>
-          </div>
 
-          {/* 计数 */}
-          <div className="text-[11px] text-muted">
-            {t('dashboard.sentiment.articles.count', { count: filtered.length })}
-            {!usingMock && total > posts.length && (
-              <span className="ml-2">
-                · {t('dashboard.sentiment.articles.page.totalCount', { loaded: posts.length, total })}
-              </span>
-            )}
+            <span className="text-[11px] text-muted ml-auto">
+              {t('dashboard.sentiment.articles.count', { count: filtered.length })}
+              {!usingMock && total > posts.length && (
+                <span className="ml-1.5">
+                  · {posts.length}/{total}
+                </span>
+              )}
+            </span>
           </div>
         </div>
 
@@ -789,7 +789,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
             {t('dashboard.sentiment.articles.empty')}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div style={{ borderTop: '1px solid var(--border-color)' }}>
             {filtered.map(p => {
               const key = `${p.source}-${p.post_id}`;
               return (

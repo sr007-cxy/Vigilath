@@ -58,24 +58,35 @@ export function PostDetail({ post }: Props) {
 
   return (
     <article className="rounded-xl p-5 space-y-3" style={cardStyle}>
+      {/* row 0: source/region/risk badges + 打开原文 (right-aligned) */}
+      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+        <SourceBadge source={post.source} />
+        {showRegion && (
+          <span className="px-1.5 py-0.5 rounded text-muted"
+            style={{ background: 'var(--bg-tertiary)' }}>{regionLabel}</span>
+        )}
+        <RiskBadge level={post.risk_level} t={t} />
+        {post.url && (
+          <a href={post.url} target="_blank" rel="noreferrer"
+            className="ml-auto text-xs px-2 py-0.5 rounded inline-flex items-center gap-0.5"
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+            {t('dashboard.sentiment.articles.detail.openOriginal')}
+          </a>
+        )}
+      </div>
+
       {/* row 1: 标题(大字) */}
       <h2 className="text-xl font-bold text-primary leading-snug">
         {post.title || '(无标题)'}
       </h2>
 
-      {/* row 2: 平台 · @账号 · 发布时间 · 查看原文 */}
+      {/* row 2: @账号 · 发布时间 · counts */}
       <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
-        <SourceBadge source={post.source} />
-        {showRegion && <span>📍 {regionLabel}</span>}
         {post.author && <span>@{post.author}</span>}
         <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
-        {post.url && (
-          <a href={post.url} target="_blank" rel="noreferrer"
-            className="ml-auto text-xs px-2 py-0.5 rounded"
-            style={{ background: 'var(--accent-primary)', color: '#fff' }}>
-            {t('dashboard.sentiment.articles.detail.openOriginal')}
-          </a>
-        )}
+        {content && <span>📝 {countChars(content).toLocaleString()}</span>}
+        {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
+        {post.reply_count != null && <span>💬 {post.reply_count.toLocaleString()}</span>}
       </div>
 
       {/* row 3: 摘要 + 完整正文 */}
@@ -85,14 +96,11 @@ export function PostDetail({ post }: Props) {
           {post.summary}
         </p>
       )}
-      <section>
-        <h4 className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
-          {t('dashboard.sentiment.articles.detail.originalText')}
-        </h4>
+      {content && (
         <p className="text-sm text-primary leading-relaxed whitespace-pre-wrap">
-          {highlightedContent || '—'}
+          {highlightedContent}
         </p>
-      </section>
+      )}
 
       {/* 底部元信息 — 风险 / 情感 / 立场 / 影响力 / 话题 / 实体 / 推理 */}
       <section className="pt-3 space-y-3" style={{ borderTop: '1px solid var(--border-color)' }}>
@@ -100,13 +108,9 @@ export function PostDetail({ post }: Props) {
           {t('dashboard.sentiment.articles.detail.aiAnalysis')}
         </h4>
 
-        {/* 风险 / 情感 — chip 行 */}
+        {/* 情感 chip(风险已在头部) */}
         <div className="flex items-center gap-2 flex-wrap">
-          <RiskBadge level={post.risk_level} t={t} />
           <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
-          {content && <span className="text-[11px] text-muted">📝 {countChars(content).toLocaleString()}</span>}
-          {post.view_count != null && <span className="text-[11px] text-muted">👁 {post.view_count.toLocaleString()}</span>}
-          {post.reply_count != null && <span className="text-[11px] text-muted">💬 {post.reply_count.toLocaleString()}</span>}
         </div>
 
         {/* 立场 / 意图 / 事实性 */}
