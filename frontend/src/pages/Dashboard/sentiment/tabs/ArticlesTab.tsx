@@ -16,6 +16,10 @@ import { FilterChip } from '../components/filterChips';
 import {
   AdvancedFilterModal, type AdvancedFilterValue,
 } from '../components/AdvancedFilterModal';
+import {
+  MEDIA_TYPE_ORDER, INDUSTRY_ORDER,
+} from '../../../../constants/sentimentPlatforms';
+import type { SentimentPlatform } from '../../../../types/sentiment';
 
 type SortKey = 'influence' | 'newest' | 'views';
 // 时间筛选预设 — 与参考竞品对齐
@@ -319,6 +323,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
   const [industries, setIndustries] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
+  const [authors, setAuthors] = useState<Set<string>>(new Set());
+  const [regions, setRegions] = useState<Set<string>>(new Set());
   // topic 与 ?q URL 参数同步 — 侧栏 KeywordGroup 子项点击 → 写 ?q → 这里读出
   const [topic, setTopicState] = useState(() => params.get('q') ?? '');
   useEffect(() => {
@@ -336,11 +342,33 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('influence');
 
-  // source code → (media_type, industry) 查找表 — 用于按双轴 chip 收窄 sources
+  // source code → (media_type, industry, region) 查找表
   const platformAxes = useMemo(() => {
-    const m = new Map<string, { media_type: string; industry: string }>();
-    for (const p of platforms) m.set(p.code, { media_type: p.media_type, industry: p.industry });
+    const m = new Map<string, { media_type: string; industry: string; region: string }>();
+    for (const p of platforms) {
+      m.set(p.code, { media_type: p.media_type, industry: p.industry, region: p.region });
+    }
     return m;
+  }, [platforms]);
+
+  // 作者列表(从已加载 posts 抽,按出现次数倒排)— 用于作者 chip 维度
+  const authorOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of posts) {
+      const a = (p.author || '').trim();
+      if (!a) continue;
+      counts.set(a, (counts.get(a) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30);  // 顶 30 个最活跃的
+  }, [posts]);
+
+  // 地区列表 — 平台目录里实际出现过的 region(mainland/hk/overseas/...)
+  const regionOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const p of platforms) if (p.region) seen.add(p.region);
+    return Array.from(seen);
   }, [platforms]);
 
   // sources 经 mediaTypes/industries chip 收窄后的有效 source 白名单
@@ -425,6 +453,11 @@ export function ArticlesTab({ account, usingMock }: Props) {
       if (risks.size && !risks.has(rl)) return false;
       if (allowedSources && !allowedSources.has(p.source)) return false;
       if (sources.size && !sources.has(p.source)) return false;
+      if (authors.size && !authors.has((p.author || '').trim())) return false;
+      if (regions.size) {
+        const reg = platformAxes.get(p.source)?.region;
+        if (!reg || !regions.has(reg)) return false;
+      }
       if (topic.trim()) {
         const tt = topic.trim();
         const inTopics = (p.topics ?? []).some(x => x.includes(tt));
@@ -442,7 +475,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       list = list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
     }
     return list;
-  }, [posts, sentiments, risks, sources, topic, onlyRelevant, sortBy, allowedSources]);
+  }, [posts, sentiments, risks, sources, authors, regions, topic, onlyRelevant, sortBy, allowedSources, platformAxes]);
 
   // selected = null 时右栏显示筛选面板;明确点击文章后才显示详情
   const selected: SentimentPost | null = useMemo(() => {
@@ -467,16 +500,17 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return n;
   };
 
-  // 高级筛选 modal 开关 — FilterRail 顶部按钮触发
+  // 高级筛选 modal 开关 — FilterRail 顶部按钮触发(modal 内容与 rail 一致)
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  // 高级筛选 modal 内 4 项的活跃数(媒体分类 + 媒体类型 + 平台 + 仅相关关闭 → 计 1)
+  // 活跃高级筛选数(rail 里现在全部摊开;角标仅作为"modal 内有改动"提醒)
   const advancedActive =
-    mediaTypes.size + industries.size + sources.size + (onlyRelevant ? 0 : 1);
+    mediaTypes.size + industries.size + sources.size +
+    authors.size + regions.size + (onlyRelevant ? 0 : 1);
 
   const reset = () => {
     setSentiments(new Set()); setRisks(new Set());
     setMediaTypes(new Set()); setIndustries(new Set());
-    setSources(new Set());
+    setSources(new Set()); setAuthors(new Set()); setRegions(new Set());
     setTopic(''); setOnlyRelevant(true); setSortBy('influence');
   };
 
@@ -805,9 +839,18 @@ export function ArticlesTab({ account, usingMock }: Props) {
             risks={risks} setRisks={setRisks}
             sentiments={sentiments} setSentiments={setSentiments}
             sources={sources} setSources={setSources}
+            mediaTypes={mediaTypes} setMediaTypes={setMediaTypes}
+            industries={industries} setIndustries={setIndustries}
+            authors={authors} setAuthors={setAuthors}
+            regions={regions} setRegions={setRegions}
+            onlyRelevant={onlyRelevant} setOnlyRelevant={setOnlyRelevant}
+            authorOptions={authorOptions}
+            regionOptions={regionOptions}
             posts={posts}
+            platforms={platforms}
             platformCodes={platformCodes}
             sourceCounts={sourceCounts}
+            axisCounts={axisCounts}
             platformLabel={platformLabel}
             topic={topic} setTopic={setTopic}
             onReset={reset}
@@ -823,9 +866,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
 }
 
 /* ── 右栏筛选面板 ─────────────────────────────────────────
- * 顶行:时间 + 高级筛选(open modal)+ 重置
- * 内容:搜索 / 风险 / 情感 / 热门媒体
- * 媒体分类 / 媒体类型 / 仅相关 进 AdvancedFilterModal */
+ * 顶行:时间 + 高级筛选(open modal,modal 内容 == rail) + 重置
+ * 全部维度常显:搜索 / 风险 / 情感 / 媒体分类 / 媒体类型 / 热门媒体
+ *            / 作者 / 地区 / 仅相关 */
 interface FilterRailProps {
   timeTrigger: React.ReactNode;
   advancedActive: number;
@@ -834,9 +877,18 @@ interface FilterRailProps {
   risks: Set<string>; setRisks: (s: Set<string>) => void;
   sentiments: Set<string>; setSentiments: (s: Set<string>) => void;
   sources: Set<string>; setSources: (s: Set<string>) => void;
+  mediaTypes: Set<string>; setMediaTypes: (s: Set<string>) => void;
+  industries: Set<string>; setIndustries: (s: Set<string>) => void;
+  authors: Set<string>; setAuthors: (s: Set<string>) => void;
+  regions: Set<string>; setRegions: (s: Set<string>) => void;
+  onlyRelevant: boolean; setOnlyRelevant: (v: boolean) => void;
+  authorOptions: [string, number][];
+  regionOptions: string[];
   posts: SentimentPost[];
+  platforms: SentimentPlatform[];
   platformCodes: string[];
   sourceCounts: Map<string, number>;
+  axisCounts: { mediaType: Map<string, number>; industry: Map<string, number> };
   platformLabel: (code: string) => string;
   topic: string; setTopic: (v: string) => void;
   onReset: () => void;
@@ -846,7 +898,12 @@ interface FilterRailProps {
 function FilterRail({
   timeTrigger, advancedActive, onOpenAdvanced, t,
   risks, setRisks, sentiments, setSentiments,
-  sources, setSources, posts, platformCodes, sourceCounts,
+  sources, setSources,
+  mediaTypes, setMediaTypes, industries, setIndustries,
+  authors, setAuthors, regions, setRegions,
+  onlyRelevant, setOnlyRelevant,
+  authorOptions, regionOptions,
+  posts, platformCodes, sourceCounts, axisCounts,
   platformLabel, topic, setTopic, onReset, toggle,
 }: FilterRailProps) {
   return (
@@ -902,7 +959,37 @@ function FilterRail({
         ))}
       </RailSection>
 
-      {/* 热门媒体 */}
+      {/* 媒体分类(行业) */}
+      <RailSection title={t('dashboard.sentiment.articles.filters.industry')}>
+        {INDUSTRY_ORDER.map(ind => {
+          const c = axisCounts.industry.get(ind) ?? 0;
+          const label = t(`dashboard.sentiment.articles.industries.${ind}`);
+          return (
+            <FilterChip key={ind}
+              label={c > 0 ? `${label} ${c}` : label}
+              active={industries.has(ind)}
+              onClick={() => setIndustries(toggle(industries, ind))} />
+          );
+        })}
+      </RailSection>
+
+      {/* 媒体类型 */}
+      <RailSection title={t('dashboard.sentiment.articles.filters.mediaType')}>
+        {MEDIA_TYPE_ORDER.map(mt => {
+          const c = axisCounts.mediaType.get(mt) ?? 0;
+          const labelKey = `dashboard.sentiment.articles.mediaTypes.${mt}`;
+          const tLabel = t(labelKey);
+          const display = tLabel === labelKey ? mt : tLabel;
+          return (
+            <FilterChip key={mt}
+              label={c > 0 ? `${display} ${c}` : display}
+              active={mediaTypes.has(mt)}
+              onClick={() => setMediaTypes(toggle(mediaTypes, mt))} />
+          );
+        })}
+      </RailSection>
+
+      {/* 热门媒体(平台来源) */}
       <RailSection title={t('dashboard.sentiment.articles.filters.popular')}>
         <FilterChip
           label={`${t('dashboard.sentiment.articles.filters.all')} ${posts.length}`}
@@ -920,6 +1007,43 @@ function FilterRail({
           );
         })}
       </RailSection>
+
+      {/* 作者(从已加载 posts 抽 top 30) */}
+      <RailSection title={t('dashboard.sentiment.articles.filters.author')}>
+        {authorOptions.length === 0
+          ? <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.filters.noAuthors')}</span>
+          : authorOptions.map(([name, cnt]) => (
+            <FilterChip key={name}
+              label={cnt > 1 ? `${name} ${cnt}` : name}
+              active={authors.has(name)}
+              onClick={() => setAuthors(toggle(authors, name))} />
+          ))}
+      </RailSection>
+
+      {/* 地区 */}
+      <RailSection title={t('dashboard.sentiment.articles.filters.region')}>
+        {regionOptions.length === 0
+          ? <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.filters.noRegions')}</span>
+          : regionOptions.map(r => {
+            const k = `dashboard.sentiment.articles.regions.${r}`;
+            const v = t(k);
+            return (
+              <FilterChip key={r}
+                label={v === k ? r : v}
+                active={regions.has(r)}
+                onClick={() => setRegions(toggle(regions, r))} />
+            );
+          })}
+      </RailSection>
+
+      {/* 仅相关 */}
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input type="checkbox" checked={onlyRelevant}
+          onChange={(e) => setOnlyRelevant(e.target.checked)} />
+        <span className="text-secondary">
+          {t('dashboard.sentiment.articles.filters.onlyRelevant')}
+        </span>
+      </label>
     </div>
   );
 }

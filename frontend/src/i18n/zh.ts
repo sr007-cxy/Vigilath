@@ -1995,7 +1995,11 @@ const zh = {
                   "save": "保存",
                   "cancel": "取消",
                   "search": "搜索标题/摘要",
-                  "displayOptions": "显示选项"
+                  "displayOptions": "显示选项",
+                  "author": "作者",
+                  "noAuthors": "暂无作者数据",
+                  "region": "地区",
+                  "noRegions": "暂无地区数据"
                 },
                 "page": {
                   "loadMore": "加载更多",

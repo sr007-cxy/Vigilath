@@ -1989,7 +1989,11 @@ const en = {
                   "save": "Save",
                   "cancel": "Cancel",
                   "search": "Search title/summary",
-                  "displayOptions": "Display options"
+                  "displayOptions": "Display options",
+                  "author": "Author",
+                  "noAuthors": "No author data",
+                  "region": "Region",
+                  "noRegions": "No region data"
                 },
                 "page": {
                   "loadMore": "Load more",
