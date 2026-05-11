@@ -1999,7 +1999,8 @@ const zh = {
                   "author": "作者",
                   "noAuthors": "暂无作者数据",
                   "region": "地区",
-                  "noRegions": "暂无地区数据"
+                  "noRegions": "暂无地区数据",
+                  "stance": "情感类型"
                 },
                 "page": {
                   "loadMore": "加载更多",

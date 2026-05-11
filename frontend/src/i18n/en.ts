@@ -1993,7 +1993,8 @@ const en = {
                   "author": "Author",
                   "noAuthors": "No author data",
                   "region": "Region",
-                  "noRegions": "No region data"
+                  "noRegions": "No region data",
+                  "stance": "Stance"
                 },
                 "page": {
                   "loadMore": "Load more",
