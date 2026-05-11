@@ -1,27 +1,31 @@
 // 高级筛选 modal — 贴 WisersOne 原型图 2(image copy.png)的稠密 checkbox 行布局.
 //
-// 每行 = 左侧标签 + 右侧一排 checkbox(可换行).
-// 包含:媒体分类 / 媒体类型 / 平台来源 / 仅相关.
+// 每行 = 左侧标签 + 右侧一排 checkbox(自动换行).控件维度与右栏 FilterRail 完全一致,
+// 用户可以选择在 rail 逐项调,或者在这个 modal 里一次性批改保存.
 //
-// 与右栏 FilterRail 内的「时间/搜索/风险/情感/热门媒体」互补 — 这些「常用」筛选
-// 留在 rail,而「媒体维度切片」放在 modal,触发点是 rail 的「⚙ 高级筛选」按钮.
-//
-// modal 内用 draft state,确认后才 commit 到 ArticlesTab,避免边改边过滤抖动.
-// 关闭即卸载,draft 自然丢弃(父组件用 {open && <Modal />} 控制挂载).
+// modal 内用 draft state,确认后才 commit;关闭即卸载,draft 自然丢弃.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import {
   MEDIA_TYPE_ORDER, INDUSTRY_ORDER,
-  type MediaType, type Industry,
 } from '../../../../constants/sentimentPlatforms';
-import type { SentimentPlatform } from '../../../../types/sentiment';
+import type {
+  SentimentPlatform, RiskLevel, SentimentLabel,
+} from '../../../../types/sentiment';
+
+const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
+const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 
 export interface AdvancedFilterValue {
+  risks: Set<string>;
+  sentiments: Set<string>;
   mediaTypes: Set<string>;
   industries: Set<string>;
   sources: Set<string>;
+  authors: Set<string>;
+  regions: Set<string>;
   onlyRelevant: boolean;
 }
 
@@ -30,6 +34,8 @@ interface Props {
   platforms: SentimentPlatform[];
   axisCounts: { mediaType: Map<string, number>; industry: Map<string, number> };
   sourceCounts: Map<string, number>;
+  authorOptions: [string, number][];
+  regionOptions: string[];
   platformLabel: (code: string) => string;
   onSave: (v: AdvancedFilterValue) => void;
   onCancel: () => void;
@@ -43,14 +49,19 @@ function toggle<T>(s: Set<T>, v: T): Set<T> {
 
 export function AdvancedFilterModal({
   value, platforms, axisCounts, sourceCounts,
+  authorOptions, regionOptions,
   platformLabel, onSave, onCancel,
 }: Props) {
   const { t } = useTranslation();
 
   // 挂载时从 props 初始化 draft;卸载时丢弃
+  const [draftRisks, setDraftRisks] = useState<Set<string>>(() => new Set(value.risks));
+  const [draftSent, setDraftSent] = useState<Set<string>>(() => new Set(value.sentiments));
   const [draftMt, setDraftMt] = useState<Set<string>>(() => new Set(value.mediaTypes));
   const [draftInd, setDraftInd] = useState<Set<string>>(() => new Set(value.industries));
   const [draftSrc, setDraftSrc] = useState<Set<string>>(() => new Set(value.sources));
+  const [draftAuthors, setDraftAuthors] = useState<Set<string>>(() => new Set(value.authors));
+  const [draftRegions, setDraftRegions] = useState<Set<string>>(() => new Set(value.regions));
   const [draftOnly, setDraftOnly] = useState<boolean>(value.onlyRelevant);
 
   // Esc 关闭
@@ -60,7 +71,7 @@ export function AdvancedFilterModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
-  // 按 media_type 分组 platforms — 平台来源段位按媒体类型 group 排序
+  // 按 media_type 分组 platforms,平台来源段位按媒体类型 group 排序后平铺
   const platformsByMt = MEDIA_TYPE_ORDER
     .map(mt => ({
       mediaType: mt,
@@ -91,6 +102,28 @@ export function AdvancedFilterModal({
 
         {/* 稠密 checkbox 行 — 每行 = 标签 + 一排 checkbox */}
         <div className="px-5 py-4 overflow-y-auto space-y-3.5">
+          {/* 风险 */}
+          <FilterRow label={t('dashboard.sentiment.articles.filters.risk')}>
+            {ALL_RISKS.map(r => (
+              <CheckOption key={r}
+                label={t(`dashboard.sentiment.articles.risk.${r}`)}
+                checked={draftRisks.has(r)}
+                onChange={() => setDraftRisks(toggle(draftRisks, r))}
+              />
+            ))}
+          </FilterRow>
+
+          {/* 情感 */}
+          <FilterRow label={t('dashboard.sentiment.articles.filters.sentiment')}>
+            {ALL_SENTIMENTS.map(s => (
+              <CheckOption key={s}
+                label={t(`dashboard.sentiment.articles.labels.${s}`)}
+                checked={draftSent.has(s)}
+                onChange={() => setDraftSent(toggle(draftSent, s))}
+              />
+            ))}
+          </FilterRow>
+
           {/* 媒体分类 */}
           <FilterRow label={t('dashboard.sentiment.articles.filters.industry')}>
             {INDUSTRY_ORDER.map(ind => {
@@ -100,7 +133,7 @@ export function AdvancedFilterModal({
                   label={t(`dashboard.sentiment.articles.industries.${ind}`)}
                   count={c}
                   checked={draftInd.has(ind)}
-                  onChange={() => setDraftInd(toggle(draftInd, ind as Industry))}
+                  onChange={() => setDraftInd(toggle(draftInd, ind))}
                 />
               );
             })}
@@ -118,13 +151,13 @@ export function AdvancedFilterModal({
                   label={display}
                   count={c}
                   checked={draftMt.has(mt)}
-                  onChange={() => setDraftMt(toggle(draftMt, mt as MediaType))}
+                  onChange={() => setDraftMt(toggle(draftMt, mt))}
                 />
               );
             })}
           </FilterRow>
 
-          {/* 平台来源(按 media_type 分组排序,平铺) */}
+          {/* 平台来源(按 media_type 分组,平铺) */}
           <FilterRow label={t('dashboard.sentiment.articles.filters.source')}>
             {platformsByMt.flatMap(g =>
               g.codes.map(code => (
@@ -136,6 +169,41 @@ export function AdvancedFilterModal({
                 />
               )),
             )}
+          </FilterRow>
+
+          {/* 作者 */}
+          <FilterRow label={t('dashboard.sentiment.articles.filters.author')}>
+            {authorOptions.length === 0 ? (
+              <span className="text-[11px] text-muted">
+                {t('dashboard.sentiment.articles.filters.noAuthors')}
+              </span>
+            ) : authorOptions.map(([name, cnt]) => (
+              <CheckOption key={name}
+                label={name}
+                count={cnt}
+                checked={draftAuthors.has(name)}
+                onChange={() => setDraftAuthors(toggle(draftAuthors, name))}
+              />
+            ))}
+          </FilterRow>
+
+          {/* 地区 */}
+          <FilterRow label={t('dashboard.sentiment.articles.filters.region')}>
+            {regionOptions.length === 0 ? (
+              <span className="text-[11px] text-muted">
+                {t('dashboard.sentiment.articles.filters.noRegions')}
+              </span>
+            ) : regionOptions.map(r => {
+              const k = `dashboard.sentiment.articles.regions.${r}`;
+              const v = t(k);
+              return (
+                <CheckOption key={r}
+                  label={v === k ? r : v}
+                  checked={draftRegions.has(r)}
+                  onChange={() => setDraftRegions(toggle(draftRegions, r))}
+                />
+              );
+            })}
           </FilterRow>
 
           {/* 显示选项 — 仅相关 */}
@@ -157,9 +225,13 @@ export function AdvancedFilterModal({
           </button>
           <button type="button"
             onClick={() => onSave({
+              risks: draftRisks,
+              sentiments: draftSent,
               mediaTypes: draftMt,
               industries: draftInd,
               sources: draftSrc,
+              authors: draftAuthors,
+              regions: draftRegions,
               onlyRelevant: draftOnly,
             })}
             className="text-xs px-3 py-1.5 rounded"
@@ -174,7 +246,7 @@ export function AdvancedFilterModal({
   return createPortal(node, document.body);
 }
 
-/** 一行筛选 — 左标签 + 右一排 checkbox.对齐 image copy.png 视觉. */
+/** 一行筛选 — 左标签 + 右一排 checkbox.贴 image copy.png 的视觉. */
 function FilterRow({ label, children }:
   { label: string; children: React.ReactNode }) {
   return (

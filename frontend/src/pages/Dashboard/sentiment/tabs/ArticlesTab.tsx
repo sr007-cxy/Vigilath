@@ -12,7 +12,9 @@ import type {
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
-import { FilterChip } from '../components/filterChips';
+import {
+  FilterChip, GridChip, ExpandableGridChip,
+} from '../components/filterChips';
 import {
   AdvancedFilterModal, type AdvancedFilterValue,
 } from '../components/AdvancedFilterModal';
@@ -723,16 +725,25 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
       {advancedOpen && (
         <AdvancedFilterModal
-          value={{ mediaTypes, industries, sources, onlyRelevant }}
+          value={{
+            risks, sentiments, mediaTypes, industries,
+            sources, authors, regions, onlyRelevant,
+          }}
           platforms={platforms}
           axisCounts={axisCounts}
           sourceCounts={sourceCounts}
+          authorOptions={authorOptions}
+          regionOptions={regionOptions}
           platformLabel={platformLabel}
           onCancel={() => setAdvancedOpen(false)}
           onSave={(v: AdvancedFilterValue) => {
+            setRisks(v.risks);
+            setSentiments(v.sentiments);
             setMediaTypes(v.mediaTypes);
             setIndustries(v.industries);
             setSources(v.sources);
+            setAuthors(v.authors);
+            setRegions(v.regions);
             setOnlyRelevant(v.onlyRelevant);
             setAdvancedOpen(false);
           }}
@@ -903,7 +914,7 @@ function FilterRail({
   authors, setAuthors, regions, setRegions,
   onlyRelevant, setOnlyRelevant,
   authorOptions, regionOptions,
-  posts, platformCodes, sourceCounts, axisCounts,
+  posts, platforms, platformCodes, sourceCounts, axisCounts,
   platformLabel, topic, setTopic, onReset, toggle,
 }: FilterRailProps) {
   return (
@@ -939,102 +950,132 @@ function FilterRail({
         className="w-full px-2 py-1.5 text-xs rounded"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
 
-      {/* 风险 */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.risk')}>
+      {/* 风险 — 短列表用 flex-wrap chip */}
+      <RailSectionChips title={t('dashboard.sentiment.articles.filters.risk')}>
         {ALL_RISKS.map(r => (
           <FilterChip key={r}
             label={t(`dashboard.sentiment.articles.risk.${r}`)}
             active={risks.has(r)}
             onClick={() => setRisks(toggle(risks, r))} />
         ))}
-      </RailSection>
+      </RailSectionChips>
 
-      {/* 情感 */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.sentiment')}>
+      {/* 情感 — 短列表 */}
+      <RailSectionChips title={t('dashboard.sentiment.articles.filters.sentiment')}>
         {ALL_SENTIMENTS.map(s => (
           <FilterChip key={s}
             label={t(`dashboard.sentiment.articles.labels.${s}`)}
             active={sentiments.has(s)}
             onClick={() => setSentiments(toggle(sentiments, s))} />
         ))}
-      </RailSection>
+      </RailSectionChips>
 
-      {/* 媒体分类(行业) */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.industry')}>
+      {/* 媒体分类(行业)— 2 列 grid + ExpandableGridChip,▾ 展开行业下平台 */}
+      <RailSectionGrid title={t('dashboard.sentiment.articles.filters.industry')}>
+        <GridChip
+          label={t('dashboard.sentiment.articles.filters.all')}
+          count={posts.length}
+          active={!industries.size}
+          onClick={() => setIndustries(new Set())}
+        />
         {INDUSTRY_ORDER.map(ind => {
           const c = axisCounts.industry.get(ind) ?? 0;
-          const label = t(`dashboard.sentiment.articles.industries.${ind}`);
+          const codes = platforms.filter(p => p.industry === ind).map(p => p.code);
           return (
-            <FilterChip key={ind}
-              label={c > 0 ? `${label} ${c}` : label}
+            <ExpandableGridChip key={ind}
+              label={t(`dashboard.sentiment.articles.industries.${ind}`)}
+              count={c}
               active={industries.has(ind)}
-              onClick={() => setIndustries(toggle(industries, ind))} />
+              onToggleSelf={() => setIndustries(toggle(industries, ind))}
+              codes={codes}
+              platformLabel={platformLabel}
+              countOf={(code) => sourceCounts.get(code) ?? 0}
+              isSourceActive={(code) => sources.has(code)}
+              onToggleSource={(code) => setSources(toggle(sources, code))}
+            />
           );
         })}
-      </RailSection>
+      </RailSectionGrid>
 
-      {/* 媒体类型 */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.mediaType')}>
+      {/* 媒体类型 — 2 列 grid + ExpandableGridChip */}
+      <RailSectionGrid title={t('dashboard.sentiment.articles.filters.mediaType')}>
+        <GridChip
+          label={t('dashboard.sentiment.articles.filters.all')}
+          count={posts.length}
+          active={!mediaTypes.size}
+          onClick={() => setMediaTypes(new Set())}
+        />
         {MEDIA_TYPE_ORDER.map(mt => {
           const c = axisCounts.mediaType.get(mt) ?? 0;
           const labelKey = `dashboard.sentiment.articles.mediaTypes.${mt}`;
           const tLabel = t(labelKey);
           const display = tLabel === labelKey ? mt : tLabel;
+          const codes = platforms.filter(p => p.media_type === mt).map(p => p.code);
           return (
-            <FilterChip key={mt}
-              label={c > 0 ? `${display} ${c}` : display}
+            <ExpandableGridChip key={mt}
+              label={display}
+              count={c}
               active={mediaTypes.has(mt)}
-              onClick={() => setMediaTypes(toggle(mediaTypes, mt))} />
+              onToggleSelf={() => setMediaTypes(toggle(mediaTypes, mt))}
+              codes={codes}
+              platformLabel={platformLabel}
+              countOf={(code) => sourceCounts.get(code) ?? 0}
+              isSourceActive={(code) => sources.has(code)}
+              onToggleSource={(code) => setSources(toggle(sources, code))}
+            />
           );
         })}
-      </RailSection>
+      </RailSectionGrid>
 
-      {/* 热门媒体(平台来源) */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.popular')}>
-        <FilterChip
-          label={`${t('dashboard.sentiment.articles.filters.all')} ${posts.length}`}
+      {/* 热门媒体(平台来源)— 2 列 grid GridChip */}
+      <RailSectionGrid title={t('dashboard.sentiment.articles.filters.popular')}>
+        <GridChip
+          label={t('dashboard.sentiment.articles.filters.all')}
+          count={posts.length}
           active={!sources.size}
           onClick={() => setSources(new Set())}
         />
-        {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => {
-          const count = sourceCounts.get(s) ?? 0;
-          const display = platformLabel(s);
+        {POPULAR_PLATFORMS.filter(c => platformCodes.includes(c)).map(s => (
+          <GridChip key={s}
+            label={platformLabel(s)}
+            count={sourceCounts.get(s) ?? 0}
+            active={sources.has(s)}
+            onClick={() => setSources(toggle(sources, s))} />
+        ))}
+      </RailSectionGrid>
+
+      {/* 作者 — 2 列 grid,最多 30 个,超出滚动 */}
+      <RailSectionGrid title={t('dashboard.sentiment.articles.filters.author')}>
+        {authorOptions.length === 0 ? (
+          <span className="col-span-2 text-[11px] text-muted px-1">
+            {t('dashboard.sentiment.articles.filters.noAuthors')}
+          </span>
+        ) : authorOptions.map(([name, cnt]) => (
+          <GridChip key={name}
+            label={name}
+            count={cnt}
+            active={authors.has(name)}
+            onClick={() => setAuthors(toggle(authors, name))} />
+        ))}
+      </RailSectionGrid>
+
+      {/* 地区 — 2 列 grid */}
+      <RailSectionGrid title={t('dashboard.sentiment.articles.filters.region')}>
+        {regionOptions.length === 0 ? (
+          <span className="col-span-2 text-[11px] text-muted px-1">
+            {t('dashboard.sentiment.articles.filters.noRegions')}
+          </span>
+        ) : regionOptions.map(r => {
+          const k = `dashboard.sentiment.articles.regions.${r}`;
+          const v = t(k);
           return (
-            <FilterChip key={s}
-              label={count > 0 ? `${display} ${count}` : display}
-              active={sources.has(s)}
-              onClick={() => setSources(toggle(sources, s))} />
+            <GridChip key={r}
+              label={v === k ? r : v}
+              active={regions.has(r)}
+              onClick={() => setRegions(toggle(regions, r))} />
           );
         })}
-      </RailSection>
-
-      {/* 作者(从已加载 posts 抽 top 30) */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.author')}>
-        {authorOptions.length === 0
-          ? <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.filters.noAuthors')}</span>
-          : authorOptions.map(([name, cnt]) => (
-            <FilterChip key={name}
-              label={cnt > 1 ? `${name} ${cnt}` : name}
-              active={authors.has(name)}
-              onClick={() => setAuthors(toggle(authors, name))} />
-          ))}
-      </RailSection>
-
-      {/* 地区 */}
-      <RailSection title={t('dashboard.sentiment.articles.filters.region')}>
-        {regionOptions.length === 0
-          ? <span className="text-[11px] text-muted">{t('dashboard.sentiment.articles.filters.noRegions')}</span>
-          : regionOptions.map(r => {
-            const k = `dashboard.sentiment.articles.regions.${r}`;
-            const v = t(k);
-            return (
-              <FilterChip key={r}
-                label={v === k ? r : v}
-                active={regions.has(r)}
-                onClick={() => setRegions(toggle(regions, r))} />
-            );
-          })}
-      </RailSection>
+      </RailSectionGrid>
 
       {/* 仅相关 */}
       <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -1048,7 +1089,8 @@ function FilterRail({
   );
 }
 
-function RailSection({ title, children }:
+/** 短列表段位 — flex-wrap chip 风格 */
+function RailSectionChips({ title, children }:
   { title: string; children: React.ReactNode }) {
   return (
     <div>
@@ -1056,6 +1098,19 @@ function RailSection({ title, children }:
         {title}
       </p>
       <div className="flex flex-wrap gap-1">{children}</div>
+    </div>
+  );
+}
+
+/** 多维度段位 — 2 列 grid 紧凑罗列(对齐之前折叠区视觉) */
+function RailSectionGrid({ title, children }:
+  { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
+        {title}
+      </p>
+      <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">{children}</div>
     </div>
   );
 }
