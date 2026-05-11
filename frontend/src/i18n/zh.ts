@@ -2051,6 +2051,7 @@ const zh = {
                   "title": "帖子详情",
                   "selectPost": "请在左侧选择一条帖子",
                   "backToFilters": "返回筛选",
+                  "unknownAuthor": "佚名",
                   "originalText": "原文",
                   "openOriginal": "打开原文 ↗",
                   "aiAnalysis": "AI 分析",

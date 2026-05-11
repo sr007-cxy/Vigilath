@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import type { SentimentPost } from '../../../../types/sentiment';
 import { useSentimentPlatforms } from '../../../../hooks/useSentiment';
-import { SentimentBadge, RiskBadge, SourceBadge, InfluenceBar } from './badges';
+import { SentimentBadge, RiskBadge, InfluenceBar } from './badges';
 
 // 显示绝对日期 — 去掉 "X 天前" 相对时间。
 // 今年:'5/8 14:30';跨年:'2025-12-31 14:30'。
@@ -36,14 +36,31 @@ function countChars(s: string): number {
 }
 
 export function PostCard({ post, selected, onClick, compact }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [params] = useSearchParams();
   const highlight = params.get('q') ?? '';
   const platforms = useSentimentPlatforms().data ?? [];
-  const sourceRegion = useMemo(
-    () => new Map(platforms.map(p => [p.code, p.region] as const)),
-    [platforms],
-  );
+  // source code → { name_zh|name_en, region } 查找表
+  const platformMeta = useMemo(() => {
+    const m = new Map<string, { name: string; region: string }>();
+    for (const p of platforms) {
+      const name = i18n.language === 'zh' ? (p.name_zh || p.code) : (p.name_en || p.code);
+      m.set(p.code, { name, region: p.region });
+    }
+    return m;
+  }, [platforms, i18n.language]);
+
+  const meta = platformMeta.get(post.source);
+  // 平台名:优先 i18n 名,fallback 到 i18n 字典 sourceLabels.<code>,再 fallback 到 raw code
+  const platformName = meta?.name ?? (() => {
+    const k = `dashboard.sentiment.articles.sourceLabels.${post.source}`;
+    const v = t(k);
+    return v === k ? post.source : v;
+  })();
+  const regionKey = meta?.region && `dashboard.sentiment.articles.regions.${meta.region}`;
+  const regionLabel = regionKey ? t(regionKey) : '';
+  const showRegion = regionKey && regionLabel !== regionKey;
+
   const topics = post.topics ?? [];
   return (
     <article
@@ -55,15 +72,25 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         borderLeft: selected ? '2px solid var(--accent-primary)' : '2px solid transparent',
       }}
     >
-      {/* 头:风险 + 平台 + 区域 + 作者 ····· 日期 */}
-      <header className="flex items-center gap-1.5 flex-wrap mb-1 text-[11px] text-muted">
+      {/* 头:风险 + 平台 + 作者 + 日期 + 地区 — 明显的元信息行 */}
+      <header className="flex items-center gap-2 flex-wrap mb-1 text-xs">
         <RiskBadge level={post.risk_level} t={t} />
-        <SourceBadge source={post.source} />
-        <RegionTag source={post.source} sourceRegion={sourceRegion} t={t} />
-        {post.author && (
-          <span className="truncate max-w-[8rem]" title={post.author}>@{post.author}</span>
+        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+          {platformName}
+        </span>
+        <span className="text-muted">·</span>
+        <span className="truncate max-w-[10rem]" style={{ color: 'var(--text-secondary)' }}
+          title={post.author || ''}>
+          {post.author ? `@${post.author}` : t('dashboard.sentiment.articles.detail.unknownAuthor')}
+        </span>
+        <span className="text-muted">·</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(post.publish_time)}</span>
+        {showRegion && (
+          <>
+            <span className="text-muted">·</span>
+            <span style={{ color: 'var(--text-muted)' }}>{regionLabel}</span>
+          </>
         )}
-        <span className="ml-auto">{fmtDate(post.publish_time)}</span>
       </header>
 
       {/* 标题(粗体黑字)— 命中 ?q 时黄高亮 */}
@@ -107,24 +134,4 @@ function highlightText(text: string, needle: string): React.ReactNode {
   );
 }
 
-function RegionTag({
-  source, sourceRegion, t,
-}: {
-  source: string;
-  sourceRegion: Map<string, string>;
-  t: (k: string) => string;
-}) {
-  const region = sourceRegion.get(source);
-  if (!region) return null;
-  const key = `dashboard.sentiment.articles.regions.${region}`;
-  const label = t(key);
-  if (label === key) return null;
-  return (
-    <span
-      className="text-[10px] px-1.5 py-0.5 rounded"
-      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
-    >
-      {label}
-    </span>
-  );
-}
+// RegionTag 已并入主 header,这里删除独立组件

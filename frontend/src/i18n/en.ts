@@ -2045,6 +2045,7 @@ const en = {
                   "title": "Post detail",
                   "selectPost": "Select a post on the left",
                   "backToFilters": "Back to filters",
+                  "unknownAuthor": "Unknown",
                   "originalText": "Original",
                   "openOriginal": "Open original ↗",
                   "aiAnalysis": "AI analysis",
