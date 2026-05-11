@@ -72,9 +72,16 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         borderLeft: selected ? '2px solid var(--accent-primary)' : '2px solid transparent',
       }}
     >
-      {/* 头:风险 + 平台 + 作者 + 日期 + 地区 — 明显的元信息行 */}
-      <header className="flex items-center gap-2 flex-wrap mb-1 text-xs">
+      {/* 行 1: [Risk] 标题(粗体黑字)— 命中 ?q 时黄高亮 */}
+      <div className="flex items-start gap-2 mb-1">
         <RiskBadge level={post.risk_level} t={t} />
+        <h4 className="font-semibold text-sm text-primary leading-snug line-clamp-2 flex-1 min-w-0">
+          {highlightText(post.title || '(无标题)', highlight)}
+        </h4>
+      </div>
+
+      {/* 行 2: 平台 · @账号 · 发布时间 · 地区 */}
+      <div className="flex items-center gap-2 flex-wrap mb-1 text-[11px]">
         <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
           {platformName}
         </span>
@@ -91,21 +98,16 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
             <span style={{ color: 'var(--text-muted)' }}>{regionLabel}</span>
           </>
         )}
-      </header>
+      </div>
 
-      {/* 标题(粗体黑字)— 命中 ?q 时黄高亮 */}
-      <h4 className="font-semibold text-sm text-primary leading-snug line-clamp-2 mb-0.5">
-        {highlightText(post.title || '(无标题)', highlight)}
-      </h4>
-
-      {/* 摘要 — 同样黄高亮 */}
+      {/* 行 3: 摘要 — 黄高亮 */}
       {!compact && post.summary && (
         <p className="text-xs text-secondary line-clamp-2 mb-1.5">
           {highlightText(post.summary, highlight)}
         </p>
       )}
 
-      {/* 尾:情感 + 影响力 + 计数 + 话题 chip,紧凑一行 */}
+      {/* 底:情感 + 影响力 + 计数 + 话题 chip,紧凑一行(详情里也有,卡片留个浓缩条) */}
       <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted">
         <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
         <InfluenceBar value={post.influence_potential} />
