@@ -162,6 +162,19 @@ class TrendPoint(BaseModel):
     values: dict[str, int]   # engine -> citation count for that day
 
 
+class DomainCount(BaseModel):
+    domain: str
+    count: int
+    pct: float                    # 0-100,本 domain 占总 citations 的百分比
+
+
+class OwnedSplit(BaseModel):
+    owned: int                    # 命中自家关键词的 citation 数
+    other: int                    # 未命中的 citation 数
+    owned_pct: float              # 0-100
+    delta_pct: Optional[float] = None   # 与上一周期 owned_pct 相比
+
+
 class OverviewOut(BaseModel):
     topic_id: int
     period_days: int
@@ -173,3 +186,6 @@ class OverviewOut(BaseModel):
     engines_total: int
     trend: list[TrendPoint]      # 按天 bucket 的引用数,每天 dict[engine]=count
     engines: list[str]           # 趋势图要绘制的引擎(本期出现过的)
+    top_domains: list[DomainCount]                  # 按引用次数降序前 10
+    owned_split: OwnedSplit                         # 自家 vs 其他
+    engine_domain_matrix: dict[str, dict[str, int]] # engine -> {domain: count},只含 top_domains

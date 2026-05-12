@@ -71,6 +71,19 @@ export interface TrendPoint {
   values: Partial<Record<EngineId, number>>;
 }
 
+export interface DomainCount {
+  domain: string;
+  count: number;
+  pct: number;
+}
+
+export interface OwnedSplit {
+  owned: number;
+  other: number;
+  owned_pct: number;
+  delta_pct: number | null;
+}
+
 export interface Overview {
   topic_id: number;
   period_days: number;
@@ -82,6 +95,9 @@ export interface Overview {
   engines_total: number;
   trend: TrendPoint[];
   engines: EngineId[];
+  top_domains: DomainCount[];
+  owned_split: OwnedSplit;
+  engine_domain_matrix: Partial<Record<EngineId, Record<string, number>>>;
 }
 
 export function isMockMode(): boolean {
@@ -203,6 +219,12 @@ export const aiTelemetryApi = {
         engines_total: 10,
         trend,
         engines: ['deepseek', 'qwen'],
+        top_domains: [
+          { domain: 'zhihu.com', count: 42, pct: 18 },
+          { domain: 'baike.baidu.com', count: 28, pct: 12 },
+        ],
+        owned_split: { owned: 24, other: 200, owned_pct: 10.7, delta_pct: 2.1 },
+        engine_domain_matrix: { deepseek: { 'zhihu.com': 8 }, qwen: { 'baike.baidu.com': 5 } },
       });
     }
     return request<Overview>('GET', `/topics/${topicId}/overview?period=${periodDays}`, token);

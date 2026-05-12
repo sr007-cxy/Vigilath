@@ -21,8 +21,8 @@ from geo.api.auth import get_current_user
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
     AiTelemetryResponseORM, AiTelemetryRunORM, AiTelemetryTopicORM,
-    KpiBlock, OverviewOut, ResponseOut, RunNowResult, RunOut, TopicOut,
-    TopicPayload, TrendPoint, VALID_ENGINES,
+    DomainCount, KpiBlock, OverviewOut, OwnedSplit, ResponseOut, RunNowResult,
+    RunOut, TopicOut, TopicPayload, TrendPoint, VALID_ENGINES,
 )
 from geo.models.sentiment import SentimentAccountORM
 from geo.models.user import User
@@ -315,6 +315,56 @@ def topic_overview(
         # 简化:visibility sparkline 与 citations 用同形状(每天 mention 率算法太重,前端先不展示精确)
         sparkline_vis.append(float(sum(day_vals.values())))
 
+    # ── 引用分析:Top domains + owned/other + engine×domain 矩阵 ──
+    def _domain_stats(rows: list[AiTelemetryResponseORM]) -> tuple[dict[str, int], int, int, dict[str, dict[str, int]]]:
+        """返回 (domain_total_count, owned_count, total_cit_count, engine_domain[engine][domain] = count)."""
+        domain_count: dict[str, int] = {}
+        owned = 0
+        total = 0
+        engine_domain: dict[str, dict[str, int]] = {}
+        for r in rows:
+            if r.error:
+                continue
+            cits = json.loads(r.citations_json or "[]")
+            for c in cits:
+                d = (c.get("domain") or "").lower().strip()
+                if not d:
+                    continue
+                domain_count[d] = domain_count.get(d, 0) + 1
+                total += 1
+                eng = engine_domain.setdefault(r.engine, {})
+                eng[d] = eng.get(d, 0) + 1
+                if brand_lc and any(k in d for k in brand_lc):
+                    owned += 1
+        return domain_count, owned, total, engine_domain
+
+    curr_domains, curr_owned, curr_total_cit, curr_engine_domain = _domain_stats(rows_curr)
+    _, prev_owned, prev_total_cit, _ = _domain_stats(rows_prev)
+
+    top_n = sorted(curr_domains.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+    top_domains_out = [
+        DomainCount(
+            domain=d, count=c,
+            pct=round(c / curr_total_cit * 100, 1) if curr_total_cit > 0 else 0.0,
+        )
+        for d, c in top_n
+    ]
+    top_set = {d for d, _ in top_n}
+
+    # 只保留 top domains 的 engine 矩阵,前端 heatmap 用
+    engine_domain_filtered: dict[str, dict[str, int]] = {}
+    for eng, dom_map in curr_engine_domain.items():
+        engine_domain_filtered[eng] = {d: c for d, c in dom_map.items() if d in top_set}
+
+    curr_owned_pct = round(curr_owned / curr_total_cit * 100, 1) if curr_total_cit > 0 else 0.0
+    prev_owned_pct = (prev_owned / prev_total_cit * 100) if prev_total_cit > 0 else 0.0
+    owned_split = OwnedSplit(
+        owned=curr_owned,
+        other=curr_total_cit - curr_owned,
+        owned_pct=curr_owned_pct,
+        delta_pct=_delta(curr_owned_pct, prev_owned_pct),
+    )
+
     return OverviewOut(
         topic_id=topic_id,
         period_days=period_days,
@@ -342,6 +392,9 @@ def topic_overview(
         engines_total=engines_total,
         trend=trend,
         engines=sorted(engines_in_window),
+        top_domains=top_domains_out,
+        owned_split=owned_split,
+        engine_domain_matrix=engine_domain_filtered,
     )
 
 

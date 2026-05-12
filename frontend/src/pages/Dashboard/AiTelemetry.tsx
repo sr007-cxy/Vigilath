@@ -16,11 +16,12 @@ import { PageHead } from '../../components/PageHead';
 import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
-  type RunSummary, type ResponseRow, type Overview,
+  type RunSummary, type ResponseRow, type Overview, type DomainCount,
+  type OwnedSplit,
 } from '../../services/aiTelemetryApi';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  AreaChart, Area,
+  AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 
 type TabKey = 'overview' | 'config' | 'results';
@@ -335,6 +336,261 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
 
       {/* 趋势图 */}
       <TrendChart data={data} loading={loading} />
+
+      {/* 引用分析:Top 10 + Owned vs Other */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="md:col-span-2">
+          <TopDomainsBlock data={data?.top_domains ?? []} loading={loading} />
+        </div>
+        <OwnedSplitBlock data={data?.owned_split} loading={loading} />
+      </div>
+
+      {/* 引擎 × 平台 heatmap */}
+      <EngineDomainMatrix
+        engines={data?.engines ?? []}
+        topDomains={data?.top_domains ?? []}
+        matrix={data?.engine_domain_matrix ?? {}}
+        loading={loading}
+      />
+    </div>
+  );
+}
+
+// ── 引用分析:Top 10 ────────────────────────────────────────────
+
+function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: boolean }) {
+  const { t } = useTranslation();
+  const max = Math.max(1, ...data.map(d => d.count));
+
+  return (
+    <div
+      className="rounded-lg p-4 h-full"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <h3 className="text-sm font-medium text-primary mb-3">
+        {t('dashboard.aiTelemetry.overview.topDomainsTitle')}
+      </h3>
+      {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
+      {!loading && data.length === 0 && (
+        <div className="text-sm text-muted py-6 text-center">
+          {t('dashboard.aiTelemetry.overview.topDomainsEmpty')}
+        </div>
+      )}
+      {!loading && data.length > 0 && (
+        <ul className="space-y-1.5">
+          {data.map((d, i) => (
+            <li key={d.domain} className="flex items-center gap-2 text-xs">
+              <span className="text-muted w-5 text-right">{i + 1}</span>
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${d.domain}&sz=16`}
+                alt="" width={14} height={14}
+                className="rounded flex-shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+              />
+              <span className="text-primary truncate flex-shrink-0 w-40">{d.domain}</span>
+              <div className="flex-1 h-2 rounded" style={{ background: 'var(--bg-input)' }}>
+                <div
+                  className="h-full rounded"
+                  style={{
+                    width: `${(d.count / max) * 100}%`,
+                    background: 'var(--accent-primary)',
+                    opacity: 0.7,
+                  }}
+                />
+              </div>
+              <span className="text-secondary w-10 text-right tabular-nums">{d.count}</span>
+              <span className="text-muted w-12 text-right tabular-nums">{d.pct.toFixed(1)}%</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── 引用分析:自家 vs 其他 ─────────────────────────────────────
+
+function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; loading: boolean }) {
+  const { t } = useTranslation();
+  const empty = !data || (data.owned === 0 && data.other === 0);
+  const pieData = data ? [
+    { name: 'owned', value: data.owned },
+    { name: 'other', value: data.other },
+  ] : [];
+
+  return (
+    <div
+      className="rounded-lg p-4 h-full flex flex-col"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <h3 className="text-sm font-medium text-primary mb-3">
+        {t('dashboard.aiTelemetry.overview.ownedTitle')}
+      </h3>
+      {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted">…</div>}
+      {!loading && empty && (
+        <div className="flex-1 flex items-center justify-center text-sm text-muted text-center px-2">
+          {t('dashboard.aiTelemetry.overview.topDomainsEmpty')}
+        </div>
+      )}
+      {!loading && !empty && data && (
+        <>
+          <div className="h-32 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData} dataKey="value" nameKey="name"
+                  cx="50%" cy="50%" innerRadius={36} outerRadius={56}
+                  strokeWidth={0} isAnimationActive={false}
+                >
+                  <Cell fill="var(--accent-primary)" />
+                  <Cell fill="var(--bg-input)" />
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xl font-semibold text-primary">{data.owned_pct.toFixed(1)}%</span>
+              <span className="text-[10px] text-muted">{t('dashboard.aiTelemetry.overview.ownedLegendOwned')}</span>
+            </div>
+          </div>
+          <div className="flex justify-around text-xs mt-2">
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
+              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOwned')}</span>
+              <span className="text-primary font-medium">{data.owned}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }} />
+              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOther')}</span>
+              <span className="text-primary font-medium">{data.other}</span>
+            </div>
+          </div>
+          {data.delta_pct !== null && data.delta_pct !== undefined && (
+            <div className="text-xs text-center mt-1">
+              <span className={data.delta_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                {data.delta_pct >= 0 ? '↑' : '↓'} {Math.abs(data.delta_pct).toFixed(1)}% vs 上期
+              </span>
+            </div>
+          )}
+          <div className="text-[10px] text-muted mt-2 text-center">
+            {t('dashboard.aiTelemetry.overview.ownedHint')}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 引用分析:引擎 × 平台 heatmap ──────────────────────────────
+
+function EngineDomainMatrix({
+  engines, topDomains, matrix, loading,
+}: {
+  engines: EngineId[];
+  topDomains: DomainCount[];
+  matrix: Partial<Record<EngineId, Record<string, number>>>;
+  loading: boolean;
+}) {
+  const { t } = useTranslation();
+  const empty = engines.length === 0 || topDomains.length === 0;
+
+  // 算 max 用于色深归一化
+  let maxVal = 0;
+  for (const e of engines) {
+    const row = matrix[e] || {};
+    for (const d of topDomains) {
+      maxVal = Math.max(maxVal, row[d.domain] || 0);
+    }
+  }
+  if (maxVal === 0) maxVal = 1;
+
+  const cellBg = (v: number): string => {
+    if (v === 0) return 'transparent';
+    const alpha = 0.15 + (v / maxVal) * 0.75; // 0.15 - 0.90
+    return `rgba(91, 108, 255, ${alpha.toFixed(2)})`;
+  };
+
+  return (
+    <div
+      className="rounded-lg p-4"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-primary">
+          {t('dashboard.aiTelemetry.overview.matrixTitle')}
+        </h3>
+        {!empty && (
+          <span className="text-[10px] text-muted">
+            {t('dashboard.aiTelemetry.overview.matrixHint')}
+          </span>
+        )}
+      </div>
+      {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
+      {!loading && empty && (
+        <div className="text-sm text-muted py-6 text-center">
+          {t('dashboard.aiTelemetry.overview.matrixEmpty')}
+        </div>
+      )}
+      {!loading && !empty && (
+        <div className="overflow-x-auto">
+          <table className="text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="px-2 py-1 text-left text-muted font-normal sticky left-0"
+                  style={{ background: 'var(--bg-card)' }}>引擎\平台</th>
+                {topDomains.map(d => (
+                  <th key={d.domain} className="px-1 py-1 font-normal text-muted">
+                    <div
+                      className="whitespace-nowrap text-[10px]"
+                      style={{ writingMode: 'vertical-rl', height: 80, transform: 'rotate(180deg)' }}
+                    >
+                      {d.domain}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {engines.map(e => {
+                const row = matrix[e] || {};
+                return (
+                  <tr key={e}>
+                    <td
+                      className="px-2 py-1 text-primary sticky left-0 font-medium"
+                      style={{ background: 'var(--bg-card)' }}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: ENGINE_COLORS[e] || '#888' }}
+                        />
+                        {t(`dashboard.aiTelemetry.engine.${e}`, e)}
+                      </span>
+                    </td>
+                    {topDomains.map(d => {
+                      const v = row[d.domain] || 0;
+                      return (
+                        <td
+                          key={d.domain}
+                          className="text-center tabular-nums"
+                          style={{
+                            background: cellBg(v),
+                            color: v >= maxVal * 0.6 ? 'white' : 'var(--text-secondary)',
+                            width: 36, height: 28,
+                            border: '1px solid var(--border-color)',
+                          }}
+                          title={`${e} × ${d.domain}: ${v}`}
+                        >
+                          {v || ''}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
