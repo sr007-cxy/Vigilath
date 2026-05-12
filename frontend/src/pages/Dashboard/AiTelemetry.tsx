@@ -16,15 +16,26 @@ import { PageHead } from '../../components/PageHead';
 import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
-  type RunSummary, type ResponseRow,
+  type RunSummary, type ResponseRow, type Overview,
 } from '../../services/aiTelemetryApi';
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  AreaChart, Area,
+} from 'recharts';
 
-type TabKey = 'config' | 'results';
+type TabKey = 'overview' | 'config' | 'results';
+
+const ENGINE_COLORS: Record<EngineId, string> = {
+  deepseek: '#5B6CFF', doubao: '#FF7043', qwen: '#7E57C2',
+  wenxin: '#26A69A', yuanbao: '#EF5350',
+  chatgpt: '#10A37F', claude: '#C97650', gemini: '#4285F4',
+  grok: '#9CA3AF', copilot: '#0078D4',
+};
 
 export function AiTelemetry() {
   const { t } = useTranslation();
   const token = localStorage.getItem('token') || '';
-  const [tab, setTab] = useState<TabKey>('config');
+  const [tab, setTab] = useState<TabKey>('overview');
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
@@ -83,7 +94,7 @@ export function AiTelemetry() {
       </header>
 
       <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
-        {(['config', 'results'] as TabKey[]).map(k => (
+        {(['overview', 'config', 'results'] as TabKey[]).map(k => (
           <button
             key={k}
             type="button"
@@ -94,11 +105,12 @@ export function AiTelemetry() {
               color: tab === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
             }}
           >
-            {t(`dashboard.aiTelemetry.tab${k === 'config' ? 'Config' : 'Results'}`)}
+            {t(`dashboard.aiTelemetry.tab${k.charAt(0).toUpperCase() + k.slice(1)}`)}
           </button>
         ))}
       </div>
 
+      {tab === 'overview' && <OverviewTab topics={topics} token={token} />}
       {tab === 'config' && (
         <TopicTable
           topics={topics} loading={loading}
@@ -214,6 +226,270 @@ function renderStatus(s?: string | null) {
   };
   const [icon, color] = map[s] || ['?', 'text-muted'];
   return <span className={color}>{icon} {s}</span>;
+}
+
+// ── 概览 ───────────────────────────────────────────────────────
+
+function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
+  const { t } = useTranslation();
+  const [topicId, setTopicId] = useState<number | null>(null);
+  const [period, setPeriod] = useState<7 | 30 | 90>(30);
+  const [data, setData] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
+  }, [topics, topicId]);
+
+  useEffect(() => {
+    if (topicId === null) return;
+    setLoading(true);
+    aiTelemetryApi.getOverview(topicId, period, token)
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [topicId, period, token]);
+
+  if (topics.length === 0) {
+    return <EmptyHint text={t('dashboard.aiTelemetry.empty')} />;
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-input)', border: '1px solid var(--border-color)',
+    color: 'var(--text-primary)',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 顶部控制行 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="text-xs text-secondary">
+          {t('dashboard.aiTelemetry.overview.selectTopic')}
+          <select
+            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+            className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
+          >
+            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
+          </select>
+        </label>
+        <div className="flex gap-1" style={{ background: 'var(--bg-input)', borderRadius: 6, padding: 2 }}>
+          {([7, 30, 90] as const).map(p => (
+            <button
+              key={p} type="button"
+              onClick={() => setPeriod(p)}
+              className="px-3 py-1 text-xs rounded"
+              style={{
+                background: period === p ? 'var(--accent-primary)' : 'transparent',
+                color: period === p ? 'white' : 'var(--text-secondary)',
+              }}
+            >
+              {t(`dashboard.aiTelemetry.overview.period${p}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {data && data.brand_keywords.length === 0 && (
+        <div className="text-xs text-amber-500 px-3 py-2 rounded"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
+          ⚠ {t('dashboard.aiTelemetry.overview.noBrand')}
+        </div>
+      )}
+
+      {/* 4 KPI 卡 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          label={t('dashboard.aiTelemetry.overview.kpiVisibility')}
+          value={data?.visibility.value ?? 0}
+          unit={t('dashboard.aiTelemetry.overview.kpiVisibilityUnit')}
+          delta={data?.visibility.delta_pct ?? null}
+          sparkline={data?.visibility.sparkline ?? []}
+          loading={loading}
+        />
+        <KpiCard
+          label={t('dashboard.aiTelemetry.overview.kpiCitations')}
+          value={data?.citations.value ?? 0}
+          delta={data?.citations.delta_pct ?? null}
+          sparkline={data?.citations.sparkline ?? []}
+          loading={loading}
+          fmt="int"
+        />
+        <KpiCard
+          label={t('dashboard.aiTelemetry.overview.kpiGrowth')}
+          value={data?.growth.value ?? 0}
+          unit="%"
+          delta={null}
+          sparkline={[]}
+          loading={loading}
+          accentByValue
+        />
+        <KpiCard
+          label={t('dashboard.aiTelemetry.overview.kpiEngines')}
+          value={data?.engines_covered.value ?? 0}
+          unit={`/${data?.engines_total ?? 0}`}
+          delta={data?.engines_covered.delta_pct ?? null}
+          sparkline={[]}
+          loading={loading}
+          fmt="int"
+        />
+      </div>
+
+      {/* 趋势图 */}
+      <TrendChart data={data} loading={loading} />
+    </div>
+  );
+}
+
+interface KpiCardProps {
+  label: string;
+  value: number;
+  unit?: string;
+  delta: number | null;
+  sparkline: number[];
+  loading: boolean;
+  fmt?: 'int' | 'float';
+  /** 大数字的颜色:value 为正绿、负红 */
+  accentByValue?: boolean;
+}
+
+function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue }: KpiCardProps) {
+  const display = fmt === 'int'
+    ? Math.round(value).toLocaleString()
+    : (Number.isInteger(value) ? value.toString() : value.toFixed(1));
+  const accent = accentByValue
+    ? (value > 0 ? 'text-emerald-500' : value < 0 ? 'text-rose-500' : 'text-primary')
+    : 'text-primary';
+
+  return (
+    <div
+      className="rounded-lg px-4 py-3"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <div className="text-xs text-secondary mb-1">{label}</div>
+      <div className="flex items-baseline gap-1">
+        <span className={`text-2xl font-semibold ${accent}`}>
+          {loading ? '…' : (accentByValue && value > 0 ? '+' : '') + display}
+        </span>
+        {unit && <span className="text-xs text-muted">{unit}</span>}
+      </div>
+      <div className="flex items-center justify-between mt-1 h-8">
+        <span className="text-xs">
+          {delta !== null && delta !== undefined && (
+            <span className={delta >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(0)}%
+            </span>
+          )}
+        </span>
+        {sparkline.length > 1 && (
+          <div className="w-20 h-8">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={sparkline.map((v, i) => ({ i, v }))}>
+                <Area
+                  type="monotone" dataKey="v"
+                  stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.15}
+                  strokeWidth={1.5} dot={false} isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrendChart({ data, loading }: { data: Overview | null; loading: boolean }) {
+  const { t } = useTranslation();
+
+  if (loading) {
+    return (
+      <div
+        className="h-64 rounded-lg flex items-center justify-center text-sm text-muted"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      >…</div>
+    );
+  }
+
+  if (!data || data.engines.length === 0) {
+    return (
+      <div
+        className="h-64 rounded-lg flex items-center justify-center text-sm text-muted px-4 text-center"
+        style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-color)' }}
+      >
+        {t('dashboard.aiTelemetry.overview.trendEmpty')}
+      </div>
+    );
+  }
+
+  // 把 trend 数据 flatten 成 recharts 用的形式:每天一行,每个 engine 一列
+  const chartData = data.trend.map(p => {
+    const row: any = { date: p.date.slice(5) }; // 月-日
+    for (const e of data.engines) {
+      row[e] = p.values[e] ?? 0;
+    }
+    return row;
+  });
+
+  return (
+    <div
+      className="rounded-lg p-4"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-primary">
+          {t('dashboard.aiTelemetry.overview.trendTitle')}
+        </h3>
+        <div className="flex flex-wrap gap-3 text-xs">
+          {data.engines.map(e => (
+            <span key={e} className="flex items-center gap-1 text-secondary">
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: ENGINE_COLORS[e] || '#888' }}
+              />
+              {t(`dashboard.aiTelemetry.engine.${e}`, e)}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.4} />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              axisLine={{ stroke: 'var(--border-color)' }}
+            />
+            <YAxis
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              axisLine={{ stroke: 'var(--border-color)' }}
+            />
+            <Tooltip
+              contentStyle={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+              labelStyle={{ color: 'var(--text-primary)' }}
+            />
+            <Legend wrapperStyle={{ display: 'none' }} />
+            {data.engines.map(e => (
+              <Line
+                key={e}
+                type="monotone"
+                dataKey={e}
+                stroke={ENGINE_COLORS[e] || '#888'}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 }
 
 // ── 跑批结果 ───────────────────────────────────────────────────

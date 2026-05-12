@@ -60,6 +60,30 @@ export interface ResponseRow {
   created_at: string;
 }
 
+export interface KpiBlock {
+  value: number;
+  delta_pct: number | null;
+  sparkline: number[];
+}
+
+export interface TrendPoint {
+  date: string;
+  values: Partial<Record<EngineId, number>>;
+}
+
+export interface Overview {
+  topic_id: number;
+  period_days: number;
+  brand_keywords: string[];
+  visibility: KpiBlock;
+  citations: KpiBlock;
+  growth: KpiBlock;
+  engines_covered: KpiBlock;
+  engines_total: number;
+  trend: TrendPoint[];
+  engines: EngineId[];
+}
+
 export function isMockMode(): boolean {
   return String(import.meta.env.VITE_USE_MOCK_AI_TELEMETRY || '').toLowerCase() === '1';
 }
@@ -161,5 +185,26 @@ export const aiTelemetryApi = {
   async listResponses(runId: number, token: string): Promise<ResponseRow[]> {
     if (isMockMode()) return Promise.resolve([]);
     return request<ResponseRow[]>('GET', `/runs/${runId}/responses`, token);
+  },
+
+  async getOverview(topicId: number, periodDays: number, token: string): Promise<Overview> {
+    if (isMockMode()) {
+      const trend = Array.from({ length: periodDays }, (_, i) => ({
+        date: new Date(Date.now() - (periodDays - 1 - i) * 86400000).toISOString().slice(0, 10),
+        values: { deepseek: Math.floor(Math.random() * 10), qwen: Math.floor(Math.random() * 8) },
+      }));
+      return Promise.resolve({
+        topic_id: topicId, period_days: periodDays,
+        brand_keywords: ['mock'],
+        visibility: { value: 78, delta_pct: 12, sparkline: trend.map(t => t.values.deepseek || 0) },
+        citations: { value: 1248, delta_pct: 16, sparkline: trend.map(t => t.values.deepseek || 0) },
+        growth: { value: 32, delta_pct: null, sparkline: [] },
+        engines_covered: { value: 5, delta_pct: null, sparkline: [] },
+        engines_total: 10,
+        trend,
+        engines: ['deepseek', 'qwen'],
+      });
+    }
+    return request<Overview>('GET', `/topics/${topicId}/overview?period=${periodDays}`, token);
   },
 };

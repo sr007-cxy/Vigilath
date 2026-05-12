@@ -1819,6 +1819,7 @@ const zh = {
             "aiTelemetry": {
               "title": "AI 遥测",
               "subtitle": "每天自动向各 AI 引擎询问你关心的话题,记录答案与引用",
+              "tabOverview": "概览",
               "tabConfig": "话题配置",
               "tabResults": "跑批结果",
               "newTopic": "新建话题",
@@ -1838,6 +1839,22 @@ const zh = {
                 "delete": "删除",
                 "run": "跑一次",
                 "running": "运行中"
+              },
+              "overview": {
+                "period7": "7 天",
+                "period30": "30 天",
+                "period90": "90 天",
+                "kpiVisibility": "AI 可见度",
+                "kpiVisibilityUnit": "/100",
+                "kpiCitations": "AI 引用数",
+                "kpiGrowth": "引用增长率",
+                "kpiEngines": "覆盖 AI 引擎",
+                "trendTitle": "AI 引用趋势",
+                "trendEmpty": "本周期暂无引用数据,等定时跑批或点列表「跑一次」",
+                "selectTopic": "选择话题",
+                "noBrand": "未配置品牌词,AI 可见度无法计算 — 请在 账户/品牌设置 里填品牌名 / 别名",
+                "tooltipCitations": "引用",
+                "tooltipDate": "日期"
               },
               "results": {
                 "selectTopic": "选择话题",

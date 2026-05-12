@@ -149,3 +149,27 @@ class ResponseOut(BaseModel):
     video_url: Optional[str]
     error: Optional[str]
     created_at: datetime
+
+
+class KpiBlock(BaseModel):
+    value: float
+    delta_pct: Optional[float] = None    # 与上一周期相比,百分比;None 表示不可比
+    sparkline: list[float] = Field(default_factory=list)  # 周期内每日序列
+
+
+class TrendPoint(BaseModel):
+    date: str   # YYYY-MM-DD
+    values: dict[str, int]   # engine -> citation count for that day
+
+
+class OverviewOut(BaseModel):
+    topic_id: int
+    period_days: int
+    brand_keywords: list[str]
+    visibility: KpiBlock         # 0-100,品牌提及率 × 100
+    citations: KpiBlock          # 引用总数
+    growth: KpiBlock             # 引用增长率(= citations.delta_pct,单独成卡显示主数)
+    engines_covered: KpiBlock    # 有 ≥1 成功 response 的引擎数
+    engines_total: int
+    trend: list[TrendPoint]      # 按天 bucket 的引用数,每天 dict[engine]=count
+    engines: list[str]           # 趋势图要绘制的引擎(本期出现过的)

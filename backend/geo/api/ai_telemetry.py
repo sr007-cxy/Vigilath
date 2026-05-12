@@ -15,12 +15,16 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timedelta, timezone
+
 from geo.api.auth import get_current_user
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
     AiTelemetryResponseORM, AiTelemetryRunORM, AiTelemetryTopicORM,
-    ResponseOut, RunNowResult, RunOut, TopicOut, TopicPayload, VALID_ENGINES,
+    KpiBlock, OverviewOut, ResponseOut, RunNowResult, RunOut, TopicOut,
+    TopicPayload, TrendPoint, VALID_ENGINES,
 )
+from geo.models.sentiment import SentimentAccountORM
 from geo.models.user import User
 from sqlalchemy import func
 
@@ -205,6 +209,140 @@ def list_runs(
           .all()
     ) if rows else {}
     return [RunOut.from_orm_row(r, response_count=counts.get(r.id, 0)) for r in rows]
+
+
+@router.get("/topics/{topic_id}/overview", response_model=OverviewOut)
+def topic_overview(
+    topic_id: int,
+    period: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """概览页聚合 — 4 KPI 卡 + 每日引擎趋势 series.
+
+    KPI 口径:
+      - visibility = (含品牌词的 response 数 / 总 response 数) × 100
+      - citations = sum(len(citations_json)) 周期内所有 response
+      - growth = citations 相对上一周期的 pct change
+      - engines_covered = 本期有 ≥1 成功 response 的引擎数 / topic.engines 总数
+    品牌词来源:用户的 sentiment_account.target + aliases.
+    """
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    now = datetime.utcnow()
+    period_start = now - timedelta(days=period_days)
+    prev_start = period_start - timedelta(days=period_days)
+
+    # 品牌词
+    acc = (
+        db.query(SentimentAccountORM)
+          .filter_by(user_id=current_user.id, active=True)
+          .order_by(SentimentAccountORM.created_at.asc())
+          .first()
+    )
+    brand_keywords: list[str] = []
+    if acc:
+        brand_keywords.append(acc.target)
+        brand_keywords.extend(json.loads(acc.aliases_json or "[]"))
+    brand_keywords = [k for k in brand_keywords if k]
+    brand_lc = [k.lower() for k in brand_keywords]
+
+    topic_engines = json.loads(topic.engines_json or "[]")
+    engines_total = len(topic_engines)
+
+    rows_curr = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= period_start)
+          .all()
+    )
+    rows_prev = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= prev_start)
+          .filter(AiTelemetryResponseORM.created_at < period_start)
+          .all()
+    )
+
+    def _aggregate(rows: list[AiTelemetryResponseORM]) -> dict:
+        cit_total = 0
+        mention_hit = 0
+        succ_engines: set[str] = set()
+        for r in rows:
+            cits = json.loads(r.citations_json or "[]")
+            cit_total += len(cits)
+            if not r.error:
+                succ_engines.add(r.engine)
+                if brand_lc and r.answer and any(k in r.answer.lower() for k in brand_lc):
+                    mention_hit += 1
+        total = sum(1 for r in rows if not r.error)
+        visibility = (mention_hit / total * 100) if total > 0 else 0.0
+        return {
+            "citations": cit_total,
+            "visibility": round(visibility, 1),
+            "engines": len(succ_engines),
+            "succ_total": total,
+        }
+
+    curr = _aggregate(rows_curr)
+    prev = _aggregate(rows_prev)
+
+    def _delta(curr_val: float, prev_val: float) -> Optional[float]:
+        if prev_val == 0:
+            return None
+        return round((curr_val - prev_val) / prev_val * 100, 1)
+
+    # 每日 trend: date -> {engine: citation_count}
+    bucket: dict[str, dict[str, int]] = {}
+    engines_in_window: set[str] = set()
+    for r in rows_curr:
+        d = r.created_at.strftime("%Y-%m-%d")
+        if d not in bucket:
+            bucket[d] = {}
+        cits = json.loads(r.citations_json or "[]")
+        bucket[d][r.engine] = bucket[d].get(r.engine, 0) + len(cits)
+        engines_in_window.add(r.engine)
+
+    # 填补缺失日期为空,保证 sparkline 连续
+    trend: list[TrendPoint] = []
+    sparkline_cit: list[float] = []
+    sparkline_vis: list[float] = []
+    for i in range(period_days):
+        d = (period_start + timedelta(days=i)).strftime("%Y-%m-%d")
+        day_vals = bucket.get(d, {})
+        trend.append(TrendPoint(date=d, values=day_vals))
+        sparkline_cit.append(float(sum(day_vals.values())))
+        # 简化:visibility sparkline 与 citations 用同形状(每天 mention 率算法太重,前端先不展示精确)
+        sparkline_vis.append(float(sum(day_vals.values())))
+
+    return OverviewOut(
+        topic_id=topic_id,
+        period_days=period_days,
+        brand_keywords=brand_keywords,
+        visibility=KpiBlock(
+            value=curr["visibility"],
+            delta_pct=_delta(curr["visibility"], prev["visibility"]),
+            sparkline=sparkline_vis,
+        ),
+        citations=KpiBlock(
+            value=float(curr["citations"]),
+            delta_pct=_delta(curr["citations"], prev["citations"]),
+            sparkline=sparkline_cit,
+        ),
+        growth=KpiBlock(
+            value=_delta(curr["citations"], prev["citations"]) or 0.0,
+            delta_pct=None,
+            sparkline=[],
+        ),
+        engines_covered=KpiBlock(
+            value=float(curr["engines"]),
+            delta_pct=_delta(curr["engines"], prev["engines"]),
+            sparkline=[],
+        ),
+        engines_total=engines_total,
+        trend=trend,
+        engines=sorted(engines_in_window),
+    )
 
 
 @router.get("/runs/{run_id}/responses", response_model=list[ResponseOut])

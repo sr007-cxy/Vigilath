@@ -1813,6 +1813,7 @@ const en = {
             "aiTelemetry": {
               "title": "AI Telemetry",
               "subtitle": "Daily probes that ask each AI engine about topics you care about, recording the answer and citations",
+              "tabOverview": "Overview",
               "tabConfig": "Topics",
               "tabResults": "Results",
               "newTopic": "New topic",
@@ -1832,6 +1833,22 @@ const en = {
                 "delete": "Delete",
                 "run": "Run",
                 "running": "Running"
+              },
+              "overview": {
+                "period7": "7 days",
+                "period30": "30 days",
+                "period90": "90 days",
+                "kpiVisibility": "AI Visibility",
+                "kpiVisibilityUnit": "/100",
+                "kpiCitations": "Citations",
+                "kpiGrowth": "Citation growth",
+                "kpiEngines": "Engines covered",
+                "trendTitle": "Citation trend",
+                "trendEmpty": "No citation data for this period yet — wait for the daily run or click \"Run\" on a topic.",
+                "selectTopic": "Topic",
+                "noBrand": "No brand keywords configured. AI visibility cannot be computed — set your brand name/aliases in Account/Brand settings.",
+                "tooltipCitations": "Citations",
+                "tooltipDate": "Date"
               },
               "results": {
                 "selectTopic": "Topic",
