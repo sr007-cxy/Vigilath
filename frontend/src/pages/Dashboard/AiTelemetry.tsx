@@ -8,7 +8,7 @@
 // Tab 2「跑批结果」:第一版占位 (Step 3 再做)
 //
 // 频率由后端固定为 daily,前端不暴露时间选择.
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -80,14 +80,27 @@ export function AiTelemetry() {
       <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
 
       <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">{t('dashboard.aiTelemetry.title')}</h1>
-          <p className="text-sm text-secondary mt-1">{t('dashboard.aiTelemetry.subtitle')}</p>
+        <div className="flex items-center gap-3">
+          <span
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg"
+            style={{ background: 'var(--accent-primary)', color: 'white' }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M2 12h3l2-6 4 12 2-6 2 3h3 4" />
+            </svg>
+          </span>
+          <div>
+            <h1 className="text-xl font-semibold text-primary leading-tight">
+              {t('dashboard.aiTelemetry.title')}
+            </h1>
+            <p className="text-xs text-secondary mt-0.5">{t('dashboard.aiTelemetry.subtitle')}</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => setEditing(null)}
-          className="px-3 py-1.5 text-sm rounded-md text-white"
+          className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
           style={{ background: 'var(--accent-primary)' }}
         >
           + {t('dashboard.aiTelemetry.newTopic')}
@@ -305,6 +318,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           delta={data?.visibility.delta_pct ?? null}
           sparkline={data?.visibility.sparkline ?? []}
           loading={loading}
+          icon="eye"
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiCitations')}
@@ -313,6 +327,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           sparkline={data?.citations.sparkline ?? []}
           loading={loading}
           fmt="int"
+          icon="link"
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiGrowth')}
@@ -322,6 +337,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           sparkline={[]}
           loading={loading}
           accentByValue
+          icon="trend"
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiEngines')}
@@ -331,6 +347,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           sparkline={[]}
           loading={loading}
           fmt="int"
+          icon="cpu"
         />
       </div>
 
@@ -365,7 +382,11 @@ function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: bool
   return (
     <div
       className="rounded-lg p-4 h-full"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}
     >
       <h3 className="text-sm font-medium text-primary mb-3">
         {t('dashboard.aiTelemetry.overview.topDomainsTitle')}
@@ -377,31 +398,44 @@ function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: bool
         </div>
       )}
       {!loading && data.length > 0 && (
-        <ul className="space-y-1.5">
-          {data.map((d, i) => (
-            <li key={d.domain} className="flex items-center gap-2 text-xs">
-              <span className="text-muted w-5 text-right">{i + 1}</span>
-              <img
-                src={`https://www.google.com/s2/favicons?domain=${d.domain}&sz=16`}
-                alt="" width={14} height={14}
-                className="rounded flex-shrink-0"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
-              />
-              <span className="text-primary truncate flex-shrink-0 w-40">{d.domain}</span>
-              <div className="flex-1 h-2 rounded" style={{ background: 'var(--bg-input)' }}>
-                <div
-                  className="h-full rounded"
-                  style={{
-                    width: `${(d.count / max) * 100}%`,
-                    background: 'var(--accent-primary)',
-                    opacity: 0.7,
-                  }}
+        <ul className="space-y-1">
+          {data.map((d, i) => {
+            const rank = i + 1;
+            const rankBg = rank <= 3 ? 'var(--accent-primary)' : 'var(--bg-input)';
+            const rankFg = rank <= 3 ? 'white' : 'var(--text-muted)';
+            return (
+              <li
+                key={d.domain}
+                className="flex items-center gap-2 text-xs py-1 px-1 rounded transition-colors hover:bg-[var(--bg-input)]"
+              >
+                <span
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-semibold"
+                  style={{ background: rankBg, color: rankFg }}
+                >
+                  {rank}
+                </span>
+                <img
+                  src={`https://www.google.com/s2/favicons?domain=${d.domain}&sz=32`}
+                  alt="" width={16} height={16}
+                  className="rounded flex-shrink-0"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
                 />
-              </div>
-              <span className="text-secondary w-10 text-right tabular-nums">{d.count}</span>
-              <span className="text-muted w-12 text-right tabular-nums">{d.pct.toFixed(1)}%</span>
-            </li>
-          ))}
+                <span className="text-primary truncate flex-shrink-0 w-40">{d.domain}</span>
+                <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-input)' }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(d.count / max) * 100}%`,
+                      background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-primary))',
+                      opacity: 0.9,
+                    }}
+                  />
+                </div>
+                <span className="text-primary w-10 text-right tabular-nums font-medium">{d.count}</span>
+                <span className="text-muted w-12 text-right tabular-nums">{d.pct.toFixed(1)}%</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -421,7 +455,11 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
   return (
     <div
       className="rounded-lg p-4 h-full flex flex-col"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}
     >
       <h3 className="text-sm font-medium text-primary mb-3">
         {t('dashboard.aiTelemetry.overview.ownedTitle')}
@@ -434,12 +472,13 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
       )}
       {!loading && !empty && data && (
         <>
-          <div className="h-32 relative">
+          <div className="h-44 relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={pieData} dataKey="value" nameKey="name"
-                  cx="50%" cy="50%" innerRadius={36} outerRadius={56}
+                  cx="50%" cy="50%" innerRadius={52} outerRadius={76}
+                  paddingAngle={data.owned > 0 && data.other > 0 ? 2 : 0}
                   strokeWidth={0} isAnimationActive={false}
                 >
                   <Cell fill="var(--accent-primary)" />
@@ -448,30 +487,35 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-xl font-semibold text-primary">{data.owned_pct.toFixed(1)}%</span>
-              <span className="text-[10px] text-muted">{t('dashboard.aiTelemetry.overview.ownedLegendOwned')}</span>
-            </div>
-          </div>
-          <div className="flex justify-around text-xs mt-2">
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
-              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOwned')}</span>
-              <span className="text-primary font-medium">{data.owned}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }} />
-              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOther')}</span>
-              <span className="text-primary font-medium">{data.other}</span>
+              <span className="text-3xl font-semibold text-primary tabular-nums">
+                {data.owned_pct.toFixed(1)}<span className="text-lg text-muted">%</span>
+              </span>
+              <span className="text-[11px] text-muted mt-0.5">
+                {t('dashboard.aiTelemetry.overview.ownedLegendOwned')}
+              </span>
             </div>
           </div>
           {data.delta_pct !== null && data.delta_pct !== undefined && (
-            <div className="text-xs text-center mt-1">
+            <div className="text-xs text-center mb-2">
               <span className={data.delta_pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                {data.delta_pct >= 0 ? '↑' : '↓'} {Math.abs(data.delta_pct).toFixed(1)}% vs 上期
+                {data.delta_pct >= 0 ? '↑' : '↓'} {Math.abs(data.delta_pct).toFixed(1)}%
               </span>
+              <span className="text-muted ml-1">vs 上期</span>
             </div>
           )}
-          <div className="text-[10px] text-muted mt-2 text-center">
+          <div className="flex justify-around text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
+              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOwned')}</span>
+              <span className="text-primary font-semibold tabular-nums">{data.owned}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }} />
+              <span className="text-secondary">{t('dashboard.aiTelemetry.overview.ownedLegendOther')}</span>
+              <span className="text-primary font-semibold tabular-nums">{data.other}</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-muted mt-3 text-center leading-relaxed">
             {t('dashboard.aiTelemetry.overview.ownedHint')}
           </div>
         </>
@@ -493,7 +537,6 @@ function EngineDomainMatrix({
   const { t } = useTranslation();
   const empty = engines.length === 0 || topDomains.length === 0;
 
-  // 算 max 用于色深归一化
   let maxVal = 0;
   for (const e of engines) {
     const row = matrix[e] || {};
@@ -504,24 +547,39 @@ function EngineDomainMatrix({
   if (maxVal === 0) maxVal = 1;
 
   const cellBg = (v: number): string => {
-    if (v === 0) return 'transparent';
-    const alpha = 0.15 + (v / maxVal) * 0.75; // 0.15 - 0.90
+    if (v === 0) return 'var(--bg-card)';
+    // 5 段量化色阶,跨度 0.30 - 0.95 alpha,对比清晰
+    const ratio = v / maxVal;
+    const alpha = 0.30 + ratio * 0.65;
     return `rgba(91, 108, 255, ${alpha.toFixed(2)})`;
   };
 
   return (
     <div
       className="rounded-lg p-4"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 className="text-sm font-medium text-primary">
           {t('dashboard.aiTelemetry.overview.matrixTitle')}
         </h3>
         {!empty && (
-          <span className="text-[10px] text-muted">
-            {t('dashboard.aiTelemetry.overview.matrixHint')}
-          </span>
+          <div className="flex items-center gap-1.5 text-[10px] text-muted">
+            <span>{t('dashboard.aiTelemetry.overview.matrixHint')}</span>
+            <span className="flex items-center gap-px ml-1">
+              {[0.30, 0.45, 0.60, 0.78, 0.95].map(a => (
+                <span
+                  key={a}
+                  className="w-3 h-3 inline-block"
+                  style={{ background: `rgba(91, 108, 255, ${a})` }}
+                />
+              ))}
+            </span>
+          </div>
         )}
       </div>
       {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
@@ -532,16 +590,27 @@ function EngineDomainMatrix({
       )}
       {!loading && !empty && (
         <div className="overflow-x-auto">
-          <table className="text-xs border-collapse">
+          <table className="text-xs border-separate" style={{ borderSpacing: 2 }}>
             <thead>
               <tr>
-                <th className="px-2 py-1 text-left text-muted font-normal sticky left-0"
-                  style={{ background: 'var(--bg-card)' }}>引擎\平台</th>
+                <th
+                  className="text-left text-muted font-normal sticky left-0 z-10 pr-3"
+                  style={{ background: 'var(--bg-card)' }}
+                />
                 {topDomains.map(d => (
-                  <th key={d.domain} className="px-1 py-1 font-normal text-muted">
+                  <th
+                    key={d.domain}
+                    className="font-normal text-secondary tabular-nums text-[10px] px-1 align-bottom"
+                    style={{ minWidth: 42 }}
+                  >
                     <div
-                      className="whitespace-nowrap text-[10px]"
-                      style={{ writingMode: 'vertical-rl', height: 80, transform: 'rotate(180deg)' }}
+                      className="whitespace-nowrap leading-tight inline-block origin-bottom-left"
+                      style={{
+                        transform: 'rotate(-45deg)',
+                        transformOrigin: 'bottom left',
+                        height: 70,
+                        paddingTop: 14,
+                      }}
                     >
                       {d.domain}
                     </div>
@@ -555,7 +624,7 @@ function EngineDomainMatrix({
                 return (
                   <tr key={e}>
                     <td
-                      className="px-2 py-1 text-primary sticky left-0 font-medium"
+                      className="text-primary sticky left-0 font-medium pr-3 whitespace-nowrap"
                       style={{ background: 'var(--bg-card)' }}
                     >
                       <span className="flex items-center gap-1.5">
@@ -571,16 +640,17 @@ function EngineDomainMatrix({
                       return (
                         <td
                           key={d.domain}
-                          className="text-center tabular-nums"
+                          className="text-center tabular-nums rounded transition-transform hover:scale-110 cursor-default"
                           style={{
                             background: cellBg(v),
-                            color: v >= maxVal * 0.6 ? 'white' : 'var(--text-secondary)',
-                            width: 36, height: 28,
-                            border: '1px solid var(--border-color)',
+                            color: v >= maxVal * 0.55 ? 'white' : (v === 0 ? 'transparent' : 'var(--text-primary)'),
+                            width: 42, height: 32,
+                            fontWeight: v >= maxVal * 0.7 ? 600 : 500,
+                            border: v === 0 ? '1px dashed var(--border-color)' : 'none',
                           }}
                           title={`${e} × ${d.domain}: ${v}`}
                         >
-                          {v || ''}
+                          {v || '·'}
                         </td>
                       );
                     })}
@@ -605,50 +675,80 @@ interface KpiCardProps {
   fmt?: 'int' | 'float';
   /** 大数字的颜色:value 为正绿、负红 */
   accentByValue?: boolean;
+  icon?: 'eye' | 'link' | 'trend' | 'cpu';
 }
 
-function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue }: KpiCardProps) {
+const KPI_ICONS: Record<string, ReactElement> = {
+  eye: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z M12 9a3 3 0 100 6 3 3 0 000-6z" />,
+  link: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71 M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />,
+  trend: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M23 6l-9.5 9.5-5-5L1 18 M17 6h6v6" />,
+  cpu: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3" />,
+};
+
+function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue, icon }: KpiCardProps) {
   const display = fmt === 'int'
     ? Math.round(value).toLocaleString()
     : (Number.isInteger(value) ? value.toString() : value.toFixed(1));
   const accent = accentByValue
     ? (value > 0 ? 'text-emerald-500' : value < 0 ? 'text-rose-500' : 'text-primary')
     : 'text-primary';
+  const hasSparkline = sparkline.length > 1 && sparkline.some(v => v > 0);
+  const hasDelta = delta !== null && delta !== undefined;
 
   return (
     <div
-      className="rounded-lg px-4 py-3"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      className="rounded-lg px-4 py-3 transition-all hover:shadow-md"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}
     >
-      <div className="text-xs text-secondary mb-1">{label}</div>
-      <div className="flex items-baseline gap-1">
-        <span className={`text-2xl font-semibold ${accent}`}>
-          {loading ? '…' : (accentByValue && value > 0 ? '+' : '') + display}
-        </span>
-        {unit && <span className="text-xs text-muted">{unit}</span>}
-      </div>
-      <div className="flex items-center justify-between mt-1 h-8">
-        <span className="text-xs">
-          {delta !== null && delta !== undefined && (
-            <span className={delta >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-              {delta >= 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(0)}%
-            </span>
-          )}
-        </span>
-        {sparkline.length > 1 && (
-          <div className="w-20 h-8">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={sparkline.map((v, i) => ({ i, v }))}>
-                <Area
-                  type="monotone" dataKey="v"
-                  stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.15}
-                  strokeWidth={1.5} dot={false} isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-secondary">{label}</span>
+        {icon && (
+          <svg
+            className="w-4 h-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            style={{ color: 'var(--accent-primary)' }}
+          >
+            {KPI_ICONS[icon]}
+          </svg>
         )}
       </div>
+      <div className="flex items-baseline gap-1">
+        <span className={`text-3xl font-semibold tabular-nums ${accent}`}>
+          {loading ? '…' : (accentByValue && value > 0 ? '+' : '') + display}
+        </span>
+        {unit && <span className="text-sm text-muted">{unit}</span>}
+      </div>
+      {(hasDelta || hasSparkline) && (
+        <div className="flex items-center justify-between mt-2 h-8">
+          {hasDelta ? (
+            <span className={`text-xs ${delta! >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              {delta! >= 0 ? '↑' : '↓'} {Math.abs(delta!).toFixed(0)}%
+            </span>
+          ) : <span />}
+          {hasSparkline && (
+            <div className="w-20 h-8">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={sparkline.map((v, i) => ({ i, v }))}>
+                  <defs>
+                    <linearGradient id={`spark-${label}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--accent-primary)" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone" dataKey="v"
+                    stroke="var(--accent-primary)" fill={`url(#spark-${label})`}
+                    strokeWidth={1.8} dot={false} isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -676,29 +776,36 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
     );
   }
 
-  // 把 trend 数据 flatten 成 recharts 用的形式:每天一行,每个 engine 一列
   const chartData = data.trend.map(p => {
-    const row: any = { date: p.date.slice(5) }; // 月-日
+    const row: any = { date: p.date.slice(5) };
     for (const e of data.engines) {
       row[e] = p.values[e] ?? 0;
     }
     return row;
   });
 
+  // X 轴稀疏:总点数 ≤ 14 时全显示;否则每 N 个显示一次,目标 8-10 个 tick
+  const totalPoints = chartData.length;
+  const tickInterval = totalPoints <= 14 ? 0 : Math.ceil(totalPoints / 8) - 1;
+
   return (
     <div
       className="rounded-lg p-4"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 className="text-sm font-medium text-primary">
           {t('dashboard.aiTelemetry.overview.trendTitle')}
         </h3>
         <div className="flex flex-wrap gap-3 text-xs">
           {data.engines.map(e => (
-            <span key={e} className="flex items-center gap-1 text-secondary">
+            <span key={e} className="flex items-center gap-1.5 text-secondary">
               <span
-                className="inline-block w-2 h-2 rounded-full"
+                className="inline-block w-2.5 h-2.5 rounded-full"
                 style={{ background: ENGINE_COLORS[e] || '#888' }}
               />
               {t(`dashboard.aiTelemetry.engine.${e}`, e)}
@@ -706,27 +813,43 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
           ))}
         </div>
       </div>
-      <div className="h-64">
+      <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.4} />
+          <LineChart data={chartData} margin={{ top: 8, right: 16, left: -8, bottom: 4 }}>
+            <defs>
+              {data.engines.map(e => (
+                <linearGradient key={e} id={`g-${e}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={ENGINE_COLORS[e] || '#888'} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={ENGINE_COLORS[e] || '#888'} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" opacity={0.3} vertical={false} />
             <XAxis
               dataKey="date"
+              interval={tickInterval}
               tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
               axisLine={{ stroke: 'var(--border-color)' }}
+              tickLine={false}
+              padding={{ left: 8, right: 8 }}
             />
             <YAxis
               tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-              axisLine={{ stroke: 'var(--border-color)' }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              width={32}
             />
             <Tooltip
               contentStyle={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
-                borderRadius: 6,
+                borderRadius: 8,
                 fontSize: 12,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
               }}
-              labelStyle={{ color: 'var(--text-primary)' }}
+              labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
+              cursor={{ stroke: 'var(--accent-primary)', strokeDasharray: '3 3', strokeOpacity: 0.5 }}
             />
             <Legend wrapperStyle={{ display: 'none' }} />
             {data.engines.map(e => (
@@ -735,9 +858,9 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
                 type="monotone"
                 dataKey={e}
                 stroke={ENGINE_COLORS[e] || '#888'}
-                strokeWidth={2}
-                dot={{ r: 3 }}
-                activeDot={{ r: 5 }}
+                strokeWidth={2.2}
+                dot={{ r: 3, strokeWidth: 0, fill: ENGINE_COLORS[e] || '#888' }}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
                 isAnimationActive={false}
               />
             ))}
