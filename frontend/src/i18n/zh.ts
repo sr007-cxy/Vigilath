@@ -1795,7 +1795,8 @@ const zh = {
               "posts": "帖子",
               "stats": "统计",
               "policy": "策略",
-              "accounts": "平台账户"
+              "accounts": "平台账户",
+              "aiTelemetry": "AI 遥测"
             },
             "home": {
               "title": "工作台",
@@ -1814,6 +1815,50 @@ const zh = {
               "activityPost": "帖子已发布",
               "activityDraft": "内容 Agent 生成草稿待审核",
               "activityPublish": "帖子已发布"
+            },
+            "aiTelemetry": {
+              "title": "AI 遥测",
+              "subtitle": "每天自动向各 AI 引擎询问你关心的话题,记录答案与引用",
+              "tabConfig": "话题配置",
+              "tabResults": "跑批结果",
+              "newTopic": "新建话题",
+              "editTopic": "编辑话题",
+              "empty": "还没有话题,点右上角「新建话题」开始",
+              "col": {
+                "enabled": "启用",
+                "name": "话题名",
+                "queries": "Query 数",
+                "engines": "引擎",
+                "lastRun": "最近跑",
+                "status": "状态",
+                "actions": "操作"
+              },
+              "form": {
+                "name": "话题名",
+                "namePlaceholder": "例如:VNET 品牌问询",
+                "queries": "关键词 / Query (每行一条,最多 10 条)",
+                "queriesPlaceholder": "世纪互联怎么样\n国内 IDC 服务商推荐\nVNET vs 万国数据",
+                "engines": "AI 引擎",
+                "enginesCN": "国内",
+                "enginesGlobal": "海外",
+                "enabled": "启用",
+                "scheduleNote": "※ 启用后每天自动跑一次,无需手动设置时间",
+                "runNow": "立即试跑一次",
+                "save": "保存",
+                "cancel": "取消"
+              },
+              "engine": {
+                "deepseek": "DeepSeek",
+                "doubao": "豆包",
+                "qwen": "通义千问",
+                "wenxin": "文心一言",
+                "yuanbao": "元宝",
+                "chatgpt": "ChatGPT",
+                "claude": "Claude",
+                "gemini": "Gemini",
+                "grok": "Grok",
+                "copilot": "Copilot"
+              }
             },
             "compose": {
               "title": "撰写",

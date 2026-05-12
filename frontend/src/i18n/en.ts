@@ -1789,7 +1789,8 @@ const en = {
               "posts": "Posts",
               "stats": "Stats",
               "policy": "Policy",
-              "accounts": "Accounts"
+              "accounts": "Accounts",
+              "aiTelemetry": "AI Telemetry"
             },
             "home": {
               "title": "Dashboard",
@@ -1808,6 +1809,50 @@ const en = {
               "activityPost": "Post published",
               "activityDraft": "Draft by Content agent for review",
               "activityPublish": "Post published"
+            },
+            "aiTelemetry": {
+              "title": "AI Telemetry",
+              "subtitle": "Daily probes that ask each AI engine about topics you care about, recording the answer and citations",
+              "tabConfig": "Topics",
+              "tabResults": "Results",
+              "newTopic": "New topic",
+              "editTopic": "Edit topic",
+              "empty": "No topics yet. Click \"New topic\" to start.",
+              "col": {
+                "enabled": "Enabled",
+                "name": "Topic",
+                "queries": "Queries",
+                "engines": "Engines",
+                "lastRun": "Last run",
+                "status": "Status",
+                "actions": "Actions"
+              },
+              "form": {
+                "name": "Topic name",
+                "namePlaceholder": "e.g. VNET brand probe",
+                "queries": "Queries (one per line, up to 10)",
+                "queriesPlaceholder": "How is VNET?\nRecommended IDC providers in China\nVNET vs GDS",
+                "engines": "AI engines",
+                "enginesCN": "CN",
+                "enginesGlobal": "Global",
+                "enabled": "Enabled",
+                "scheduleNote": "Once enabled, this topic runs automatically every day.",
+                "runNow": "Run once now",
+                "save": "Save",
+                "cancel": "Cancel"
+              },
+              "engine": {
+                "deepseek": "DeepSeek",
+                "doubao": "Doubao",
+                "qwen": "Qwen",
+                "wenxin": "Wenxin",
+                "yuanbao": "Yuanbao",
+                "chatgpt": "ChatGPT",
+                "claude": "Claude",
+                "gemini": "Gemini",
+                "grok": "Grok",
+                "copilot": "Copilot"
+              }
             },
             "compose": {
               "title": "Compose",

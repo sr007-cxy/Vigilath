@@ -45,6 +45,7 @@ const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({
 const DashboardStats = lazy(() => import('./pages/Dashboard/Stats').then(m => ({ default: m.Stats })));
 const PolicyEditor = lazy(() => import('./pages/Dashboard/PolicyEditor').then(m => ({ default: m.PolicyEditor })));
 const PlatformAccounts = lazy(() => import('./pages/Dashboard/PlatformAccounts').then(m => ({ default: m.PlatformAccounts })));
+const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
 const SentimentSettings = lazy(() => import('./pages/Dashboard/sentiment/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
@@ -115,6 +116,7 @@ function App() {
                 <Route path="stats" element={<DashboardStats />} />
                 <Route path="policy" element={<PolicyEditor />} />
                 <Route path="accounts" element={<PlatformAccounts />} />
+                <Route path="ai-telemetry" element={<AiTelemetry />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />

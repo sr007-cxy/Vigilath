@@ -15,6 +15,9 @@ from geo.models.sentiment import (  # noqa: F401 (register ORM so create_all bui
     SentimentRunLogORM,
     SentimentPlatformORM,
 )
+from geo.models.ai_telemetry import (  # noqa: F401 (register ORM)
+    AiTelemetryTopicORM, AiTelemetryRunORM, AiTelemetryResponseORM,
+)
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
