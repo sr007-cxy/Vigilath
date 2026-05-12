@@ -39,6 +39,27 @@ export interface RunNowResult {
   error?: string | null;
 }
 
+export interface RunSummary {
+  id: number;
+  topic_id: number;
+  status: 'running' | 'success' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+  response_count: number;
+}
+
+export interface ResponseRow {
+  id: number;
+  engine: EngineId;
+  query: string;
+  answer: string;
+  citations: { url: string; domain: string; title: string }[];
+  video_url: string | null;
+  error: string | null;
+  created_at: string;
+}
+
 export function isMockMode(): boolean {
   return String(import.meta.env.VITE_USE_MOCK_AI_TELEMETRY || '').toLowerCase() === '1';
 }
@@ -125,5 +146,20 @@ export const aiTelemetryApi = {
       );
     }
     return request<RunNowResult[]>('POST', '/topics/run-now', token, payload);
+  },
+
+  async triggerRun(topicId: number, token: string): Promise<{ status: string; topic_id: number }> {
+    if (isMockMode()) return Promise.resolve({ status: 'started', topic_id: topicId });
+    return request('POST', `/topics/${topicId}/run`, token);
+  },
+
+  async listRuns(topicId: number, token: string, limit = 20): Promise<RunSummary[]> {
+    if (isMockMode()) return Promise.resolve([]);
+    return request<RunSummary[]>('GET', `/topics/${topicId}/runs?limit=${limit}`, token);
+  },
+
+  async listResponses(runId: number, token: string): Promise<ResponseRow[]> {
+    if (isMockMode()) return Promise.resolve([]);
+    return request<ResponseRow[]>('GET', `/runs/${runId}/responses`, token);
   },
 };

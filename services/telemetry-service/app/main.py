@@ -97,11 +97,21 @@ async def http_run_now(body: RunNowBody):
 
 @app.post("/run-topic")
 async def http_run_topic(body: RunTopicBody):
-    """运维 / 调度兜底入口 — 按 topic_id 立刻拉起一次正式跑批(写库)."""
+    """触发一次正式跑批(写库),fire-and-forget — 立刻返回,后台跑.
+
+    单 topic 真实耗时 5-40 分钟,HTTP 不能同步等;FE 调完后轮询 GET /topics/{id}/runs.
+    """
     with db_session() as s:
         t = s.get(TopicORM, body.topic_id)
         if t is None:
             return {"status": "not_found"}
         s.expunge(t)
-    await run_topic_once(t)
-    return {"status": "ok", "topic_id": body.topic_id}
+
+    async def _bg(topic):
+        try:
+            await run_topic_once(topic)
+        except Exception as e:  # noqa: BLE001
+            log.exception("background run failed for topic %d: %s", topic.id, e)
+
+    asyncio.create_task(_bg(t))
+    return {"status": "started", "topic_id": body.topic_id}

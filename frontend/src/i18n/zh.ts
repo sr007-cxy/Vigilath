@@ -1833,6 +1833,26 @@ const zh = {
                 "status": "状态",
                 "actions": "操作"
               },
+              "actions": {
+                "edit": "编辑",
+                "delete": "删除",
+                "run": "跑一次",
+                "running": "运行中"
+              },
+              "results": {
+                "selectTopic": "选择话题",
+                "selectRun": "选择跑批",
+                "noRuns": "该话题还没有跑批记录,点列表行的「跑一次」按钮触发",
+                "noTopics": "请先建一个话题",
+                "runStatus": "状态",
+                "runStarted": "开始",
+                "runFinished": "结束",
+                "responseCount": "结果数",
+                "viewDetail": "展开",
+                "noCitations": "无引用",
+                "video": "录像",
+                "started": "已触发,跑批在后台运行,预计 5-30 分钟"
+              },
               "form": {
                 "name": "话题名",
                 "namePlaceholder": "例如:VNET 品牌问询",

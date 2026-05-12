@@ -8,7 +8,7 @@
 // Tab 2「跑批结果」:第一版占位 (Step 3 再做)
 //
 // 频率由后端固定为 daily,前端不暴露时间选择.
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,7 @@ import { PageHead } from '../../components/PageHead';
 import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
+  type RunSummary, type ResponseRow,
 } from '../../services/aiTelemetryApi';
 
 type TabKey = 'config' | 'results';
@@ -56,6 +57,12 @@ export function AiTelemetry() {
     refresh();
   };
 
+  const handleRun = async (id: number) => {
+    await aiTelemetryApi.triggerRun(id, token);
+    window.alert(t('dashboard.aiTelemetry.results.started'));
+    refresh();
+  };
+
   return (
     <div className="space-y-4">
       <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
@@ -93,9 +100,12 @@ export function AiTelemetry() {
       </div>
 
       {tab === 'config' && (
-        <TopicTable topics={topics} loading={loading} onEdit={setEditing} onDelete={handleDelete} />
+        <TopicTable
+          topics={topics} loading={loading}
+          onEdit={setEditing} onDelete={handleDelete} onRun={handleRun}
+        />
       )}
-      {tab === 'results' && <ResultsPlaceholder />}
+      {tab === 'results' && <ResultsTab topics={topics} token={token} />}
 
       {editing !== undefined && (
         <TopicModal
@@ -112,10 +122,11 @@ export function AiTelemetry() {
 // ── 话题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onEdit, onDelete,
+  topics, loading, onEdit, onDelete, onRun,
 }: {
   topics: Topic[]; loading: boolean;
   onEdit: (t: Topic) => void; onDelete: (id: number) => void;
+  onRun: (id: number) => void;
 }) {
   const { t } = useTranslation();
   if (loading) return <div className="py-12 text-center text-sm text-muted">…</div>;
@@ -159,8 +170,22 @@ function TopicTable({
               <td className="px-3 py-2 text-secondary">{formatTime(tp.last_run_at)}</td>
               <td className="px-3 py-2">{renderStatus(tp.last_run_status)}</td>
               <td className="px-3 py-2 text-right space-x-2">
-                <button className="text-xs text-secondary hover:text-primary" onClick={() => onEdit(tp)}>编辑</button>
-                <button className="text-xs text-rose-500 hover:text-rose-400" onClick={() => onDelete(tp.id)}>删除</button>
+                <button
+                  className="text-xs disabled:opacity-40"
+                  style={{ color: 'var(--accent-primary)' }}
+                  disabled={tp.last_run_status === 'running'}
+                  onClick={() => onRun(tp.id)}
+                >
+                  {tp.last_run_status === 'running'
+                    ? t('dashboard.aiTelemetry.actions.running')
+                    : t('dashboard.aiTelemetry.actions.run')}
+                </button>
+                <button className="text-xs text-secondary hover:text-primary" onClick={() => onEdit(tp)}>
+                  {t('dashboard.aiTelemetry.actions.edit')}
+                </button>
+                <button className="text-xs text-rose-500 hover:text-rose-400" onClick={() => onDelete(tp.id)}>
+                  {t('dashboard.aiTelemetry.actions.delete')}
+                </button>
               </td>
             </tr>
           ))}
@@ -191,15 +216,243 @@ function renderStatus(s?: string | null) {
   return <span className={color}>{icon} {s}</span>;
 }
 
-// ── 跑批结果占位 ──────────────────────────────────────────────
+// ── 跑批结果 ───────────────────────────────────────────────────
 
-function ResultsPlaceholder() {
+function ResultsTab({ topics, token }: { topics: Topic[]; token: string }) {
+  const { t } = useTranslation();
+  const [topicId, setTopicId] = useState<number | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [runId, setRunId] = useState<number | null>(null);
+  const [responses, setResponses] = useState<ResponseRow[]>([]);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [loadingResp, setLoadingResp] = useState(false);
+
+  useEffect(() => {
+    if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
+  }, [topics, topicId]);
+
+  useEffect(() => {
+    if (topicId === null) return;
+    setLoadingRuns(true);
+    aiTelemetryApi.listRuns(topicId, token)
+      .then(rs => {
+        setRuns(rs);
+        setRunId(rs[0]?.id ?? null);
+      })
+      .finally(() => setLoadingRuns(false));
+  }, [topicId, token]);
+
+  useEffect(() => {
+    if (runId === null) { setResponses([]); return; }
+    setLoadingResp(true);
+    aiTelemetryApi.listResponses(runId, token)
+      .then(setResponses)
+      .finally(() => setLoadingResp(false));
+  }, [runId, token]);
+
+  if (topics.length === 0) {
+    return <EmptyHint text={t('dashboard.aiTelemetry.results.noTopics')} />;
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-input)', border: '1px solid var(--border-color)',
+    color: 'var(--text-primary)',
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-xs text-secondary">
+          {t('dashboard.aiTelemetry.results.selectTopic')}
+          <select
+            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+            className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
+          >
+            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-secondary">
+          {t('dashboard.aiTelemetry.results.selectRun')}
+          <select
+            value={runId ?? ''} onChange={e => setRunId(Number(e.target.value))}
+            disabled={runs.length === 0}
+            className="ml-2 px-2 py-1 text-sm rounded disabled:opacity-50" style={inputStyle}
+          >
+            {runs.map(r => (
+              <option key={r.id} value={r.id}>
+                {`#${r.id} ${r.status} · ${formatTime(r.started_at)} · ${r.response_count} 条`}
+              </option>
+            ))}
+          </select>
+        </label>
+        {runId !== null && runs.find(r => r.id === runId) && (
+          <RunStatusChip run={runs.find(r => r.id === runId)!} />
+        )}
+      </div>
+
+      {loadingRuns && <div className="text-sm text-muted py-6 text-center">…</div>}
+      {!loadingRuns && runs.length === 0 && (
+        <EmptyHint text={t('dashboard.aiTelemetry.results.noRuns')} />
+      )}
+
+      {runs.length > 0 && (
+        <ResponseTable
+          responses={responses}
+          loading={loadingResp}
+          expanded={expanded}
+          onToggle={(id) => {
+            setExpanded(prev => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id); else next.add(id);
+              return next;
+            });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EmptyHint({ text }: { text: string }) {
   return (
     <div
       className="py-12 text-center text-sm text-muted rounded-lg"
       style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-color)' }}
     >
-      跑批结果视图建设中(Step 3)
+      {text}
+    </div>
+  );
+}
+
+function RunStatusChip({ run }: { run: RunSummary }) {
+  const color = run.status === 'success' ? 'text-emerald-500'
+    : run.status === 'failed' ? 'text-rose-500'
+    : 'text-blue-500';
+  return (
+    <span className={`text-xs ${color}`}>
+      ● {run.status}
+      {run.finished_at && (
+        <span className="text-muted ml-2">
+          ({Math.max(1, Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000))}s)
+        </span>
+      )}
+    </span>
+  );
+}
+
+function ResponseTable({
+  responses, loading, expanded, onToggle,
+}: {
+  responses: ResponseRow[]; loading: boolean;
+  expanded: Set<number>; onToggle: (id: number) => void;
+}) {
+  const { t } = useTranslation();
+  if (loading) return <div className="text-sm text-muted py-6 text-center">…</div>;
+  if (responses.length === 0) return null;
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+            <th className="text-left px-3 py-2 font-medium w-8"></th>
+            <th className="text-left px-3 py-2 font-medium">
+              {t(`dashboard.aiTelemetry.engine.${responses[0].engine}`, responses[0].engine)
+                ? '引擎' : 'Engine'}
+            </th>
+            <th className="text-left px-3 py-2 font-medium">Query</th>
+            <th className="text-left px-3 py-2 font-medium">答案摘要 / Answer</th>
+            <th className="text-left px-3 py-2 font-medium">引用 / Cites</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.video')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {responses.map(r => {
+            const open = expanded.has(r.id);
+            return (
+              <Fragment key={r.id}>
+                <tr
+                  style={{ borderTop: '1px solid var(--border-color)', cursor: 'pointer' }}
+                  onClick={() => onToggle(r.id)}
+                >
+                  <td className="px-3 py-2 text-muted">{open ? '▼' : '▶'}</td>
+                  <td className="px-3 py-2 text-primary font-medium">
+                    <EngineLabel id={r.engine} />
+                  </td>
+                  <td className="px-3 py-2 text-secondary max-w-[18rem] truncate">{r.query}</td>
+                  <td className="px-3 py-2 text-secondary max-w-[28rem] truncate">
+                    {r.error ? (
+                      <span className="text-rose-500">⚠ {r.error}</span>
+                    ) : (
+                      r.answer || <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">{r.citations.length}</td>
+                  <td className="px-3 py-2">
+                    {r.video_url ? (
+                      <a
+                        href={r.video_url} target="_blank" rel="noreferrer"
+                        className="text-xs hover:underline"
+                        style={{ color: 'var(--accent-primary)' }}
+                        onClick={e => e.stopPropagation()}
+                      >▶</a>
+                    ) : <span className="text-muted">—</span>}
+                  </td>
+                </tr>
+                {open && (
+                  <tr style={{ borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                    <td colSpan={6} className="px-4 py-3">
+                      <ResponseDetail row={r} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EngineLabel({ id }: { id: EngineId }) {
+  const { t } = useTranslation();
+  return <span>{t(`dashboard.aiTelemetry.engine.${id}`, id)}</span>;
+}
+
+function ResponseDetail({ row }: { row: ResponseRow }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2 text-sm">
+      <div>
+        <div className="text-xs text-muted mb-1">Answer</div>
+        <div className="text-primary whitespace-pre-wrap leading-relaxed">
+          {row.answer || <span className="text-muted">—</span>}
+        </div>
+      </div>
+      <div>
+        <div className="text-xs text-muted mb-1">Citations ({row.citations.length})</div>
+        {row.citations.length === 0 ? (
+          <div className="text-muted text-xs">{t('dashboard.aiTelemetry.results.noCitations')}</div>
+        ) : (
+          <ul className="text-xs space-y-1">
+            {row.citations.map((c, i) => (
+              <li key={i}>
+                <span className="text-muted mr-2">[{i + 1}]</span>
+                <a
+                  href={c.url} target="_blank" rel="noreferrer"
+                  className="hover:underline" style={{ color: 'var(--accent-primary)' }}
+                >{c.title || c.url}</a>
+                <span className="text-muted ml-2">· {c.domain}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

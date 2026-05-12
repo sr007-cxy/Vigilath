@@ -18,9 +18,11 @@ from sqlalchemy.orm import Session
 from geo.api.auth import get_current_user
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
-    AiTelemetryTopicORM, TopicOut, TopicPayload, RunNowResult, VALID_ENGINES,
+    AiTelemetryResponseORM, AiTelemetryRunORM, AiTelemetryTopicORM,
+    ResponseOut, RunNowResult, RunOut, TopicOut, TopicPayload, VALID_ENGINES,
 )
 from geo.models.user import User
+from sqlalchemy import func
 
 log = logging.getLogger(__name__)
 
@@ -156,3 +158,80 @@ async def run_now(
     except httpx.HTTPError as e:
         log.warning("telemetry-service run-now failed: %s", e)
         raise HTTPException(502, f"telemetry-service unavailable: {e}")
+
+
+# ─────────────────────────── Trigger run + result queries ─────
+
+
+@router.post("/topics/{topic_id}/run", status_code=202)
+async def trigger_run(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """触发一次正式跑批入库,立刻返回(202).结果通过 GET /topics/{id}/runs 轮询."""
+    _get_topic_or_404(db, topic_id, current_user.id)
+    url = f"{TELEMETRY_SERVICE_URL}/run-topic"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, json={"topic_id": topic_id})
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPError as e:
+        log.warning("telemetry-service /run-topic failed: %s", e)
+        raise HTTPException(502, f"telemetry-service unavailable: {e}")
+
+
+@router.get("/topics/{topic_id}/runs", response_model=list[RunOut])
+def list_runs(
+    topic_id: int,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_topic_or_404(db, topic_id, current_user.id)
+    rows = (
+        db.query(AiTelemetryRunORM)
+          .filter_by(topic_id=topic_id)
+          .order_by(AiTelemetryRunORM.id.desc())
+          .limit(min(limit, 100))
+          .all()
+    )
+    # response counts in one query
+    counts = dict(
+        db.query(AiTelemetryResponseORM.run_id, func.count(AiTelemetryResponseORM.id))
+          .filter(AiTelemetryResponseORM.run_id.in_([r.id for r in rows]))
+          .group_by(AiTelemetryResponseORM.run_id)
+          .all()
+    ) if rows else {}
+    return [RunOut.from_orm_row(r, response_count=counts.get(r.id, 0)) for r in rows]
+
+
+@router.get("/runs/{run_id}/responses", response_model=list[ResponseOut])
+def list_responses(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    run = db.get(AiTelemetryRunORM, run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    topic = db.get(AiTelemetryTopicORM, run.topic_id)
+    if not topic or topic.user_id != current_user.id:
+        raise HTTPException(404, "run not found")
+    rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter_by(run_id=run_id)
+          .order_by(AiTelemetryResponseORM.id.asc())
+          .all()
+    )
+    out = []
+    for r in rows:
+        cites = json.loads(r.citations_json or "[]")
+        out.append(ResponseOut(
+            id=r.id, engine=r.engine, query=r.query,
+            answer=r.answer, citations=cites,
+            video_url=r.video_url, error=r.error,
+            created_at=r.created_at,
+        ))
+    return out

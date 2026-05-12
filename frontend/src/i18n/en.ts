@@ -1827,6 +1827,26 @@ const en = {
                 "status": "Status",
                 "actions": "Actions"
               },
+              "actions": {
+                "edit": "Edit",
+                "delete": "Delete",
+                "run": "Run",
+                "running": "Running"
+              },
+              "results": {
+                "selectTopic": "Topic",
+                "selectRun": "Run",
+                "noRuns": "No runs yet for this topic. Click \"Run\" in the topic list to trigger one.",
+                "noTopics": "Create a topic first.",
+                "runStatus": "Status",
+                "runStarted": "Started",
+                "runFinished": "Finished",
+                "responseCount": "Responses",
+                "viewDetail": "Expand",
+                "noCitations": "No citations",
+                "video": "Replay",
+                "started": "Triggered. The run continues in the background (~5-30 min)."
+              },
               "form": {
                 "name": "Topic name",
                 "namePlaceholder": "e.g. VNET brand probe",

@@ -120,3 +120,32 @@ class RunNowResult(BaseModel):
     answer: str = ""
     citations: list[RunNowCitation] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+class RunOut(BaseModel):
+    id: int
+    topic_id: int
+    status: str
+    started_at: datetime
+    finished_at: Optional[datetime]
+    error: Optional[str]
+    response_count: int = 0
+
+    @classmethod
+    def from_orm_row(cls, r, response_count: int = 0) -> "RunOut":
+        return cls(
+            id=r.id, topic_id=r.topic_id, status=r.status,
+            started_at=r.started_at, finished_at=r.finished_at,
+            error=r.error, response_count=response_count,
+        )
+
+
+class ResponseOut(BaseModel):
+    id: int
+    engine: str
+    query: str
+    answer: str
+    citations: list[RunNowCitation]
+    video_url: Optional[str]
+    error: Optional[str]
+    created_at: datetime
