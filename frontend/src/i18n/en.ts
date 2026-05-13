@@ -1820,6 +1820,7 @@ const en = {
               "tabResults": "Results",
               "newTopic": "New topic",
               "editTopic": "Edit topic",
+              "backToList": "Back to topics",
               "empty": "No topics yet. Click \"New topic\" to start.",
               "col": {
                 "enabled": "Enabled",

@@ -1826,6 +1826,7 @@ const zh = {
               "tabResults": "跑批结果",
               "newTopic": "新建话题",
               "editTopic": "编辑话题",
+              "backToList": "返回话题列表",
               "empty": "还没有话题,点右上角「新建话题」开始",
               "col": {
                 "enabled": "启用",

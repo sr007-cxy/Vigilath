@@ -77,6 +77,40 @@ export function AiTelemetry() {
     refresh();
   };
 
+  // 编辑 / 新建模式:把整页内容换成 inline editor,200+ 候选才有空间选
+  if (editing !== undefined) {
+    return (
+      <div className="space-y-4">
+        <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(undefined)}
+              className="text-sm px-2 py-1 rounded-md"
+              style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              ← {t('dashboard.aiTelemetry.backToList')}
+            </button>
+            <h1 className="text-xl font-semibold text-primary leading-tight">
+              {t(editing ? 'dashboard.aiTelemetry.editTopic' : 'dashboard.aiTelemetry.newTopic')}
+            </h1>
+          </div>
+        </header>
+        <TopicEditor
+          initial={editing}
+          token={token}
+          onCancel={() => setEditing(undefined)}
+          onSave={handleSave}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
@@ -136,15 +170,6 @@ export function AiTelemetry() {
         />
       )}
       {tab === 'results' && <ResultsTab topics={topics} token={token} />}
-
-      {editing !== undefined && (
-        <TopicModal
-          initial={editing}
-          token={token}
-          onCancel={() => setEditing(undefined)}
-          onSave={handleSave}
-        />
-      )}
     </div>
   );
 }
@@ -1265,14 +1290,14 @@ function ResponseDetail({ row }: { row: ResponseRow }) {
 
 // ── 新建/编辑 Modal ───────────────────────────────────────────
 
-interface TopicModalProps {
+interface TopicEditorProps {
   initial: Topic | null;
   token: string;
   onCancel: () => void;
   onSave: (payload: TopicPayload) => Promise<void>;
 }
 
-function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
+function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(initial?.name || '');
   const [target, setTarget] = useState(initial?.target || '');
@@ -1394,27 +1419,14 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     setSuggestions(prev => prev.filter(q => picked.has(q)));
   };
 
-  const node = (
-    <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+  return (
+    <section
+      className="rounded-xl"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
     >
-      <div
-        className="rounded-xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-      >
-        <header
-          className="px-5 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid var(--border-color)' }}
-        >
-          <h3 className="text-sm font-semibold text-primary">
-            {t(initial ? 'dashboard.aiTelemetry.editTopic' : 'dashboard.aiTelemetry.newTopic')}
-          </h3>
-          <button type="button" onClick={onCancel} className="text-muted hover:text-primary text-lg leading-none px-2">×</button>
-        </header>
-
-        <div className="px-5 py-4 space-y-4 overflow-y-auto">
+      <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* 左列:基本字段 + 引擎 + 试跑结果 */}
+        <div className="lg:col-span-5 space-y-4">
           <label className="block">
             <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.name')}*</span>
             <input
@@ -1454,6 +1466,53 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
             </span>
           </label>
 
+          <div>
+            <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.engines')}*</span>
+            <div className="mt-2 space-y-2">
+              <EngineRow
+                label={t('dashboard.aiTelemetry.form.enginesCN')}
+                engines={CN_ENGINES} selected={engines} onToggle={toggleEngine}
+              />
+              <EngineRow
+                label={t('dashboard.aiTelemetry.form.enginesGlobal')}
+                engines={GLOBAL_ENGINES} selected={engines} onToggle={toggleEngine}
+              />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+            <span className="text-sm text-primary">{t('dashboard.aiTelemetry.form.enabled')}</span>
+          </label>
+
+          <p className="text-xs text-muted">{t('dashboard.aiTelemetry.form.scheduleNote')}</p>
+
+          {runResults && (
+            <div
+              className="rounded-md p-3 text-xs space-y-2 max-h-60 overflow-y-auto"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+            >
+              {runResults.map((r, i) => (
+                <div key={i} className="border-b pb-2 last:border-0" style={{ borderColor: 'var(--border-color)' }}>
+                  <div className="text-primary font-medium">{r.engine} · {r.query}</div>
+                  {r.error ? (
+                    <div className="text-rose-500 mt-1">⚠ {r.error}</div>
+                  ) : (
+                    <>
+                      <div className="text-secondary mt-1 line-clamp-3">{r.answer}</div>
+                      {r.citations.length > 0 && (
+                        <div className="text-muted mt-1">引用 {r.citations.length} 条</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 右列:Query picker(200 候选 / 50 选) */}
+        <div className="lg:col-span-7">
           <div
             className="rounded-md p-3 space-y-3"
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
@@ -1536,7 +1595,7 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
                 <div
                   className="overflow-y-auto space-y-1 rounded-md p-2"
                   style={{
-                    maxHeight: '360px',
+                    maxHeight: 'clamp(360px, 65vh, 720px)',
                     background: 'var(--bg-input)',
                     border: '1px solid var(--border-color)',
                   }}
@@ -1594,78 +1653,33 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
             )}
           </div>
 
-          <div>
-            <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.engines')}*</span>
-            <div className="mt-2 space-y-2">
-              <EngineRow
-                label={t('dashboard.aiTelemetry.form.enginesCN')}
-                engines={CN_ENGINES} selected={engines} onToggle={toggleEngine}
-              />
-              <EngineRow
-                label={t('dashboard.aiTelemetry.form.enginesGlobal')}
-                engines={GLOBAL_ENGINES} selected={engines} onToggle={toggleEngine}
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-            <span className="text-sm text-primary">{t('dashboard.aiTelemetry.form.enabled')}</span>
-          </label>
-
-          <p className="text-xs text-muted">{t('dashboard.aiTelemetry.form.scheduleNote')}</p>
-
-          {runResults && (
-            <div
-              className="mt-2 rounded-md p-3 text-xs space-y-2 max-h-60 overflow-y-auto"
-              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
-            >
-              {runResults.map((r, i) => (
-                <div key={i} className="border-b pb-2 last:border-0" style={{ borderColor: 'var(--border-color)' }}>
-                  <div className="text-primary font-medium">{r.engine} · {r.query}</div>
-                  {r.error ? (
-                    <div className="text-rose-500 mt-1">⚠ {r.error}</div>
-                  ) : (
-                    <>
-                      <div className="text-secondary mt-1 line-clamp-3">{r.answer}</div>
-                      {r.citations.length > 0 && (
-                        <div className="text-muted mt-1">引用 {r.citations.length} 条</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-
-        <footer
-          className="px-5 py-3 flex items-center justify-end gap-2"
-          style={{ borderTop: '1px solid var(--border-color)' }}
-        >
-          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm rounded-md text-secondary">
-            {t('dashboard.aiTelemetry.form.cancel')}
-          </button>
-          <button
-            type="button" onClick={handleRunNow} disabled={!valid || running}
-            className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-          >
-            {running ? '…' : t('dashboard.aiTelemetry.form.runNow')}
-          </button>
-          <button
-            type="button" onClick={handleSave} disabled={!valid || saving}
-            className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-            style={{ background: 'var(--accent-primary)' }}
-          >
-            {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
-          </button>
-        </footer>
       </div>
-    </div>
-  );
 
-  return createPortal(node, document.body);
+      <footer
+        className="px-5 py-3 flex items-center justify-end gap-2"
+        style={{ borderTop: '1px solid var(--border-color)' }}
+      >
+        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm rounded-md text-secondary">
+          {t('dashboard.aiTelemetry.form.cancel')}
+        </button>
+        <button
+          type="button" onClick={handleRunNow} disabled={!valid || running}
+          className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
+          style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+        >
+          {running ? '…' : t('dashboard.aiTelemetry.form.runNow')}
+        </button>
+        <button
+          type="button" onClick={handleSave} disabled={!valid || saving}
+          className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+          style={{ background: 'var(--accent-primary)' }}
+        >
+          {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
+        </button>
+      </footer>
+    </section>
+  );
 }
 
 function EngineRow({
