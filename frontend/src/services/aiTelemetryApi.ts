@@ -334,11 +334,13 @@ export const aiTelemetryApi = {
     token: string,
   ): Promise<{ seed: string; queries: string[] }> {
     if (isMockMode()) {
-      const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价'];
-      return Promise.resolve({
-        seed: args.seed,
-        queries: stems.slice(0, args.count).map(s => `${args.seed} ${s}`),
-      });
+      // mock: 拼出 args.count 条假候选,够前端 picker 调试
+      const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价', '案例', '使用场景', '行业应用'];
+      const out: string[] = [];
+      for (let i = 0; out.length < args.count; i++) {
+        out.push(`${args.seed} ${stems[i % stems.length]} ${Math.floor(i / stems.length) + 1}`);
+      }
+      return Promise.resolve({ seed: args.seed, queries: out });
     }
     return request<{ seed: string; queries: string[] }>(
       'POST', '/suggest-queries', token, {

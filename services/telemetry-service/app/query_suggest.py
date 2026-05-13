@@ -146,12 +146,12 @@ class DeepSeekError(Exception):
 
 
 async def suggest_queries(
-    seed: str, count: int = 20, *,
+    seed: str, count: int = 200, *,
     target: str = "", aliases: Optional[list[str]] = None, industry: str = "",
 ) -> list[str]:
     """调 DeepSeek 生成候选 query。
 
-    传 target 时走 GEO-aware prompt(避开 target / aliases),并多要 ~1.4x 再过滤;
+    传 target 时走 GEO-aware prompt(避开 target / aliases),并多要 ~1.3x 再过滤;
     不传 target 时退化到通用 prompt(向后兼容)。
 
     失败时抛 DeepSeekError(no_key / invalid_seed / http_4xx / network / empty)。
@@ -159,13 +159,13 @@ async def suggest_queries(
     seed = (seed or "").strip()
     if not seed:
         raise DeepSeekError("invalid_seed", "seed 不能为空")
-    count = max(5, min(count, 50))
+    count = max(5, min(count, 300))
     target = (target or "").strip()
     aliases = [a.strip() for a in (aliases or []) if a and a.strip()]
     industry = (industry or "").strip()
 
-    # GEO-aware 时多要点儿,留过滤损耗的余量
-    raw_count = min(50, int(count * 1.4)) if target else count
+    # GEO-aware 时多要点儿,留过滤损耗余量;300 是 prompt+output 安全上限
+    raw_count = min(300, int(count * 1.3)) if target else count
 
     api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
     if not api_key:
@@ -178,7 +178,8 @@ async def suggest_queries(
             {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry)},
         ],
         "temperature": 0.9,
-        "max_tokens": min(4096, raw_count * 30),
+        # DeepSeek deepseek-chat max output 8192 tokens;中文 query 平均 ~30 token/条
+        "max_tokens": min(8000, raw_count * 35),
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -186,7 +187,8 @@ async def suggest_queries(
     }
     url = f"{DEEPSEEK_BASE_URL}/chat/completions"
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # 200 条候选大约 30-90s;给 180s 余量,backend 转发端给 200s
+        async with httpx.AsyncClient(timeout=180.0) as client:
             r = await client.post(url, json=payload, headers=headers)
     except httpx.HTTPError as e:
         raise DeepSeekError("network", str(e)) from e

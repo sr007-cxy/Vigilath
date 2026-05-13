@@ -226,10 +226,10 @@ async def suggest_queries(
     if not seed:
         raise HTTPException(400, "seed cannot be empty")
     try:
-        count = int(payload.get("count", 20))
+        count = int(payload.get("count", 200))
     except (TypeError, ValueError):
-        count = 20
-    count = max(5, min(count, 50))
+        count = 200
+    count = max(5, min(count, 300))
 
     target = (payload.get("target") or "").strip()
     industry = (payload.get("industry") or "").strip()
@@ -244,7 +244,8 @@ async def suggest_queries(
     }
     url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        # 200 条候选 DeepSeek 端 30-90s,留 200s 余量
+        async with httpx.AsyncClient(timeout=200.0) as client:
             r = await client.post(url, json=body)
     except httpx.HTTPError as e:
         log.warning("telemetry-service suggest-queries failed: %s", e)

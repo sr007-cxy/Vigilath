@@ -1277,7 +1277,6 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const [name, setName] = useState(initial?.name || '');
   const [target, setTarget] = useState(initial?.target || '');
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
-  const [queriesText, setQueriesText] = useState((initial?.queries || []).join('\n'));
   const [engines, setEngines] = useState<Set<EngineId>>(
     new Set(initial?.engines || ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao'])
   );
@@ -1286,23 +1285,31 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<RunNowResult[] | null>(null);
 
-  // DeepSeek 候选生成 — seed + industry,target/aliases 自动从表单当前值拿
+  // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
+  // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
+  const SUGGEST_COUNT = 200;
+  const QUERY_MAX_PICK = 50;
   const [seed, setSeed] = useState('');
   const [industry, setIndustry] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [suggestions, setSuggestions] = useState<string[]>(initial?.queries || []);
+  const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
+  const [queryFilter, setQueryFilter] = useState('');
 
-  const queries = useMemo(
-    () => queriesText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10),
-    [queriesText],
-  );
+  const queries = useMemo(() => Array.from(picked).slice(0, QUERY_MAX_PICK), [picked]);
   const aliases = useMemo(
     () => aliasesText.split(/[,,\n]/).map(s => s.trim()).filter(Boolean).slice(0, 10),
     [aliasesText],
   );
 
+  const filteredSuggestions = useMemo(() => {
+    const f = queryFilter.trim().toLowerCase();
+    if (!f) return suggestions;
+    return suggestions.filter(q => q.toLowerCase().includes(f));
+  }, [suggestions, queryFilter]);
+
+  const pickedCap = picked.size >= QUERY_MAX_PICK;
   const valid = name.trim().length > 0 && target.trim().length > 0
     && queries.length > 0 && engines.size > 0;
 
@@ -1348,16 +1355,22 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     setSuggestErr(null);
     try {
       const res = await aiTelemetryApi.suggestQueries({
-        seed: s, count: 20,
+        seed: s, count: SUGGEST_COUNT,
         target: target.trim(),
         aliases,
         industry: industry.trim(),
       }, token);
-      setSuggestions(res.queries);
-      setPicked(new Set());
+      // 追加(去重),不覆盖 — 用户可能想多轮生成、不同 seed 累积候选
+      setSuggestions(prev => {
+        const seen = new Set(prev);
+        const out = [...prev];
+        for (const q of res.queries) {
+          if (!seen.has(q)) { seen.add(q); out.push(q); }
+        }
+        return out;
+      });
     } catch (e: unknown) {
       setSuggestErr(e instanceof Error ? e.message : String(e));
-      setSuggestions([]);
     } finally {
       setSuggesting(false);
     }
@@ -1366,25 +1379,19 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const togglePicked = (q: string) => {
     setPicked(prev => {
       const next = new Set(prev);
-      if (next.has(q)) next.delete(q); else next.add(q);
+      if (next.has(q)) {
+        next.delete(q);
+      } else if (next.size < QUERY_MAX_PICK) {
+        next.add(q);
+      }
       return next;
     });
   };
 
-  const appendPicked = () => {
-    if (picked.size === 0) return;
-    const existing = queriesText.split('\n').map(s => s.trim()).filter(Boolean);
-    const seen = new Set(existing);
-    const merged = [...existing];
-    for (const q of picked) {
-      if (!seen.has(q) && merged.length < 10) {
-        seen.add(q);
-        merged.push(q);
-      }
-    }
-    setQueriesText(merged.join('\n'));
-    setSuggestions(prev => prev.filter(q => !picked.has(q)));
-    setPicked(new Set());
+  const clearPicked = () => setPicked(new Set());
+  const clearSuggestions = () => {
+    // 只清掉未勾选的候选,保留已勾选的(否则 valid 状态会瞬间崩)
+    setSuggestions(prev => prev.filter(q => picked.has(q)));
   };
 
   const node = (
@@ -1448,12 +1455,25 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
           </label>
 
           <div
-            className="rounded-md p-3 space-y-2"
-            style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border-color)' }}
+            className="rounded-md p-3 space-y-3"
+            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
           >
-            <div className="text-xs text-secondary">
-              {t('dashboard.aiTelemetry.form.suggestTitle')}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-secondary font-medium">
+                {t('dashboard.aiTelemetry.form.queriesPickerTitle')}*
+              </span>
+              <span
+                className="text-xs font-mono"
+                style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+              >
+                {picked.size} / {QUERY_MAX_PICK}
+              </span>
             </div>
+            <div className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
+            </div>
+
+            {/* seed + industry + 生成按钮 */}
             <div className="flex gap-2">
               <input
                 type="text" value={seed} onChange={e => setSeed(e.target.value)}
@@ -1471,8 +1491,8 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
                 }}
               >
                 {suggesting
-                  ? t('dashboard.aiTelemetry.form.suggestRunning')
-                  : t('dashboard.aiTelemetry.form.suggestGenerate')}
+                  ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
+                  : t('dashboard.aiTelemetry.form.suggestGenerateN', { count: SUGGEST_COUNT })}
               </button>
             </div>
             <input
@@ -1489,58 +1509,90 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
             {suggestErr && (
               <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
             )}
-            {suggestions.length > 0 && (
+
+            {/* 候选池 — 过滤 + 滚动列表 */}
+            {suggestions.length === 0 ? (
+              <div
+                className="rounded-md p-4 text-xs text-muted text-center"
+                style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
+              >
+                {t('dashboard.aiTelemetry.form.queriesPickerEmpty')}
+              </div>
+            ) : (
               <>
-                <div className="text-xs text-muted">
-                  {t('dashboard.aiTelemetry.form.suggestHint', { count: suggestions.length })}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" value={queryFilter} onChange={e => setQueryFilter(e.target.value)}
+                    placeholder={t('dashboard.aiTelemetry.form.queriesFilterPlaceholder') || ''}
+                    className="flex-1 px-3 py-1 rounded-md text-xs"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                  />
+                  <span className="text-xs text-muted whitespace-nowrap">
+                    {t('dashboard.aiTelemetry.form.queriesFilterCount', {
+                      shown: filteredSuggestions.length, total: suggestions.length,
+                    })}
+                  </span>
                 </div>
                 <div
-                  className="max-h-40 overflow-y-auto space-y-1 rounded-md p-2"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+                  className="overflow-y-auto space-y-1 rounded-md p-2"
+                  style={{
+                    maxHeight: '360px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                  }}
                 >
-                  {suggestions.map(q => (
-                    <label key={q} className="flex items-start gap-2 cursor-pointer text-xs text-primary">
-                      <input
-                        type="checkbox"
-                        checked={picked.has(q)}
-                        onChange={() => togglePicked(q)}
-                        className="mt-0.5"
-                      />
-                      <span className="break-all">{q}</span>
-                    </label>
-                  ))}
+                  {filteredSuggestions.map(q => {
+                    const isPicked = picked.has(q);
+                    const disabled = !isPicked && pickedCap;
+                    return (
+                      <label
+                        key={q}
+                        className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
+                        style={{
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.4 : 1,
+                          background: isPicked ? 'var(--bg-card)' : 'transparent',
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        <input
+                          type="checkbox" checked={isPicked} disabled={disabled}
+                          onChange={() => togglePicked(q)}
+                          className="mt-0.5"
+                        />
+                        <span className="break-all">{q}</span>
+                      </label>
+                    );
+                  })}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">
-                    {t('dashboard.aiTelemetry.form.suggestPickedCount', { count: picked.size })}
-                  </span>
+                <div className="flex items-center justify-between text-xs">
                   <button
-                    type="button" onClick={appendPicked} disabled={picked.size === 0}
-                    className="px-3 py-1 rounded-md text-xs"
+                    type="button" onClick={clearPicked} disabled={picked.size === 0}
+                    className="px-2 py-1 rounded"
                     style={{
-                      background: 'var(--bg-card)',
+                      background: 'transparent',
                       border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      opacity: picked.size === 0 ? 0.55 : 1,
+                      color: 'var(--text-secondary)',
+                      opacity: picked.size === 0 ? 0.45 : 1,
                     }}
                   >
-                    {t('dashboard.aiTelemetry.form.suggestAppend')}
+                    {t('dashboard.aiTelemetry.form.queriesClearPicked')}
+                  </button>
+                  <button
+                    type="button" onClick={clearSuggestions}
+                    className="px-2 py-1 rounded"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {t('dashboard.aiTelemetry.form.queriesClearUnpicked')}
                   </button>
                 </div>
               </>
             )}
           </div>
-
-          <label className="block">
-            <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.queries')}*</span>
-            <textarea
-              rows={5} value={queriesText} onChange={e => setQueriesText(e.target.value)}
-              placeholder={t('dashboard.aiTelemetry.form.queriesPlaceholder') || ''}
-              className="mt-1 w-full px-3 py-1.5 rounded-md text-sm font-mono"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            />
-            <span className="text-xs text-muted">{queries.length} / 10</span>
-          </label>
 
           <div>
             <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.engines')}*</span>

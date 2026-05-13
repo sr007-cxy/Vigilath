@@ -199,7 +199,7 @@ class TopicPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     target: str = Field("", max_length=128)
     target_aliases: list[str] = Field(default_factory=list, max_length=10)
-    queries: list[str] = Field(..., min_length=1, max_length=10)
+    queries: list[str] = Field(..., min_length=1, max_length=50)
     engines: list[str] = Field(..., min_length=1, max_length=10)
     enabled: bool = True
 

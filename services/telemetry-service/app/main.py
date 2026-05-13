@@ -66,7 +66,7 @@ app = FastAPI(title="Telemetry Service", version="0.1.0", lifespan=lifespan)
 
 class RunNowBody(BaseModel):
     name: str = ""
-    queries: list[str] = Field(..., min_length=1, max_length=10)
+    queries: list[str] = Field(..., min_length=1, max_length=50)
     engines: list[str] = Field(..., min_length=1, max_length=10)
     user_id: Optional[int] = None
 
@@ -174,7 +174,7 @@ async def http_generate_briefing(body: BriefingTriggerBody):
 
 class SuggestQueriesBody(BaseModel):
     seed: str = Field(..., min_length=1, max_length=200)
-    count: int = Field(20, ge=5, le=50)
+    count: int = Field(200, ge=5, le=300)
     target: str = Field("", max_length=200)
     aliases: list[str] = Field(default_factory=list, max_length=20)
     industry: str = Field("", max_length=100)
