@@ -23,6 +23,8 @@ import sys
 # 允许从 services/telemetry-service 目录直接运行
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import text
+
 from app.storage import db_session, TopicORM
 from app.tracking import backfill_query_hits
 
@@ -35,9 +37,11 @@ def _read_sentiment_target(s, user_id: int) -> tuple[str, list[str]]:
     SentimentAccountORM 在另一个 package(geo.models),这里用裸 SQL,避免硬依赖.
     """
     row = s.execute(
-        "SELECT target, aliases_json FROM sentiment_accounts "
-        "WHERE user_id = :uid AND active = 1 "
-        "ORDER BY created_at ASC LIMIT 1",
+        text(
+            "SELECT target, aliases_json FROM sentiment_accounts "
+            "WHERE user_id = :uid AND active = 1 "
+            "ORDER BY created_at ASC LIMIT 1"
+        ),
         {"uid": user_id},
     ).fetchone()
     if not row:
@@ -73,16 +77,17 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s | %(message)s")
 
+    # 先在 session 内取出 id 列表(避免 session 关闭后 detached instance)
     with db_session() as s:
-        q = s.query(TopicORM)
+        q = s.query(TopicORM.id)
         if args.topic is not None:
             q = q.filter(TopicORM.id == args.topic)
         elif not args.all:
             q = q.filter(TopicORM.enabled == True)  # noqa: E712
-        topics = q.all()
-        log.info("backfilling %d topics", len(topics))
+        topic_ids = [r[0] for r in q.all()]
+        log.info("backfilling %d topics", len(topic_ids))
 
-    for tid in [t.id for t in topics]:
+    for tid in topic_ids:
         try:
             with db_session() as s:
                 t = s.get(TopicORM, tid)
