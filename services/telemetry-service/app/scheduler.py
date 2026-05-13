@@ -19,6 +19,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from .runner import run_topic_once
+from .briefings import generate_all_briefings_for_week
 from .storage import db_session, list_enabled_topics, TopicORM
 
 log = logging.getLogger(__name__)
@@ -30,9 +31,18 @@ CRON_MINUTE = int(os.environ.get("SCHEDULER_CRON_MINUTE", "5"))
 TZ_OFFSET = int(os.environ.get("SCHEDULER_TIMEZONE_OFFSET", "8"))
 TRIGGER_WINDOW_MIN = 2   # 触发窗口 2 分钟,容忍 poll 抖动
 
+# v1.2 周报 cron — 默认本地周一 09:00
+BRIEFING_CRON_WEEKDAY = int(os.environ.get("BRIEFING_CRON_WEEKDAY", "0"))  # Mon=0
+BRIEFING_CRON_HOUR_LOCAL = int(os.environ.get("BRIEFING_CRON_HOUR", "9"))
+BRIEFING_CRON_MINUTE = int(os.environ.get("BRIEFING_CRON_MINUTE", "0"))
+
 # 转 UTC 等价时间(可能为负 → wrap)
 _HOUR_UTC = (CRON_HOUR_LOCAL - TZ_OFFSET) % 24
+_BRIEFING_HOUR_UTC = (BRIEFING_CRON_HOUR_LOCAL - TZ_OFFSET) % 24
 _LOCAL_TZ = timezone(timedelta(hours=TZ_OFFSET))
+
+# 周报每周只跑一次 — 记上次触发的本地周一日期,避免 2 分钟窗口期重复触发
+_last_briefing_local_monday: object | None = None
 
 
 def _in_trigger_window(now_utc: datetime) -> bool:
@@ -74,6 +84,35 @@ async def scheduler_loop(stop_event: asyncio.Event) -> None:
     log.info("scheduler stopped")
 
 
+def _in_briefing_window(now_utc: datetime) -> bool:
+    """周报触发窗口 — 当前 UTC 时间是否在配置的周一 09:00 北京 ± 2min 内."""
+    local = now_utc.astimezone(_LOCAL_TZ)
+    if local.weekday() != BRIEFING_CRON_WEEKDAY:
+        return False
+    if local.hour != BRIEFING_CRON_HOUR_LOCAL:
+        return False
+    return BRIEFING_CRON_MINUTE <= local.minute < (BRIEFING_CRON_MINUTE + TRIGGER_WINDOW_MIN)
+
+
+async def _maybe_run_briefings(now_utc: datetime) -> None:
+    """v1.2 — 每周一 09:00 北京触发,生成所有 enabled topic 的上周周报."""
+    global _last_briefing_local_monday
+    if not _in_briefing_window(now_utc):
+        return
+    local = now_utc.astimezone(_LOCAL_TZ)
+    this_monday = (local - timedelta(days=local.weekday())).date()
+    if _last_briefing_local_monday == this_monday:
+        return  # 本周已跑过
+    _last_briefing_local_monday = this_monday
+    log.info("scheduler firing weekly briefings (week starting %s)", this_monday)
+    try:
+        # 阻塞在 thread 里跑 — generate_all_briefings_for_week 是同步函数 + LLM 调用
+        import asyncio as _a
+        await _a.to_thread(generate_all_briefings_for_week)
+    except Exception as e:  # noqa: BLE001
+        log.exception("weekly briefings failed: %s", e)
+
+
 async def _tick() -> None:
     now = datetime.now(timezone.utc)
     with db_session() as s:
@@ -93,3 +132,6 @@ async def _tick() -> None:
             await run_topic_once(topic_copy)
         except Exception as e:  # noqa: BLE001
             log.exception("topic %d run failed: %s", topic_id, e)
+
+    # v1.2 周报触发(独立于日跑批 cron)
+    await _maybe_run_briefings(now)

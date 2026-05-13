@@ -18,13 +18,15 @@ import {
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
   type OwnedSplit,
+  type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
+  type CellDrawer, type CellInsight, type Briefing,
 } from '../../services/aiTelemetryApi';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 
-type TabKey = 'overview' | 'config' | 'results';
+type TabKey = 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
 
 const ENGINE_COLORS: Record<EngineId, string> = {
   deepseek: '#5B6CFF', doubao: '#FF7043', qwen: '#7E57C2',
@@ -108,7 +110,7 @@ export function AiTelemetry() {
       </header>
 
       <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
-        {(['overview', 'config', 'results'] as TabKey[]).map(k => (
+        {(['overview', 'tracking', 'briefings', 'config', 'results'] as TabKey[]).map(k => (
           <button
             key={k}
             type="button"
@@ -125,6 +127,8 @@ export function AiTelemetry() {
       </div>
 
       {tab === 'overview' && <OverviewTab topics={topics} token={token} />}
+      {tab === 'tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
+      {tab === 'briefings' && <BriefingsTab topics={topics} token={token} />}
       {tab === 'config' && (
         <TopicTable
           topics={topics} loading={loading}
@@ -1124,6 +1128,8 @@ interface TopicModalProps {
 function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(initial?.name || '');
+  const [target, setTarget] = useState(initial?.target || '');
+  const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
   const [queriesText, setQueriesText] = useState((initial?.queries || []).join('\n'));
   const [engines, setEngines] = useState<Set<EngineId>>(
     new Set(initial?.engines || ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao'])
@@ -1137,8 +1143,13 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     () => queriesText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10),
     [queriesText],
   );
+  const aliases = useMemo(
+    () => aliasesText.split(/[,,\n]/).map(s => s.trim()).filter(Boolean).slice(0, 10),
+    [aliasesText],
+  );
 
-  const valid = name.trim().length > 0 && queries.length > 0 && engines.size > 0;
+  const valid = name.trim().length > 0 && target.trim().length > 0
+    && queries.length > 0 && engines.size > 0;
 
   const toggleEngine = (e: EngineId) => {
     setEngines(prev => {
@@ -1150,6 +1161,8 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
 
   const buildPayload = (): TopicPayload => ({
     name: name.trim(),
+    target: target.trim(),
+    target_aliases: aliases,
     queries,
     engines: Array.from(engines),
     enabled,
@@ -1202,6 +1215,35 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
               className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
               style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
             />
+          </label>
+
+          <label className="block">
+            <span className="text-xs text-secondary">
+              <span style={{ color: 'var(--accent-primary)' }}>★ </span>
+              {t('dashboard.aiTelemetry.form.target')}*
+            </span>
+            <input
+              type="text" value={target} onChange={e => setTarget(e.target.value)}
+              placeholder={t('dashboard.aiTelemetry.form.targetPlaceholder') || ''}
+              className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            />
+            <span className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.targetHint')}
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.aliases')}</span>
+            <input
+              type="text" value={aliasesText} onChange={e => setAliasesText(e.target.value)}
+              placeholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
+              className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            />
+            <span className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
+            </span>
           </label>
 
           <label className="block">
@@ -1316,5 +1358,625 @@ function EngineRow({
         );
       })}
     </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  v1 引用追踪 Tab
+// ═══════════════════════════════════════════════════════════════
+
+function TrackingTab({ topics, token, onRun }: {
+  topics: Topic[]; token: string; onRun: (id: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [topicId, setTopicId] = useState<number | null>(topics[0]?.id ?? null);
+  const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [openCell, setOpenCell] = useState<{ query: string; engine: EngineId } | null>(null);
+
+  useEffect(() => {
+    if (topicId == null) return;
+    setLoading(true);
+    aiTelemetryApi.getTrackingMatrix(topicId, token)
+      .then(setMatrix)
+      .finally(() => setLoading(false));
+  }, [topicId, token]);
+
+  if (topics.length === 0) {
+    return (
+      <div className="py-12 text-center text-sm text-muted">
+        {t('dashboard.aiTelemetry.tracking.noTopics')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <label className="text-xs text-secondary">{t('dashboard.aiTelemetry.tracking.selectTopic')}</label>
+        <select
+          value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-md text-sm"
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+        >
+          {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        {topicId != null && (
+          <button type="button" onClick={() => onRun(topicId)}
+            className="text-xs px-3 py-1.5 rounded-md text-white"
+            style={{ background: 'var(--accent-primary)' }}>
+            ⏵ {t('dashboard.aiTelemetry.tracking.runNow')}
+          </button>
+        )}
+      </div>
+
+      {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
+      {!loading && matrix && (
+        <>
+          <TrackingHeader matrix={matrix} />
+          <TimelineRow timeline={matrix.timeline} />
+          <MatrixGrid matrix={matrix} onPick={(q, e) => setOpenCell({ query: q, engine: e })} />
+        </>
+      )}
+
+      {openCell && topicId != null && (
+        <CellDrawerView
+          topicId={topicId} query={openCell.query} engine={openCell.engine}
+          token={token} onClose={() => setOpenCell(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TrackingHeader({ matrix }: { matrix: TrackingMatrix }) {
+  const { t } = useTranslation();
+  const started = matrix.started_at ? new Date(matrix.started_at).toLocaleDateString() : '-';
+  return (
+    <div className="rounded-md p-3 text-xs flex flex-wrap items-center gap-x-4 gap-y-1"
+      style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+      <span className="text-secondary">
+        {t('dashboard.aiTelemetry.tracking.targetLabel')}:
+        <strong className="text-primary ml-1">{matrix.target || '-'}</strong>
+        {matrix.target_aliases.length > 0 && (
+          <span className="text-muted ml-1">
+            ({matrix.target_aliases.join(' / ')})
+          </span>
+        )}
+      </span>
+      <span className="text-secondary">
+        {t('dashboard.aiTelemetry.tracking.startedAt')}: <span className="text-primary">{started}</span>
+      </span>
+      <span className="text-secondary">
+        {t('dashboard.aiTelemetry.tracking.totalRuns')}: <span className="text-primary tabular-nums">{matrix.total_runs}</span>
+      </span>
+      <span className="text-secondary">
+        {t('dashboard.aiTelemetry.tracking.hitCells')}:
+        <span className="text-primary tabular-nums ml-1">{matrix.hit_cells}</span>
+        <span className="text-muted ml-0.5">/{matrix.total_cells}</span>
+        <span className="ml-1 px-1.5 py-0.5 rounded text-[10px]"
+          style={{ background: 'rgba(14,165,233,0.15)', color: 'var(--accent-primary)' }}>
+          {matrix.hit_cells_pct.toFixed(1)}%
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function TimelineRow({ timeline }: { timeline: EngineFirstHit[] }) {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-md p-3 text-xs space-y-1.5"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1">
+        {t('dashboard.aiTelemetry.tracking.timelineTitle')}
+      </div>
+      {timeline.map(e => {
+        const hit = e.first_hit_at;
+        return (
+          <div key={e.engine} className="flex items-center gap-2">
+            <span style={{
+              display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+              background: hit ? '#10b981' : 'var(--border-color)',
+            }} />
+            <span className="w-20" style={{ color: ENGINE_COLORS[e.engine] }}>
+              {t(`dashboard.aiTelemetry.engine.${e.engine}`)}
+            </span>
+            {hit ? (
+              <>
+                <span className="text-primary tabular-nums">
+                  {new Date(hit).toLocaleDateString()}
+                </span>
+                <span className="text-muted">
+                  · {t('dashboard.aiTelemetry.tracking.firstHitDay', { n: e.days_after_start ?? '?' })}
+                </span>
+                {e.first_hit_query && (
+                  <span className="text-muted truncate flex-1">· {e.first_hit_query}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-muted">{t('dashboard.aiTelemetry.tracking.notYet')}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MatrixGrid({ matrix, onPick }: {
+  matrix: TrackingMatrix;
+  onPick: (query: string, engine: EngineId) => void;
+}) {
+  const { t } = useTranslation();
+  const byKey = useMemo(() => {
+    const m = new Map<string, QueryHitCell>();
+    for (const c of matrix.cells) m.set(`${c.query}${c.engine}`, c);
+    return m;
+  }, [matrix.cells]);
+
+  return (
+    <div className="rounded-md overflow-x-auto"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <table className="text-xs border-collapse w-full">
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+            <th className="text-left px-3 py-2 font-medium text-secondary sticky left-0"
+              style={{ background: 'var(--bg-card)', minWidth: 240 }}>
+              Query \ Engine
+            </th>
+            {matrix.engines.map(e => (
+              <th key={e} className="px-3 py-2 font-medium text-center"
+                style={{ color: ENGINE_COLORS[e] }}>
+                {t(`dashboard.aiTelemetry.engine.${e}`)}
+              </th>
+            ))}
+            <th className="px-3 py-2 font-medium text-center text-secondary">
+              {t('dashboard.aiTelemetry.tracking.rowHits')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {matrix.queries.map(q => {
+            let rowHits = 0;
+            let rowTotal = 0;
+            for (const e of matrix.engines) {
+              const c = byKey.get(`${q}${e}`);
+              if (c) { rowTotal += 1; if (c.total_hits >= 1) rowHits += 1; }
+            }
+            return (
+              <tr key={q} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <td className="px-3 py-2 sticky left-0" style={{ background: 'var(--bg-card)' }}>
+                  <div className="truncate text-primary">{q}</div>
+                </td>
+                {matrix.engines.map(e => {
+                  const cell = byKey.get(`${q}${e}`);
+                  return (
+                    <td key={e} className="px-1 py-1.5 text-center">
+                      <CellBadge cell={cell} onClick={() => onPick(q, e)} />
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-2 text-center text-secondary tabular-nums">
+                  {rowHits}/{rowTotal}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="px-3 py-2 text-[11px] text-muted"
+        style={{ borderTop: '1px solid var(--border-color)' }}>
+        {t('dashboard.aiTelemetry.tracking.legend')}
+      </div>
+    </div>
+  );
+}
+
+function CellBadge({ cell, onClick }: { cell: QueryHitCell | undefined; onClick: () => void }) {
+  if (!cell || cell.status === 'pending') {
+    return (
+      <button type="button" onClick={onClick}
+        className="px-2 py-1 rounded text-muted cursor-pointer"
+        title="待做">⌛</button>
+    );
+  }
+  if (cell.status === 'running') {
+    return (
+      <button type="button" onClick={onClick}
+        className="px-2 py-1 rounded text-muted cursor-pointer"
+        title="进行中">⏳</button>
+    );
+  }
+  // done
+  const hit = cell.total_hits >= 1;
+  const date = cell.first_hit_at ? new Date(cell.first_hit_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) : '';
+  return (
+    <button type="button" onClick={onClick}
+      className="px-2 py-1 rounded transition-colors cursor-pointer"
+      style={{
+        background: hit ? 'rgba(16,185,129,0.15)' : 'transparent',
+        color: hit ? '#10b981' : 'var(--text-muted)',
+        border: hit ? '1px solid rgba(16,185,129,0.4)' : '1px solid transparent',
+      }}
+      title={hit ? `${cell.total_hits}/${cell.total_runs} 命中` : `${cell.total_runs} 次跑批 0 命中`}>
+      {hit ? `✓ ${date}` : '✓'}
+    </button>
+  );
+}
+
+// ── drawer:cell 详情 + 历次答复 + 诊断按钮 ────────────────────
+
+function CellDrawerView({
+  topicId, query, engine, token, onClose,
+}: {
+  topicId: number; query: string; engine: EngineId; token: string; onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [data, setData] = useState<CellDrawer | null>(null);
+  const [insight, setInsight] = useState<CellInsight | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    aiTelemetryApi.getCellDrawer(topicId, query, engine, token).then(d => {
+      setData(d);
+      setInsight(d.insight);
+    });
+  }, [topicId, query, engine, token]);
+
+  const handleAnalyze = async (force = false) => {
+    setAnalyzing(true);
+    try {
+      const r = await aiTelemetryApi.fetchCellInsight(topicId, query, engine, token, force);
+      setInsight(r);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleFeedback = async (f: 'helpful' | 'not_helpful' | 'wrong') => {
+    if (!insight) return;
+    await aiTelemetryApi.postCellInsightFeedback(insight.id, f, token);
+    setInsight({ ...insight, feedback: f });
+  };
+
+  const node = (
+    <div className="fixed inset-0 z-[1100] flex" onMouseDown={onClose}
+      style={{ background: 'rgba(0,0,0,0.35)' }}>
+      <div className="ml-auto h-full overflow-y-auto"
+        style={{ width: 560, background: 'var(--bg-card)', borderLeft: '1px solid var(--border-color)' }}
+        onMouseDown={e => e.stopPropagation()}>
+        <header className="sticky top-0 px-5 py-3 flex items-center justify-between z-10"
+          style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)' }}>
+          <div>
+            <div className="text-sm font-semibold text-primary">
+              {t(`dashboard.aiTelemetry.engine.${engine}`)} · {query}
+            </div>
+            {data && (
+              <div className="text-[11px] text-muted mt-0.5">
+                {data.cell.total_hits}/{data.cell.total_runs} {t('dashboard.aiTelemetry.tracking.hits')}
+                {data.cell.first_hit_at && (
+                  <> · {t('dashboard.aiTelemetry.tracking.firstHit')}: {new Date(data.cell.first_hit_at).toLocaleDateString()}</>
+                )}
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="text-muted hover:text-primary text-lg px-2">✕</button>
+        </header>
+
+        <div className="px-5 py-4 space-y-4 text-xs">
+          {!data && <div className="text-muted py-6 text-center">…</div>}
+
+          {/* 诊断块(LLM) */}
+          {data && (
+            <section className="rounded-md p-3"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <strong className="text-primary">🔍 {t('dashboard.aiTelemetry.insight.title')}</strong>
+                {insight ? (
+                  <button type="button" onClick={() => handleAnalyze(true)} disabled={analyzing}
+                    className="text-[11px] text-muted hover:text-primary">
+                    ↻ {t('dashboard.aiTelemetry.insight.refresh')}
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => handleAnalyze(false)} disabled={analyzing}
+                    className="text-[11px] px-2 py-1 rounded text-white"
+                    style={{ background: 'var(--accent-primary)' }}>
+                    {analyzing ? '…' : t('dashboard.aiTelemetry.insight.analyze')}
+                  </button>
+                )}
+              </div>
+              {analyzing && <div className="text-muted">🤔 {t('dashboard.aiTelemetry.insight.analyzing')}</div>}
+              {!analyzing && !insight && (
+                <p className="text-muted">{t('dashboard.aiTelemetry.insight.empty')}</p>
+              )}
+              {insight && <InsightBlock insight={insight} onFeedback={handleFeedback} />}
+            </section>
+          )}
+
+          {/* 历次答复 */}
+          {data && data.evidence.length > 0 && (
+            <section>
+              <div className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">
+                {t('dashboard.aiTelemetry.tracking.evidenceTitle')}
+              </div>
+              <div className="space-y-2">
+                {data.evidence.map(e => <EvidenceCard key={e.response_id} ev={e} />)}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(node, document.body);
+}
+
+function InsightBlock({ insight, onFeedback }: {
+  insight: CellInsight;
+  onFeedback: (f: 'helpful' | 'not_helpful' | 'wrong') => void;
+}) {
+  const { t } = useTranslation();
+  const verdictColor: Record<string, string> = {
+    hit_stable: '#10b981', hit_unstable: '#f59e0b', near_miss: '#3b82f6',
+    no_signal: '#9ca3af', negative_mention: '#ef4444',
+  };
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+          style={{ background: 'rgba(0,0,0,0.05)', color: verdictColor[insight.verdict] || '#9ca3af' }}>
+          {t(`dashboard.aiTelemetry.insight.verdict.${insight.verdict}`)}
+        </span>
+        <span className="text-muted">{insight.llm_model}</span>
+      </div>
+      <p className="text-primary">{insight.summary}</p>
+
+      {insight.competitors_top3.length > 0 && (
+        <div>
+          <div className="text-[11px] font-semibold text-muted uppercase mb-0.5">
+            {t('dashboard.aiTelemetry.insight.competitors')}
+          </div>
+          <ul className="space-y-0.5 ml-3">
+            {insight.competitors_top3.map((c, i) => (
+              <li key={i} className="text-muted">
+                ▸ <span className="text-primary">{c.name}</span>
+                <span className="ml-1">({c.count})</span>
+                {c.snippet && <span className="text-muted text-[11px] block ml-3">「{c.snippet}」</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {insight.answer_format && (
+        <div className="text-muted">
+          {t('dashboard.aiTelemetry.insight.format')}:
+          <span className="text-primary ml-1">{insight.answer_format}</span>
+        </div>
+      )}
+
+      {insight.citation_domains.length > 0 && (
+        <div className="text-muted">
+          {t('dashboard.aiTelemetry.insight.citationDomains')}:
+          <span className="text-primary ml-1">{insight.citation_domains.slice(0, 6).join(' · ')}</span>
+        </div>
+      )}
+
+      {insight.recommendations.length > 0 && (
+        <div>
+          <div className="text-[11px] font-semibold text-muted uppercase mb-1">
+            {t('dashboard.aiTelemetry.insight.recommendations')}
+          </div>
+          <ul className="space-y-1.5">
+            {insight.recommendations.map((r, i) => (
+              <li key={i} className="rounded p-2"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold mr-2"
+                  style={{
+                    background: r.priority === 'P0' ? '#ef4444' : r.priority === 'P1' ? '#f59e0b' : '#9ca3af',
+                    color: 'white',
+                  }}>{r.priority}</span>
+                <strong className="text-primary">{r.title}</strong>
+                <p className="mt-1 text-secondary">{r.action}</p>
+                {r.why && <p className="mt-0.5 text-muted text-[11px]">— {r.why}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-muted text-[11px]">{t('dashboard.aiTelemetry.insight.feedbackQ')}:</span>
+        {(['helpful', 'not_helpful', 'wrong'] as const).map(f => (
+          <button key={f} type="button" onClick={() => onFeedback(f)}
+            className="text-[11px] px-2 py-0.5 rounded"
+            style={{
+              background: insight.feedback === f ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+              color: insight.feedback === f ? 'white' : 'var(--text-secondary)',
+            }}>
+            {f === 'helpful' ? '👍' : f === 'not_helpful' ? '👎' : '⚠'}
+            {' '}{t(`dashboard.aiTelemetry.insight.feedback.${f}`)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EvidenceCard({ ev }: { ev: CellDrawer['evidence'][number] }) {
+  const dt = ev.created_at ? new Date(ev.created_at).toLocaleString() : '';
+  return (
+    <div className="rounded p-2"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="flex items-center gap-2 text-[11px] text-muted">
+        <span className={ev.hit ? 'text-emerald-500' : 'text-muted'}>
+          {ev.hit ? '✓' : '○'}
+        </span>
+        <span>{dt}</span>
+        {ev.source_url && (
+          <a href={ev.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">
+            📎 {ev.source_url.replace(/^https?:\/\//, '').slice(0, 40)}…
+          </a>
+        )}
+      </div>
+      {ev.hit && ev.hit_excerpt && (
+        <p className="mt-1 text-primary text-xs italic">「{ev.hit_excerpt}」</p>
+      )}
+      {!ev.hit && ev.answer && (
+        <p className="mt-1 text-muted text-[11px] line-clamp-3">{ev.answer.slice(0, 200)}…</p>
+      )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  v1.2 优化建议(周报) Tab
+// ═══════════════════════════════════════════════════════════════
+
+function BriefingsTab({ topics, token }: { topics: Topic[]; token: string }) {
+  const { t } = useTranslation();
+  const [topicId, setTopicId] = useState<number | null>(topics[0]?.id ?? null);
+  const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (topicId == null) return;
+    setLoading(true);
+    aiTelemetryApi.listBriefings(topicId, token).then(list => {
+      setBriefings(list);
+      setSelectedId(list[0]?.id ?? null);
+    }).finally(() => setLoading(false));
+  }, [topicId, token]);
+
+  const selected = useMemo(
+    () => briefings.find(b => b.id === selectedId) ?? null,
+    [briefings, selectedId],
+  );
+
+  const handleGenerate = async () => {
+    if (topicId == null) return;
+    setGenerating(true);
+    try {
+      const fresh = await aiTelemetryApi.triggerBriefing(topicId, token);
+      const list = await aiTelemetryApi.listBriefings(topicId, token);
+      setBriefings(list);
+      setSelectedId(fresh.id);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (topics.length === 0) {
+    return (
+      <div className="py-12 text-center text-sm text-muted">
+        {t('dashboard.aiTelemetry.briefings.noTopics')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-xs text-secondary">{t('dashboard.aiTelemetry.briefings.selectTopic')}</label>
+        <select
+          value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-md text-sm"
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+        >
+          {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        {briefings.length > 0 && (
+          <select value={selectedId ?? ''} onChange={e => setSelectedId(Number(e.target.value))}
+            className="px-3 py-1.5 rounded-md text-sm"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+            {briefings.map(b => (
+              <option key={b.id} value={b.id}>
+                {new Date(b.period_start).toLocaleDateString()} ~ {new Date(b.period_end).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+        )}
+        <button type="button" onClick={handleGenerate} disabled={generating || topicId == null}
+          className="text-xs px-3 py-1.5 rounded-md text-white"
+          style={{ background: 'var(--accent-primary)' }}>
+          {generating ? '…' : `📧 ${t('dashboard.aiTelemetry.briefings.regenerate')}`}
+        </button>
+      </div>
+
+      {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
+      {!loading && briefings.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted">
+          {t('dashboard.aiTelemetry.briefings.empty')}
+        </div>
+      )}
+      {!loading && selected && <BriefingView briefing={selected} token={token} />}
+    </div>
+  );
+}
+
+function BriefingView({ briefing, token }: { briefing: Briefing; token: string }) {
+  const { t } = useTranslation();
+  const [score, setScore] = useState<number | null>(briefing.feedback_score);
+
+  const handleScore = async (n: number) => {
+    setScore(n);
+    await aiTelemetryApi.postBriefingFeedback(briefing.id, n, token);
+  };
+
+  return (
+    <article className="rounded-md p-5"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <header className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-primary">
+          📰 {new Date(briefing.period_start).toLocaleDateString()} - {new Date(briefing.period_end).toLocaleDateString()}
+        </h3>
+        <span className="text-[11px] text-muted">
+          {briefing.llm_model} · {t('dashboard.aiTelemetry.briefings.generatedAt')} {new Date(briefing.generated_at).toLocaleString()}
+        </span>
+      </header>
+
+      <div className="prose prose-sm max-w-none text-primary whitespace-pre-wrap">
+        {briefing.body_md}
+      </div>
+
+      {briefing.top_actions.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">
+            🎯 {t('dashboard.aiTelemetry.briefings.topActions')}
+          </div>
+          <ul className="space-y-2">
+            {briefing.top_actions.map((a, i) => (
+              <li key={i} className="rounded p-2 text-xs"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold mr-2"
+                  style={{
+                    background: a.priority === 'P0' ? '#ef4444' : a.priority === 'P1' ? '#f59e0b' : '#9ca3af',
+                    color: 'white',
+                  }}>{a.priority}</span>
+                <strong className="text-primary">{a.title}</strong>
+                <p className="mt-1 text-muted">{a.why}</p>
+                <p className="mt-0.5 text-secondary">→ {a.how}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center gap-2 text-xs">
+        <span className="text-muted">{t('dashboard.aiTelemetry.briefings.rate')}:</span>
+        {[1, 2, 3, 4, 5].map(n => (
+          <button key={n} type="button" onClick={() => handleScore(n)}
+            className="hover:scale-110 transition-transform">
+            <span style={{ color: (score ?? 0) >= n ? '#f59e0b' : 'var(--text-muted)' }}>★</span>
+          </button>
+        ))}
+      </div>
+    </article>
   );
 }

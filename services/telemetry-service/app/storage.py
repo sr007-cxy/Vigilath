@@ -2,6 +2,9 @@
 
 读写同一 SQLAlchemy DB(backend 主库,目前是 SQLite,sentinel v2 后切 MySQL).
 Schema 由 backend 的 geo/__init__.py 创建,这里只复用同一张表的连接.
+
+这些 ORM 定义需要与 backend geo/models/ai_telemetry.py 保持字段一致.
+选择独立声明而非共享 Base,是为了让 telemetry-service 可独立部署、不强依赖 backend 代码包.
 """
 from __future__ import annotations
 
@@ -18,7 +21,6 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    # 默认指向 backend 同一 SQLite — 部署时通过 env 覆盖
     "sqlite:////home/DEV/GEO/backend/data/geo_checker.db",
 )
 
@@ -29,14 +31,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, futu
 Base = declarative_base()
 
 
-# 注:这些 ORM 定义需要与 backend geo/models/ai_telemetry.py 保持字段一致.
-# 选择独立声明而非共享 Base,是为了让 telemetry-service 可独立部署、不强依赖 backend 代码包.
-
 class TopicORM(Base):
     __tablename__ = "ai_telemetry_topics"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     name = Column(String, nullable=False)
+    target = Column(String, nullable=False, default="")
+    target_aliases_json = Column(Text, nullable=False, default="[]")
     queries_json = Column(Text, nullable=False, default="[]")
     engines_json = Column(Text, nullable=False, default="[]")
     enabled = Column(Boolean, nullable=False, default=True)
@@ -69,6 +70,64 @@ class ResponseORM(Base):
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
+    # v1
+    hit = Column(Boolean, nullable=False, default=False)
+    hit_excerpt = Column(Text, nullable=True)
+    source_url = Column(String, nullable=True)
+    # v1.1
+    competitors_json = Column(Text, nullable=True)
+    citation_domains_json = Column(Text, nullable=True)
+    answer_format = Column(String, nullable=True)
+
+
+class QueryHitORM(Base):
+    __tablename__ = "ai_telemetry_query_hits"
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id"), nullable=False)
+    query = Column(Text, nullable=False)
+    engine = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    first_hit_at = Column(DateTime, nullable=True)
+    first_hit_response_id = Column(Integer, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    total_runs = Column(Integer, nullable=False, default=0)
+    total_hits = Column(Integer, nullable=False, default=0)
+
+
+class CellInsightORM(Base):
+    __tablename__ = "ai_telemetry_cell_insights"
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id"), nullable=False)
+    query = Column(Text, nullable=False)
+    engine = Column(String, nullable=False)
+    window_start = Column(DateTime, nullable=False)
+    window_end = Column(DateTime, nullable=False)
+    verdict = Column(String, nullable=False)
+    summary = Column(Text, nullable=False, default="")
+    competitors_top3_json = Column(Text, nullable=False, default="[]")
+    recommendations_json = Column(Text, nullable=False, default="[]")
+    evidence_response_ids_json = Column(Text, nullable=False, default="[]")
+    llm_model = Column(String, nullable=False, default="")
+    prompt_version = Column(String, nullable=False, default="cell_v1")
+    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    feedback = Column(String, nullable=True)
+
+
+class TopicBriefingORM(Base):
+    __tablename__ = "ai_telemetry_topic_briefings"
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id"), nullable=False)
+    period_start = Column(DateTime, nullable=False)
+    period_end = Column(DateTime, nullable=False)
+    body_md = Column(Text, nullable=False, default="")
+    kpi_snapshot_json = Column(Text, nullable=False, default="{}")
+    top_actions_json = Column(Text, nullable=False, default="[]")
+    delivered_email_at = Column(DateTime, nullable=True)
+    feedback_score = Column(Integer, nullable=True)
+    llm_model = Column(String, nullable=False, default="")
+    prompt_version = Column(String, nullable=False, default="briefing_v1")
+    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
 
 @contextmanager
 def db_session() -> Iterator[Session]:
@@ -94,7 +153,6 @@ def start_run(s: Session, topic_id: int) -> RunORM:
     r = RunORM(topic_id=topic_id, started_at=datetime.utcnow(), status="running")
     s.add(r)
     s.flush()
-    # mark topic running
     t = s.get(TopicORM, topic_id)
     if t:
         t.last_run_at = r.started_at
@@ -117,17 +175,56 @@ def finish_run(s: Session, run_id: int, status: str, error: str | None = None) -
 def save_response(
     s: Session, *, run_id: int, topic_id: int, engine: str, query: str,
     answer: str, citations: list[dict], video_url: str | None, error: str | None,
-) -> None:
-    s.add(ResponseORM(
+    hit: bool = False, hit_excerpt: str | None = None, source_url: str | None = None,
+) -> ResponseORM:
+    r = ResponseORM(
         run_id=run_id, topic_id=topic_id, engine=engine, query=query,
         answer=answer or "",
         citations_json=json.dumps(citations or [], ensure_ascii=False),
         video_url=video_url,
         error=error,
-    ))
+        hit=hit,
+        hit_excerpt=hit_excerpt,
+        source_url=source_url,
+    )
+    s.add(r)
+    s.flush()  # 拿到 id 用于 QueryHit.first_hit_response_id
+    return r
 
 
 def parse_topic(t: TopicORM) -> tuple[list[str], list[str]]:
-    queries = json.loads(t.queries_json or "[]")
+    queries_raw = json.loads(t.queries_json or "[]")
+    queries: list[str] = []
+    for q in queries_raw:
+        if isinstance(q, dict):
+            txt = q.get("text") or ""
+            if txt:
+                queries.append(txt)
+        elif isinstance(q, str):
+            queries.append(q)
     engines = json.loads(t.engines_json or "[]")
     return queries, engines
+
+
+def parse_target(t: TopicORM) -> tuple[str, list[str]]:
+    """返回 (target, aliases). target 为空时 fallback 到 topic.name."""
+    target = (t.target or "").strip()
+    aliases = json.loads(t.target_aliases_json or "[]")
+    # 兼容老数据:target 为空 → 用 name 当 target
+    if not target:
+        target = (t.name or "").strip()
+    return target, [a for a in aliases if a]
+
+
+def query_created_at(t: TopicORM, query_text: str) -> datetime:
+    """新 query 不回填 — 取 query 自己的 created_at,缺失则回退到 topic.created_at."""
+    queries_raw = json.loads(t.queries_json or "[]")
+    for q in queries_raw:
+        if isinstance(q, dict) and q.get("text") == query_text:
+            ts = q.get("created_at")
+            if ts:
+                try:
+                    return datetime.fromisoformat(ts)
+                except (ValueError, TypeError):
+                    pass
+    return t.created_at

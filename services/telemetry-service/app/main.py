@@ -23,6 +23,8 @@ from pydantic import BaseModel, Field
 from .runner import run_preview, run_topic_once
 from .scheduler import scheduler_loop
 from .storage import db_session, TopicORM
+from .insights import get_or_generate_cell_insight, update_feedback
+from .briefings import generate_briefing_for_topic
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -115,3 +117,52 @@ async def http_run_topic(body: RunTopicBody):
 
     asyncio.create_task(_bg(t))
     return {"status": "started", "topic_id": body.topic_id}
+
+
+# ─── v1.1 cell insight (按需触发) ────────────────────────────
+
+
+class CellInsightBody(BaseModel):
+    topic_id: int
+    query: str
+    engine: str
+    force: bool = False
+
+
+@app.post("/cell-insight")
+async def http_cell_insight(body: CellInsightBody):
+    """drawer 首次打开 / 重新分析 — 同步返回(LLM 调用 3-8s)."""
+    result = await asyncio.to_thread(
+        get_or_generate_cell_insight,
+        topic_id=body.topic_id, query=body.query, engine=body.engine, force=body.force,
+    )
+    if result is None:
+        return {"status": "not_found"}
+    return result
+
+
+class FeedbackBody(BaseModel):
+    insight_id: int
+    feedback: str  # helpful / not_helpful / wrong
+
+
+@app.post("/cell-insight/feedback")
+async def http_cell_insight_feedback(body: FeedbackBody):
+    ok = update_feedback(body.insight_id, body.feedback)
+    return {"status": "ok" if ok else "failed"}
+
+
+# ─── v1.2 briefing (按需 + scheduler 自动) ──────────────────
+
+
+class BriefingTriggerBody(BaseModel):
+    topic_id: int
+
+
+@app.post("/briefing/generate")
+async def http_generate_briefing(body: BriefingTriggerBody):
+    """手动触发某 topic 上一周的周报生成(管理用 / scheduler 之外的补刀)."""
+    result = await asyncio.to_thread(generate_briefing_for_topic, body.topic_id)
+    if result is None:
+        return {"status": "not_found"}
+    return result
