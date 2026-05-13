@@ -91,7 +91,7 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
           {post.author ? `@${post.author}` : t('dashboard.sentiment.articles.detail.unknownAuthor')}
         </span>
         <span className="text-muted">·</span>
-        <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(post.publish_time)}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(post.publish_time ?? post.ingested_at)}</span>
         {showRegion && (
           <>
             <span className="text-muted">·</span>

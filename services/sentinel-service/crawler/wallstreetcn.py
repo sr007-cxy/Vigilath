@@ -80,6 +80,9 @@ class WallstreetcnClient:
                 "publish_time": pub_time,
                 "view_count": resource.get("page_views"),
                 "reply_count": resource.get("comment_count"),
+                # 见闻 API 偶尔给 praise_count(点赞);转发不暴露
+                "like_count": resource.get("praise_count") or resource.get("likes_count"),
+                "share_count": None,
                 "url": resource.get("uri") or (f"https://wallstreetcn.com/articles/{article_id}" if article_id else None),
             }
 

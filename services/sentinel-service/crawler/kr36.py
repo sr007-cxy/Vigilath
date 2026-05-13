@@ -88,6 +88,9 @@ class Kr36Client:
                 "publish_time": pub_time,
                 "view_count": item.get("pageView") or item.get("pv"),
                 "reply_count": item.get("commentCount"),
+                # 36kr API 偶尔给 favourite(收藏)/ share — 当作 like / share
+                "like_count": item.get("favourite") or item.get("favouriteCount") or item.get("likeCount"),
+                "share_count": item.get("shareCount"),
                 "url": f"https://36kr.com/p/{article_id}" if article_id else None,
             }
 

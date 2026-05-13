@@ -110,6 +110,7 @@ export const sentimentApi = {
     if (query.days !== undefined) usp.set('days', String(query.days));
     if (query.start) usp.set('start', query.start);
     if (query.end) usp.set('end', query.end);
+    if (query.sort_by) usp.set('sort_by', query.sort_by);
     return request<PostsResponse>(
       'GET',
       `/accounts/${accountId}/posts?${usp.toString()}`,

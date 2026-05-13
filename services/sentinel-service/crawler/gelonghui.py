@@ -84,6 +84,9 @@ class GelonghuiClient:
                 "publish_time": pub_time,
                 "view_count": item.get("viewCount") or item.get("pv"),
                 "reply_count": item.get("commentCount"),
+                # 格隆汇 API 偶尔给 likeCount;转发不暴露
+                "like_count": item.get("likeCount") or item.get("praiseCount"),
+                "share_count": item.get("shareCount"),
                 "url": f"https://www.gelonghui.com/p/{article_id}" if article_id else None,
             }
 

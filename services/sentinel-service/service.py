@@ -550,15 +550,21 @@ app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "
 @app.get("/accounts/{account_id}/posts")
 def list_posts(account_id: int, ticker: str, limit: int = 50,
                offset: int = 0, days: int = 1,
-               start: str | None = None, end: str | None = None) -> dict:
+               start: str | None = None, end: str | None = None,
+               sort_by: str = "newest") -> dict:
     """返回 posts JOIN analyses(给文章 Tab 用)。
 
     时间过滤(基于 ingested_at):
       - start/end (YYYY-MM-DD,闭区间) 优先;任一端可省。
       - 否则按 days:1=今日(默认), N>1=最近 N 天, 0=全部历史。
 
+    排序 sort_by(默认 newest)— 支持:
+      newest / oldest / engagement / replies / likes / shares / views /
+      cluster / mediaAZ / mediaZA / scoreSentiment / scoreInfluence.
+      未知值后端回退 newest。
+
     分页:limit + offset。返回:
-      items[]、count(本页)、total(满足时间筛选的总条数)、offset、days、start、end。
+      items[]、count(本页)、total(满足时间筛选的总条数)、offset、days、start、end、sort_by。
     """
     from storage import analyses_for_symbol, analyses_count_for_symbol  # type: ignore
     with _account_db_context(account_id):
@@ -567,13 +573,14 @@ def list_posts(account_id: int, ticker: str, limit: int = 50,
         total = analyses_count_for_symbol(conn, ticker, days=days, start=start, end=end)
         rows = analyses_for_symbol(
             conn, ticker, days=days, start=start, end=end,
-            limit=limit, offset=offset,
+            limit=limit, offset=offset, sort_by=sort_by,
         )
         out = [_row_to_dict(r) for r in rows]
     return {
         "count": len(out), "items": out, "total": int(total),
         "offset": int(offset), "limit": int(limit),
         "days": days, "start": start, "end": end,
+        "sort_by": sort_by,
     }
 
 

@@ -150,5 +150,8 @@ def _parse_item(item: dict, symbol: str) -> dict:
         "publish_time": publish_time,
         "view_count": item.get("view_count"),
         "reply_count": item.get("reply_count"),
+        # 雪球 API 公开返回 like_count / retweet_count;不存在时 None,排序时按 0 处理
+        "like_count": item.get("like_count") or item.get("fav_count"),
+        "share_count": item.get("retweet_count"),
         "url": f"https://xueqiu.com{item['target']}" if item.get("target") else None,
     }

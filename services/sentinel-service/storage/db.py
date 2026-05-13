@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS posts (
     publish_time  TEXT,
     view_count    INTEGER,
     reply_count   INTEGER,
+    like_count    INTEGER,
+    share_count   INTEGER,
     url           TEXT,
     ingested_at   TEXT NOT NULL,
     PRIMARY KEY (source, post_id)
@@ -118,6 +120,13 @@ def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    # 老 DB 升列:like_count / share_count(2026-05-13 起 posts 表新增,
+    # ADD COLUMN IF NOT EXISTS 在 SQLite 是 3.35+,这里走 try/except 兼容)
+    for col in ("like_count INTEGER", "share_count INTEGER"):
+        try:
+            conn.execute(f"ALTER TABLE posts ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
     conn.commit()
 
 
@@ -130,8 +139,10 @@ def upsert_post(conn: sqlite3.Connection, rec: dict) -> bool:
     cur = conn.execute(
         """
         INSERT INTO posts (source, post_id, symbol, author, title, content,
-                           publish_time, view_count, reply_count, url, ingested_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                           publish_time, view_count, reply_count,
+                           like_count, share_count,
+                           url, ingested_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(source, post_id) DO NOTHING
         """,
         (
@@ -144,6 +155,8 @@ def upsert_post(conn: sqlite3.Connection, rec: dict) -> bool:
             rec.get("publish_time"),
             rec.get("view_count"),
             rec.get("reply_count"),
+            rec.get("like_count"),
+            rec.get("share_count"),
             rec.get("url"),
             _now(),
         ),
@@ -239,12 +252,39 @@ def posts_missing_analysis(conn: sqlite3.Connection, symbol: str,
     return list(conn.execute(sql, params))
 
 
+# sort_by 白名单 → SQL ORDER BY 子句。
+# 全部在 SQL 层排,前端不再客户端排,避免跨 page 顺序错乱。
+# NULL 用 COALESCE 兜底为最小值,放最后。
+_SORT_SQL: dict[str, str] = {
+    "newest":         "COALESCE(p.publish_time, p.ingested_at) DESC",
+    "oldest":         "COALESCE(p.publish_time, p.ingested_at) ASC",
+    # 互动量 = view + reply + like + share(任一缺失视作 0)
+    "engagement":     ("(COALESCE(p.view_count,0) + COALESCE(p.reply_count,0) "
+                       "+ COALESCE(p.like_count,0) + COALESCE(p.share_count,0)) DESC"),
+    "shares":         "COALESCE(p.share_count, -1) DESC",
+    "replies":        "COALESCE(p.reply_count, -1) DESC",
+    "likes":          "COALESCE(p.like_count, -1) DESC",
+    "views":          "COALESCE(p.view_count, -1) DESC",
+    # 聚类 = 按 topics_json 第一个 topic 字符串排,然后组内按 noteworthy
+    "cluster":        ("COALESCE(json_extract(a.topics_json, '$[0]'), '~') ASC, "
+                       "(COALESCE(a.influence_potential,0) * ABS(COALESCE(a.sentiment_score,0))) DESC"),
+    "mediaAZ":        "p.source ASC",
+    "mediaZA":        "p.source DESC",
+    # 评分(sentiment_score 绝对值大 = 情感强烈)
+    "scoreSentiment": "ABS(COALESCE(a.sentiment_score, 0)) DESC",
+    # 影响力(沿用历史 noteworthy = influence * |sentiment|)
+    "scoreInfluence": ("(COALESCE(a.influence_potential,0) * "
+                       "ABS(COALESCE(a.sentiment_score,0))) DESC"),
+}
+
+
 def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
                         days: int | None = 1,
                         start: str | None = None,
                         end: str | None = None,
                         limit: int | None = None,
                         offset: int = 0,
+                        sort_by: str = "newest",
                         ) -> list[sqlite3.Row]:
     """文章列表(舆情 Tab 用).
 
@@ -257,7 +297,9 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
                      start/end 同时 None 时回退到 days 语义。
         - days: 1=今日(默认), N>1=最近 N 天, 0/None=全部历史
 
-    排序: max(publish_time, ingested_at) DESC.
+    排序: sort_by ∈ _SORT_SQL.keys(),默认 newest。未知值回退 newest。
+    所有 sort 都在 tie-break 末尾追加 (publish_time DESC, ingested_at DESC, post_id ASC)
+    保证分页稳定。
     分页: limit/offset。limit None = 不限。
     """
     where = ["a.symbol = ?"]
@@ -277,13 +319,17 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
         where.append("COALESCE(p.publish_time, p.ingested_at) >= ?")
         params.append(cutoff)
 
+    order = _SORT_SQL.get(sort_by) or _SORT_SQL["newest"]
+    # tie-break:稳定分页 — 同 score / 同 source 下保证顺序固定
+    tie = "p.ingested_at DESC, p.post_id ASC"
     sql = f"""
         SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
-               p.reply_count, p.url, p.content
+               p.reply_count, p.like_count, p.share_count,
+               p.url, p.content, p.ingested_at
         FROM analyses a
         JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
         WHERE {' AND '.join(where)}
-        ORDER BY max(coalesce(p.publish_time, ''), p.ingested_at) DESC
+        ORDER BY {order}, {tie}
     """
     if limit is not None:
         sql += " LIMIT ? OFFSET ?"

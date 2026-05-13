@@ -114,10 +114,13 @@ export interface SentimentPost {
   title: string | null;
   author: string | null;
   publish_time: string | null;
+  ingested_at?: string | null;
   url: string | null;
   content: string | null;
   view_count: number | null;
   reply_count: number | null;
+  like_count?: number | null;
+  share_count?: number | null;
   // analyses
   is_relevant: 0 | 1 | boolean;
   filter_reason: string | null;
@@ -151,6 +154,15 @@ export interface PostsResponse {
   end?: string | null;
 }
 
+// 排序键 — 与后端 _SORT_SQL.keys() 一一对应。
+// 默认 newest(对标图里"按最新文章 默认")。
+export type PostSortKey =
+  | 'newest' | 'oldest'
+  | 'engagement' | 'replies' | 'likes' | 'shares' | 'views'
+  | 'cluster'
+  | 'mediaAZ' | 'mediaZA'
+  | 'scoreSentiment' | 'scoreInfluence';
+
 export interface PostsQuery {
   limit?: number;
   offset?: number;
@@ -158,6 +170,7 @@ export interface PostsQuery {
   days?: number;
   start?: string;
   end?: string;
+  sort_by?: PostSortKey;
 }
 
 export interface BriefSummary {

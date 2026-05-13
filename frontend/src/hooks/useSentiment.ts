@@ -164,6 +164,8 @@ export interface InfinitePostsFilters {
   /** 起始 offset — "跳转到第 N 页" 时设为 (N-1)*pageSize,
    *  用 queryKey 区分,改值会重置 infinite query */
   startOffset?: number;
+  /** 排序键 — 见 PostSortKey,改值会重置 infinite query 第一页 */
+  sortBy?: import('../types/sentiment').PostSortKey;
 }
 
 export function useInfinitePosts(
@@ -178,6 +180,7 @@ export function useInfinitePosts(
     queryKey: [
       'sentiment', 'posts-infinite', accountId, ticker,
       pageSize, filters.days, filters.start, filters.end, startOffset,
+      filters.sortBy,
     ],
     queryFn: ({ pageParam }) => {
       const q: PostsQuery = { limit: pageSize, offset: (pageParam as number) ?? startOffset };
@@ -187,6 +190,7 @@ export function useInfinitePosts(
       } else if (filters.days !== undefined) {
         q.days = filters.days;
       }
+      if (filters.sortBy) q.sort_by = filters.sortBy;
       return sentimentApi.listPosts(accountId!, ticker!, token!, q);
     },
     initialPageParam: startOffset,

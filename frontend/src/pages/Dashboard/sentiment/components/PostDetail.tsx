@@ -92,7 +92,7 @@ export function PostDetail({ post, onBack }: Props) {
       {/* row 2: @账号 · 发布时间 · counts */}
       <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
         {post.author && <span>@{post.author}</span>}
-        <span>{post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '—'}</span>
+        <span>{(post.publish_time ?? post.ingested_at) ? new Date((post.publish_time ?? post.ingested_at)!).toLocaleString('zh-CN') : '—'}</span>
         {content && <span>📝 {countChars(content).toLocaleString()}</span>}
         {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
         {post.reply_count != null && <span>💬 {post.reply_count.toLocaleString()}</span>}

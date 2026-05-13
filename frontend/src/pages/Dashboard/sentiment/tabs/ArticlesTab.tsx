@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { mockPosts } from '../../../../mocks/sentiment';
 import { useInfinitePosts, useGenerateDraft, useSentimentPlatforms } from '../../../../hooks/useSentiment';
 import type {
-  SentimentAccount, SentimentPost, SentimentLabel, RiskLevel,
+  SentimentAccount, SentimentPost, SentimentLabel, RiskLevel, PostSortKey,
 } from '../../../../types/sentiment';
 
 import { PostCard } from '../components/PostCard';
@@ -23,7 +23,22 @@ import {
 } from '../../../../constants/sentimentPlatforms';
 import type { SentimentPlatform } from '../../../../types/sentiment';
 
-type SortKey = 'influence' | 'newest' | 'views';
+// 排序键 = 后端 PostSortKey;影响力/情感强度走 scoreInfluence / scoreSentiment 子项
+type SortKey = PostSortKey;
+
+// 默认排序 — 对标图片"按最新文章 默认"
+const DEFAULT_SORT: SortKey = 'newest';
+
+// 评分子菜单(图里"按评分排序 ▸ 评分")— 展开后是这两项
+const SCORE_SUBMENU: readonly SortKey[] = ['scoreSentiment', 'scoreInfluence'];
+
+// 主下拉的顺序(图里自上而下) — 评分子菜单单独渲染
+const SORT_ITEMS: readonly SortKey[] = [
+  'newest', 'oldest',
+  'engagement', 'shares', 'replies', 'likes', 'views',
+  'cluster',
+  'mediaAZ', 'mediaZA',
+];
 // 时间筛选预设 — 与参考竞品对齐
 type TimePreset = 'today' | 'h24' | 'd3' | 'd7' | 'd14' | 'd30' | 'd90' | 'all' | 'custom';
 
@@ -115,10 +130,6 @@ const cardStyle: React.CSSProperties = {
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
 
-function noteworthy(p: SentimentPost): number {
-  return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
-}
-
 interface Props {
   account: SentimentAccount;
   usingMock?: boolean;
@@ -195,11 +206,11 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [startOffset, setStartOffset] = useState<number>(0);
   const [jumpInput, setJumpInput] = useState<string>('');
 
-  // 时间筛选改变 / preset 切换 → 重置分页
+  // 时间筛选 / 排序改变 → 重置分页(否则切排序还停留在第 N 页,体验割裂)
   useEffect(() => {
     setStartOffset(0);
     setJumpInput('');
-  }, [timePreset, appliedStart, appliedEnd]);
+  }, [timePreset, appliedStart, appliedEnd, sortBy]);
 
   // 切到 custom 时自动填默认范围 = 今日 00:00 ~ 23:59
   // (用户明确没改 customStart/customEnd 时才填,避免覆盖之前输入的值)
@@ -285,6 +296,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       end: effectiveRange.end,
       days: effectiveRange.days,
       startOffset,
+      sortBy,
     },
   );
 
@@ -348,7 +360,49 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [specificMedia, setSpecificMedia] = useState<string>('');
   const [columnInput, setColumnInput] = useState<string>('');
   const [authorInput, setAuthorInput] = useState<string>('');
-  const [sortBy, setSortBy] = useState<SortKey>('influence');
+  const [sortBy, setSortBy] = useState<SortKey>(DEFAULT_SORT);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortBtnRef = useRef<HTMLButtonElement | null>(null);
+  const sortPopupRef = useRef<HTMLDivElement | null>(null);
+  const [sortPopupPos, setSortPopupPos] = useState<{ top: number; right: number } | null>(null);
+
+  // 评分子菜单 hover/click 展开
+  const [sortScoreOpen, setSortScoreOpen] = useState(false);
+
+  // 下拉:跟随触发器定位 + 滚动/resize 重算
+  useEffect(() => {
+    if (!sortOpen) return;
+    const update = () => {
+      const el = sortBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setSortPopupPos({
+        top: rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [sortOpen]);
+
+  // 点外部关闭(包括子菜单)
+  useEffect(() => {
+    if (!sortOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (sortBtnRef.current?.contains(target)) return;
+      if (sortPopupRef.current?.contains(target)) return;
+      setSortOpen(false);
+      setSortScoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [sortOpen]);
 
   // source code → (media_type, industry, region) 查找表
   const platformAxes = useMemo(() => {
@@ -431,8 +485,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey]);
 
+  // posts 已由后端按 sortBy 排好序;这里只做客户端 chip 二次筛选,不再 sort。
   const filtered = useMemo(() => {
-    let list = posts.filter(p => {
+    return posts.filter(p => {
       const isRel = !!p.is_relevant;
       if (onlyRelevant && !isRel) return false;
       const sl = (p.sentiment_label as string) || 'unknown';
@@ -464,15 +519,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
       }
       return true;
     });
-    if (sortBy === 'influence') {
-      list = list.sort((a, b) => noteworthy(b) - noteworthy(a));
-    } else if (sortBy === 'newest') {
-      list = list.sort((a, b) => (b.publish_time ?? '').localeCompare(a.publish_time ?? ''));
-    } else if (sortBy === 'views') {
-      list = list.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0));
-    }
-    return list;
-  }, [posts, sentiments, risks, sources, topic, keywordScope, authorInput, onlyRelevant, sortBy, allowedSources]);
+  }, [posts, sentiments, risks, sources, topic, keywordScope, authorInput, onlyRelevant, allowedSources]);
 
   // 当前 filtered 集合的 stance 分布(情感类型进度条用)
   const stanceDist = useMemo(() => {
@@ -520,7 +567,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setSentiments(new Set()); setRisks(new Set());
     setMediaTypes(new Set()); setIndustries(new Set());
     setSources(new Set());
-    setTopic(''); setSortBy('influence');
+    setTopic(''); setSortBy(DEFAULT_SORT);
     setKeywordScope(''); setAuthorRegion(''); setArticleType('');
     setSpecificMedia(''); setColumnInput(''); setAuthorInput('');
   };
@@ -716,6 +763,52 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>
   );
 
+  // 排序下拉 — 对标图片样式:主菜单 + 评分子菜单 + 灰掉的禁用项
+  const sortPopup = sortOpen && sortPopupPos && (
+    <div ref={sortPopupRef}
+      className="rounded-lg shadow-2xl py-1"
+      style={{
+        position: 'fixed',
+        top: sortPopupPos.top,
+        right: sortPopupPos.right,
+        zIndex: 1000,
+        width: 240,
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+      }}>
+      {SORT_ITEMS.map(k => (
+        <SortMenuItem key={k} active={sortBy === k} t={t} sortKey={k}
+          isDefault={k === DEFAULT_SORT}
+          onPick={() => { setSortBy(k); setSortOpen(false); setSortScoreOpen(false); }} />
+      ))}
+
+      {/* 按评分排序 — 可展开子菜单 */}
+      <SortScoreParent
+        t={t}
+        open={sortScoreOpen}
+        onToggle={() => setSortScoreOpen(v => !v)}
+        activeKey={SCORE_SUBMENU.includes(sortBy) ? sortBy : null}
+        submenu={SCORE_SUBMENU}
+        onPick={(k) => { setSortBy(k); setSortOpen(false); setSortScoreOpen(false); }}
+      />
+
+      {/* ── 灰掉:数据未采集 / 暂不支持 ─────────── */}
+      <div className="my-1" style={{ borderTop: '1px solid var(--border-color)' }} />
+      {(['commentDetailCount', 'commentUpdatedAt'] as const).map(k => (
+        <DisabledMenuItem key={k} t={t} sortKey={k} />
+      ))}
+
+      <div className="my-1" style={{ borderTop: '1px solid var(--border-color)' }} />
+      {(['relevance', 'favoritedFirst'] as const).map(k => (
+        <DisabledMenuItem key={k} t={t} sortKey={k} />
+      ))}
+      <DisabledMenuItem t={t} sortKey="editor" hasSubmenu />
+      {(['wordCount', 'addedAt'] as const).map(k => (
+        <DisabledMenuItem key={k} t={t} sortKey={k} />
+      ))}
+    </div>
+  );
+
   // 右栏:无文章选中 → 280-320px 窄筛选条;选中后 → 1.2fr 宽承载正文
   const gridCls = selected
     ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]'
@@ -731,6 +824,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
   return (
     <div className={`grid grid-cols-1 ${gridCls} gap-3`}>
       {timePopup && createPortal(timePopup, document.body)}
+      {sortPopup && createPortal(sortPopup, document.body)}
 
       {advancedOpen && (
         <AdvancedFilterModal
@@ -793,17 +887,20 @@ export function ArticlesTab({ account, usingMock }: Props) {
               <span className="ml-1.5">· {posts.length}/{total}</span>
             )}
           </span>
-          <div className="ml-auto flex items-center gap-0.5">
-            {(['influence', 'newest', 'views'] as SortKey[]).map(k => (
-              <button key={k} type="button" onClick={() => setSortBy(k)}
-                className={`text-xs px-1.5 py-0.5 rounded ${sortBy === k ? 'font-bold' : ''}`}
-                style={{
-                  background: sortBy === k ? 'var(--bg-tertiary)' : 'transparent',
-                  color: sortBy === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                }}>
-                {t(`dashboard.sentiment.articles.sort.${k}`)}
-              </button>
-            ))}
+          <div className="ml-auto">
+            <button ref={sortBtnRef} type="button"
+              onClick={() => setSortOpen(v => !v)}
+              className="text-xs px-2.5 py-1 rounded inline-flex items-center gap-1.5 transition-colors"
+              style={{
+                background: sortOpen ? 'var(--accent-primary)' : 'var(--bg-surface)',
+                color: sortOpen ? '#ffffff' : 'var(--text-primary)',
+                border: '1px solid var(--border-color)',
+              }}>
+              <span>{t('dashboard.sentiment.articles.sort.trigger', {
+                label: t(`dashboard.sentiment.articles.sort.${sortBy}`),
+              })}</span>
+              <span style={{ fontSize: 10 }}>{sortOpen ? '▴' : '▾'}</span>
+            </button>
           </div>
         </div>
 
@@ -1208,6 +1305,112 @@ function CalendarMonth({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ── 排序下拉子组件 ─────────────────────────────────────────
+ * SortMenuItem:普通选项,active 时左侧 ✓,默认项右侧蓝色"默认"chip
+ * SortScoreParent:可展开的"按评分排序" — 右侧 ▸,展开后内联 submenu
+ * DisabledMenuItem:灰掉的禁用项 — tooltip 说明原因 */
+
+function SortMenuItem({ active, isDefault, t, sortKey, onPick }: {
+  active: boolean;
+  isDefault: boolean;
+  t: (k: string, opts?: Record<string, unknown>) => string;
+  sortKey: SortKey;
+  onPick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onPick}
+      className="w-full text-left text-xs px-3 py-1.5 flex items-center transition-colors hover:bg-tertiary"
+      style={{ color: 'var(--text-primary)' }}>
+      <span className="flex-1">
+        {t('dashboard.sentiment.articles.sort.trigger', {
+          label: t(`dashboard.sentiment.articles.sort.${sortKey}`),
+        })}
+      </span>
+      {isDefault && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded mr-1.5"
+          style={{ background: 'rgba(14,165,233,0.15)', color: 'var(--accent-primary)' }}>
+          {t('dashboard.sentiment.articles.sort.default')}
+        </span>
+      )}
+      {active && (
+        <span style={{ color: 'var(--accent-primary)' }}>✓</span>
+      )}
+    </button>
+  );
+}
+
+function SortScoreParent({
+  t, open, onToggle, activeKey, submenu, onPick,
+}: {
+  t: (k: string, opts?: Record<string, unknown>) => string;
+  open: boolean;
+  onToggle: () => void;
+  activeKey: SortKey | null;
+  submenu: readonly SortKey[];
+  onPick: (k: SortKey) => void;
+}) {
+  return (
+    <>
+      <button type="button" onClick={onToggle}
+        className="w-full text-left text-xs px-3 py-1.5 flex items-center transition-colors hover:bg-tertiary"
+        style={{ color: 'var(--text-primary)' }}>
+        <span className="flex-1">
+          {t('dashboard.sentiment.articles.sort.trigger', {
+            label: t('dashboard.sentiment.articles.sort.scoreGroupTitle'),
+          })}
+        </span>
+        <span className="text-[11px] mr-1.5"
+          style={{ color: 'var(--accent-primary)' }}>
+          {activeKey
+            ? t(`dashboard.sentiment.articles.sort.${activeKey}`)
+            : t('dashboard.sentiment.articles.sort.scoreSubmenuTrigger')}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ background: 'var(--bg-surface)' }}>
+          {submenu.map(k => (
+            <button key={k} type="button" onClick={() => onPick(k)}
+              className="w-full text-left text-xs pl-6 pr-3 py-1.5 flex items-center transition-colors hover:bg-tertiary"
+              style={{ color: 'var(--text-primary)' }}>
+              <span className="flex-1">{t(`dashboard.sentiment.articles.sort.${k}`)}</span>
+              {activeKey === k && <span style={{ color: 'var(--accent-primary)' }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function DisabledMenuItem({ t, sortKey, hasSubmenu }: {
+  t: (k: string, opts?: Record<string, unknown>) => string;
+  sortKey: string;
+  hasSubmenu?: boolean;
+}) {
+  return (
+    <div
+      title={t('dashboard.sentiment.articles.sort.disabledHint')}
+      className="w-full text-left text-xs px-3 py-1.5 flex items-center cursor-not-allowed select-none"
+      style={{ color: 'var(--text-muted)', opacity: 0.55 }}>
+      <span className="flex-1">
+        {t('dashboard.sentiment.articles.sort.trigger', {
+          label: t(`dashboard.sentiment.articles.sort.${sortKey}`),
+        })}
+      </span>
+      {hasSubmenu && (
+        <>
+          <span className="text-[11px] mr-1.5"
+            style={{ color: 'var(--text-muted)' }}>
+            {t('dashboard.sentiment.articles.sort.scoreSubmenuTrigger')}
+          </span>
+          <span style={{ fontSize: 10 }}>▸</span>
+        </>
+      )}
     </div>
   );
 }

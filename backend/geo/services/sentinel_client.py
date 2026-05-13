@@ -426,13 +426,18 @@ def run_respond(
 
 def list_posts(account_id: int, ticker: str, limit: int = 50,
                days: int = 1, offset: int = 0,
-               start: str | None = None, end: str | None = None) -> dict:
-    """文章列表 + 分页。
+               start: str | None = None, end: str | None = None,
+               sort_by: str = "newest") -> dict:
+    """文章列表 + 分页 + 排序。
 
     时间过滤(基于 ingested_at):start/end (YYYY-MM-DD,闭区间) 优先,否则按 days。
     分页:limit + offset。
+    排序:sort_by — 见 sentinel-service /accounts/{id}/posts 接口注释。
     """
-    params: dict = {"ticker": ticker, "limit": limit, "offset": offset, "days": days}
+    params: dict = {
+        "ticker": ticker, "limit": limit, "offset": offset,
+        "days": days, "sort_by": sort_by,
+    }
     if start:
         params["start"] = start
     if end:

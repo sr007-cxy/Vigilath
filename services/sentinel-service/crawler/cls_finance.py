@@ -138,6 +138,9 @@ class ClsFinanceClient:
                 "publish_time": pub_time,
                 "view_count": item.get("pv"),
                 "reply_count": item.get("comment_num"),
+                # 财联社 API 偶尔给 praise_num / share_num
+                "like_count": item.get("praise_num") or item.get("like_num"),
+                "share_count": item.get("share_num"),
                 "url": f"https://www.cls.cn/detail/{item['id']}" if item.get("id") else None,
             }
 
