@@ -447,7 +447,7 @@ function _mockMatrix(topicId: number): TrackingMatrix {
   };
 }
 
-function _mockDrawer(topicId: number, query: string, engine: EngineId): CellDrawer {
+function _mockDrawer(_topicId: number, query: string, engine: EngineId): CellDrawer {
   return {
     cell: {
       query, engine, status: 'done',

@@ -205,6 +205,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [appliedEnd, setAppliedEnd] = useState<string>('');
   const [startOffset, setStartOffset] = useState<number>(0);
   const [jumpInput, setJumpInput] = useState<string>('');
+  // 排序 state 提前到这里,后面 effect 里要用作 dep;dropdown UI 相关 state 仍在原位
+  const [sortBy, setSortBy] = useState<SortKey>(DEFAULT_SORT);
 
   // 时间筛选 / 排序改变 → 重置分页(否则切排序还停留在第 N 页,体验割裂)
   useEffect(() => {
@@ -360,7 +362,6 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const [specificMedia, setSpecificMedia] = useState<string>('');
   const [columnInput, setColumnInput] = useState<string>('');
   const [authorInput, setAuthorInput] = useState<string>('');
-  const [sortBy, setSortBy] = useState<SortKey>(DEFAULT_SORT);
   const [sortOpen, setSortOpen] = useState(false);
   const sortBtnRef = useRef<HTMLButtonElement | null>(null);
   const sortPopupRef = useRef<HTMLDivElement | null>(null);
