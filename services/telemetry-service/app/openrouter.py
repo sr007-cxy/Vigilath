@@ -33,11 +33,13 @@ log = logging.getLogger(__name__)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 DEFAULT_MODEL_MAP: dict[str, str] = {
-    "chatgpt": "openai/gpt-4o-mini:online",
-    "claude":  "anthropic/claude-3.5-sonnet:online",
-    "gemini":  "google/gemini-2.0-flash-exp:online",
-    "grok":    "x-ai/grok-2-1212:online",
-    "copilot": "openai/gpt-4o:online",
+    # 2026-05 实测可用,优先用「search-preview」(自带 web search)或「router alias」.
+    # 老的 `:online` 后缀在 2026 已废弃,会返回 500.
+    "chatgpt": "openai/gpt-4o-mini-search-preview",
+    "claude":  "~anthropic/claude-sonnet-latest",
+    "gemini":  "~google/gemini-flash-latest",
+    "grok":    "x-ai/grok-4-fast",
+    "copilot": "openai/gpt-4o-search-preview",
 }
 
 # `_URL_RE` 在 answer 文本里抓 URL 兜底(GPT/Claude/Grok 没有结构化 citations 字段)
