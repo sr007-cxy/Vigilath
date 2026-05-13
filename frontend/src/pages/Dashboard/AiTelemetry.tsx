@@ -1286,8 +1286,9 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<RunNowResult[] | null>(null);
 
-  // DeepSeek 候选生成 — seed 输入 + 候选 picker
+  // DeepSeek 候选生成 — seed + industry,target/aliases 自动从表单当前值拿
   const [seed, setSeed] = useState('');
+  const [industry, setIndustry] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -1346,7 +1347,12 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     setSuggesting(true);
     setSuggestErr(null);
     try {
-      const res = await aiTelemetryApi.suggestQueries(s, 20, token);
+      const res = await aiTelemetryApi.suggestQueries({
+        seed: s, count: 20,
+        target: target.trim(),
+        aliases,
+        industry: industry.trim(),
+      }, token);
       setSuggestions(res.queries);
       setPicked(new Set());
     } catch (e: unknown) {
@@ -1468,6 +1474,17 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
                   ? t('dashboard.aiTelemetry.form.suggestRunning')
                   : t('dashboard.aiTelemetry.form.suggestGenerate')}
               </button>
+            </div>
+            <input
+              type="text" value={industry} onChange={e => setIndustry(e.target.value)}
+              placeholder={t('dashboard.aiTelemetry.form.suggestIndustryPlaceholder') || ''}
+              className="w-full px-3 py-1.5 rounded-md text-sm"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            />
+            <div className="text-xs text-muted">
+              {target.trim()
+                ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
+                : t('dashboard.aiTelemetry.form.suggestContextOff')}
             </div>
             {suggestErr && (
               <div className="text-xs text-rose-500">⚠ {suggestErr}</div>

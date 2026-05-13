@@ -175,13 +175,23 @@ async def http_generate_briefing(body: BriefingTriggerBody):
 class SuggestQueriesBody(BaseModel):
     seed: str = Field(..., min_length=1, max_length=200)
     count: int = Field(20, ge=5, le=50)
+    target: str = Field("", max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+    industry: str = Field("", max_length=100)
 
 
 @app.post("/suggest-queries")
 async def http_suggest_queries(body: SuggestQueriesBody):
-    """根据 seed 主题用 DeepSeek 生成 query 候选,前端做多选 picker."""
+    """根据 seed + target 上下文用 DeepSeek 生成 query 候选,前端做多选 picker.
+
+    target 非空时走 GEO-aware prompt(候选不含 target / aliases 字眼),
+    缺省时退化为通用 prompt(向后兼容)。
+    """
     try:
-        queries = await suggest_queries(body.seed, body.count)
+        queries = await suggest_queries(
+            body.seed, body.count,
+            target=body.target, aliases=body.aliases, industry=body.industry,
+        )
     except DeepSeekError as e:
         status = 400 if e.code in ("invalid_seed", "no_key") else 502
         raise HTTPException(status, detail={"code": e.code, "message": e.message})

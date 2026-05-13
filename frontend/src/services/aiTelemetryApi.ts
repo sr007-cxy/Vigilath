@@ -327,17 +327,26 @@ export const aiTelemetryApi = {
   },
 
   async suggestQueries(
-    seed: string, count: number, token: string,
+    args: {
+      seed: string; count: number;
+      target?: string; aliases?: string[]; industry?: string;
+    },
+    token: string,
   ): Promise<{ seed: string; queries: string[] }> {
     if (isMockMode()) {
       const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价'];
       return Promise.resolve({
-        seed,
-        queries: stems.slice(0, count).map(s => `${seed} ${s}`),
+        seed: args.seed,
+        queries: stems.slice(0, args.count).map(s => `${args.seed} ${s}`),
       });
     }
     return request<{ seed: string; queries: string[] }>(
-      'POST', '/suggest-queries', token, { seed, count },
+      'POST', '/suggest-queries', token, {
+        seed: args.seed, count: args.count,
+        target: args.target || '',
+        aliases: args.aliases || [],
+        industry: args.industry || '',
+      },
     );
   },
 

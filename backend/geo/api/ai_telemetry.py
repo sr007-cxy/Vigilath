@@ -217,23 +217,35 @@ async def suggest_queries(
 ):
     """种子主题 → DeepSeek 候选 query,前端 picker 多选回填。
 
-    body: {"seed": str, "count": int=20}
-    resp: {"seed": str, "queries": [str, ...]}
+    body: {seed, count?=20, target?, aliases?=[], industry?}
+    resp: {seed, queries: [str, ...]}
+
+    target 非空时 telemetry-service 走 GEO-aware prompt(候选不含 target / aliases 字眼)。
     """
     seed = (payload.get("seed") or "").strip()
     if not seed:
         raise HTTPException(400, "seed cannot be empty")
-    count = payload.get("count", 20)
     try:
-        count = int(count)
+        count = int(payload.get("count", 20))
     except (TypeError, ValueError):
         count = 20
     count = max(5, min(count, 50))
 
+    target = (payload.get("target") or "").strip()
+    industry = (payload.get("industry") or "").strip()
+    aliases_in = payload.get("aliases") or []
+    if not isinstance(aliases_in, list):
+        aliases_in = []
+    aliases = [str(a).strip() for a in aliases_in if str(a).strip()][:20]
+
+    body = {
+        "seed": seed, "count": count,
+        "target": target, "aliases": aliases, "industry": industry,
+    }
     url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
-            r = await client.post(url, json={"seed": seed, "count": count})
+            r = await client.post(url, json=body)
     except httpx.HTTPError as e:
         log.warning("telemetry-service suggest-queries failed: %s", e)
         raise HTTPException(502, f"telemetry-service unavailable: {e}")
