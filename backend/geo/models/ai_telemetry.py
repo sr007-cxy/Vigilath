@@ -29,9 +29,11 @@ class AiTelemetryTopicORM(Base):
     """AI 遥测话题配置.
 
     v1 新增 `target` 字段(被检测的检索词,如 "金诚同达律所")+ `target_aliases_json`(别名列表).
-    `queries_json` 升级支持两种形态以做向后兼容:
+    `queries_json` 升级支持三种形态以做向后兼容:
       - list[str] (旧版,所有 query 视为 topic 创建时即存在)
-      - list[{text, created_at}] (新版,每个 query 记自己的创建时间,用于"新 query 不回填")
+      - list[{text, created_at}] (v1)
+      - list[{text, created_at, cluster_id?}] (v2,picker 端聚类后保留簇归属)
+    `clusters_json`:picker 端嵌入 + K-Means 出的簇元数据,跑批结果按 cluster_id 分组用。
     """
     __tablename__ = "ai_telemetry_topics"
 
@@ -43,7 +45,8 @@ class AiTelemetryTopicORM(Base):
     target = Column(String, nullable=False, default="")
     target_aliases_json = Column(Text, nullable=False, default="[]")    # list[str]
 
-    queries_json = Column(Text, nullable=False, default="[]")   # list[str] | list[{text, created_at}]
+    queries_json = Column(Text, nullable=False, default="[]")   # list[str] | list[{text, created_at, cluster_id?}]
+    clusters_json = Column(Text, nullable=False, default="[]")  # list[{cluster_id, label, size}]
     engines_json = Column(Text, nullable=False, default="[]")   # list[engine_id]
     enabled = Column(Boolean, nullable=False, default=True)
 
@@ -195,11 +198,20 @@ VALID_ENGINES = {
 }
 
 
+class ClusterMeta(BaseModel):
+    cluster_id: int
+    label: str
+    size: int
+
+
 class TopicPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     target: str = Field("", max_length=128)
     target_aliases: list[str] = Field(default_factory=list, max_length=10)
     queries: list[str] = Field(..., min_length=1, max_length=50)
+    # 与 queries 同长的 cluster_id 数组,可选;长度不齐或缺省时全部按 0 处理
+    query_cluster_ids: Optional[list[int]] = None
+    clusters: Optional[list[ClusterMeta]] = None
     engines: list[str] = Field(..., min_length=1, max_length=10)
     enabled: bool = True
 
@@ -210,6 +222,8 @@ class TopicOut(BaseModel):
     target: str
     target_aliases: list[str]
     queries: list[str]
+    query_cluster_ids: list[int]
+    clusters: list[ClusterMeta]
     engines: list[str]
     enabled: bool
     last_run_at: Optional[datetime]
@@ -219,22 +233,30 @@ class TopicOut(BaseModel):
 
     @classmethod
     def from_orm_row(cls, r: AiTelemetryTopicORM) -> "TopicOut":
-        # queries_json 兼容两种形态:list[str] 与 list[{text, created_at}]
+        # queries_json 兼容三种形态:list[str] / list[{text, created_at}] / list[{text, created_at, cluster_id}]
         raw = json.loads(r.queries_json or "[]")
         queries: list[str] = []
+        cluster_ids: list[int] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
                 if t:
                     queries.append(t)
+                    cid = q.get("cluster_id")
+                    cluster_ids.append(int(cid) if isinstance(cid, int) else 0)
             elif isinstance(q, str):
                 queries.append(q)
+                cluster_ids.append(0)
+        clusters_raw = json.loads(r.clusters_json or "[]")
+        clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         return cls(
             id=r.id,
             name=r.name,
             target=r.target or "",
             target_aliases=json.loads(r.target_aliases_json or "[]"),
             queries=queries,
+            query_cluster_ids=cluster_ids,
+            clusters=clusters,
             engines=json.loads(r.engines_json or "[]"),
             enabled=r.enabled,
             last_run_at=r.last_run_at,
@@ -313,6 +335,24 @@ class OwnedSplit(BaseModel):
     other: int                    # 未命中的 citation 数
     owned_pct: float              # 0-100
     delta_pct: Optional[float] = None   # 与上一周期 owned_pct 相比
+
+
+class ClusterBreakdownItem(BaseModel):
+    cluster_id: int
+    label: str
+    query_count: int          # 这一簇里的 query 数(topic 维度,不分时段)
+    response_count: int       # 本期成功 response 数(query × engine,error 不算)
+    mention_count: int        # response 里有品牌词的数
+    mention_rate: float       # mention_count / response_count(0 → 0.0)
+    citation_count: int       # response.citations 累计
+
+
+class IntentBreakdownOut(BaseModel):
+    topic_id: int
+    period_days: int
+    brand_keywords: list[str]
+    clusters: list[ClusterBreakdownItem]   # 按 size 降序
+    uncategorized: ClusterBreakdownItem    # cluster_id 无匹配 / 老话题无聚类信息时的兜底桶
 
 
 class OverviewOut(BaseModel):

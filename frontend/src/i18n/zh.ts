@@ -1873,7 +1873,11 @@ const zh = {
                 "selectTopic": "选择话题",
                 "noBrand": "未配置品牌词,AI 可见度无法计算 — 请在 账户/品牌设置 里填品牌名 / 别名",
                 "tooltipCitations": "引用",
-                "tooltipDate": "日期"
+                "tooltipDate": "日期",
+                "intentTitle": "Intent 分布(按 query 簇看 AI 提及率)",
+                "intentHint": "建话题时 query 已自动按意图聚为几簇。命中率低的簇 → 该补这类话题下的内容。",
+                "intentResponseCount": "{{m}} / {{n}}",
+                "intentUncategorized": "未分类"
               },
               "results": {
                 "selectTopic": "选择话题",
@@ -1961,6 +1965,11 @@ const zh = {
                 "queriesPickerEmpty": "候选池为空 — 输入主题种子后点「话题挖掘」,一次产出约 200 条候选供你筛选。",
                 "queriesFilterPlaceholder": "按文本过滤候选…",
                 "queriesFilterCount": "显示 {{shown}} / {{total}}",
+                "sortByScoreOn": "按评分",
+                "sortByScoreOff": "原顺序",
+                "clusterExpand": "展开",
+                "clusterCollapse": "收起",
+                "clusterPickAll": "全选此簇",
                 "queriesClearPicked": "清空已选",
                 "queriesClearUnpicked": "移除未选候选",
                 "suggestPlaceholder": "输入主题种子,例如:云数据中心 / 律所服务 / 跨境电商",

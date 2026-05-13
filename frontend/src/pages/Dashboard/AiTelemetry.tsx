@@ -17,9 +17,11 @@ import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
+  type IntentBreakdown,
   type OwnedSplit,
   type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
   type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
+  type QueryCandidate, type ClusterMeta,
 } from '../../services/aiTelemetryApi';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -279,6 +281,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [data, setData] = useState<Overview | null>(null);
   const [sov, setSoV] = useState<ShareOfVoice | null>(null);
+  const [intent, setIntent] = useState<IntentBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -291,9 +294,11 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
     Promise.all([
       aiTelemetryApi.getOverview(topicId, period, token),
       aiTelemetryApi.getShareOfVoice(topicId, period, token).catch(() => null),
-    ]).then(([ov, s]) => {
+      aiTelemetryApi.getIntentBreakdown(topicId, period, token).catch(() => null),
+    ]).then(([ov, s, ib]) => {
       setData(ov);
       setSoV(s);
+      setIntent(ib);
     }).finally(() => setLoading(false));
   }, [topicId, period, token]);
 
@@ -390,6 +395,9 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
 
       {/* 趋势图 */}
       <TrendChart data={data} loading={loading} />
+
+      {/* intent 分布(picker 端聚出的簇 × 本期 mention 率)*/}
+      <IntentBreakdownBlock data={intent} loading={loading} />
 
       {/* 引用分析:Top 10 + Owned vs Other */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -548,6 +556,76 @@ function PositionBar({ dist }: { dist: ShareOfVoice['position_dist'] }) {
     </div>
   );
 }
+
+// ── intent 分布 ────────────────────────────────────────────
+
+function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null; loading: boolean }) {
+  const { t } = useTranslation();
+  if (loading && !data) {
+    return (
+      <div className="rounded-lg p-4 text-sm text-muted text-center"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>…</div>
+    );
+  }
+  if (!data) return null;
+  const hasSignal = data.clusters.length > 0 || data.uncategorized.response_count > 0;
+  if (!hasSignal) return null;
+
+  // 一行显示所有有 response 的簇 + 兜底桶。按 mention_rate 升序排,先看到弱簇 → 内容补强目标
+  const items = [
+    ...data.clusters,
+    ...(data.uncategorized.response_count > 0 ? [data.uncategorized] : []),
+  ].filter(c => c.response_count > 0)
+    .sort((a, b) => a.mention_rate - b.mention_rate);
+
+  if (items.length === 0) return null;
+
+  const maxRate = Math.max(...items.map(c => c.mention_rate), 0.01);
+  return (
+    <div className="rounded-lg p-4"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <h3 className="text-sm font-medium text-primary mb-3">
+        {t('dashboard.aiTelemetry.overview.intentTitle')}
+      </h3>
+      <div className="text-xs text-muted mb-3">
+        {t('dashboard.aiTelemetry.overview.intentHint')}
+      </div>
+      <div className="space-y-2">
+        {items.map(c => {
+          const rate = c.mention_rate * 100;
+          const barPct = (c.mention_rate / maxRate) * 100;
+          const barColor = c.mention_rate >= 0.5 ? 'var(--accent-primary)'
+            : c.mention_rate >= 0.25 ? '#f59e0b'
+            : '#ef4444';
+          return (
+            <div key={c.cluster_id} className="flex items-center gap-3 text-xs">
+              <div className="w-40 shrink-0 break-all" style={{ color: 'var(--text-primary)' }}>
+                {c.cluster_id === -1
+                  ? t('dashboard.aiTelemetry.overview.intentUncategorized')
+                  : c.label}
+              </div>
+              <div className="flex-1 relative h-4 rounded"
+                style={{ background: 'var(--bg-input)' }}>
+                <div className="absolute inset-y-0 left-0 rounded"
+                  style={{ width: `${barPct}%`, background: barColor }} />
+              </div>
+              <div className="w-12 text-right tabular-nums font-mono shrink-0"
+                style={{ color: 'var(--text-primary)' }}>
+                {rate.toFixed(0)}%
+              </div>
+              <div className="w-24 text-right text-muted shrink-0">
+                {t('dashboard.aiTelemetry.overview.intentResponseCount', {
+                  m: c.mention_count, n: c.response_count,
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 // ── 引用分析:Top 10 ────────────────────────────────────────────
 
@@ -1318,9 +1396,26 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const [industry, setIndustry] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>(initial?.queries || []);
+  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果话题
+  // 已存过 cluster_ids 就把簇 ID 一并回填,允许下次保存继续按簇分组
+  const [suggestions, setSuggestions] = useState<QueryCandidate[]>(() => {
+    const qs = initial?.queries || [];
+    const cids = initial?.query_cluster_ids || [];
+    return qs.map((text, i) => ({
+      text, score: 0, sources: [],
+      ...(typeof cids[i] === 'number' && cids[i] >= 0 ? { cluster_id: cids[i] } : {}),
+    }));
+  });
+  const [clusters, setClusters] = useState<ClusterMeta[]>(
+    () => (initial?.clusters || []).map(c => ({
+      cluster_id: c.cluster_id, label: c.label, size: c.size,
+      medoid_index: 0,  // 持久化时没存 medoid_index,这里用 0 占位
+    })),
+  );
+  const [collapsedClusters, setCollapsedClusters] = useState<Set<number>>(new Set());
   const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
   const [queryFilter, setQueryFilter] = useState('');
+  const [sortByScore, setSortByScore] = useState(true);
 
   const queries = useMemo(() => Array.from(picked).slice(0, QUERY_MAX_PICK), [picked]);
   const aliases = useMemo(
@@ -1330,9 +1425,51 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
 
   const filteredSuggestions = useMemo(() => {
     const f = queryFilter.trim().toLowerCase();
-    if (!f) return suggestions;
-    return suggestions.filter(q => q.toLowerCase().includes(f));
-  }, [suggestions, queryFilter]);
+    let out = f ? suggestions.filter(q => q.text.toLowerCase().includes(f)) : suggestions;
+    if (sortByScore) {
+      // 已勾选的固定置顶(避免重排时跳走),分数同高的稳定保留 LLM 原序
+      out = [...out].sort((a, b) => {
+        const pa = picked.has(a.text) ? 1 : 0;
+        const pb = picked.has(b.text) ? 1 : 0;
+        if (pa !== pb) return pb - pa;
+        return b.score - a.score;
+      });
+    }
+    return out;
+  }, [suggestions, queryFilter, sortByScore, picked]);
+
+  // 按 cluster 分组渲染。clusters 为空时返回 null → 走平铺渲染回退
+  const groupedByCluster = useMemo<{ cluster: ClusterMeta; items: QueryCandidate[] }[] | null>(() => {
+    if (clusters.length === 0) return null;
+    const byId = new Map<number, QueryCandidate[]>();
+    for (const q of filteredSuggestions) {
+      const cid = q.cluster_id ?? -1;
+      if (!byId.has(cid)) byId.set(cid, []);
+      byId.get(cid)!.push(q);
+    }
+    return clusters
+      .map(c => ({ cluster: c, items: byId.get(c.cluster_id) || [] }))
+      .filter(g => g.items.length > 0);
+  }, [filteredSuggestions, clusters]);
+
+  const toggleClusterCollapse = (cid: number) => {
+    setCollapsedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(cid)) next.delete(cid); else next.add(cid);
+      return next;
+    });
+  };
+  const pickAllInCluster = (cid: number) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      const items = suggestions.filter(q => (q.cluster_id ?? -1) === cid);
+      for (const q of items) {
+        if (next.size >= QUERY_MAX_PICK) break;
+        next.add(q.text);
+      }
+      return next;
+    });
+  };
 
   const pickedCap = picked.size >= QUERY_MAX_PICK;
   const valid = name.trim().length > 0 && target.trim().length > 0
@@ -1346,14 +1483,30 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     });
   };
 
-  const buildPayload = (): TopicPayload => ({
-    name: name.trim(),
-    target: target.trim(),
-    target_aliases: aliases,
-    queries,
-    engines: Array.from(engines),
-    enabled,
-  });
+  const buildPayload = (): TopicPayload => {
+    // 按 queries 顺序回填 cluster_id;suggestions 里没记 cluster_id 的就给 -1
+    const textToCluster = new Map<string, number>();
+    for (const q of suggestions) {
+      if (typeof q.cluster_id === 'number') textToCluster.set(q.text, q.cluster_id);
+    }
+    const query_cluster_ids = queries.map(q => textToCluster.get(q) ?? -1);
+    const hasAnyCluster = query_cluster_ids.some(c => c >= 0);
+    return {
+      name: name.trim(),
+      target: target.trim(),
+      target_aliases: aliases,
+      queries,
+      // 全 -1 时省略,避免给老话题写空簇信息
+      ...(hasAnyCluster ? {
+        query_cluster_ids,
+        clusters: clusters.map(c => ({
+          cluster_id: c.cluster_id, label: c.label, size: c.size,
+        })),
+      } : {}),
+      engines: Array.from(engines),
+      enabled,
+    };
+  };
 
   const handleSave = async () => {
     if (!valid) return;
@@ -1387,13 +1540,16 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
       }, token);
       // 追加(去重),不覆盖 — 用户可能想多轮生成、不同 seed 累积候选
       setSuggestions(prev => {
-        const seen = new Set(prev);
+        const seen = new Set(prev.map(q => q.text));
         const out = [...prev];
         for (const q of res.queries) {
-          if (!seen.has(q)) { seen.add(q); out.push(q); }
+          if (!seen.has(q.text)) { seen.add(q.text); out.push(q); }
         }
         return out;
       });
+      // clusters 直接覆盖(每次挖掘是一次完整聚类,旧簇 ID 与新簇 ID 不可比)
+      setClusters(res.clusters || []);
+      setCollapsedClusters(new Set());
     } catch (e: unknown) {
       setSuggestErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1416,7 +1572,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const clearPicked = () => setPicked(new Set());
   const clearSuggestions = () => {
     // 只清掉未勾选的候选,保留已勾选的(否则 valid 状态会瞬间崩)
-    setSuggestions(prev => prev.filter(q => picked.has(q)));
+    setSuggestions(prev => prev.filter(q => picked.has(q.text)));
   };
 
   return (
@@ -1586,6 +1742,22 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                     className="flex-1 px-3 py-1 rounded-md text-xs"
                     style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
                   />
+                  <button
+                    type="button" onClick={() => setSortByScore(s => !s)}
+                    className="px-2 py-1 rounded text-xs whitespace-nowrap"
+                    style={{
+                      background: sortByScore ? 'var(--accent-primary)' : 'transparent',
+                      color: sortByScore ? '#fff' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                    title={sortByScore
+                      ? t('dashboard.aiTelemetry.form.sortByScoreOn') || ''
+                      : t('dashboard.aiTelemetry.form.sortByScoreOff') || ''}
+                  >
+                    {sortByScore
+                      ? t('dashboard.aiTelemetry.form.sortByScoreOn')
+                      : t('dashboard.aiTelemetry.form.sortByScoreOff')}
+                  </button>
                   <span className="text-xs text-muted whitespace-nowrap">
                     {t('dashboard.aiTelemetry.form.queriesFilterCount', {
                       shown: filteredSuggestions.length, total: suggestions.length,
@@ -1593,36 +1765,116 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                   </span>
                 </div>
                 <div
-                  className="overflow-y-auto space-y-1 rounded-md p-2"
+                  className="overflow-y-auto rounded-md p-2"
                   style={{
                     maxHeight: 'clamp(360px, 65vh, 720px)',
                     background: 'var(--bg-input)',
                     border: '1px solid var(--border-color)',
                   }}
                 >
-                  {filteredSuggestions.map(q => {
-                    const isPicked = picked.has(q);
-                    const disabled = !isPicked && pickedCap;
+                  {(() => {
+                    const renderRow = (q: QueryCandidate) => {
+                      const isPicked = picked.has(q.text);
+                      const disabled = !isPicked && pickedCap;
+                      const showScore = q.score > 0;
+                      const scoreColor = q.score >= 75 ? 'var(--accent-primary)'
+                        : q.score >= 60 ? 'var(--text-primary)'
+                        : 'var(--text-muted)';
+                      return (
+                        <label
+                          key={q.text}
+                          className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
+                          style={{
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.4 : 1,
+                            background: isPicked ? 'var(--bg-card)' : 'transparent',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <input
+                            type="checkbox" checked={isPicked} disabled={disabled}
+                            onChange={() => togglePicked(q.text)}
+                            className="mt-0.5"
+                          />
+                          {showScore && (
+                            <span
+                              className="font-mono shrink-0 tabular-nums"
+                              style={{ color: scoreColor, minWidth: '1.8rem' }}
+                              title={q.sources.join(', ')}
+                            >
+                              {q.score}
+                            </span>
+                          )}
+                          <span className="break-all">{q.text}</span>
+                        </label>
+                      );
+                    };
+                    if (!groupedByCluster) {
+                      return (
+                        <div className="space-y-1">
+                          {filteredSuggestions.map(renderRow)}
+                        </div>
+                      );
+                    }
                     return (
-                      <label
-                        key={q}
-                        className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
-                        style={{
-                          cursor: disabled ? 'not-allowed' : 'pointer',
-                          opacity: disabled ? 0.4 : 1,
-                          background: isPicked ? 'var(--bg-card)' : 'transparent',
-                          color: 'var(--text-primary)',
-                        }}
-                      >
-                        <input
-                          type="checkbox" checked={isPicked} disabled={disabled}
-                          onChange={() => togglePicked(q)}
-                          className="mt-0.5"
-                        />
-                        <span className="break-all">{q}</span>
-                      </label>
+                      <div className="space-y-2">
+                        {groupedByCluster.map(({ cluster, items }) => {
+                          const collapsed = collapsedClusters.has(cluster.cluster_id);
+                          const pickedInCluster = items.filter(q => picked.has(q.text)).length;
+                          return (
+                            <div key={cluster.cluster_id}>
+                              <div
+                                className="flex items-center gap-2 px-1 py-1 rounded sticky top-0"
+                                style={{
+                                  background: 'var(--bg-secondary)',
+                                  borderBottom: '1px solid var(--border-color)',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleClusterCollapse(cluster.cluster_id)}
+                                  className="text-xs px-1"
+                                  style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                  title={collapsed
+                                    ? t('dashboard.aiTelemetry.form.clusterExpand') || ''
+                                    : t('dashboard.aiTelemetry.form.clusterCollapse') || ''}
+                                >
+                                  {collapsed ? '▶' : '▼'}
+                                </button>
+                                <span className="text-xs font-medium break-all flex-1"
+                                      style={{ color: 'var(--text-primary)' }}>
+                                  {cluster.label}
+                                </span>
+                                <span className="text-xs font-mono tabular-nums shrink-0"
+                                      style={{ color: 'var(--text-muted)' }}>
+                                  {pickedInCluster} / {items.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => pickAllInCluster(cluster.cluster_id)}
+                                  disabled={pickedCap}
+                                  className="text-xs px-2 py-0.5 rounded shrink-0"
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-secondary)',
+                                    opacity: pickedCap ? 0.4 : 1,
+                                  }}
+                                >
+                                  {t('dashboard.aiTelemetry.form.clusterPickAll')}
+                                </button>
+                              </div>
+                              {!collapsed && (
+                                <div className="space-y-1 pl-3 pt-1">
+                                  {items.map(renderRow)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
-                  })}
+                  })()}
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <button

@@ -1867,7 +1867,11 @@ const en = {
                 "selectTopic": "Topic",
                 "noBrand": "No brand keywords configured. AI visibility cannot be computed — set your brand name/aliases in Account/Brand settings.",
                 "tooltipCitations": "Citations",
-                "tooltipDate": "Date"
+                "tooltipDate": "Date",
+                "intentTitle": "Intent breakdown (AI mention rate by query cluster)",
+                "intentHint": "Queries were auto-clustered by intent at topic-creation time. Low-mention clusters → content gaps worth filling.",
+                "intentResponseCount": "{{m}} / {{n}}",
+                "intentUncategorized": "Uncategorized"
               },
               "results": {
                 "selectTopic": "Topic",
@@ -1955,6 +1959,11 @@ const en = {
                 "queriesPickerEmpty": "Pool is empty — enter a topic seed and click \"Mine topics\". About 200 candidates will appear for you to choose from.",
                 "queriesFilterPlaceholder": "Filter candidates by text…",
                 "queriesFilterCount": "{{shown}} of {{total}}",
+                "sortByScoreOn": "By score",
+                "sortByScoreOff": "LLM order",
+                "clusterExpand": "Expand",
+                "clusterCollapse": "Collapse",
+                "clusterPickAll": "Pick all in cluster",
                 "queriesClearPicked": "Clear selection",
                 "queriesClearUnpicked": "Remove unselected",
                 "suggestPlaceholder": "Topic seed, e.g. cloud data center / law firm services / cross-border e-commerce",

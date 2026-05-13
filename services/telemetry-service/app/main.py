@@ -182,17 +182,17 @@ class SuggestQueriesBody(BaseModel):
 
 @app.post("/suggest-queries")
 async def http_suggest_queries(body: SuggestQueriesBody):
-    """根据 seed + target 上下文用 DeepSeek 生成 query 候选,前端做多选 picker.
+    """根据 seed + target 上下文生成 query 候选(LLM + autocomplete 混合 + 4 维评分)。
 
-    target 非空时走 GEO-aware prompt(候选不含 target / aliases 字眼),
-    缺省时退化为通用 prompt(向后兼容)。
+    target 非空走 GEO-aware prompt + 兜底过滤;缺省退化通用 prompt。
+    返回 {seed, queries: [{text, score, sources}, ...]},按 score 降序。
     """
     try:
-        queries = await suggest_queries(
+        candidates, clusters = await suggest_queries(
             body.seed, body.count,
             target=body.target, aliases=body.aliases, industry=body.industry,
         )
     except DeepSeekError as e:
         status = 400 if e.code in ("invalid_seed", "no_key") else 502
         raise HTTPException(status, detail={"code": e.code, "message": e.message})
-    return {"seed": body.seed, "queries": queries}
+    return {"seed": body.seed, "queries": candidates, "clusters": clusters}

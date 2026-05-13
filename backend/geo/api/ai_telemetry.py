@@ -24,7 +24,8 @@ from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryCellInsightORM, AiTelemetryTopicBriefingORM,
     BriefingAction, BriefingFeedbackPayload, BriefingOut,
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
-    CompetitorShareEntry, DomainCount, EngineFirstHit, FeedbackPayload, KpiBlock,
+    CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
+    FeedbackPayload, IntentBreakdownOut, KpiBlock,
     OverviewOut, OwnedSplit, PositionDist, QueryHitCell, ResponseOut, RunNowCitation,
     RunNowResult, RunOut, ShareOfVoiceOut, TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
@@ -52,17 +53,24 @@ def _validate_payload(payload: TopicPayload) -> None:
     bad = [e for e in payload.engines if e not in VALID_ENGINES]
     if bad:
         raise HTTPException(400, f"unknown engines: {bad}")
-    # de-dup + strip
-    cleaned_queries = []
-    seen = set()
-    for q in payload.queries:
+    # de-dup + strip — 同步把 query_cluster_ids 按位置剔除/对齐
+    cluster_ids_in = payload.query_cluster_ids if payload.query_cluster_ids else []
+    cleaned_queries: list[str] = []
+    cleaned_clusters: list[int] = []
+    seen: set[str] = set()
+    for i, q in enumerate(payload.queries):
         q = q.strip()
         if q and q not in seen:
             seen.add(q)
             cleaned_queries.append(q)
+            if i < len(cluster_ids_in):
+                cleaned_clusters.append(int(cluster_ids_in[i]))
     if not cleaned_queries:
         raise HTTPException(400, "queries cannot be empty")
     payload.queries = cleaned_queries
+    payload.query_cluster_ids = (
+        cleaned_clusters if len(cleaned_clusters) == len(cleaned_queries) else None
+    )
     payload.engines = list(dict.fromkeys(payload.engines))
     # target / aliases cleanup
     payload.target = (payload.target or "").strip()
@@ -76,11 +84,13 @@ def _validate_payload(payload: TopicPayload) -> None:
     payload.target_aliases = aliases_clean
 
 
-def _queries_with_meta(payload_queries: list[str], existing_raw: str | None) -> str:
-    """把 query 列表升级为 [{text, created_at}] 形态.
+def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
+                       cluster_ids: list[int] | None = None) -> str:
+    """把 query 列表升级为 [{text, created_at, cluster_id?}] 形态.
 
     - 已存在的 query:沿用原 created_at(支持 v1 "新 query 不回填" 语义)
     - 新加的 query:用 utcnow() 作为 created_at
+    - cluster_id:按 payload_queries 位置取(长度不齐或缺省时不写 cluster_id)
     """
     now_iso = datetime.utcnow().isoformat()
     existing_meta: dict[str, str] = {}
@@ -93,10 +103,13 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None) -> 
                 existing_meta[q] = now_iso
     except Exception:  # noqa: BLE001
         pass
-    out = [
-        {"text": q, "created_at": existing_meta.get(q, now_iso)}
-        for q in payload_queries
-    ]
+    cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
+    out = []
+    for i, q in enumerate(payload_queries):
+        item = {"text": q, "created_at": existing_meta.get(q, now_iso)}
+        if cluster_ok:
+            item["cluster_id"] = int(cluster_ids[i])
+        out.append(item)
     return json.dumps(out, ensure_ascii=False)
 
 
@@ -131,12 +144,14 @@ def create_topic(
     db: Session = Depends(get_db),
 ):
     _validate_payload(payload)
+    clusters_dump = [c.model_dump() for c in payload.clusters] if payload.clusters else []
     t = AiTelemetryTopicORM(
         user_id=current_user.id,
         name=payload.name.strip(),
         target=payload.target,
         target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
-        queries_json=_queries_with_meta(payload.queries, None),
+        queries_json=_queries_with_meta(payload.queries, None, payload.query_cluster_ids),
+        clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
         enabled=payload.enabled,
     )
@@ -158,7 +173,12 @@ def update_topic(
     t.name = payload.name.strip()
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
-    t.queries_json = _queries_with_meta(payload.queries, t.queries_json)
+    t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
+    # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉
+    if payload.clusters is not None:
+        t.clusters_json = json.dumps(
+            [c.model_dump() for c in payload.clusters], ensure_ascii=False,
+        )
     t.engines_json = json.dumps(payload.engines, ensure_ascii=False)
     t.enabled = payload.enabled
     db.commit()
@@ -491,6 +511,132 @@ def topic_overview(
         top_domains=top_domains_out,
         owned_split=owned_split,
         engine_domain_matrix=engine_domain_filtered,
+    )
+
+
+@router.get("/topics/{topic_id}/intent-breakdown", response_model=IntentBreakdownOut)
+def topic_intent_breakdown(
+    topic_id: int,
+    period: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """按 picker 端聚出的 cluster_id 把本期 response 分组,出每簇 mention / citation 率。
+
+    话题 queries_json 里没有 cluster_id(老话题或聚类失败时全 0)就只有一个簇,
+    或者 query 文本与 cluster_id 对不上时落到 uncategorized 桶。
+    """
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    period_start = datetime.utcnow() - timedelta(days=period_days)
+
+    # 品牌词(沿用 overview 口径)
+    acc = (
+        db.query(SentimentAccountORM)
+          .filter_by(user_id=current_user.id, active=True)
+          .order_by(SentimentAccountORM.created_at.asc())
+          .first()
+    )
+    brand_keywords: list[str] = []
+    if acc:
+        brand_keywords.append(acc.target)
+        brand_keywords.extend(json.loads(acc.aliases_json or "[]"))
+    brand_keywords = [k for k in brand_keywords if k]
+    brand_lc = [k.lower() for k in brand_keywords]
+
+    # query → cluster_id 映射
+    queries_raw = json.loads(topic.queries_json or "[]")
+    query_to_cluster: dict[str, int] = {}
+    query_count_by_cluster: dict[int, int] = {}
+    for q in queries_raw:
+        if isinstance(q, dict):
+            text = q.get("text") or ""
+            cid = q.get("cluster_id")
+            cid_int = int(cid) if isinstance(cid, int) else -1
+        elif isinstance(q, str):
+            text, cid_int = q, -1
+        else:
+            continue
+        if not text:
+            continue
+        query_to_cluster[text] = cid_int
+        query_count_by_cluster[cid_int] = query_count_by_cluster.get(cid_int, 0) + 1
+
+    # 簇标签
+    clusters_raw = json.loads(topic.clusters_json or "[]")
+    cluster_labels: dict[int, str] = {}
+    cluster_order: list[int] = []
+    for c in clusters_raw:
+        if isinstance(c, dict) and "cluster_id" in c:
+            cid = int(c["cluster_id"])
+            cluster_labels[cid] = c.get("label") or f"cluster_{cid}"
+            cluster_order.append(cid)
+
+    rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= period_start)
+          .all()
+    )
+
+    # 按 cluster_id 聚合 response 维度
+    agg: dict[int, dict] = {}
+    for r in rows:
+        if r.error:
+            continue
+        cid = query_to_cluster.get(r.query, -1)
+        bucket = agg.setdefault(cid, {"response": 0, "mention": 0, "citation": 0})
+        bucket["response"] += 1
+        if brand_lc and r.answer and any(k in r.answer.lower() for k in brand_lc):
+            bucket["mention"] += 1
+        bucket["citation"] += len(json.loads(r.citations_json or "[]"))
+
+    def _mk(cid: int, label: str) -> ClusterBreakdownItem:
+        b = agg.get(cid, {"response": 0, "mention": 0, "citation": 0})
+        return ClusterBreakdownItem(
+            cluster_id=cid,
+            label=label,
+            query_count=query_count_by_cluster.get(cid, 0),
+            response_count=b["response"],
+            mention_count=b["mention"],
+            mention_rate=round(b["mention"] / b["response"], 3) if b["response"] else 0.0,
+            citation_count=b["citation"],
+        )
+
+    # 按 size 降序排出有名簇,无标签 / 老话题落到 uncategorized
+    out_clusters: list[ClusterBreakdownItem] = []
+    seen_cids: set[int] = set()
+    for cid in cluster_order:
+        out_clusters.append(_mk(cid, cluster_labels[cid]))
+        seen_cids.add(cid)
+    out_clusters.sort(key=lambda c: c.query_count, reverse=True)
+
+    uncat_b = agg.get(-1, {"response": 0, "mention": 0, "citation": 0})
+    # 把所有 query 没对上簇的 response 累到 uncategorized
+    for cid, b in agg.items():
+        if cid != -1 and cid not in seen_cids:
+            uncat_b["response"] += b["response"]
+            uncat_b["mention"] += b["mention"]
+            uncat_b["citation"] += b["citation"]
+    uncat = ClusterBreakdownItem(
+        cluster_id=-1,
+        label="uncategorized",
+        query_count=query_count_by_cluster.get(-1, 0)
+                  + sum(c for cid, c in query_count_by_cluster.items()
+                        if cid not in seen_cids and cid != -1),
+        response_count=uncat_b["response"],
+        mention_count=uncat_b["mention"],
+        mention_rate=round(uncat_b["mention"] / uncat_b["response"], 3)
+                   if uncat_b["response"] else 0.0,
+        citation_count=uncat_b["citation"],
+    )
+
+    return IntentBreakdownOut(
+        topic_id=topic_id,
+        period_days=period_days,
+        brand_keywords=brand_keywords,
+        clusters=out_clusters,
+        uncategorized=uncat,
     )
 
 

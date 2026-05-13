@@ -30,6 +30,7 @@ def _apply_telemetry_migrations() -> None:  # pragma: no cover
     additions = [
         ("ai_telemetry_topics", "target", "TEXT NOT NULL DEFAULT ''"),
         ("ai_telemetry_topics", "target_aliases_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("ai_telemetry_topics", "clusters_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("ai_telemetry_responses", "hit", "BOOLEAN NOT NULL DEFAULT 0"),
         ("ai_telemetry_responses", "hit_excerpt", "TEXT"),
         ("ai_telemetry_responses", "source_url", "TEXT"),
