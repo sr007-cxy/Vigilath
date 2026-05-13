@@ -1936,7 +1936,7 @@ const zh = {
                 "namePlaceholder": "例如:VNET 品牌问询",
                 "target": "检索词(被检测的品牌 / 实体)",
                 "targetPlaceholder": "例如:金诚同达律所 / 世纪互联",
-                "targetHint": "AI 引擎答复里提到这个词就算"命中",这是 GEO 衡量曝光的核心字段",
+                "targetHint": "AI 引擎答复里提到这个词就算「命中」,这是 GEO 衡量曝光的核心字段",
                 "aliases": "别名(可选)",
                 "aliasesPlaceholder": "KWM, King & Wood, 金诚 (逗号分隔)",
                 "aliasesHint": "别名 {{count}} / 10,任一在答复里出现即算命中",
