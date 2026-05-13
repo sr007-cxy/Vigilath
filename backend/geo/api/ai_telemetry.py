@@ -207,6 +207,46 @@ async def run_now(
         raise HTTPException(502, f"telemetry-service unavailable: {e}")
 
 
+# ─────────────── 候选 query 生成(DeepSeek)— 建话题时用 ───────────
+
+
+@router.post("/suggest-queries")
+async def suggest_queries(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """种子主题 → DeepSeek 候选 query,前端 picker 多选回填。
+
+    body: {"seed": str, "count": int=20}
+    resp: {"seed": str, "queries": [str, ...]}
+    """
+    seed = (payload.get("seed") or "").strip()
+    if not seed:
+        raise HTTPException(400, "seed cannot be empty")
+    count = payload.get("count", 20)
+    try:
+        count = int(count)
+    except (TypeError, ValueError):
+        count = 20
+    count = max(5, min(count, 50))
+
+    url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.post(url, json={"seed": seed, "count": count})
+    except httpx.HTTPError as e:
+        log.warning("telemetry-service suggest-queries failed: %s", e)
+        raise HTTPException(502, f"telemetry-service unavailable: {e}")
+
+    if r.status_code != 200:
+        # 透传 telemetry-service 的错误结构(detail.code / detail.message)
+        try:
+            raise HTTPException(r.status_code, r.json().get("detail") or r.text)
+        except ValueError:
+            raise HTTPException(r.status_code, r.text)
+    return r.json()
+
+
 # ─────────────────────────── Trigger run + result queries ─────
 
 

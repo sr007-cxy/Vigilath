@@ -326,6 +326,21 @@ export const aiTelemetryApi = {
     return request<void>('DELETE', `/topics/${id}`, token);
   },
 
+  async suggestQueries(
+    seed: string, count: number, token: string,
+  ): Promise<{ seed: string; queries: string[] }> {
+    if (isMockMode()) {
+      const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价'];
+      return Promise.resolve({
+        seed,
+        queries: stems.slice(0, count).map(s => `${seed} ${s}`),
+      });
+    }
+    return request<{ seed: string; queries: string[] }>(
+      'POST', '/suggest-queries', token, { seed, count },
+    );
+  },
+
   async runNow(payload: TopicPayload, token: string): Promise<RunNowResult[]> {
     if (isMockMode()) {
       return Promise.resolve(

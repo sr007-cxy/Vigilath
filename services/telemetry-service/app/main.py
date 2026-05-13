@@ -17,7 +17,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .runner import run_preview, run_topic_once
@@ -25,6 +25,7 @@ from .scheduler import scheduler_loop
 from .storage import db_session, TopicORM
 from .insights import get_or_generate_cell_insight, update_feedback
 from .briefings import generate_briefing_for_topic
+from .query_suggest import suggest_queries, DeepSeekError
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -166,3 +167,22 @@ async def http_generate_briefing(body: BriefingTriggerBody):
     if result is None:
         return {"status": "not_found"}
     return result
+
+
+# ─── v1.4 query 候选生成(建话题时让用户选,不必手填) ────────
+
+
+class SuggestQueriesBody(BaseModel):
+    seed: str = Field(..., min_length=1, max_length=200)
+    count: int = Field(20, ge=5, le=50)
+
+
+@app.post("/suggest-queries")
+async def http_suggest_queries(body: SuggestQueriesBody):
+    """根据 seed 主题用 DeepSeek 生成 query 候选,前端做多选 picker."""
+    try:
+        queries = await suggest_queries(body.seed, body.count)
+    except DeepSeekError as e:
+        status = 400 if e.code in ("invalid_seed", "no_key") else 502
+        raise HTTPException(status, detail={"code": e.code, "message": e.message})
+    return {"seed": body.seed, "queries": queries}

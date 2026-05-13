@@ -1286,6 +1286,13 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<RunNowResult[] | null>(null);
 
+  // DeepSeek 候选生成 — seed 输入 + 候选 picker
+  const [seed, setSeed] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestErr, setSuggestErr] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
   const queries = useMemo(
     () => queriesText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10),
     [queriesText],
@@ -1331,6 +1338,47 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     } finally {
       setRunning(false);
     }
+  };
+
+  const handleSuggest = async () => {
+    const s = seed.trim();
+    if (!s || suggesting) return;
+    setSuggesting(true);
+    setSuggestErr(null);
+    try {
+      const res = await aiTelemetryApi.suggestQueries(s, 20, token);
+      setSuggestions(res.queries);
+      setPicked(new Set());
+    } catch (e: unknown) {
+      setSuggestErr(e instanceof Error ? e.message : String(e));
+      setSuggestions([]);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const togglePicked = (q: string) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(q)) next.delete(q); else next.add(q);
+      return next;
+    });
+  };
+
+  const appendPicked = () => {
+    if (picked.size === 0) return;
+    const existing = queriesText.split('\n').map(s => s.trim()).filter(Boolean);
+    const seen = new Set(existing);
+    const merged = [...existing];
+    for (const q of picked) {
+      if (!seen.has(q) && merged.length < 10) {
+        seen.add(q);
+        merged.push(q);
+      }
+    }
+    setQueriesText(merged.join('\n'));
+    setSuggestions(prev => prev.filter(q => !picked.has(q)));
+    setPicked(new Set());
   };
 
   const node = (
@@ -1392,6 +1440,79 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
               {t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
             </span>
           </label>
+
+          <div
+            className="rounded-md p-3 space-y-2"
+            style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border-color)' }}
+          >
+            <div className="text-xs text-secondary">
+              {t('dashboard.aiTelemetry.form.suggestTitle')}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text" value={seed} onChange={e => setSeed(e.target.value)}
+                placeholder={t('dashboard.aiTelemetry.form.suggestPlaceholder') || ''}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSuggest(); } }}
+                className="flex-1 px-3 py-1.5 rounded-md text-sm"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              />
+              <button
+                type="button" onClick={handleSuggest} disabled={!seed.trim() || suggesting}
+                className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
+                style={{
+                  background: 'var(--accent-primary)', color: '#fff',
+                  opacity: !seed.trim() || suggesting ? 0.55 : 1,
+                }}
+              >
+                {suggesting
+                  ? t('dashboard.aiTelemetry.form.suggestRunning')
+                  : t('dashboard.aiTelemetry.form.suggestGenerate')}
+              </button>
+            </div>
+            {suggestErr && (
+              <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+            )}
+            {suggestions.length > 0 && (
+              <>
+                <div className="text-xs text-muted">
+                  {t('dashboard.aiTelemetry.form.suggestHint', { count: suggestions.length })}
+                </div>
+                <div
+                  className="max-h-40 overflow-y-auto space-y-1 rounded-md p-2"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+                >
+                  {suggestions.map(q => (
+                    <label key={q} className="flex items-start gap-2 cursor-pointer text-xs text-primary">
+                      <input
+                        type="checkbox"
+                        checked={picked.has(q)}
+                        onChange={() => togglePicked(q)}
+                        className="mt-0.5"
+                      />
+                      <span className="break-all">{q}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">
+                    {t('dashboard.aiTelemetry.form.suggestPickedCount', { count: picked.size })}
+                  </span>
+                  <button
+                    type="button" onClick={appendPicked} disabled={picked.size === 0}
+                    className="px-3 py-1 rounded-md text-xs"
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      opacity: picked.size === 0 ? 0.55 : 1,
+                    }}
+                  >
+                    {t('dashboard.aiTelemetry.form.suggestAppend')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           <label className="block">
             <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.queries')}*</span>
