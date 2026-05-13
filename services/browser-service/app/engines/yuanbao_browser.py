@@ -29,6 +29,45 @@ from ..browser import create_stealth_page, human_delay, save_page_session
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
 
 
+# CP1252(Windows-1252)在 0x80-0x9F 区把若干字节映射到了 latin-1 不在的字符
+# (em-dash、引号、欧元符号等)。元宝 SSE JSON 是按 CP1252 把 UTF-8 字节解出来再
+# \\uXXXX 转义的 —— 单纯 encode('latin-1') round-trip 不回去,因为这些字符在
+# latin-1 里不存在。手工表把它们映射回原字节,其余 < U+0100 走 latin-1 一一对应。
+_CP1252_HIGH = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85,
+    0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A,
+    0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92,
+    0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+    0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C,
+    0x017E: 0x9E, 0x0178: 0x9F,
+}
+
+
+def _fix_mojibake(s: str) -> str:
+    """还原 'UTF-8 字节被按 CP1252 解码' 类 mojibake('世'→'ä¸–')。
+
+    元宝 SSE JSON 把 UTF-8 字节按 CP1252/Latin-1 当 codepoint 用 \\uXXXX 转义。
+    修复:把每个字符映射回原字节,再 decode('utf-8')。
+    仅在 s 含典型 mojibake 引导字符且能干净往返时才改;否则原样返回。
+    """
+    if not s or not any(c in s for c in "äÃâåæçèéêëìíîï"):
+        return s
+    try:
+        bs = bytearray()
+        for ch in s:
+            cp = ord(ch)
+            if cp < 0x100:
+                bs.append(cp)
+            elif cp in _CP1252_HIGH:
+                bs.append(_CP1252_HIGH[cp])
+            else:
+                # 出现真 Unicode 字符(非 CP1252 mapping) —— 不像 mojibake,放弃修
+                return s
+        return bs.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return s
+
+
 _YUANBAO_BLOCK_HOSTS = (
     "yuanbao.tencent.com",
     "tencent.com",
@@ -393,11 +432,18 @@ class YuanbaoBrowserAdapter(EngineAdapter):
                 self._extract_citations_from_json(item, out, _depth + 1)
 
     async def _capture_body(self, response, bucket: List[str]) -> None:
+        # 元宝 SSE 接口的 Content-Type 不带 charset=utf-8,Playwright 的
+        # response.text() 会退到 Latin-1 解码,造成汉字 mojibake("世"→"ä¸–")。
+        # 抓 raw bytes 自己按 UTF-8 解,errors='replace' 防极少数非 UTF-8 帧抛错。
         try:
-            text = await response.text()
+            data = await response.body()
         except Exception:
             return
-        if not text:
+        if not data:
+            return
+        try:
+            text = data.decode("utf-8", errors="replace")
+        except Exception:
             return
         bucket.append(text[:400_000])
 
@@ -431,16 +477,19 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             key = cit.url or cit.domain
             if not key:
                 return
+            # 统一在落库前修 mojibake — SSE/DOM 都可能产生,放这里一处搞定
+            cit_title = _fix_mojibake(cit.title or "")
+            cit_snippet = _fix_mojibake(cit.snippet or "")
             if key in seen_keys:
                 # Upgrade: replace existing citation if new one carries a title
-                if cit.title:
+                if cit_title:
                     for i, ex in enumerate(citations):
                         if (ex.url or ex.domain) == key and not ex.title:
                             citations[i] = Citation(
                                 url=cit.url,
                                 domain=cit.domain,
-                                title=cit.title,
-                                snippet=cit.snippet,
+                                title=cit_title,
+                                snippet=cit_snippet,
                                 position=ex.position,
                             )
                             return
@@ -450,8 +499,8 @@ class YuanbaoBrowserAdapter(EngineAdapter):
                 Citation(
                     url=cit.url,
                     domain=cit.domain,
-                    title=cit.title,
-                    snippet=cit.snippet,
+                    title=cit_title,
+                    snippet=cit_snippet,
                     position=len(citations) + 1,
                 )
             )

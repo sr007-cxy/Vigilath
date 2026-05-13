@@ -296,14 +296,14 @@ class DoubaoBrowserAdapter(EngineAdapter):
                 sys.__stdout__.write(f"[Doubao-fingerprint] probe failed: {e}\n")
                 sys.__stdout__.flush()
 
-            # Extended warm-up: ByteDance escalates to image CAPTCHA when a
-            # fresh context submits without enough "looking around" first.
-            await simulate_browsing(page, duration=random.uniform(6.0, 12.0))
-
-            # Dismiss popups (cookie consent, upgrade prompts, etc.)
+            # patchright 已经在 CDP 层做 stealth,不需要再叠我们的 mouse 行为
+            # 模拟(simulate_browsing/human_click)—— 那些反而可能在 Xvfb 下挂死
+            # mouse.move(steps=N) 调用。input 用 fill() 一次性灌,patchright 会
+            # 用 isTrusted 输入事件,ByteDance 看到的跟真人粘贴一样自然。
+            sys.__stdout__.write("[Doubao-step] dismiss popups\n"); sys.__stdout__.flush()
             await self._dismiss_popups(page)
 
-            # Find the input
+            sys.__stdout__.write("[Doubao-step] find input\n"); sys.__stdout__.flush()
             input_el = await self._find_input(page)
             if input_el is None:
                 await ctx.close()
@@ -311,51 +311,33 @@ class DoubaoBrowserAdapter(EngineAdapter):
                     engine=self.name, query=query, error="input not found"
                 )
 
-            # Click input with human-like mouse movement, then a "thinking" pause
-            # before typing (real users focus → think → type, not focus → type).
-            box = await input_el.bounding_box()
-            if box:
-                cx = box["x"] + box["width"] / 2
-                cy = box["y"] + box["height"] / 2
-                await human_click(page, cx, cy)
-            else:
-                await input_el.click()
-            await human_delay(1.2, 2.8)
-
-            # Always type per-char with variable delay. fill() pastes the whole
-            # string in ~10ms with inputType=insertText — a clear bot signature
-            # that lets ByteDance escalate from slider CAPTCHA to image CAPTCHA.
-            for ch in query:
-                await page.keyboard.type(ch, delay=random.randint(60, 220))
-
-            # Post-typing review pause (humans scan their own message before sending).
-            await human_delay(0.8, 2.2)
+            sys.__stdout__.write("[Doubao-step] click + fill query\n"); sys.__stdout__.flush()
+            await input_el.click()
+            await human_delay(0.5, 1.0)
+            typed_query = f"{query}，请展示引用来源"
+            await input_el.fill(typed_query)
+            await human_delay(0.6, 1.2)
 
             # Submit ONCE: prefer the send button (what real users click), fall
             # back to Enter only if the button is missing. Double-submitting
             # (Enter + button click) is itself a bot signal.
+            sys.__stdout__.write("[Doubao-step] submit\n"); sys.__stdout__.flush()
             submitted = False
             try:
                 send_btn = page.locator(
                     "[data-testid='send-button'], "
                     "button[aria-label='发送'], "
-                    "button[aria-label='Send']"
+                    "button[aria-label='Send'], "
+                    "button:has(svg) >> nth=-1"
                 ).first
                 if await send_btn.is_visible(timeout=1500):
-                    btn_box = await send_btn.bounding_box()
-                    if btn_box:
-                        await human_click(
-                            page,
-                            btn_box["x"] + btn_box["width"] / 2,
-                            btn_box["y"] + btn_box["height"] / 2,
-                        )
-                    else:
-                        await send_btn.click()
+                    await send_btn.click()
                     submitted = True
             except Exception:
                 pass
             if not submitted:
                 await page.keyboard.press("Enter")
+            sys.__stdout__.write(f"[Doubao-step] submitted via={'btn' if submitted else 'Enter'}\n"); sys.__stdout__.flush()
 
             # Check for CAPTCHA after submit. We do NOT do a close-and-reopen
             # "retry" here: the previous version closed the original context and
@@ -367,6 +349,7 @@ class DoubaoBrowserAdapter(EngineAdapter):
             # fast on a single submission than to give ByteDance a second
             # automation signal.
             await human_delay(3, 5)
+            sys.__stdout__.write("[Doubao-step] check captcha\n"); sys.__stdout__.flush()
             if await self._check_captcha(page):
                 screenshot_dir = "/tmp/doubao_captcha"
                 os.makedirs(screenshot_dir, exist_ok=True)
@@ -451,7 +434,9 @@ class DoubaoBrowserAdapter(EngineAdapter):
 
             # Wait for response — longer timeout after CAPTCHA recovery
             max_wait = 90
+            sys.__stdout__.write("[Doubao-step] wait_for_stable_answer\n"); sys.__stdout__.flush()
             await self._wait_for_stable_answer(page, max_wait=max_wait, stable_secs=3.0)
+            sys.__stdout__.write("[Doubao-step] answer stabilized\n"); sys.__stdout__.flush()
             await human_delay(1.0, 2.0)
 
             # Debug: dump screenshot after answer wait (CAPTCHA path)

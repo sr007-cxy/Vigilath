@@ -160,11 +160,16 @@ async def create_headed_page(
     When `record_video` is True, Playwright records the session to
     data/snapshots/{engine}/*.webm (file is finalized only after the caller
     closes the context).
+
+    Backend: 用 patchright(playwright 的 stealth fork)规避 ByteDance 的 CDP
+    指纹检测。2026-05-12 验证:patchright headed + xvfb + 同一份 storage_state,
+    豆包从 silent-block(回答 12 字 / cites=0)→ 流式 1486 字完整回答。
+    其他 engines 仍走 playwright(create_stealth_page),不受影响。
     """
     try:
-        from playwright.async_api import async_playwright
+        from patchright.async_api import async_playwright
     except ImportError:
-        raise RuntimeError("playwright is not installed")
+        raise RuntimeError("patchright is not installed (pip install patchright)")
 
     international = locale is not None and locale != "zh-CN"
     pw = await async_playwright().start()
@@ -208,9 +213,10 @@ async def create_headed_page(
 
     context = await browser.new_context(**ctx_opts)
 
-    await apply_stealth_to_context(
-        context, international=international, profile=profile
-    )
+    # 不调 apply_stealth_to_context:patchright 自己已在 CDP 层做完整 stealth,
+    # 再叠我们的 ~13KB stealth JS 会让 Chrome network service 炸 DNS
+    # (实测 ERR_NAME_NOT_RESOLVED,2026-05-12 bisect 确认)。patchright 内置
+    # 的 navigator/webgl/permissions 等 spoof 比我们手写的更彻底。
 
     page = await context.new_page()
 
