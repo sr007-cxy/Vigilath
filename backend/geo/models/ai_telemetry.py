@@ -94,6 +94,9 @@ class AiTelemetryResponseORM(Base):
     competitors_json = Column(Text, nullable=True)         # [{name, count, snippet}]
     citation_domains_json = Column(Text, nullable=True)    # [domain, ...]
     answer_format = Column(String, nullable=True)          # listicle/single_recommendation/report/case_study/qa
+    # v1.3 提及位置(检索排名简化版):lead(开头)/ body(中段)/ tail(末尾)/ unknown
+    # 未命中 (hit=False) 时为 NULL
+    mention_position = Column(String, nullable=True)
 
 
 class AiTelemetryQueryHitORM(Base):
@@ -285,6 +288,7 @@ class ResponseOut(BaseModel):
     created_at: datetime
     hit: bool = False
     hit_excerpt: Optional[str] = None
+    mention_position: Optional[str] = None
 
 
 class KpiBlock(BaseModel):
@@ -380,6 +384,7 @@ class CellEvidence(BaseModel):
     source_url: Optional[str]
     answer: str
     citations: list[RunNowCitation]
+    mention_position: Optional[str] = None
 
 
 class CellInsightRec(BaseModel):
@@ -453,3 +458,40 @@ class FeedbackPayload(BaseModel):
 
 class BriefingFeedbackPayload(BaseModel):
     score: int = Field(..., ge=1, le=5)
+
+
+# ─────────────────── v1.3 SAIV / 竞品份额 ──────────────────────
+
+
+class CompetitorShareEntry(BaseModel):
+    name: str
+    count: int
+    pct: float                          # 该竞品 / 全行业(品牌 + 全部竞品) 提及次数 × 100
+
+
+class PositionDist(BaseModel):
+    """命中位置分布 — 检索排名简化版."""
+    lead: int = 0
+    body: int = 0
+    tail: int = 0
+    unknown: int = 0
+
+
+class ShareOfVoiceOut(BaseModel):
+    """声量份额 — 品牌 vs 竞品 在最近 window 内被 AI 提及次数的对比.
+
+    SAIV(Share of AI Voice) = brand_count / (brand_count + sum(competitors.count)) × 100.
+    一个 ResponseORM:hit=True 贡献 brand_count + 1;
+                     competitors_json 里每条 {name, count} 贡献到对应 name 的累计.
+    """
+    topic_id: int
+    target: str
+    period_days: int                    # 统计窗口
+    brand_count: int                    # 品牌在所有 Response 答复里被提到的次数
+    competitors_count_total: int        # 所有竞品提及的总次数
+    saiv_pct: float                     # 0-100,品牌占比
+    competitors: list[CompetitorShareEntry]   # 按 count 降序 top 10
+    position_dist: PositionDist         # 命中位置分布(lead/body/tail/unknown)
+    optimal_rate_pct: float             # AI 答案优选率 = sum(total_hits) / sum(total_runs) × 100
+    total_runs: int                     # 该 topic 累计 run 数
+    sample_size: int                    # 用于聚合的 Response 行数(含 hit=False)

@@ -24,9 +24,10 @@ from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryCellInsightORM, AiTelemetryTopicBriefingORM,
     BriefingAction, BriefingFeedbackPayload, BriefingOut,
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
-    DomainCount, EngineFirstHit, FeedbackPayload, KpiBlock,
-    OverviewOut, OwnedSplit, QueryHitCell, ResponseOut, RunNowCitation, RunNowResult,
-    RunOut, TopicOut, TopicPayload, TrackingMatrixOut, TrendPoint, VALID_ENGINES,
+    CompetitorShareEntry, DomainCount, EngineFirstHit, FeedbackPayload, KpiBlock,
+    OverviewOut, OwnedSplit, PositionDist, QueryHitCell, ResponseOut, RunNowCitation,
+    RunNowResult, RunOut, ShareOfVoiceOut, TopicOut, TopicPayload, TrackingMatrixOut,
+    TrendPoint, VALID_ENGINES,
 )
 from geo.models.sentiment import SentimentAccountORM
 from geo.models.user import User
@@ -577,6 +578,101 @@ def get_tracking_matrix(
     )
 
 
+@router.get("/topics/{topic_id}/share-of-voice", response_model=ShareOfVoiceOut)
+def get_share_of_voice(
+    topic_id: int, period: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """v1.3 SAIV(Share of AI Voice)聚合 — 品牌 vs 竞品 提及次数对比.
+
+    口径(近 period 天):
+      brand_count = COUNT(Response WHERE hit=True)
+      competitors[name].count = SUM(competitors_json[*].count) 按 name 聚合
+      saiv_pct = brand / (brand + sum(competitors)) × 100
+      position_dist = COUNT(Response GROUP BY mention_position) 仅 hit=True
+      optimal_rate_pct = SUM(QueryHit.total_hits) / SUM(QueryHit.total_runs) × 100
+    """
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
+
+    rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= cutoff)
+          .all()
+    )
+
+    brand_count = 0
+    competitors_map: dict[str, int] = {}
+    pos = {"lead": 0, "body": 0, "tail": 0, "unknown": 0}
+    for r in rows:
+        if r.error:
+            continue
+        if r.hit:
+            brand_count += 1
+            p = (r.mention_position or "unknown").lower()
+            if p not in pos:
+                p = "unknown"
+            pos[p] += 1
+        if r.competitors_json:
+            try:
+                arr = json.loads(r.competitors_json or "[]")
+            except Exception:  # noqa: BLE001
+                arr = []
+            for c in arr:
+                if not isinstance(c, dict):
+                    continue
+                name = (c.get("name") or "").strip()
+                cnt = int(c.get("count") or 0)
+                if name and cnt > 0:
+                    competitors_map[name] = competitors_map.get(name, 0) + cnt
+
+    comp_total = sum(competitors_map.values())
+    total = brand_count + comp_total
+    saiv_pct = round(brand_count / total * 100, 1) if total > 0 else 0.0
+
+    top_comps = sorted(competitors_map.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+    comp_entries = [
+        CompetitorShareEntry(
+            name=name, count=cnt,
+            pct=round(cnt / total * 100, 1) if total > 0 else 0.0,
+        )
+        for name, cnt in top_comps
+    ]
+
+    # 优选率 = sum(QueryHit.total_hits) / sum(QueryHit.total_runs)
+    qh_rows = (
+        db.query(AiTelemetryQueryHitORM)
+          .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
+          .all()
+    )
+    sum_hits = sum((c.total_hits or 0) for c in qh_rows)
+    sum_runs = sum((c.total_runs or 0) for c in qh_rows)
+    optimal_pct = round(sum_hits / sum_runs * 100, 1) if sum_runs > 0 else 0.0
+
+    total_runs = (
+        db.query(func.count(AiTelemetryRunORM.id))
+          .filter(AiTelemetryRunORM.topic_id == topic_id)
+          .scalar() or 0
+    )
+
+    return ShareOfVoiceOut(
+        topic_id=topic_id,
+        target=topic.target or topic.name or "",
+        period_days=period_days,
+        brand_count=brand_count,
+        competitors_count_total=comp_total,
+        saiv_pct=saiv_pct,
+        competitors=comp_entries,
+        position_dist=PositionDist(**pos),
+        optimal_rate_pct=optimal_pct,
+        total_runs=int(total_runs),
+        sample_size=len(rows),
+    )
+
+
 @router.get("/topics/{topic_id}/cells/drawer", response_model=CellDrawerOut)
 def get_cell_drawer(
     topic_id: int, query: str, engine: str,
@@ -619,6 +715,7 @@ def get_cell_drawer(
             response_id=r.id, run_id=r.run_id, created_at=r.created_at,
             engine=r.engine, query=r.query,
             hit=bool(r.hit), hit_excerpt=r.hit_excerpt,
+            mention_position=r.mention_position,
             source_url=r.source_url, answer=r.answer or "",
             citations=[RunNowCitation(**c) for c in json.loads(r.citations_json or "[]")],
         )

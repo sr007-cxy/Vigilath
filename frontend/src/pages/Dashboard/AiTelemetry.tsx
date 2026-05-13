@@ -19,7 +19,7 @@ import {
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
   type OwnedSplit,
   type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
-  type CellDrawer, type CellInsight, type Briefing,
+  type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
 } from '../../services/aiTelemetryApi';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -253,6 +253,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
   const [topicId, setTopicId] = useState<number | null>(null);
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [data, setData] = useState<Overview | null>(null);
+  const [sov, setSoV] = useState<ShareOfVoice | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -262,9 +263,13 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
   useEffect(() => {
     if (topicId === null) return;
     setLoading(true);
-    aiTelemetryApi.getOverview(topicId, period, token)
-      .then(setData)
-      .finally(() => setLoading(false));
+    Promise.all([
+      aiTelemetryApi.getOverview(topicId, period, token),
+      aiTelemetryApi.getShareOfVoice(topicId, period, token).catch(() => null),
+    ]).then(([ov, s]) => {
+      setData(ov);
+      setSoV(s);
+    }).finally(() => setLoading(false));
   }, [topicId, period, token]);
 
   if (topics.length === 0) {
@@ -355,6 +360,9 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
         />
       </div>
 
+      {/* v1.3 — SAIV 声量份额 + 竞品引用份额差 */}
+      <ShareOfVoiceBlock data={sov} loading={loading} />
+
       {/* 趋势图 */}
       <TrendChart data={data} loading={loading} />
 
@@ -373,6 +381,145 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
         matrix={data?.engine_domain_matrix ?? {}}
         loading={loading}
       />
+    </div>
+  );
+}
+
+// ── v1.3 SAIV 声量份额 + 竞品引用份额差 + 命中位置分布 ───────────
+
+function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loading: boolean }) {
+  const { t } = useTranslation();
+  if (loading && !data) {
+    return (
+      <div className="rounded-lg p-4 text-sm text-muted text-center"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>…</div>
+    );
+  }
+  if (!data) return null;
+  const hasSignal = data.brand_count + data.competitors_count_total > 0;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* SAIV KPI 卡 */}
+      <div className="rounded-lg p-4"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <h3 className="text-sm font-medium text-primary mb-2 flex items-center gap-1">
+          <span style={{ color: 'var(--accent-primary)' }}>📣</span>
+          {t('dashboard.aiTelemetry.overview.saivTitle')}
+        </h3>
+        <div className="flex items-baseline gap-1">
+          <span className="text-3xl font-semibold tabular-nums text-primary">
+            {data.saiv_pct.toFixed(1)}
+          </span>
+          <span className="text-muted text-sm">%</span>
+        </div>
+        <p className="text-[11px] text-muted mt-1">
+          {t('dashboard.aiTelemetry.overview.saivHint', {
+            brand: data.brand_count,
+            total: data.brand_count + data.competitors_count_total,
+          })}
+        </p>
+        {/* 命中位置分布(检索排名简化版) */}
+        {hasSignal && data.brand_count > 0 && (
+          <div className="mt-3">
+            <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+              {t('dashboard.aiTelemetry.overview.positionTitle')}
+            </div>
+            <PositionBar dist={data.position_dist} />
+          </div>
+        )}
+        <div className="mt-3 text-[11px] text-muted">
+          {t('dashboard.aiTelemetry.overview.optimalRate')}:
+          <span className="text-primary font-semibold ml-1">
+            {data.optimal_rate_pct.toFixed(1)}%
+          </span>
+          <span className="ml-1">
+            ({t('dashboard.aiTelemetry.overview.optimalRateHint', { runs: data.total_runs })})
+          </span>
+        </div>
+      </div>
+
+      {/* 竞品份额对比 */}
+      <div className="rounded-lg p-4 md:col-span-2"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <h3 className="text-sm font-medium text-primary mb-3">
+          {t('dashboard.aiTelemetry.overview.competitorShareTitle')}
+        </h3>
+        {!hasSignal && (
+          <div className="text-xs text-muted py-6 text-center">
+            {t('dashboard.aiTelemetry.overview.competitorShareEmpty')}
+          </div>
+        )}
+        {hasSignal && (
+          <ul className="space-y-1.5">
+            {/* 把品牌自身和竞品一起排序展示 */}
+            {[
+              { name: `★ ${data.target}`, count: data.brand_count,
+                pct: data.brand_count / Math.max(1, data.brand_count + data.competitors_count_total) * 100,
+                isBrand: true },
+              ...data.competitors.map(c => ({ ...c, isBrand: false })),
+            ]
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 8)
+              .map((c, i) => {
+                const max = Math.max(
+                  data.brand_count,
+                  ...data.competitors.map(x => x.count),
+                );
+                const width = Math.max(4, (c.count / Math.max(1, max)) * 100);
+                return (
+                  <li key={i} className="flex items-center gap-2 text-xs">
+                    <span className="w-32 truncate"
+                      style={{
+                        color: c.isBrand ? 'var(--accent-primary)' : 'var(--text-primary)',
+                        fontWeight: c.isBrand ? 600 : 400,
+                      }}>{c.name}</span>
+                    <div className="flex-1 h-3 rounded relative"
+                      style={{ background: 'var(--bg-input)' }}>
+                      <div className="h-3 rounded transition-all" style={{
+                        width: `${width}%`,
+                        background: c.isBrand ? 'var(--accent-primary)' : '#94a3b8',
+                      }} />
+                    </div>
+                    <span className="w-10 text-right text-primary tabular-nums">{c.count}</span>
+                    <span className="w-12 text-right text-muted tabular-nums">
+                      {c.pct.toFixed(1)}%
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PositionBar({ dist }: { dist: ShareOfVoice['position_dist'] }) {
+  const total = dist.lead + dist.body + dist.tail + dist.unknown;
+  if (total === 0) return <p className="text-[11px] text-muted">—</p>;
+  const segs = [
+    { key: 'lead', color: '#10b981', n: dist.lead },     // 绿:开头
+    { key: 'body', color: '#3b82f6', n: dist.body },     // 蓝:中段
+    { key: 'tail', color: '#f59e0b', n: dist.tail },     // 黄:末尾
+    { key: 'unknown', color: '#9ca3af', n: dist.unknown },
+  ];
+  return (
+    <div>
+      <div className="flex rounded overflow-hidden h-2"
+        style={{ background: 'var(--bg-tertiary)' }}>
+        {segs.map(s => s.n > 0 && (
+          <div key={s.key} title={`${s.key}: ${s.n}`}
+            style={{ width: `${s.n / total * 100}%`, background: s.color }} />
+        ))}
+      </div>
+      <div className="flex gap-2 mt-1 text-[10px] text-muted">
+        {segs.filter(s => s.n > 0).map(s => (
+          <span key={s.key}>
+            <span style={{ color: s.color }}>●</span> {s.key} {s.n}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1372,15 +1519,20 @@ function TrackingTab({ topics, token, onRun }: {
   const { t } = useTranslation();
   const [topicId, setTopicId] = useState<number | null>(topics[0]?.id ?? null);
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
+  const [sov, setSoV] = useState<ShareOfVoice | null>(null);
   const [loading, setLoading] = useState(false);
   const [openCell, setOpenCell] = useState<{ query: string; engine: EngineId } | null>(null);
 
   useEffect(() => {
     if (topicId == null) return;
     setLoading(true);
-    aiTelemetryApi.getTrackingMatrix(topicId, token)
-      .then(setMatrix)
-      .finally(() => setLoading(false));
+    Promise.all([
+      aiTelemetryApi.getTrackingMatrix(topicId, token),
+      aiTelemetryApi.getShareOfVoice(topicId, 90, token).catch(() => null),
+    ]).then(([m, s]) => {
+      setMatrix(m);
+      setSoV(s);
+    }).finally(() => setLoading(false));
   }, [topicId, token]);
 
   if (topics.length === 0) {
@@ -1414,7 +1566,7 @@ function TrackingTab({ topics, token, onRun }: {
       {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
       {!loading && matrix && (
         <>
-          <TrackingHeader matrix={matrix} />
+          <TrackingHeader matrix={matrix} sov={sov} />
           <TimelineRow timeline={matrix.timeline} />
           <MatrixGrid matrix={matrix} onPick={(q, e) => setOpenCell({ query: q, engine: e })} />
         </>
@@ -1430,7 +1582,7 @@ function TrackingTab({ topics, token, onRun }: {
   );
 }
 
-function TrackingHeader({ matrix }: { matrix: TrackingMatrix }) {
+function TrackingHeader({ matrix, sov }: { matrix: TrackingMatrix; sov: ShareOfVoice | null }) {
   const { t } = useTranslation();
   const started = matrix.started_at ? new Date(matrix.started_at).toLocaleDateString() : '-';
   return (
@@ -1460,6 +1612,30 @@ function TrackingHeader({ matrix }: { matrix: TrackingMatrix }) {
           {matrix.hit_cells_pct.toFixed(1)}%
         </span>
       </span>
+      {sov && (
+        <>
+          <span className="text-secondary">
+            {t('dashboard.aiTelemetry.tracking.optimalRate')}:
+            <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+              style={{
+                background: sov.optimal_rate_pct >= 70
+                  ? 'rgba(16,185,129,0.18)' : sov.optimal_rate_pct >= 40
+                    ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.18)',
+                color: sov.optimal_rate_pct >= 70
+                  ? '#10b981' : sov.optimal_rate_pct >= 40 ? '#f59e0b' : '#ef4444',
+              }}>
+              {sov.optimal_rate_pct.toFixed(1)}%
+            </span>
+          </span>
+          <span className="text-secondary">
+            {t('dashboard.aiTelemetry.tracking.saivLabel')}:
+            <span className="text-primary tabular-nums ml-1">{sov.saiv_pct.toFixed(1)}%</span>
+            <span className="text-muted ml-1">
+              ({sov.brand_count} vs {sov.competitors_count_total})
+            </span>
+          </span>
+        </>
+      )}
     </div>
   );
 }
@@ -1807,15 +1983,32 @@ function InsightBlock({ insight, onFeedback }: {
 }
 
 function EvidenceCard({ ev }: { ev: CellDrawer['evidence'][number] }) {
+  const { t } = useTranslation();
   const dt = ev.created_at ? new Date(ev.created_at).toLocaleString() : '';
+  const posColor: Record<string, { bg: string; fg: string }> = {
+    lead: { bg: 'rgba(16,185,129,0.18)', fg: '#10b981' },
+    body: { bg: 'rgba(59,130,246,0.18)', fg: '#3b82f6' },
+    tail: { bg: 'rgba(245,158,11,0.18)', fg: '#f59e0b' },
+    unknown: { bg: 'rgba(156,163,175,0.18)', fg: '#9ca3af' },
+  };
+  const pos = ev.mention_position;
   return (
     <div className="rounded p-2"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <div className="flex items-center gap-2 text-[11px] text-muted">
+      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
         <span className={ev.hit ? 'text-emerald-500' : 'text-muted'}>
           {ev.hit ? '✓' : '○'}
         </span>
         <span>{dt}</span>
+        {ev.hit && pos && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+            style={{
+              background: (posColor[pos] || posColor.unknown).bg,
+              color: (posColor[pos] || posColor.unknown).fg,
+            }}>
+            {t(`dashboard.aiTelemetry.insight.position.${pos}`)}
+          </span>
+        )}
         {ev.source_url && (
           <a href={ev.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate">
             📎 {ev.source_url.replace(/^https?:\/\//, '').slice(0, 40)}…

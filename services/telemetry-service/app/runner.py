@@ -180,6 +180,30 @@ def _extract_one(target: str, response_id: int) -> None:
         r.competitors_json = json.dumps(comps, ensure_ascii=False)
         r.citation_domains_json = json.dumps(cd, ensure_ascii=False)
         r.answer_format = result.get("answer_format") or None
+        # mention_position 兜底:LLM 没给 → 用 hit_excerpt 在原文里的位置算 lead/body/tail
+        r.mention_position = result.get("mention_position") or _fallback_position(r.answer, r.hit_excerpt)
+
+
+def _fallback_position(answer: str | None, hit_excerpt: str | None) -> str | None:
+    """LLM 不可用时,按 hit_excerpt 在答复全文里的字符位置粗判 lead/body/tail.
+
+    用 excerpt 去 strip 两端「…」,在 answer 里 find 首字符位置;前 30% lead,
+    后 30% tail,中间 body.无法匹配返回 None.
+    """
+    if not answer or not hit_excerpt:
+        return None
+    needle = hit_excerpt.strip("…").strip()
+    if not needle or not answer:
+        return None
+    i = answer.find(needle[:20]) if len(needle) >= 20 else answer.find(needle)
+    if i < 0:
+        return None
+    pct = i / max(1, len(answer))
+    if pct < 0.30:
+        return "lead"
+    if pct > 0.70:
+        return "tail"
+    return "body"
 
 
 def _domains_from_citations(citations: list[dict]) -> list[str]:

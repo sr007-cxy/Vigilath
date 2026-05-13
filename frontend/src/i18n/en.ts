@@ -1856,6 +1856,13 @@ const en = {
                 "matrixTitle": "Engine × Domain heatmap",
                 "matrixEmpty": "No matrix data",
                 "matrixHint": "Darker = engine cites this domain more",
+                "saivTitle": "Share of AI Voice",
+                "saivHint": "Brand mentioned {{brand}} / industry total {{total}}",
+                "competitorShareTitle": "Competitor share gap",
+                "competitorShareEmpty": "No competitor data yet — populated after next LLM extract",
+                "positionTitle": "Mention position",
+                "optimalRate": "AI answer pick rate",
+                "optimalRateHint": "across {{runs}} runs",
                 "selectTopic": "Topic",
                 "noBrand": "No brand keywords configured. AI visibility cannot be computed — set your brand name/aliases in Account/Brand settings.",
                 "tooltipCitations": "Citations",
@@ -1890,7 +1897,9 @@ const en = {
                 "legend": "Legend: ✓ = hit (click to view) · ⏳ in progress · ⌛ pending · grey ✓ = ran without hit",
                 "hits": "hits",
                 "firstHit": "First hit",
-                "evidenceTitle": "Past answers"
+                "evidenceTitle": "Past answers",
+                "optimalRate": "Pick rate",
+                "saivLabel": "SAIV"
               },
               "insight": {
                 "title": "Diagnosis",
@@ -1914,6 +1923,12 @@ const en = {
                   "near_miss": "Near miss",
                   "no_signal": "No signal",
                   "negative_mention": "Negative mention"
+                },
+                "position": {
+                  "lead": "Lead",
+                  "body": "Body",
+                  "tail": "Tail",
+                  "unknown": "Unknown"
                 }
               },
               "briefings": {

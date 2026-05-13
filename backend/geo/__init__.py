@@ -36,6 +36,7 @@ def _apply_telemetry_migrations() -> None:  # pragma: no cover
         ("ai_telemetry_responses", "competitors_json", "TEXT"),
         ("ai_telemetry_responses", "citation_domains_json", "TEXT"),
         ("ai_telemetry_responses", "answer_format", "TEXT"),
+        ("ai_telemetry_responses", "mention_position", "TEXT"),
     ]
     with engine.begin() as conn:
         for table, col, ddl in additions:

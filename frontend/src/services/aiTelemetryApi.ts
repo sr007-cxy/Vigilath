@@ -112,9 +112,39 @@ export interface CellEvidence {
   query: string;
   hit: boolean;
   hit_excerpt: string | null;
+  mention_position?: 'lead' | 'body' | 'tail' | 'unknown' | string | null;
   source_url: string | null;
   answer: string;
   citations: { url: string; domain: string; title: string }[];
+}
+
+// ─── v1.3 SAIV / 竞品份额 ──────────────────────────────────
+
+export interface CompetitorShareEntry {
+  name: string;
+  count: number;
+  pct: number;
+}
+
+export interface PositionDist {
+  lead: number;
+  body: number;
+  tail: number;
+  unknown: number;
+}
+
+export interface ShareOfVoice {
+  topic_id: number;
+  target: string;
+  period_days: number;
+  brand_count: number;
+  competitors_count_total: number;
+  saiv_pct: number;
+  competitors: CompetitorShareEntry[];
+  position_dist: PositionDist;
+  optimal_rate_pct: number;
+  total_runs: number;
+  sample_size: number;
 }
 
 export interface CellInsightRec {
@@ -355,6 +385,14 @@ export const aiTelemetryApi = {
     return request<Overview>('GET', `/topics/${topicId}/overview?period=${periodDays}`, token);
   },
 
+  // ── v1.3 SAIV / 竞品份额 / 优选率 / 命中位置 ────────
+  async getShareOfVoice(
+    topicId: number, periodDays: number, token: string,
+  ): Promise<ShareOfVoice> {
+    if (isMockMode()) return Promise.resolve(_mockSoV(topicId, periodDays));
+    return request<ShareOfVoice>('GET', `/topics/${topicId}/share-of-voice?period=${periodDays}`, token);
+  },
+
   // ── v1 引用追踪 ──────────────────────────
   async getTrackingMatrix(topicId: number, token: string): Promise<TrackingMatrix> {
     if (isMockMode()) return Promise.resolve(_mockMatrix(topicId));
@@ -490,6 +528,26 @@ function _mockInsight(topicId: number, query: string, engine: EngineId): CellIns
     llm_model: 'mock', prompt_version: 'cell_v1',
     generated_at: new Date().toISOString(),
     feedback: null,
+  };
+}
+
+function _mockSoV(topicId: number, periodDays: number): ShareOfVoice {
+  return {
+    topic_id: topicId, target: '世纪互联', period_days: periodDays,
+    brand_count: 23,
+    competitors_count_total: 41,
+    saiv_pct: 35.9,
+    competitors: [
+      { name: '万国数据', count: 18, pct: 28.1 },
+      { name: '世纪华通', count: 12, pct: 18.8 },
+      { name: '光环新网', count: 6, pct: 9.4 },
+      { name: '宝信软件', count: 3, pct: 4.7 },
+      { name: '数据港', count: 2, pct: 3.1 },
+    ],
+    position_dist: { lead: 12, body: 8, tail: 3, unknown: 0 },
+    optimal_rate_pct: 82.9,
+    total_runs: 7,
+    sample_size: 35,
   };
 }
 

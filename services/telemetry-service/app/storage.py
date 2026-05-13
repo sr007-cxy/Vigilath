@@ -78,6 +78,8 @@ class ResponseORM(Base):
     competitors_json = Column(Text, nullable=True)
     citation_domains_json = Column(Text, nullable=True)
     answer_format = Column(String, nullable=True)
+    # v1.3 提及位置
+    mention_position = Column(String, nullable=True)
 
 
 class QueryHitORM(Base):

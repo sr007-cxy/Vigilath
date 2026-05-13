@@ -148,9 +148,30 @@ def backfill_query_hits(s: Session, topic: TopicORM) -> int:
             if is_hit:
                 r.hit = True
                 r.hit_excerpt = excerpt
+        # mention_position 兜底:hit 但没 position 的,用 excerpt 在 answer 的位置粗判
+        if is_hit and not r.mention_position:
+            r.mention_position = _position_from_excerpt(r.answer, r.hit_excerpt)
         if is_hit or r.hit:
             cell.total_hits += 1
             if cell.first_hit_at is None:
                 cell.first_hit_at = r.created_at
                 cell.first_hit_response_id = r.id
     return len(rows)
+
+
+def _position_from_excerpt(answer: str | None, hit_excerpt: str | None) -> str | None:
+    """与 runner._fallback_position 等价 — 用 excerpt 在 answer 的字符位置算 lead/body/tail."""
+    if not answer or not hit_excerpt:
+        return None
+    needle = hit_excerpt.strip("…").strip()
+    if not needle:
+        return None
+    i = answer.find(needle[:20]) if len(needle) >= 20 else answer.find(needle)
+    if i < 0:
+        return None
+    pct = i / max(1, len(answer))
+    if pct < 0.30:
+        return "lead"
+    if pct > 0.70:
+        return "tail"
+    return "body"

@@ -118,6 +118,11 @@ Query:{query}
    每个含 name(原文出现的名字)、count(在答复里出现次数)、snippet(前后约 60 字上下文,带 …)
 2. answer_format:在以下 5 类中选一个:listicle / single_recommendation / report / case_study / qa
 3. citation_domains:答复 citations 列出的顶级域名集合(去重)
+4. mention_position:检索词「{target}」在答复里的位置 — 四选一:
+   - lead:出现在开头(前 30%)或被显式推荐为首选 / 列表第 1-3 项
+   - body:出现在中段(30%-70%)或列表 4-7 项
+   - tail:出现在末尾(后 30%)或列表 8+ / 一笔带过
+   - unknown:检索词没出现,或难以判断位置
 
 【硬约束】
 - 严格输出 JSON,不要解释、不要 markdown 包裹
@@ -127,7 +132,8 @@ Query:{query}
 【输出格式】
 {{"competitors": [{{"name":"...","count":1,"snippet":"..."}}],
   "answer_format": "...",
-  "citation_domains": ["site.com", ...]}}
+  "citation_domains": ["site.com", ...],
+  "mention_position": "lead"}}
 """
 
 
@@ -142,10 +148,14 @@ def extract_response_insights(*, target: str, query: str, engine: str,
     parsed, model = _chat_json(prompt, temperature=0.2, max_completion_tokens=800)
     if not isinstance(parsed, dict):
         return {}
+    pos = (parsed.get("mention_position") or "").strip().lower()
+    if pos not in {"lead", "body", "tail", "unknown"}:
+        pos = None
     return {
         "competitors": parsed.get("competitors") or [],
         "answer_format": parsed.get("answer_format") or None,
         "citation_domains": parsed.get("citation_domains") or [],
+        "mention_position": pos,
         "llm_model": model,
     }
 

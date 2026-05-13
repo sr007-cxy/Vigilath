@@ -1862,6 +1862,13 @@ const zh = {
                 "matrixTitle": "引擎 × 平台 命中矩阵",
                 "matrixEmpty": "暂无矩阵数据",
                 "matrixHint": "颜色越深 = 该引擎引用该平台越多",
+                "saivTitle": "AI 声量份额 SAIV",
+                "saivHint": "品牌被提及 {{brand}} 次 / 全行业 {{total}} 次",
+                "competitorShareTitle": "竞品引用份额差",
+                "competitorShareEmpty": "暂无竞品提及数据,等下次跑批 LLM 抽取",
+                "positionTitle": "命中位置分布",
+                "optimalRate": "AI 答案优选率",
+                "optimalRateHint": "累计 {{runs}} 次跑批",
                 "selectTopic": "选择话题",
                 "noBrand": "未配置品牌词,AI 可见度无法计算 — 请在 账户/品牌设置 里填品牌名 / 别名",
                 "tooltipCitations": "引用",
@@ -1896,7 +1903,9 @@ const zh = {
                 "legend": "图例:✓ = 已命中(点击看原文) · ⏳ 进行中 · ⌛ 待做 · 灰 ✓ 跑过未命中",
                 "hits": "命中",
                 "firstHit": "首次命中",
-                "evidenceTitle": "历次答复"
+                "evidenceTitle": "历次答复",
+                "optimalRate": "答案优选率",
+                "saivLabel": "声量份额"
               },
               "insight": {
                 "title": "诊断",
@@ -1920,6 +1929,12 @@ const zh = {
                   "near_miss": "临门一脚",
                   "no_signal": "无信号",
                   "negative_mention": "负面提及"
+                },
+                "position": {
+                  "lead": "开篇位",
+                  "body": "中段",
+                  "tail": "末尾",
+                  "unknown": "位置未知"
                 }
               },
               "briefings": {
