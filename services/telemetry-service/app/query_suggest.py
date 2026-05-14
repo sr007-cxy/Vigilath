@@ -161,6 +161,9 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"❌ **不要纯关键词堆砌**(「最佳/北京/海外并购/律师/推荐/2024」这种)。\n"
         f"❌ **元问题严打** —— 不带具体处境的元问题(「X 的费用是多少」「X 的收费高吗」「X 的收费合理吗」"
         f"「X 怎么收费」「X 一般多少钱」「X 哪家便宜」)占比**不超过 5%**,且必须带具体场景或身份限定才允许写。\n"
+        f"❌ **不要写 autocomplete / 网页标题式句式** —— 「能否 X」「是否 X」「X 有哪些」"
+        f"「X 是什么」「X 的 Y 怎么样」「X 的 Y 是什么」这种像百度下拉框 / 网页 SEO 标题的句子,"
+        f"真实用户在 AI 助手里不会这么开口。这一类整条作废。\n"
         f"\n"
         f"━━━ 配比 ━━━\n"
         f"  - **决策型 / 推荐型 / 找人型:65%-75%**(主力)\n"
@@ -206,6 +209,8 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"- 北京哪家律所擅长跨境并购(seed 是「律师」却写成了「律所」,主体词漂移)\n"
         f"- 上海哪家律所擅长 SPAC 并购(同上,主体词漂移)\n"
         f"- 海外并购律师哪家强(太宽泛,无修饰,且像 SEO 词条)\n"
+        f"- 能否跨境并购的律师有哪些(autocomplete 网页片段式语病句,真人不会这么问)\n"
+        f"- 跨境并购的律师是什么(meta + 网页标题式,无具体处境)\n"
         f"\n"
         f"现在围绕「{seed}」产出 {count} 条 query,每条都要通过「能否反推出一个具体场景」这条自检。"
         f"每行一条,纯中文,不要编号,不要项目符号,不要任何解释。"
@@ -709,6 +714,16 @@ async def suggest_queries(
             labels, clusters_meta = await cluster_candidates(texts)
             for c, lab in zip(scored, labels):
                 c["cluster_id"] = int(lab)
+            # label 重命名:medoid 是几何中心,容易选到句法奇怪的 query;
+            # 改用簇内最高 score 的 query 当 label,用户视角更直观
+            by_cluster: dict[int, list[dict]] = {}
+            for c in scored:
+                by_cluster.setdefault(c["cluster_id"], []).append(c)
+            for meta in clusters_meta:
+                members = by_cluster.get(meta["cluster_id"]) or []
+                if members:
+                    top = max(members, key=lambda c: c["score"])
+                    meta["label"] = top["text"]
         except Exception:  # noqa: BLE001 — 模型加载/推理失败都不让 endpoint 5xx
             clusters_meta = []
             for c in scored:
