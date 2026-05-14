@@ -1988,7 +1988,7 @@ const zh = {
                 "seedPickerLabel": "种子提示词({{selected}} / {{total}} 选中)",
                 "seedPickerEmpty": "步骤 2 还没填种子提示词 — 回到上一步添加后,这里会列出来供你勾选",
                 "expandSectionTitle": "1. 选择关键词开始扩展",
-                "candidateSectionTitle": "2. 从候选 Query 里挑要监测的(最多 50)",
+                "candidateSectionTitle": "2. 选择要监测的问题(最多 50 个)",
                 "runResultsTitle": "试跑结果 · {{count}} 条",
                 "seedPromptsTitle": "已提交的种子词(审核状态)",
                 "seedPromptsHint": "甲方提交,平台审核后固化",

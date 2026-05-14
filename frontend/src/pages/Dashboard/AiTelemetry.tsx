@@ -1482,16 +1482,11 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     const f = queryFilter.trim().toLowerCase();
     let out = f ? suggestions.filter(q => q.text.toLowerCase().includes(f)) : suggestions;
     if (sortByScore) {
-      // 已勾选的固定置顶(避免重排时跳走),分数同高的稳定保留 LLM 原序
-      out = [...out].sort((a, b) => {
-        const pa = picked.has(a.text) ? 1 : 0;
-        const pb = picked.has(b.text) ? 1 : 0;
-        if (pa !== pb) return pb - pa;
-        return b.score - a.score;
-      });
+      // 纯按评分降序;不再把已勾选项拉到顶部,免得用户每次勾/取消都看到位置漂移
+      out = [...out].sort((a, b) => b.score - a.score);
     }
     return out;
-  }, [suggestions, queryFilter, sortByScore, picked]);
+  }, [suggestions, queryFilter, sortByScore]);
 
   // 按 cluster 分组渲染。clusters 为空时返回 null → 走平铺渲染回退
   const groupedByCluster = useMemo<{ cluster: ClusterMeta; items: QueryCandidate[] }[] | null>(() => {
