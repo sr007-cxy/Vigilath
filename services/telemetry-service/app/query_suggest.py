@@ -85,6 +85,8 @@ _CJK_COMMERCIAL_MARKERS = (
     "对比", "比较", "评价", "评测", "测评",
     "价格", "费用", "收费", "价位",
     "哪个好", "怎么选", "排行榜", "性价比",
+    # GEO / AEO 决策型 query 高频信号
+    "哪家", "擅长", "适合", "靠谱", "资深", "头部", "知名", "求推荐",
 )
 
 _QUESTION_WORDS_EN = {
@@ -126,19 +128,51 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
     avoid = f"「{target}」" + (f"及其别名 {alias_part}" if alias_part else "")
     ind = f"(行业:{industry})" if industry else ""
     return (
-        f"你在帮品牌「{target}」{ind} 做 GEO(生成式搜索优化)监测。"
-        f"请围绕主题「{seed}」生成 {count} 条**潜在客户会向 AI 助手(ChatGPT / DeepSeek / 豆包等)提的真实问题**。\n"
+        f"你在帮品牌「{target}」{ind} 做 GEO / AEO 监测。"
+        f"我们要测的核心问题是:**当真实用户拿这类话题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
+        f"AI 会不会自然推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query。\n"
         f"\n"
-        f"硬性要求:\n"
-        f"1. **绝对禁止**在 query 里出现 {avoid} — 我们要测的是 AI 会不会"
-        f"「自然」提到它,query 里点名了就是作弊,这一类全部作废。\n"
-        f"2. 覆盖三类用户决策阶段,数量大致均衡:\n"
-        f"   - 认知期:「我需要这个吗」「这是什么」「适合谁」「有什么用」\n"
-        f"   - 对比期:「A vs B」「怎么选」「有什么区别」「优劣对比」\n"
-        f"   - 决策期:「预算多少」「性价比」「哪家最值」「推荐哪家」\n"
-        f"3. **口语化**,像真实用户对 AI 助手说话,不是 SEO 关键词堆砌。\n"
-        f"4. 每条 15-50 个汉字,不要太短(短 query 信号弱)。\n"
-        f"5. 全部用中文输出,不要混入英文;不要编号,不要项目符号,不要解释,**每行一条**。"
+        f"━━━ 铁律 ━━━\n"
+        f"1. 绝对禁止在 query 里出现 {avoid} — query 里点名我们就是作弊,这一类全部作废。\n"
+        f"2. 每条都是用户**真的会脱口而出**的话,口语、不规范都没关系,但**不能是 SEO 关键词堆砌**。\n"
+        f"3. 每条 8-35 个汉字,**短而像人说话**比长而像目录强。\n"
+        f"4. 纯中文,不混英文。不要编号、不要项目符号、不要解释,**每行一条**。\n"
+        f"\n"
+        f"━━━ 配比(关键) ━━━\n"
+        f"GEO / AEO 监测里,**「找人 / 找服务 / 求推荐 / 哪家好」类决策型 query 信号最强**。"
+        f"产出配比必须是:\n"
+        f"  - **决策型 / 推荐型:60%-70%**(主力,反复用不同修饰词产出大量变体)\n"
+        f"  - 对比型:15%-20%(「A 和 B 哪个好」「区别」「优劣」)\n"
+        f"  - 认知型:15%-20%(「什么是」「流程」「需要注意什么」)\n"
+        f"**不要平均分配** — 决策型严重过半才符合 GEO 测试的目的。\n"
+        f"\n"
+        f"━━━ 决策型句式模板(必须每种都生成多条变体)━━━\n"
+        f"- 推荐型: 「推荐一下 X」/「X 推荐」/「求推荐 X」/「有没有靠谱的 X」/「谁家 X 做得好」\n"
+        f"- 找人型: 「在 [地点] 找 X」/「[地点] 哪里有 X」/「[地点] 做 [场景] 的 X」\n"
+        f"- 适配型: 「适合 [场景] 的 X 推荐」/「做 [场景] 的 X」/「[用户身份] 该找哪种 X」\n"
+        f"- 排名型: 「[地点 / 场景] X 排名」/「最好的 X」/「头部 X 有哪些」/「[地点] X 排行」\n"
+        f"\n"
+        f"━━━ 修饰词维度(必须叠加使用,产出大量真实变体)━━━\n"
+        f"- **地点**:国内一线(北京、上海、深圳、广州),港澳新(香港、新加坡),海外金融中心"
+        f"(纽约、伦敦、东京),或「跨境 / 全国 / 线上」等。话题本身与人 / 服务 / 商家相关时,"
+        f"**至少 35%-50% 的 query 要带地点修饰**。\n"
+        f"- **细分场景 / 业务方向**:根据「{seed}」具体行业,自行提炼 5-10 个真实业务子场景作修饰。\n"
+        f"- **用户身份**:初创公司 / 上市公司 / 中小企业 / 个人 / 外企 等,挑合适的混入。\n"
+        f"- **质量描述(可选)**:资深、专业、靠谱、经验丰富、头部、知名。\n"
+        f"\n"
+        f"━━━ 示例(假设 seed 是「海外并购律师」,只是格式参考,你不要照抄)━━━\n"
+        f"- 推荐海外并购的北京律师\n"
+        f"- 适合海外并购的北京律师推荐\n"
+        f"- 推荐一下在北京做海外并购的律师\n"
+        f"- 推荐一下在上海做海外并购的律师\n"
+        f"- 上海哪家律所擅长跨境并购\n"
+        f"- 深圳做海外收购的律师有靠谱的推荐吗\n"
+        f"- 香港做跨境并购的资深律师推荐\n"
+        f"- 上市公司海外并购找哪家律师靠谱\n"
+        f"- 国内做美股 SPAC 并购的律师推荐\n"
+        f"- 跨境并购的律师怎么选\n"
+        f"\n"
+        f"现在请按上述规则,围绕「{seed}」产出 {count} 条 query,每行一条。"
     )
 
 
@@ -147,19 +181,49 @@ def _user_msg_en_geo(seed: str, count: int, target: str, aliases: list[str], ind
     avoid = f'"{target}"' + (f" or its aliases {alias_part}" if alias_part else "")
     ind = f" (industry: {industry})" if industry else ""
     return (
-        f"You are helping the brand \"{target}\"{ind} run a GEO (generative-engine "
-        f"optimization) audit. Generate {count} realistic prompts a potential customer "
-        f"would send to an AI assistant (ChatGPT / DeepSeek / etc.) about the topic: '{seed}'.\n"
+        f"You are helping the brand \"{target}\"{ind} run a GEO / AEO audit. "
+        f"What we measure: **when real users ask an AI assistant (ChatGPT / DeepSeek / "
+        f"Perplexity / Claude / Gemini) about this kind of topic, will the AI naturally "
+        f"recommend us?** Generate {count} candidate queries around the topic: '{seed}'.\n"
         f"\n"
-        f"Hard requirements:\n"
-        f"1. **Never mention {avoid}** in the prompt — we are measuring whether the AI "
-        f"brings it up on its own; if the prompt names it, the test is cheating.\n"
-        f"2. Roughly balance across three buyer stages:\n"
-        f"   - Awareness: \"what is X\", \"do I need X\", \"who is it for\"\n"
-        f"   - Comparison: \"A vs B\", \"how to choose\", \"differences\"\n"
-        f"   - Decision: \"budget / pricing\", \"best value\", \"recommend one\"\n"
-        f"3. Conversational tone, like a real user talking to an AI assistant — not SEO keywords.\n"
-        f"4. 8-20 words each. No numbering, no bullets, no commentary. One prompt per line."
+        f"━━━ Hard rules ━━━\n"
+        f"1. **Never mention {avoid}** — naming us in the prompt is cheating; throw those out.\n"
+        f"2. Every line is something a real user would actually say to an AI — conversational, "
+        f"casual is fine, **but not SEO keyword stuffing**.\n"
+        f"3. 5-20 words each. **Short and human** beats long and listy.\n"
+        f"4. English only. No numbering, no bullets, no commentary. One prompt per line.\n"
+        f"\n"
+        f"━━━ Mix (critical) ━━━\n"
+        f"For GEO / AEO, **\"recommend / find / who's the best\" decision-stage queries are the "
+        f"strongest signal**. Produce:\n"
+        f"  - **Decision / recommendation: 60-70%** (the bulk — vary modifiers, not intent)\n"
+        f"  - Comparison: 15-20% (\"A vs B\", \"differences between\", \"which is better\")\n"
+        f"  - Awareness: 15-20% (\"what is\", \"how does X work\", \"what to look for\")\n"
+        f"**Don't split evenly** — heavily over-index on decision queries.\n"
+        f"\n"
+        f"━━━ Decision-query templates (produce many variants of each) ━━━\n"
+        f"- Recommend: \"recommend a X\", \"any good X for Y\", \"best X for Y\", \"who does X well\"\n"
+        f"- Find: \"find a X in [city]\", \"X near [city]\", \"[city] X that handles [scenario]\"\n"
+        f"- Fit: \"X for [scenario]\", \"which X works for [user type]\", \"X specialized in [scenario]\"\n"
+        f"- Rank: \"top X in [city/scenario]\", \"leading X for [scenario]\", \"X firms ranked\"\n"
+        f"\n"
+        f"━━━ Modifier dimensions (stack them to get real variation) ━━━\n"
+        f"- **Location**: major US/UK/EU/APAC cities, financial hubs (NYC, London, Singapore, "
+        f"Hong Kong, Tokyo), or \"cross-border / global / remote\". If the topic is about a "
+        f"person / service / firm, **35-50% of queries should carry a location modifier**.\n"
+        f"- **Scenario / sub-vertical**: infer 5-10 real sub-scenarios from '{seed}'.\n"
+        f"- **User type**: startup / public company / SMB / individual / enterprise — mix in.\n"
+        f"- **Quality words (optional)**: experienced, reputable, top-tier, specialized.\n"
+        f"\n"
+        f"━━━ Examples (assume seed = 'cross-border M&A lawyer' — for format only, do not copy) ━━━\n"
+        f"- recommend a cross-border M&A lawyer in New York\n"
+        f"- best cross-border M&A attorneys in Hong Kong\n"
+        f"- looking for an M&A lawyer for our overseas acquisition\n"
+        f"- who handles cross-border M&A in Singapore well\n"
+        f"- top firms for SPAC cross-border deals\n"
+        f"- M&A lawyer recommendations for a US listed company expanding to Asia\n"
+        f"\n"
+        f"Now produce {count} queries around '{seed}', one per line."
     )
 
 
@@ -227,7 +291,7 @@ async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
             {"role": "system", "content": _SYSTEM_MSG},
             {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry)},
         ],
-        "temperature": 0.9,
+        "temperature": 0.7,
         "max_tokens": min(8000, raw_count * 35),
     }
     headers = {
