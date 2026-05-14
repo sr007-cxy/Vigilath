@@ -12,7 +12,7 @@ import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
 import {
   aiTelemetryApi, CN_ENGINES,
-  type EngineId, type Topic, type TopicPayload, type RunNowResult,
+  type EngineId, type Topic, type TopicPayload,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
   type IntentBreakdown,
   type OwnedSplit,
@@ -1486,8 +1486,6 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
   const enabled = true;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [runResults, setRunResults] = useState<RunNowResult[] | null>(null);
 
   // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
   // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
@@ -1632,17 +1630,6 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
       }
       onSaveDone();
     } finally { setSaving(false); }
-  };
-
-  const handleRunNow = async () => {
-    if (!valid) return;
-    setRunning(true);
-    try {
-      const res = await aiTelemetryApi.runNow(buildPayload(), token);
-      setRunResults(res);
-    } finally {
-      setRunning(false);
-    }
   };
 
   const handleSuggest = async () => {
@@ -2183,35 +2170,6 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
               )}
             </section>
 
-            {/* ── 第 3 段:试跑结果(只在试跑后出现)+ 调度脚注 ───── */}
-            {runResults && (
-              <section
-                className="rounded-md p-4 space-y-2"
-                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
-              >
-                <div className="text-sm font-semibold text-primary">
-                  {t('dashboard.aiTelemetry.form.runResultsTitle', { count: runResults.length })}
-                </div>
-                <div className="text-xs space-y-2 max-h-60 overflow-y-auto">
-                  {runResults.map((r, i) => (
-                    <div key={i} className="border-b pb-2 last:border-0" style={{ borderColor: 'var(--border-color)' }}>
-                      <div className="text-primary font-medium">{r.engine} · {r.query}</div>
-                      {r.error ? (
-                        <div className="text-rose-500 mt-1">⚠ {r.error}</div>
-                      ) : (
-                        <>
-                          <div className="text-secondary mt-1 line-clamp-3">{r.answer}</div>
-                          {r.citations.length > 0 && (
-                            <div className="text-muted mt-1">引用 {r.citations.length} 条</div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
             <p className="text-xs text-muted text-center">
               {t('dashboard.aiTelemetry.form.scheduleNote')}
             </p>
@@ -2248,22 +2206,13 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             </button>
           )}
           {step === 3 && !readOnly && (
-            <>
-              <button
-                type="button" onClick={handleRunNow} disabled={!valid || running}
-                className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
-                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-              >
-                {running ? '…' : t('dashboard.aiTelemetry.form.runNow')}
-              </button>
-              <button
-                type="button" onClick={handleSave} disabled={!valid || saving}
-                className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-                style={{ background: 'var(--accent-primary)' }}
-              >
-                {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
-              </button>
-            </>
+            <button
+              type="button" onClick={handleSave} disabled={!valid || saving}
+              className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+              style={{ background: 'var(--accent-primary)' }}
+            >
+              {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
+            </button>
           )}
         </div>
       </footer>
