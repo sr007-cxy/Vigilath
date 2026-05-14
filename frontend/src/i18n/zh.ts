@@ -1794,7 +1794,8 @@ const zh = {
               "compose": "内容创作",
               "posts": "内容投放",
               "aiTelemetry": "AI 检测",
-              "insights": "优化建议"
+              "insights": "优化建议",
+              "adminWorkbench": "工作台"
             },
             "config": {
               "subtitle": "配置要追踪的检索词、问题角度和 AI 引擎"

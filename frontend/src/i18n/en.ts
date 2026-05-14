@@ -1788,7 +1788,8 @@ const en = {
               "compose": "Content",
               "posts": "Distribution",
               "aiTelemetry": "AI Detection",
-              "insights": "Recommendations"
+              "insights": "Recommendations",
+              "adminWorkbench": "Admin"
             },
             "config": {
               "subtitle": "Configure tracked targets, query angles, and AI engines"

@@ -21,16 +21,35 @@ interface SidebarItem {
   adminOnly?: boolean;
 }
 
-const sidebarItems: SidebarItem[] = [
-  { to: '/dashboard', end: true, icon: 'config', labelKey: 'dashboard.nav.config' },
-  { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
-  { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },
-  // AI 遥测 = 概览 / 引用追踪 / 遥测详情(原"跑批结果")
-  { to: '/dashboard/ai-telemetry', end: false, icon: 'telemetry', labelKey: 'dashboard.nav.aiTelemetry' },
-  // 优化建议从原 AI 遥测 tab 提级到一级菜单
-  { to: '/dashboard/insights', end: false, icon: 'insights', labelKey: 'dashboard.nav.insights' },
-  // admin only — 审核入口,放在左侧栏底部
-  { to: '/dashboard/review', end: false, icon: 'review', labelKey: 'nav.adminReview', adminOnly: true },
+interface SidebarGroup {
+  /** 分组标题 i18n key;null 表示无标题(顶部主菜单常用) */
+  titleKey: string | null;
+  items: SidebarItem[];
+  /** 整组只对 admin 显示 */
+  adminOnly?: boolean;
+}
+
+const sidebarGroups: SidebarGroup[] = [
+  {
+    titleKey: null,
+    items: [
+      { to: '/dashboard', end: true, icon: 'config', labelKey: 'dashboard.nav.config' },
+      { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
+      { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },
+      // AI 遥测 = 概览 / 引用追踪 / 遥测详情(原"跑批结果")
+      { to: '/dashboard/ai-telemetry', end: false, icon: 'telemetry', labelKey: 'dashboard.nav.aiTelemetry' },
+      // 优化建议从原 AI 遥测 tab 提级到一级菜单
+      { to: '/dashboard/insights', end: false, icon: 'insights', labelKey: 'dashboard.nav.insights' },
+    ],
+  },
+  {
+    // 独立分组,标题「工作台」— 只对 admin 显示
+    titleKey: 'dashboard.nav.adminWorkbench',
+    adminOnly: true,
+    items: [
+      { to: '/dashboard/review', end: false, icon: 'review', labelKey: 'nav.adminReview' },
+    ],
+  },
 ];
 
 function SidebarIcon({ name }: { name: string }) {
@@ -159,31 +178,40 @@ export function DashboardLayout() {
             </p>
           </div>
 
-          {/* Nav items — adminOnly 项只在 is_admin 用户处显示 */}
-          <nav className="p-2 md:p-3 flex md:flex-col gap-0.5 overflow-x-auto md:overflow-visible md:flex-1 scrollbar-hide">
-            {sidebarItems
-              .filter((item) => !item.adminOnly || user?.is_admin)
-              .map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2"
-                  style={({ isActive }) =>
-                    isActive
-                      ? {
-                          background: 'var(--bg-tertiary)',
-                          color: item.adminOnly ? '#ef4444' : 'var(--accent-primary)',
-                        }
-                      : {
-                          color: item.adminOnly ? '#ef4444' : 'var(--text-secondary)',
-                          fontWeight: item.adminOnly ? 600 : undefined,
-                        }
-                  }
-                >
-                  <SidebarIcon name={item.icon} />
-                  {t(item.labelKey)}
-                </NavLink>
+          {/* Nav 按分组渲染;adminOnly 整组在非 admin 时隐藏 */}
+          <nav className="p-2 md:p-3 flex md:flex-col gap-3 overflow-x-auto md:overflow-visible md:flex-1 scrollbar-hide">
+            {sidebarGroups
+              .filter((g) => !g.adminOnly || user?.is_admin)
+              .map((g, gi) => (
+                <div key={gi} className="flex md:flex-col gap-0.5">
+                  {g.titleKey && (
+                    <div
+                      className="hidden md:block px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {t(g.titleKey)}
+                    </div>
+                  )}
+                  {g.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2"
+                      style={({ isActive }) =>
+                        isActive
+                          ? {
+                              background: 'var(--bg-tertiary)',
+                              color: 'var(--accent-primary)',
+                            }
+                          : { color: 'var(--text-secondary)' }
+                      }
+                    >
+                      <SidebarIcon name={item.icon} />
+                      {t(item.labelKey)}
+                    </NavLink>
+                  ))}
+                </div>
               ))}
           </nav>
         </aside>
