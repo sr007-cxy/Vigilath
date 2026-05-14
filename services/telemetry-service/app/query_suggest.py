@@ -132,15 +132,24 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"我们要测:**当真实用户拿这类问题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
         f"AI 会不会主动推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query,每行一条,纯中文。\n"
         f"\n"
-        f"━━━ 主体词锁定(最重要的一条,违反就全废)━━━\n"
-        f"seed「{seed}」里出现的**每一个实体核心词**(尤其是末尾那个标识身份/角色/产品的词),"
-        f"在你产出的每一条 query 里**必须原样保留**,不许换成:\n"
-        f"  - 上位词(律师 → 律所 / 法律服务 / 法律顾问 / 法律团队;医生 → 医院 / 诊所)\n"
-        f"  - 下位词(律师 → 合伙人 / 高级顾问;医生 → 主任医师)\n"
-        f"  - 近义词(顾问 → 咨询师;教练 → 老师)\n"
-        f"如果 seed 是「海外并购律师」,query 里**必须**含「律师」,不能改成「律所」「事务所」「法律服务」。"
-        f"我们要测的就是 AI 在被问到「{seed}」这个**精确身份/产品**时会不会推荐我们,"
-        f"换成上位/下位/近义词就是测错对象,这一类全部作废。\n"
+        f"━━━ 关于数量(读这条优先于一切)━━━\n"
+        f"我要 {count} 条**不是硬指标**。如果你只能写出 25-30 条句式各异、每条出自不同人不同处境的真实 query,"
+        f"就**停在那里**,把剩余的 quota 放弃,**不要为了凑到 {count} 条而开启「同句式 + 换变量」的模板灌水**。\n"
+        f"灌水的征兆:连续 3+ 条句式骨架相同(如「做 X 的律师 [地名] 推荐」反复套地名,或「收购 [国家] [行业]"
+        f"公司找哪家律师」反复套国家+行业)。一旦你写到第 20-25 条左右发现自己**只剩下「换变量」才能继续写**,"
+        f"那就立刻停笔 —— 30 条好的远好过 50 条中 20 条模板灌水。\n"
+        f"\n"
+        f"━━━ 主体词锁定 vs. 修饰词替换(关键区分)━━━\n"
+        f"seed「{seed}」末尾的**实体身份词**(律师/医生/顾问/教练/品牌……即"
+        f"指代「这个人/这个东西」的那个词),在每条 query 里**必须原样出现**,"
+        f"不许换成上位词(律师→律所)、下位词(律师→合伙人)、近义词(顾问→咨询师)。\n"
+        f"\n"
+        f"但 seed 前面的**修饰词**(「跨境并购」「海外」等业务/场景前缀)**不要每条都直接复读**,"
+        f"鼓励替换为同义 / 下位 / 具体场景词:\n"
+        f"  - 「跨境并购律师」→ 可以写成「美股 SPAC 律师」「红筹搭建律师」「VIE 拆除律师」"
+        f"「欧盟反垄断律师」「东南亚收购律师」「海外并购方向的律师」「做跨境收购的律师」等,"
+        f"或者干脆**只在 query 中描述具体处境**而不显式说「跨境并购」(只要语义对上即可)。\n"
+        f"  - 错例:连续多条都直接以「{seed}」开头当 hashtag — 这是模型偷懒。\n"
         f"\n"
         f"━━━ 角色锚定(写之前先在脑里跑一遍)━━━\n"
         f"你不是在写「关于 {seed} 这个行业的 N 个研究问题」,你是在扮演 N 个**正在准备做这件事的真实人**"
@@ -158,6 +167,20 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"     「做 X 的律师适合什么行业」「做 X 的律师适合什么规模」「做 X 的律师适合什么需求」\n"
         f"     「做 X 的律师适合什么公司」「做 X 的律师适合什么预算」「X 律师适合哪类客户」\n"
         f"❌ **不要做 cartesian product 模板填空** —— 同一句式套不同维度名枚举出来的清单一律作废。\n"
+        f"❌ **不要把 seed 词当 hashtag 前缀** —— 即「{seed},X 推荐」「{seed},做 X 的推荐」"
+        f"「{seed},擅长 X 的」这种把 seed 整体提到句首再加补语的句式。真人开口不会先报 seed 再说事,"
+        f"这是 LLM 凑数典型征兆,整条作废。\n"
+        f"❌ **禁止连续多条只换 1 个词的枚举 / 字典遍历** —— "
+        f"地点维度允许扩展,可以用国内一线 / 新一线 / 强二线城市(北京 / 上海 / 深圳 / 广州 / 杭州 / 成都 / 苏州 / "
+        f"南京 / 武汉 / 天津 / 重庆 / 西安 / 青岛 / 厦门 等),也可以用海外主流商业 / 金融中心 "
+        f"(香港 / 新加坡 / 纽约 / 伦敦 / 东京 / 迪拜 / 法兰克福 / 苏黎世 / 悉尼 / 多伦多 / 首尔)。\n"
+        f"   但**严格禁止**把地点扩到偏门小国 / 避税群岛 / 微国家做字典遍历凑数:"
+        f"梵蒂冈 / 瑙鲁 / 图瓦卢 / 圣马力诺 / 安道尔 / 列支敦士登 / 摩纳哥 / 帕劳 / 汤加 / 基里巴斯 / "
+        f"密克罗尼西亚 / 马绍尔群岛 / 所罗门群岛 / 瓦努阿图 / 萨摩亚 / 多米尼克 / 圣卢西亚 / 安提瓜 / "
+        f"格林纳达 / 巴巴多斯 / 巴哈马 / 牙买加 / 不丹 / 老挝 / 柬埔寨(除非用户身份真和这些地方相关)/ "
+        f"特克斯和凯科斯 / 开曼群岛 / 英属维尔京 / 百慕大 / 泽西岛 / 根西岛 / 马恩岛 / 直布罗陀 / "
+        f"格陵兰 / 法罗群岛 / 冰岛 …… 这些没人会在 AI 助手里搜「跨境并购律师」时想到的地方。\n"
+        f"   每个独立 query 必须在「身份 / 处境 / 句式」三者中至少 2 个上有真实差异,不要靠换地名凑数。\n"
         f"❌ **不要纯关键词堆砌**(「最佳/北京/海外并购/律师/推荐/2024」这种)。\n"
         f"❌ **元问题严打** —— 不带具体处境的元问题(「X 的费用是多少」「X 的收费高吗」「X 的收费合理吗」"
         f"「X 怎么收费」「X 一般多少钱」「X 哪家便宜」)占比**不超过 5%**,且必须带具体场景或身份限定才允许写。\n"
@@ -512,6 +535,60 @@ def _drop_anchor_drift(items: list[tuple[str, str]], anchor: str) -> list[tuple[
     return out
 
 
+def _dedup_template_glut(scored: list[dict], prefix_len: int = 6,
+                         suffix_len: int = 6,
+                         max_per_template: int = 5,
+                         jaccard_threshold: float = 0.7,
+                         max_per_jaccard_group: int = 4) -> list[dict]:
+    """三层模板去重 — 前缀 / 后缀 / token-bag jaccard。score 高的优先保留。
+
+    挡 LLM 在 count 较大时进入「同句式 + 字典遍历」模式产出灌水:
+    - prefix 抓「做跨境并购」「跨境并购律」这类句首模板
+    - suffix 抓「找哪家律师」「找哪个律师」「的推荐」这类句尾模板
+    - jaccard 抓中间词模板(「[城市] 做跨境并购的律师有擅长 [行业] 的吗」这种)
+
+    任何一层触发上限就丢。jaccard 是 O(n^2) 但 n <= 几百 ok。
+    """
+    def _norm(s: str) -> str:
+        return "".join(ch for ch in s if ch not in " ,.!?!?\t\n").lower()
+
+    items = sorted(scored, key=lambda c: c["score"], reverse=True)
+    prefix_counts: dict[str, int] = {}
+    suffix_counts: dict[str, int] = {}
+    accepted_tokens: list[set[str]] = []
+    out: list[dict] = []
+    for c in items:
+        norm = _norm(c["text"])
+        tokens = set(_tokenize(c["text"]))
+        # jaccard 去重:与已 accepted 比,>= threshold 算"同模板"计票
+        if tokens and accepted_tokens:
+            jaccard_hits = 0
+            for prev in accepted_tokens:
+                union = tokens | prev
+                if not union:
+                    continue
+                j = len(tokens & prev) / len(union)
+                if j >= jaccard_threshold:
+                    jaccard_hits += 1
+                    if jaccard_hits >= max_per_jaccard_group:
+                        break
+            if jaccard_hits >= max_per_jaccard_group:
+                continue
+        # prefix / suffix 桶限制
+        if len(norm) >= max(prefix_len, suffix_len):
+            pk = norm[:prefix_len]
+            sk = norm[-suffix_len:]
+            if prefix_counts.get(pk, 0) >= max_per_template:
+                continue
+            if suffix_counts.get(sk, 0) >= max_per_template:
+                continue
+            prefix_counts[pk] = prefix_counts.get(pk, 0) + 1
+            suffix_counts[sk] = suffix_counts.get(sk, 0) + 1
+        out.append(c)
+        accepted_tokens.append(tokens)
+    return out
+
+
 # ─── 4 维 composite 评分 ───────────────────────────
 
 
@@ -614,7 +691,7 @@ def _score_candidate(text: str, seed_terms: list[str],
 async def suggest_queries(
     seed: str, count: int = 200, *,
     target: str = "", aliases: Optional[list[str]] = None, industry: str = "",
-    include_autocomplete: bool = True,
+    include_autocomplete: bool = False,
     include_clusters: bool = True,
 ) -> tuple[list[dict], list[dict]]:
     """seed → (candidates, clusters_meta)。
@@ -639,7 +716,9 @@ async def suggest_queries(
     aliases = [a.strip() for a in (aliases or []) if a and a.strip()]
     industry = (industry or "").strip()
 
-    raw_count = min(300, int(count * 1.3)) if target else count
+    # LLM 在 raw_count > ~100 时会进入「同句式 + 字典遍历」凑数模式,质量崩塌。
+    # 硬上限到 100,模型质量在 80-100 条内可维持。dedup 后约 60-90 个候选。
+    raw_count = min(100, int(count * 1.3)) if target else min(100, count)
 
     # 两路并行:LLM 必须成功(主力),autocomplete 失败吞掉
     llm_task = _fetch_llm(seed, raw_count, target, aliases, industry)
@@ -703,6 +782,9 @@ async def suggest_queries(
         accepted.append(set(_tokenize(m["text"])))
 
     scored.sort(key=lambda c: c["score"], reverse=True)
+    # 模板灌水兜底:同前缀 6 字的 query 每模板最多 5 条 — 挡 LLM 在 count 大时
+    # 进入「同句式 + 国家/行业字典遍历」凑数模式
+    scored = _dedup_template_glut(scored)
     scored = scored[:count]
 
     # 聚类:嵌入 + K-Means。失败吞掉(聚类是锦上添花,不致 endpoint 5xx)
