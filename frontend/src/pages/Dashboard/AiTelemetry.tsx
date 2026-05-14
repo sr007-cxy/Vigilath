@@ -94,11 +94,16 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const [editing, setEditing] = useState<Topic | null | undefined>(undefined);
   // 进入 editor 时的形态:edit(可写) / view(只读)
   const [editorMode, setEditorMode] = useState<'edit' | 'view'>('edit');
+  // 概览 / 引用追踪 / 检测详情 共享的 topic 选择 — 切 tab 时保留
+  const [sharedTopicId, setSharedTopicId] = useState<number | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      setTopics(await aiTelemetryApi.listTopics(token));
+      const list = await aiTelemetryApi.listTopics(token);
+      setTopics(list);
+      // 首次拿到 topics 时把默认选中的 topic 落到共享 state
+      setSharedTopicId(prev => (prev !== null ? prev : list[0]?.id ?? null));
     } finally {
       setLoading(false);
     }
@@ -115,12 +120,6 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 
   const handleSaveDone = () => {
     setEditing(undefined);
-    refresh();
-  };
-
-  const handleRun = async (id: number) => {
-    await aiTelemetryApi.triggerRun(id, token);
-    window.alert(t('dashboard.aiTelemetry.results.started'));
     refresh();
   };
 
@@ -246,8 +245,14 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
         </div>
       )}
 
-      {currentTab ==='overview' && <OverviewTab topics={topics} token={token} />}
-      {currentTab ==='tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
+      {currentTab ==='overview' && (
+        <OverviewTab topics={topics} token={token}
+          topicId={sharedTopicId} onTopicChange={setSharedTopicId} />
+      )}
+      {currentTab ==='tracking' && (
+        <TrackingTab topics={topics} token={token}
+          topicId={sharedTopicId} onTopicChange={setSharedTopicId} />
+      )}
       {currentTab ==='briefings' && <BriefingsTab topics={topics} token={token} />}
       {currentTab ==='config' && (
         <TopicTable
@@ -256,7 +261,10 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
           onToggleEnabled={handleToggleEnabled}
         />
       )}
-      {currentTab ==='results' && <ResultsTab topics={topics} token={token} />}
+      {currentTab ==='results' && (
+        <ResultsTab topics={topics} token={token}
+          topicId={sharedTopicId} onTopicChange={setSharedTopicId} />
+      )}
     </div>
   );
 }
@@ -358,9 +366,12 @@ function formatTime(iso?: string | null): string {
 
 // ── 概览 ───────────────────────────────────────────────────────
 
-function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
+function OverviewTab({ topics, token, topicId, onTopicChange }: {
+  topics: Topic[]; token: string;
+  topicId: number | null; onTopicChange: (id: number | null) => void;
+}) {
   const { t } = useTranslation();
-  const [topicId, setTopicId] = useState<number | null>(null);
+  const setTopicId = onTopicChange;
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [data, setData] = useState<Overview | null>(null);
   const [sov, setSoV] = useState<ShareOfVoice | null>(null);
@@ -369,7 +380,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
 
   useEffect(() => {
     if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
-  }, [topics, topicId]);
+  }, [topics, topicId, setTopicId]);
 
   useEffect(() => {
     if (topicId === null) return;
@@ -1227,9 +1238,12 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
 
 // ── 跑批结果 ───────────────────────────────────────────────────
 
-function ResultsTab({ topics, token }: { topics: Topic[]; token: string }) {
+function ResultsTab({ topics, token, topicId, onTopicChange }: {
+  topics: Topic[]; token: string;
+  topicId: number | null; onTopicChange: (id: number | null) => void;
+}) {
   const { t } = useTranslation();
-  const [topicId, setTopicId] = useState<number | null>(null);
+  const setTopicId = onTopicChange;
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [runId, setRunId] = useState<number | null>(null);
   const [responses, setResponses] = useState<ResponseRow[]>([]);
@@ -1239,7 +1253,7 @@ function ResultsTab({ topics, token }: { topics: Topic[]; token: string }) {
 
   useEffect(() => {
     if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
-  }, [topics, topicId]);
+  }, [topics, topicId, setTopicId]);
 
   useEffect(() => {
     if (topicId === null) return;
@@ -2281,15 +2295,20 @@ function StepHeader({
 //  v1 引用追踪 Tab
 // ═══════════════════════════════════════════════════════════════
 
-function TrackingTab({ topics, token, onRun }: {
-  topics: Topic[]; token: string; onRun: (id: number) => void;
+function TrackingTab({ topics, token, topicId, onTopicChange }: {
+  topics: Topic[]; token: string;
+  topicId: number | null; onTopicChange: (id: number | null) => void;
 }) {
   const { t } = useTranslation();
-  const [topicId, setTopicId] = useState<number | null>(topics[0]?.id ?? null);
+  const setTopicId = onTopicChange;
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [sov, setSoV] = useState<ShareOfVoice | null>(null);
   const [loading, setLoading] = useState(false);
   const [openCell, setOpenCell] = useState<{ query: string; engine: EngineId } | null>(null);
+
+  useEffect(() => {
+    if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
+  }, [topics, topicId, setTopicId]);
 
   useEffect(() => {
     if (topicId == null) return;
@@ -2322,13 +2341,6 @@ function TrackingTab({ topics, token, onRun }: {
         >
           {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        {topicId != null && (
-          <button type="button" onClick={() => onRun(topicId)}
-            className="text-xs px-3 py-1.5 rounded-md text-white"
-            style={{ background: 'var(--accent-primary)' }}>
-            ⏵ {t('dashboard.aiTelemetry.tracking.runNow')}
-          </button>
-        )}
       </div>
 
       {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
