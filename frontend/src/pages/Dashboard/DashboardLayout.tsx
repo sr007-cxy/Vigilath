@@ -15,7 +15,6 @@ interface StoredUser {
 const sidebarItems = [
   { to: '/dashboard', end: true, icon: 'config', labelKey: 'dashboard.nav.config' },
   { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
-  { to: '/dashboard/inbox', end: false, icon: 'inbox', labelKey: 'dashboard.nav.content' },
   { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },
   // AI 遥测 = 概览 / 引用追踪 / 遥测详情(原"跑批结果")
   { to: '/dashboard/ai-telemetry', end: false, icon: 'telemetry', labelKey: 'dashboard.nav.aiTelemetry' },
@@ -36,12 +35,6 @@ function SidebarIcon({ name }: { name: string }) {
       return (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-        </svg>
-      );
-    case 'inbox':
-      return (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
         </svg>
       );
     case 'posts':

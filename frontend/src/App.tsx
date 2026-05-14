@@ -39,7 +39,6 @@ const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default:
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
 const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
 const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ default: m.Compose })));
-const DashboardInbox = lazy(() => import('./pages/Dashboard/Inbox').then(m => ({ default: m.Inbox })));
 const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
 const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
@@ -109,7 +108,6 @@ function App() {
                     key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
                 <Route index element={<AiTelemetry key="config" views={['config']} />} />
                 <Route path="compose" element={<Compose />} />
-                <Route path="inbox" element={<DashboardInbox />} />
                 <Route path="posts" element={<DashboardPosts />} />
                 {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
                 <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />

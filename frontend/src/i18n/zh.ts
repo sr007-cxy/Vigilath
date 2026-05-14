@@ -1791,7 +1791,6 @@ const zh = {
               "sentiment": "舆情监测",
               "config": "意图建模",
               "compose": "内容生产",
-              "content": "素材库",
               "posts": "渠道分发",
               "aiTelemetry": "AI 监测",
               "insights": "闭环迭代"

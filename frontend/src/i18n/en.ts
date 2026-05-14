@@ -1785,7 +1785,6 @@ const en = {
               "sentiment": "Sentinel",
               "config": "Intent",
               "compose": "Content Gen",
-              "content": "Library",
               "posts": "Distribution",
               "aiTelemetry": "Monitoring",
               "insights": "Feedback Loop"
