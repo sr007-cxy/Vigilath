@@ -1790,10 +1790,10 @@ const zh = {
             "title": "AEO",
             "nav": {
               "sentiment": "舆情监测",
-              "config": "追踪设置",
+              "config": "配置",
               "compose": "内容创作",
               "posts": "内容投放",
-              "aiTelemetry": "AI 曝光",
+              "aiTelemetry": "AI 检测",
               "insights": "优化建议"
             },
             "config": {
@@ -1976,7 +1976,7 @@ const zh = {
               "form": {
                 "step1": "设置",
                 "step2": "种子提示词",
-                "step3": "泛化扩展",
+                "step3": "提示词扩展",
                 "step1Hint": "填写品牌词、别名与行业 — 这些是 GEO 衡量的「被检测主体」",
                 "step2Hint": "甲方手填多条种子提示词。保存后进入审核队列,已固化的种子只能新增,不能修改",
                 "step3Hint": "基于步骤 2 的种子扇出约 200 条/种子的候选问题,勾选并选择 AI 引擎。Query 一经固化只能新增,不能修改",
@@ -1986,7 +1986,7 @@ const zh = {
                 "suggestFromSeeds": "基于 {{count}} 个种子挖掘 ~200/条",
                 "seedPickerLabel": "种子提示词({{selected}} / {{total}} 选中)",
                 "seedPickerEmpty": "步骤 2 还没填种子提示词 — 回到上一步添加后,这里会列出来供你勾选",
-                "expandSectionTitle": "1. 选种子,启动扇出",
+                "expandSectionTitle": "1. 选择关键词开始扩展",
                 "candidateSectionTitle": "2. 从候选 Query 里挑要监测的(最多 50)",
                 "runResultsTitle": "试跑结果 · {{count}} 条",
                 "seedPromptsTitle": "已提交的种子词(审核状态)",

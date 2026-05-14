@@ -1784,10 +1784,10 @@ const en = {
             "title": "AEO",
             "nav": {
               "sentiment": "Sentinel",
-              "config": "Tracking",
+              "config": "Config",
               "compose": "Content",
               "posts": "Distribution",
-              "aiTelemetry": "AI Visibility",
+              "aiTelemetry": "AI Detection",
               "insights": "Recommendations"
             },
             "config": {
@@ -1970,7 +1970,7 @@ const en = {
               "form": {
                 "step1": "Setup",
                 "step2": "Seed prompts",
-                "step3": "Expansion",
+                "step3": "Prompt expansion",
                 "step1Hint": "Fill in the brand, aliases and industry — these define the entity GEO will track.",
                 "step2Hint": "Tenant types one or more seed prompts. On save they go into the review queue; locked seeds are append-only.",
                 "step3Hint": "Fan out ~200 queries per seed (from step 2), pick what to monitor, choose engines. Locked queries are append-only.",
@@ -1980,7 +1980,7 @@ const en = {
                 "suggestFromSeeds": "Mine from {{count}} seed(s) (~200 ea.)",
                 "seedPickerLabel": "Seed prompts ({{selected}} / {{total}} selected)",
                 "seedPickerEmpty": "No seeds yet in step 2 — go back and add some; they'll appear here as checkboxes.",
-                "expandSectionTitle": "1. Pick seeds & run expansion",
+                "expandSectionTitle": "1. Pick keywords to start expanding",
                 "candidateSectionTitle": "2. Pick queries to monitor (up to 50)",
                 "runResultsTitle": "Run results · {{count}} item(s)",
                 "seedPromptsTitle": "Seed prompt review",
