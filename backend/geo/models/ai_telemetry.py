@@ -247,9 +247,11 @@ class TopicPayload(BaseModel):
     clusters: Optional[list[ClusterMeta]] = None
     engines: list[str] = Field(..., min_length=1, max_length=10)
     enabled: bool = True
-    # Phase C — 创建 / 更新时,如果用户在编辑器里填了种子提示词,把它附带提交;
-    # 后端追加到 seed_prompts_json(status=pending),保证种子词总会进审核流
-    seed_prompt: Optional[str] = Field(None, max_length=256)
+    # Phase C — 创建 / 更新时,如果用户在编辑器里填了种子提示词,把它们附带提交;
+    # 后端去重 + 追加到 seed_prompts_json(status=pending),保证种子词总会进审核流。
+    # 字段名跟 TopicOut.seed_prompts(SeedPromptItem 列表)区分开 — 这里只是
+    # 提交的纯文本,后端补 status/timestamp 写库.
+    seed_drafts: Optional[list[str]] = Field(default=None, max_length=10)
 
 
 class SeedPromptSubmitPayload(BaseModel):

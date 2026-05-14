@@ -134,14 +134,14 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
     return json.dumps(out, ensure_ascii=False)
 
 
-def _append_seed_prompt(existing_raw: str | None, text: str | None) -> str:
-    """把 payload.seed_prompt(若非空)追加到 seed_prompts_json,状态=pending.
+def _append_seed_prompts(existing_raw: str | None, texts: list[str] | None) -> str:
+    """把 payload.seed_drafts(若非空)逐条追加到 seed_prompts_json,状态=pending.
 
-    幂等:如果 text 已在列表里(不论状态),不重复添加,保留原 JSON.
-    text 为 None / 空字符串则原样返回 existing.
+    幂等:文本已在列表里(不论状态)则跳过.
+    texts 为 None / 空列表 / 全空字符串 则原样返回 existing.
     """
     raw = existing_raw or "[]"
-    if not text or not text.strip():
+    if not texts:
         return raw
     try:
         items = json.loads(raw)
@@ -149,16 +149,21 @@ def _append_seed_prompt(existing_raw: str | None, text: str | None) -> str:
         items = []
     if not isinstance(items, list):
         items = []
-    cleaned = text.strip()
-    for s in items:
-        if isinstance(s, dict) and s.get("text") == cleaned:
-            return raw
-    items.append({
-        "text": cleaned,
-        "status": "pending",
-        "submitted_at": datetime.utcnow().isoformat(),
-    })
-    return json.dumps(items, ensure_ascii=False)
+    existing_texts = {s["text"] for s in items if isinstance(s, dict) and s.get("text")}
+    now_iso = datetime.utcnow().isoformat()
+    changed = False
+    for raw_text in texts:
+        cleaned = (raw_text or "").strip()
+        if not cleaned or cleaned in existing_texts:
+            continue
+        items.append({
+            "text": cleaned,
+            "status": "pending",
+            "submitted_at": now_iso,
+        })
+        existing_texts.add(cleaned)
+        changed = True
+    return json.dumps(items, ensure_ascii=False) if changed else raw
 
 
 def _validate_query_diff(payload_queries: list[str], existing_raw: str | None) -> None:
@@ -220,7 +225,7 @@ def create_topic(
 ):
     _validate_payload(payload)
     clusters_dump = [c.model_dump() for c in payload.clusters] if payload.clusters else []
-    seed_prompts_init = _append_seed_prompt("[]", payload.seed_prompt)
+    seed_prompts_init = _append_seed_prompts("[]", payload.seed_drafts)
     t = AiTelemetryTopicORM(
         user_id=current_user.id,
         name=payload.name.strip(),
@@ -255,7 +260,7 @@ def update_topic(
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
     t.industry = payload.industry
     # Phase C — payload 带 seed_prompt 时追加为 pending(若 text 已存在则跳过)
-    t.seed_prompts_json = _append_seed_prompt(t.seed_prompts_json, payload.seed_prompt)
+    t.seed_prompts_json = _append_seed_prompts(t.seed_prompts_json, payload.seed_drafts)
     t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉
     if payload.clusters is not None:
