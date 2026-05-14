@@ -243,10 +243,11 @@ class TopicOut(BaseModel):
                 if t:
                     queries.append(t)
                     cid = q.get("cluster_id")
-                    cluster_ids.append(int(cid) if isinstance(cid, int) else 0)
+                    # 缺失 → -1(未分类),前端用 ≥0 判定是否有有效簇
+                    cluster_ids.append(int(cid) if isinstance(cid, int) else -1)
             elif isinstance(q, str):
                 queries.append(q)
-                cluster_ids.append(0)
+                cluster_ids.append(-1)
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         return cls(

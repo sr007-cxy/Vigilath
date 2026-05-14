@@ -88,27 +88,36 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
                        cluster_ids: list[int] | None = None) -> str:
     """把 query 列表升级为 [{text, created_at, cluster_id?}] 形态.
 
-    - 已存在的 query:沿用原 created_at(支持 v1 "新 query 不回填" 语义)
+    - 已存在的 query:沿用原 created_at + cluster_id(支持 v1 "新 query 不回填" 语义)
     - 新加的 query:用 utcnow() 作为 created_at
-    - cluster_id:按 payload_queries 位置取(长度不齐或缺省时不写 cluster_id)
+    - cluster_id:本次 payload 显式带且 ≥0 时覆盖,否则按 text 从 existing_raw 沿用
+      (避免 PUT 不带 cluster_ids 时悄悄把历史 cluster_id 抹掉)
     """
     now_iso = datetime.utcnow().isoformat()
-    existing_meta: dict[str, str] = {}
+    existing_created: dict[str, str] = {}
+    existing_cid: dict[str, int] = {}
     try:
         for q in json.loads(existing_raw or "[]"):
             if isinstance(q, dict) and q.get("text"):
-                existing_meta[q["text"]] = q.get("created_at") or now_iso
+                existing_created[q["text"]] = q.get("created_at") or now_iso
+                if isinstance(q.get("cluster_id"), int) and q["cluster_id"] >= 0:
+                    existing_cid[q["text"]] = int(q["cluster_id"])
             elif isinstance(q, str):
                 # 老版纯字符串 — 视为 topic 创建时即存在
-                existing_meta[q] = now_iso
+                existing_created[q] = now_iso
     except Exception:  # noqa: BLE001
         pass
     cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
     out = []
     for i, q in enumerate(payload_queries):
-        item = {"text": q, "created_at": existing_meta.get(q, now_iso)}
-        if cluster_ok:
-            item["cluster_id"] = int(cluster_ids[i])
+        item = {"text": q, "created_at": existing_created.get(q, now_iso)}
+        cid: int | None = None
+        if cluster_ok and isinstance(cluster_ids[i], int) and int(cluster_ids[i]) >= 0:
+            cid = int(cluster_ids[i])
+        elif q in existing_cid:
+            cid = existing_cid[q]
+        if cid is not None:
+            item["cluster_id"] = cid
         out.append(item)
     return json.dumps(out, ensure_ascii=False)
 

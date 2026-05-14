@@ -1526,12 +1526,15 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     }
     const query_cluster_ids = queries.map(q => textToCluster.get(q) ?? -1);
     const hasAnyCluster = query_cluster_ids.some(c => c >= 0);
+    // cluster_ids 和 clusters 必须同进同出 — 只发其一会留下 "queries 没簇但
+    // clusters_json 还在" 的孤儿态(topic#2 就是这么坏的)。
+    // hasAnyCluster=false 时两个都不发,backend `_queries_with_meta` 会按 text
+    // 沿用历史 cluster_id;clusters_json 也保持不动。
     return {
       name: name.trim(),
       target: target.trim(),
       target_aliases: aliases,
       queries,
-      // 全 -1 时省略,避免给老话题写空簇信息
       ...(hasAnyCluster ? {
         query_cluster_ids,
         clusters: clusters.map(c => ({
@@ -2191,7 +2194,7 @@ function MatrixGrid({ matrix, onPick }: {
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <th className="text-left px-3 py-2 font-medium text-secondary sticky left-0"
               style={{ background: 'var(--bg-card)', minWidth: 240 }}>
-              Query \ Engine
+              {t('dashboard.aiTelemetry.tracking.queryEngineHeader')}
             </th>
             {matrix.engines.map(e => (
               <th key={e} className="px-3 py-2 font-medium text-center"
