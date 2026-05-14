@@ -114,12 +114,6 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
     refresh();
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm(t('common.confirmDelete') || 'Delete?')) return;
-    await aiTelemetryApi.deleteTopic(id, token);
-    refresh();
-  };
-
   const handleRun = async (id: number) => {
     await aiTelemetryApi.triggerRun(id, token);
     window.alert(t('dashboard.aiTelemetry.results.started'));
@@ -229,7 +223,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
       {currentTab ==='config' && (
         <TopicTable
           topics={topics} loading={loading}
-          onEdit={setEditing} onDelete={handleDelete} onRun={handleRun}
+          onEdit={setEditing}
         />
       )}
       {currentTab ==='results' && <ResultsTab topics={topics} token={token} />}
@@ -240,11 +234,10 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 // ── 话题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onEdit, onDelete, onRun,
+  topics, loading, onEdit,
 }: {
   topics: Topic[]; loading: boolean;
-  onEdit: (t: Topic) => void; onDelete: (id: number) => void;
-  onRun: (id: number) => void;
+  onEdit: (t: Topic) => void;
 }) {
   const { t } = useTranslation();
   if (loading) return <div className="py-12 text-center text-sm text-muted">…</div>;
@@ -287,22 +280,13 @@ function TopicTable({
               <td className="px-3 py-2">{tp.engines.length}/10</td>
               <td className="px-3 py-2 text-secondary">{formatTime(tp.last_run_at)}</td>
               <td className="px-3 py-2">{renderStatus(tp.last_run_status)}</td>
-              <td className="px-3 py-2 text-right space-x-2">
+              <td className="px-3 py-2 text-right space-x-3">
                 <button
-                  className="text-xs disabled:opacity-40"
+                  className="text-xs"
                   style={{ color: 'var(--accent-primary)' }}
-                  disabled={tp.last_run_status === 'running'}
-                  onClick={() => onRun(tp.id)}
+                  onClick={() => onEdit(tp)}
                 >
-                  {tp.last_run_status === 'running'
-                    ? t('dashboard.aiTelemetry.actions.running')
-                    : t('dashboard.aiTelemetry.actions.run')}
-                </button>
-                <button className="text-xs text-secondary hover:text-primary" onClick={() => onEdit(tp)}>
                   {t('dashboard.aiTelemetry.actions.edit')}
-                </button>
-                <button className="text-xs text-rose-500 hover:text-rose-400" onClick={() => onDelete(tp.id)}>
-                  {t('dashboard.aiTelemetry.actions.delete')}
                 </button>
               </td>
             </tr>
@@ -2051,7 +2035,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                       };
                       if (!groupedByCluster) {
                         return (
-                          <div className="space-y-1">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1">
                             {filteredSuggestions.map(renderRow)}
                           </div>
                         );
@@ -2102,7 +2086,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                                   </button>
                                 </div>
                                 {!collapsed && (
-                                  <div className="space-y-1 pl-3 pt-1">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1 pl-3 pt-1">
                                     {items.map(renderRow)}
                                   </div>
                                 )}

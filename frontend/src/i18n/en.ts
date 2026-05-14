@@ -1838,6 +1838,7 @@ const en = {
               "actions": {
                 "edit": "Edit",
                 "delete": "Delete",
+                "view": "View",
                 "run": "Run",
                 "running": "Running"
               },
@@ -2004,7 +2005,7 @@ const en = {
                 "aliasesPlaceholder": "KWM, King & Wood, JinCheng (comma-separated)",
                 "aliasesHint": "Aliases {{count}} / 10. Any one appearing in the answer counts as a hit.",
                 "queriesPickerTitle": "Queries",
-                "queriesPickerHint": "Queries cannot be typed manually — pick from the candidate pool, up to {{max}}. Each \"Mine topics\" run adds ~{{count}} candidates (multiple runs accumulate).",
+                "queriesPickerHint": "Pick which candidate questions to monitor — up to {{max}}. Each expansion run adds ~{{count}} more candidates; multiple runs accumulate.",
                 "queriesPickerEmpty": "Pool is empty — enter a topic seed and click \"Mine topics\". About 200 candidates will appear for you to choose from.",
                 "queriesFilterPlaceholder": "Filter candidates by text…",
                 "queriesFilterCount": "{{shown}} of {{total}}",
