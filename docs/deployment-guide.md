@@ -12,7 +12,7 @@
 | DNS / 转发 | GoDaddy Domain Forwarding（apex）+ Route 53 / DNS 别名（www） | `vigilath.com` → GoDaddy 301；`www.vigilath.com` → AWS ALB |
 | 边缘 TLS | AWS Application Load Balancer（ALB） | `vigilath-alb-01-654513483.us-east-1.elb.amazonaws.com`，TLS 终止（ACM 证书：`www.vigilath.com` + SAN `vigilath.com`） |
 | 入口 | nginx | `/etc/nginx/nginx.conf` 内 `server_name www.vigilath.com` 块，listen 80（ALB 内网回源） |
-| 后端 | FastAPI + uvicorn | systemd 服务 `geo-checker.service`，监听 `127.0.0.1:8070` |
+| 后端 | FastAPI + uvicorn | systemd 服务 `geo.service`，监听 `127.0.0.1:8070` |
 | 支付 | MoltsPayServer (Node.js) | systemd 服务 `moltspay.service`，监听 `127.0.0.1:3010` |
 | 前端 | Vite 构建的 SPA 静态产物 | `/var/www/html/www.vigilath.com/`（属主 `www-data:www-data`） |
 
@@ -39,7 +39,7 @@
 
 ### 后端 systemd 单元
 
-`/etc/systemd/system/geo-checker.service` 关键字段：
+`/etc/systemd/system/geo.service` 关键字段：
 
 ```ini
 [Service]
@@ -58,7 +58,7 @@ StartLimitIntervalSec=60
 
 - 解释器与依赖都来自 `backend/.venv`
 - 所有 secret（OpenAI/Anthropic/Stripe/MoltsPay/SMTP 等）通过 `backend/.env` 注入，不进 git
-- 日志走 journald，查看：`sudo journalctl -u geo-checker.service -f`
+- 日志走 journald，查看：`sudo journalctl -u geo.service -f`
 - `ExecStartPre=alembic upgrade head` 每次 start 前把数据库迁到最新 schema，idempotent；DB 已经是 head 时是几十毫秒的 no-op
 - `--workers 4` 跑 4 个 uvicorn worker；`Restart=on-failure` + `StartLimitBurst=5` 防止历史上「与外部进程抢端口时 systemd 死循环重试 9万+ 次」的复发
 
@@ -214,7 +214,7 @@ cd ..
 
 ### 4. 数据库 migration（alembic 自动）
 
-从 2026-05-14 起，schema 演进改由 **alembic** 管理。`geo-checker.service` 的 `ExecStartPre` 已经接管这一步——每次 `systemctl restart` 之前自动跑 `alembic upgrade head`，**不需要手工执行任何 migration 命令**。
+从 2026-05-14 起，schema 演进改由 **alembic** 管理。`geo.service` 的 `ExecStartPre` 已经接管这一步——每次 `systemctl restart` 之前自动跑 `alembic upgrade head`，**不需要手工执行任何 migration 命令**。
 
 如果你**改了 ORM model**（加表 / 加列），workflow 是：
 
@@ -241,9 +241,9 @@ cd ..
 
 ```bash
 sudo systemctl daemon-reload                 # 如 unit 文件被触碰过
-sudo systemctl restart geo-checker.service
-sudo systemctl status geo-checker.service    # 确认 active (running)
-sudo journalctl -u geo-checker.service -n 50 # 快速扫一眼无报错
+sudo systemctl restart geo.service
+sudo systemctl status geo.service    # 确认 active (running)
+sudo journalctl -u geo.service -n 50 # 快速扫一眼无报错
 ```
 
 ### 6. 重启 MoltsPayServer（如有变更）
@@ -308,7 +308,7 @@ git log --oneline -10          # 找到上一个稳定 commit
 git reset --hard <sha>
 # 恢复 DB(必要时)
 cp backend/data/geo_checker.db.predeploy.<timestamp> backend/data/geo_checker.db
-sudo systemctl restart geo-checker.service
+sudo systemctl restart geo.service
 ```
 
 ### MoltsPayServer 回滚
@@ -455,8 +455,8 @@ node index.mjs          # 本地启动，监听 :3010
 ### nginx 502 / 上游无响应
 
 ```bash
-sudo systemctl status geo-checker.service
-sudo journalctl -u geo-checker.service -n 200 --no-pager
+sudo systemctl status geo.service
+sudo journalctl -u geo.service -n 200 --no-pager
 ss -ltnp | grep 8070          # 确认 uvicorn 在监听
 ```
 
@@ -482,7 +482,7 @@ curl -s http://localhost:3010/health
 sqlite3 backend/data/geo_checker.db ".schema <table_name>"
 # 从 predeploy 备份恢复
 cp backend/data/geo_checker.db.predeploy.<ts> backend/data/geo_checker.db
-sudo systemctl restart geo-checker.service
+sudo systemctl restart geo.service
 ```
 
 ### Stripe 支付未激活会员
@@ -511,7 +511,7 @@ sudo systemctl restart geo-checker.service
 | 前端源码 | `/home/ubuntu/Dev/geo/frontend/` |
 | 前端构建产物 | `/home/ubuntu/Dev/geo/frontend/dist/` |
 | 前端 webroot | `/var/www/html/www.vigilath.com/` |
-| systemd 单元（后端） | `/etc/systemd/system/geo-checker.service` |
+| systemd 单元（后端） | `/etc/systemd/system/geo.service` |
 | systemd 单元（MoltsPay） | `/etc/systemd/system/moltspay.service` |
 | nginx 主配置 | `/etc/nginx/nginx.conf`（vigilath server 块内联其中） |
 

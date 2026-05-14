@@ -480,7 +480,7 @@ baidu 对不存在的路径平均 2 秒返回 404,22 × 2 = 44 s。
 
 **症状**:单 worker 时,一个慢检测会让后续请求全堆积。
 
-**修复**:`/etc/systemd/system/geo-checker.service` 的 `ExecStart` 加 `--workers 4`。
+**修复**:`/etc/systemd/system/geo.service` 的 `ExecStart` 加 `--workers 4`。
 
 **备注**:此修复**只是缓解**——并发上限从 1 提到 4,但单 worker 内仍由 `_geo_checker_lock` 串行,根本解决见 [#9]。
 

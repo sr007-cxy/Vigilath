@@ -129,17 +129,17 @@ INFO geo.timing:http method=POST path=/api/check/anonymous status=200 elapsed_ms
 
 ```bash
 # 近 10 分钟所有 check 耗时
-sudo journalctl -u geo-checker.service --since "10 minutes ago" | grep 'geo.timing'
+sudo journalctl -u geo.service --since "10 minutes ago" | grep 'geo.timing'
 
 # 只看 HTTP 层汇总
-sudo journalctl -u geo-checker.service | grep 'geo.timing:http'
+sudo journalctl -u geo.service | grep 'geo.timing:http'
 
 # 列出 > 5 s 的慢检测
-sudo journalctl -u geo-checker.service | grep 'geo.timing' | \
+sudo journalctl -u geo.service | grep 'geo.timing' | \
   awk -F'elapsed_ms=' '$2+0 > 5000'
 
 # 按 check_ 名聚合最大耗时
-sudo journalctl -u geo-checker.service --since "1 hour ago" | grep 'geo.timing:func=' | \
+sudo journalctl -u geo.service --since "1 hour ago" | grep 'geo.timing:func=' | \
   awk -F'[= ]' '{print $4, $6}' | sort | awk '{a[$1]=($2>a[$1])?$2:a[$1]} END{for(k in a)print a[k], k}' | sort -n
 ```
 
@@ -264,14 +264,14 @@ sudo grep -E 'POST /api/check' /var/log/nginx/access.log | tail -20
 | 499 | 客户端提前断开 | 看 `X-Process-Time` 是否快到 300 s（axios 超时）；排查是否 UX 型（用户按返回键） |
 | 503 | RuntimeError | 看 journalctl 区分三种情况（4.6 节） |
 | 500 | 其他异常 | 看 `advanced:<fn>` 和 `func=` 日志 |
-| 502 | 后端未响应 | `systemctl status geo-checker.service` |
+| 502 | 后端未响应 | `systemctl status geo.service` |
 | 429 | 匿名配额用尽 | 正常业务返回 |
 
 ### 5.2 症状：某次检测明显变慢
 
 ```bash
 # 找到对应请求
-sudo journalctl -u geo-checker.service --since "<时刻>" | grep 'geo.timing' | head -50
+sudo journalctl -u geo.service --since "<时刻>" | grep 'geo.timing' | head -50
 
 # 看每个 check 的耗时，定位具体哪个热点
 # 典型答案：check_cross_platform 超过 10 s → 某平台 probe 超时
@@ -292,12 +292,12 @@ sudo grep -E '" 499' /var/log/nginx/access.log | awk '{print $7}' | sort | uniq 
 
 ```bash
 # 资源占用
-ps aux | grep geo-checker
+systemctl status geo.service
 free -m
 ss -ltnp | grep 8070
 
 # upstream AI 情况
-sudo journalctl -u geo-checker.service | grep -E 'http_[45][0-9][0-9]' | tail
+sudo journalctl -u geo.service | grep -E 'http_[45][0-9][0-9]' | tail
 ```
 
 ---
@@ -381,10 +381,10 @@ sudo journalctl -u geo-checker.service | grep -E 'http_[45][0-9][0-9]' | tail
 
 | 路径 | 作用 |
 |---|---|
-| `/etc/systemd/system/geo-checker.service` | 后端 systemd unit（`--workers 4`） |
+| `/etc/systemd/system/geo.service` | 后端 systemd unit（`--workers 4`） |
 | `/etc/nginx/nginx.conf` | nginx，内含 `server_name www.vigilath.com` |
 | `/var/log/nginx/access.log` | 访问日志 |
-| `sudo journalctl -u geo-checker.service` | 后端日志（含 `geo.timing`） |
+| `sudo journalctl -u geo.service` | 后端日志（含 `geo.timing`） |
 
 ---
 

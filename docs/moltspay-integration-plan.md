@@ -472,7 +472,7 @@ cd /home/ubuntu/Dev/geo/backend
 # 7. 更新 .env（新增 MOLTSPAY_* 配置）
 
 # 8. 重启 FastAPI
-sudo systemctl restart geo-checker.service
+sudo systemctl restart geo.service
 
 # 9. 构建前端
 cd /home/ubuntu/Dev/geo/frontend
