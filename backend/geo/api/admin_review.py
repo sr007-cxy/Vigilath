@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from geo.api.auth import require_admin
 from geo.api.ai_telemetry import get_db
 from geo.models.ai_telemetry import AiTelemetryTopicORM
+from geo.models.user import UserORM
 
 router = APIRouter(prefix="/admin/review")
 
@@ -24,7 +25,9 @@ router = APIRouter(prefix="/admin/review")
 class PendingSeedItem(BaseModel):
     topic_id: int
     topic_name: str
+    target: str                           # 该 topic 的检测词,审核时帮 admin 看清上下文
     user_id: int
+    user_email: str                       # 提交人邮箱
     idx: int                              # 在 seed_prompts_json 里的下标
     text: str
     submitted_at: Optional[str] = None
@@ -33,7 +36,9 @@ class PendingSeedItem(BaseModel):
 class PendingQueryItem(BaseModel):
     topic_id: int
     topic_name: str
+    target: str
     user_id: int
+    user_email: str
     idx: int                              # 在 queries_json 里的下标
     text: str
     cluster_id: Optional[int] = None
@@ -50,10 +55,17 @@ def list_pending(
     _admin = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    # 跨用户全表扫(admin 视角)— 同步取一次 user.email 字典,避免 N+1
     rows = db.query(AiTelemetryTopicORM).all()
+    user_ids = {r.user_id for r in rows}
+    email_by_uid: dict[int, str] = {}
+    if user_ids:
+        for u in db.query(UserORM).filter(UserORM.id.in_(user_ids)).all():
+            email_by_uid[u.id] = u.email
     seeds: list[PendingSeedItem] = []
     queries: list[PendingQueryItem] = []
     for r in rows:
+        email = email_by_uid.get(r.user_id, "")
         try:
             seed_list = json.loads(r.seed_prompts_json or "[]")
         except Exception:  # noqa: BLE001
@@ -61,7 +73,8 @@ def list_pending(
         for i, s in enumerate(seed_list):
             if isinstance(s, dict) and s.get("status") == "pending" and s.get("text"):
                 seeds.append(PendingSeedItem(
-                    topic_id=r.id, topic_name=r.name, user_id=r.user_id,
+                    topic_id=r.id, topic_name=r.name, target=r.target or "",
+                    user_id=r.user_id, user_email=email,
                     idx=i, text=s["text"], submitted_at=s.get("submitted_at"),
                 ))
         try:
@@ -71,7 +84,8 @@ def list_pending(
         for i, q in enumerate(q_list):
             if isinstance(q, dict) and q.get("status") == "pending" and q.get("text"):
                 queries.append(PendingQueryItem(
-                    topic_id=r.id, topic_name=r.name, user_id=r.user_id,
+                    topic_id=r.id, topic_name=r.name, target=r.target or "",
+                    user_id=r.user_id, user_email=email,
                     idx=i, text=q["text"],
                     cluster_id=q.get("cluster_id") if isinstance(q.get("cluster_id"), int) else None,
                     submitted_at=q.get("submitted_at"),

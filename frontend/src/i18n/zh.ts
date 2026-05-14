@@ -2204,7 +2204,9 @@ const zh = {
                 "batchApprove": "批量批准",
                 "batchReject": "批量拒绝",
                 "queryCountUnit": "条待审",
-                "pickedHint": "已选 {{n}}"
+                "pickedHint": "已选 {{n}}",
+                "targetLabel": "检测词:",
+                "byUser": "提交人:"
               }
             },
             "sentiment": {

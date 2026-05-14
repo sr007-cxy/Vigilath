@@ -1586,6 +1586,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
     // clusters_json 还在" 的孤儿态(topic#2 就是这么坏的)。
     // hasAnyCluster=false 时两个都不发,backend `_queries_with_meta` 会按 text
     // 沿用历史 cluster_id;clusters_json 也保持不动。
+    const seedText = seed.trim();
     return {
       name: name.trim(),
       target: target.trim(),
@@ -1600,6 +1601,8 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
       } : {}),
       engines: Array.from(engines),
       enabled,
+      // Phase C — 把当前种子词附带提交;后端去重 + 自动追加为 pending
+      ...(seedText ? { seed_prompt: seedText } : {}),
     };
   };
 

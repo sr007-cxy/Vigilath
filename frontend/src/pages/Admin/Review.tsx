@@ -131,24 +131,48 @@ function SeedList({
   if (items.length === 0) {
     return <div className="py-12 text-center text-sm text-muted">{t('admin.review.emptySeed')}</div>;
   }
-  // 按 topic 分组
-  const grouped = new Map<number, { name: string; items: PendingSeedItem[] }>();
+  // 按 topic 分组(同时保留 target / user_email 上下文)
+  const grouped = new Map<number, { name: string; target: string; userEmail: string; items: PendingSeedItem[] }>();
   for (const it of items) {
-    if (!grouped.has(it.topic_id)) grouped.set(it.topic_id, { name: it.topic_name, items: [] });
+    if (!grouped.has(it.topic_id)) {
+      grouped.set(it.topic_id, {
+        name: it.topic_name, target: it.target, userEmail: it.user_email, items: [],
+      });
+    }
     grouped.get(it.topic_id)!.items.push(it);
   }
   return (
     <div className="space-y-4">
       {Array.from(grouped.entries()).map(([topicId, g]) => (
         <section key={topicId} className="space-y-2">
-          <h3 className="text-xs font-semibold text-secondary uppercase tracking-wide">
-            📂 {g.name} <span className="text-muted">#{topicId}</span>
-          </h3>
+          <TopicGroupHeader name={g.name} topicId={topicId} target={g.target} userEmail={g.userEmail} />
           {g.items.map(it => (
             <SeedRow key={`${it.topic_id}-${it.idx}`} item={it} token={token} onChange={onChange} />
           ))}
         </section>
       ))}
+    </div>
+  );
+}
+
+function TopicGroupHeader({
+  name, topicId, target, userEmail,
+}: { name: string; topicId: number; target: string; userEmail: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-xs">
+      <span className="font-semibold text-primary">📂 {name}</span>
+      <span className="text-muted">#{topicId}</span>
+      {target && (
+        <span className="text-secondary">
+          · {t('admin.review.targetLabel')} <span className="text-primary">{target}</span>
+        </span>
+      )}
+      {userEmail && (
+        <span className="text-secondary ml-auto">
+          {t('admin.review.byUser')} <span className="text-primary">{userEmail}</span>
+        </span>
+      )}
     </div>
   );
 }
@@ -224,9 +248,13 @@ function QueryList({
     return <div className="py-12 text-center text-sm text-muted">{t('admin.review.emptyQueries')}</div>;
   }
 
-  const grouped = new Map<number, { name: string; items: PendingQueryItem[] }>();
+  const grouped = new Map<number, { name: string; target: string; userEmail: string; items: PendingQueryItem[] }>();
   for (const it of items) {
-    if (!grouped.has(it.topic_id)) grouped.set(it.topic_id, { name: it.topic_name, items: [] });
+    if (!grouped.has(it.topic_id)) {
+      grouped.set(it.topic_id, {
+        name: it.topic_name, target: it.target, userEmail: it.user_email, items: [],
+      });
+    }
     grouped.get(it.topic_id)!.items.push(it);
   }
 
@@ -268,11 +296,11 @@ function QueryList({
         const pickedInTopic = g.items.filter(it => picked.has(`${it.topic_id}-${it.idx}`)).length;
         return (
           <section key={topicId} className="space-y-2">
+            <TopicGroupHeader name={g.name} topicId={topicId} target={g.target} userEmail={g.userEmail} />
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-xs font-semibold text-secondary uppercase tracking-wide">
-                📂 {g.name} <span className="text-muted">#{topicId}</span>
-                <span className="ml-2 text-muted">· {g.items.length} {t('admin.review.queryCountUnit')}</span>
-              </h3>
+              <span className="text-xs text-muted">
+                · {g.items.length} {t('admin.review.queryCountUnit')}
+              </span>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted">
                   {t('admin.review.pickedHint', { n: pickedInTopic })}

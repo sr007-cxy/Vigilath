@@ -2198,7 +2198,9 @@ const en = {
                 "batchApprove": "Approve selected",
                 "batchReject": "Reject selected",
                 "queryCountUnit": "pending",
-                "pickedHint": "{{n}} selected"
+                "pickedHint": "{{n}} selected",
+                "targetLabel": "Target:",
+                "byUser": "Submitted by:"
               }
             },
             "sentiment": {

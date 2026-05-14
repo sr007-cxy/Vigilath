@@ -134,6 +134,33 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
     return json.dumps(out, ensure_ascii=False)
 
 
+def _append_seed_prompt(existing_raw: str | None, text: str | None) -> str:
+    """把 payload.seed_prompt(若非空)追加到 seed_prompts_json,状态=pending.
+
+    幂等:如果 text 已在列表里(不论状态),不重复添加,保留原 JSON.
+    text 为 None / 空字符串则原样返回 existing.
+    """
+    raw = existing_raw or "[]"
+    if not text or not text.strip():
+        return raw
+    try:
+        items = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        items = []
+    if not isinstance(items, list):
+        items = []
+    cleaned = text.strip()
+    for s in items:
+        if isinstance(s, dict) and s.get("text") == cleaned:
+            return raw
+    items.append({
+        "text": cleaned,
+        "status": "pending",
+        "submitted_at": datetime.utcnow().isoformat(),
+    })
+    return json.dumps(items, ensure_ascii=False)
+
+
 def _validate_query_diff(payload_queries: list[str], existing_raw: str | None) -> None:
     """Phase C 只增不改:已 approved 的 query 不允许从 payload 中消失.
 
@@ -193,12 +220,14 @@ def create_topic(
 ):
     _validate_payload(payload)
     clusters_dump = [c.model_dump() for c in payload.clusters] if payload.clusters else []
+    seed_prompts_init = _append_seed_prompt("[]", payload.seed_prompt)
     t = AiTelemetryTopicORM(
         user_id=current_user.id,
         name=payload.name.strip(),
         target=payload.target,
         target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
         industry=payload.industry,
+        seed_prompts_json=seed_prompts_init,
         queries_json=_queries_with_meta(payload.queries, None, payload.query_cluster_ids),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
@@ -225,6 +254,8 @@ def update_topic(
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
     t.industry = payload.industry
+    # Phase C — payload 带 seed_prompt 时追加为 pending(若 text 已存在则跳过)
+    t.seed_prompts_json = _append_seed_prompt(t.seed_prompts_json, payload.seed_prompt)
     t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉
     if payload.clusters is not None:

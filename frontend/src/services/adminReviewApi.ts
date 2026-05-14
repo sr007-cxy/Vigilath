@@ -8,7 +8,9 @@ const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 export interface PendingSeedItem {
   topic_id: number;
   topic_name: string;
+  target: string;
   user_id: number;
+  user_email: string;
   idx: number;
   text: string;
   submitted_at?: string | null;
@@ -17,7 +19,9 @@ export interface PendingSeedItem {
 export interface PendingQueryItem {
   topic_id: number;
   topic_name: string;
+  target: string;
   user_id: number;
+  user_email: string;
   idx: number;
   text: string;
   cluster_id?: number | null;

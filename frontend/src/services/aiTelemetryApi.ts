@@ -58,6 +58,8 @@ export interface TopicPayload {
   clusters?: ClusterMetaPersist[];
   engines: EngineId[];
   enabled: boolean;
+  // Phase C — 创建 / 更新时把当前种子词附带提交,后端追加进 seed_prompts_json (pending)
+  seed_prompt?: string;
 }
 
 export interface RunNowResult {
