@@ -1978,6 +1978,8 @@ const en = {
                 "seedPromptsPlaceholder": "Type a seed, press Enter to add (e.g. cloud data center / law firm services / cross-border e-commerce)",
                 "seedPromptsListHint": "{{count}} new seed(s) — submitted for review on save; step 3 fans out ~200 queries per seed",
                 "suggestFromSeeds": "Mine from {{count}} seed(s) (~200 ea.)",
+                "seedPickerLabel": "Seed prompts ({{selected}} / {{total}} selected)",
+                "seedPickerEmpty": "No seeds yet in step 2 — go back and add some; they'll appear here as checkboxes.",
                 "seedPromptsTitle": "Seed prompt review",
                 "seedPromptsHint": "Tenant submits; platform approves to lock",
                 "seedPromptsEmpty": "No submitted seed prompts yet. Type one and click \"Submit for review\".",

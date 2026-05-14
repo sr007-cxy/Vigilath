@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
 import {
-  aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
+  aiTelemetryApi, CN_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
   type IntentBreakdown,
@@ -1444,10 +1444,13 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const [name, setName] = useState(initial?.name || '');
   const [target, setTarget] = useState(initial?.target || '');
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
-  const [engines, setEngines] = useState<Set<EngineId>>(
-    new Set(initial?.engines || ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao'])
+  // 引擎选择 UI 已隐藏 — 默认走 5 个国内引擎,编辑场景保留原配置;
+  // enabled 同样固定 true(产品口径:种子提示词都按每天跑)
+  const engines = useMemo<Set<EngineId>>(
+    () => new Set((initial?.engines && initial.engines.length > 0) ? initial.engines : CN_ENGINES),
+    [initial?.engines],
   );
-  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const enabled = true;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -1543,14 +1546,6 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const valid = name.trim().length > 0 && target.trim().length > 0
     && queries.length > 0 && engines.size > 0;
 
-  const toggleEngine = (e: EngineId) => {
-    setEngines(prev => {
-      const next = new Set(prev);
-      if (next.has(e)) next.delete(e); else next.add(e);
-      return next;
-    });
-  };
-
   const buildPayload = (): TopicPayload => {
     // 按 queries 顺序回填 cluster_id;suggestions 里没记 cluster_id 的就给 -1
     const textToCluster = new Map<string, number>();
@@ -1610,7 +1605,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   };
 
   const handleSuggest = async () => {
-    const validSeeds = seeds.map(s => s.trim()).filter(Boolean);
+    const validSeeds = selectedSeedsForMining;
     if (validSeeds.length === 0 || suggesting) return;
     setSuggesting(true);
     setSuggestErr(null);
@@ -1658,6 +1653,34 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     () => initial?.seed_prompts || []
   );
   const [seedSubmitErr, setSeedSubmitErr] = useState<string | null>(null);
+
+  // step 3 用于挖掘候选的"种子选择" — 来源是 step 2 新加 + 服务端已固化的种子词;
+  // 默认全选,用户在 step 3 可勾掉个别种子只针对剩下的去扇出
+  const allSeedTexts = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of seedPrompts) {
+      if (s.text && !seen.has(s.text)) { seen.add(s.text); out.push(s.text); }
+    }
+    for (const raw of seeds) {
+      const t = raw.trim();
+      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
+    }
+    return out;
+  }, [seedPrompts, seeds]);
+  const [deselectedSeeds, setDeselectedSeeds] = useState<Set<string>>(() => new Set());
+  const selectedSeedsForMining = useMemo<string[]>(
+    () => allSeedTexts.filter(t => !deselectedSeeds.has(t)),
+    [allSeedTexts, deselectedSeeds],
+  );
+  const toggleSeedSelection = (t: string) => {
+    setDeselectedSeeds(prev => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t); else next.add(t);
+      return next;
+    });
+  };
+
   const lockedQueryTexts = useMemo<Set<string>>(() => {
     const out = new Set<string>();
     const qs = initial?.queries || [];
@@ -1849,27 +1872,8 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
 
         {step === 3 && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* 左列:引擎 + 试跑结果 */}
+            {/* 左列:运行说明 + 试跑结果(引擎和启用开关已隐藏,默认 5 个国内引擎 + 每日自动) */}
             <div className="lg:col-span-5 space-y-4">
-              <div>
-                <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.engines')}*</span>
-                <div className="mt-2 space-y-2">
-                  <EngineRow
-                    label={t('dashboard.aiTelemetry.form.enginesCN')}
-                    engines={CN_ENGINES} selected={engines} onToggle={toggleEngine}
-                  />
-                  <EngineRow
-                    label={t('dashboard.aiTelemetry.form.enginesGlobal')}
-                    engines={GLOBAL_ENGINES} selected={engines} onToggle={toggleEngine}
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-                <span className="text-sm text-primary">{t('dashboard.aiTelemetry.form.enabled')}</span>
-              </label>
-
               <p className="text-xs text-muted">{t('dashboard.aiTelemetry.form.scheduleNote')}</p>
 
               {runResults && (
@@ -1917,32 +1921,67 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                   {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
                 </div>
 
-                {/* 基于 step2 种子做扇出 */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button" onClick={handleSuggest}
-                    disabled={!step2Valid || suggesting}
-                    className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
-                    style={{
-                      background: 'var(--accent-primary)', color: '#fff',
-                      opacity: !step2Valid || suggesting ? 0.55 : 1,
-                    }}
-                  >
-                    {suggesting
-                      ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
-                      : t('dashboard.aiTelemetry.form.suggestFromSeeds', {
-                          count: seeds.map(s => s.trim()).filter(Boolean).length,
-                        })}
-                  </button>
-                  <span className="text-xs text-muted">
-                    {target.trim()
-                      ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
-                      : t('dashboard.aiTelemetry.form.suggestContextOff')}
-                  </span>
+                {/* 基于 step2 种子做扇出 — 用户可勾选/取消每个种子,只扩展选中的 */}
+                <div className="space-y-2">
+                  <div className="text-xs text-secondary font-medium">
+                    {t('dashboard.aiTelemetry.form.seedPickerLabel', {
+                      selected: selectedSeedsForMining.length,
+                      total: allSeedTexts.length,
+                    })}
+                  </div>
+                  {allSeedTexts.length === 0 ? (
+                    <div
+                      className="rounded-md p-2 text-xs text-muted"
+                      style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
+                    >
+                      {t('dashboard.aiTelemetry.form.seedPickerEmpty')}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {allSeedTexts.map(t1 => {
+                        const active = !deselectedSeeds.has(t1);
+                        return (
+                          <button
+                            key={t1}
+                            type="button"
+                            onClick={() => toggleSeedSelection(t1)}
+                            className="px-2 py-1 rounded text-xs"
+                            style={{
+                              background: active ? 'var(--accent-primary)' : 'var(--bg-input)',
+                              color: active ? '#fff' : 'var(--text-secondary)',
+                              border: '1px solid var(--border-color)',
+                            }}
+                          >
+                            {active ? '✓ ' : ''}{t1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button" onClick={handleSuggest}
+                      disabled={selectedSeedsForMining.length === 0 || suggesting}
+                      className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
+                      style={{
+                        background: 'var(--accent-primary)', color: '#fff',
+                        opacity: selectedSeedsForMining.length === 0 || suggesting ? 0.55 : 1,
+                      }}
+                    >
+                      {suggesting
+                        ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
+                        : t('dashboard.aiTelemetry.form.suggestFromSeeds', { count: selectedSeedsForMining.length })}
+                    </button>
+                    <span className="text-xs text-muted">
+                      {target.trim()
+                        ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
+                        : t('dashboard.aiTelemetry.form.suggestContextOff')}
+                    </span>
+                  </div>
+                  {suggestErr && (
+                    <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+                  )}
                 </div>
-                {suggestErr && (
-                  <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
-                )}
 
                 {suggestions.length === 0 ? (
                   <div
@@ -2243,36 +2282,6 @@ function StepHeader({
               />
             )}
           </Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-function EngineRow({
-  label, engines, selected, onToggle,
-}: {
-  label: string; engines: EngineId[];
-  selected: Set<EngineId>; onToggle: (e: EngineId) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-muted w-10">{label}</span>
-      {engines.map(e => {
-        const active = selected.has(e);
-        return (
-          <button
-            key={e} type="button" onClick={() => onToggle(e)}
-            className="px-2 py-1 rounded text-xs"
-            style={{
-              background: active ? 'var(--accent-primary)' : 'var(--bg-input)',
-              color: active ? 'white' : 'var(--text-secondary)',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-            {t(`dashboard.aiTelemetry.engine.${e}`)}
-          </button>
         );
       })}
     </div>

@@ -1984,6 +1984,8 @@ const zh = {
                 "seedPromptsPlaceholder": "输入一条种子,回车添加(例如:云数据中心 / 律所服务 / 跨境电商)",
                 "seedPromptsListHint": "本次新增 {{count}} 条 — 保存时会一并提交审核;第三步会基于全部种子各扇出约 200 条候选",
                 "suggestFromSeeds": "基于 {{count}} 个种子挖掘 ~200/条",
+                "seedPickerLabel": "种子提示词({{selected}} / {{total}} 选中)",
+                "seedPickerEmpty": "步骤 2 还没填种子提示词 — 回到上一步添加后,这里会列出来供你勾选",
                 "seedPromptsTitle": "已提交的种子词(审核状态)",
                 "seedPromptsHint": "甲方提交,平台审核后固化",
                 "seedPromptsEmpty": "暂无已提交的种子词。输入种子后点右侧「提交审核」即可入档。",
