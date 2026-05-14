@@ -1871,16 +1871,286 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
         )}
 
         {step === 3 && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* 左列:运行说明 + 试跑结果(引擎和启用开关已隐藏,默认 5 个国内引擎 + 每日自动) */}
-            <div className="lg:col-span-5 space-y-4">
-              <p className="text-xs text-muted">{t('dashboard.aiTelemetry.form.scheduleNote')}</p>
+          <div className="space-y-5">
+            {/* ── 第 1 段:选种子 + 触发挖掘 ─────────────────────── */}
+            <section
+              className="rounded-md p-4 space-y-3"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-primary">
+                  {t('dashboard.aiTelemetry.form.expandSectionTitle')}
+                </div>
+                <span className="text-xs text-muted whitespace-nowrap">
+                  {t('dashboard.aiTelemetry.form.seedPickerLabel', {
+                    selected: selectedSeedsForMining.length,
+                    total: allSeedTexts.length,
+                  })}
+                </span>
+              </div>
 
-              {runResults && (
+              {allSeedTexts.length === 0 ? (
                 <div
-                  className="rounded-md p-3 text-xs space-y-2 max-h-60 overflow-y-auto"
-                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+                  className="rounded-md p-3 text-xs text-muted"
+                  style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
                 >
+                  {t('dashboard.aiTelemetry.form.seedPickerEmpty')}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {allSeedTexts.map(t1 => {
+                    const active = !deselectedSeeds.has(t1);
+                    return (
+                      <button
+                        key={t1}
+                        type="button"
+                        onClick={() => toggleSeedSelection(t1)}
+                        className="px-2.5 py-1 rounded-full text-xs"
+                        style={{
+                          background: active ? 'var(--accent-primary)' : 'var(--bg-input)',
+                          color: active ? '#fff' : 'var(--text-secondary)',
+                          border: '1px solid var(--border-color)',
+                        }}
+                      >
+                        {active ? '✓ ' : ''}{t1}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button" onClick={handleSuggest}
+                  disabled={selectedSeedsForMining.length === 0 || suggesting}
+                  className="px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap disabled:opacity-50"
+                  style={{ background: 'var(--accent-primary)', color: '#fff' }}
+                >
+                  {suggesting
+                    ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
+                    : t('dashboard.aiTelemetry.form.suggestFromSeeds', { count: selectedSeedsForMining.length })}
+                </button>
+                <span className="text-xs text-muted">
+                  {target.trim()
+                    ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
+                    : t('dashboard.aiTelemetry.form.suggestContextOff')}
+                </span>
+              </div>
+              {suggestErr && (
+                <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+              )}
+            </section>
+
+            {/* ── 第 2 段:候选 Query 列表 ────────────────────────── */}
+            <section
+              className="rounded-md p-4 space-y-3"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-primary">
+                    {t('dashboard.aiTelemetry.form.candidateSectionTitle')}
+                  </div>
+                  <div className="text-xs text-muted mt-0.5">
+                    {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
+                  </div>
+                </div>
+                <span
+                  className="text-sm font-mono tabular-nums shrink-0"
+                  style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
+                >
+                  {picked.size} / {QUERY_MAX_PICK}
+                </span>
+              </div>
+
+              {suggestions.length === 0 ? (
+                <div
+                  className="rounded-md p-6 text-xs text-muted text-center"
+                  style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
+                >
+                  {t('dashboard.aiTelemetry.form.queriesPickerEmpty')}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text" value={queryFilter} onChange={e => setQueryFilter(e.target.value)}
+                      placeholder={t('dashboard.aiTelemetry.form.queriesFilterPlaceholder') || ''}
+                      className="flex-1 px-3 py-1 rounded-md text-xs"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                    />
+                    <button
+                      type="button" onClick={() => setSortByScore(s => !s)}
+                      className="px-2 py-1 rounded text-xs whitespace-nowrap"
+                      style={{
+                        background: sortByScore ? 'var(--accent-primary)' : 'transparent',
+                        color: sortByScore ? '#fff' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      {sortByScore
+                        ? t('dashboard.aiTelemetry.form.sortByScoreOn')
+                        : t('dashboard.aiTelemetry.form.sortByScoreOff')}
+                    </button>
+                    <span className="text-xs text-muted whitespace-nowrap">
+                      {t('dashboard.aiTelemetry.form.queriesFilterCount', {
+                        shown: filteredSuggestions.length, total: suggestions.length,
+                      })}
+                    </span>
+                  </div>
+                  <div
+                    className="overflow-y-auto rounded-md p-2"
+                    style={{
+                      maxHeight: 'clamp(360px, 60vh, 640px)',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  >
+                    {(() => {
+                      const renderRow = (q: QueryCandidate) => {
+                        const isPicked = picked.has(q.text);
+                        const isLocked = lockedQueryTexts.has(q.text);
+                        const reviewStatus = queryStatusByText.get(q.text);
+                        const disabled = isLocked || (!isPicked && pickedCap);
+                        const showScore = q.score > 0;
+                        const scoreColor = q.score >= 75 ? 'var(--accent-primary)'
+                          : q.score >= 60 ? 'var(--text-primary)'
+                          : 'var(--text-muted)';
+                        return (
+                          <label
+                            key={q.text}
+                            className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
+                            style={{
+                              cursor: isLocked ? 'default' : disabled ? 'not-allowed' : 'pointer',
+                              opacity: !isLocked && disabled ? 0.4 : 1,
+                              background: isPicked ? 'var(--bg-card)' : 'transparent',
+                              color: 'var(--text-primary)',
+                            }}
+                            title={isLocked ? (t('dashboard.aiTelemetry.form.queryLockedHint') || '') : undefined}
+                          >
+                            <input
+                              type="checkbox" checked={isPicked} disabled={disabled}
+                              onChange={() => togglePicked(q.text)}
+                              className="mt-0.5"
+                            />
+                            {showScore && (
+                              <span
+                                className="font-mono shrink-0 tabular-nums"
+                                style={{ color: scoreColor, minWidth: '1.8rem' }}
+                                title={q.sources.join(', ')}
+                              >
+                                {q.score}
+                              </span>
+                            )}
+                            <span className="break-all flex-1">{q.text}</span>
+                            {reviewStatus && (
+                              <span className="shrink-0"><ReviewBadge status={reviewStatus} /></span>
+                            )}
+                          </label>
+                        );
+                      };
+                      if (!groupedByCluster) {
+                        return (
+                          <div className="space-y-1">
+                            {filteredSuggestions.map(renderRow)}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="space-y-2">
+                          {groupedByCluster.map(({ cluster, items }) => {
+                            const collapsed = collapsedClusters.has(cluster.cluster_id);
+                            const pickedInCluster = items.filter(q => picked.has(q.text)).length;
+                            return (
+                              <div key={cluster.cluster_id}>
+                                <div
+                                  className="flex items-center gap-2 px-1 py-1 rounded sticky top-0"
+                                  style={{
+                                    background: 'var(--bg-secondary)',
+                                    borderBottom: '1px solid var(--border-color)',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleClusterCollapse(cluster.cluster_id)}
+                                    className="text-xs px-1"
+                                    style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                  >
+                                    {collapsed ? '▶' : '▼'}
+                                  </button>
+                                  <span className="text-xs font-medium break-all flex-1"
+                                        style={{ color: 'var(--text-primary)' }}>
+                                    {cluster.label}
+                                  </span>
+                                  <span className="text-xs font-mono tabular-nums shrink-0"
+                                        style={{ color: 'var(--text-muted)' }}>
+                                    {pickedInCluster} / {items.length}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => pickAllInCluster(cluster.cluster_id)}
+                                    disabled={pickedCap}
+                                    className="text-xs px-2 py-0.5 rounded shrink-0"
+                                    style={{
+                                      background: 'transparent',
+                                      border: '1px solid var(--border-color)',
+                                      color: 'var(--text-secondary)',
+                                      opacity: pickedCap ? 0.4 : 1,
+                                    }}
+                                  >
+                                    {t('dashboard.aiTelemetry.form.clusterPickAll')}
+                                  </button>
+                                </div>
+                                {!collapsed && (
+                                  <div className="space-y-1 pl-3 pt-1">
+                                    {items.map(renderRow)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <button
+                      type="button" onClick={clearPicked} disabled={picked.size === 0}
+                      className="px-2 py-1 rounded disabled:opacity-45"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {t('dashboard.aiTelemetry.form.queriesClearPicked')}
+                    </button>
+                    <button
+                      type="button" onClick={clearSuggestions}
+                      className="px-2 py-1 rounded"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {t('dashboard.aiTelemetry.form.queriesClearUnpicked')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* ── 第 3 段:试跑结果(只在试跑后出现)+ 调度脚注 ───── */}
+            {runResults && (
+              <section
+                className="rounded-md p-4 space-y-2"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+              >
+                <div className="text-sm font-semibold text-primary">
+                  {t('dashboard.aiTelemetry.form.runResultsTitle', { count: runResults.length })}
+                </div>
+                <div className="text-xs space-y-2 max-h-60 overflow-y-auto">
                   {runResults.map((r, i) => (
                     <div key={i} className="border-b pb-2 last:border-0" style={{ borderColor: 'var(--border-color)' }}>
                       <div className="text-primary font-medium">{r.engine} · {r.query}</div>
@@ -1897,278 +2167,12 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </section>
+            )}
 
-            {/* 右列:Query picker(200 候选 / 50 选) */}
-            <div className="lg:col-span-7">
-              <div
-                className="rounded-md p-3 space-y-3"
-                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-secondary font-medium">
-                    {t('dashboard.aiTelemetry.form.queriesPickerTitle')}*
-                  </span>
-                  <span
-                    className="text-xs font-mono"
-                    style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-muted)' }}
-                  >
-                    {picked.size} / {QUERY_MAX_PICK}
-                  </span>
-                </div>
-                <div className="text-xs text-muted">
-                  {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
-                </div>
-
-                {/* 基于 step2 种子做扇出 — 用户可勾选/取消每个种子,只扩展选中的 */}
-                <div className="space-y-2">
-                  <div className="text-xs text-secondary font-medium">
-                    {t('dashboard.aiTelemetry.form.seedPickerLabel', {
-                      selected: selectedSeedsForMining.length,
-                      total: allSeedTexts.length,
-                    })}
-                  </div>
-                  {allSeedTexts.length === 0 ? (
-                    <div
-                      className="rounded-md p-2 text-xs text-muted"
-                      style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
-                    >
-                      {t('dashboard.aiTelemetry.form.seedPickerEmpty')}
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {allSeedTexts.map(t1 => {
-                        const active = !deselectedSeeds.has(t1);
-                        return (
-                          <button
-                            key={t1}
-                            type="button"
-                            onClick={() => toggleSeedSelection(t1)}
-                            className="px-2 py-1 rounded text-xs"
-                            style={{
-                              background: active ? 'var(--accent-primary)' : 'var(--bg-input)',
-                              color: active ? '#fff' : 'var(--text-secondary)',
-                              border: '1px solid var(--border-color)',
-                            }}
-                          >
-                            {active ? '✓ ' : ''}{t1}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button" onClick={handleSuggest}
-                      disabled={selectedSeedsForMining.length === 0 || suggesting}
-                      className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
-                      style={{
-                        background: 'var(--accent-primary)', color: '#fff',
-                        opacity: selectedSeedsForMining.length === 0 || suggesting ? 0.55 : 1,
-                      }}
-                    >
-                      {suggesting
-                        ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
-                        : t('dashboard.aiTelemetry.form.suggestFromSeeds', { count: selectedSeedsForMining.length })}
-                    </button>
-                    <span className="text-xs text-muted">
-                      {target.trim()
-                        ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
-                        : t('dashboard.aiTelemetry.form.suggestContextOff')}
-                    </span>
-                  </div>
-                  {suggestErr && (
-                    <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
-                  )}
-                </div>
-
-                {suggestions.length === 0 ? (
-                  <div
-                    className="rounded-md p-4 text-xs text-muted text-center"
-                    style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
-                  >
-                    {t('dashboard.aiTelemetry.form.queriesPickerEmpty')}
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text" value={queryFilter} onChange={e => setQueryFilter(e.target.value)}
-                        placeholder={t('dashboard.aiTelemetry.form.queriesFilterPlaceholder') || ''}
-                        className="flex-1 px-3 py-1 rounded-md text-xs"
-                        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-                      />
-                      <button
-                        type="button" onClick={() => setSortByScore(s => !s)}
-                        className="px-2 py-1 rounded text-xs whitespace-nowrap"
-                        style={{
-                          background: sortByScore ? 'var(--accent-primary)' : 'transparent',
-                          color: sortByScore ? '#fff' : 'var(--text-secondary)',
-                          border: '1px solid var(--border-color)',
-                        }}
-                        title={sortByScore
-                          ? t('dashboard.aiTelemetry.form.sortByScoreOn') || ''
-                          : t('dashboard.aiTelemetry.form.sortByScoreOff') || ''}
-                      >
-                        {sortByScore
-                          ? t('dashboard.aiTelemetry.form.sortByScoreOn')
-                          : t('dashboard.aiTelemetry.form.sortByScoreOff')}
-                      </button>
-                      <span className="text-xs text-muted whitespace-nowrap">
-                        {t('dashboard.aiTelemetry.form.queriesFilterCount', {
-                          shown: filteredSuggestions.length, total: suggestions.length,
-                        })}
-                      </span>
-                    </div>
-                    <div
-                      className="overflow-y-auto rounded-md p-2"
-                      style={{
-                        maxHeight: 'clamp(360px, 65vh, 720px)',
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-color)',
-                      }}
-                    >
-                      {(() => {
-                        const renderRow = (q: QueryCandidate) => {
-                          const isPicked = picked.has(q.text);
-                          const isLocked = lockedQueryTexts.has(q.text);
-                          const reviewStatus = queryStatusByText.get(q.text);
-                          // 已固化(approved):勾住 + 锁定;新候选超出容量:禁用
-                          const disabled = isLocked || (!isPicked && pickedCap);
-                          const showScore = q.score > 0;
-                          const scoreColor = q.score >= 75 ? 'var(--accent-primary)'
-                            : q.score >= 60 ? 'var(--text-primary)'
-                            : 'var(--text-muted)';
-                          return (
-                            <label
-                              key={q.text}
-                              className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
-                              style={{
-                                cursor: isLocked ? 'default' : disabled ? 'not-allowed' : 'pointer',
-                                opacity: !isLocked && disabled ? 0.4 : 1,
-                                background: isPicked ? 'var(--bg-card)' : 'transparent',
-                                color: 'var(--text-primary)',
-                              }}
-                              title={isLocked ? (t('dashboard.aiTelemetry.form.queryLockedHint') || '') : undefined}
-                            >
-                              <input
-                                type="checkbox" checked={isPicked} disabled={disabled}
-                                onChange={() => togglePicked(q.text)}
-                                className="mt-0.5"
-                              />
-                              {showScore && (
-                                <span
-                                  className="font-mono shrink-0 tabular-nums"
-                                  style={{ color: scoreColor, minWidth: '1.8rem' }}
-                                  title={q.sources.join(', ')}
-                                >
-                                  {q.score}
-                                </span>
-                              )}
-                              <span className="break-all flex-1">{q.text}</span>
-                              {reviewStatus && (
-                                <span className="shrink-0"><ReviewBadge status={reviewStatus} /></span>
-                              )}
-                            </label>
-                          );
-                        };
-                        if (!groupedByCluster) {
-                          return (
-                            <div className="space-y-1">
-                              {filteredSuggestions.map(renderRow)}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="space-y-2">
-                            {groupedByCluster.map(({ cluster, items }) => {
-                              const collapsed = collapsedClusters.has(cluster.cluster_id);
-                              const pickedInCluster = items.filter(q => picked.has(q.text)).length;
-                              return (
-                                <div key={cluster.cluster_id}>
-                                  <div
-                                    className="flex items-center gap-2 px-1 py-1 rounded sticky top-0"
-                                    style={{
-                                      background: 'var(--bg-secondary)',
-                                      borderBottom: '1px solid var(--border-color)',
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleClusterCollapse(cluster.cluster_id)}
-                                      className="text-xs px-1"
-                                      style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
-                                      title={collapsed
-                                        ? t('dashboard.aiTelemetry.form.clusterExpand') || ''
-                                        : t('dashboard.aiTelemetry.form.clusterCollapse') || ''}
-                                    >
-                                      {collapsed ? '▶' : '▼'}
-                                    </button>
-                                    <span className="text-xs font-medium break-all flex-1"
-                                          style={{ color: 'var(--text-primary)' }}>
-                                      {cluster.label}
-                                    </span>
-                                    <span className="text-xs font-mono tabular-nums shrink-0"
-                                          style={{ color: 'var(--text-muted)' }}>
-                                      {pickedInCluster} / {items.length}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => pickAllInCluster(cluster.cluster_id)}
-                                      disabled={pickedCap}
-                                      className="text-xs px-2 py-0.5 rounded shrink-0"
-                                      style={{
-                                        background: 'transparent',
-                                        border: '1px solid var(--border-color)',
-                                        color: 'var(--text-secondary)',
-                                        opacity: pickedCap ? 0.4 : 1,
-                                      }}
-                                    >
-                                      {t('dashboard.aiTelemetry.form.clusterPickAll')}
-                                    </button>
-                                  </div>
-                                  {!collapsed && (
-                                    <div className="space-y-1 pl-3 pt-1">
-                                      {items.map(renderRow)}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <button
-                        type="button" onClick={clearPicked} disabled={picked.size === 0}
-                        className="px-2 py-1 rounded"
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid var(--border-color)',
-                          color: 'var(--text-secondary)',
-                          opacity: picked.size === 0 ? 0.45 : 1,
-                        }}
-                      >
-                        {t('dashboard.aiTelemetry.form.queriesClearPicked')}
-                      </button>
-                      <button
-                        type="button" onClick={clearSuggestions}
-                        className="px-2 py-1 rounded"
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid var(--border-color)',
-                          color: 'var(--text-secondary)',
-                        }}
-                      >
-                        {t('dashboard.aiTelemetry.form.queriesClearUnpicked')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <p className="text-xs text-muted text-center">
+              {t('dashboard.aiTelemetry.form.scheduleNote')}
+            </p>
           </div>
         )}
       </div>
