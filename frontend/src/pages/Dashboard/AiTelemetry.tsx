@@ -1,11 +1,7 @@
-// AI 遥测 工作台页 — 配置话题 + 查看跑批结果.
-//
-// Tab 1「话题配置」:
-//   - 列表:启用 / 话题名 / Query 数 / 引擎数 / 最近跑 / 状态 / 操作
-//   - 新建/编辑 Modal:话题名 + Query 多行 + 引擎 10 复选(国内/海外分组)+ 启用开关
-//   - 立即试跑:点「立即试跑一次」直接调 /run-now,结果就在 modal 底部展示
-//
-// Tab 2「跑批结果」:第一版占位 (Step 3 再做)
+// AI 遥测 工作台页 — 一个组件承载 3 个 route:
+//   /dashboard            views=['config']                  — 话题配置(新 dashboard 首页)
+//   /dashboard/ai-telemetry  views=['overview','tracking','results'] — 遥测看板
+//   /dashboard/insights   views=['briefings']               — 优化建议
 //
 // 频率由后端固定为 daily,前端不暴露时间选择.
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
@@ -17,14 +13,17 @@ import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
+  type IntentBreakdown,
   type OwnedSplit,
   type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
   type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
+  type QueryCandidate, type ClusterMeta,
 } from '../../services/aiTelemetryApi';
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
+import { Tooltip as HintTooltip } from '../../components/Tooltip';
 
 type TabKey = 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
 
@@ -35,10 +34,34 @@ const ENGINE_COLORS: Record<EngineId, string> = {
   grok: '#9CA3AF', copilot: '#0078D4',
 };
 
-export function AiTelemetry() {
+function InfoHint({ text }: { text: string }) {
+  return (
+    <HintTooltip content={text}>
+      <span
+        role="img"
+        aria-label="info"
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] font-semibold cursor-help align-middle leading-none select-none"
+        style={{
+          background: 'var(--bg-input)',
+          color: 'var(--text-muted)',
+          border: '1px solid var(--border-color)',
+        }}
+      >?</span>
+    </HintTooltip>
+  );
+}
+
+const ALL_TABS: TabKey[] = ['overview', 'tracking', 'briefings', 'config', 'results'];
+
+export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const { t } = useTranslation();
   const token = localStorage.getItem('token') || '';
-  const [tab, setTab] = useState<TabKey>('overview');
+  const visibleTabs = (views && views.length > 0 ? views : ALL_TABS);
+  const showTabBar = visibleTabs.length > 1;
+  const showNewTopicBtn = visibleTabs.includes('config');
+  const [tab, setTab] = useState<TabKey>(visibleTabs[0]);
+  // clamp:若组件被复用(state 残留),把 tab 拉回当前视图允许的范围
+  const currentTab: TabKey = visibleTabs.includes(tab) ? tab : visibleTabs[0];
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
@@ -77,9 +100,53 @@ export function AiTelemetry() {
     refresh();
   };
 
+  // 编辑 / 新建模式:把整页内容换成 inline editor,200+ 候选才有空间选
+  if (editing !== undefined) {
+    return (
+      <div className="space-y-4">
+        <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(undefined)}
+              className="text-sm px-2 py-1 rounded-md"
+              style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              ← {t('dashboard.aiTelemetry.backToList')}
+            </button>
+            <h1 className="text-xl font-semibold text-primary leading-tight">
+              {t(editing ? 'dashboard.aiTelemetry.editTopic' : 'dashboard.aiTelemetry.newTopic')}
+            </h1>
+          </div>
+        </header>
+        <TopicEditor
+          initial={editing}
+          token={token}
+          onCancel={() => setEditing(undefined)}
+          onSave={handleSave}
+        />
+      </div>
+    );
+  }
+
+  // 标题 / 副标题:跟侧边栏菜单同源(用 dashboard.nav.*),subtitle 各 view 独立
+  const headTitleKey =
+    visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.nav.config' :
+    visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.nav.insights' :
+    'dashboard.nav.aiTelemetry';
+  const subtitleKey =
+    visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.config.subtitle' :
+    visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.insights.subtitle' :
+    'dashboard.aiTelemetry.subtitle';
+
   return (
     <div className="space-y-4">
-      <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
+      <PageHead titleKey={headTitleKey} titleFallback="AI Telemetry" />
 
       <header className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -94,57 +161,52 @@ export function AiTelemetry() {
           </span>
           <div>
             <h1 className="text-xl font-semibold text-primary leading-tight">
-              {t('dashboard.aiTelemetry.title')}
+              {t(headTitleKey)}
             </h1>
-            <p className="text-xs text-secondary mt-0.5">{t('dashboard.aiTelemetry.subtitle')}</p>
+            <p className="text-xs text-secondary mt-0.5">{t(subtitleKey)}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing(null)}
-          className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
-          style={{ background: 'var(--accent-primary)' }}
-        >
-          + {t('dashboard.aiTelemetry.newTopic')}
-        </button>
+        {showNewTopicBtn && (
+          <button
+            type="button"
+            onClick={() => setEditing(null)}
+            className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
+            style={{ background: 'var(--accent-primary)' }}
+          >
+            + {t('dashboard.aiTelemetry.newTopic')}
+          </button>
+        )}
       </header>
 
-      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
-        {(['overview', 'tracking', 'briefings', 'config', 'results'] as TabKey[]).map(k => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className="px-3 py-2 text-sm -mb-px"
-            style={{
-              borderBottom: tab === k ? '2px solid var(--accent-primary)' : '2px solid transparent',
-              color: tab === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-            }}
-          >
-            {t(`dashboard.aiTelemetry.tab${k.charAt(0).toUpperCase() + k.slice(1)}`)}
-          </button>
-        ))}
-      </div>
+      {showTabBar && (
+        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
+          {visibleTabs.map(k => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setTab(k)}
+              className="px-3 py-2 text-sm -mb-px"
+              style={{
+                borderBottom: tab === k ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                color: tab === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+              }}
+            >
+              {t(`dashboard.aiTelemetry.tab${k.charAt(0).toUpperCase() + k.slice(1)}`)}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === 'overview' && <OverviewTab topics={topics} token={token} />}
-      {tab === 'tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
-      {tab === 'briefings' && <BriefingsTab topics={topics} token={token} />}
-      {tab === 'config' && (
+      {currentTab ==='overview' && <OverviewTab topics={topics} token={token} />}
+      {currentTab ==='tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
+      {currentTab ==='briefings' && <BriefingsTab topics={topics} token={token} />}
+      {currentTab ==='config' && (
         <TopicTable
           topics={topics} loading={loading}
           onEdit={setEditing} onDelete={handleDelete} onRun={handleRun}
         />
       )}
-      {tab === 'results' && <ResultsTab topics={topics} token={token} />}
-
-      {editing !== undefined && (
-        <TopicModal
-          initial={editing}
-          token={token}
-          onCancel={() => setEditing(undefined)}
-          onSave={handleSave}
-        />
-      )}
+      {currentTab ==='results' && <ResultsTab topics={topics} token={token} />}
     </div>
   );
 }
@@ -254,6 +316,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [data, setData] = useState<Overview | null>(null);
   const [sov, setSoV] = useState<ShareOfVoice | null>(null);
+  const [intent, setIntent] = useState<IntentBreakdown | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -266,9 +329,11 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
     Promise.all([
       aiTelemetryApi.getOverview(topicId, period, token),
       aiTelemetryApi.getShareOfVoice(topicId, period, token).catch(() => null),
-    ]).then(([ov, s]) => {
+      aiTelemetryApi.getIntentBreakdown(topicId, period, token).catch(() => null),
+    ]).then(([ov, s, ib]) => {
       setData(ov);
       setSoV(s);
+      setIntent(ib);
     }).finally(() => setLoading(false));
   }, [topicId, period, token]);
 
@@ -328,6 +393,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           sparkline={data?.visibility.sparkline ?? []}
           loading={loading}
           icon="eye"
+          hint={t('dashboard.aiTelemetry.overview.tipVisibility')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiCitations')}
@@ -337,6 +403,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           fmt="int"
           icon="link"
+          hint={t('dashboard.aiTelemetry.overview.tipCitations')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiGrowth')}
@@ -347,6 +414,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           accentByValue
           icon="trend"
+          hint={t('dashboard.aiTelemetry.overview.tipGrowth')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiEngines')}
@@ -357,6 +425,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           fmt="int"
           icon="cpu"
+          hint={t('dashboard.aiTelemetry.overview.tipEngines')}
         />
       </div>
 
@@ -365,6 +434,9 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
 
       {/* 趋势图 */}
       <TrendChart data={data} loading={loading} />
+
+      {/* intent 分布(picker 端聚出的簇 × 本期 mention 率)*/}
+      <IntentBreakdownBlock data={intent} loading={loading} />
 
       {/* 引用分析:Top 10 + Owned vs Other */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -406,6 +478,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         <h3 className="text-sm font-medium text-primary mb-2 flex items-center gap-1">
           <span style={{ color: 'var(--accent-primary)' }}>📣</span>
           {t('dashboard.aiTelemetry.overview.saivTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipSaiv')} />
         </h3>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-semibold tabular-nums text-primary">
@@ -422,14 +495,16 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         {/* 命中位置分布(检索排名简化版) */}
         {hasSignal && data.brand_count > 0 && (
           <div className="mt-3">
-            <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+            <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1 inline-flex items-center gap-1">
               {t('dashboard.aiTelemetry.overview.positionTitle')}
+              <InfoHint text={t('dashboard.aiTelemetry.overview.tipPosition')} />
             </div>
             <PositionBar dist={data.position_dist} />
           </div>
         )}
         <div className="mt-3 text-[11px] text-muted">
-          {t('dashboard.aiTelemetry.overview.optimalRate')}:
+          {t('dashboard.aiTelemetry.overview.optimalRate')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipOptimalRate')} />:
           <span className="text-primary font-semibold ml-1">
             {data.optimal_rate_pct.toFixed(1)}%
           </span>
@@ -442,8 +517,9 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
       {/* 竞品份额对比 */}
       <div className="rounded-lg p-4 md:col-span-2"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <h3 className="text-sm font-medium text-primary mb-3">
+        <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.competitorShareTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipCompetitorShare')} />
         </h3>
         {!hasSignal && (
           <div className="text-xs text-muted py-6 text-center">
@@ -524,6 +600,77 @@ function PositionBar({ dist }: { dist: ShareOfVoice['position_dist'] }) {
   );
 }
 
+// ── intent 分布 ────────────────────────────────────────────
+
+function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null; loading: boolean }) {
+  const { t } = useTranslation();
+  if (loading && !data) {
+    return (
+      <div className="rounded-lg p-4 text-sm text-muted text-center"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>…</div>
+    );
+  }
+  if (!data) return null;
+  const hasSignal = data.clusters.length > 0 || data.uncategorized.response_count > 0;
+  if (!hasSignal) return null;
+
+  // 一行显示所有有 response 的簇 + 兜底桶。按 mention_rate 升序排,先看到弱簇 → 内容补强目标
+  const items = [
+    ...data.clusters,
+    ...(data.uncategorized.response_count > 0 ? [data.uncategorized] : []),
+  ].filter(c => c.response_count > 0)
+    .sort((a, b) => a.mention_rate - b.mention_rate);
+
+  if (items.length === 0) return null;
+
+  const maxRate = Math.max(...items.map(c => c.mention_rate), 0.01);
+  return (
+    <div className="rounded-lg p-4"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
+        {t('dashboard.aiTelemetry.overview.intentTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipIntent')} />
+      </h3>
+      <div className="text-xs text-muted mb-3">
+        {t('dashboard.aiTelemetry.overview.intentHint')}
+      </div>
+      <div className="space-y-2">
+        {items.map(c => {
+          const rate = c.mention_rate * 100;
+          const barPct = (c.mention_rate / maxRate) * 100;
+          const barColor = c.mention_rate >= 0.5 ? 'var(--accent-primary)'
+            : c.mention_rate >= 0.25 ? '#f59e0b'
+            : '#ef4444';
+          return (
+            <div key={c.cluster_id} className="flex items-center gap-3 text-xs">
+              <div className="w-40 shrink-0 break-all" style={{ color: 'var(--text-primary)' }}>
+                {c.cluster_id === -1
+                  ? t('dashboard.aiTelemetry.overview.intentUncategorized')
+                  : c.label}
+              </div>
+              <div className="flex-1 relative h-4 rounded"
+                style={{ background: 'var(--bg-input)' }}>
+                <div className="absolute inset-y-0 left-0 rounded"
+                  style={{ width: `${barPct}%`, background: barColor }} />
+              </div>
+              <div className="w-12 text-right tabular-nums font-mono shrink-0"
+                style={{ color: 'var(--text-primary)' }}>
+                {rate.toFixed(0)}%
+              </div>
+              <div className="w-24 text-right text-muted shrink-0">
+                {t('dashboard.aiTelemetry.overview.intentResponseCount', {
+                  m: c.mention_count, n: c.response_count,
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 // ── 引用分析:Top 10 ────────────────────────────────────────────
 
 function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: boolean }) {
@@ -539,8 +686,9 @@ function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: bool
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <h3 className="text-sm font-medium text-primary mb-3">
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
         {t('dashboard.aiTelemetry.overview.topDomainsTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipTopDomains')} />
       </h3>
       {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
       {!loading && data.length === 0 && (
@@ -612,8 +760,9 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <h3 className="text-sm font-medium text-primary mb-3">
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
         {t('dashboard.aiTelemetry.overview.ownedTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipOwned')} />
       </h3>
       {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted">…</div>}
       {!loading && empty && (
@@ -715,8 +864,9 @@ function EngineDomainMatrix({
       }}
     >
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-sm font-medium text-primary">
+        <h3 className="text-sm font-medium text-primary inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.matrixTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipMatrix')} />
         </h3>
         {!empty && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted">
@@ -827,6 +977,7 @@ interface KpiCardProps {
   /** 大数字的颜色:value 为正绿、负红 */
   accentByValue?: boolean;
   icon?: 'eye' | 'link' | 'trend' | 'cpu';
+  hint?: string;
 }
 
 const KPI_ICONS: Record<string, ReactElement> = {
@@ -836,7 +987,7 @@ const KPI_ICONS: Record<string, ReactElement> = {
   cpu: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3" />,
 };
 
-function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue, icon }: KpiCardProps) {
+function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue, icon, hint }: KpiCardProps) {
   const display = fmt === 'int'
     ? Math.round(value).toLocaleString()
     : (Number.isInteger(value) ? value.toString() : value.toFixed(1));
@@ -856,7 +1007,10 @@ function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByV
       }}
     >
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-secondary">{label}</span>
+        <span className="text-xs text-secondary inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoHint text={hint} />}
+        </span>
         {icon && (
           <svg
             className="w-4 h-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -949,8 +1103,9 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
       }}
     >
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-sm font-medium text-primary">
+        <h3 className="text-sm font-medium text-primary inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.trendTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipTrend')} />
         </h3>
         <div className="flex flex-wrap gap-3 text-xs">
           {data.engines.map(e => (
@@ -991,7 +1146,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
               allowDecimals={false}
               width={32}
             />
-            <Tooltip
+            <RTooltip
               contentStyle={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
@@ -1166,14 +1321,10 @@ function ResponseTable({
         <thead>
           <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
             <th className="text-left px-3 py-2 font-medium w-8"></th>
-            <th className="text-left px-3 py-2 font-medium">
-              {t(`dashboard.aiTelemetry.engine.${responses[0].engine}`, responses[0].engine)
-                ? '引擎' : 'Engine'}
-            </th>
-            <th className="text-left px-3 py-2 font-medium">Query</th>
-            <th className="text-left px-3 py-2 font-medium">答案摘要 / Answer</th>
-            <th className="text-left px-3 py-2 font-medium">引用 / Cites</th>
-            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.video')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colEngine')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colQuery')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colAnswer')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colCitations')}</th>
           </tr>
         </thead>
         <tbody>
@@ -1198,20 +1349,10 @@ function ResponseTable({
                     )}
                   </td>
                   <td className="px-3 py-2">{r.citations.length}</td>
-                  <td className="px-3 py-2">
-                    {r.video_url ? (
-                      <a
-                        href={r.video_url} target="_blank" rel="noreferrer"
-                        className="text-xs hover:underline"
-                        style={{ color: 'var(--accent-primary)' }}
-                        onClick={e => e.stopPropagation()}
-                      >▶</a>
-                    ) : <span className="text-muted">—</span>}
-                  </td>
                 </tr>
                 {open && (
                   <tr style={{ borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-                    <td colSpan={6} className="px-4 py-3">
+                    <td colSpan={5} className="px-4 py-3">
                       <ResponseDetail row={r} />
                     </td>
                   </tr>
@@ -1265,19 +1406,18 @@ function ResponseDetail({ row }: { row: ResponseRow }) {
 
 // ── 新建/编辑 Modal ───────────────────────────────────────────
 
-interface TopicModalProps {
+interface TopicEditorProps {
   initial: Topic | null;
   token: string;
   onCancel: () => void;
   onSave: (payload: TopicPayload) => Promise<void>;
 }
 
-function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
+function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(initial?.name || '');
   const [target, setTarget] = useState(initial?.target || '');
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
-  const [queriesText, setQueriesText] = useState((initial?.queries || []).join('\n'));
   const [engines, setEngines] = useState<Set<EngineId>>(
     new Set(initial?.engines || ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao'])
   );
@@ -1286,15 +1426,90 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<RunNowResult[] | null>(null);
 
-  const queries = useMemo(
-    () => queriesText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10),
-    [queriesText],
+  // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
+  // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
+  const SUGGEST_COUNT = 200;
+  const QUERY_MAX_PICK = 50;
+  const [seed, setSeed] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestErr, setSuggestErr] = useState<string | null>(null);
+  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果话题
+  // 已存过 cluster_ids 就把簇 ID 一并回填,允许下次保存继续按簇分组
+  const [suggestions, setSuggestions] = useState<QueryCandidate[]>(() => {
+    const qs = initial?.queries || [];
+    const cids = initial?.query_cluster_ids || [];
+    return qs.map((text, i) => ({
+      text, score: 0, sources: [],
+      ...(typeof cids[i] === 'number' && cids[i] >= 0 ? { cluster_id: cids[i] } : {}),
+    }));
+  });
+  const [clusters, setClusters] = useState<ClusterMeta[]>(
+    () => (initial?.clusters || []).map(c => ({
+      cluster_id: c.cluster_id, label: c.label, size: c.size,
+      medoid_index: 0,  // 持久化时没存 medoid_index,这里用 0 占位
+    })),
   );
+  const [collapsedClusters, setCollapsedClusters] = useState<Set<number>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
+  const [queryFilter, setQueryFilter] = useState('');
+  const [sortByScore, setSortByScore] = useState(true);
+
+  const queries = useMemo(() => Array.from(picked).slice(0, QUERY_MAX_PICK), [picked]);
   const aliases = useMemo(
     () => aliasesText.split(/[,,\n]/).map(s => s.trim()).filter(Boolean).slice(0, 10),
     [aliasesText],
   );
 
+  const filteredSuggestions = useMemo(() => {
+    const f = queryFilter.trim().toLowerCase();
+    let out = f ? suggestions.filter(q => q.text.toLowerCase().includes(f)) : suggestions;
+    if (sortByScore) {
+      // 已勾选的固定置顶(避免重排时跳走),分数同高的稳定保留 LLM 原序
+      out = [...out].sort((a, b) => {
+        const pa = picked.has(a.text) ? 1 : 0;
+        const pb = picked.has(b.text) ? 1 : 0;
+        if (pa !== pb) return pb - pa;
+        return b.score - a.score;
+      });
+    }
+    return out;
+  }, [suggestions, queryFilter, sortByScore, picked]);
+
+  // 按 cluster 分组渲染。clusters 为空时返回 null → 走平铺渲染回退
+  const groupedByCluster = useMemo<{ cluster: ClusterMeta; items: QueryCandidate[] }[] | null>(() => {
+    if (clusters.length === 0) return null;
+    const byId = new Map<number, QueryCandidate[]>();
+    for (const q of filteredSuggestions) {
+      const cid = q.cluster_id ?? -1;
+      if (!byId.has(cid)) byId.set(cid, []);
+      byId.get(cid)!.push(q);
+    }
+    return clusters
+      .map(c => ({ cluster: c, items: byId.get(c.cluster_id) || [] }))
+      .filter(g => g.items.length > 0);
+  }, [filteredSuggestions, clusters]);
+
+  const toggleClusterCollapse = (cid: number) => {
+    setCollapsedClusters(prev => {
+      const next = new Set(prev);
+      if (next.has(cid)) next.delete(cid); else next.add(cid);
+      return next;
+    });
+  };
+  const pickAllInCluster = (cid: number) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      const items = suggestions.filter(q => (q.cluster_id ?? -1) === cid);
+      for (const q of items) {
+        if (next.size >= QUERY_MAX_PICK) break;
+        next.add(q.text);
+      }
+      return next;
+    });
+  };
+
+  const pickedCap = picked.size >= QUERY_MAX_PICK;
   const valid = name.trim().length > 0 && target.trim().length > 0
     && queries.length > 0 && engines.size > 0;
 
@@ -1306,14 +1521,33 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     });
   };
 
-  const buildPayload = (): TopicPayload => ({
-    name: name.trim(),
-    target: target.trim(),
-    target_aliases: aliases,
-    queries,
-    engines: Array.from(engines),
-    enabled,
-  });
+  const buildPayload = (): TopicPayload => {
+    // 按 queries 顺序回填 cluster_id;suggestions 里没记 cluster_id 的就给 -1
+    const textToCluster = new Map<string, number>();
+    for (const q of suggestions) {
+      if (typeof q.cluster_id === 'number') textToCluster.set(q.text, q.cluster_id);
+    }
+    const query_cluster_ids = queries.map(q => textToCluster.get(q) ?? -1);
+    const hasAnyCluster = query_cluster_ids.some(c => c >= 0);
+    // cluster_ids 和 clusters 必须同进同出 — 只发其一会留下 "queries 没簇但
+    // clusters_json 还在" 的孤儿态(topic#2 就是这么坏的)。
+    // hasAnyCluster=false 时两个都不发,backend `_queries_with_meta` 会按 text
+    // 沿用历史 cluster_id;clusters_json 也保持不动。
+    return {
+      name: name.trim(),
+      target: target.trim(),
+      target_aliases: aliases,
+      queries,
+      ...(hasAnyCluster ? {
+        query_cluster_ids,
+        clusters: clusters.map(c => ({
+          cluster_id: c.cluster_id, label: c.label, size: c.size,
+        })),
+      } : {}),
+      engines: Array.from(engines),
+      enabled,
+    };
+  };
 
   const handleSave = async () => {
     if (!valid) return;
@@ -1333,27 +1567,63 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
     }
   };
 
-  const node = (
-    <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
-      <div
-        className="rounded-xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-      >
-        <header
-          className="px-5 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid var(--border-color)' }}
-        >
-          <h3 className="text-sm font-semibold text-primary">
-            {t(initial ? 'dashboard.aiTelemetry.editTopic' : 'dashboard.aiTelemetry.newTopic')}
-          </h3>
-          <button type="button" onClick={onCancel} className="text-muted hover:text-primary text-lg leading-none px-2">×</button>
-        </header>
+  const handleSuggest = async () => {
+    const s = seed.trim();
+    if (!s || suggesting) return;
+    setSuggesting(true);
+    setSuggestErr(null);
+    try {
+      const res = await aiTelemetryApi.suggestQueries({
+        seed: s, count: SUGGEST_COUNT,
+        target: target.trim(),
+        aliases,
+        industry: industry.trim(),
+      }, token);
+      // 追加(去重),不覆盖 — 用户可能想多轮生成、不同 seed 累积候选
+      setSuggestions(prev => {
+        const seen = new Set(prev.map(q => q.text));
+        const out = [...prev];
+        for (const q of res.queries) {
+          if (!seen.has(q.text)) { seen.add(q.text); out.push(q); }
+        }
+        return out;
+      });
+      // clusters 直接覆盖(每次挖掘是一次完整聚类,旧簇 ID 与新簇 ID 不可比)
+      setClusters(res.clusters || []);
+      setCollapsedClusters(new Set());
+    } catch (e: unknown) {
+      setSuggestErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
-        <div className="px-5 py-4 space-y-4 overflow-y-auto">
+  const togglePicked = (q: string) => {
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(q)) {
+        next.delete(q);
+      } else if (next.size < QUERY_MAX_PICK) {
+        next.add(q);
+      }
+      return next;
+    });
+  };
+
+  const clearPicked = () => setPicked(new Set());
+  const clearSuggestions = () => {
+    // 只清掉未勾选的候选,保留已勾选的(否则 valid 状态会瞬间崩)
+    setSuggestions(prev => prev.filter(q => picked.has(q.text)));
+  };
+
+  return (
+    <section
+      className="rounded-xl"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+    >
+      <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* 左列:基本字段 + 引擎 + 试跑结果 */}
+        <div className="lg:col-span-5 space-y-4">
           <label className="block">
             <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.name')}*</span>
             <input
@@ -1393,17 +1663,6 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
             </span>
           </label>
 
-          <label className="block">
-            <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.queries')}*</span>
-            <textarea
-              rows={5} value={queriesText} onChange={e => setQueriesText(e.target.value)}
-              placeholder={t('dashboard.aiTelemetry.form.queriesPlaceholder') || ''}
-              className="mt-1 w-full px-3 py-1.5 rounded-md text-sm font-mono"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            />
-            <span className="text-xs text-muted">{queries.length} / 10</span>
-          </label>
-
           <div>
             <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.engines')}*</span>
             <div className="mt-2 space-y-2">
@@ -1427,7 +1686,7 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
 
           {runResults && (
             <div
-              className="mt-2 rounded-md p-3 text-xs space-y-2 max-h-60 overflow-y-auto"
+              className="rounded-md p-3 text-xs space-y-2 max-h-60 overflow-y-auto"
               style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
             >
               {runResults.map((r, i) => (
@@ -1449,33 +1708,271 @@ function TopicModal({ initial, token, onCancel, onSave }: TopicModalProps) {
           )}
         </div>
 
-        <footer
-          className="px-5 py-3 flex items-center justify-end gap-2"
-          style={{ borderTop: '1px solid var(--border-color)' }}
-        >
-          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm rounded-md text-secondary">
-            {t('dashboard.aiTelemetry.form.cancel')}
-          </button>
-          <button
-            type="button" onClick={handleRunNow} disabled={!valid || running}
-            className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+        {/* 右列:Query picker(200 候选 / 50 选) */}
+        <div className="lg:col-span-7">
+          <div
+            className="rounded-md p-3 space-y-3"
+            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
           >
-            {running ? '…' : t('dashboard.aiTelemetry.form.runNow')}
-          </button>
-          <button
-            type="button" onClick={handleSave} disabled={!valid || saving}
-            className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-            style={{ background: 'var(--accent-primary)' }}
-          >
-            {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
-          </button>
-        </footer>
-      </div>
-    </div>
-  );
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-secondary font-medium">
+                {t('dashboard.aiTelemetry.form.queriesPickerTitle')}*
+              </span>
+              <span
+                className="text-xs font-mono"
+                style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+              >
+                {picked.size} / {QUERY_MAX_PICK}
+              </span>
+            </div>
+            <div className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
+            </div>
 
-  return createPortal(node, document.body);
+            {/* seed + industry + 生成按钮 */}
+            <div className="flex gap-2">
+              <input
+                type="text" value={seed} onChange={e => setSeed(e.target.value)}
+                placeholder={t('dashboard.aiTelemetry.form.suggestPlaceholder') || ''}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSuggest(); } }}
+                className="flex-1 px-3 py-1.5 rounded-md text-sm"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              />
+              <button
+                type="button" onClick={handleSuggest} disabled={!seed.trim() || suggesting}
+                className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
+                style={{
+                  background: 'var(--accent-primary)', color: '#fff',
+                  opacity: !seed.trim() || suggesting ? 0.55 : 1,
+                }}
+              >
+                {suggesting
+                  ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
+                  : t('dashboard.aiTelemetry.form.suggestGenerateN', { count: SUGGEST_COUNT })}
+              </button>
+            </div>
+            <input
+              type="text" value={industry} onChange={e => setIndustry(e.target.value)}
+              placeholder={t('dashboard.aiTelemetry.form.suggestIndustryPlaceholder') || ''}
+              className="w-full px-3 py-1.5 rounded-md text-sm"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            />
+            <div className="text-xs text-muted">
+              {target.trim()
+                ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
+                : t('dashboard.aiTelemetry.form.suggestContextOff')}
+            </div>
+            {suggestErr && (
+              <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+            )}
+
+            {/* 候选池 — 过滤 + 滚动列表 */}
+            {suggestions.length === 0 ? (
+              <div
+                className="rounded-md p-4 text-xs text-muted text-center"
+                style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}
+              >
+                {t('dashboard.aiTelemetry.form.queriesPickerEmpty')}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" value={queryFilter} onChange={e => setQueryFilter(e.target.value)}
+                    placeholder={t('dashboard.aiTelemetry.form.queriesFilterPlaceholder') || ''}
+                    className="flex-1 px-3 py-1 rounded-md text-xs"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                  />
+                  <button
+                    type="button" onClick={() => setSortByScore(s => !s)}
+                    className="px-2 py-1 rounded text-xs whitespace-nowrap"
+                    style={{
+                      background: sortByScore ? 'var(--accent-primary)' : 'transparent',
+                      color: sortByScore ? '#fff' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                    title={sortByScore
+                      ? t('dashboard.aiTelemetry.form.sortByScoreOn') || ''
+                      : t('dashboard.aiTelemetry.form.sortByScoreOff') || ''}
+                  >
+                    {sortByScore
+                      ? t('dashboard.aiTelemetry.form.sortByScoreOn')
+                      : t('dashboard.aiTelemetry.form.sortByScoreOff')}
+                  </button>
+                  <span className="text-xs text-muted whitespace-nowrap">
+                    {t('dashboard.aiTelemetry.form.queriesFilterCount', {
+                      shown: filteredSuggestions.length, total: suggestions.length,
+                    })}
+                  </span>
+                </div>
+                <div
+                  className="overflow-y-auto rounded-md p-2"
+                  style={{
+                    maxHeight: 'clamp(360px, 65vh, 720px)',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  {(() => {
+                    const renderRow = (q: QueryCandidate) => {
+                      const isPicked = picked.has(q.text);
+                      const disabled = !isPicked && pickedCap;
+                      const showScore = q.score > 0;
+                      const scoreColor = q.score >= 75 ? 'var(--accent-primary)'
+                        : q.score >= 60 ? 'var(--text-primary)'
+                        : 'var(--text-muted)';
+                      return (
+                        <label
+                          key={q.text}
+                          className="flex items-start gap-2 text-xs px-1 py-0.5 rounded"
+                          style={{
+                            cursor: disabled ? 'not-allowed' : 'pointer',
+                            opacity: disabled ? 0.4 : 1,
+                            background: isPicked ? 'var(--bg-card)' : 'transparent',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <input
+                            type="checkbox" checked={isPicked} disabled={disabled}
+                            onChange={() => togglePicked(q.text)}
+                            className="mt-0.5"
+                          />
+                          {showScore && (
+                            <span
+                              className="font-mono shrink-0 tabular-nums"
+                              style={{ color: scoreColor, minWidth: '1.8rem' }}
+                              title={q.sources.join(', ')}
+                            >
+                              {q.score}
+                            </span>
+                          )}
+                          <span className="break-all">{q.text}</span>
+                        </label>
+                      );
+                    };
+                    if (!groupedByCluster) {
+                      return (
+                        <div className="space-y-1">
+                          {filteredSuggestions.map(renderRow)}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-2">
+                        {groupedByCluster.map(({ cluster, items }) => {
+                          const collapsed = collapsedClusters.has(cluster.cluster_id);
+                          const pickedInCluster = items.filter(q => picked.has(q.text)).length;
+                          return (
+                            <div key={cluster.cluster_id}>
+                              <div
+                                className="flex items-center gap-2 px-1 py-1 rounded sticky top-0"
+                                style={{
+                                  background: 'var(--bg-secondary)',
+                                  borderBottom: '1px solid var(--border-color)',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleClusterCollapse(cluster.cluster_id)}
+                                  className="text-xs px-1"
+                                  style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                  title={collapsed
+                                    ? t('dashboard.aiTelemetry.form.clusterExpand') || ''
+                                    : t('dashboard.aiTelemetry.form.clusterCollapse') || ''}
+                                >
+                                  {collapsed ? '▶' : '▼'}
+                                </button>
+                                <span className="text-xs font-medium break-all flex-1"
+                                      style={{ color: 'var(--text-primary)' }}>
+                                  {cluster.label}
+                                </span>
+                                <span className="text-xs font-mono tabular-nums shrink-0"
+                                      style={{ color: 'var(--text-muted)' }}>
+                                  {pickedInCluster} / {items.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => pickAllInCluster(cluster.cluster_id)}
+                                  disabled={pickedCap}
+                                  className="text-xs px-2 py-0.5 rounded shrink-0"
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-secondary)',
+                                    opacity: pickedCap ? 0.4 : 1,
+                                  }}
+                                >
+                                  {t('dashboard.aiTelemetry.form.clusterPickAll')}
+                                </button>
+                              </div>
+                              {!collapsed && (
+                                <div className="space-y-1 pl-3 pt-1">
+                                  {items.map(renderRow)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <button
+                    type="button" onClick={clearPicked} disabled={picked.size === 0}
+                    className="px-2 py-1 rounded"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      opacity: picked.size === 0 ? 0.45 : 1,
+                    }}
+                  >
+                    {t('dashboard.aiTelemetry.form.queriesClearPicked')}
+                  </button>
+                  <button
+                    type="button" onClick={clearSuggestions}
+                    className="px-2 py-1 rounded"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {t('dashboard.aiTelemetry.form.queriesClearUnpicked')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      <footer
+        className="px-5 py-3 flex items-center justify-end gap-2"
+        style={{ borderTop: '1px solid var(--border-color)' }}
+      >
+        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm rounded-md text-secondary">
+          {t('dashboard.aiTelemetry.form.cancel')}
+        </button>
+        <button
+          type="button" onClick={handleRunNow} disabled={!valid || running}
+          className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
+          style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+        >
+          {running ? '…' : t('dashboard.aiTelemetry.form.runNow')}
+        </button>
+        <button
+          type="button" onClick={handleSave} disabled={!valid || saving}
+          className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+          style={{ background: 'var(--accent-primary)' }}
+        >
+          {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
+        </button>
+      </footer>
+    </section>
+  );
 }
 
 function EngineRow({
@@ -1700,7 +2197,7 @@ function MatrixGrid({ matrix, onPick }: {
           <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             <th className="text-left px-3 py-2 font-medium text-secondary sticky left-0"
               style={{ background: 'var(--bg-card)', minWidth: 240 }}>
-              Query \ Engine
+              {t('dashboard.aiTelemetry.tracking.queryEngineHeader')}
             </th>
             {matrix.engines.map(e => (
               <th key={e} className="px-3 py-2 font-medium text-center"

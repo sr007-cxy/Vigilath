@@ -77,25 +77,57 @@ class WenxinBrowserAdapter(EngineAdapter):
             await human_delay(1.0, 2.0)
 
             answer = ""
-            # chat.baidu.com DOM (2026-04): .cosd-markdown-content inside answer container
-            for sel in [
-                ".cosd-markdown-content",
-                ".cosd-markdown",
-                ".ai-markdown",
-                "div.conversation-flow-answer-container .markdown-body",
-                "div.conversation-flow-answer-container",
-                "#answer_text_id",
-                ".custom-html.md-stream",
-                "[class*='md-stream']",
-            ]:
-                try:
-                    els = await page.locator(sel).all()
-                    if els:
-                        answer = await els[-1].inner_text()
-                        if answer.strip():
+            # chat.baidu.com 把"正文 + follow-up CTA"渲染成两个独立的
+            # .cosd-markdown-content 块,所以要拼接而不是只取 [-1]。
+            # 先锁定到最后一个 answer 容器,避免历史 turn 干扰。
+            try:
+                container = page.locator("div.conversation-flow-answer-container").last
+                if await container.count() > 0:
+                    blocks = await container.locator(".cosd-markdown-content, .cosd-markdown, .ai-markdown").all()
+                    parts: list[str] = []
+                    seen: set[str] = set()
+                    for b in blocks:
+                        try:
+                            t = (await b.inner_text()).strip()
+                        except Exception:
+                            continue
+                        if t and t not in seen:
+                            seen.add(t)
+                            parts.append(t)
+                    if parts:
+                        answer = "\n\n".join(parts)
+            except Exception:
+                pass
+
+            if not answer.strip():
+                # Fallback: 整页扫,拼所有 markdown 块
+                for sel in [
+                    ".cosd-markdown-content",
+                    ".cosd-markdown",
+                    ".ai-markdown",
+                    "div.conversation-flow-answer-container .markdown-body",
+                    "div.conversation-flow-answer-container",
+                    "#answer_text_id",
+                    ".custom-html.md-stream",
+                    "[class*='md-stream']",
+                ]:
+                    try:
+                        els = await page.locator(sel).all()
+                        if not els:
+                            continue
+                        parts = []
+                        for e in els:
+                            try:
+                                t = (await e.inner_text()).strip()
+                            except Exception:
+                                continue
+                            if t:
+                                parts.append(t)
+                        if parts:
+                            answer = "\n\n".join(parts)
                             break
-                except Exception:
-                    continue
+                    except Exception:
+                        continue
 
             # citation 折叠在 "参考 N 个网页" chip 里,需点击展开才能抓 a[href]
             await self._expand_references(page)

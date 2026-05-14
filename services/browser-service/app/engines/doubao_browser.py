@@ -69,6 +69,41 @@ def _is_xvfb_display() -> bool:
     return display.startswith(":") and display.lstrip(":").isdigit()
 
 
+# CloakBrowser/某些代理路径下,豆包 SSE JSON 的 title 字段会以 CP1252
+# codepoint(\uXXXX)形式把 UTF-8 字节编进去,json.loads 出来全是 'ä¸–çºªäº\x81'
+# 这种乱码。手工 CP1252 表 + latin-1 fallback 反编码。跟 yuanbao_browser.py
+# 同款实现,只是局部化在豆包里(两个 engine 都自带,日后可以提到 base.py)。
+_CP1252_HIGH = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85,
+    0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A,
+    0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92,
+    0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+    0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C,
+    0x017E: 0x9E, 0x0178: 0x9F,
+}
+
+
+def _fix_mojibake(s: str) -> str:
+    """还原 'UTF-8 bytes decoded as CP1252/Latin-1' mojibake('世'→'ä¸–')。
+
+    仅在含典型 mojibake 引导字符且能干净往返时改;否则原样返回避免误伤干净串。"""
+    if not s or not any(c in s for c in "äÃâåæçèéêëìíîï"):
+        return s
+    try:
+        bs = bytearray()
+        for ch in s:
+            cp = ord(ch)
+            if cp < 0x100:
+                bs.append(cp)
+            elif cp in _CP1252_HIGH:
+                bs.append(_CP1252_HIGH[cp])
+            else:
+                return s
+        return bs.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return s
+
+
 # Hosts to exclude from citation results
 _DOUBAO_BLOCK_HOSTS = (
     "doubao.com",
@@ -311,11 +346,14 @@ class DoubaoBrowserAdapter(EngineAdapter):
                     engine=self.name, query=query, error="input not found"
                 )
 
-            sys.__stdout__.write("[Doubao-step] click + fill query\n"); sys.__stdout__.flush()
+            sys.__stdout__.write("[Doubao-step] click + insert_text query\n"); sys.__stdout__.flush()
             await input_el.click()
             await human_delay(0.5, 1.0)
             typed_query = f"{query}，请展示引用来源"
-            await input_el.fill(typed_query)
+            # keyboard.insert_text 一次性插入文本(走 Input.insertText CDP 命令,
+            # 不模拟键盘事件),unicode 完整 + 比 fill() 更通用 ——
+            # CloakBrowser 的 fill() 对 Semi Design textarea 不生效,insert_text 可以。
+            await page.keyboard.insert_text(typed_query)
             await human_delay(0.6, 1.2)
 
             # Submit ONCE: prefer the send button (what real users click), fall
@@ -783,12 +821,14 @@ class DoubaoBrowserAdapter(EngineAdapter):
             if not key or key in seen_keys:
                 return
             seen_keys.add(key)
+            # SSE response 在 CloakBrowser 路径下会拿到 CP1252-mojibake 的 title;
+            # 统一在落库前清洗一次,patchright 路径下也不会误改干净串。
             citations.append(
                 Citation(
                     url=cit.url,
                     domain=cit.domain,
-                    title=cit.title,
-                    snippet=cit.snippet,
+                    title=_fix_mojibake(cit.title or ""),
+                    snippet=_fix_mojibake(cit.snippet or ""),
                     position=len(citations) + 1,
                 )
             )

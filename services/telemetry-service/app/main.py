@@ -17,7 +17,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .runner import run_preview, run_topic_once
@@ -25,6 +25,7 @@ from .scheduler import scheduler_loop
 from .storage import db_session, TopicORM
 from .insights import get_or_generate_cell_insight, update_feedback
 from .briefings import generate_briefing_for_topic
+from .query_suggest import suggest_queries, DeepSeekError
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -65,7 +66,7 @@ app = FastAPI(title="Telemetry Service", version="0.1.0", lifespan=lifespan)
 
 class RunNowBody(BaseModel):
     name: str = ""
-    queries: list[str] = Field(..., min_length=1, max_length=10)
+    queries: list[str] = Field(..., min_length=1, max_length=50)
     engines: list[str] = Field(..., min_length=1, max_length=10)
     user_id: Optional[int] = None
 
@@ -166,3 +167,32 @@ async def http_generate_briefing(body: BriefingTriggerBody):
     if result is None:
         return {"status": "not_found"}
     return result
+
+
+# ─── v1.4 query 候选生成(建话题时让用户选,不必手填) ────────
+
+
+class SuggestQueriesBody(BaseModel):
+    seed: str = Field(..., min_length=1, max_length=200)
+    count: int = Field(200, ge=5, le=300)
+    target: str = Field("", max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+    industry: str = Field("", max_length=100)
+
+
+@app.post("/suggest-queries")
+async def http_suggest_queries(body: SuggestQueriesBody):
+    """根据 seed + target 上下文生成 query 候选(LLM + autocomplete 混合 + 4 维评分)。
+
+    target 非空走 GEO-aware prompt + 兜底过滤;缺省退化通用 prompt。
+    返回 {seed, queries: [{text, score, sources}, ...]},按 score 降序。
+    """
+    try:
+        candidates, clusters = await suggest_queries(
+            body.seed, body.count,
+            target=body.target, aliases=body.aliases, industry=body.industry,
+        )
+    except DeepSeekError as e:
+        status = 400 if e.code in ("invalid_seed", "no_key") else 502
+        raise HTTPException(status, detail={"code": e.code, "message": e.message})
+    return {"seed": body.seed, "queries": candidates, "clusters": clusters}

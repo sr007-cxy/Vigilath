@@ -18,6 +18,8 @@ export interface Topic {
   target: string;
   target_aliases: string[];
   queries: string[];
+  query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老话题或未聚类)
+  clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
   engines: EngineId[];
   enabled: boolean;
   last_run_at?: string | null;
@@ -26,11 +28,19 @@ export interface Topic {
   updated_at?: string;
 }
 
+export interface ClusterMetaPersist {
+  cluster_id: number;
+  label: string;
+  size: number;
+}
+
 export interface TopicPayload {
   name: string;
   target: string;
   target_aliases: string[];
   queries: string[];
+  query_cluster_ids?: number[];
+  clusters?: ClusterMetaPersist[];
   engines: EngineId[];
   enabled: boolean;
 }
@@ -41,6 +51,20 @@ export interface RunNowResult {
   answer: string;
   citations: { url: string; domain: string; title: string }[];
   error?: string | null;
+}
+
+export interface QueryCandidate {
+  text: string;
+  score: number;
+  sources: string[];
+  cluster_id?: number;
+}
+
+export interface ClusterMeta {
+  cluster_id: number;
+  label: string;
+  size: number;
+  medoid_index: number;
 }
 
 export interface RunSummary {
@@ -250,6 +274,24 @@ export interface Overview {
   engine_domain_matrix: Partial<Record<EngineId, Record<string, number>>>;
 }
 
+export interface ClusterBreakdownItem {
+  cluster_id: number;
+  label: string;
+  query_count: number;
+  response_count: number;
+  mention_count: number;
+  mention_rate: number;
+  citation_count: number;
+}
+
+export interface IntentBreakdown {
+  topic_id: number;
+  period_days: number;
+  brand_keywords: string[];
+  clusters: ClusterBreakdownItem[];
+  uncategorized: ClusterBreakdownItem;
+}
+
 export function isMockMode(): boolean {
   return String(import.meta.env.VITE_USE_MOCK_AI_TELEMETRY || '').toLowerCase() === '1';
 }
@@ -326,6 +368,44 @@ export const aiTelemetryApi = {
     return request<void>('DELETE', `/topics/${id}`, token);
   },
 
+  async suggestQueries(
+    args: {
+      seed: string; count: number;
+      target?: string; aliases?: string[]; industry?: string;
+    },
+    token: string,
+  ): Promise<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }> {
+    if (isMockMode()) {
+      // mock: 拼出 args.count 条假候选 + 5 簇 + 递减分数,够前端 picker 调试
+      const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价', '案例', '使用场景', '行业应用'];
+      const out: QueryCandidate[] = [];
+      const clusterLabels = ['认知与定义', '对比与差异', '价格与费用', '案例与口碑', '使用与场景'];
+      for (let i = 0; out.length < args.count; i++) {
+        out.push({
+          text: `${args.seed} ${stems[i % stems.length]} ${Math.floor(i / stems.length) + 1}`,
+          score: Math.max(20, 90 - i),
+          sources: i % 4 === 0 ? ['suggest:baidu'] : ['llm:deepseek'],
+          cluster_id: i % 5,
+        });
+      }
+      const clusters: ClusterMeta[] = clusterLabels.map((l, i) => ({
+        cluster_id: i,
+        label: l,
+        size: out.filter(q => q.cluster_id === i).length,
+        medoid_index: out.findIndex(q => q.cluster_id === i),
+      }));
+      return Promise.resolve({ seed: args.seed, queries: out, clusters });
+    }
+    return request<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }>(
+      'POST', '/suggest-queries', token, {
+        seed: args.seed, count: args.count,
+        target: args.target || '',
+        aliases: args.aliases || [],
+        industry: args.industry || '',
+      },
+    );
+  },
+
   async runNow(payload: TopicPayload, token: string): Promise<RunNowResult[]> {
     if (isMockMode()) {
       return Promise.resolve(
@@ -391,6 +471,34 @@ export const aiTelemetryApi = {
   ): Promise<ShareOfVoice> {
     if (isMockMode()) return Promise.resolve(_mockSoV(topicId, periodDays));
     return request<ShareOfVoice>('GET', `/topics/${topicId}/share-of-voice?period=${periodDays}`, token);
+  },
+
+  // 按 picker 端聚出的 intent cluster 把本期 response 分组聚合
+  async getIntentBreakdown(
+    topicId: number, periodDays: number, token: string,
+  ): Promise<IntentBreakdown> {
+    if (isMockMode()) {
+      const mk = (cid: number, label: string, qc: number, rc: number, mc: number, cc: number) => ({
+        cluster_id: cid, label, query_count: qc, response_count: rc,
+        mention_count: mc,
+        mention_rate: rc ? Math.round(mc / rc * 1000) / 1000 : 0,
+        citation_count: cc,
+      });
+      return Promise.resolve({
+        topic_id: topicId, period_days: periodDays, brand_keywords: ['mock'],
+        clusters: [
+          mk(0, '认知与定义', 12, 84, 31, 96),
+          mk(1, '对比与差异', 10, 70, 18, 64),
+          mk(2, '价格与费用', 8, 56, 38, 72),
+          mk(3, '案例与口碑', 6, 42, 25, 50),
+          mk(4, '使用与场景', 4, 28, 9, 22),
+        ],
+        uncategorized: mk(-1, 'uncategorized', 0, 0, 0, 0),
+      });
+    }
+    return request<IntentBreakdown>(
+      'GET', `/topics/${topicId}/intent-breakdown?period=${periodDays}`, token,
+    );
   },
 
   // ── v1 引用追踪 ──────────────────────────

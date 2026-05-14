@@ -161,37 +161,20 @@ async def create_headed_page(
     data/snapshots/{engine}/*.webm (file is finalized only after the caller
     closes the context).
 
-    Backend: 用 patchright(playwright 的 stealth fork)规避 ByteDance 的 CDP
-    指纹检测。2026-05-12 验证:patchright headed + xvfb + 同一份 storage_state,
-    豆包从 silent-block(回答 12 字 / cites=0)→ 流式 1486 字完整回答。
-    其他 engines 仍走 playwright(create_stealth_page),不受影响。
-    """
-    try:
-        from patchright.async_api import async_playwright
-    except ImportError:
-        raise RuntimeError("patchright is not installed (pip install patchright)")
+    Backend(2026-05-13 起):默认 **CloakBrowser**(github.com/CloakHQ/CloakBrowser),
+    49+ 个源码级 C++ patches,比 patchright 的 runtime CDP patch 更彻底。
+    设置 `DOUBAO_BACKEND=patchright` 可切回 patchright 兜底。
 
+    无论哪个 backend 都不能再叠 `apply_stealth_to_context`(我们的 ~13KB stealth
+    JS)—— 那会让 Chrome network service 炸 ERR_NAME_NOT_RESOLVED(2026-05-12
+    bisect 确认)。两个 stealth backend 都已经在 CDP/编译层把 navigator/webgl/
+    permissions 等 spoof 干完了,我们手写的反而干扰。
+    """
+    backend = os.environ.get("DOUBAO_BACKEND", "cloakbrowser").lower()
     international = locale is not None and locale != "zh-CN"
-    pw = await async_playwright().start()
 
     if profile is None:
         profile = _pick_profile()
-    # Try the requested channel first (e.g. "chrome" → real Google Chrome);
-    # if unavailable, fall back to bundled Chromium so the engine still works
-    # in environments without google-chrome installed.
-    last_err = None
-    browser = None
-    for ch in (channel, None) if channel else (None,):
-        try:
-            launch_opts = get_launch_options(headless=False, profile=profile, channel=ch)
-            browser = await pw.chromium.launch(**launch_opts)
-            break
-        except Exception as e:
-            last_err = e
-            continue
-    if browser is None:
-        await pw.stop()
-        raise RuntimeError(f"create_headed_page: launch failed (channel={channel}): {last_err}")
 
     if locale and timezone_id:
         ctx_opts = get_context_options(
@@ -211,16 +194,43 @@ async def create_headed_page(
         ctx_opts["record_video_dir"] = str(get_snapshot_dir(engine_name))
         ctx_opts["record_video_size"] = {"width": 1920, "height": 1080}
 
-    context = await browser.new_context(**ctx_opts)
+    pw = None
+    browser = None
 
-    # 不调 apply_stealth_to_context:patchright 自己已在 CDP 层做完整 stealth,
-    # 再叠我们的 ~13KB stealth JS 会让 Chrome network service 炸 DNS
-    # (实测 ERR_NAME_NOT_RESOLVED,2026-05-12 bisect 确认)。patchright 内置
-    # 的 navigator/webgl/permissions 等 spoof 比我们手写的更彻底。
+    if backend == "cloakbrowser":
+        try:
+            from cloakbrowser import launch_context_async
+        except ImportError:
+            raise RuntimeError("cloakbrowser is not installed (pip install cloakbrowser)")
+        # CloakBrowser 自带 stealth chromium binary,没有 channel 概念。
+        # launch_context_async 直接返回 context(无独立 browser 句柄),
+        # 关闭只需 close context;pw_ref/headed_browser 设 None 让 close 兼容路径走过。
+        context = await launch_context_async(headless=False, **ctx_opts)
+    else:
+        # patchright fallback path
+        try:
+            from patchright.async_api import async_playwright
+        except ImportError:
+            raise RuntimeError("patchright is not installed (pip install patchright)")
+        pw = await async_playwright().start()
+        last_err = None
+        for ch in (channel, None) if channel else (None,):
+            try:
+                launch_opts = get_launch_options(headless=False, profile=profile, channel=ch)
+                browser = await pw.chromium.launch(**launch_opts)
+                break
+            except Exception as e:
+                last_err = e
+                continue
+        if browser is None:
+            await pw.stop()
+            raise RuntimeError(f"create_headed_page: launch failed (channel={channel}): {last_err}")
+        context = await browser.new_context(**ctx_opts)
 
     page = await context.new_page()
 
-    # Attach pw + browser references so caller can close them later
+    # Attach pw + browser references so caller can close them later (both None
+    # for cloakbrowser since it manages lifecycle internally).
     page._pw_ref = pw
     page._headed_browser = browser
     return page, context

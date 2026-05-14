@@ -38,13 +38,8 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ de
 const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
 const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
-const DashboardHome = lazy(() => import('./pages/Dashboard/DashboardHome').then(m => ({ default: m.DashboardHome })));
 const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ default: m.Compose })));
-const DashboardInbox = lazy(() => import('./pages/Dashboard/Inbox').then(m => ({ default: m.Inbox })));
 const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
-const DashboardStats = lazy(() => import('./pages/Dashboard/Stats').then(m => ({ default: m.Stats })));
-const PolicyEditor = lazy(() => import('./pages/Dashboard/PolicyEditor').then(m => ({ default: m.PolicyEditor })));
-const PlatformAccounts = lazy(() => import('./pages/Dashboard/PlatformAccounts').then(m => ({ default: m.PlatformAccounts })));
 const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
 const SentimentSettings = lazy(() => import('./pages/Dashboard/sentiment/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -109,14 +104,15 @@ function App() {
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>
               <Route path="/dashboard" element={<DashboardLayout />}>
-                <Route index element={<DashboardHome />} />
+                {/* 首页 = 配置(原 AI 遥测的「话题配置」tab)
+                    key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
+                <Route index element={<AiTelemetry key="config" views={['config']} />} />
                 <Route path="compose" element={<Compose />} />
-                <Route path="inbox" element={<DashboardInbox />} />
                 <Route path="posts" element={<DashboardPosts />} />
-                <Route path="stats" element={<DashboardStats />} />
-                <Route path="policy" element={<PolicyEditor />} />
-                <Route path="accounts" element={<PlatformAccounts />} />
-                <Route path="ai-telemetry" element={<AiTelemetry />} />
+                {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
+                <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />
+                {/* 优化建议提升为顶级 */}
+                <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />
