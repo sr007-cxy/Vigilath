@@ -45,7 +45,13 @@ class AiTelemetryTopicORM(Base):
     target = Column(String, nullable=False, default="")
     target_aliases_json = Column(Text, nullable=False, default="[]")    # list[str]
 
-    queries_json = Column(Text, nullable=False, default="[]")   # list[str] | list[{text, created_at, cluster_id?}]
+    # v2(Phase C)新增 — 种子提示词列表,审核固化只增不改
+    # list[{text, status, submitted_at, approved_at?, rejected_at?, reviewer_id?}]
+    seed_prompts_json = Column(Text, nullable=False, default="[]")
+
+    # v2(Phase C)起 query 项 schema 扩展加 status / submitted_at / approved_at:
+    # list[str] | list[{text, created_at, cluster_id?}] | list[{text, status, submitted_at, ...}]
+    queries_json = Column(Text, nullable=False, default="[]")
     clusters_json = Column(Text, nullable=False, default="[]")  # list[{cluster_id, label, size}]
     engines_json = Column(Text, nullable=False, default="[]")   # list[engine_id]
     enabled = Column(Boolean, nullable=False, default=True)
@@ -204,6 +210,29 @@ class ClusterMeta(BaseModel):
     size: int
 
 
+# Phase C — 审核固化:种子词 + query 的审核状态机
+ReviewStatus = str  # "pending" | "approved" | "rejected"
+
+
+class SeedPromptItem(BaseModel):
+    text: str
+    status: ReviewStatus = "pending"
+    submitted_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    reviewer_id: Optional[int] = None
+
+
+class QueryItem(BaseModel):
+    text: str
+    cluster_id: Optional[int] = None
+    # Phase C 审核固化:legacy 数据 migration 时默认 "approved"
+    status: ReviewStatus = "approved"
+    submitted_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    reviewer_id: Optional[int] = None
+
+
 class TopicPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     target: str = Field("", max_length=128)
@@ -216,6 +245,11 @@ class TopicPayload(BaseModel):
     enabled: bool = True
 
 
+class SeedPromptSubmitPayload(BaseModel):
+    """甲方追加新种子词 — POST /topics/{id}/seed-prompts."""
+    text: str = Field(..., min_length=1, max_length=256)
+
+
 class TopicOut(BaseModel):
     id: int
     name: str
@@ -223,7 +257,10 @@ class TopicOut(BaseModel):
     target_aliases: list[str]
     queries: list[str]
     query_cluster_ids: list[int]
+    # Phase C — 跟 queries 同长的 status 数组,便于前端徽章渲染
+    query_statuses: list[ReviewStatus]
     clusters: list[ClusterMeta]
+    seed_prompts: list[SeedPromptItem]
     engines: list[str]
     enabled: bool
     last_run_at: Optional[datetime]
@@ -233,23 +270,32 @@ class TopicOut(BaseModel):
 
     @classmethod
     def from_orm_row(cls, r: AiTelemetryTopicORM) -> "TopicOut":
-        # queries_json 兼容三种形态:list[str] / list[{text, created_at}] / list[{text, created_at, cluster_id}]
+        # queries_json 兼容 4 种形态:
+        #   v0: list[str]
+        #   v1: list[{text, created_at}]
+        #   v2 (intent cluster): list[{text, created_at, cluster_id}]
+        #   v3 (Phase C 审核): list[{text, cluster_id?, status, submitted_at?, ...}]
         raw = json.loads(r.queries_json or "[]")
         queries: list[str] = []
         cluster_ids: list[int] = []
+        statuses: list[str] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
                 if t:
                     queries.append(t)
                     cid = q.get("cluster_id")
-                    # 缺失 → -1(未分类),前端用 ≥0 判定是否有有效簇
                     cluster_ids.append(int(cid) if isinstance(cid, int) else -1)
+                    # legacy 无 status 字段的项视为已批准(向后兼容)
+                    statuses.append(q.get("status") or "approved")
             elif isinstance(q, str):
                 queries.append(q)
                 cluster_ids.append(-1)
+                statuses.append("approved")
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
+        seeds_raw = json.loads(getattr(r, "seed_prompts_json", None) or "[]")
+        seeds = [SeedPromptItem(**s) for s in seeds_raw if isinstance(s, dict)]
         return cls(
             id=r.id,
             name=r.name,
@@ -257,7 +303,9 @@ class TopicOut(BaseModel):
             target_aliases=json.loads(r.target_aliases_json or "[]"),
             queries=queries,
             query_cluster_ids=cluster_ids,
+            query_statuses=statuses,
             clusters=clusters,
+            seed_prompts=seeds,
             engines=json.loads(r.engines_json or "[]"),
             enabled=r.enabled,
             last_run_at=r.last_run_at,

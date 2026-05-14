@@ -1968,6 +1968,14 @@ const en = {
                 "rate": "Rate"
               },
               "form": {
+                "step1": "Setup",
+                "step2": "Seed prompts",
+                "step3": "Expansion",
+                "step1Hint": "Fill in the brand, aliases and industry — these define the entity GEO will track.",
+                "step2Hint": "Type a topic seed to generate ~200 candidate queries (append-only, multiple runs accumulate).",
+                "step3Hint": "Select the queries to monitor and the AI engines, then save. Once locked in, queries are append-only.",
+                "prev": "Back",
+                "next": "Next",
                 "name": "Topic name",
                 "namePlaceholder": "e.g. VNET brand probe",
                 "target": "Target (the brand / entity being tracked)",
@@ -2159,7 +2167,13 @@ const en = {
                 },
                 "emptySeed": "No seed prompts pending review",
                 "emptyQueries": "No queries pending review",
-                "phaseBNotice": "* Scaffolding (Phase B): entry + auth gate in place; real review data lands with Phase C"
+                "refresh": "Refresh",
+                "approve": "Approve",
+                "reject": "Reject",
+                "batchApprove": "Approve selected",
+                "batchReject": "Reject selected",
+                "queryCountUnit": "pending",
+                "pickedHint": "{{n}} selected"
               }
             },
             "sentiment": {

@@ -27,7 +27,8 @@ from geo.models.ai_telemetry import (
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
     FeedbackPayload, IntentBreakdownOut, KpiBlock,
     OverviewOut, OwnedSplit, PositionDist, QueryHitCell, ResponseOut, RunNowCitation,
-    RunNowResult, RunOut, ShareOfVoiceOut, TopicOut, TopicPayload, TrackingMatrixOut,
+    RunNowResult, RunOut, SeedPromptSubmitPayload, ShareOfVoiceOut,
+    TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
 from geo.models.user import User
@@ -85,40 +86,79 @@ def _validate_payload(payload: TopicPayload) -> None:
 
 def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
                        cluster_ids: list[int] | None = None) -> str:
-    """把 query 列表升级为 [{text, created_at, cluster_id?}] 形态.
+    """把 query 列表升级为 [{text, created_at, cluster_id?, status, ...}] 形态.
 
-    - 已存在的 query:沿用原 created_at + cluster_id(支持 v1 "新 query 不回填" 语义)
-    - 新加的 query:用 utcnow() 作为 created_at
-    - cluster_id:本次 payload 显式带且 ≥0 时覆盖,否则按 text 从 existing_raw 沿用
-      (避免 PUT 不带 cluster_ids 时悄悄把历史 cluster_id 抹掉)
+    Phase C 起每条 query 都带 `status`(pending/approved/rejected):
+    - 已存在的 query:沿用原 status / created_at / cluster_id / submitted_at / approved_at
+    - 新加的 query:status="pending", submitted_at=now
+    - 校验:不允许删除 approved 的 query(由 caller `_validate_query_diff` 提前拦截)
     """
     now_iso = datetime.utcnow().isoformat()
-    existing_created: dict[str, str] = {}
-    existing_cid: dict[str, int] = {}
+    existing_by_text: dict[str, dict] = {}
     try:
         for q in json.loads(existing_raw or "[]"):
             if isinstance(q, dict) and q.get("text"):
-                existing_created[q["text"]] = q.get("created_at") or now_iso
-                if isinstance(q.get("cluster_id"), int) and q["cluster_id"] >= 0:
-                    existing_cid[q["text"]] = int(q["cluster_id"])
+                existing_by_text[q["text"]] = q
             elif isinstance(q, str):
-                # 老版纯字符串 — 视为 topic 创建时即存在
-                existing_created[q] = now_iso
+                # 老版纯字符串 — 视为 topic 创建时即存在,补 approved 状态
+                existing_by_text[q] = {
+                    "text": q, "created_at": now_iso,
+                    "status": "approved", "approved_at": now_iso,
+                }
     except Exception:  # noqa: BLE001
         pass
     cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
     out = []
     for i, q in enumerate(payload_queries):
-        item = {"text": q, "created_at": existing_created.get(q, now_iso)}
+        prev = existing_by_text.get(q)
+        if prev is not None:
+            item = dict(prev)
+            item.setdefault("created_at", now_iso)
+            item.setdefault("status", "approved")
+        else:
+            # 新 query — 待审核
+            item = {
+                "text": q,
+                "created_at": now_iso,
+                "status": "pending",
+                "submitted_at": now_iso,
+            }
         cid: int | None = None
         if cluster_ok and isinstance(cluster_ids[i], int) and int(cluster_ids[i]) >= 0:
             cid = int(cluster_ids[i])
-        elif q in existing_cid:
-            cid = existing_cid[q]
+        elif isinstance(item.get("cluster_id"), int) and item["cluster_id"] >= 0:
+            cid = int(item["cluster_id"])
         if cid is not None:
             item["cluster_id"] = cid
         out.append(item)
     return json.dumps(out, ensure_ascii=False)
+
+
+def _validate_query_diff(payload_queries: list[str], existing_raw: str | None) -> None:
+    """Phase C 只增不改:已 approved 的 query 不允许从 payload 中消失.
+
+    text 是 query 的身份标识;如果用户把 approved query 改文案,等价于"删一个、加一个",
+    这里阻止该操作 — 抛 422 with code=LOCKED_FIELD.
+    """
+    approved_texts: set[str] = set()
+    try:
+        for q in json.loads(existing_raw or "[]"):
+            if isinstance(q, dict) and q.get("status") == "approved" and q.get("text"):
+                approved_texts.add(q["text"])
+    except Exception:  # noqa: BLE001
+        return  # 解析失败就跳过,不阻塞 update
+    payload_set = set(payload_queries)
+    missing = approved_texts - payload_set
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "LOCKED_FIELD",
+                "field": "queries",
+                "message": "approved queries 不可删除或修改 text",
+                "locked_items": sorted(missing),
+            },
+        )
 
 
 def _get_topic_or_404(db: Session, topic_id: int, user_id: int) -> AiTelemetryTopicORM:
@@ -178,6 +218,8 @@ def update_topic(
 ):
     _validate_payload(payload)
     t = _get_topic_or_404(db, topic_id, current_user.id)
+    # Phase C — 只增不改:approved query 不允许从 payload 消失
+    _validate_query_diff(payload.queries, t.queries_json)
     t.name = payload.name.strip()
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
@@ -203,6 +245,39 @@ def delete_topic(
     t = _get_topic_or_404(db, topic_id, current_user.id)
     db.delete(t)
     db.commit()
+
+
+# ─────────── Phase C — 种子提示词审核固化 ────────────
+
+
+@router.post("/topics/{topic_id}/seed-prompts", response_model=TopicOut)
+def submit_seed_prompt(
+    topic_id: int,
+    payload: SeedPromptSubmitPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """甲方追加新种子提示词 — 默认 status=pending,等 admin 审核."""
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    try:
+        seeds = json.loads(t.seed_prompts_json or "[]")
+    except Exception:  # noqa: BLE001
+        seeds = []
+    if not isinstance(seeds, list):
+        seeds = []
+    text = payload.text.strip()
+    # 同一 topic 下种子词文本不允许重复
+    if any(isinstance(s, dict) and s.get("text") == text for s in seeds):
+        raise HTTPException(409, {"code": "DUPLICATE", "message": "种子提示词已存在"})
+    seeds.append({
+        "text": text,
+        "status": "pending",
+        "submitted_at": datetime.utcnow().isoformat(),
+    })
+    t.seed_prompts_json = json.dumps(seeds, ensure_ascii=False)
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
 
 
 # ─────────────────────────── Run-now passthrough ──────────────

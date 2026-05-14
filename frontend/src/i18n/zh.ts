@@ -1974,6 +1974,14 @@ const zh = {
                 "rate": "评分"
               },
               "form": {
+                "step1": "设置",
+                "step2": "种子提示词",
+                "step3": "泛化扩展",
+                "step1Hint": "填写品牌词、别名与行业 — 这些是 GEO 衡量的「被检测主体」",
+                "step2Hint": "输入主题种子,生成约 200 条候选问题(只增不改,本轮可多次累积)",
+                "step3Hint": "勾选要监测的 Query、选择 AI 引擎并保存。Query 一经固化只能新增,不能修改。",
+                "prev": "上一步",
+                "next": "下一步",
                 "name": "话题名",
                 "namePlaceholder": "例如:VNET 品牌问询",
                 "target": "检索词(被检测的品牌 / 实体)",
@@ -2165,7 +2173,13 @@ const zh = {
                 },
                 "emptySeed": "暂无待审核的种子提示词",
                 "emptyQueries": "暂无待审核的 Query",
-                "phaseBNotice": "* 当前为脚手架版本(Phase B):入口 + 守门已就绪;真实待审核数据将在 Phase C(配置审核固化)接入后展示"
+                "refresh": "刷新",
+                "approve": "批准",
+                "reject": "拒绝",
+                "batchApprove": "批量批准",
+                "batchReject": "批量拒绝",
+                "queryCountUnit": "条待审",
+                "pickedHint": "已选 {{n}}"
               }
             },
             "sentiment": {

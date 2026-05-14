@@ -12,6 +12,17 @@ export type EngineId =
 export const CN_ENGINES: EngineId[] = ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao'];
 export const GLOBAL_ENGINES: EngineId[] = ['chatgpt', 'claude', 'gemini', 'grok', 'copilot'];
 
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SeedPrompt {
+  text: string;
+  status: ReviewStatus;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  reviewer_id?: number | null;
+}
+
 export interface Topic {
   id: number;
   name: string;
@@ -19,7 +30,9 @@ export interface Topic {
   target_aliases: string[];
   queries: string[];
   query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老话题或未聚类)
+  query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
   clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
+  seed_prompts?: SeedPrompt[];       // Phase C — 已提交的种子词列表
   engines: EngineId[];
   enabled: boolean;
   last_run_at?: string | null;
@@ -366,6 +379,11 @@ export const aiTelemetryApi = {
       return Promise.resolve();
     }
     return request<void>('DELETE', `/topics/${id}`, token);
+  },
+
+  // Phase C — 甲方追加种子提示词(待审核)
+  async submitSeedPrompt(topicId: number, text: string, token: string): Promise<Topic> {
+    return request<Topic>('POST', `/topics/${topicId}/seed-prompts`, token, { text });
   },
 
   async suggestQueries(
