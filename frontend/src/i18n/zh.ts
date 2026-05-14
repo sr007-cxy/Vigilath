@@ -87,7 +87,7 @@ const zh = {
             "login": "登录",
             "register": "注册",
             "signedInAs": "已登录为",
-            "dashboard": "答案引擎优化",
+            "dashboard": "AI 品牌增长",
             "adminReview": "审核",
             "sentiment": "舆情监控",
             "account": "账户中心",
@@ -1787,7 +1787,7 @@ const zh = {
             }
           },
           "dashboard": {
-            "title": "答案引擎优化",
+            "title": "AI 品牌增长",
             "nav": {
               "sentiment": "舆情监测",
               "config": "配置",
