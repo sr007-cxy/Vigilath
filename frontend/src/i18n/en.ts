@@ -1780,17 +1780,21 @@ const en = {
             }
           },
           "dashboard": {
-            "title": "Dashboard",
+            "title": "AEO",
             "nav": {
-              "home": "Home",
               "sentiment": "Sentinel",
+              "config": "Setup",
               "compose": "Compose",
-              "inbox": "Inbox",
+              "content": "Content",
               "posts": "Posts",
-              "stats": "Stats",
-              "policy": "Policy",
-              "accounts": "Accounts",
-              "aiTelemetry": "AI Telemetry"
+              "aiTelemetry": "AI Telemetry",
+              "insights": "Recommendations"
+            },
+            "config": {
+              "subtitle": "Configure tracked targets, query angles, and AI engines"
+            },
+            "insights": {
+              "subtitle": "Diagnostic findings and next-week action items, generated from run data"
             },
             "home": {
               "title": "Dashboard",
@@ -1817,7 +1821,7 @@ const en = {
               "tabTracking": "Mentions",
               "tabBriefings": "Insights",
               "tabConfig": "Topics",
-              "tabResults": "Results",
+              "tabResults": "Telemetry detail",
               "newTopic": "New topic",
               "editTopic": "Edit topic",
               "backToList": "Back to topics",

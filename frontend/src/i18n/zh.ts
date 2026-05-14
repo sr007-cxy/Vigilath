@@ -1786,17 +1786,21 @@ const zh = {
             }
           },
           "dashboard": {
-            "title": "工作台",
+            "title": "AEO",
             "nav": {
-              "home": "首页",
               "sentiment": "舆情监测",
+              "config": "配置",
               "compose": "撰写",
-              "inbox": "收件箱",
+              "content": "内容管理",
               "posts": "帖子",
-              "stats": "统计",
-              "policy": "策略",
-              "accounts": "平台账户",
-              "aiTelemetry": "AI 遥测"
+              "aiTelemetry": "AI 遥测",
+              "insights": "优化建议"
+            },
+            "config": {
+              "subtitle": "配置要追踪的检索词、问题角度和 AI 引擎"
+            },
+            "insights": {
+              "subtitle": "基于跑批数据生成的诊断结论与下周行动建议"
             },
             "home": {
               "title": "工作台",
@@ -1823,7 +1827,7 @@ const zh = {
               "tabTracking": "引用追踪",
               "tabBriefings": "优化建议",
               "tabConfig": "话题配置",
-              "tabResults": "跑批结果",
+              "tabResults": "遥测详情",
               "newTopic": "新建话题",
               "editTopic": "编辑话题",
               "backToList": "返回话题列表",

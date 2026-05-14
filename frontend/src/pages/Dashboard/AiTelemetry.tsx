@@ -1,11 +1,7 @@
-// AI 遥测 工作台页 — 配置话题 + 查看跑批结果.
-//
-// Tab 1「话题配置」:
-//   - 列表:启用 / 话题名 / Query 数 / 引擎数 / 最近跑 / 状态 / 操作
-//   - 新建/编辑 Modal:话题名 + Query 多行 + 引擎 10 复选(国内/海外分组)+ 启用开关
-//   - 立即试跑:点「立即试跑一次」直接调 /run-now,结果就在 modal 底部展示
-//
-// Tab 2「跑批结果」:第一版占位 (Step 3 再做)
+// AI 遥测 工作台页 — 一个组件承载 3 个 route:
+//   /dashboard            views=['config']                  — 话题配置(新 dashboard 首页)
+//   /dashboard/ai-telemetry  views=['overview','tracking','results'] — 遥测看板
+//   /dashboard/insights   views=['briefings']               — 优化建议
 //
 // 频率由后端固定为 daily,前端不暴露时间选择.
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
@@ -55,10 +51,15 @@ function InfoHint({ text }: { text: string }) {
   );
 }
 
-export function AiTelemetry() {
+const ALL_TABS: TabKey[] = ['overview', 'tracking', 'briefings', 'config', 'results'];
+
+export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const { t } = useTranslation();
   const token = localStorage.getItem('token') || '';
-  const [tab, setTab] = useState<TabKey>('overview');
+  const visibleTabs = (views && views.length > 0 ? views : ALL_TABS);
+  const showTabBar = visibleTabs.length > 1;
+  const showNewTopicBtn = visibleTabs.includes('config');
+  const [tab, setTab] = useState<TabKey>(visibleTabs[0]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
@@ -131,9 +132,19 @@ export function AiTelemetry() {
     );
   }
 
+  // 单 view 模式下,标题 / 副标题用对应导航项的文案,而不是统一的 "AI 遥测"
+  const headTitleKey =
+    visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.nav.config' :
+    visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.nav.insights' :
+    'dashboard.aiTelemetry.title';
+  const subtitleKey =
+    visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.config.subtitle' :
+    visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.insights.subtitle' :
+    'dashboard.aiTelemetry.subtitle';
+
   return (
     <div className="space-y-4">
-      <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
+      <PageHead titleKey={headTitleKey} titleFallback="AI Telemetry" />
 
       <header className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -148,37 +159,41 @@ export function AiTelemetry() {
           </span>
           <div>
             <h1 className="text-xl font-semibold text-primary leading-tight">
-              {t('dashboard.aiTelemetry.title')}
+              {t(headTitleKey)}
             </h1>
-            <p className="text-xs text-secondary mt-0.5">{t('dashboard.aiTelemetry.subtitle')}</p>
+            <p className="text-xs text-secondary mt-0.5">{t(subtitleKey)}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing(null)}
-          className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
-          style={{ background: 'var(--accent-primary)' }}
-        >
-          + {t('dashboard.aiTelemetry.newTopic')}
-        </button>
+        {showNewTopicBtn && (
+          <button
+            type="button"
+            onClick={() => setEditing(null)}
+            className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
+            style={{ background: 'var(--accent-primary)' }}
+          >
+            + {t('dashboard.aiTelemetry.newTopic')}
+          </button>
+        )}
       </header>
 
-      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
-        {(['overview', 'tracking', 'briefings', 'config', 'results'] as TabKey[]).map(k => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className="px-3 py-2 text-sm -mb-px"
-            style={{
-              borderBottom: tab === k ? '2px solid var(--accent-primary)' : '2px solid transparent',
-              color: tab === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
-            }}
-          >
-            {t(`dashboard.aiTelemetry.tab${k.charAt(0).toUpperCase() + k.slice(1)}`)}
-          </button>
-        ))}
-      </div>
+      {showTabBar && (
+        <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border-color)' }}>
+          {visibleTabs.map(k => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setTab(k)}
+              className="px-3 py-2 text-sm -mb-px"
+              style={{
+                borderBottom: tab === k ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                color: tab === k ? 'var(--accent-primary)' : 'var(--text-secondary)',
+              }}
+            >
+              {t(`dashboard.aiTelemetry.tab${k.charAt(0).toUpperCase() + k.slice(1)}`)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === 'overview' && <OverviewTab topics={topics} token={token} />}
       {tab === 'tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
