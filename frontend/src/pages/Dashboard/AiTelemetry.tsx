@@ -134,11 +134,11 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
     );
   }
 
-  // 单 view 模式下,标题 / 副标题用对应导航项的文案,而不是统一的 "AI 遥测"
+  // 标题 / 副标题:跟侧边栏菜单同源(用 dashboard.nav.*),subtitle 各 view 独立
   const headTitleKey =
     visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.nav.config' :
     visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.nav.insights' :
-    'dashboard.aiTelemetry.title';
+    'dashboard.nav.aiTelemetry';
   const subtitleKey =
     visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.config.subtitle' :
     visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.insights.subtitle' :

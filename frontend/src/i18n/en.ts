@@ -87,7 +87,7 @@ const en = {
             "login": "Log in",
             "register": "Sign up",
             "signedInAs": "Signed in as",
-            "dashboard": "Dashboard",
+            "dashboard": "AEO",
             "sentiment": "Sentinel",
             "account": "Account",
             "logout": "Sign out"
@@ -1783,12 +1783,12 @@ const en = {
             "title": "AEO",
             "nav": {
               "sentiment": "Sentinel",
-              "config": "Setup",
-              "compose": "Compose",
-              "content": "Content",
-              "posts": "Posts",
-              "aiTelemetry": "AI Telemetry",
-              "insights": "Recommendations"
+              "config": "Intent",
+              "compose": "Content Gen",
+              "content": "Library",
+              "posts": "Distribution",
+              "aiTelemetry": "Monitoring",
+              "insights": "Feedback Loop"
             },
             "config": {
               "subtitle": "Configure tracked targets, query angles, and AI engines"

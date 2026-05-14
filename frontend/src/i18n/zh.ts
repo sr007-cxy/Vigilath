@@ -87,7 +87,7 @@ const zh = {
             "login": "登录",
             "register": "注册",
             "signedInAs": "已登录为",
-            "dashboard": "工作台",
+            "dashboard": "AEO",
             "sentiment": "舆情监控",
             "account": "账户中心",
             "logout": "退出登录"
@@ -1789,12 +1789,12 @@ const zh = {
             "title": "AEO",
             "nav": {
               "sentiment": "舆情监测",
-              "config": "配置",
-              "compose": "撰写",
-              "content": "内容管理",
-              "posts": "帖子",
-              "aiTelemetry": "AI 遥测",
-              "insights": "优化建议"
+              "config": "意图建模",
+              "compose": "内容生产",
+              "content": "素材库",
+              "posts": "渠道分发",
+              "aiTelemetry": "AI 监测",
+              "insights": "闭环迭代"
             },
             "config": {
               "subtitle": "配置要追踪的检索词、问题角度和 AI 引擎"

@@ -133,7 +133,7 @@ export function DashboardLayout() {
             background: 'var(--bg-card)',
           }}
         >
-          {/* Tenant header */}
+          {/* Tenant header — 只显示品牌名,邮箱在顶 Header 的账户下拉里 */}
           <div
             className="hidden md:flex items-center gap-2 p-4 border-b"
             style={{ borderColor: 'var(--border-color)' }}
@@ -144,12 +144,9 @@ export function DashboardLayout() {
             >
               {user?.email?.charAt(0).toUpperCase() ?? 'U'}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate text-primary">
-                {t('dashboard.title')}
-              </p>
-              <p className="text-xs text-secondary truncate">{user?.email}</p>
-            </div>
+            <p className="text-sm font-semibold truncate text-primary">
+              {t('dashboard.title')}
+            </p>
           </div>
 
           {/* Nav items */}
