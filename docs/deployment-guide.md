@@ -48,14 +48,19 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/Dev/geo/backend
 EnvironmentFile=/home/ubuntu/Dev/geo/backend/.env
-ExecStart=/home/ubuntu/Dev/geo/backend/.venv/bin/python -m uvicorn geo.main:app --host 127.0.0.1 --port 8070
-Restart=always
-RestartSec=3
+ExecStartPre=/home/ubuntu/Dev/geo/backend/.venv/bin/alembic -c /home/ubuntu/Dev/geo/backend/alembic.ini upgrade head
+ExecStart=/home/ubuntu/Dev/geo/backend/.venv/bin/python -m uvicorn geo.main:app --host 127.0.0.1 --port 8070 --workers 4
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
 ```
 
 - 解释器与依赖都来自 `backend/.venv`
 - 所有 secret（OpenAI/Anthropic/Stripe/MoltsPay/SMTP 等）通过 `backend/.env` 注入，不进 git
 - 日志走 journald，查看：`sudo journalctl -u geo-checker.service -f`
+- `ExecStartPre=alembic upgrade head` 每次 start 前把数据库迁到最新 schema，idempotent；DB 已经是 head 时是几十毫秒的 no-op
+- `--workers 4` 跑 4 个 uvicorn worker；`Restart=on-failure` + `StartLimitBurst=5` 防止历史上「与外部进程抢端口时 systemd 死循环重试 9万+ 次」的复发
 
 ### MoltsPayServer systemd 单元
 
@@ -207,22 +212,30 @@ cd ..
 
 > 注意：后端 venv 使用 `uv` 管理依赖，不用 `pip`。
 
-### 4. 跑数据库 migration（如有新文件）
+### 4. 数据库 migration（alembic 自动）
 
-所有 migration 都是**幂等**的，重跑无副作用：
+从 2026-05-14 起，schema 演进改由 **alembic** 管理。`geo-checker.service` 的 `ExecStartPre` 已经接管这一步——每次 `systemctl restart` 之前自动跑 `alembic upgrade head`，**不需要手工执行任何 migration 命令**。
+
+如果你**改了 ORM model**（加表 / 加列），workflow 是：
 
 ```bash
 cd backend
-.venv/bin/python migrations/001_membership_v2.py
-.venv/bin/python migrations/002_membership_currency.py
-.venv/bin/python migrations/003_membership_plan_update.py
-.venv/bin/python migrations/004_anonymous_check_usage.py
-.venv/bin/python migrations/005_detection_records.py
-.venv/bin/python migrations/006_moltspay_payment.py
-cd ..
+.venv/bin/alembic revision --autogenerate -m "describe change"
+# 人工 review backend/alembic/versions/<hash>_describe_change.py
+git add backend/alembic/versions/<hash>_describe_change.py
 ```
 
-**只需跑新增的那个**。当前最新是 `006`。
+commit 后 restart service 时 ExecStartPre 会自动 upgrade。**不要再往 `backend/migrations/` 写新脚本**——那个目录里的 11 个文件是 alembic 引入前的历史脚本，现已归档到 `backend/migrations/legacy/`。
+
+**新机器初始化**（从空 DB 部署）：
+
+```bash
+cd backend
+.venv/bin/alembic upgrade head                 # 建好所有表
+.venv/bin/python -m seeds.sentiment_platforms  # 灌入 68 个平台目录
+# memberships 5 tier 由 MembershipService.__init__ 自动 seed,无需手动
+cd ..
+```
 
 ### 5. 重启后端
 
@@ -315,14 +328,53 @@ sudo systemctl restart moltspay.service
 
 ## 五、数据库 migration 历史
 
+> 2026-05-14 起 schema 演进改由 **alembic** 管理。下表中的 11 个手糊脚本均已归档到 `backend/migrations/legacy/`,**不应再运行**。当前 prod 状态被 alembic 的 `initial schema baseline` revision (`backend/alembic/versions/*.py`) 锁定;后续所有变更走 `alembic revision --autogenerate`。
+
+### legacy 脚本(2026-05-14 前的手糊 migration,只读)
+
 | 编号 | 作用 | 是否破坏性 |
 |---|---|---|
-| 001 | 会员体系 v2（5 档统一阶梯） | **重新 seed `memberships`/`user_memberships`**。生产跑之前必须备份。 |
+| 001 | 会员体系 v2(5 档统一阶梯) | **重新 seed `memberships`/`user_memberships`**。 |
 | 002 | `memberships` 表新增 `currency` 字段 | 幂等 ALTER |
 | 003 | 会员方案更新 | 幂等 |
 | 004 | 新增 `anonymous_check_usage` 表 | 幂等 |
 | 005 | 新增 `detection_records` 表 | 幂等 |
-| 006 | `payment_sessions` 新增 MoltsPay 字段（provider/chain/tx_hash/wallet_address） | 幂等 ALTER |
+| 006a | `contact_submissions` 表 | 幂等 |
+| 006b | `payment_sessions` 新增 MoltsPay 字段 (provider/chain/tx_hash/wallet_address) | 幂等 ALTER |
+| 007 | `detection_records.deleted_at` 软删除 | 幂等 |
+| 008 | `sentiment_accounts.keyword_groups_json` 列 | 幂等 |
+| 009 | `sentiment_accounts.media_allowlist_json` 列 | 幂等 |
+| 010 | 建 `sentiment_platforms` 表 + 68 条平台目录种子 | 幂等 |
+| 011 | `sentiment_platforms.category` 拆 `media_type`/`industry` | 幂等 |
+
+注:`006` 重号是原手糊系统命名冲突的痕迹,alembic 用随机 hash 替换了这种命名方式。
+
+### 新 schema 变更 workflow(alembic)
+
+```bash
+# 1. 改 ORM model (backend/geo/models/*.py)
+
+# 2. 让 alembic 比对 ORM 和 prod DB,生成 revision
+cd backend
+.venv/bin/alembic revision --autogenerate -m "describe the change"
+
+# 3. 人工 review 生成的文件 — autogenerate 偶尔有幻觉,务必看一眼
+$EDITOR backend/alembic/versions/<hash>_describe_the_change.py
+
+# 4. commit + push,部署到 prod 时 ExecStartPre 会自动跑 upgrade head
+git add backend/alembic/versions/<hash>_describe_the_change.py
+```
+
+### 常用 alembic 命令
+
+```bash
+cd backend
+.venv/bin/alembic current                 # 当前 DB 在哪个 revision
+.venv/bin/alembic history                 # 全部 revision 链
+.venv/bin/alembic upgrade head            # 升级到最新(restart 时 ExecStartPre 自动做)
+.venv/bin/alembic downgrade -1            # 回滚一个 revision(慎用,生产数据丢失风险)
+.venv/bin/alembic stamp head              # 标记当前 DB 为 head 但不真的执行(baseline 已建好的 DB 才用)
+```
 
 ### 主要 API 端点
 
