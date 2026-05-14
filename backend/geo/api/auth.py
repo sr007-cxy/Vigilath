@@ -62,6 +62,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise AppException(status_code=401, message="Could not validate credentials")
     return user
 
+
+async def require_admin(current_user = Depends(get_current_user)):
+    """Reject non-admin users with 403. Wrap any admin-only endpoint with this."""
+    if not getattr(current_user, "is_admin", False):
+        raise AppException(status_code=403, message="Admin only")
+    return current_user
+
 @router.post("/register", response_model=User)
 async def register(user: UserCreate):
     """Register a new user"""

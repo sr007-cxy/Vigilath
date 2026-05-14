@@ -41,6 +41,7 @@ const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').t
 const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ default: m.Compose })));
 const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
 const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
+const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
 const SentimentSettings = lazy(() => import('./pages/Dashboard/sentiment/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
@@ -114,6 +115,8 @@ function App() {
                 {/* 优化建议提升为顶级 */}
                 <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
               </Route>
+              {/* 审核 — admin only,客户端 + 后端双重守门 */}
+              <Route path="/admin/review" element={<AdminReview />} />
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />
               <Route path="/sentiment/settings" element={<SentimentSettings />} />

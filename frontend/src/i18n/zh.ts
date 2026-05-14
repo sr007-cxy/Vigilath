@@ -88,6 +88,7 @@ const zh = {
             "register": "注册",
             "signedInAs": "已登录为",
             "dashboard": "AEO",
+            "adminReview": "审核",
             "sentiment": "舆情监控",
             "account": "账户中心",
             "logout": "退出登录"
@@ -2153,6 +2154,19 @@ const zh = {
               "connected": "已连接",
               "expires": "过期时间",
               "connect": "连接"
+            },
+            "admin": {
+              "review": {
+                "title": "审核",
+                "subtitle": "平台运营审核甲方提交的种子提示词 + 扩展 Query,通过后固化为只增不改",
+                "tab": {
+                  "seed": "种子提示词",
+                  "queries": "扩展 Query"
+                },
+                "emptySeed": "暂无待审核的种子提示词",
+                "emptyQueries": "暂无待审核的 Query",
+                "phaseBNotice": "* 当前为脚手架版本(Phase B):入口 + 守门已就绪;真实待审核数据将在 Phase C(配置审核固化)接入后展示"
+              }
             },
             "sentiment": {
               "title": "舆情监测",

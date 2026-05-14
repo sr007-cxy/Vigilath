@@ -88,6 +88,7 @@ const en = {
             "register": "Sign up",
             "signedInAs": "Signed in as",
             "dashboard": "AEO",
+            "adminReview": "Review",
             "sentiment": "Sentinel",
             "account": "Account",
             "logout": "Sign out"
@@ -2147,6 +2148,19 @@ const en = {
               "connected": "Connected",
               "expires": "Expires",
               "connect": "Connect"
+            },
+            "admin": {
+              "review": {
+                "title": "Review",
+                "subtitle": "Platform ops review tenant-submitted seed prompts + queries; approved items lock and become append-only",
+                "tab": {
+                  "seed": "Seed Prompts",
+                  "queries": "Queries"
+                },
+                "emptySeed": "No seed prompts pending review",
+                "emptyQueries": "No queries pending review",
+                "phaseBNotice": "* Scaffolding (Phase B): entry + auth gate in place; real review data lands with Phase C"
+              }
             },
             "sentiment": {
               "title": "Brand Sentinel",

@@ -14,6 +14,7 @@ class UserORM(Base):
     name = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False, nullable=False)
 
 # Pydantic Models
 class UserBase(BaseModel):
@@ -30,7 +31,8 @@ class UserLogin(BaseModel):
 class User(UserBase):
     id: int
     is_active: bool = True
-    
+    is_admin: bool = False
+
     class Config:
         from_attributes = True
 

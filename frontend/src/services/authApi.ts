@@ -6,6 +6,7 @@ interface User {
   email: string;
   name?: string | null;
   is_active: boolean;
+  is_admin?: boolean;
 }
 
 interface LoginResponse {

@@ -37,6 +37,14 @@ export function Header() {
     }
     return null;
   });
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? !!JSON.parse(stored).is_admin : false;
+    } catch {
+      return false;
+    }
+  });
 
   const { isLoggedIn } = useAuth();
   const { openAuthModal } = useAuthModal();
@@ -59,14 +67,17 @@ export function Header() {
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser.email);
+        setIsAdmin(!!parsedUser.is_admin);
       } else {
         setUser(null);
+        setIsAdmin(false);
       }
     } catch (error) {
       console.error('Error parsing user from localStorage:', error);
       localStorage.removeItem('user');
       localStorage.removeItem('token');
       setUser(null);
+      setIsAdmin(false);
     }
   };
 
@@ -74,6 +85,7 @@ export function Header() {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     setUser(null);
+    setIsAdmin(false);
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
     navigate('/');
@@ -204,6 +216,19 @@ export function Header() {
                       <p className="text-sm font-medium truncate text-primary">{user}</p>
                     </div>
                     <div className="py-2">
+                      {isAdmin && (
+                        <Link
+                          to="/admin/review"
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 bg-surface-hover"
+                          style={{ color: 'var(--accent-primary)', fontWeight: 600 }}
+                        >
+                          <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          {t('nav.adminReview')}
+                        </Link>
+                      )}
                       <Link
                         to="/dashboard"
                         onClick={() => setIsDropdownOpen(false)}
@@ -343,6 +368,19 @@ export function Header() {
                     <p className="text-xs text-muted">{t('nav.signedInAs')}</p>
                     <p className="text-sm font-medium truncate text-primary">{user}</p>
                   </div>
+                  {isAdmin && (
+                    <Link
+                      to="/admin/review"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                      style={{ color: 'var(--accent-primary)', fontWeight: 600 }}
+                    >
+                      <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      {t('nav.adminReview')}
+                    </Link>
+                  )}
                   <Link
                     to="/dashboard"
                     onClick={() => setIsMobileMenuOpen(false)}
