@@ -114,9 +114,10 @@ function App() {
                 <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />
                 {/* 优化建议提升为顶级 */}
                 <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
+                {/* 审核 — admin only,客户端 + 后端双重守门;放进 dashboard 子树
+                    保证左侧 sidebar 在审核页也持续可见 */}
+                <Route path="review" element={<AdminReview />} />
               </Route>
-              {/* 审核 — admin only,客户端 + 后端双重守门 */}
-              <Route path="/admin/review" element={<AdminReview />} />
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />
               <Route path="/sentiment/settings" element={<SentimentSettings />} />

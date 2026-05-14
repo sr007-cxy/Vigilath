@@ -48,7 +48,7 @@ export function AdminReview() {
 
   useEffect(() => {
     if (!isAdmin) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
       return;
     }
     refresh();
@@ -57,9 +57,8 @@ export function AdminReview() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] px-4 sm:px-6 py-6 md:py-8">
-      <div className="max-w-5xl mx-auto space-y-4">
-        <PageHead titleKey="admin.review.title" titleFallback="Review" />
+    <div className="space-y-4">
+      <PageHead titleKey="admin.review.title" titleFallback="Review" />
 
         <header className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -119,7 +118,6 @@ export function AdminReview() {
         {!loading && data && tab === 'queries' && (
           <QueryList items={data.queries} token={token} onChange={refresh} />
         )}
-      </div>
     </div>
   );
 }

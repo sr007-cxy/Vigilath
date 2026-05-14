@@ -10,9 +10,18 @@ interface StoredUser {
   email: string;
   name?: string | null;
   is_active: boolean;
+  is_admin?: boolean;
 }
 
-const sidebarItems = [
+interface SidebarItem {
+  to: string;
+  end: boolean;
+  icon: string;
+  labelKey: string;
+  adminOnly?: boolean;
+}
+
+const sidebarItems: SidebarItem[] = [
   { to: '/dashboard', end: true, icon: 'config', labelKey: 'dashboard.nav.config' },
   { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
   { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },
@@ -20,7 +29,9 @@ const sidebarItems = [
   { to: '/dashboard/ai-telemetry', end: false, icon: 'telemetry', labelKey: 'dashboard.nav.aiTelemetry' },
   // 优化建议从原 AI 遥测 tab 提级到一级菜单
   { to: '/dashboard/insights', end: false, icon: 'insights', labelKey: 'dashboard.nav.insights' },
-] as const;
+  // admin only — 审核入口,放在左侧栏底部
+  { to: '/dashboard/review', end: false, icon: 'review', labelKey: 'nav.adminReview', adminOnly: true },
+];
 
 function SidebarIcon({ name }: { name: string }) {
   switch (name) {
@@ -55,6 +66,12 @@ function SidebarIcon({ name }: { name: string }) {
       return (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      );
+    case 'review':
+      return (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
       );
     default:
@@ -142,27 +159,32 @@ export function DashboardLayout() {
             </p>
           </div>
 
-          {/* Nav items */}
+          {/* Nav items — adminOnly 项只在 is_admin 用户处显示 */}
           <nav className="p-2 md:p-3 flex md:flex-col gap-0.5 overflow-x-auto md:overflow-visible md:flex-1 scrollbar-hide">
-            {sidebarItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2"
-                style={({ isActive }) =>
-                  isActive
-                    ? {
-                        background: 'var(--bg-tertiary)',
-                        color: 'var(--accent-primary)',
-                      }
-                    : { color: 'var(--text-secondary)' }
-                }
-              >
-                <SidebarIcon name={item.icon} />
-                {t(item.labelKey)}
-              </NavLink>
-            ))}
+            {sidebarItems
+              .filter((item) => !item.adminOnly || user?.is_admin)
+              .map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2"
+                  style={({ isActive }) =>
+                    isActive
+                      ? {
+                          background: 'var(--bg-tertiary)',
+                          color: item.adminOnly ? '#ef4444' : 'var(--accent-primary)',
+                        }
+                      : {
+                          color: item.adminOnly ? '#ef4444' : 'var(--text-secondary)',
+                          fontWeight: item.adminOnly ? 600 : undefined,
+                        }
+                  }
+                >
+                  <SidebarIcon name={item.icon} />
+                  {t(item.labelKey)}
+                </NavLink>
+              ))}
           </nav>
         </aside>
 

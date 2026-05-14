@@ -218,7 +218,7 @@ export function Header() {
                     <div className="py-2">
                       {isAdmin && (
                         <Link
-                          to="/admin/review"
+                          to="/dashboard/review"
                           onClick={() => setIsDropdownOpen(false)}
                           className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 bg-surface-hover"
                           style={{ color: 'var(--accent-primary)', fontWeight: 600 }}
@@ -370,7 +370,7 @@ export function Header() {
                   </div>
                   {isAdmin && (
                     <Link
-                      to="/admin/review"
+                      to="/dashboard/review"
                       onClick={() => setIsMobileMenuOpen(false)}
                       className="text-sm font-medium py-2.5 px-3 rounded-lg transition-colors duration-200 flex items-center gap-2"
                       style={{ color: 'var(--accent-primary)', fontWeight: 600 }}
