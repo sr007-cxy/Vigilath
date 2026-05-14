@@ -105,15 +105,16 @@ function App() {
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>
               <Route path="/dashboard" element={<DashboardLayout />}>
-                {/* 首页 = 配置(原 AI 遥测的「话题配置」tab) */}
-                <Route index element={<AiTelemetry views={['config']} />} />
+                {/* 首页 = 配置(原 AI 遥测的「话题配置」tab)
+                    key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
+                <Route index element={<AiTelemetry key="config" views={['config']} />} />
                 <Route path="compose" element={<Compose />} />
                 <Route path="inbox" element={<DashboardInbox />} />
                 <Route path="posts" element={<DashboardPosts />} />
                 {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
-                <Route path="ai-telemetry" element={<AiTelemetry views={['overview', 'tracking', 'results']} />} />
+                <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />
                 {/* 优化建议提升为顶级 */}
-                <Route path="insights" element={<AiTelemetry views={['briefings']} />} />
+                <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />

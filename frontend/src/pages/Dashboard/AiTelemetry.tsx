@@ -60,6 +60,8 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const showTabBar = visibleTabs.length > 1;
   const showNewTopicBtn = visibleTabs.includes('config');
   const [tab, setTab] = useState<TabKey>(visibleTabs[0]);
+  // clamp:若组件被复用(state 残留),把 tab 拉回当前视图允许的范围
+  const currentTab: TabKey = visibleTabs.includes(tab) ? tab : visibleTabs[0];
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
@@ -195,16 +197,16 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
         </div>
       )}
 
-      {tab === 'overview' && <OverviewTab topics={topics} token={token} />}
-      {tab === 'tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
-      {tab === 'briefings' && <BriefingsTab topics={topics} token={token} />}
-      {tab === 'config' && (
+      {currentTab ==='overview' && <OverviewTab topics={topics} token={token} />}
+      {currentTab ==='tracking' && <TrackingTab topics={topics} token={token} onRun={handleRun} />}
+      {currentTab ==='briefings' && <BriefingsTab topics={topics} token={token} />}
+      {currentTab ==='config' && (
         <TopicTable
           topics={topics} loading={loading}
           onEdit={setEditing} onDelete={handleDelete} onRun={handleRun}
         />
       )}
-      {tab === 'results' && <ResultsTab topics={topics} token={token} />}
+      {currentTab ==='results' && <ResultsTab topics={topics} token={token} />}
     </div>
   );
 }
