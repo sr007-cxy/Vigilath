@@ -1904,6 +1904,10 @@ const zh = {
                 "viewDetail": "展开",
                 "noCitations": "无引用",
                 "video": "录像",
+                "colEngine": "引擎",
+                "colQuery": "查询",
+                "colAnswer": "答案摘要",
+                "colCitations": "引用",
                 "started": "已触发,跑批在后台运行,预计 5-30 分钟"
               },
               "tracking": {
@@ -1918,6 +1922,7 @@ const zh = {
                 "firstHitDay": "投放后第 {{n}} 天",
                 "notYet": "暂未命中",
                 "rowHits": "本行命中",
+                "queryEngineHeader": "查询 \\ 引擎",
                 "legend": "图例:✓ = 已命中(点击看原文) · ⏳ 进行中 · ⌛ 待做 · 灰 ✓ 跑过未命中",
                 "hits": "命中",
                 "firstHit": "首次命中",

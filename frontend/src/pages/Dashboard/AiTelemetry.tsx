@@ -1304,14 +1304,10 @@ function ResponseTable({
         <thead>
           <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
             <th className="text-left px-3 py-2 font-medium w-8"></th>
-            <th className="text-left px-3 py-2 font-medium">
-              {t(`dashboard.aiTelemetry.engine.${responses[0].engine}`, responses[0].engine)
-                ? '引擎' : 'Engine'}
-            </th>
-            <th className="text-left px-3 py-2 font-medium">Query</th>
-            <th className="text-left px-3 py-2 font-medium">答案摘要 / Answer</th>
-            <th className="text-left px-3 py-2 font-medium">引用 / Cites</th>
-            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.video')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colEngine')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colQuery')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colAnswer')}</th>
+            <th className="text-left px-3 py-2 font-medium">{t('dashboard.aiTelemetry.results.colCitations')}</th>
           </tr>
         </thead>
         <tbody>
@@ -1336,20 +1332,10 @@ function ResponseTable({
                     )}
                   </td>
                   <td className="px-3 py-2">{r.citations.length}</td>
-                  <td className="px-3 py-2">
-                    {r.video_url ? (
-                      <a
-                        href={r.video_url} target="_blank" rel="noreferrer"
-                        className="text-xs hover:underline"
-                        style={{ color: 'var(--accent-primary)' }}
-                        onClick={e => e.stopPropagation()}
-                      >▶</a>
-                    ) : <span className="text-muted">—</span>}
-                  </td>
                 </tr>
                 {open && (
                   <tr style={{ borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-                    <td colSpan={6} className="px-4 py-3">
+                    <td colSpan={5} className="px-4 py-3">
                       <ResponseDetail row={r} />
                     </td>
                   </tr>

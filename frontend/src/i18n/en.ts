@@ -1898,6 +1898,10 @@ const en = {
                 "viewDetail": "Expand",
                 "noCitations": "No citations",
                 "video": "Replay",
+                "colEngine": "Engine",
+                "colQuery": "Query",
+                "colAnswer": "Answer",
+                "colCitations": "Citations",
                 "started": "Triggered. The run continues in the background (~5-30 min)."
               },
               "tracking": {
@@ -1912,6 +1916,7 @@ const en = {
                 "firstHitDay": "day {{n}} after start",
                 "notYet": "no mention yet",
                 "rowHits": "Row hits",
+                "queryEngineHeader": "Query \\ Engine",
                 "legend": "Legend: ✓ = hit (click to view) · ⏳ in progress · ⌛ pending · grey ✓ = ran without hit",
                 "hits": "hits",
                 "firstHit": "First hit",
