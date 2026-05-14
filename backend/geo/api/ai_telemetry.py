@@ -30,7 +30,6 @@ from geo.models.ai_telemetry import (
     RunNowResult, RunOut, ShareOfVoiceOut, TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
-from geo.models.sentiment import SentimentAccountORM
 from geo.models.user import User
 from sqlalchemy import func
 
@@ -346,11 +345,11 @@ def topic_overview(
     """概览页聚合 — 4 KPI 卡 + 每日引擎趋势 series.
 
     KPI 口径:
-      - visibility = (含品牌词的 response 数 / 总 response 数) × 100
+      - visibility = (Response.hit=True 的成功 response 数 / 总成功 response 数) × 100
       - citations = sum(len(citations_json)) 周期内所有 response
       - growth = citations 相对上一周期的 pct change
       - engines_covered = 本期有 ≥1 成功 response 的引擎数 / topic.engines 总数
-    品牌词来源:用户的 sentiment_account.target + aliases.
+    品牌词来源:topic.target + topic.target_aliases_json(与 runner 落 hit 时同源).
     """
     topic = _get_topic_or_404(db, topic_id, current_user.id)
     period_days = max(1, min(period, 90))
@@ -358,17 +357,11 @@ def topic_overview(
     period_start = now - timedelta(days=period_days)
     prev_start = period_start - timedelta(days=period_days)
 
-    # 品牌词
-    acc = (
-        db.query(SentimentAccountORM)
-          .filter_by(user_id=current_user.id, active=True)
-          .order_by(SentimentAccountORM.created_at.asc())
-          .first()
-    )
+    # 品牌词:用 topic 自己的检测词,与 runner detect_hit 同源
     brand_keywords: list[str] = []
-    if acc:
-        brand_keywords.append(acc.target)
-        brand_keywords.extend(json.loads(acc.aliases_json or "[]"))
+    if topic.target:
+        brand_keywords.append(topic.target)
+    brand_keywords.extend(json.loads(topic.target_aliases_json or "[]"))
     brand_keywords = [k for k in brand_keywords if k]
     brand_lc = [k.lower() for k in brand_keywords]
 
@@ -393,14 +386,15 @@ def topic_overview(
         cit_total = 0
         mention_hit = 0
         succ_engines: set[str] = set()
+        total = 0
         for r in rows:
             cits = json.loads(r.citations_json or "[]")
             cit_total += len(cits)
             if not r.error:
+                total += 1
                 succ_engines.add(r.engine)
-                if brand_lc and r.answer and any(k in r.answer.lower() for k in brand_lc):
+                if r.hit:
                     mention_hit += 1
-        total = sum(1 for r in rows if not r.error)
         visibility = (mention_hit / total * 100) if total > 0 else 0.0
         return {
             "citations": cit_total,
@@ -417,8 +411,10 @@ def topic_overview(
             return None
         return round((curr_val - prev_val) / prev_val * 100, 1)
 
-    # 每日 trend: date -> {engine: citation_count}
+    # 每日 trend: date -> {engine: citation_count} + 每日 hit/total 计 visibility 曲线
     bucket: dict[str, dict[str, int]] = {}
+    day_succ: dict[str, int] = {}
+    day_hit: dict[str, int] = {}
     engines_in_window: set[str] = set()
     for r in rows_curr:
         d = r.created_at.strftime("%Y-%m-%d")
@@ -427,6 +423,10 @@ def topic_overview(
         cits = json.loads(r.citations_json or "[]")
         bucket[d][r.engine] = bucket[d].get(r.engine, 0) + len(cits)
         engines_in_window.add(r.engine)
+        if not r.error:
+            day_succ[d] = day_succ.get(d, 0) + 1
+            if r.hit:
+                day_hit[d] = day_hit.get(d, 0) + 1
 
     # 填补缺失日期为空,保证 sparkline 连续
     trend: list[TrendPoint] = []
@@ -437,8 +437,8 @@ def topic_overview(
         day_vals = bucket.get(d, {})
         trend.append(TrendPoint(date=d, values=day_vals))
         sparkline_cit.append(float(sum(day_vals.values())))
-        # 简化:visibility sparkline 与 citations 用同形状(每天 mention 率算法太重,前端先不展示精确)
-        sparkline_vis.append(float(sum(day_vals.values())))
+        succ = day_succ.get(d, 0)
+        sparkline_vis.append(round(day_hit.get(d, 0) / succ * 100, 1) if succ > 0 else 0.0)
 
     # ── 引用分析:Top domains + owned/other + engine×domain 矩阵 ──
     def _domain_stats(rows: list[AiTelemetryResponseORM]) -> tuple[dict[str, int], int, int, dict[str, dict[str, int]]]:
@@ -539,19 +539,12 @@ def topic_intent_breakdown(
     period_days = max(1, min(period, 90))
     period_start = datetime.utcnow() - timedelta(days=period_days)
 
-    # 品牌词(沿用 overview 口径)
-    acc = (
-        db.query(SentimentAccountORM)
-          .filter_by(user_id=current_user.id, active=True)
-          .order_by(SentimentAccountORM.created_at.asc())
-          .first()
-    )
+    # 品牌词(沿用 overview 口径:topic.target + aliases,与 runner detect_hit 同源)
     brand_keywords: list[str] = []
-    if acc:
-        brand_keywords.append(acc.target)
-        brand_keywords.extend(json.loads(acc.aliases_json or "[]"))
+    if topic.target:
+        brand_keywords.append(topic.target)
+    brand_keywords.extend(json.loads(topic.target_aliases_json or "[]"))
     brand_keywords = [k for k in brand_keywords if k]
-    brand_lc = [k.lower() for k in brand_keywords]
 
     # query → cluster_id 映射
     queries_raw = json.loads(topic.queries_json or "[]")
@@ -596,7 +589,7 @@ def topic_intent_breakdown(
         cid = query_to_cluster.get(r.query, -1)
         bucket = agg.setdefault(cid, {"response": 0, "mention": 0, "citation": 0})
         bucket["response"] += 1
-        if brand_lc and r.answer and any(k in r.answer.lower() for k in brand_lc):
+        if r.hit:
             bucket["mention"] += 1
         bucket["citation"] += len(json.loads(r.citations_json or "[]"))
 
