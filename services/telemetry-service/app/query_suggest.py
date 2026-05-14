@@ -378,6 +378,78 @@ async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
     return _parse_lines(text)
 
 
+# ─── 簇主题摘要(LLM 二次打标)─────────────────────
+
+
+_CLUSTER_LABEL_RE = re.compile(r"^[簇\s]*(\d+)[\s]*[:：]\s*(.+?)\s*$")
+
+
+async def _label_clusters_llm(by_cluster: dict[int, list[dict]],
+                              seed: str = "") -> dict[int, str]:
+    """让 DeepSeek 给每个簇生成 2-8 字主题摘要。一次 call 处理所有簇。
+
+    输入:{cluster_id: [{text, score, ...}, ...]} (每簇候选列表,score 顺序无关)
+    输出:{cluster_id: 主题词} (失败返回空 dict,caller 应回退到 max-score label)
+    """
+    api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if not api_key or not by_cluster:
+        return {}
+
+    blocks: list[str] = []
+    for cid in sorted(by_cluster.keys()):
+        members = by_cluster[cid]
+        top = sorted(members, key=lambda c: c.get("score", 0), reverse=True)[:6]
+        sample = "\n".join(f"  - {m['text']}" for m in top)
+        blocks.append(f"簇 {cid}(共 {len(members)} 条,以下为代表样本):\n{sample}")
+
+    seed_hint = f"\n这些 query 都围绕主题「{seed}」展开。" if seed else ""
+    user_msg = (
+        f"下面是按语义聚成的 {len(by_cluster)} 个簇。请给每个簇生成一个"
+        f"**2-8 个汉字的主题摘要**,概括该簇 query 的共性。"
+        f"摘要可以是「业务方向」「用户身份」「地点偏好」「问询类型」等。"
+        f"{seed_hint}\n\n"
+        f"{chr(10).join(blocks)}\n\n"
+        f"输出格式严格遵守(不要解释、不要标点、不要项目符号):\n"
+        f"簇 0: 主题词\n"
+        f"簇 1: 主题词\n"
+        f"……\n\n"
+        f"主题词要让人一眼看到簇内容,避免「类」「型」「相关」「问题」这类冗余后缀。"
+    )
+
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system",
+             "content": "You generate concise 2-8 character Chinese topic labels for clustered queries. Output only labels in '簇 N: 主题词' format, one per line."},
+            {"role": "user", "content": user_msg},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 600,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(url, json=payload, headers=headers)
+        if r.status_code != 200:
+            return {}
+        data = r.json()
+        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    except (httpx.HTTPError, ValueError, IndexError, KeyError):
+        return {}
+
+    out: dict[int, str] = {}
+    for line in text.splitlines():
+        m = _CLUSTER_LABEL_RE.match(line.strip())
+        if not m:
+            continue
+        cid = int(m.group(1))
+        label = m.group(2).strip().strip("「」\"'")
+        if 2 <= len(label) <= 30:
+            out[cid] = label
+    return out
+
+
 # ─── Autocomplete(Baidu / Bing)────────────────────
 
 
@@ -796,8 +868,8 @@ async def suggest_queries(
             labels, clusters_meta = await cluster_candidates(texts)
             for c, lab in zip(scored, labels):
                 c["cluster_id"] = int(lab)
-            # label 重命名:medoid 是几何中心,容易选到句法奇怪的 query;
-            # 改用簇内最高 score 的 query 当 label,用户视角更直观
+            # label 重命名:先用簇内最高 score 当 fallback label,再尝试 LLM 二次打标
+            # 生成 2-8 字主题摘要(更直观)。LLM 失败回退到 max-score label。
             by_cluster: dict[int, list[dict]] = {}
             for c in scored:
                 by_cluster.setdefault(c["cluster_id"], []).append(c)
@@ -806,6 +878,14 @@ async def suggest_queries(
                 if members:
                     top = max(members, key=lambda c: c["score"])
                     meta["label"] = top["text"]
+            # LLM 二次打标 — 一次 call 给所有簇生成主题摘要
+            try:
+                llm_labels = await _label_clusters_llm(by_cluster, seed=seed)
+                for meta in clusters_meta:
+                    if meta["cluster_id"] in llm_labels:
+                        meta["label"] = llm_labels[meta["cluster_id"]]
+            except Exception:  # noqa: BLE001 — LLM 打标失败保留 max-score label
+                pass
         except Exception:  # noqa: BLE001 — 模型加载/推理失败都不让 endpoint 5xx
             clusters_meta = []
             for c in scored:
