@@ -198,6 +198,7 @@ def create_topic(
         name=payload.name.strip(),
         target=payload.target,
         target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
+        industry=payload.industry,
         queries_json=_queries_with_meta(payload.queries, None, payload.query_cluster_ids),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
@@ -223,6 +224,7 @@ def update_topic(
     t.name = payload.name.strip()
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
+    t.industry = payload.industry
     t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉
     if payload.clusters is not None:

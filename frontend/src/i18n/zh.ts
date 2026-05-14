@@ -1830,6 +1830,7 @@ const zh = {
               "tabResults": "检测明细",
               "newTopic": "新建话题",
               "editTopic": "编辑话题",
+              "viewTopic": "查看话题",
               "backToList": "返回话题列表",
               "empty": "还没有话题,点右上角「新建话题」开始",
               "col": {
@@ -1846,7 +1847,11 @@ const zh = {
                 "delete": "删除",
                 "view": "查看",
                 "run": "跑一次",
-                "running": "运行中"
+                "running": "运行中",
+                "enabled": "已启用",
+                "disabled": "已弃用",
+                "enable": "启用",
+                "disable": "弃用"
               },
               "overview": {
                 "period7": "近 7 天",

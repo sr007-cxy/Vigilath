@@ -44,6 +44,9 @@ class AiTelemetryTopicORM(Base):
     # v1 新增 — 检索词与别名;迁移时从 sentiment account 回填
     target = Column(String, nullable=False, default="")
     target_aliases_json = Column(Text, nullable=False, default="[]")    # list[str]
+    # v2(Phase C)新增 — 行业 / 业务定位.之前只是 suggest-queries 的临时参数,
+    # 现在持久化到 topic 上,编辑时可回显
+    industry = Column(Text, nullable=False, default="")
 
     # v2(Phase C)新增 — 种子提示词列表,审核固化只增不改
     # list[{text, status, submitted_at, approved_at?, rejected_at?, reviewer_id?}]
@@ -237,6 +240,7 @@ class TopicPayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     target: str = Field("", max_length=128)
     target_aliases: list[str] = Field(default_factory=list, max_length=10)
+    industry: str = Field("", max_length=128)
     queries: list[str] = Field(..., min_length=1, max_length=50)
     # 与 queries 同长的 cluster_id 数组,可选;长度不齐或缺省时全部按 0 处理
     query_cluster_ids: Optional[list[int]] = None
@@ -255,6 +259,7 @@ class TopicOut(BaseModel):
     name: str
     target: str
     target_aliases: list[str]
+    industry: str
     queries: list[str]
     query_cluster_ids: list[int]
     # Phase C — 跟 queries 同长的 status 数组,便于前端徽章渲染
@@ -301,6 +306,7 @@ class TopicOut(BaseModel):
             name=r.name,
             target=r.target or "",
             target_aliases=json.loads(r.target_aliases_json or "[]"),
+            industry=getattr(r, "industry", None) or "",
             queries=queries,
             query_cluster_ids=cluster_ids,
             query_statuses=statuses,

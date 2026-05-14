@@ -1824,6 +1824,7 @@ const en = {
               "tabResults": "Telemetry detail",
               "newTopic": "New topic",
               "editTopic": "Edit topic",
+              "viewTopic": "View topic",
               "backToList": "Back to topics",
               "empty": "No topics yet. Click \"New topic\" to start.",
               "col": {
@@ -1840,7 +1841,11 @@ const en = {
                 "delete": "Delete",
                 "view": "View",
                 "run": "Run",
-                "running": "Running"
+                "running": "Running",
+                "enabled": "Enabled",
+                "disabled": "Disabled",
+                "enable": "Enable",
+                "disable": "Disable"
               },
               "overview": {
                 "period7": "7 days",

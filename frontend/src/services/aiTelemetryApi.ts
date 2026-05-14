@@ -28,6 +28,7 @@ export interface Topic {
   name: string;
   target: string;
   target_aliases: string[];
+  industry: string;
   queries: string[];
   query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老话题或未聚类)
   query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
@@ -51,6 +52,7 @@ export interface TopicPayload {
   name: string;
   target: string;
   target_aliases: string[];
+  industry: string;
   queries: string[];
   query_cluster_ids?: number[];
   clusters?: ClusterMetaPersist[];
@@ -317,6 +319,7 @@ const _mockTopics: Topic[] = [
     name: 'VNET 品牌问询',
     target: '世纪互联',
     target_aliases: ['VNET', 'Century Link China'],
+    industry: 'IDC 数据中心',
     queries: ['世纪互联怎么样', '国内 IDC 服务商推荐', 'VNET vs 万国数据'],
     engines: ['deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao', 'chatgpt'],
     enabled: true,

@@ -92,6 +92,8 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
   const [editing, setEditing] = useState<Topic | null | undefined>(undefined);
+  // 进入 editor 时的形态:edit(可写) / view(只读)
+  const [editorMode, setEditorMode] = useState<'edit' | 'view'>('edit');
 
   const refresh = async () => {
     setLoading(true);
@@ -104,12 +106,14 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 
   useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  const handleSave = async (payload: TopicPayload) => {
-    if (editing && editing.id) {
-      await aiTelemetryApi.updateTopic(editing.id, payload, token);
-    } else {
-      await aiTelemetryApi.createTopic(payload, token);
-    }
+  const handleSave = async (payload: TopicPayload): Promise<Topic> => {
+    const saved = editing && editing.id
+      ? await aiTelemetryApi.updateTopic(editing.id, payload, token)
+      : await aiTelemetryApi.createTopic(payload, token);
+    return saved;
+  };
+
+  const handleSaveDone = () => {
     setEditing(undefined);
     refresh();
   };
@@ -117,6 +121,23 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const handleRun = async (id: number) => {
     await aiTelemetryApi.triggerRun(id, token);
     window.alert(t('dashboard.aiTelemetry.results.started'));
+    refresh();
+  };
+
+  const handleToggleEnabled = async (tp: Topic) => {
+    // 后端 PUT /topics/{id} 要求完整 payload — 由当前 topic 数据重建
+    const payload: TopicPayload = {
+      name: tp.name,
+      target: tp.target,
+      target_aliases: tp.target_aliases,
+      industry: tp.industry || '',
+      queries: tp.queries,
+      query_cluster_ids: tp.query_cluster_ids,
+      clusters: tp.clusters,
+      engines: tp.engines,
+      enabled: !tp.enabled,
+    };
+    await aiTelemetryApi.updateTopic(tp.id, payload, token);
     refresh();
   };
 
@@ -140,15 +161,23 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
               ← {t('dashboard.aiTelemetry.backToList')}
             </button>
             <h1 className="text-xl font-semibold text-primary leading-tight">
-              {t(editing ? 'dashboard.aiTelemetry.editTopic' : 'dashboard.aiTelemetry.newTopic')}
+              {t(
+                editorMode === 'view'
+                  ? 'dashboard.aiTelemetry.viewTopic'
+                  : editing
+                    ? 'dashboard.aiTelemetry.editTopic'
+                    : 'dashboard.aiTelemetry.newTopic',
+              )}
             </h1>
           </div>
         </header>
         <TopicEditor
           initial={editing}
           token={token}
+          mode={editorMode}
           onCancel={() => setEditing(undefined)}
           onSave={handleSave}
+          onSaveDone={handleSaveDone}
         />
       </div>
     );
@@ -189,7 +218,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
         {showNewTopicBtn && (
           <button
             type="button"
-            onClick={() => setEditing(null)}
+            onClick={() => { setEditorMode('edit'); setEditing(null); }}
             className="px-3 py-1.5 text-sm rounded-md text-white shadow-sm hover:opacity-90 transition-opacity"
             style={{ background: 'var(--accent-primary)' }}
           >
@@ -223,7 +252,9 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
       {currentTab ==='config' && (
         <TopicTable
           topics={topics} loading={loading}
-          onEdit={setEditing}
+          onEdit={(tp) => { setEditorMode('edit'); setEditing(tp); }}
+          onView={(tp) => { setEditorMode('view'); setEditing(tp); }}
+          onToggleEnabled={handleToggleEnabled}
         />
       )}
       {currentTab ==='results' && <ResultsTab topics={topics} token={token} />}
@@ -234,10 +265,12 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 // ── 话题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onEdit,
+  topics, loading, onEdit, onView, onToggleEnabled,
 }: {
   topics: Topic[]; loading: boolean;
   onEdit: (t: Topic) => void;
+  onView: (t: Topic) => void;
+  onToggleEnabled: (t: Topic) => void;
 }) {
   const { t } = useTranslation();
   if (loading) return <div className="py-12 text-center text-sm text-muted">…</div>;
@@ -266,27 +299,51 @@ function TopicTable({
             <th className="text-left px-3 py-2 font-medium">{c('name')}</th>
             <th className="text-left px-3 py-2 font-medium">{c('queries')}</th>
             <th className="text-left px-3 py-2 font-medium">{c('engines')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('lastRun')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('status')}</th>
             <th className="text-right px-3 py-2 font-medium">{c('actions')}</th>
           </tr>
         </thead>
         <tbody>
           {topics.map(tp => (
             <tr key={tp.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-              <td className="px-3 py-2">{tp.enabled ? '✓' : '—'}</td>
+              <td className="px-3 py-2">
+                <span
+                  className="inline-block px-2 py-0.5 rounded text-xs"
+                  style={{
+                    background: tp.enabled ? 'rgba(34,197,94,0.15)' : 'var(--bg-input)',
+                    color: tp.enabled ? '#16a34a' : 'var(--text-muted)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  {tp.enabled
+                    ? t('dashboard.aiTelemetry.actions.enabled')
+                    : t('dashboard.aiTelemetry.actions.disabled')}
+                </span>
+              </td>
               <td className="px-3 py-2 text-primary">{tp.name}</td>
               <td className="px-3 py-2">{tp.queries.length}</td>
               <td className="px-3 py-2">{tp.engines.length}/10</td>
-              <td className="px-3 py-2 text-secondary">{formatTime(tp.last_run_at)}</td>
-              <td className="px-3 py-2">{renderStatus(tp.last_run_status)}</td>
               <td className="px-3 py-2 text-right space-x-3">
+                <button
+                  className="text-xs text-secondary hover:text-primary"
+                  onClick={() => onView(tp)}
+                >
+                  {t('dashboard.aiTelemetry.actions.view')}
+                </button>
                 <button
                   className="text-xs"
                   style={{ color: 'var(--accent-primary)' }}
                   onClick={() => onEdit(tp)}
                 >
                   {t('dashboard.aiTelemetry.actions.edit')}
+                </button>
+                <button
+                  className="text-xs"
+                  style={{ color: tp.enabled ? 'var(--text-muted)' : 'var(--accent-primary)' }}
+                  onClick={() => onToggleEnabled(tp)}
+                >
+                  {tp.enabled
+                    ? t('dashboard.aiTelemetry.actions.disable')
+                    : t('dashboard.aiTelemetry.actions.enable')}
                 </button>
               </td>
             </tr>
@@ -305,17 +362,6 @@ function formatTime(iso?: string | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return d.toLocaleDateString();
-}
-
-function renderStatus(s?: string | null) {
-  if (!s) return <span className="text-muted">—</span>;
-  const map: Record<string, [string, string]> = {
-    success: ['✓', 'text-emerald-500'],
-    failed: ['✗', 'text-rose-500'],
-    running: ['…', 'text-blue-500'],
-  };
-  const [icon, color] = map[s] || ['?', 'text-muted'];
-  return <span className={color}>{icon} {s}</span>;
 }
 
 // ── 概览 ───────────────────────────────────────────────────────
@@ -1419,11 +1465,14 @@ function ResponseDetail({ row }: { row: ResponseRow }) {
 interface TopicEditorProps {
   initial: Topic | null;
   token: string;
+  mode?: 'edit' | 'view';
   onCancel: () => void;
-  onSave: (payload: TopicPayload) => Promise<void>;
+  onSave: (payload: TopicPayload) => Promise<Topic>;
+  onSaveDone: () => void;
 }
 
-function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
+function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDone }: TopicEditorProps) {
+  const readOnly = mode === 'view';
   const { t } = useTranslation();
   const [name, setName] = useState(initial?.name || '');
   const [target, setTarget] = useState(initial?.target || '');
@@ -1448,7 +1497,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const [seeds, setSeeds] = useState<string[]>(() =>
     (initial?.seed_prompts || []).map(s => s.text).filter(Boolean)
   );
-  const [industry, setIndustry] = useState('');
+  const [industry, setIndustry] = useState(initial?.industry || '');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
   // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果话题
@@ -1541,6 +1590,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
       name: name.trim(),
       target: target.trim(),
       target_aliases: aliases,
+      industry: industry.trim(),
       queries,
       ...(hasAnyCluster ? {
         query_cluster_ids,
@@ -1557,18 +1607,27 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     if (!valid) return;
     setSaving(true);
     try {
-      // Phase C — 编辑已有 topic 时,把 step2 新增的种子词逐条 POST 到审核队列;
-      // 新建场景没有 topic_id,种子词只保留在 client side(待后端补 seed-on-create)
+      // Phase C 编辑场景 — 把新增的种子词先 POST 到审核队列再 PUT topic
       if (initial?.id) {
         const existingTexts = new Set(seedPrompts.map(s => s.text));
-        const newSeeds = seeds
-          .map(s => s.trim())
-          .filter(s => s && !existingTexts.has(s));
+        const newSeeds = seeds.map(s => s.trim()).filter(s => s && !existingTexts.has(s));
         for (const s of newSeeds) {
           await handleSubmitSeed(s);
         }
       }
-      await onSave(buildPayload());
+      const saved = await onSave(buildPayload());
+      // 新建场景 — 拿到 topic.id 后再把本次填的种子词逐条 POST,保证 seed_prompts 落库
+      if (!initial?.id && saved?.id) {
+        const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
+        for (const s of cleanSeeds) {
+          try {
+            await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
+          } catch (e) {
+            setSeedSubmitErr(e instanceof Error ? e.message : String(e));
+          }
+        }
+      }
+      onSaveDone();
     } finally { setSaving(false); }
   };
 
@@ -1745,6 +1804,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
       </div>
 
       <div className="px-5 py-5">
+        <fieldset disabled={readOnly} className="border-0 p-0 m-0 min-w-0">
         {step === 1 && (
           <div className="max-w-2xl space-y-4">
             <label className="block">
@@ -2154,6 +2214,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
             </p>
           </div>
         )}
+        </fieldset>
       </div>
 
       <footer
@@ -2183,7 +2244,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
               {t('dashboard.aiTelemetry.form.next')} →
             </button>
           )}
-          {step === 3 && (
+          {step === 3 && !readOnly && (
             <>
               <button
                 type="button" onClick={handleRunNow} disabled={!valid || running}
