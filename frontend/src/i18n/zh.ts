@@ -87,7 +87,7 @@ const zh = {
             "login": "登录",
             "register": "注册",
             "signedInAs": "已登录为",
-            "dashboard": "AEO",
+            "dashboard": "答案引擎优化",
             "adminReview": "审核",
             "sentiment": "舆情监控",
             "account": "账户中心",
@@ -1787,7 +1787,7 @@ const zh = {
             }
           },
           "dashboard": {
-            "title": "AEO",
+            "title": "答案引擎优化",
             "nav": {
               "sentiment": "舆情监测",
               "config": "配置",
