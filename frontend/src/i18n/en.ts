@@ -2182,27 +2182,6 @@ const en = {
               "expires": "Expires",
               "connect": "Connect"
             },
-            "admin": {
-              "review": {
-                "title": "Review",
-                "subtitle": "Platform ops review tenant-submitted seed prompts + queries; approved items lock and become append-only",
-                "tab": {
-                  "seed": "Seed Prompts",
-                  "queries": "Queries"
-                },
-                "emptySeed": "No seed prompts pending review",
-                "emptyQueries": "No queries pending review",
-                "refresh": "Refresh",
-                "approve": "Approve",
-                "reject": "Reject",
-                "batchApprove": "Approve selected",
-                "batchReject": "Reject selected",
-                "queryCountUnit": "pending",
-                "pickedHint": "{{n}} selected",
-                "targetLabel": "Target:",
-                "byUser": "Submitted by:"
-              }
-            },
             "sentiment": {
               "title": "Brand Sentinel",
               "lastUpdate": "Updated {{ago}}",
@@ -2605,6 +2584,27 @@ const en = {
                   "custom": "Custom"
                 }
               }
+            }
+          },
+          "admin": {
+            "review": {
+              "title": "Review",
+              "subtitle": "Platform ops review tenant-submitted seed prompts + queries; approved items lock and become append-only",
+              "tab": {
+                "seed": "Seed Prompts",
+                "queries": "Queries"
+              },
+              "emptySeed": "No seed prompts pending review",
+              "emptyQueries": "No queries pending review",
+              "refresh": "Refresh",
+              "approve": "Approve",
+              "reject": "Reject",
+              "batchApprove": "Approve selected",
+              "batchReject": "Reject selected",
+              "queryCountUnit": "pending",
+              "pickedHint": "{{n}} selected",
+              "targetLabel": "Target:",
+              "byUser": "Submitted by:"
             }
           },
           "account": {

@@ -2188,27 +2188,6 @@ const zh = {
               "expires": "过期时间",
               "connect": "连接"
             },
-            "admin": {
-              "review": {
-                "title": "审核",
-                "subtitle": "平台运营审核甲方提交的种子提示词 + 扩展 Query,通过后固化为只增不改",
-                "tab": {
-                  "seed": "种子提示词",
-                  "queries": "扩展 Query"
-                },
-                "emptySeed": "暂无待审核的种子提示词",
-                "emptyQueries": "暂无待审核的 Query",
-                "refresh": "刷新",
-                "approve": "批准",
-                "reject": "拒绝",
-                "batchApprove": "批量批准",
-                "batchReject": "批量拒绝",
-                "queryCountUnit": "条待审",
-                "pickedHint": "已选 {{n}}",
-                "targetLabel": "检测词:",
-                "byUser": "提交人:"
-              }
-            },
             "sentiment": {
               "title": "舆情监测",
               "lastUpdate": "上次更新 {{ago}}",
@@ -2611,6 +2590,27 @@ const zh = {
                   "custom": "自定义"
                 }
               }
+            }
+          },
+          "admin": {
+            "review": {
+              "title": "审核",
+              "subtitle": "平台运营审核甲方提交的种子提示词 + 扩展 Query,通过后固化为只增不改",
+              "tab": {
+                "seed": "种子提示词",
+                "queries": "扩展 Query"
+              },
+              "emptySeed": "暂无待审核的种子提示词",
+              "emptyQueries": "暂无待审核的 Query",
+              "refresh": "刷新",
+              "approve": "批准",
+              "reject": "拒绝",
+              "batchApprove": "批量批准",
+              "batchReject": "批量拒绝",
+              "queryCountUnit": "条待审",
+              "pickedHint": "已选 {{n}}",
+              "targetLabel": "检测词:",
+              "byUser": "提交人:"
             }
           },
           "account": {
