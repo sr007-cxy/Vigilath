@@ -132,6 +132,16 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"我们要测:**当真实用户拿这类问题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
         f"AI 会不会主动推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query,每行一条,纯中文。\n"
         f"\n"
+        f"━━━ 主体词锁定(最重要的一条,违反就全废)━━━\n"
+        f"seed「{seed}」里出现的**每一个实体核心词**(尤其是末尾那个标识身份/角色/产品的词),"
+        f"在你产出的每一条 query 里**必须原样保留**,不许换成:\n"
+        f"  - 上位词(律师 → 律所 / 法律服务 / 法律顾问 / 法律团队;医生 → 医院 / 诊所)\n"
+        f"  - 下位词(律师 → 合伙人 / 高级顾问;医生 → 主任医师)\n"
+        f"  - 近义词(顾问 → 咨询师;教练 → 老师)\n"
+        f"如果 seed 是「海外并购律师」,query 里**必须**含「律师」,不能改成「律所」「事务所」「法律服务」。"
+        f"我们要测的就是 AI 在被问到「{seed}」这个**精确身份/产品**时会不会推荐我们,"
+        f"换成上位/下位/近义词就是测错对象,这一类全部作废。\n"
+        f"\n"
         f"━━━ 角色锚定(写之前先在脑里跑一遍)━━━\n"
         f"你不是在写「关于 {seed} 这个行业的 N 个研究问题」,你是在扮演 N 个**正在准备做这件事的真实人**"
         f"——创业者、CFO、家族企业老板、上市公司董秘、海外业务负责人、并购顾问、个人客户……"
@@ -149,8 +159,8 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"     「做 X 的律师适合什么公司」「做 X 的律师适合什么预算」「X 律师适合哪类客户」\n"
         f"❌ **不要做 cartesian product 模板填空** —— 同一句式套不同维度名枚举出来的清单一律作废。\n"
         f"❌ **不要纯关键词堆砌**(「最佳/北京/海外并购/律师/推荐/2024」这种)。\n"
-        f"❌ **不要写 meta 问句**(「X 该怎么选」「X 是什么」之外的所有「X 的 Y 怎么样」「X 的费用多少」"
-        f"这种不带具体处境的元问题尽量少写,占比不超过 10%)。\n"
+        f"❌ **元问题严打** —— 不带具体处境的元问题(「X 的费用是多少」「X 的收费高吗」「X 的收费合理吗」"
+        f"「X 怎么收费」「X 一般多少钱」「X 哪家便宜」)占比**不超过 5%**,且必须带具体场景或身份限定才允许写。\n"
         f"\n"
         f"━━━ 配比 ━━━\n"
         f"  - **决策型 / 推荐型 / 找人型:65%-75%**(主力)\n"
@@ -190,9 +200,12 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"━━━ 坏示例(产出了就当作没产出,不要写这种)━━━\n"
         f"- 做跨境并购的律师适合什么地区(占位词)\n"
         f"- 做跨境并购的律师适合什么场景(占位词)\n"
-        f"- 做跨境并购的律师适合什么类型(占位词)\n"
-        f"- 跨境并购的律师收费合理吗(meta 元问题,无具体处境)\n"
-        f"- 海外并购律师哪家强(太宽泛,无修饰)\n"
+        f"- 做跨境并购的律师适合什么类型/规模/需求/项目/预算/公司(占位词 cartesian product)\n"
+        f"- 跨境并购的律师费用是多少(meta 元问题,无具体处境)\n"
+        f"- 跨境并购的律师收费高吗 / 收费合理吗(meta 元问题,无具体处境)\n"
+        f"- 北京哪家律所擅长跨境并购(seed 是「律师」却写成了「律所」,主体词漂移)\n"
+        f"- 上海哪家律所擅长 SPAC 并购(同上,主体词漂移)\n"
+        f"- 海外并购律师哪家强(太宽泛,无修饰,且像 SEO 词条)\n"
         f"\n"
         f"现在围绕「{seed}」产出 {count} 条 query,每条都要通过「能否反推出一个具体场景」这条自检。"
         f"每行一条,纯中文,不要编号,不要项目符号,不要任何解释。"
@@ -461,6 +474,39 @@ def _drop_target_mentions(items: list[tuple[str, str]],
     return out
 
 
+def _seed_anchor(seed: str) -> str:
+    """提取 seed 的主体锚词 — CJK 取末尾 2 字,EN 取最后一个 content token。
+
+    用于 _drop_anchor_drift 兜底:候选不含 seed 主体词的直接丢,挡住
+    LLM 的近义词漂移(律师→律所、医生→医院等)。
+    """
+    seed = (seed or "").strip()
+    if not seed:
+        return ""
+    if _has_cjk(seed):
+        cjk_only = "".join(c for c in seed if not c.isspace())
+        if len(cjk_only) >= 2:
+            return cjk_only[-2:]
+        return cjk_only
+    tokens = _tokenize(seed)
+    content = [t for t in tokens if t not in _STOP_WORDS_EN]
+    if content:
+        return content[-1]
+    return tokens[-1] if tokens else ""
+
+
+def _drop_anchor_drift(items: list[tuple[str, str]], anchor: str) -> list[tuple[str, str]]:
+    """seed 主体词不在候选里 → 丢。anchor 空 / 长度 <2 时直通。"""
+    if not anchor or len(anchor) < 2:
+        return items
+    a_low = anchor.lower()
+    out: list[tuple[str, str]] = []
+    for text, source in items:
+        if a_low in text.lower():
+            out.append((text, source))
+    return out
+
+
 # ─── 4 维 composite 评分 ───────────────────────────
 
 
@@ -627,6 +673,14 @@ async def suggest_queries(
     if target:
         pairs = [(m["text"], "_") for m in merged.values()]
         kept_texts = {t.lower() for t, _ in _drop_target_mentions(pairs, target, aliases)}
+        merged = {k: v for k, v in merged.items() if v["text"].lower() in kept_texts}
+
+    # seed 主体词锚定过滤 — 不含 seed 末尾主体词的候选全丢,挡住
+    # LLM 的近义词漂移(律师→律所、医生→医院、教练→老师 等)
+    anchor = _seed_anchor(seed)
+    if anchor and len(anchor) >= 2:
+        pairs = [(m["text"], "_") for m in merged.values()]
+        kept_texts = {t.lower() for t, _ in _drop_anchor_drift(pairs, anchor)}
         merged = {k: v for k, v in merged.items() if v["text"].lower() in kept_texts}
 
     if not merged:
