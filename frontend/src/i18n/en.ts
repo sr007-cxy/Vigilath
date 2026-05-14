@@ -1868,7 +1868,7 @@ const en = {
                 "noBrand": "No brand keywords configured. AI visibility cannot be computed — set your brand name/aliases in Account/Brand settings.",
                 "tooltipCitations": "Citations",
                 "tooltipDate": "Date",
-                "intentTitle": "Intent breakdown (AI mention rate by query cluster)",
+                "intentTitle": "Brand mention rate by intent cluster",
                 "intentHint": "Queries were auto-clustered by intent at topic-creation time. Low-mention clusters → content gaps worth filling.",
                 "intentResponseCount": "{{m}} / {{n}}",
                 "intentUncategorized": "Uncategorized",
