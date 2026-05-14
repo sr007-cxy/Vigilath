@@ -1789,11 +1789,11 @@ const zh = {
             "title": "AEO",
             "nav": {
               "sentiment": "舆情监测",
-              "config": "意图建模",
-              "compose": "内容生产",
-              "posts": "渠道分发",
-              "aiTelemetry": "AI 监测",
-              "insights": "闭环迭代"
+              "config": "追踪设置",
+              "compose": "内容创作",
+              "posts": "内容投放",
+              "aiTelemetry": "AI 曝光",
+              "insights": "优化建议"
             },
             "config": {
               "subtitle": "配置要追踪的检索词、问题角度和 AI 引擎"

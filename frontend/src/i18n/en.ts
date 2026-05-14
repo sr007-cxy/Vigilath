@@ -1783,11 +1783,11 @@ const en = {
             "title": "AEO",
             "nav": {
               "sentiment": "Sentinel",
-              "config": "Intent",
-              "compose": "Content Gen",
+              "config": "Tracking",
+              "compose": "Content",
               "posts": "Distribution",
-              "aiTelemetry": "Monitoring",
-              "insights": "Feedback Loop"
+              "aiTelemetry": "AI Visibility",
+              "insights": "Recommendations"
             },
             "config": {
               "subtitle": "Configure tracked targets, query angles, and AI engines"
