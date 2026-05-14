@@ -32,6 +32,23 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _compare_type(_ctx, _col, _meta_col, inspected_type, metadata_type):
+    """Skip noise from SQLite's lack of a VARCHAR/TEXT distinction.
+
+    SQLite stores both as TEXT affinity, so an ORM `Column(String)` reading
+    back from a column that was historically created via raw `ALTER TABLE …
+    ADD COLUMN x TEXT` will always look like a type change to alembic.
+    Returning False suppresses that one case; returning None falls back to
+    alembic's default comparison so genuine type changes (e.g. Integer ↔
+    String, JSON ↔ Text) still surface.
+    """
+    import sqlalchemy as sa
+    str_like = (sa.String, sa.VARCHAR, sa.Text, sa.TEXT)
+    if isinstance(inspected_type, str_like) and isinstance(metadata_type, str_like):
+        return False
+    return None
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -40,6 +57,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=url.startswith("sqlite"),
+        compare_type=_compare_type,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -56,6 +74,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             render_as_batch=settings.DATABASE_URL.startswith("sqlite"),
+            compare_type=_compare_type,
         )
         with context.begin_transaction():
             context.run_migrations()
