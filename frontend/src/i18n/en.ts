@@ -1871,7 +1871,20 @@ const en = {
                 "intentTitle": "Intent breakdown (AI mention rate by query cluster)",
                 "intentHint": "Queries were auto-clustered by intent at topic-creation time. Low-mention clusters → content gaps worth filling.",
                 "intentResponseCount": "{{m}} / {{n}}",
-                "intentUncategorized": "Uncategorized"
+                "intentUncategorized": "Uncategorized",
+                "tipVisibility": "Successful responses whose answer contains a brand keyword ÷ total successful responses this period. Brand keywords come from Account/Brand settings (target + aliases).",
+                "tipCitations": "Sum of citation count across all responses this period — total web pages linked by AI answers.",
+                "tipGrowth": "Period-over-period change of AI Citations: (this − prev) / prev × 100. Green if up, red if down.",
+                "tipEngines": "Engines that produced ≥ 1 successful response this period / total engines configured on this topic.",
+                "tipSaiv": "Share of AI Voice — brand mentions / (brand + all competitors) mentions; measures industry-level AI voice share.",
+                "tipPosition": "Splits each hit into lead / body / tail of the AI answer; lead-position mentions carry the most weight.",
+                "tipOptimalRate": "Share of responses where the brand is the primary recommendation (not a passing mention). Strict rubric, computed across all runs.",
+                "tipCompetitorShare": "Brand and competitors ranked side-by-side by mention count this period, to read relative voice share.",
+                "tipTrend": "Per-day sum of citation count across all responses for each engine — citation activity over time.",
+                "tipIntent": "Queries are auto-clustered by intent at topic-creation time. Clusters with low brand mention-rate mark weak content areas to invest in.",
+                "tipTopDomains": "Top 10 domains by total citation count across all responses this period — who AI links to most.",
+                "tipOwned": "For each citation.domain, substring-match against brand keywords: hit = owned, otherwise other. Benchmark: Profound Owned Citation % (industry avg ~4.3%).",
+                "tipMatrix": "Rows = engines configured, columns = Top 10 domains, cell shade = how often the engine cites that domain. Reveals per-engine citation bias."
               },
               "results": {
                 "selectTopic": "Topic",

@@ -1877,7 +1877,20 @@ const zh = {
                 "intentTitle": "Intent 分布(按 query 簇看 AI 提及率)",
                 "intentHint": "建话题时 query 已自动按意图聚为几簇。命中率低的簇 → 该补这类话题下的内容。",
                 "intentResponseCount": "{{m}} / {{n}}",
-                "intentUncategorized": "未分类"
+                "intentUncategorized": "未分类",
+                "tipVisibility": "本期 answer 含品牌词的成功 response 数 ÷ 总成功 response 数。品牌词取自 账户/品牌设置 的 target + 别名。",
+                "tipCitations": "本期所有 response 的 citations 数累加。反映 AI 答案里链出来的网页总量。",
+                "tipGrowth": "= AI 引用数的同比变化:(本期 − 上期) / 上期 × 100;正绿负红。",
+                "tipEngines": "本期至少有 1 条成功 response 的引擎数 / 话题配置的引擎总数。",
+                "tipSaiv": "Share of AI Voice:品牌被提及次数 / (品牌 + 所有竞品)被提及总次数,衡量行业 AI 声量占比。",
+                "tipPosition": "把命中切成 3 段:开头 lead / 中段 body / 末尾 tail。出现在开头权重最高。",
+                "tipOptimalRate": "AI 把你品牌当主推荐(而非顺带提及)的比例,口径较严,跨累计跑批统计。",
+                "tipCompetitorShare": "把品牌自身与竞品并排,按本期 AI 答复中被提及次数排序,看相对份额。",
+                "tipTrend": "每天该引擎所有 response 的 citations 数之和,看引用随时间的变化。",
+                "tipIntent": "建话题时 query 已自动按意图聚为几簇。簇下品牌提及率低 → 该方向内容是弱点,需补。",
+                "tipTopDomains": "本期所有 response 的 citations.domain 累加排序前 10 — AI 主要在引谁的内容。",
+                "tipOwned": "对每个 citation.domain 做品牌词 substring 匹配:命中=自家,不命中=其他。对标 Profound Owned Citation %(行业均值 ~4.3%)。",
+                "tipMatrix": "行=配置的引擎,列=Top 10 平台,格子色深 = 该引擎引用该平台的次数。看引擎引用偏好差异。"
               },
               "results": {
                 "selectTopic": "选择话题",

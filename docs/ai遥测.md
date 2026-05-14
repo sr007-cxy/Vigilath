@@ -63,6 +63,18 @@ hit = any(k.lower() in r.answer.lower() for k in brand_keywords)
 
 如果用户没配品牌词,卡 #1 显示 0,页面顶部出现琥珀色警告:`未配置品牌词,AI 可见度无法计算...`。
 
+### 3.2.5 v1.3 新增模块(KPI 行下面、趋势图上面)
+
+| 块 | 口径 | 价值 |
+|---|---|---|
+| **AI 声量份额 SAIV** | 品牌被提及次数 / (品牌 + 所有竞品) 被提及总次数 | 行业级 AI 声量占比 (对标 Profound SAIV) |
+| **命中位置分布** | 每条命中切 lead / body / tail 三段统计占比 | 开头位 mention 权重最高 |
+| **AI 答案优选率** | 答复中品牌作为主推荐(非顺带提及)的累计比例 | 跨累计跑批维度,口径较严 |
+| **竞品引用份额差** | 品牌 + 各竞品并排,按本期被提及次数排序的水平柱 | 看相对份额、识别强敌 |
+| **Intent 分布** | 建话题时 query 已按意图聚簇,看每簇 mention 率 | 低 mention 簇 = 内容弱点,该补 |
+
+> 这 5 个块在 `/api/ai-telemetry/topics/{id}/overview` 同一个端点里返回;前端在 KPI 行下面、趋势图上面渲染。竞品名单走 sentiment_account.competitors,品牌词走 target + aliases。
+
 ### 3.3 趋势图(AI 引用趋势)
 
 ```
@@ -262,3 +274,4 @@ cd frontend && npm run build                 # dist 给 nginx 直接读
 - 2026-05-12:初版(概览页 KPI / 趋势图)
 - 2026-05-12 晚:加引用分析 3 个块(Top10 / Owned / heatmap)
 - 2026-05-12 当晚:视觉优化 + 本文档新增架构 / 部署 / 端点章节
+- 2026-05-14:补 v1.3 模块(SAIV / 命中位置 / 优选率 / 竞品份额 / Intent 分布);前端每个 KPI/section 加 `?` 悬浮提示(`tip*` i18n key)

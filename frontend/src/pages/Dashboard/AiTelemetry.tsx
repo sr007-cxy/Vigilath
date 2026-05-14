@@ -24,9 +24,10 @@ import {
   type QueryCandidate, type ClusterMeta,
 } from '../../services/aiTelemetryApi';
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
+import { Tooltip as HintTooltip } from '../../components/Tooltip';
 
 type TabKey = 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
 
@@ -36,6 +37,23 @@ const ENGINE_COLORS: Record<EngineId, string> = {
   chatgpt: '#10A37F', claude: '#C97650', gemini: '#4285F4',
   grok: '#9CA3AF', copilot: '#0078D4',
 };
+
+function InfoHint({ text }: { text: string }) {
+  return (
+    <HintTooltip content={text}>
+      <span
+        role="img"
+        aria-label="info"
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] font-semibold cursor-help align-middle leading-none select-none"
+        style={{
+          background: 'var(--bg-input)',
+          color: 'var(--text-muted)',
+          border: '1px solid var(--border-color)',
+        }}
+      >?</span>
+    </HintTooltip>
+  );
+}
 
 export function AiTelemetry() {
   const { t } = useTranslation();
@@ -358,6 +376,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           sparkline={data?.visibility.sparkline ?? []}
           loading={loading}
           icon="eye"
+          hint={t('dashboard.aiTelemetry.overview.tipVisibility')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiCitations')}
@@ -367,6 +386,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           fmt="int"
           icon="link"
+          hint={t('dashboard.aiTelemetry.overview.tipCitations')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiGrowth')}
@@ -377,6 +397,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           accentByValue
           icon="trend"
+          hint={t('dashboard.aiTelemetry.overview.tipGrowth')}
         />
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiEngines')}
@@ -387,6 +408,7 @@ function OverviewTab({ topics, token }: { topics: Topic[]; token: string }) {
           loading={loading}
           fmt="int"
           icon="cpu"
+          hint={t('dashboard.aiTelemetry.overview.tipEngines')}
         />
       </div>
 
@@ -439,6 +461,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         <h3 className="text-sm font-medium text-primary mb-2 flex items-center gap-1">
           <span style={{ color: 'var(--accent-primary)' }}>📣</span>
           {t('dashboard.aiTelemetry.overview.saivTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipSaiv')} />
         </h3>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-semibold tabular-nums text-primary">
@@ -455,14 +478,16 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         {/* 命中位置分布(检索排名简化版) */}
         {hasSignal && data.brand_count > 0 && (
           <div className="mt-3">
-            <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">
+            <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1 inline-flex items-center gap-1">
               {t('dashboard.aiTelemetry.overview.positionTitle')}
+              <InfoHint text={t('dashboard.aiTelemetry.overview.tipPosition')} />
             </div>
             <PositionBar dist={data.position_dist} />
           </div>
         )}
         <div className="mt-3 text-[11px] text-muted">
-          {t('dashboard.aiTelemetry.overview.optimalRate')}:
+          {t('dashboard.aiTelemetry.overview.optimalRate')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipOptimalRate')} />:
           <span className="text-primary font-semibold ml-1">
             {data.optimal_rate_pct.toFixed(1)}%
           </span>
@@ -475,8 +500,9 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
       {/* 竞品份额对比 */}
       <div className="rounded-lg p-4 md:col-span-2"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <h3 className="text-sm font-medium text-primary mb-3">
+        <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.competitorShareTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipCompetitorShare')} />
         </h3>
         {!hasSignal && (
           <div className="text-xs text-muted py-6 text-center">
@@ -584,8 +610,9 @@ function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null;
   return (
     <div className="rounded-lg p-4"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <h3 className="text-sm font-medium text-primary mb-3">
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
         {t('dashboard.aiTelemetry.overview.intentTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipIntent')} />
       </h3>
       <div className="text-xs text-muted mb-3">
         {t('dashboard.aiTelemetry.overview.intentHint')}
@@ -642,8 +669,9 @@ function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: bool
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <h3 className="text-sm font-medium text-primary mb-3">
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
         {t('dashboard.aiTelemetry.overview.topDomainsTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipTopDomains')} />
       </h3>
       {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
       {!loading && data.length === 0 && (
@@ -715,8 +743,9 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
         boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
       }}
     >
-      <h3 className="text-sm font-medium text-primary mb-3">
+      <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
         {t('dashboard.aiTelemetry.overview.ownedTitle')}
+        <InfoHint text={t('dashboard.aiTelemetry.overview.tipOwned')} />
       </h3>
       {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted">…</div>}
       {!loading && empty && (
@@ -818,8 +847,9 @@ function EngineDomainMatrix({
       }}
     >
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-sm font-medium text-primary">
+        <h3 className="text-sm font-medium text-primary inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.matrixTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipMatrix')} />
         </h3>
         {!empty && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted">
@@ -930,6 +960,7 @@ interface KpiCardProps {
   /** 大数字的颜色:value 为正绿、负红 */
   accentByValue?: boolean;
   icon?: 'eye' | 'link' | 'trend' | 'cpu';
+  hint?: string;
 }
 
 const KPI_ICONS: Record<string, ReactElement> = {
@@ -939,7 +970,7 @@ const KPI_ICONS: Record<string, ReactElement> = {
   cpu: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M4 4h16v16H4z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3" />,
 };
 
-function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue, icon }: KpiCardProps) {
+function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByValue, icon, hint }: KpiCardProps) {
   const display = fmt === 'int'
     ? Math.round(value).toLocaleString()
     : (Number.isInteger(value) ? value.toString() : value.toFixed(1));
@@ -959,7 +990,10 @@ function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByV
       }}
     >
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-secondary">{label}</span>
+        <span className="text-xs text-secondary inline-flex items-center gap-1">
+          {label}
+          {hint && <InfoHint text={hint} />}
+        </span>
         {icon && (
           <svg
             className="w-4 h-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -1052,8 +1086,9 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
       }}
     >
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-sm font-medium text-primary">
+        <h3 className="text-sm font-medium text-primary inline-flex items-center gap-1">
           {t('dashboard.aiTelemetry.overview.trendTitle')}
+          <InfoHint text={t('dashboard.aiTelemetry.overview.tipTrend')} />
         </h3>
         <div className="flex flex-wrap gap-3 text-xs">
           {data.engines.map(e => (
@@ -1094,7 +1129,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
               allowDecimals={false}
               width={32}
             />
-            <Tooltip
+            <RTooltip
               contentStyle={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
