@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { PageHead } from '../../components/PageHead';
+import { TagInput } from './sentiment/components/TagInput';
 import {
   aiTelemetryApi, CN_ENGINES, GLOBAL_ENGINES,
   type EngineId, type Topic, type TopicPayload, type RunNowResult,
@@ -1456,7 +1457,10 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
   const SUGGEST_COUNT = 200;
   const QUERY_MAX_PICK = 50;
-  const [seed, setSeed] = useState('');
+  // 种子提示词 — 多条,用户手填。Phase C 起会经过审核固化(已固化只能新增)
+  const [seeds, setSeeds] = useState<string[]>(() =>
+    (initial?.seed_prompts || []).map(s => s.text).filter(Boolean)
+  );
   const [industry, setIndustry] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
@@ -1578,8 +1582,20 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const handleSave = async () => {
     if (!valid) return;
     setSaving(true);
-    try { await onSave(buildPayload()); }
-    finally { setSaving(false); }
+    try {
+      // Phase C — 编辑已有 topic 时,把 step2 新增的种子词逐条 POST 到审核队列;
+      // 新建场景没有 topic_id,种子词只保留在 client side(待后端补 seed-on-create)
+      if (initial?.id) {
+        const existingTexts = new Set(seedPrompts.map(s => s.text));
+        const newSeeds = seeds
+          .map(s => s.trim())
+          .filter(s => s && !existingTexts.has(s));
+        for (const s of newSeeds) {
+          await handleSubmitSeed(s);
+        }
+      }
+      await onSave(buildPayload());
+    } finally { setSaving(false); }
   };
 
   const handleRunNow = async () => {
@@ -1594,28 +1610,41 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   };
 
   const handleSuggest = async () => {
-    const s = seed.trim();
-    if (!s || suggesting) return;
+    const validSeeds = seeds.map(s => s.trim()).filter(Boolean);
+    if (validSeeds.length === 0 || suggesting) return;
     setSuggesting(true);
     setSuggestErr(null);
     try {
-      const res = await aiTelemetryApi.suggestQueries({
-        seed: s, count: SUGGEST_COUNT,
-        target: target.trim(),
-        aliases,
-        industry: industry.trim(),
-      }, token);
-      // 追加(去重),不覆盖 — 用户可能想多轮生成、不同 seed 累积候选
-      setSuggestions(prev => {
-        const seen = new Set(prev.map(q => q.text));
-        const out = [...prev];
+      // 多个种子串行扇出 — 每个 seed 的 cluster_id 用 i*1000 做命名空间隔离,
+      // 避免不同种子的 cluster 0 互相覆盖。queries 全局去重。
+      const accClusters: ClusterMeta[] = [];
+      const seenText = new Set(suggestions.map(q => q.text));
+      const additions: QueryCandidate[] = [];
+
+      for (let i = 0; i < validSeeds.length; i++) {
+        const offset = i * 1000;
+        const res = await aiTelemetryApi.suggestQueries({
+          seed: validSeeds[i], count: SUGGEST_COUNT,
+          target: target.trim(),
+          aliases,
+          industry: industry.trim(),
+        }, token);
         for (const q of res.queries) {
-          if (!seen.has(q.text)) { seen.add(q.text); out.push(q); }
+          if (seenText.has(q.text)) continue;
+          seenText.add(q.text);
+          additions.push({
+            ...q,
+            cluster_id: typeof q.cluster_id === 'number' ? q.cluster_id + offset : undefined,
+          });
         }
-        return out;
-      });
-      // clusters 直接覆盖(每次挖掘是一次完整聚类,旧簇 ID 与新簇 ID 不可比)
-      setClusters(res.clusters || []);
+        for (const c of (res.clusters || [])) {
+          accClusters.push({ ...c, cluster_id: c.cluster_id + offset });
+        }
+      }
+
+      setSuggestions(prev => [...prev, ...additions]);
+      // clusters 覆盖(每次"挖掘"是一次完整重聚类,旧簇 ID 与新簇 ID 不可比)
+      setClusters(accClusters);
       setCollapsedClusters(new Set());
     } catch (e: unknown) {
       setSuggestErr(e instanceof Error ? e.message : String(e));
@@ -1628,7 +1657,6 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   const [seedPrompts, setSeedPrompts] = useState<SeedPrompt[]>(
     () => initial?.seed_prompts || []
   );
-  const [submittingSeed, setSubmittingSeed] = useState(false);
   const [seedSubmitErr, setSeedSubmitErr] = useState<string | null>(null);
   const lockedQueryTexts = useMemo<Set<string>>(() => {
     const out = new Set<string>();
@@ -1645,19 +1673,17 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
     return m;
   }, [initial?.queries, initial?.query_statuses]);
 
-  const handleSubmitSeed = async () => {
-    const text = seed.trim();
-    if (!text || !initial?.id || submittingSeed) return;
-    setSubmittingSeed(true);
+  const handleSubmitSeed = async (rawText: string): Promise<boolean> => {
+    const text = rawText.trim();
+    if (!text || !initial?.id) return false;
     setSeedSubmitErr(null);
     try {
       const updated = await aiTelemetryApi.submitSeedPrompt(initial.id, text, token);
       setSeedPrompts(updated.seed_prompts || []);
-      setSeed('');
+      return true;
     } catch (e: unknown) {
       setSeedSubmitErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmittingSeed(false);
+      return false;
     }
   };
 
@@ -1681,7 +1707,7 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
   };
 
   const step1Valid = name.trim().length > 0 && target.trim().length > 0;
-  const step2Valid = suggestions.length > 0;
+  const step2Valid = seeds.map(s => s.trim()).filter(Boolean).length > 0;
   const goNext = () => {
     if (step === 1 && step1Valid) setStep(2);
     else if (step === 2 && step2Valid) setStep(3);
@@ -1773,100 +1799,51 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
         )}
 
         {step === 2 && (
-          <div className="max-w-2xl space-y-3">
-            {/* Phase C — 种子提示词审核固化列表 */}
-            {(seedPrompts.length > 0 || initial?.id) && (
+          <div className="max-w-2xl space-y-4">
+            {/* Phase C — 已提交种子词的审核状态(编辑场景才显示) */}
+            {seedPrompts.length > 0 && (
               <div
                 className="rounded-md p-3 space-y-2"
                 style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
               >
                 <div className="text-xs font-semibold text-secondary">
                   {t('dashboard.aiTelemetry.form.seedPromptsTitle')}
-                  <span className="ml-2 text-muted font-normal">
-                    {t('dashboard.aiTelemetry.form.seedPromptsHint')}
-                  </span>
                 </div>
-                {seedPrompts.length === 0 ? (
-                  <div className="text-xs text-muted py-1">
-                    {t('dashboard.aiTelemetry.form.seedPromptsEmpty')}
-                  </div>
-                ) : (
-                  <ul className="space-y-1">
-                    {seedPrompts.map((s, i) => (
-                      <li key={i} className="flex items-center gap-2 text-xs">
-                        <ReviewBadge status={s.status} />
-                        <span className="text-primary">{s.text}</span>
-                        {s.submitted_at && (
-                          <span className="text-muted ml-auto">
-                            {new Date(s.submitted_at).toLocaleString()}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {seedSubmitErr && (
-                  <div className="text-xs text-rose-500">⚠ {seedSubmitErr}</div>
-                )}
+                <ul className="space-y-1">
+                  {seedPrompts.map((s, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <ReviewBadge status={s.status} />
+                      <span className="text-primary">{s.text}</span>
+                      {s.submitted_at && (
+                        <span className="text-muted ml-auto">
+                          {new Date(s.submitted_at).toLocaleString()}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
-            <div className="flex gap-2">
-              <input
-                type="text" value={seed} onChange={e => setSeed(e.target.value)}
-                placeholder={t('dashboard.aiTelemetry.form.suggestPlaceholder') || ''}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSuggest(); } }}
-                className="flex-1 px-3 py-1.5 rounded-md text-sm"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              />
-              <button
-                type="button" onClick={handleSuggest} disabled={!seed.trim() || suggesting}
-                className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
-                style={{
-                  background: 'var(--accent-primary)', color: '#fff',
-                  opacity: !seed.trim() || suggesting ? 0.55 : 1,
-                }}
-              >
-                {suggesting
-                  ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
-                  : t('dashboard.aiTelemetry.form.suggestGenerateN', { count: SUGGEST_COUNT })}
-              </button>
-              {initial?.id && (
-                <button
-                  type="button"
-                  onClick={handleSubmitSeed}
-                  disabled={!seed.trim() || submittingSeed}
-                  className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
-                  style={{
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--accent-primary)',
-                    border: '1px solid var(--border-color)',
-                    opacity: !seed.trim() || submittingSeed ? 0.55 : 1,
-                  }}
-                  title={t('dashboard.aiTelemetry.form.submitSeedHint') || ''}
-                >
-                  {submittingSeed
-                    ? t('dashboard.aiTelemetry.form.submitSeedRunning')
-                    : t('dashboard.aiTelemetry.form.submitSeed')}
-                </button>
-              )}
-            </div>
-            <div className="text-xs text-muted">
-              {target.trim()
-                ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
-                : t('dashboard.aiTelemetry.form.suggestContextOff')}
-            </div>
-            {suggestErr && (
-              <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+            <label className="block">
+              <span className="text-xs text-secondary">
+                {t('dashboard.aiTelemetry.form.seedPromptsLabel')}*
+              </span>
+              <div className="mt-1.5">
+                <TagInput
+                  value={seeds}
+                  onChange={setSeeds}
+                  placeholder={t('dashboard.aiTelemetry.form.seedPromptsPlaceholder') || ''}
+                />
+              </div>
+              <span className="text-xs text-muted">
+                {t('dashboard.aiTelemetry.form.seedPromptsListHint', { count: seeds.length })}
+              </span>
+            </label>
+
+            {seedSubmitErr && (
+              <div className="text-xs text-rose-500">⚠ {seedSubmitErr}</div>
             )}
-            <div
-              className="rounded-md p-3 text-xs"
-              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
-            >
-              {suggestions.length === 0
-                ? t('dashboard.aiTelemetry.form.queriesPickerEmpty')
-                : t('dashboard.aiTelemetry.form.queriesFilterCount', { shown: suggestions.length, total: suggestions.length })}
-            </div>
           </div>
         )}
 
@@ -1939,6 +1916,33 @@ function TopicEditor({ initial, token, onCancel, onSave }: TopicEditorProps) {
                 <div className="text-xs text-muted">
                   {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
                 </div>
+
+                {/* 基于 step2 种子做扇出 */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button" onClick={handleSuggest}
+                    disabled={!step2Valid || suggesting}
+                    className="px-3 py-1.5 rounded-md text-sm whitespace-nowrap"
+                    style={{
+                      background: 'var(--accent-primary)', color: '#fff',
+                      opacity: !step2Valid || suggesting ? 0.55 : 1,
+                    }}
+                  >
+                    {suggesting
+                      ? t('dashboard.aiTelemetry.form.suggestRunningLong', { count: SUGGEST_COUNT })
+                      : t('dashboard.aiTelemetry.form.suggestFromSeeds', {
+                          count: seeds.map(s => s.trim()).filter(Boolean).length,
+                        })}
+                  </button>
+                  <span className="text-xs text-muted">
+                    {target.trim()
+                      ? t('dashboard.aiTelemetry.form.suggestContextOn', { target: target.trim() })
+                      : t('dashboard.aiTelemetry.form.suggestContextOff')}
+                  </span>
+                </div>
+                {suggestErr && (
+                  <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
+                )}
 
                 {suggestions.length === 0 ? (
                   <div
