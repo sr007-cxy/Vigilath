@@ -774,7 +774,7 @@ export function Result() {
           <div className="bg-glow bg-glow-3"></div>
 
           <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
-            <div className="w-full max-w-3xl mx-auto animate-fade-in text-center">
+            <div className="w-full max-w-3xl mx-auto animate-fade-in">
               <button
                 type="button"
                 onClick={() => navigate('/')}
@@ -782,6 +782,7 @@ export function Result() {
               >
                 ← {t('result.buttons.checkAnother', { defaultValue: 'Back' })}
               </button>
+            <div className="text-center">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-soft shadow-glow mb-6">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
                 <span className="text-xs font-medium text-secondary">
@@ -795,6 +796,7 @@ export function Result() {
                 {modeDesc}
               </p>
               <div className="mt-2">{renderRerunForm({ hero: true })}</div>
+            </div>
             </div>
 
             {advancedResult && (

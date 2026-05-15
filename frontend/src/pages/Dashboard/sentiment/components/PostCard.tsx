@@ -80,16 +80,20 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         </h4>
       </div>
 
-      {/* 行 2: 平台 · @账号 · 发布时间 · 地区 */}
+      {/* 行 2: 平台 · @账号 · 发布时间 · 地区 — 缺 author 整段不渲染(连同分隔点),不展示"佚名" */}
       <div className="flex items-center gap-2 flex-wrap mb-1 text-[11px]">
         <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
           {platformName}
         </span>
-        <span className="text-muted">·</span>
-        <span className="truncate max-w-[10rem]" style={{ color: 'var(--text-secondary)' }}
-          title={post.author || ''}>
-          {post.author ? `@${post.author}` : t('dashboard.sentiment.articles.detail.unknownAuthor')}
-        </span>
+        {post.author && (
+          <>
+            <span className="text-muted">·</span>
+            <span className="truncate max-w-[10rem]" style={{ color: 'var(--text-secondary)' }}
+              title={post.author}>
+              @{post.author}
+            </span>
+          </>
+        )}
         <span className="text-muted">·</span>
         <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(post.publish_time ?? post.ingested_at)}</span>
         {showRegion && (
@@ -115,7 +119,7 @@ export function PostCard({ post, selected, onClick, compact }: Props) {
         {post.view_count != null && <span>👁 {post.view_count.toLocaleString()}</span>}
         {!compact && topics.slice(0, 2).map(tag => (
           <span key={tag} className="px-1 rounded"
-            style={{ background: 'rgba(251,191,36,0.15)', color: '#854d0e' }}>
+            style={{ background: 'rgba(59,130,246,0.12)', color: '#1e40af' }}>
             #{tag}
           </span>
         ))}

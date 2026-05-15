@@ -592,7 +592,7 @@ def list_briefs(account_id: int, ticker: str) -> dict:
         init_schema(conn)
         rows = list(conn.execute(
             "SELECT id, symbol, date, model, generated_at FROM briefs "
-            "WHERE symbol = ? ORDER BY id DESC", (ticker,),
+            "WHERE symbol = ? ORDER BY date DESC, id DESC", (ticker,),
         ))
         return {"count": len(rows), "items": [dict(r) for r in rows]}
 
@@ -651,16 +651,22 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
         kpi_row = conn.execute(kpi_sql, (ticker, today)).fetchone()
         prev_row = conn.execute(kpi_sql, (ticker, yesterday)).fetchone()
 
-        # N 天情感堆叠柱:按日期 group + sentiment_label 分桶
+        # N 天情感堆叠柱:严格按 publish_time 分桶(NULL 的丢弃).
+        # Why: 爬虫单次能拉回半年历史内容,若按 ingested_at 分桶,所有历史都
+        # 堆到首次入库当天,左侧巨柱、中间空白.而 publish_time 为 NULL 的(主
+        # 要是搜索引擎结果页未能解析发布日期)无法归到任一具体日期,如果回退
+        # 到 ingested_at 又会重新制造首次入库当天的尖峰,所以直接丢弃.今日
+        # KPI 仍按 ingested_at 统计,语义不同,允许不一致.
         trend_rows = list(conn.execute("""
             SELECT
-                substr(p.ingested_at, 1, 10) AS d,
+                substr(p.publish_time, 1, 10) AS d,
                 a.sentiment_label AS sl,
                 count(*) AS c
             FROM posts p JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
             WHERE p.symbol = ? AND a.is_relevant = 1
-              AND substr(p.ingested_at, 1, 10) >= ?
+              AND p.publish_time IS NOT NULL
+              AND substr(p.publish_time, 1, 10) >= ?
             GROUP BY d, sl
             ORDER BY d ASC
         """, (ticker, cutoff)))
@@ -702,7 +708,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
 
         # 最新简报
         brief = conn.execute(
-            "SELECT * FROM briefs WHERE symbol = ? ORDER BY id DESC LIMIT 1", (ticker,),
+            "SELECT * FROM briefs WHERE symbol = ? ORDER BY date DESC, id DESC LIMIT 1", (ticker,),
         ).fetchone()
         latest_brief = dict(brief) if brief else None
 

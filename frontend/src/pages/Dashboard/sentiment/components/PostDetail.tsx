@@ -195,7 +195,7 @@ export function PostDetail({ post, onBack }: Props) {
               {citations.map((c, i) => (
                 <li key={i}>
                   <span className="inline-block px-1.5 py-0.5 rounded font-mono"
-                    style={{ background: 'rgba(251,191,36,0.18)', color: '#854d0e' }}>
+                    style={{ background: 'rgba(168,85,247,0.15)', color: '#6b21a8' }}>
                     "{c}"
                   </span>
                 </li>
@@ -287,7 +287,7 @@ function renderHighlightedContent(content: string, citations: string[]): React.R
       return (
         <mark
           key={i}
-          style={{ background: 'rgba(251,191,36,0.25)', color: 'inherit', padding: '0 2px', borderRadius: 3 }}
+          style={{ background: 'rgba(168,85,247,0.22)', color: 'inherit', padding: '0 2px', borderRadius: 3 }}
         >
           {p}
         </mark>

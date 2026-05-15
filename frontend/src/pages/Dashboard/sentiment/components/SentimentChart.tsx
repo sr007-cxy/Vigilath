@@ -33,7 +33,7 @@ export function SentimentChart({ data }: { data: Row[] }) {
   const keys: (keyof Row)[] = ['bullish', 'neutral', 'mixed', 'bearish'];
 
   return (
-    <section className="rounded-xl p-5 flex-1 flex flex-col min-w-0" style={cardStyle}>
+    <section className="rounded-xl p-5 flex-1 flex flex-col min-w-0 w-full" style={cardStyle}>
       <header className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-primary uppercase tracking-wide">
           {t('dashboard.sentiment.today.sentimentTrend')}
@@ -48,9 +48,13 @@ export function SentimentChart({ data }: { data: Row[] }) {
         </div>
       </header>
 
-      {/* chart 区:flex-1 让它撑满卡片剩余高度 — 与右侧 RiskPie 卡(flex-col +
-         legend + 底部摘要)对齐.min-h-[200px] 防内容塌缩到不可读. */}
-      <div className="relative flex-1 min-h-[200px]">
+      {/* 顶部 flex-1 spacer:section 用 items-stretch 时,把柱子推到卡片下半段,
+         而 chart 容器本身固定高度,避免 SVG `preserveAspectRatio=none` 把柱子
+         随容器一起垂直拉伸成"高瘦怪". */}
+      <div className="flex-1" />
+
+      {/* chart 区:固定 h-56 (224px),svg 等比铺满这块区域. */}
+      <div className="relative h-56">
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
           {data.map((row, i) => {
             const total = row.bullish + row.neutral + row.bearish + row.mixed;
