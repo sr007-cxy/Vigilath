@@ -1,5 +1,5 @@
 // AI 遥测 工作台页 — 一个组件承载 3 个 route:
-//   /dashboard            views=['config']                  — 话题配置(新 dashboard 首页)
+//   /dashboard            views=['config']                  — 主题配置(新 dashboard 首页)
 //   /dashboard/ai-telemetry  views=['overview','tracking','results'] — 遥测看板
 //   /dashboard/insights   views=['briefings']               — 优化建议
 //
@@ -267,7 +267,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   );
 }
 
-// ── 话题列表 ───────────────────────────────────────────────────
+// ── 主题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
   topics, loading, onView, onToggleEnabled,
@@ -299,31 +299,33 @@ function TopicTable({
       <table className="w-full text-sm">
         <thead>
           <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-            <th className="text-left px-3 py-2 font-medium">{c('enabled')}</th>
+            <th className="text-left px-3 py-2 font-medium w-12">{c('index')}</th>
             <th className="text-left px-3 py-2 font-medium">{c('name')}</th>
+            <th className="text-left px-3 py-2 font-medium">{c('status')}</th>
             <th className="text-left px-3 py-2 font-medium">{c('queries')}</th>
             <th className="text-left px-3 py-2 font-medium">{c('engines')}</th>
             <th className="text-right px-3 py-2 font-medium">{c('actions')}</th>
           </tr>
         </thead>
         <tbody>
-          {topics.map(tp => (
+          {topics.map((tp, idx) => {
+            const s = deriveTopicStatus(tp);
+            return (
             <tr key={tp.id} style={{ borderTop: '1px solid var(--border-color)' }}>
+              <td className="px-3 py-2 text-muted tabular-nums">{idx + 1}</td>
+              <td className="px-3 py-2 text-primary">{tp.name}</td>
               <td className="px-3 py-2">
                 <span
                   className="inline-block px-2 py-0.5 rounded text-xs"
                   style={{
-                    background: tp.enabled ? 'rgba(34,197,94,0.15)' : 'var(--bg-input)',
-                    color: tp.enabled ? '#16a34a' : 'var(--text-muted)',
+                    background: TOPIC_STATUS_STYLE[s].bg,
+                    color: TOPIC_STATUS_STYLE[s].fg,
                     border: '1px solid var(--border-color)',
                   }}
                 >
-                  {tp.enabled
-                    ? t('dashboard.aiTelemetry.actions.enabled')
-                    : t('dashboard.aiTelemetry.actions.disabled')}
+                  {t(`dashboard.aiTelemetry.statuses.${s}`)}
                 </span>
               </td>
-              <td className="px-3 py-2 text-primary">{tp.name}</td>
               <td className="px-3 py-2">{tp.queries.length}</td>
               <td className="px-3 py-2">{tp.engines.length}/10</td>
               <td className="px-3 py-2 text-right space-x-3">
@@ -345,12 +347,29 @@ function TopicTable({
                 </button>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
+
+type TopicStatus = 'draft' | 'reviewing' | 'enabled' | 'disabled';
+
+function deriveTopicStatus(tp: Topic): TopicStatus {
+  if (!tp.enabled) return 'disabled';
+  if (tp.seed_prompts?.some(s => s.status === 'pending')) return 'reviewing';
+  if (!tp.last_run_at || tp.queries.length === 0) return 'draft';
+  return 'enabled';
+}
+
+const TOPIC_STATUS_STYLE: Record<TopicStatus, { bg: string; fg: string }> = {
+  draft:    { bg: 'rgba(59,130,246,0.15)', fg: '#3b82f6' },
+  reviewing:{ bg: 'rgba(234,179,8,0.15)',  fg: '#b45309' },
+  enabled:  { bg: 'rgba(34,197,94,0.15)',  fg: '#16a34a' },
+  disabled: { bg: 'var(--bg-input)',       fg: 'var(--text-muted)' },
+};
 
 function formatTime(iso?: string | null): string {
   if (!iso) return '—';
@@ -1502,7 +1521,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
   const [industry, setIndustry] = useState(initial?.industry || '');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
-  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果话题
+  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果主题
   // 已存过 cluster_ids 就把簇 ID 一并回填,允许下次保存继续按簇分组
   const [suggestions, setSuggestions] = useState<QueryCandidate[]>(() => {
     const qs = initial?.queries || [];

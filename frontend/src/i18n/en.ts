@@ -1830,6 +1830,7 @@ const en = {
               "backToList": "Back to topics",
               "empty": "No topics yet. Click \"New topic\" to start.",
               "col": {
+                "index": "#",
                 "enabled": "Enabled",
                 "name": "Topic",
                 "queries": "Queries",
@@ -1837,6 +1838,12 @@ const en = {
                 "lastRun": "Last run",
                 "status": "Status",
                 "actions": "Actions"
+              },
+              "statuses": {
+                "draft": "Draft",
+                "reviewing": "In review",
+                "enabled": "Active",
+                "disabled": "Disabled"
               },
               "actions": {
                 "edit": "Edit",

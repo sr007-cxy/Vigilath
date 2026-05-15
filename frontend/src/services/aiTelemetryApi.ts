@@ -1,4 +1,4 @@
-// AI 遥测 API 客户端 — 话题 CRUD + 立即试跑.
+// AI 遥测 API 客户端 — 主题 CRUD + 立即试跑.
 // 后端就绪前用 mock 数据;VITE_USE_MOCK_AI_TELEMETRY=1 强制 mock.
 
 import { localizedHeaders, readApiError } from './apiError';
@@ -30,7 +30,7 @@ export interface Topic {
   target_aliases: string[];
   industry: string;
   queries: string[];
-  query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老话题或未聚类)
+  query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老主题或未聚类)
   query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
   clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
   seed_prompts?: SeedPrompt[];       // Phase C — 已提交的种子词列表

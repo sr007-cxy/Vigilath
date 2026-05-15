@@ -106,7 +106,7 @@ function App() {
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>
               <Route path="/dashboard" element={<DashboardLayout />}>
-                {/* 首页 = 配置(原 AI 遥测的「话题配置」tab)
+                {/* 首页 = 配置(原 AI 遥测的「主题配置」tab)
                     key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
                 <Route index element={<AiTelemetry key="config" views={['config']} />} />
                 <Route path="compose" element={<Compose />} />
