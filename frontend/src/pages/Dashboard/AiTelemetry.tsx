@@ -146,29 +146,27 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
       <div className="space-y-4">
         <PageHead titleKey="dashboard.aiTelemetry.title" titleFallback="AI Telemetry" />
         <header className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setEditing(undefined)}
-              className="text-sm px-2 py-1 rounded-md"
-              style={{
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              ← {t('dashboard.aiTelemetry.backToList')}
-            </button>
-            <h1 className="text-xl font-semibold text-primary leading-tight">
-              {t(
-                editorMode === 'view'
-                  ? 'dashboard.aiTelemetry.viewTopic'
-                  : editing
-                    ? 'dashboard.aiTelemetry.editTopic'
-                    : 'dashboard.aiTelemetry.newTopic',
-              )}
-            </h1>
-          </div>
+          <h1 className="text-xl font-semibold text-primary leading-tight">
+            {t(
+              editorMode === 'view'
+                ? 'dashboard.aiTelemetry.viewTopic'
+                : editing
+                  ? 'dashboard.aiTelemetry.editTopic'
+                  : 'dashboard.aiTelemetry.newTopic',
+            )}
+          </h1>
+          <button
+            type="button"
+            onClick={() => setEditing(undefined)}
+            className="text-sm px-2 py-1 rounded-md"
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            ← {t('dashboard.aiTelemetry.backToList')}
+          </button>
         </header>
         <TopicEditor
           initial={editing}

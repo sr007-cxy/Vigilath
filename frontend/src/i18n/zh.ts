@@ -89,6 +89,7 @@ const zh = {
             "signedInAs": "已登录为",
             "dashboard": "AI 品牌增长",
             "adminReview": "审核",
+            "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
             "account": "账户中心",
             "logout": "退出登录"
@@ -1836,9 +1837,9 @@ const zh = {
               "empty": "还没有话题,点右上角「新建话题」开始",
               "col": {
                 "enabled": "启用",
-                "name": "话题名",
-                "queries": "Query 数",
-                "engines": "引擎",
+                "name": "主题",
+                "queries": "查询数",
+                "engines": "模型",
                 "lastRun": "最近跑",
                 "status": "状态",
                 "actions": "操作"
@@ -2008,7 +2009,7 @@ const zh = {
                 "queryLockedHint": "该 Query 已审核生效,不可取消勾选",
                 "prev": "上一步",
                 "next": "下一步",
-                "name": "话题名",
+                "name": "主题",
                 "namePlaceholder": "例如:VNET 品牌问询",
                 "target": "检索词(被检测的品牌 / 实体)",
                 "targetPlaceholder": "例如:金诚同达律所 / 世纪互联",

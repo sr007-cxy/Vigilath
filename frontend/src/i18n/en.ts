@@ -89,6 +89,7 @@ const en = {
             "signedInAs": "Signed in as",
             "dashboard": "AEO",
             "adminReview": "Review",
+            "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",
             "account": "Account",
             "logout": "Sign out"
@@ -1832,7 +1833,7 @@ const en = {
                 "enabled": "Enabled",
                 "name": "Topic",
                 "queries": "Queries",
-                "engines": "Engines",
+                "engines": "Models",
                 "lastRun": "Last run",
                 "status": "Status",
                 "actions": "Actions"
@@ -2002,7 +2003,7 @@ const en = {
                 "queryLockedHint": "This query is locked after approval and cannot be unchecked",
                 "prev": "Back",
                 "next": "Next",
-                "name": "Topic name",
+                "name": "Topic",
                 "namePlaceholder": "e.g. VNET brand probe",
                 "target": "Target (the brand / entity being tracked)",
                 "targetPlaceholder": "e.g. JinCheng Tongda Law Firm / VNET",
