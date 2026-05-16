@@ -17,10 +17,11 @@ import { useRef, useState } from 'react';
 import type { BrandProfile } from '../services/aiTelemetryApi';
 import { topicProfileApi } from '../services/topicProfileApi';
 
-// 文本类(前端能 file.text() 直读)+ 二进制类(走后端解析)
-const TEXT_EXTS = ['.txt', '.md', '.markdown', '.csv', '.json', '.log', '.html', '.htm', '.xml'];
-const BINARY_EXTS = ['.pdf', '.docx'];  // .doc 不支持,后端会 415 + 友好提示
-const ACCEPT_EXTS = [...BINARY_EXTS, ...TEXT_EXTS];
+// 收窄到三种格式 — txt/md 客户端 file.text() 直读,docx 二进制走后端解析。
+// .pdf / .doc / .csv / .json 等都不接受;PDF 扫描件常抽不到字反而误导用户。
+const TEXT_EXTS = ['.txt', '.md'];
+const BINARY_EXTS = ['.docx'];
+const ACCEPT_EXTS = [...TEXT_EXTS, ...BINARY_EXTS];
 const MAX_TEXT_LEN = 60000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -90,13 +91,15 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
 
   const readFile = async (file: File) => {
     const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
-    const isText = TEXT_EXTS.includes(ext) || (!ext && file.type.startsWith('text/'));
+    const isText = TEXT_EXTS.includes(ext);
     const isBinary = BINARY_EXTS.includes(ext);
     if (!isText && !isBinary) {
       if (ext === '.doc') {
-        setErr('暂不支持 .doc 旧格式,请用 Word「另存为」.docx 或 PDF 后重试');
+        setErr('暂不支持 .doc 旧格式,请用 Word「另存为」.docx 后重试');
+      } else if (ext === '.pdf') {
+        setErr('暂不支持 PDF,请复制内容粘贴到下方文本框,或另存为 .docx / .txt / .md');
       } else {
-        setErr(`不支持的文件类型(${ext || '未知'});接受 ${ACCEPT_EXTS.join(' / ')}`);
+        setErr(`不支持的文件类型(${ext || '未知'});只接受 ${ACCEPT_EXTS.join(' / ')}`);
       }
       return;
     }
@@ -148,7 +151,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
         <div>
           <h3 className="text-sm font-semibold text-primary">AI 智能填充</h3>
           <p className="text-xs text-muted mt-0.5">
-            拖入 PDF / Word / 纯文本,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 7 大模块。
+            拖入 .txt / .md / .docx,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 7 大模块。
           </p>
         </div>
         <button type="button" onClick={() => setOpen(o => !o)}
@@ -177,7 +180,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
               <>
                 拖入文件或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
                 <span className="block text-muted mt-1">
-                  支持 PDF / Word(.docx)/ 纯文本({TEXT_EXTS.slice(0, 4).join(' / ')} 等)
+                  支持 .txt / .md / .docx;PDF / Word(.doc)请复制内容粘贴到下方
                 </span>
               </>
             )}

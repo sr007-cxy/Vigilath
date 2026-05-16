@@ -146,35 +146,44 @@ class FileParseError(Exception):
     pass
 
 
+SUPPORTED_EXTS = ("txt", "md", "docx")
+
+
 def file_bytes_to_text(filename: str, data: bytes) -> str:
     """根据后缀分发到对应解析器;返回截断到 MAX_EXTRACTED_TEXT 的文本。
 
     支持:
-    - .pdf  → pypdf 文本层抽取(扫描件抽不到字时会返回 "" → 调用方报错)
-    - .docx → python-docx 段落
-    - .txt / .md / .csv / .json / .log / .html / .htm / .xml / 无后缀 → utf-8 / gbk 兜底
+    - .docx → python-docx 段落 + 表格
+    - .txt / .md → utf-8 / gbk 兜底
 
-    .doc 旧二进制格式不支持(需要 antiword / textract,装起来麻烦);提示用户另存为 .docx。
+    其它类型(.pdf / .doc / .csv / .json …)统一 415,提示用户复制内容到文本框,
+    或另存为支持的格式。PDF 一开始上过 pypdf,扫描件抽不到字反而误导用户,
+    所以这里收紧到三种最稳的格式。
     """
     name = (filename or "").lower()
     ext = name.rsplit(".", 1)[-1] if "." in name else ""
 
-    if ext == "pdf":
-        return _truncate(_parse_pdf(data))
     if ext == "docx":
         return _truncate(_parse_docx(data))
+    if ext in ("txt", "md"):
+        try:
+            return _truncate(data.decode("utf-8"))
+        except UnicodeDecodeError:
+            try:
+                return _truncate(data.decode("gbk", errors="replace"))
+            except Exception as e:  # noqa: BLE001
+                raise FileParseError(f"无法以 UTF-8 或 GBK 解码文件:{e}") from e
     if ext == "doc":
         raise FileParseError(
-            "暂不支持 .doc 旧二进制格式,请用 Word 「另存为」.docx 或 PDF 后重试"
+            "暂不支持 .doc 旧二进制格式,请用 Word 「另存为」.docx 后重试"
         )
-    # 文本类(含无后缀) — UTF-8 优先,失败回退 GBK(国内 Word 导出常见编码)
-    try:
-        return _truncate(data.decode("utf-8"))
-    except UnicodeDecodeError:
-        try:
-            return _truncate(data.decode("gbk", errors="replace"))
-        except Exception as e:  # noqa: BLE001
-            raise FileParseError(f"无法以 UTF-8 或 GBK 解码文件:{e}") from e
+    if ext == "pdf":
+        raise FileParseError(
+            "暂不支持 PDF。请复制内容粘贴到文本框,或另存为 .docx / .txt / .md 后上传"
+        )
+    raise FileParseError(
+        f"暂不支持的文件类型(.{ext or '未知'}),支持 {', '.join('.' + e for e in SUPPORTED_EXTS)}"
+    )
 
 
 def _truncate(text: str) -> str:
@@ -182,33 +191,6 @@ def _truncate(text: str) -> str:
     if len(text) > MAX_EXTRACTED_TEXT:
         return text[:MAX_EXTRACTED_TEXT]
     return text
-
-
-def _parse_pdf(data: bytes) -> str:
-    try:
-        from pypdf import PdfReader
-    except ImportError as e:
-        raise FileParseError("后端缺少 pypdf 依赖,无法解析 PDF") from e
-    try:
-        reader = PdfReader(io.BytesIO(data))
-    except Exception as e:  # noqa: BLE001
-        raise FileParseError(f"PDF 解析失败(文件可能损坏或加密):{e}") from e
-    chunks: list[str] = []
-    for i, page in enumerate(reader.pages):
-        try:
-            t = page.extract_text() or ""
-        except Exception as e:  # noqa: BLE001
-            log.warning("pypdf page %d extract_text 失败: %s", i, e)
-            t = ""
-        if t:
-            chunks.append(t)
-    out = "\n".join(chunks).strip()
-    if not out:
-        raise FileParseError(
-            "这份 PDF 抽不到文字(可能是扫描件 / 图片型 PDF)。请改用 Word 或纯文本,"
-            "或先 OCR 转可复制文字后再上传"
-        )
-    return out
 
 
 def _parse_docx(data: bytes) -> str:
