@@ -256,6 +256,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
         <TopicTable
           topics={topics} loading={loading}
           onView={(tp) => { setEditorMode('view'); setEditing(tp); }}
+          onEdit={(tp) => { setEditorMode('edit'); setEditing(tp); }}
           onToggleEnabled={handleToggleEnabled}
         />
       )}
@@ -270,10 +271,11 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 // ── 主题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onView, onToggleEnabled,
+  topics, loading, onView, onEdit, onToggleEnabled,
 }: {
   topics: Topic[]; loading: boolean;
   onView: (t: Topic) => void;
+  onEdit: (t: Topic) => void;
   onToggleEnabled: (t: Topic) => void;
 }) {
   const { t } = useTranslation();
@@ -335,6 +337,13 @@ function TopicTable({
                   onClick={() => onView(tp)}
                 >
                   {t('dashboard.aiTelemetry.actions.view')}
+                </button>
+                <button
+                  className="text-xs"
+                  style={{ color: 'var(--accent-primary)' }}
+                  onClick={() => onEdit(tp)}
+                >
+                  {t('dashboard.aiTelemetry.actions.edit')}
                 </button>
                 <button
                   className="text-xs"
