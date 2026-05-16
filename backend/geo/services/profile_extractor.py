@@ -4,11 +4,15 @@
 复用与 content_generator 相同的 DeepSeek 双通道(直连 + OpenRouter fallback);
 两个 key 都没配时调用方应给前端 503,而不是无声生成空画像。
 
-入口:`extract_profile_from_text(text)` → (BrandProfile, model_id)
-- model_id == "" 表示 provider 不可用,调用方据此返回 503
+入口:
+- `extract_profile_from_text(text)` → (BrandProfile, model_id)
+- `file_bytes_to_text(filename, data)` → str(用于 PDF / DOCX / 纯文本上传)
+
+model_id == "" 表示 provider 不可用,调用方据此返回 503
 """
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -129,6 +133,105 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, str]:
         log.warning("BrandProfile 映射失败,降级用空画像: %s; raw=%s", e, content[:300])
         profile = BrandProfile()
     return profile, model_id
+
+
+# ─────────────── 上传文件 → 纯文本 ─────────────────────────
+
+
+# 上限同 BrandProfile.extra_notes 的合理边界:LLM 一次能消化的中文 ~30K 字
+MAX_EXTRACTED_TEXT = 60_000
+
+# 友好的错误消息体,调用方会包成 HTTPException
+class FileParseError(Exception):
+    pass
+
+
+def file_bytes_to_text(filename: str, data: bytes) -> str:
+    """根据后缀分发到对应解析器;返回截断到 MAX_EXTRACTED_TEXT 的文本。
+
+    支持:
+    - .pdf  → pypdf 文本层抽取(扫描件抽不到字时会返回 "" → 调用方报错)
+    - .docx → python-docx 段落
+    - .txt / .md / .csv / .json / .log / .html / .htm / .xml / 无后缀 → utf-8 / gbk 兜底
+
+    .doc 旧二进制格式不支持(需要 antiword / textract,装起来麻烦);提示用户另存为 .docx。
+    """
+    name = (filename or "").lower()
+    ext = name.rsplit(".", 1)[-1] if "." in name else ""
+
+    if ext == "pdf":
+        return _truncate(_parse_pdf(data))
+    if ext == "docx":
+        return _truncate(_parse_docx(data))
+    if ext == "doc":
+        raise FileParseError(
+            "暂不支持 .doc 旧二进制格式,请用 Word 「另存为」.docx 或 PDF 后重试"
+        )
+    # 文本类(含无后缀) — UTF-8 优先,失败回退 GBK(国内 Word 导出常见编码)
+    try:
+        return _truncate(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        try:
+            return _truncate(data.decode("gbk", errors="replace"))
+        except Exception as e:  # noqa: BLE001
+            raise FileParseError(f"无法以 UTF-8 或 GBK 解码文件:{e}") from e
+
+
+def _truncate(text: str) -> str:
+    text = (text or "").strip()
+    if len(text) > MAX_EXTRACTED_TEXT:
+        return text[:MAX_EXTRACTED_TEXT]
+    return text
+
+
+def _parse_pdf(data: bytes) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError as e:
+        raise FileParseError("后端缺少 pypdf 依赖,无法解析 PDF") from e
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except Exception as e:  # noqa: BLE001
+        raise FileParseError(f"PDF 解析失败(文件可能损坏或加密):{e}") from e
+    chunks: list[str] = []
+    for i, page in enumerate(reader.pages):
+        try:
+            t = page.extract_text() or ""
+        except Exception as e:  # noqa: BLE001
+            log.warning("pypdf page %d extract_text 失败: %s", i, e)
+            t = ""
+        if t:
+            chunks.append(t)
+    out = "\n".join(chunks).strip()
+    if not out:
+        raise FileParseError(
+            "这份 PDF 抽不到文字(可能是扫描件 / 图片型 PDF)。请改用 Word 或纯文本,"
+            "或先 OCR 转可复制文字后再上传"
+        )
+    return out
+
+
+def _parse_docx(data: bytes) -> str:
+    try:
+        import docx  # python-docx
+    except ImportError as e:
+        raise FileParseError("后端缺少 python-docx 依赖,无法解析 Word") from e
+    try:
+        doc = docx.Document(io.BytesIO(data))
+    except Exception as e:  # noqa: BLE001
+        raise FileParseError(f"Word 解析失败(文件可能损坏):{e}") from e
+    paras = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+    # 表格也抽一下 — PRD / 公司简介常用表格列字段
+    tables: list[str] = []
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text and c.text.strip()]
+            if cells:
+                tables.append(" | ".join(cells))
+    out = "\n".join(paras + tables).strip()
+    if not out:
+        raise FileParseError("这份 Word 文档为空 / 没有可抽取的文字")
+    return out
 
 
 def _parse_json_loose(text: str) -> dict:

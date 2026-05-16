@@ -67,4 +67,20 @@ export const topicProfileApi = {
   async extractProfile(text: string, token: string): Promise<ExtractProfileResp> {
     return request<ExtractProfileResp>('POST', '/profile/extract', token, { text });
   },
+  // PDF / Word / 纯文本文件 — 后端用 pypdf / python-docx 解析后走同一条
+  // LLM pipeline,所以前端 PDF.js / mammoth 都不用上,bundle 不胖。
+  async extractProfileFile(file: File, token: string): Promise<ExtractProfileResp> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    const resp = await fetch(`${API_BASE}/ai-telemetry/profile/extract-file`, {
+      method: 'POST',
+      headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      body: fd,
+    });
+    if (!resp.ok) {
+      const msg = await readApiError(resp, 'AI 解析失败');
+      throw new Error(msg);
+    }
+    return resp.json();
+  },
 };

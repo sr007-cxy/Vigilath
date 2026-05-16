@@ -17,8 +17,12 @@ import { useRef, useState } from 'react';
 import type { BrandProfile } from '../services/aiTelemetryApi';
 import { topicProfileApi } from '../services/topicProfileApi';
 
-const ACCEPT_EXTS = ['.txt', '.md', '.markdown', '.csv', '.json', '.log', '.html', '.htm', '.xml'];
+// 文本类(前端能 file.text() 直读)+ 二进制类(走后端解析)
+const TEXT_EXTS = ['.txt', '.md', '.markdown', '.csv', '.json', '.log', '.html', '.htm', '.xml'];
+const BINARY_EXTS = ['.pdf', '.docx'];  // .doc 不支持,后端会 415 + 友好提示
+const ACCEPT_EXTS = [...BINARY_EXTS, ...TEXT_EXTS];
 const MAX_TEXT_LEN = 60000;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 interface ProfileImporterProps {
   profile: BrandProfile;
@@ -65,24 +69,58 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
     }
   };
 
+  const callExtractFile = async (file: File, mode: 'fill-blank' | 'overwrite') => {
+    setBusy(true); setErr(null);
+    try {
+      const resp = await topicProfileApi.extractProfileFile(file, token);
+      const merged = mergeProfile(profileRef.current, resp.profile, mode);
+      const changed = countChanged(profileRef.current, merged);
+      onApply(merged);
+      if (changed === 0) {
+        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(文件可能太短或没有品牌信息),可手动调整后再试`);
+      } else {
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段(模型:${resp.used_model})`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const readFile = async (file: File) => {
     const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
-    if (ext && !ACCEPT_EXTS.includes(ext) && !file.type.startsWith('text/')) {
-      setErr(`暂只支持文本类文件(${ACCEPT_EXTS.join(' / ')})。PDF / Word 请先在原工具里复制内容,粘贴到下面文本框。`);
+    const isText = TEXT_EXTS.includes(ext) || (!ext && file.type.startsWith('text/'));
+    const isBinary = BINARY_EXTS.includes(ext);
+    if (!isText && !isBinary) {
+      if (ext === '.doc') {
+        setErr('暂不支持 .doc 旧格式,请用 Word「另存为」.docx 或 PDF 后重试');
+      } else {
+        setErr(`不支持的文件类型(${ext || '未知'});接受 ${ACCEPT_EXTS.join(' / ')}`);
+      }
       return;
     }
-    if (file.size > MAX_TEXT_LEN * 4) {
-      setErr(`文件过大(>${Math.floor(MAX_TEXT_LEN * 4 / 1024)}KB),请截短后再试`);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setErr(`文件过大(${Math.floor(file.size / 1024)} KB > ${MAX_UPLOAD_BYTES / 1024 / 1024} MB 上限),请精简后再试`);
       return;
     }
+
+    if (isBinary) {
+      // PDF / Word — 二进制,前端 file.text() 拿不到字,直接 multipart 给后端
+      setText('');
+      setErr(null);
+      setOkMsg(`已上传 ${file.name}(${Math.floor(file.size / 1024)} KB),后端正在解析…`);
+      await callExtractFile(file, 'fill-blank');
+      return;
+    }
+
+    // 文本类 — 客户端读出后塞到 textarea,顺便走旧的 /profile/extract JSON 路径
     try {
       const content = await file.text();
       const trimmed = content.length > MAX_TEXT_LEN ? content.slice(0, MAX_TEXT_LEN) : content;
       setText(trimmed);
       setErr(null);
       setOkMsg(`已读取 ${file.name}(${trimmed.length.toLocaleString()} 字),正在用 AI 解析…`);
-      // 关键改动:拖入后立刻调一次 AI 解析,不需要用户额外点按钮。
-      // 默认「填充空白」,不会覆盖已填字段;用户想覆盖再手动点「全部覆盖」。
       await callExtract(trimmed, 'fill-blank');
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -110,7 +148,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
         <div>
           <h3 className="text-sm font-semibold text-primary">AI 智能填充</h3>
           <p className="text-xs text-muted mt-0.5">
-            拖入文本文件或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 7 大模块。
+            拖入 PDF / Word / 纯文本,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 7 大模块。
           </p>
         </div>
         <button type="button" onClick={() => setOpen(o => !o)}
@@ -139,7 +177,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
               <>
                 拖入文件或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
                 <span className="block text-muted mt-1">
-                  支持 {ACCEPT_EXTS.join(' / ')};PDF / Word 请复制内容粘贴到下方
+                  支持 PDF / Word(.docx)/ 纯文本({TEXT_EXTS.slice(0, 4).join(' / ')} 等)
                 </span>
               </>
             )}

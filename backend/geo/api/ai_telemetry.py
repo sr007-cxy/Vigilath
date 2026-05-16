@@ -12,7 +12,7 @@ import os
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from datetime import datetime, timedelta, timezone
@@ -34,7 +34,10 @@ from geo.models.ai_telemetry import (
     TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
-from geo.services.profile_extractor import extract_profile_from_text
+from geo.services.profile_extractor import (
+    FileParseError, MAX_EXTRACTED_TEXT,
+    extract_profile_from_text, file_bytes_to_text,
+)
 from geo.models.user import User
 from sqlalchemy import func
 
@@ -654,24 +657,70 @@ async def run_now(
 # ─────────────── AI 智能填充 — 原始资料 → 品牌画像 ────────────
 
 
+# 上传单个文件大小上限 — 10MB。
+# 文本抽出后还会被 file_bytes_to_text → MAX_EXTRACTED_TEXT 截断,
+# 这个 10MB 主要拦"扔了个几百兆的 PDF"那种意外。
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+def _do_extract(text: str, user_id: int) -> ProfileExtractOut:
+    if not text or len(text.strip()) < 10:
+        raise HTTPException(400, "原始资料过短(<10 字符),无法抽取画像")
+    if len(text) > MAX_EXTRACTED_TEXT:
+        text = text[:MAX_EXTRACTED_TEXT]
+    try:
+        profile, model_id = extract_profile_from_text(text)
+    except Exception as e:  # noqa: BLE001
+        log.warning("profile extract failed for user %s: %s", user_id, e)
+        raise HTTPException(502, f"AI 解析失败: {e}")
+    if not model_id:
+        raise HTTPException(503, "未配置 DEEPSEEK_API_KEY / OPENROUTER_API_KEY,AI 智能填充不可用")
+    return ProfileExtractOut(profile=profile, used_model=model_id)
+
+
 @router.post("/profile/extract", response_model=ProfileExtractOut)
 def extract_profile_endpoint(
     payload: ProfileExtractPayload,
     current_user: User = Depends(get_current_user),
 ):
-    """前端 step1「设置」里把用户拖入的文件文本 / 粘贴的原始资料丢给 LLM,
-    抽取出一份 BrandProfile 回填。空字段由调用方决定是否合并(默认只填空缺)。
+    """JSON 路径 — 用户粘贴的原始文本(textarea)走这里。
 
+    文件类(PDF / Word / TXT 等)走 /profile/extract-file。
     503 = 后端没配 DEEPSEEK_API_KEY 或 OPENROUTER_API_KEY。
     """
+    return _do_extract(payload.text, current_user.id)
+
+
+@router.post("/profile/extract-file", response_model=ProfileExtractOut)
+async def extract_profile_file_endpoint(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Multipart 路径 — 拖入 PDF / Word / 纯文本文件。
+
+    流程:UploadFile → bytes → 按后缀分发解析器 → 抽出文本 → 同一条
+    LLM pipeline。前端 form field 名:`file`。
+
+    400 = 文件太大 / 空文件 / 文本太短
+    415 = .doc 旧格式或扫描件 PDF 抽不到字
+    502 = LLM 调用失败
+    503 = 后端 LLM key 未配
+    """
+    if not file or not file.filename:
+        raise HTTPException(400, "请上传一个文件")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "文件为空")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            400,
+            f"文件过大({len(raw) // 1024} KB > {MAX_UPLOAD_BYTES // 1024 // 1024} MB 上限)",
+        )
     try:
-        profile, model_id = extract_profile_from_text(payload.text)
-    except Exception as e:  # noqa: BLE001
-        log.warning("profile extract failed for user %s: %s", current_user.id, e)
-        raise HTTPException(502, f"AI 解析失败: {e}")
-    if not model_id:
-        raise HTTPException(503, "未配置 DEEPSEEK_API_KEY / OPENROUTER_API_KEY,AI 智能填充不可用")
-    return ProfileExtractOut(profile=profile, used_model=model_id)
+        text = file_bytes_to_text(file.filename, raw)
+    except FileParseError as e:
+        raise HTTPException(415, str(e))
+    return _do_extract(text, current_user.id)
 
 
 # ─────────────── 候选 query 生成(DeepSeek)— 建话题时用 ───────────
