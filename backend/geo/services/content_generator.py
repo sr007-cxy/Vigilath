@@ -6,14 +6,19 @@ admin_review.approve_topic 通过 FastAPI BackgroundTasks 异步触发。
 流程:
   1. 加载 topic 的画像 + 通过的监测问题(approved 且 selected)
   2. 对每条监测问题,组装 prompt(画像中创作方向/文案类型/平台/调性/雷区/Slogan)
-  3. 调用 OpenRouter 拿 LLM 输出(JSON {title, body, summary})
+  3. 调用 DeepSeek 拿 LLM 输出(JSON {title, body, summary})
   4. 落 TopicGeneratedDocORM(status=draft)
+
+LLM 提供商沿用项目里 query 扩展用的同一份 DeepSeek key,无需再配 OpenRouter:
+endpoint 走 OpenAI 兼容的 /chat/completions,跟 telemetry-service/query_suggest 一致.
 
 失败粒度:单条 query 失败不影响其它,失败的稿件会用 generation_error 记录原因.
 
-ENV:
-    OPENROUTER_API_KEY    必填(无则跳过生成,err 落库 → admin 看到原因)
-    GEO_CONTENT_MODEL     可选,默认 "openai/gpt-4o-mini"
+ENV(沿用 telemetry-service 的约定):
+    DEEPSEEK_API_KEY      必填(无则跳过生成,err 落库 → admin 看到原因)
+    DEEPSEEK_BASE_URL     可选,默认 https://api.deepseek.com
+    DEEPSEEK_MODEL        可选,默认 deepseek-chat
+    GEO_CONTENT_TIMEOUT   可选,单条 LLM 请求超时(秒),默认 180
     GEO_CONTENT_MAX_DOCS  可选,单次审核最多生成多少稿(默认 = 监测问题数,上限 50)
 """
 from __future__ import annotations
@@ -33,9 +38,9 @@ from geo.models.ai_telemetry import (
 
 log = logging.getLogger(__name__)
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = os.environ.get("GEO_CONTENT_MODEL", "openai/gpt-4o-mini")
-DEFAULT_TIMEOUT = int(os.environ.get("GEO_CONTENT_TIMEOUT", "120"))
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+DEFAULT_TIMEOUT = int(os.environ.get("GEO_CONTENT_TIMEOUT", "180"))
 
 
 def schedule_generation(*, topic_id: int, plan_id: int | None = None) -> None:
@@ -87,15 +92,15 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
         max_docs = min(int(os.environ.get("GEO_CONTENT_MAX_DOCS", "50")), len(queries))
         queries = queries[:max_docs]
 
-        api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
         for q in queries:
             doc = TopicGeneratedDocORM(
                 topic_id=topic_id, execution_plan_id=plan_id,
                 source_query_text=q, status="draft",
-                llm_model=DEFAULT_MODEL,
+                llm_model=DEEPSEEK_MODEL,
             )
             if not api_key:
-                doc.generation_error = "OPENROUTER_API_KEY 未配置"
+                doc.generation_error = "DEEPSEEK_API_KEY 未配置"
                 doc.title = f"[未生成] {q}"
                 db.add(doc)
                 continue
@@ -132,28 +137,29 @@ def _generate_one(profile: BrandProfile, query: str, api_key: str) -> tuple[str,
         f"只输出 JSON,不要包前后 ``` 围栏。"
     )
     payload = {
-        "model": DEFAULT_MODEL,
+        "model": DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.7,
+        # DeepSeek 支持 OpenAI 风格 response_format,要求 user message 里出现 "json" 字样
+        # (我们 prompt 末尾明确写了"只输出 JSON",满足要求)
         "response_format": {"type": "json_object"},
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://www.vigilath.com",
-        "X-Title": "GEO Content Generator",
     }
-    r = requests.post(OPENROUTER_URL, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
+    url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+    r = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
     if r.status_code >= 400:
-        raise RuntimeError(f"OpenRouter {r.status_code}: {r.text[:200]}")
+        raise RuntimeError(f"DeepSeek {r.status_code}: {r.text[:200]}")
     data = r.json()
     try:
         content = data["choices"][0]["message"]["content"]
     except Exception as e:  # noqa: BLE001
-        raise RuntimeError(f"unexpected OpenRouter response shape: {e}")
+        raise RuntimeError(f"unexpected DeepSeek response shape: {e}")
     parsed = _parse_json_loose(content)
     title = str(parsed.get("title") or "")[:200]
     body = str(parsed.get("body") or "")
