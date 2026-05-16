@@ -1856,6 +1856,8 @@ const zh = {
                 "edit": "编辑",
                 "delete": "删除",
                 "view": "查看",
+                "profile": "画像",
+                "profileHint": "填写品牌画像 / 种子词 / 监测问题,提交平台审核",
                 "run": "跑一次",
                 "running": "运行中",
                 "enabled": "已启用",

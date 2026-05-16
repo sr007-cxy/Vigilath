@@ -1850,6 +1850,8 @@ const en = {
                 "edit": "Edit",
                 "delete": "Delete",
                 "view": "View",
+                "profile": "Profile",
+                "profileHint": "Fill brand profile / seeds / monitored queries and submit for review",
                 "run": "Run",
                 "running": "Running",
                 "enabled": "Enabled",

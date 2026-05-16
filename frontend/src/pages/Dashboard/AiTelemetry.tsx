@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
@@ -81,6 +82,7 @@ const ALL_TABS: TabKey[] = ['overview', 'tracking', 'briefings', 'config', 'resu
 
 export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const visibleTabs = (views && views.length > 0 ? views : ALL_TABS);
   const showTabBar = visibleTabs.length > 1;
@@ -257,6 +259,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
           topics={topics} loading={loading}
           onView={(tp) => { setEditorMode('view'); setEditing(tp); }}
           onEdit={(tp) => { setEditorMode('edit'); setEditing(tp); }}
+          onProfile={(tp) => { navigate(`/dashboard/topics/${tp.id}/profile`); }}
           onToggleEnabled={handleToggleEnabled}
         />
       )}
@@ -271,11 +274,12 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 // ── 主题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onView, onEdit, onToggleEnabled,
+  topics, loading, onView, onEdit, onProfile, onToggleEnabled,
 }: {
   topics: Topic[]; loading: boolean;
   onView: (t: Topic) => void;
   onEdit: (t: Topic) => void;
+  onProfile: (t: Topic) => void;
   onToggleEnabled: (t: Topic) => void;
 }) {
   const { t } = useTranslation();
@@ -344,6 +348,14 @@ function TopicTable({
                   onClick={() => onEdit(tp)}
                 >
                   {t('dashboard.aiTelemetry.actions.edit')}
+                </button>
+                <button
+                  className="text-xs"
+                  style={{ color: 'var(--accent-primary)' }}
+                  onClick={() => onProfile(tp)}
+                  title={t('dashboard.aiTelemetry.actions.profileHint')}
+                >
+                  {t('dashboard.aiTelemetry.actions.profile')}
                 </button>
                 <button
                   className="text-xs"
