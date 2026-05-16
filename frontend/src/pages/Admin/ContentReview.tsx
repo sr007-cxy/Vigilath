@@ -1,0 +1,464 @@
+// Admin 内容审核 — 选账号 + 主题 → 看文档列表 → 勾选送审 → 通过 + 选发布平台/媒体 (或拒绝).
+// 路由:/workbench/content-review
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { PageHead } from '../../components/PageHead';
+import {
+  adminContentReviewApi,
+  type DocStatus, type GeneratedDoc, type TopicWithDocs,
+} from '../../services/adminContentReviewApi';
+
+type StatusFilter = DocStatus | 'to_review' | 'all';
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'to_review',      label: 'to_review' },
+  { key: 'draft',          label: 'draft' },
+  { key: 'pending_review', label: 'pending_review' },
+  { key: 'approved',       label: 'approved' },
+  { key: 'rejected',       label: 'rejected' },
+  { key: 'published',      label: 'published' },
+  { key: 'all',            label: 'all' },
+];
+
+export function AdminContentReview() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const token = localStorage.getItem('token') || '';
+
+  const [topics, setTopics] = useState<TopicWithDocs[]>([]);
+  const [topicId, setTopicId] = useState<number | null>(null);
+  const [docs, setDocs] = useState<GeneratedDoc[]>([]);
+  const [status, setStatus] = useState<StatusFilter>('to_review');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [openDocId, setOpenDocId] = useState<number | null>(null);
+
+  const isAdmin = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? !!JSON.parse(stored).is_admin : false;
+    } catch { return false; }
+  }, []);
+
+  const refreshTopics = useCallback(async () => {
+    try {
+      const rs = await adminContentReviewApi.listTopics(token);
+      setTopics(rs);
+      if (rs.length > 0 && topicId === null) {
+        setTopicId(rs[0].topic_id);
+      }
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }, [token, topicId]);
+
+  const refreshDocs = useCallback(async () => {
+    if (topicId === null) return;
+    setLoading(true); setErr(null);
+    try {
+      const ds = await adminContentReviewApi.listDocs(
+        topicId, status === 'all' ? undefined : status, token,
+      );
+      setDocs(ds);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [topicId, status, token]);
+
+  useEffect(() => {
+    if (!isAdmin) { navigate('/dashboard', { replace: true }); return; }
+    refreshTopics();
+  }, [isAdmin, navigate, refreshTopics]);
+
+  useEffect(() => { refreshDocs(); }, [refreshDocs]);
+
+  if (!isAdmin) return null;
+
+  const selectedDoc = openDocId ? docs.find(d => d.id === openDocId) || null : null;
+
+  const togglePick = (id: number) => {
+    setPicked(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const sendToReview = async () => {
+    if (picked.size === 0) return;
+    try {
+      await adminContentReviewApi.selectForReview(Array.from(picked), token);
+      setPicked(new Set());
+      refreshDocs(); refreshTopics();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <PageHead titleKey="admin.contentReview.title" titleFallback="内容审核" />
+      <header className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold text-primary">{t('admin.contentReview.title')}</h1>
+          <p className="text-xs text-secondary mt-0.5">{t('admin.contentReview.subtitle')}</p>
+        </div>
+        <button type="button" onClick={() => { refreshTopics(); refreshDocs(); }}
+                className="text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--accent-primary)' }}>
+          ⟳ {t('admin.contentReview.refresh')}
+        </button>
+      </header>
+
+      <div className="rounded-md p-3 flex flex-wrap gap-3 items-end"
+           style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted">{t('admin.contentReview.topicLabel')}</label>
+          <select value={topicId ?? ''}
+                  onChange={e => { setTopicId(Number(e.target.value)); setPicked(new Set()); }}
+                  className="text-sm px-3 py-1.5 rounded-md min-w-[260px]"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                           border: '1px solid var(--border-color)' }}>
+            {topics.map(tp => (
+              <option key={tp.topic_id} value={tp.topic_id}>
+                {tp.topic_name} · {tp.user_email} · ({tp.draft_count}/{tp.doc_count})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted">{t('admin.contentReview.statusLabel')}</label>
+          <div className="flex gap-1">
+            {STATUS_FILTERS.map(f => (
+              <button key={f.key} type="button" onClick={() => setStatus(f.key)}
+                      className="text-xs px-2.5 py-1 rounded-md"
+                      style={{
+                        background: status === f.key ? 'var(--accent-primary)' : 'var(--bg-input)',
+                        color: status === f.key ? '#fff' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}>
+                {t(`admin.contentReview.statusFilter.${f.key}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1" />
+
+        {picked.size > 0 && (
+          <button type="button" onClick={sendToReview}
+                  className="text-sm px-4 py-2 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)' }}>
+            {t('admin.contentReview.sendToReview', { n: picked.size })}
+          </button>
+        )}
+      </div>
+
+      {err && (
+        <div className="rounded-md p-3 text-sm"
+             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.3)' }}>
+          {err}
+        </div>
+      )}
+
+      {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
+
+      {!loading && docs.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted">{t('admin.contentReview.empty')}</div>
+      )}
+
+      <div className="space-y-2">
+        {docs.map(d => (
+          <DocCard key={d.id} doc={d}
+                   pickable={d.status === 'draft'}
+                   picked={picked.has(d.id)}
+                   onPick={() => togglePick(d.id)}
+                   onOpen={() => setOpenDocId(d.id)} />
+        ))}
+      </div>
+
+      {selectedDoc && (
+        <DocDetailModal doc={selectedDoc}
+                        token={token}
+                        onClose={() => setOpenDocId(null)}
+                        onAnyChange={() => { setOpenDocId(null); refreshDocs(); refreshTopics(); }} />
+      )}
+    </div>
+  );
+}
+
+function DocCard({ doc, pickable, picked, onPick, onOpen }: {
+  doc: GeneratedDoc; pickable: boolean; picked: boolean;
+  onPick: () => void; onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="rounded-md p-3 flex items-start gap-3 flex-wrap"
+             style={{ background: picked ? 'var(--bg-tertiary)' : 'var(--bg-card)',
+                      border: `1px solid ${picked ? 'var(--accent-primary)' : 'var(--border-color)'}` }}>
+      {pickable && (
+        <input type="checkbox" checked={picked} onChange={onPick} className="mt-1"
+               style={{ accentColor: 'var(--accent-primary)' }} />
+      )}
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-semibold text-primary">{doc.title || `#${doc.id}`}</span>
+          <DocStatusChip status={doc.status} />
+          {doc.generation_error && (
+            <span className="text-[10px]" style={{ color: '#ef4444' }}>
+              ⚠ {t('admin.contentReview.genError')}
+            </span>
+          )}
+        </div>
+        {doc.source_query_text && (
+          <div className="text-[11px] text-muted mt-0.5">
+            {t('admin.contentReview.sourceQuery')}:{doc.source_query_text}
+          </div>
+        )}
+        {doc.summary && (
+          <div className="text-xs text-secondary mt-1 line-clamp-2">{doc.summary}</div>
+        )}
+        {doc.publish_targets.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {doc.publish_targets.map((p, i) => (
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-full"
+                    style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
+                {p.platform}{p.media ? ` / ${p.media}` : ''}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <button type="button" onClick={onOpen}
+              className="text-xs px-3 py-1 rounded-md self-center"
+              style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)',
+                       border: '1px solid var(--border-color)' }}>
+        {t('admin.contentReview.view')}
+      </button>
+    </section>
+  );
+}
+
+function DocStatusChip({ status }: { status: DocStatus }) {
+  const { t } = useTranslation();
+  const cm: Record<DocStatus, { c: string; bg: string }> = {
+    draft:          { c: '#94a3b8', bg: 'rgba(148,163,184,0.15)' },
+    pending_review: { c: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+    approved:       { c: '#10b981', bg: 'rgba(16,185,129,0.15)' },
+    rejected:       { c: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+    published:      { c: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+  };
+  const s = cm[status];
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: s.bg, color: s.c }}>
+      {t(`admin.contentReview.statusFilter.${status}`)}
+    </span>
+  );
+}
+
+function DocDetailModal({ doc, token, onClose, onAnyChange }:
+  { doc: GeneratedDoc; token: string; onClose: () => void; onAnyChange: () => void }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [showReject, setShowReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showPublish, setShowPublish] = useState(false);
+
+  const wrap = async (fn: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try { await fn(); onAnyChange(); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+         style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="rounded-md w-full max-w-3xl max-h-[90vh] flex flex-col"
+           style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <div className="p-4 flex items-start justify-between gap-3 border-b"
+             style={{ borderColor: 'var(--border-color)' }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-semibold text-primary">{doc.title || `#${doc.id}`}</h2>
+              <DocStatusChip status={doc.status} />
+            </div>
+            <div className="text-xs text-muted mt-1">
+              {doc.source_query_text} · {doc.llm_model} · {new Date(doc.created_at).toLocaleString()}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="text-muted hover:text-primary">✕</button>
+        </div>
+
+        <div className="p-4 flex-1 overflow-auto space-y-3">
+          {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+          {doc.generation_error && (
+            <div className="rounded-md p-2 text-xs"
+                 style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+              {doc.generation_error}
+            </div>
+          )}
+          {doc.reject_reason && (
+            <div className="rounded-md p-2 text-xs"
+                 style={{ background: 'rgba(239,68,68,0.05)', color: '#ef4444',
+                          border: '1px solid rgba(239,68,68,0.3)' }}>
+              {t('admin.contentReview.rejectReason')}:{doc.reject_reason}
+            </div>
+          )}
+          <article className="text-sm text-primary whitespace-pre-wrap leading-relaxed">
+            {doc.body_markdown || <span className="text-muted">{t('admin.contentReview.emptyBody')}</span>}
+          </article>
+          {doc.publish_targets.length > 0 && (
+            <div>
+              <p className="text-xs text-muted mb-1">{t('admin.contentReview.publishedTo')}:</p>
+              <div className="flex flex-wrap gap-1">
+                {doc.publish_targets.map((p, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full"
+                        style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
+                    {p.platform}{p.media ? ` / ${p.media}` : ''}
+                    <span className="text-muted ml-1">
+                      {p.marked_at && new Date(p.marked_at).toLocaleDateString()}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 border-t flex justify-end gap-2 flex-wrap"
+             style={{ borderColor: 'var(--border-color)' }}>
+          {(doc.status === 'draft' || doc.status === 'pending_review') && (
+            <>
+              <button type="button" onClick={() => setShowReject(true)} disabled={busy}
+                      className="text-xs px-4 py-1.5 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: '#ef4444',
+                               border: '1px solid var(--border-color)' }}>
+                {t('admin.contentReview.reject')}
+              </button>
+              <button type="button" disabled={busy}
+                      onClick={() => wrap(() => adminContentReviewApi.approveDoc(doc.id, token))}
+                      className="text-xs px-4 py-1.5 rounded-md text-white"
+                      style={{ background: 'var(--accent-primary)' }}>
+                {t('admin.contentReview.approve')}
+              </button>
+            </>
+          )}
+          {doc.status === 'approved' && (
+            <button type="button" onClick={() => setShowPublish(true)} disabled={busy}
+                    className="text-xs px-4 py-1.5 rounded-md text-white"
+                    style={{ background: '#3b82f6' }}>
+              {t('admin.contentReview.choosePublish')}
+            </button>
+          )}
+        </div>
+
+        {showReject && (
+          <div className="p-3 border-t"
+               style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
+            <p className="text-xs text-secondary mb-2">{t('admin.contentReview.rejectReasonLabel')}</p>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={2}
+                      className="w-full text-sm px-3 py-2 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                               border: '1px solid var(--border-color)' }} />
+            <div className="flex justify-end gap-2 mt-2">
+              <button type="button" onClick={() => { setShowReject(false); setRejectReason(''); }}
+                      className="text-xs px-3 py-1 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+                {t('admin.contentReview.cancel')}
+              </button>
+              <button type="button" disabled={busy}
+                      onClick={() => wrap(() => adminContentReviewApi.rejectDoc(doc.id, rejectReason.trim(), token))}
+                      className="text-xs px-3 py-1 rounded-md text-white"
+                      style={{ background: '#ef4444' }}>
+                {t('admin.contentReview.confirmReject')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showPublish && (
+          <PublishPicker onCancel={() => setShowPublish(false)}
+                         onConfirm={(targets) =>
+                           wrap(() => adminContentReviewApi.publishDoc(doc.id, targets, token))} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const PLATFORM_OPTIONS = ['抖音', '小红书', '视频号', '公众号', 'B站', '知乎', '微博', 'Twitter', 'LinkedIn'];
+
+function PublishPicker({ onCancel, onConfirm }: {
+  onCancel: () => void; onConfirm: (targets: { platform: string; media: string }[]) => void;
+}) {
+  const { t } = useTranslation();
+  const [platforms, setPlatforms] = useState<Set<string>>(new Set());
+  const [media, setMedia] = useState('');
+
+  const toggle = (p: string) => setPlatforms(prev => {
+    const n = new Set(prev);
+    if (n.has(p)) n.delete(p); else n.add(p);
+    return n;
+  });
+
+  const submit = () => {
+    if (platforms.size === 0) return;
+    const targets = Array.from(platforms).map(p => ({ platform: p, media: media.trim() }));
+    onConfirm(targets);
+  };
+
+  return (
+    <div className="p-3 border-t space-y-3"
+         style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
+      <p className="text-xs text-secondary">{t('admin.contentReview.publishPlatformLabel')}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {PLATFORM_OPTIONS.map(p => {
+          const on = platforms.has(p);
+          return (
+            <button key={p} type="button" onClick={() => toggle(p)}
+                    className="text-xs px-3 py-1 rounded-full"
+                    style={{
+                      background: on ? 'var(--accent-primary)' : 'var(--bg-input)',
+                      color: on ? '#fff' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-color)',
+                    }}>
+              {p}
+            </button>
+          );
+        })}
+      </div>
+      <div>
+        <label className="text-xs text-muted block mb-1">
+          {t('admin.contentReview.publishMediaLabel')}
+        </label>
+        <input type="text" value={media} onChange={e => setMedia(e.target.value)}
+               placeholder={t('admin.contentReview.publishMediaPlaceholder')}
+               className="w-full text-sm px-3 py-2 rounded-md"
+               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                        border: '1px solid var(--border-color)' }} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancel}
+                className="text-xs px-3 py-1 rounded-md"
+                style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+          {t('admin.contentReview.cancel')}
+        </button>
+        <button type="button" disabled={platforms.size === 0} onClick={submit}
+                className="text-xs px-3 py-1 rounded-md text-white"
+                style={{ background: '#3b82f6', opacity: platforms.size === 0 ? 0.5 : 1 }}>
+          {t('admin.contentReview.confirmPublish', { n: platforms.size })}
+        </button>
+      </div>
+    </div>
+  );
+}

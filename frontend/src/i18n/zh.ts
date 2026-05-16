@@ -89,6 +89,7 @@ const zh = {
             "signedInAs": "已登录为",
             "dashboard": "AI 品牌增长",
             "adminReview": "审核",
+            "adminContentReview": "内容审核",
             "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
             "account": "账户中心",
@@ -2604,22 +2605,140 @@ const zh = {
           "admin": {
             "review": {
               "title": "审核",
-              "subtitle": "平台运营审核甲方提交的种子提示词 + 扩展 Query,通过后生效,后续只增不改",
-              "tab": {
-                "seed": "种子提示词",
-                "queries": "扩展 Query"
+              "subtitle": "审核甲方提交的画像 + 种子 + 监测问题;通过即跑、生成执行计划书并触发内容生成",
+              "empty": "暂无符合条件的申请",
+              "refresh": "刷新",
+              "approve": "通过",
+              "reject": "拒绝",
+              "cancel": "取消",
+              "confirmReject": "确认拒绝",
+              "rejectReasonLabel": "拒绝原因(会随邮件通知用户):",
+              "edit": "编辑",
+              "save": "保存",
+              "editorNote": "只编辑常用字段;完整画像请由用户在 /dashboard/topics/:id/profile 操作",
+              "viewPlan": "查看执行计划书",
+              "filter": {
+                "all": "全部",
+                "draft": "草稿",
+                "pending": "待审",
+                "approved": "已通过",
+                "rejected": "已拒绝"
               },
+              "card": {
+                "seedCount": "种子 {{n}}",
+                "selectedCount": "监测问题 {{n}}/{{max}}",
+                "submittedAt": "提交于"
+              },
+              "section": {
+                "profile": "品牌画像",
+                "seeds": "种子提示词",
+                "monitored": "监测问题 ({{n}}/{{max}})",
+                "changelog": "主题日志"
+              },
+              "tab": { "seed": "种子提示词", "queries": "扩展 Query" },
               "emptySeed": "暂无待审核的种子提示词",
               "emptyQueries": "暂无待审核的 Query",
-              "refresh": "刷新",
-              "approve": "批准",
-              "reject": "拒绝",
               "batchApprove": "批量批准",
               "batchReject": "批量拒绝",
               "queryCountUnit": "条待审",
               "pickedHint": "已选 {{n}}",
               "targetLabel": "检测词:",
               "byUser": "提交人:"
+            },
+            "executionPlan": {
+              "title": "执行计划书",
+              "subtitle": "项目总体状况 / 主题日志 / 泛化日志 / 运行进度",
+              "backToReview": "返回审核",
+              "errorPrefix": "错误",
+              "section": {
+                "overview": "项目总体状况",
+                "changelog": "主题日志 ({{n}})",
+                "expansion": "泛化日志 ({{n}})",
+                "progress": "运行进度"
+              }
+            },
+            "contentReview": {
+              "title": "内容审核",
+              "subtitle": "选账号 + 主题查看 LLM 生成的文案稿;先审核内容,再为通过稿件选发布平台和媒体",
+              "refresh": "刷新",
+              "empty": "该筛选条件下没有文档",
+              "topicLabel": "账号 / 主题",
+              "statusLabel": "状态",
+              "statusFilter": {
+                "all": "全部",
+                "to_review": "待审",
+                "draft": "草稿",
+                "pending_review": "审核中",
+                "approved": "已通过",
+                "rejected": "已拒绝",
+                "published": "已发布"
+              },
+              "sendToReview": "送审 ({{n}})",
+              "view": "查看",
+              "approve": "通过",
+              "reject": "拒绝",
+              "cancel": "取消",
+              "confirmReject": "确认拒绝",
+              "rejectReasonLabel": "拒绝原因:",
+              "rejectReason": "拒绝原因",
+              "sourceQuery": "源问题",
+              "genError": "生成失败",
+              "emptyBody": "(没有正文)",
+              "choosePublish": "选择发布平台",
+              "publishedTo": "发布去向",
+              "publishPlatformLabel": "选择发布平台(多选)",
+              "publishMediaLabel": "媒体 / 账号名(选填,选多个平台会沿用同一个名称)",
+              "publishMediaPlaceholder": "如:品牌官方账号",
+              "confirmPublish": "确认发布到 {{n}} 个平台"
+            }
+          },
+          "topic": {
+            "profile": {
+              "title": "主题画像",
+              "subtitle": "提交品牌画像 + 种子词 + 监测问题(≤50),通过审核后会自动生成执行计划书和文案稿",
+              "backToDashboard": "返回主控台",
+              "notFound": "主题不存在",
+              "saved": "已保存",
+              "saving": "保存中…",
+              "submitted": "已提交审核,等待平台运营批复",
+              "submitting": "提交中…",
+              "save": "保存画像",
+              "submitForReview": "提交审核",
+              "missing": "还有 {{n}} 个必填项未完成",
+              "allFilled": "必填项已全部填写",
+              "selectedNow": "监测问题 {{n}}/{{max}}",
+              "tab": {
+                "profile": "品牌画像",
+                "seeds": "种子提示词",
+                "monitor": "监测问题"
+              },
+              "status": {
+                "draft": "草稿",
+                "pending": "待审核",
+                "approved": "已通过",
+                "rejected": "已拒绝"
+              },
+              "statusHint": {
+                "draft": "完成画像并勾选监测问题后可提交审核",
+                "pending": "平台运营审核中,暂无法编辑",
+                "approved": "已通过审核,执行计划书已生成,文案稿正在异步生成",
+                "rejected": "未通过审核,请按邮件反馈调整后重新提交"
+              },
+              "seeds": {
+                "hint": "种子提示词用于扩展监测问题;新增的种子会默认进入待审状态",
+                "placeholder": "输入种子提示词,如「遗产继承」",
+                "add": "添加种子",
+                "empty": "还没有种子提示词"
+              },
+              "monitor": {
+                "expandTitle": "用种子词扩展监测问题候选",
+                "expandHint": "LLM 会基于画像 + 种子词扩展候选,你勾选最多 50 条作为正式监测问题",
+                "seedPlaceholder": "种子词(如「遗产继承」)",
+                "expand": "扩展候选",
+                "selectedHint": "已勾选 {{n}}/{{max}} 个监测问题",
+                "cap": "最多勾选 {{max}} 个监测问题",
+                "empty": "暂无候选,先用上方扩展或在编辑器添加 query"
+              }
             }
           },
           "account": {

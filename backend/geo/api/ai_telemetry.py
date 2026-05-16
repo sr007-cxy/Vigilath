@@ -22,12 +22,14 @@ from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
     AiTelemetryResponseORM, AiTelemetryRunORM, AiTelemetryTopicORM,
     AiTelemetryQueryHitORM, AiTelemetryCellInsightORM, AiTelemetryTopicBriefingORM,
-    BriefingAction, BriefingFeedbackPayload, BriefingOut,
+    BrandProfile, BriefingAction, BriefingFeedbackPayload, BriefingOut,
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
-    FeedbackPayload, IntentBreakdownOut, KpiBlock,
-    OverviewOut, OwnedSplit, PositionDist, QueryHitCell, ResponseOut, RunNowCitation,
-    RunNowResult, RunOut, SeedPromptSubmitPayload, ShareOfVoiceOut,
+    FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_SELECTED_QUERIES,
+    OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist, QueryHitCell,
+    ResponseOut, RunNowCitation,
+    RunNowResult, RunOut, SeedPromptSubmitPayload,
+    SelectedQueriesPayload, ShareOfVoiceOut,
     TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
@@ -313,6 +315,285 @@ def submit_seed_prompt(
         "submitted_at": datetime.utcnow().isoformat(),
     })
     t.seed_prompts_json = json.dumps(seeds, ensure_ascii=False)
+    _append_changelog(t, actor_id=current_user.id, actor_role="user",
+                      field="seed_prompts", after=text, note="user submitted new seed")
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
+
+
+# ─────────── Phase D — 画像 / 提交审核 / 监测问题勾选 ────────────
+
+
+def _append_changelog(t: AiTelemetryTopicORM, *, actor_id: int | None, actor_role: str,
+                       field: str, before: str | None = None, after: str | None = None,
+                       note: str | None = None) -> None:
+    """topic_changelog_json 末尾追加一条记录(只增不减)."""
+    try:
+        log_arr = json.loads(t.topic_changelog_json or "[]")
+    except Exception:  # noqa: BLE001
+        log_arr = []
+    if not isinstance(log_arr, list):
+        log_arr = []
+    entry: dict = {
+        "at": datetime.utcnow().isoformat(),
+        "actor_id": actor_id,
+        "actor_role": actor_role,
+        "field": field,
+    }
+    if before is not None:
+        entry["before"] = before[:500]
+    if after is not None:
+        entry["after"] = after[:500]
+    if note is not None:
+        entry["note"] = note
+    log_arr.append(entry)
+    t.topic_changelog_json = json.dumps(log_arr, ensure_ascii=False)
+
+
+def _append_expansion_log(t: AiTelemetryTopicORM, *, seed: str, model: str,
+                           expanded_count: int, raw_excerpt: str) -> None:
+    """expansion_log_json 末尾追加一条"种子词扩展"的调用记录."""
+    try:
+        log_arr = json.loads(t.expansion_log_json or "[]")
+    except Exception:  # noqa: BLE001
+        log_arr = []
+    if not isinstance(log_arr, list):
+        log_arr = []
+    log_arr.append({
+        "at": datetime.utcnow().isoformat(),
+        "seed": seed[:200],
+        "model": model,
+        "expanded_count": int(expanded_count),
+        "raw_excerpt": (raw_excerpt or "")[:300],
+    })
+    t.expansion_log_json = json.dumps(log_arr, ensure_ascii=False)
+
+
+def _ensure_editable(t: AiTelemetryTopicORM) -> None:
+    """资料编辑权限:submission_status ∈ {draft, rejected} 时用户可改;pending/approved 不让动."""
+    s = (t.submission_status or "draft")
+    if s not in ("draft", "rejected"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "LOCKED_STATUS",
+                "field": "submission_status",
+                "message": f"submission_status={s},不允许编辑;请等待 admin 审核",
+            },
+        )
+
+
+def _validate_selected_cap(queries_json_str: str | None) -> None:
+    """selected=True 的 query 总数不能超过 MAX_SELECTED_QUERIES."""
+    try:
+        arr = json.loads(queries_json_str or "[]")
+    except Exception:  # noqa: BLE001
+        return
+    if not isinstance(arr, list):
+        return
+    n = sum(1 for q in arr if isinstance(q, dict) and bool(q.get("selected", True)))
+    if n > MAX_SELECTED_QUERIES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "TOO_MANY_SELECTED",
+                "field": "queries",
+                "message": f"最多勾选 {MAX_SELECTED_QUERIES} 个监测问题,当前 {n}",
+            },
+        )
+
+
+@router.put("/topics/{topic_id}/profile", response_model=TopicOut)
+def update_topic_profile(
+    topic_id: int,
+    payload: BrandProfile,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新 topic 的品牌画像(7 大模块).只允许在 draft/rejected 状态下改."""
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    _ensure_editable(t)
+    old_profile_summary = ""
+    try:
+        old = json.loads(t.profile_json or "{}")
+        old_profile_summary = old.get("profile_name") or old.get("company_short_name") or ""
+    except Exception:  # noqa: BLE001
+        pass
+    t.profile_json = json.dumps(payload.model_dump(), ensure_ascii=False)
+    # 把 industry / target 也回填到 topic 顶层字段,跟 profile 保持一致
+    if payload.industry:
+        t.industry = payload.industry
+    if payload.company_short_name and not t.target:
+        t.target = payload.company_short_name
+    if payload.profile_name and (t.name == "" or t.name == "(unnamed)"):
+        t.name = payload.profile_name
+    _append_changelog(
+        t, actor_id=current_user.id, actor_role="user", field="profile",
+        before=old_profile_summary or None,
+        after=payload.profile_name or payload.company_short_name or None,
+    )
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
+
+
+@router.post("/topics/{topic_id}/selected-queries", response_model=TopicOut)
+def update_selected_queries(
+    topic_id: int,
+    payload: SelectedQueriesPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """根据用户勾选,更新 queries_json 里每条的 `selected` 字段.
+
+    入参 items 用 text 匹配现有 queries — 不在 payload 里的 text 默认 selected=False.
+    新文本(payload 里有但 queries_json 没的)直接加进 queries_json,status=pending + selected=值.
+    """
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    _ensure_editable(t)
+    try:
+        arr = json.loads(t.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        arr = []
+    if not isinstance(arr, list):
+        arr = []
+    # 升级 legacy str → dict
+    upgraded: list[dict] = []
+    for q in arr:
+        if isinstance(q, str):
+            upgraded.append({"text": q, "status": "approved", "selected": True})
+        elif isinstance(q, dict) and q.get("text"):
+            upgraded.append(dict(q))
+    by_text = {q["text"]: q for q in upgraded}
+    now_iso = datetime.utcnow().isoformat()
+    desired_texts: set[str] = set()
+    for item in payload.items:
+        text = item.text.strip()
+        if not text:
+            continue
+        desired_texts.add(text)
+        if text in by_text:
+            by_text[text]["selected"] = bool(item.selected)
+        else:
+            upgraded.append({
+                "text": text,
+                "status": "pending",
+                "submitted_at": now_iso,
+                "selected": bool(item.selected),
+            })
+            by_text[text] = upgraded[-1]
+    # 不在 payload 里的:保留原状态,selected=False
+    for text, q in by_text.items():
+        if text not in desired_texts:
+            q["selected"] = False
+    selected_n = sum(1 for q in upgraded if q.get("selected"))
+    if selected_n > MAX_SELECTED_QUERIES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "TOO_MANY_SELECTED",
+                "field": "queries",
+                "message": f"最多勾选 {MAX_SELECTED_QUERIES} 个监测问题,当前 {selected_n}",
+            },
+        )
+    t.queries_json = json.dumps(upgraded, ensure_ascii=False)
+    _append_changelog(
+        t, actor_id=current_user.id, actor_role="user", field="selected_queries",
+        after=f"selected_count={selected_n}",
+    )
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
+
+
+@router.post("/topics/{topic_id}/submit-for-review", response_model=TopicOut)
+def submit_topic_for_review(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """把整张申请置为 pending,等 admin 审核.
+
+    校验:
+      - submission_status ∈ {draft, rejected}
+      - 画像 PROFILE_REQUIRED_FIELDS 都非空
+      - 至少 1 条种子(pending 或 approved)
+      - selected query 数 ∈ [1, 50]
+    """
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    _ensure_editable(t)
+
+    # 1) 画像必填校验
+    try:
+        profile_raw = json.loads(t.profile_json or "{}")
+    except Exception:  # noqa: BLE001
+        profile_raw = {}
+    if not isinstance(profile_raw, dict):
+        profile_raw = {}
+    missing: list[str] = []
+    for f in PROFILE_REQUIRED_FIELDS:
+        v = profile_raw.get(f)
+        if v is None or v == "" or v == [] or v == {}:
+            missing.append(f)
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "PROFILE_INCOMPLETE",
+                "field": "profile",
+                "message": "画像必填项缺失",
+                "missing": missing,
+            },
+        )
+
+    # 2) 种子词:至少 1 条 pending/approved
+    try:
+        seeds = json.loads(t.seed_prompts_json or "[]")
+    except Exception:  # noqa: BLE001
+        seeds = []
+    seed_ok = sum(
+        1 for s in seeds
+        if isinstance(s, dict) and s.get("text")
+        and (s.get("status") in (None, "pending", "approved"))
+    )
+    if seed_ok < 1:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "NO_SEED", "field": "seed_prompts",
+                    "message": "请至少填写 1 个种子提示词"},
+        )
+
+    # 3) selected query ∈ [1, 50]
+    try:
+        qarr = json.loads(t.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        qarr = []
+    selected_n = sum(
+        1 for q in qarr
+        if isinstance(q, dict) and q.get("text") and q.get("selected", True)
+    )
+    if selected_n < 1:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "NO_SELECTED", "field": "queries",
+                    "message": "请至少勾选 1 个监测问题"},
+        )
+    if selected_n > MAX_SELECTED_QUERIES:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "TOO_MANY_SELECTED", "field": "queries",
+                    "message": f"最多勾选 {MAX_SELECTED_QUERIES} 个监测问题,当前 {selected_n}"},
+        )
+
+    t.submission_status = "pending"
+    t.submitted_at = datetime.utcnow()
+    t.rejected_at = None
+    _append_changelog(
+        t, actor_id=current_user.id, actor_role="user", field="submission_status",
+        before=t.submission_status, after="pending",
+        note=f"selected_queries={selected_n}",
+    )
     db.commit()
     db.refresh(t)
     return TopicOut.from_orm_row(t)
@@ -399,6 +680,63 @@ async def suggest_queries(
         except ValueError:
             raise HTTPException(r.status_code, r.text)
     return r.json()
+
+
+@router.post("/topics/{topic_id}/expand-queries")
+async def expand_queries_for_topic(
+    topic_id: int, payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Phase D — 针对单个 topic 跑一次种子扩展,把调用记录写进 expansion_log_json.
+
+    body: {seed, count?=50} — count 默认 50(对应监测问题上限).
+    resp: {seed, queries: [str, ...]} — 与 /suggest-queries 同 schema.
+
+    扩展候选不直接落 queries_json — 前端拿到后让用户勾选,再调 /selected-queries.
+    """
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    _ensure_editable(t)
+    seed = (payload.get("seed") or "").strip()
+    if not seed:
+        raise HTTPException(400, "seed cannot be empty")
+    try:
+        count = int(payload.get("count", 50))
+    except (TypeError, ValueError):
+        count = 50
+    count = max(5, min(count, MAX_SELECTED_QUERIES))
+
+    target = t.target or ""
+    industry = t.industry or ""
+    try:
+        aliases = json.loads(t.target_aliases_json or "[]")
+    except Exception:  # noqa: BLE001
+        aliases = []
+    body = {"seed": seed, "count": count, "target": target,
+            "aliases": aliases, "industry": industry}
+    url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
+    try:
+        async with httpx.AsyncClient(timeout=200.0) as client:
+            r = await client.post(url, json=body)
+    except httpx.HTTPError as e:
+        log.warning("telemetry-service suggest-queries failed: %s", e)
+        raise HTTPException(502, f"telemetry-service unavailable: {e}")
+    if r.status_code != 200:
+        try:
+            raise HTTPException(r.status_code, r.json().get("detail") or r.text)
+        except ValueError:
+            raise HTTPException(r.status_code, r.text)
+
+    data = r.json()
+    queries_out = data.get("queries") or []
+    model_name = data.get("model") or "deepseek"
+    raw_excerpt = ", ".join(queries_out[:5])
+    _append_expansion_log(
+        t, seed=seed, model=model_name,
+        expanded_count=len(queries_out), raw_excerpt=raw_excerpt,
+    )
+    db.commit()
+    return data
 
 
 # ─────────────────────────── Trigger run + result queries ─────

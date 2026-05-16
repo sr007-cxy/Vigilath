@@ -223,6 +223,137 @@ class EmailService:
             reply_to=email,
         )
 
+    def send_review_result_email(
+        self,
+        *,
+        to: str,
+        topic_name: str,
+        decision: str,                                  # "approved" | "rejected"
+        reject_reason: Optional[str] = None,
+        execution_plan_url: Optional[str] = None,
+    ) -> bool:
+        """Phase D — 整张申请审核结果通知用户(approved / rejected)."""
+        if decision == "approved":
+            subject = f"【GEO】审核通过:{topic_name}"
+            cta_block = ""
+            if execution_plan_url:
+                cta_block = f"""
+            <p>
+              <a href="{execution_plan_url}"
+                 style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                查看执行计划书
+              </a>
+            </p>
+            <p style="word-break: break-all; color: #4b5563;">{execution_plan_url}</p>
+            """
+            html = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+                <h2 style="color: #111827;">你的画像申请已通过审核</h2>
+                <p>主题:<strong>{topic_name}</strong></p>
+                <p>我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
+                {cta_block}
+                <p>内容文案稿正在异步生成,生成完成后会在「内容审核」环节再次通知你。</p>
+                <p>— GEO 团队</p>
+              </body>
+            </html>
+            """
+            text_lines = [
+                f"你的画像申请已通过审核",
+                f"主题:{topic_name}",
+                "",
+                "我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书。",
+            ]
+            if execution_plan_url:
+                text_lines.append(f"查看执行计划书:{execution_plan_url}")
+            text_lines += ["", "— GEO 团队"]
+            return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
+
+        # rejected
+        subject = f"【GEO】审核未通过:{topic_name}"
+        reason_block = (
+            f'<p><strong>未通过原因:</strong></p>'
+            f'<blockquote style="margin:0;padding:12px 16px;background:#f3f4f6;border-left:4px solid #ef4444;">{reject_reason}</blockquote>'
+            if reject_reason else ""
+        )
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+            <h2 style="color: #111827;">你的画像申请未通过审核</h2>
+            <p>主题:<strong>{topic_name}</strong></p>
+            {reason_block}
+            <p>请按反馈调整画像 / 种子 / 监测问题后,重新提交审核。</p>
+            <p>— GEO 团队</p>
+          </body>
+        </html>
+        """
+        text_lines = [
+            "你的画像申请未通过审核",
+            f"主题:{topic_name}",
+            "",
+        ]
+        if reject_reason:
+            text_lines.append(f"未通过原因:{reject_reason}")
+            text_lines.append("")
+        text_lines += ["请按反馈调整画像后重新提交审核。", "", "— GEO 团队"]
+        return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
+
+    def send_content_review_result_email(
+        self,
+        *,
+        to: str,
+        doc_title: str,
+        decision: str,                                  # "approved" | "rejected" | "published"
+        reject_reason: Optional[str] = None,
+        publish_targets: Optional[list[dict]] = None,
+    ) -> bool:
+        """Phase D — 内容文档审核结果通知(approved / rejected / published)."""
+        if decision == "approved":
+            subject = f"【GEO】内容审核通过:{doc_title}"
+            body_title = "你的内容稿件已通过审核"
+            extra = "<p>等待运营选定发布平台与媒体后,稿件会进入「已发布」状态。</p>"
+        elif decision == "published":
+            targets_html = ""
+            if publish_targets:
+                chips = "".join(
+                    f'<span style="display:inline-block;padding:4px 10px;margin:2px 4px 2px 0;'
+                    f'background:#eff6ff;color:#1d4ed8;border-radius:9999px;font-size:12px;">'
+                    f'{(t.get("platform") or "")} {(t.get("media") or "")}</span>'
+                    for t in publish_targets if isinstance(t, dict)
+                )
+                targets_html = f"<p><strong>发布去向:</strong></p><div>{chips}</div>"
+            subject = f"【GEO】内容已发布:{doc_title}"
+            body_title = "你的内容稿件已被标记为发布"
+            extra = targets_html
+        else:
+            subject = f"【GEO】内容审核未通过:{doc_title}"
+            body_title = "你的内容稿件未通过审核"
+            extra = (
+                f'<p><strong>未通过原因:</strong></p>'
+                f'<blockquote style="margin:0;padding:12px 16px;background:#f3f4f6;border-left:4px solid #ef4444;">{reject_reason}</blockquote>'
+                if reject_reason else ""
+            )
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+            <h2 style="color: #111827;">{body_title}</h2>
+            <p>稿件标题:<strong>{doc_title}</strong></p>
+            {extra}
+            <p>— GEO 团队</p>
+          </body>
+        </html>
+        """
+        text_lines = [body_title, f"稿件标题:{doc_title}", ""]
+        if decision == "rejected" and reject_reason:
+            text_lines.append(f"未通过原因:{reject_reason}")
+        if decision == "published" and publish_targets:
+            text_lines.append("发布去向:")
+            for t in publish_targets:
+                if isinstance(t, dict):
+                    text_lines.append(f"  - {t.get('platform', '')} {t.get('media', '')}".rstrip())
+        text_lines += ["", "— GEO 团队"]
+        return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
+
     def send_sales_lead_confirmation_email(
         self, recipient_email: str, name: str, tier_slug: Optional[str] = None
     ) -> bool:

@@ -54,10 +54,25 @@ class AiTelemetryTopicORM(Base):
 
     # v2(Phase C)起 query 项 schema 扩展加 status / submitted_at / approved_at:
     # list[str] | list[{text, created_at, cluster_id?}] | list[{text, status, submitted_at, ...}]
+    # v3(Phase D)起 query 项再加 `selected`:用户从扩展池里勾选为监测对象的 ≤50 个
     queries_json = Column(Text, nullable=False, default="[]")
     clusters_json = Column(Text, nullable=False, default="[]")  # list[{cluster_id, label, size}]
     engines_json = Column(Text, nullable=False, default="[]")   # list[engine_id]
     enabled = Column(Boolean, nullable=False, default=True)
+
+    # v3(Phase D)审核工作流:整张申请的状态机 + 资料快照
+    # profile_json:7 大模块品牌画像表单(画像基础 / 内容创作方向 / 品牌主体 / 服务核心 / 用户痛点 / 品牌故事 / 创作边界)
+    profile_json = Column(Text, nullable=False, default="{}")
+    submission_status = Column(String, nullable=False, default="draft")
+    # ↑ draft / pending / approved / rejected — 与 seed_prompts_json[].status 是两层:整张申请 + 单条种子词
+    submitted_at = Column(DateTime, nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    rejected_at = Column(DateTime, nullable=True)
+    reviewer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # 主题日志:每次画像/种子/queries 变更追加一条 {at, actor_id, actor_role, field, before, after}
+    topic_changelog_json = Column(Text, nullable=False, default="[]")
+    # 泛化日志:种子词 → LLM 扩展 query 候选的调用记录 [{at, seed, model, expanded_count, raw_excerpt}]
+    expansion_log_json = Column(Text, nullable=False, default="[]")
 
     last_run_at = Column(DateTime, nullable=True)
     last_run_status = Column(String, nullable=True)             # success / failed / running
@@ -198,6 +213,68 @@ class AiTelemetryTopicBriefingORM(Base):
     generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AiTelemetryTopicExecutionPlanORM(Base):
+    """v3(Phase D)— 审核通过时生成的执行计划书快照.
+
+    包含:画像 + 监测问题 + 主题/泛化日志的不变副本(后续即便 topic 被编辑也保留生成时形态)
+    + 指向那次"通过即跑"的 run_id,运行进度由 _query_hits 表实时聚合.
+    """
+    __tablename__ = "ai_telemetry_topic_execution_plans"
+    __table_args__ = (Index("idx_tep_topic", "topic_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id", ondelete="CASCADE"), nullable=False)
+    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    generated_by_reviewer_id = Column(Integer, nullable=True)
+
+    # 项目总体状况快照:画像 + 监测问题数 + 引擎清单
+    overview_json = Column(Text, nullable=False, default="{}")
+    # 主题日志快照(生成那一刻的 topic_changelog_json 副本)
+    topic_changelog_snapshot_json = Column(Text, nullable=False, default="[]")
+    # 泛化日志快照(生成那一刻的 expansion_log_json 副本)
+    expansion_log_snapshot_json = Column(Text, nullable=False, default="[]")
+    # 监测问题清单快照(approved 且 selected 的 query 文本列表)
+    monitored_queries_snapshot_json = Column(Text, nullable=False, default="[]")
+
+    run_id = Column(Integer, ForeignKey("ai_telemetry_runs.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=False, default="generating")   # generating / ready / failed
+    error = Column(Text, nullable=True)
+
+
+class TopicGeneratedDocORM(Base):
+    """v3(Phase D)— 基于画像 + 通过的监测问题,LLM 生成的内容文案稿.
+
+    生命周期:draft → pending_review → approved/rejected → published(approved 后选发布平台 / 媒体)
+    publish_targets_json 不真实调外部平台 OpenAPI,只记录"标注为已发布到哪里".
+    """
+    __tablename__ = "topic_generated_docs"
+    __table_args__ = (
+        Index("idx_tgd_topic", "topic_id"),
+        Index("idx_tgd_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id", ondelete="CASCADE"), nullable=False)
+    execution_plan_id = Column(Integer, ForeignKey("ai_telemetry_topic_execution_plans.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    source_query_text = Column(Text, nullable=False, default="")
+    title = Column(String, nullable=False, default="")
+    body_markdown = Column(Text, nullable=False, default="")
+    summary = Column(Text, nullable=False, default="")          # 200 字内摘要 — 卡片用
+    llm_model = Column(String, nullable=False, default="")
+    generation_error = Column(Text, nullable=True)
+
+    status = Column(String, nullable=False, default="draft")
+    # ↑ draft(LLM 刚出)/ pending_review(admin 勾入审核)/ approved / rejected / published
+    selected_for_review = Column(Boolean, nullable=False, default=False)
+    review_decision_at = Column(DateTime, nullable=True)
+    reviewer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reject_reason = Column(Text, nullable=True)
+    # [{platform: "抖音"|"小红书"|"视频号"|"公众号", media: "...", marked_at, marked_by}]
+    publish_targets_json = Column(Text, nullable=False, default="[]")
+
+
 # ─────────────────────────── Schemas ──────────────────────────
 
 
@@ -234,6 +311,204 @@ class QueryItem(BaseModel):
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     reviewer_id: Optional[int] = None
+    # Phase D 监测勾选:用户从扩展池里勾的 ≤50 个 → selected=True;legacy 数据默认 True
+    selected: bool = True
+
+
+# ─────────────── Phase D — 品牌画像(7 大模块) ──────────────
+
+
+class BrandProfile(BaseModel):
+    """用户提交资料时填的 7 大模块表单.
+
+    画像跟 topic 一一对应,序列化进 topic.profile_json.
+    必填项见各字段 Field 注解(min_length / 默认值);submit-for-review 端点会再做完整校验.
+    """
+    # 一、画像基础标识
+    profile_name: str = Field("", max_length=128)               # 画像名称
+    company_full_name: str = Field("", max_length=256)          # 公司 / 品牌全称
+    company_short_name: str = Field("", max_length=64)          # 公司 / 品牌简称
+    industry: str = Field("", max_length=128)                   # 所属行业 / 赛道
+    core_business_lines: list[str] = Field(default_factory=list, max_length=20)  # 核心业务线(多选)
+    service_geo: str = Field("", max_length=256)                # 服务地域
+
+    # 二、内容创作方向(都是多选)
+    creation_directions: list[str] = Field(default_factory=list, max_length=20)  # 创作方向
+    copywriting_types: list[str] = Field(default_factory=list, max_length=20)    # 文案类型偏好
+    target_platforms: list[str] = Field(default_factory=list, max_length=20)     # 适配平台
+    content_tones: list[str] = Field(default_factory=list, max_length=20)        # 内容调性偏好
+    content_redlines: list[str] = Field(default_factory=list, max_length=20)     # 内容雷区 / 禁止项(选填)
+
+    # 三、品牌主体信息
+    team_size: str = Field("", max_length=64)                                    # 公司 / 团队规模(选填)
+    founded_year: str = Field("", max_length=64)                                 # 成立时间 / 从业年限
+    core_credentials: list[str] = Field(default_factory=list, max_length=20)     # 核心荣誉 / 背书资质
+    brand_diff_tags: list[str] = Field(default_factory=list, max_length=10)      # 品牌差异化标签(3-5 个)
+
+    # 四、产品 / 服务核心信息
+    core_service_overview: str = Field("", max_length=2000)                      # 核心服务概述
+    service_features: list[str] = Field(default_factory=list, max_length=20)     # 服务核心特点
+    service_process: list[str] = Field(default_factory=list, max_length=20)      # 服务关键流程 / 环节
+    target_scenarios: list[str] = Field(default_factory=list, max_length=20)     # 服务覆盖场景 / 客户类型
+    service_guarantees: list[str] = Field(default_factory=list, max_length=20)   # 服务交付保障(选填)
+
+    # 五、目标用户与痛点
+    target_audience: list[str] = Field(default_factory=list, max_length=20)      # 核心目标用户画像
+    user_pain_points: list[str] = Field(default_factory=list, max_length=20)     # 用户核心痛点
+    user_faqs: list[str] = Field(default_factory=list, max_length=20)            # 用户高频疑问 / 常见误区
+    decision_factors: list[str] = Field(default_factory=list, max_length=20)     # 用户决策关键因素
+
+    # 六、品牌故事与情感素材
+    brand_story: str = Field("", max_length=2000)                                # 品牌故事 / 成立初衷
+    key_person_story: str = Field("", max_length=2000)                           # 核心人物故事(选填)
+    case_stories: list[str] = Field(default_factory=list, max_length=20)         # 典型案例(选填)
+    brand_values: str = Field("", max_length=1000)                               # 品牌价值观 / 服务理念
+
+    # 七、补充素材与创作边界
+    available_materials: list[str] = Field(default_factory=list, max_length=20)  # 可提供的素材类型(选填)
+    brand_slogan: str = Field("", max_length=256)                                # Slogan / 宣传语(选填)
+    core_message: str = Field("", max_length=1000)                               # 本次内容核心信息
+    extra_notes: str = Field("", max_length=2000)                                # 其他补充说明(选填)
+
+
+# 7 大模块的必填字段清单 — submit-for-review 校验用
+PROFILE_REQUIRED_FIELDS: tuple[str, ...] = (
+    "profile_name", "company_full_name", "company_short_name",
+    "industry", "core_business_lines", "service_geo",
+    "creation_directions", "copywriting_types", "target_platforms", "content_tones",
+    "founded_year", "core_credentials", "brand_diff_tags",
+    "core_service_overview", "service_features", "service_process", "target_scenarios",
+    "target_audience", "user_pain_points", "user_faqs", "decision_factors",
+    "brand_story", "brand_values",
+    "core_message",
+)
+
+
+class TopicChangelogEntry(BaseModel):
+    at: datetime
+    actor_id: Optional[int] = None
+    actor_role: str = "user"                # user / admin / system
+    field: str
+    before: Optional[str] = None
+    after: Optional[str] = None
+    note: Optional[str] = None
+
+
+class ExpansionLogEntry(BaseModel):
+    at: datetime
+    seed: str = ""
+    model: str = ""
+    expanded_count: int = 0
+    raw_excerpt: str = ""                   # 前 300 字截断
+
+
+class SubmitForReviewPayload(BaseModel):
+    """提交审核 — 校验:画像必填齐 + ≥1 个 pending/approved 种子 + ≤50 个 selected query."""
+    pass
+
+
+# 监测问题 selected 上限
+MAX_SELECTED_QUERIES = 50
+
+
+class MonitoredQueryItem(BaseModel):
+    """用户勾选/取消勾选监测问题时的输入项."""
+    text: str
+    selected: bool
+
+
+class SelectedQueriesPayload(BaseModel):
+    items: list[MonitoredQueryItem] = Field(..., max_length=500)
+
+
+# ─────────────── Phase D — 执行计划书 / 内容文档 ──────────────
+
+
+class TopicProgressCell(BaseModel):
+    query: str
+    engine: str
+    status: str                          # pending / running / done
+    hit: Optional[bool] = None
+    last_checked_at: Optional[datetime] = None
+
+
+class TopicExecutionPlanOut(BaseModel):
+    id: int
+    topic_id: int
+    generated_at: datetime
+    generated_by_reviewer_id: Optional[int]
+    status: str                          # generating / ready / failed
+    error: Optional[str] = None
+    # 项目总体状况
+    overview: dict
+    # 主题日志(快照,只增不减)
+    topic_changelog: list[TopicChangelogEntry]
+    # 泛化日志(快照)
+    expansion_log: list[ExpansionLogEntry]
+    # 监测问题清单(快照,文本数组)
+    monitored_queries: list[str]
+    # 运行进度 — 实时聚合,run 完成后停止变化
+    run_id: Optional[int] = None
+    run_status: Optional[str] = None     # running / success / failed
+    progress: list[TopicProgressCell] = Field(default_factory=list)
+    progress_done: int = 0
+    progress_total: int = 0
+
+
+class GeneratedDocOut(BaseModel):
+    id: int
+    topic_id: int
+    execution_plan_id: Optional[int]
+    created_at: datetime
+    source_query_text: str
+    title: str
+    body_markdown: str
+    summary: str
+    llm_model: str
+    generation_error: Optional[str]
+    status: str
+    selected_for_review: bool
+    review_decision_at: Optional[datetime]
+    reviewer_id: Optional[int]
+    reject_reason: Optional[str]
+    publish_targets: list[dict]
+
+    @classmethod
+    def from_orm_row(cls, r: "TopicGeneratedDocORM") -> "GeneratedDocOut":
+        try:
+            targets = json.loads(r.publish_targets_json or "[]")
+        except Exception:  # noqa: BLE001
+            targets = []
+        if not isinstance(targets, list):
+            targets = []
+        return cls(
+            id=r.id, topic_id=r.topic_id, execution_plan_id=r.execution_plan_id,
+            created_at=r.created_at,
+            source_query_text=r.source_query_text or "",
+            title=r.title or "", body_markdown=r.body_markdown or "",
+            summary=r.summary or "", llm_model=r.llm_model or "",
+            generation_error=r.generation_error,
+            status=r.status, selected_for_review=bool(r.selected_for_review),
+            review_decision_at=r.review_decision_at, reviewer_id=r.reviewer_id,
+            reject_reason=r.reject_reason, publish_targets=targets,
+        )
+
+
+class PublishTargetItem(BaseModel):
+    platform: str = Field(..., min_length=1, max_length=32)
+    media: str = Field("", max_length=128)
+
+
+class PublishPayload(BaseModel):
+    publish_targets: list[PublishTargetItem] = Field(..., min_length=1, max_length=20)
+
+
+class RejectDocPayload(BaseModel):
+    reason: str = Field("", max_length=500)
+
+
+class SelectDocsPayload(BaseModel):
+    doc_ids: list[int] = Field(..., min_length=1, max_length=100)
 
 
 class TopicPayload(BaseModel):
@@ -269,12 +544,22 @@ class TopicOut(BaseModel):
     query_cluster_ids: list[int]
     # Phase C — 跟 queries 同长的 status 数组,便于前端徽章渲染
     query_statuses: list[ReviewStatus]
+    # Phase D — 跟 queries 同长的 selected 数组(用户勾选为监测问题的标志)
+    query_selected: list[bool]
     clusters: list[ClusterMeta]
     seed_prompts: list[SeedPromptItem]
     engines: list[str]
     enabled: bool
     last_run_at: Optional[datetime]
     last_run_status: Optional[str]
+    # Phase D — 资料申请状态机
+    profile: BrandProfile
+    submission_status: str                  # draft / pending / approved / rejected
+    submitted_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    reviewer_id: Optional[int] = None
+    selected_query_count: int = 0           # 当前 selected=True 的 query 数,前端徽章用
     created_at: datetime
     updated_at: datetime
 
@@ -285,10 +570,12 @@ class TopicOut(BaseModel):
         #   v1: list[{text, created_at}]
         #   v2 (intent cluster): list[{text, created_at, cluster_id}]
         #   v3 (Phase C 审核): list[{text, cluster_id?, status, submitted_at?, ...}]
+        #   v4 (Phase D 监测勾选): list[{text, ..., selected: bool}]
         raw = json.loads(r.queries_json or "[]")
         queries: list[str] = []
         cluster_ids: list[int] = []
         statuses: list[str] = []
+        selected: list[bool] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
@@ -296,16 +583,28 @@ class TopicOut(BaseModel):
                     queries.append(t)
                     cid = q.get("cluster_id")
                     cluster_ids.append(int(cid) if isinstance(cid, int) else -1)
-                    # legacy 无 status 字段的项视为已批准(向后兼容)
                     statuses.append(q.get("status") or "approved")
+                    # legacy 无 selected 字段:默认 True(老话题的 query 默认都参与监测)
+                    selected.append(bool(q.get("selected", True)))
             elif isinstance(q, str):
                 queries.append(q)
                 cluster_ids.append(-1)
                 statuses.append("approved")
+                selected.append(True)
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         seeds_raw = json.loads(getattr(r, "seed_prompts_json", None) or "[]")
         seeds = [SeedPromptItem(**s) for s in seeds_raw if isinstance(s, dict)]
+        try:
+            profile_data = json.loads(getattr(r, "profile_json", None) or "{}")
+        except Exception:  # noqa: BLE001
+            profile_data = {}
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+        try:
+            profile = BrandProfile(**profile_data)
+        except Exception:  # noqa: BLE001
+            profile = BrandProfile()
         return cls(
             id=r.id,
             name=r.name,
@@ -315,12 +614,20 @@ class TopicOut(BaseModel):
             queries=queries,
             query_cluster_ids=cluster_ids,
             query_statuses=statuses,
+            query_selected=selected,
             clusters=clusters,
             seed_prompts=seeds,
             engines=json.loads(r.engines_json or "[]"),
             enabled=r.enabled,
             last_run_at=r.last_run_at,
             last_run_status=r.last_run_status,
+            profile=profile,
+            submission_status=getattr(r, "submission_status", None) or "draft",
+            submitted_at=getattr(r, "submitted_at", None),
+            approved_at=getattr(r, "approved_at", None),
+            rejected_at=getattr(r, "rejected_at", None),
+            reviewer_id=getattr(r, "reviewer_id", None),
+            selected_query_count=sum(1 for s in selected if s),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )

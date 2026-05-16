@@ -1,7 +1,8 @@
-// Admin 审核 API — Phase C.
+// Admin 审核 API — Phase C 单条审核 + Phase D 整张申请审核.
 // 端点都挂在 /api/admin/review,后端用 require_admin 守门;调用方需带 admin token.
 
 import { localizedHeaders, readApiError } from './apiError';
+import type { BrandProfile, SubmissionStatus, Topic } from './aiTelemetryApi';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
@@ -53,7 +54,84 @@ async function request<T>(
   return resp.json() as Promise<T>;
 }
 
+// ── Phase D — 整张申请审核 ───────────────────────────
+
+export interface TopicReviewListItem {
+  topic_id: number;
+  topic_name: string;
+  user_id: number;
+  user_email: string;
+  submission_status: SubmissionStatus;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  profile_name: string;
+  company_short_name: string;
+  industry: string;
+  seed_count: number;
+  selected_query_count: number;
+}
+
+export interface TopicChangelogEntry {
+  at: string;
+  actor_id?: number | null;
+  actor_role: 'user' | 'admin' | 'system';
+  field: string;
+  before?: string | null;
+  after?: string | null;
+  note?: string | null;
+}
+
+export interface ExpansionLogEntry {
+  at: string;
+  seed: string;
+  model: string;
+  expanded_count: number;
+  raw_excerpt: string;
+}
+
+export interface TopicReviewDetail extends Topic {
+  user_email: string;
+  topic_changelog: TopicChangelogEntry[];
+  expansion_log: ExpansionLogEntry[];
+}
+
+export interface AdminPatchTopicPayload {
+  profile?: BrandProfile;
+  seed_prompts?: string[];
+  selected_query_texts?: string[];
+  add_queries?: string[];
+  note?: string;
+}
+
+export interface TopicProgressCell {
+  query: string;
+  engine: string;
+  status: 'pending' | 'running' | 'done';
+  hit?: boolean | null;
+  last_checked_at?: string | null;
+}
+
+export interface ExecutionPlan {
+  id: number;
+  topic_id: number;
+  generated_at: string;
+  generated_by_reviewer_id?: number | null;
+  status: 'generating' | 'ready' | 'failed';
+  error?: string | null;
+  overview: Record<string, unknown>;
+  topic_changelog: TopicChangelogEntry[];
+  expansion_log: ExpansionLogEntry[];
+  monitored_queries: string[];
+  run_id?: number | null;
+  run_status?: 'running' | 'success' | 'failed' | null;
+  progress: TopicProgressCell[];
+  progress_done: number;
+  progress_total: number;
+}
+
 export const adminReviewApi = {
+  // Phase C 兼容入口
   async listPending(token: string): Promise<PendingReview> {
     return request<PendingReview>('GET', '/pending', token);
   },
@@ -68,5 +146,26 @@ export const adminReviewApi = {
   },
   async rejectQueries(topicId: number, indices: number[], token: string): Promise<void> {
     return request<void>('POST', `/queries/${topicId}/reject`, token, { indices });
+  },
+
+  // Phase D — 整张申请
+  async listTopicReviews(token: string, status?: SubmissionStatus): Promise<TopicReviewListItem[]> {
+    const qs = status ? `?status=${status}` : '';
+    return request<TopicReviewListItem[]>('GET', `/topics${qs}`, token);
+  },
+  async getTopicReview(topicId: number, token: string): Promise<TopicReviewDetail> {
+    return request<TopicReviewDetail>('GET', `/topic/${topicId}`, token);
+  },
+  async patchTopic(topicId: number, payload: AdminPatchTopicPayload, token: string): Promise<TopicReviewDetail> {
+    return request<TopicReviewDetail>('PATCH', `/topic/${topicId}`, token, payload);
+  },
+  async approveTopic(topicId: number, token: string): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>('POST', `/topic/${topicId}/approve`, token);
+  },
+  async rejectTopic(topicId: number, reason: string, token: string): Promise<void> {
+    return request<void>('POST', `/topic/${topicId}/reject`, token, { reason });
+  },
+  async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);
   },
 };

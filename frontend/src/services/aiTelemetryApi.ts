@@ -32,15 +32,84 @@ export interface Topic {
   queries: string[];
   query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老主题或未聚类)
   query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
+  query_selected?: boolean[];        // Phase D — 与 queries 同长,标记是否选为监测问题
   clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
   seed_prompts?: SeedPrompt[];       // Phase C — 已提交的种子词列表
   engines: EngineId[];
   enabled: boolean;
   last_run_at?: string | null;
   last_run_status?: 'success' | 'failed' | 'running' | null;
+  // Phase D — 画像 + 申请状态机
+  profile?: BrandProfile;
+  submission_status?: SubmissionStatus;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  reviewer_id?: number | null;
+  selected_query_count?: number;
   created_at?: string;
   updated_at?: string;
 }
+
+export type SubmissionStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+
+// Phase D — 品牌画像 (7 大模块)
+export interface BrandProfile {
+  // 一、画像基础标识
+  profile_name: string;
+  company_full_name: string;
+  company_short_name: string;
+  industry: string;
+  core_business_lines: string[];
+  service_geo: string;
+  // 二、内容创作方向
+  creation_directions: string[];
+  copywriting_types: string[];
+  target_platforms: string[];
+  content_tones: string[];
+  content_redlines: string[];
+  // 三、品牌主体信息
+  team_size: string;
+  founded_year: string;
+  core_credentials: string[];
+  brand_diff_tags: string[];
+  // 四、产品 / 服务核心信息
+  core_service_overview: string;
+  service_features: string[];
+  service_process: string[];
+  target_scenarios: string[];
+  service_guarantees: string[];
+  // 五、目标用户与痛点
+  target_audience: string[];
+  user_pain_points: string[];
+  user_faqs: string[];
+  decision_factors: string[];
+  // 六、品牌故事与情感素材
+  brand_story: string;
+  key_person_story: string;
+  case_stories: string[];
+  brand_values: string;
+  // 七、补充素材与创作边界
+  available_materials: string[];
+  brand_slogan: string;
+  core_message: string;
+  extra_notes: string;
+}
+
+export const EMPTY_BRAND_PROFILE: BrandProfile = {
+  profile_name: '', company_full_name: '', company_short_name: '',
+  industry: '', core_business_lines: [], service_geo: '',
+  creation_directions: [], copywriting_types: [], target_platforms: [],
+  content_tones: [], content_redlines: [],
+  team_size: '', founded_year: '', core_credentials: [], brand_diff_tags: [],
+  core_service_overview: '', service_features: [], service_process: [],
+  target_scenarios: [], service_guarantees: [],
+  target_audience: [], user_pain_points: [], user_faqs: [], decision_factors: [],
+  brand_story: '', key_person_story: '', case_stories: [], brand_values: '',
+  available_materials: [], brand_slogan: '', core_message: '', extra_notes: '',
+};
+
+export const MAX_SELECTED_QUERIES = 50;
 
 export interface ClusterMetaPersist {
   cluster_id: number;

@@ -89,6 +89,7 @@ const en = {
             "signedInAs": "Signed in as",
             "dashboard": "AEO",
             "adminReview": "Review",
+            "adminContentReview": "Content Review",
             "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",
             "account": "Account",
@@ -2598,22 +2599,140 @@ const en = {
           "admin": {
             "review": {
               "title": "Review",
-              "subtitle": "Platform ops review tenant-submitted seed prompts + queries; approved items lock and become append-only",
-              "tab": {
-                "seed": "Seed Prompts",
-                "queries": "Queries"
-              },
-              "emptySeed": "No seed prompts pending review",
-              "emptyQueries": "No queries pending review",
+              "subtitle": "Review tenant-submitted profile + seeds + monitored queries; approval triggers a run, generates the execution plan and queues content generation",
+              "empty": "No applications match this filter",
               "refresh": "Refresh",
               "approve": "Approve",
               "reject": "Reject",
+              "cancel": "Cancel",
+              "confirmReject": "Confirm reject",
+              "rejectReasonLabel": "Reject reason (sent in the notification email):",
+              "edit": "Edit",
+              "save": "Save",
+              "editorNote": "Only common fields; ask the user to edit the full profile on /dashboard/topics/:id/profile",
+              "viewPlan": "View execution plan",
+              "filter": {
+                "all": "All",
+                "draft": "Draft",
+                "pending": "Pending",
+                "approved": "Approved",
+                "rejected": "Rejected"
+              },
+              "card": {
+                "seedCount": "{{n}} seeds",
+                "selectedCount": "{{n}}/{{max}} monitored",
+                "submittedAt": "submitted"
+              },
+              "section": {
+                "profile": "Brand Profile",
+                "seeds": "Seed Prompts",
+                "monitored": "Monitored queries ({{n}}/{{max}})",
+                "changelog": "Topic changelog"
+              },
+              "tab": { "seed": "Seed Prompts", "queries": "Queries" },
+              "emptySeed": "No seed prompts pending review",
+              "emptyQueries": "No queries pending review",
               "batchApprove": "Approve selected",
               "batchReject": "Reject selected",
               "queryCountUnit": "pending",
               "pickedHint": "{{n}} selected",
               "targetLabel": "Target:",
               "byUser": "Submitted by:"
+            },
+            "executionPlan": {
+              "title": "Execution Plan",
+              "subtitle": "Overview / Topic changelog / Expansion log / Run progress",
+              "backToReview": "Back to review",
+              "errorPrefix": "Error",
+              "section": {
+                "overview": "Project overview",
+                "changelog": "Topic changelog ({{n}})",
+                "expansion": "Expansion log ({{n}})",
+                "progress": "Run progress"
+              }
+            },
+            "contentReview": {
+              "title": "Content Review",
+              "subtitle": "Pick an account + topic to review generated drafts; approve first, then mark publish platforms and media",
+              "refresh": "Refresh",
+              "empty": "No documents match this filter",
+              "topicLabel": "Account / Topic",
+              "statusLabel": "Status",
+              "statusFilter": {
+                "all": "All",
+                "to_review": "To review",
+                "draft": "Draft",
+                "pending_review": "In review",
+                "approved": "Approved",
+                "rejected": "Rejected",
+                "published": "Published"
+              },
+              "sendToReview": "Send {{n}} to review",
+              "view": "View",
+              "approve": "Approve",
+              "reject": "Reject",
+              "cancel": "Cancel",
+              "confirmReject": "Confirm reject",
+              "rejectReasonLabel": "Reject reason:",
+              "rejectReason": "Reject reason",
+              "sourceQuery": "Source query",
+              "genError": "Generation failed",
+              "emptyBody": "(empty body)",
+              "choosePublish": "Choose publish targets",
+              "publishedTo": "Published to",
+              "publishPlatformLabel": "Choose platforms (multi-select)",
+              "publishMediaLabel": "Media / account (optional)",
+              "publishMediaPlaceholder": "e.g. official brand account",
+              "confirmPublish": "Publish to {{n}} platform(s)"
+            }
+          },
+          "topic": {
+            "profile": {
+              "title": "Topic Profile",
+              "subtitle": "Submit brand profile + seeds + monitored queries (≤50). Approval auto-generates the execution plan and content drafts.",
+              "backToDashboard": "Back to dashboard",
+              "notFound": "Topic not found",
+              "saved": "Saved",
+              "saving": "Saving…",
+              "submitted": "Submitted for review",
+              "submitting": "Submitting…",
+              "save": "Save profile",
+              "submitForReview": "Submit for review",
+              "missing": "{{n}} required field(s) missing",
+              "allFilled": "All required fields filled",
+              "selectedNow": "Monitored {{n}}/{{max}}",
+              "tab": {
+                "profile": "Profile",
+                "seeds": "Seeds",
+                "monitor": "Monitored"
+              },
+              "status": {
+                "draft": "Draft",
+                "pending": "Pending review",
+                "approved": "Approved",
+                "rejected": "Rejected"
+              },
+              "statusHint": {
+                "draft": "Complete the profile and pick monitored queries, then submit for review",
+                "pending": "Under platform review — editing disabled",
+                "approved": "Approved. Execution plan ready; content drafts are being generated.",
+                "rejected": "Rejected — adjust per the email feedback and resubmit"
+              },
+              "seeds": {
+                "hint": "Seed prompts feed query expansion; new seeds enter pending state.",
+                "placeholder": "Type a seed prompt",
+                "add": "Add",
+                "empty": "No seed prompts yet"
+              },
+              "monitor": {
+                "expandTitle": "Expand monitored-query candidates from a seed",
+                "expandHint": "LLM expands candidates based on your profile and seed. Pick up to 50 to monitor.",
+                "seedPlaceholder": "Seed (e.g. \"inheritance law\")",
+                "expand": "Expand",
+                "selectedHint": "{{n}}/{{max}} monitored selected",
+                "cap": "At most {{max}} monitored queries",
+                "empty": "No candidates yet — expand above or add queries from the editor"
+              }
             }
           },
           "account": {

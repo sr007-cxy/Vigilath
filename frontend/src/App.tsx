@@ -42,6 +42,9 @@ const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ defa
 const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
 const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
 const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
+const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
+const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
+const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
 const SentimentSettings = lazy(() => import('./pages/Dashboard/sentiment/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -105,6 +108,7 @@ function App() {
                 <Route path="history" element={<HistoryTab />} />
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>
+              <Route path="/dashboard/topics/:topicId/profile" element={<TopicProfile />} />
               <Route path="/dashboard" element={<DashboardLayout />}>
                 {/* 首页 = 配置(原 AI 遥测的「主题配置」tab)
                     key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
@@ -120,6 +124,8 @@ function App() {
               <Route path="/workbench" element={<WorkbenchLayout />}>
                 <Route index element={<Navigate to="review" replace />} />
                 <Route path="review" element={<AdminReview />} />
+                <Route path="content-review" element={<AdminContentReview />} />
+                <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />
