@@ -6,18 +6,22 @@ admin_review.approve_topic 通过 FastAPI BackgroundTasks 异步触发。
 流程:
   1. 加载 topic 的画像 + 通过的监测问题(approved 且 selected)
   2. 对每条监测问题,组装 prompt(画像中创作方向/文案类型/平台/调性/雷区/Slogan)
-  3. 调用 DeepSeek 拿 LLM 输出(JSON {title, body, summary})
+  3. 调用 LLM(DeepSeek) 拿输出(JSON {title, body, summary})
   4. 落 TopicGeneratedDocORM(status=draft)
 
-LLM 提供商沿用项目里 query 扩展用的同一份 DeepSeek key,无需再配 OpenRouter:
-endpoint 走 OpenAI 兼容的 /chat/completions,跟 telemetry-service/query_suggest 一致.
+模型用 DeepSeek-Chat.两条路:
+  - 直连:配 DEEPSEEK_API_KEY,走 https://api.deepseek.com/chat/completions
+  - 走 OpenRouter:配 OPENROUTER_API_KEY,model 用 deepseek/deepseek-chat
+两个都没配 → 落库时记错误,不阻塞审核流程.
 
 失败粒度:单条 query 失败不影响其它,失败的稿件会用 generation_error 记录原因.
 
-ENV(沿用 telemetry-service 的约定):
-    DEEPSEEK_API_KEY      必填(无则跳过生成,err 落库 → admin 看到原因)
+ENV:
+    DEEPSEEK_API_KEY      可选,优先使用 → 直连 DeepSeek
+    OPENROUTER_API_KEY    可选,fallback → 通过 OpenRouter 调 DeepSeek 模型
     DEEPSEEK_BASE_URL     可选,默认 https://api.deepseek.com
-    DEEPSEEK_MODEL        可选,默认 deepseek-chat
+    DEEPSEEK_MODEL        直连模型 id,可选,默认 deepseek-chat
+    OPENROUTER_DEEPSEEK_MODEL 可选,默认 deepseek/deepseek-chat
     GEO_CONTENT_TIMEOUT   可选,单条 LLM 请求超时(秒),默认 180
     GEO_CONTENT_MAX_DOCS  可选,单次审核最多生成多少稿(默认 = 监测问题数,上限 50)
 """
@@ -40,6 +44,8 @@ log = logging.getLogger(__name__)
 
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+OPENROUTER_DEEPSEEK_MODEL = os.environ.get("OPENROUTER_DEEPSEEK_MODEL", "deepseek/deepseek-chat")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = int(os.environ.get("GEO_CONTENT_TIMEOUT", "180"))
 
 
@@ -92,20 +98,29 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
         max_docs = min(int(os.environ.get("GEO_CONTENT_MAX_DOCS", "50")), len(queries))
         queries = queries[:max_docs]
 
-        api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        # 优先级:DEEPSEEK_API_KEY > OPENROUTER_API_KEY > 都没有则记错
+        if ds_key:
+            provider, model_id = "deepseek", DEEPSEEK_MODEL
+        elif or_key:
+            provider, model_id = "openrouter", OPENROUTER_DEEPSEEK_MODEL
+        else:
+            provider, model_id = None, DEEPSEEK_MODEL
+
         for q in queries:
             doc = TopicGeneratedDocORM(
                 topic_id=topic_id, execution_plan_id=plan_id,
                 source_query_text=q, status="draft",
-                llm_model=DEEPSEEK_MODEL,
+                llm_model=model_id,
             )
-            if not api_key:
-                doc.generation_error = "DEEPSEEK_API_KEY 未配置"
+            if not provider:
+                doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
                 doc.title = f"[未生成] {q}"
                 db.add(doc)
                 continue
             try:
-                title, body, summary = _generate_one(profile, q, api_key)
+                title, body, summary = _generate_one(profile, q, provider, ds_key or or_key)
                 doc.title = title
                 doc.body_markdown = body
                 doc.summary = summary
@@ -120,11 +135,13 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
         db.close()
 
 
-def _generate_one(profile: BrandProfile, query: str, api_key: str) -> tuple[str, str, str]:
+def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str) -> tuple[str, str, str]:
     """单条 query → (title, body_markdown, summary).
 
-    Prompt 把画像里跟"文案"相关的字段塞进系统消息,user message 是监测问题.
-    要求 LLM 返回严格 JSON 以便解析失败时报错.
+    provider:
+      - "deepseek":  直连 https://api.deepseek.com/chat/completions,model=deepseek-chat
+      - "openrouter": 走 https://openrouter.ai,model=deepseek/deepseek-chat
+    两条路 schema 都是 OpenAI 兼容 /chat/completions.
     """
     system_prompt = _build_system_prompt(profile)
     user_prompt = (
@@ -136,30 +153,41 @@ def _generate_one(profile: BrandProfile, query: str, api_key: str) -> tuple[str,
         f'  "body": Markdown 正文(800-1500 字,有小标题/分段)。\n'
         f"只输出 JSON,不要包前后 ``` 围栏。"
     )
+    if provider == "deepseek":
+        url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        model = DEEPSEEK_MODEL
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+    else:  # openrouter
+        url = OPENROUTER_URL
+        model = OPENROUTER_DEEPSEEK_MODEL
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://www.vigilath.com",
+            "X-Title": "GEO Content Generator",
+        }
     payload = {
-        "model": DEEPSEEK_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.7,
-        # DeepSeek 支持 OpenAI 风格 response_format,要求 user message 里出现 "json" 字样
-        # (我们 prompt 末尾明确写了"只输出 JSON",满足要求)
+        # DeepSeek/OpenRouter 都支持 OpenAI 风格 response_format;DeepSeek 要求 user
+        # message 里出现 "json" 字样,我们 prompt 末尾明确写了"只输出 JSON",满足要求
         "response_format": {"type": "json_object"},
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    url = f"{DEEPSEEK_BASE_URL}/chat/completions"
     r = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
     if r.status_code >= 400:
-        raise RuntimeError(f"DeepSeek {r.status_code}: {r.text[:200]}")
+        raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
     data = r.json()
     try:
         content = data["choices"][0]["message"]["content"]
     except Exception as e:  # noqa: BLE001
-        raise RuntimeError(f"unexpected DeepSeek response shape: {e}")
+        raise RuntimeError(f"unexpected {provider} response shape: {e}")
     parsed = _parse_json_loose(content)
     title = str(parsed.get("title") or "")[:200]
     body = str(parsed.get("body") or "")
