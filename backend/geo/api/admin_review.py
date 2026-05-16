@@ -236,6 +236,7 @@ class TopicReviewListItem(BaseModel):
     industry: str
     seed_count: int
     selected_query_count: int
+    version: int = 1                          # 修订号,跟 TopicOut.version 对齐
 
 
 class TopicReviewDetailOut(TopicOut):
@@ -303,6 +304,7 @@ def list_topic_reviews(
             industry=str(profile.get("industry") or r.industry or ""),
             seed_count=seed_count,
             selected_query_count=sel_n,
+            version=int(getattr(r, "version", 1) or 1),
         ))
     out.sort(key=lambda x: (x.submitted_at or datetime.min, x.topic_id), reverse=True)
     return out

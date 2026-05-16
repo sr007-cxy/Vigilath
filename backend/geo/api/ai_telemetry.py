@@ -353,18 +353,27 @@ def submit_seed_prompt(
 def _append_changelog(t: AiTelemetryTopicORM, *, actor_id: int | None, actor_role: str,
                        field: str, before: str | None = None, after: str | None = None,
                        note: str | None = None) -> None:
-    """topic_changelog_json 末尾追加一条记录(只增不减)."""
+    """topic_changelog_json 末尾追加一条记录(只增不减)+ version += 1.
+
+    version 自增是审计与"修订号"语义的核心:每条 changelog 条目都对应一个版本,
+    `version=N` 即第 N 次"有意义的状态改动"之后的快照。调用方不要绕过这里直接
+    改 topic 然后忘记记 changelog。
+    """
     try:
         log_arr = json.loads(t.topic_changelog_json or "[]")
     except Exception:  # noqa: BLE001
         log_arr = []
     if not isinstance(log_arr, list):
         log_arr = []
+    # version 自增:旧表(migration 之前)可能没这列,getattr 兜底成 1
+    new_version = int(getattr(t, "version", 1) or 1) + 1
+    t.version = new_version
     entry: dict = {
         "at": datetime.utcnow().isoformat(),
         "actor_id": actor_id,
         "actor_role": actor_role,
         "field": field,
+        "version": new_version,
     }
     if before is not None:
         entry["before"] = before[:500]

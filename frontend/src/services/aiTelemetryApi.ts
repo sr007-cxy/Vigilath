@@ -47,6 +47,8 @@ export interface Topic {
   rejected_at?: string | null;
   reviewer_id?: number | null;
   selected_query_count?: number;
+  // 修订号:每次编辑都 +1。后端 _append_changelog 是单一来源。
+  version?: number;
   created_at?: string;
   updated_at?: string;
 }

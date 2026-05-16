@@ -77,6 +77,11 @@ class AiTelemetryTopicORM(Base):
     last_run_at = Column(DateTime, nullable=True)
     last_run_status = Column(String, nullable=True)             # success / failed / running
 
+    # 修订号 — 每次任何字段改动(包括 admin 编辑 / 审核状态机迁移)都 +1。
+    # 跟 topic_changelog_json 配对:changelog 第 N 条对应的就是 version=N+1 的快照。
+    # 新建 topic 时 version=1;每次 _append_changelog 都 bump 一次。
+    version = Column(Integer, nullable=False, default=1)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -392,6 +397,8 @@ class TopicChangelogEntry(BaseModel):
     before: Optional[str] = None
     after: Optional[str] = None
     note: Optional[str] = None
+    # 这条 changelog 写入后 topic 的 version。老条目(migration 前的)没有,允许缺省
+    version: Optional[int] = None
 
 
 class ExpansionLogEntry(BaseModel):
@@ -573,6 +580,7 @@ class TopicOut(BaseModel):
     rejected_at: Optional[datetime] = None
     reviewer_id: Optional[int] = None
     selected_query_count: int = 0           # 当前 selected=True 的 query 数,前端徽章用
+    version: int = 1                        # 修订号:每次 _append_changelog 自增,前端徽章 "v3"
     created_at: datetime
     updated_at: datetime
 
@@ -641,6 +649,7 @@ class TopicOut(BaseModel):
             rejected_at=getattr(r, "rejected_at", None),
             reviewer_id=getattr(r, "reviewer_id", None),
             selected_query_count=sum(1 for s in selected if s),
+            version=int(getattr(r, "version", 1) or 1),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )

@@ -70,6 +70,7 @@ export interface TopicReviewListItem {
   industry: string;
   seed_count: number;
   selected_query_count: number;
+  version?: number;
 }
 
 export interface TopicChangelogEntry {
@@ -80,6 +81,7 @@ export interface TopicChangelogEntry {
   before?: string | null;
   after?: string | null;
   note?: string | null;
+  version?: number | null;
 }
 
 export interface ExpansionLogEntry {

@@ -240,6 +240,13 @@ function ApplicationCard({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-primary">{item.profile_name || item.topic_name}</span>
             <span className="text-xs text-muted">#{item.topic_id}</span>
+            {typeof item.version === 'number' && item.version > 1 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                    title={`第 ${item.version} 次修订`}>
+                v{item.version}
+              </span>
+            )}
             <StatusChip status={item.submission_status} />
           </div>
           <div className="text-xs text-secondary mt-0.5">
@@ -316,10 +323,17 @@ function ApplicationCard({
 
               {/* 主题日志 */}
               {detail.topic_changelog?.length > 0 && (
-                <Block title={t('admin.review.section.changelog')}>
-                  <ul className="text-xs space-y-1 max-h-40 overflow-auto">
-                    {detail.topic_changelog.slice(-10).reverse().map((e, i) => (
+                <Block title={`${t('admin.review.section.changelog')} (${detail.topic_changelog.length} 次修订)`}>
+                  <ul className="text-xs space-y-1 max-h-60 overflow-auto">
+                    {detail.topic_changelog.slice().reverse().map((e, i) => (
                       <li key={i} className="text-secondary">
+                        {typeof e.version === 'number' && (
+                          <span className="inline-block mr-1 text-[10px] px-1.5 py-0 rounded-full tabular-nums"
+                                style={{ background: 'var(--bg-card)', color: 'var(--text-muted)',
+                                         border: '1px solid var(--border-color)' }}>
+                            v{e.version}
+                          </span>
+                        )}
                         <span className="text-muted">{new Date(e.at).toLocaleString()}</span>
                         <span className="mx-1">·</span>
                         <span style={{ color: e.actor_role === 'admin' ? '#ef4444' : '#10b981' }}>{e.actor_role}</span>

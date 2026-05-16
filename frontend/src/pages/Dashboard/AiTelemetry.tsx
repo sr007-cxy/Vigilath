@@ -319,7 +319,16 @@ function TopicTable({
             return (
             <tr key={tp.id} style={{ borderTop: '1px solid var(--border-color)' }}>
               <td className="px-3 py-2 text-muted tabular-nums">{idx + 1}</td>
-              <td className="px-3 py-2 text-primary">{tp.name}</td>
+              <td className="px-3 py-2 text-primary">
+                {tp.name}
+                {typeof tp.version === 'number' && tp.version > 1 && (
+                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                        title={`第 ${tp.version} 次修订(每次编辑自增)`}>
+                    v{tp.version}
+                  </span>
+                )}
+              </td>
               <td className="px-3 py-2">
                 <span
                   className="inline-block px-2 py-0.5 rounded text-xs"
