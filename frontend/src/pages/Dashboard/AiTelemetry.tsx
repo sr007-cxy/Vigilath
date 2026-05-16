@@ -7,12 +7,13 @@
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
+import { BrandProfileForm } from '../../components/BrandProfileForm';
 import {
-  aiTelemetryApi, CN_ENGINES,
+  aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
+  type BrandProfile,
   type EngineId, type Topic, type TopicPayload,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
   type IntentBreakdown,
@@ -82,7 +83,6 @@ const ALL_TABS: TabKey[] = ['overview', 'tracking', 'briefings', 'config', 'resu
 
 export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const visibleTabs = (views && views.length > 0 ? views : ALL_TABS);
   const showTabBar = visibleTabs.length > 1;
@@ -259,7 +259,6 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
           topics={topics} loading={loading}
           onView={(tp) => { setEditorMode('view'); setEditing(tp); }}
           onEdit={(tp) => { setEditorMode('edit'); setEditing(tp); }}
-          onProfile={(tp) => { navigate(`/dashboard/topics/${tp.id}/profile`); }}
           onToggleEnabled={handleToggleEnabled}
         />
       )}
@@ -274,12 +273,11 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
 // ── 主题列表 ───────────────────────────────────────────────────
 
 function TopicTable({
-  topics, loading, onView, onEdit, onProfile, onToggleEnabled,
+  topics, loading, onView, onEdit, onToggleEnabled,
 }: {
   topics: Topic[]; loading: boolean;
   onView: (t: Topic) => void;
   onEdit: (t: Topic) => void;
-  onProfile: (t: Topic) => void;
   onToggleEnabled: (t: Topic) => void;
 }) {
   const { t } = useTranslation();
@@ -348,14 +346,6 @@ function TopicTable({
                   onClick={() => onEdit(tp)}
                 >
                   {t('dashboard.aiTelemetry.actions.edit')}
-                </button>
-                <button
-                  className="text-xs"
-                  style={{ color: 'var(--accent-primary)' }}
-                  onClick={() => onProfile(tp)}
-                  title={t('dashboard.aiTelemetry.actions.profileHint')}
-                >
-                  {t('dashboard.aiTelemetry.actions.profile')}
                 </button>
                 <button
                   className="text-xs"
@@ -1518,8 +1508,13 @@ interface TopicEditorProps {
 function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDone }: TopicEditorProps) {
   const readOnly = mode === 'view';
   const { t } = useTranslation();
-  const [name, setName] = useState(initial?.name || '');
-  const [target, setTarget] = useState(initial?.target || '');
+  // Phase D — 画像作为 Step 1 的核心;name/target/industry 从画像取值;只保留 aliases 单独输入
+  const [profile, setProfile] = useState<BrandProfile>(
+    () => ({ ...EMPTY_BRAND_PROFILE, ...(initial?.profile || {}) }),
+  );
+  // 画像里没有 aliases 字段,单独留一个文本输入 — 仅 topic 表用
+  const name = profile.profile_name;
+  const target = profile.company_short_name;
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
   // 引擎选择 UI 已隐藏 — 默认走 5 个国内引擎,编辑场景保留原配置;
   // enabled 同样固定 true(产品口径:种子提示词都按每天跑)
@@ -1539,7 +1534,8 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
   const [seeds, setSeeds] = useState<string[]>(() =>
     (initial?.seed_prompts || []).map(s => s.text).filter(Boolean)
   );
-  const [industry, setIndustry] = useState(initial?.industry || '');
+  // industry 也从 profile 取(同步 profile.industry,跟 name/target 同源)
+  const industry = profile.industry;
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
   // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果主题
@@ -1645,6 +1641,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
       engines: Array.from(engines),
       enabled,
       ...(seedTexts.length > 0 ? { seed_drafts: seedTexts } : {}),
+      profile,
     };
   };
 
@@ -1840,57 +1837,38 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
       <div className="px-5 py-5">
         <fieldset disabled={readOnly} className="border-0 p-0 m-0 min-w-0">
         {step === 1 && (
-          <div className="max-w-2xl space-y-4">
-            <label className="block">
-              <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.name')}*</span>
-              <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder={t('dashboard.aiTelemetry.form.namePlaceholder') || ''}
-                className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-xs text-secondary">
-                <span style={{ color: 'var(--accent-primary)' }}>★ </span>
-                {t('dashboard.aiTelemetry.form.target')}*
-              </span>
-              <input
-                type="text" value={target} onChange={e => setTarget(e.target.value)}
-                placeholder={t('dashboard.aiTelemetry.form.targetPlaceholder') || ''}
-                className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              />
-              <span className="text-xs text-muted">
-                {t('dashboard.aiTelemetry.form.targetHint')}
-              </span>
-            </label>
-
-            <label className="block">
-              <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.aliases')}</span>
-              <input
-                type="text" value={aliasesText} onChange={e => setAliasesText(e.target.value)}
-                placeholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
-                className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              />
-              <span className="text-xs text-muted">
-                {t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
-              </span>
-            </label>
-
-            <label className="block">
-              <span className="text-xs text-secondary">
-                {t('dashboard.aiTelemetry.form.suggestIndustryPlaceholder')?.replace(/[((].*?[))]/, '').trim()}
-              </span>
-              <input
-                type="text" value={industry} onChange={e => setIndustry(e.target.value)}
-                placeholder={t('dashboard.aiTelemetry.form.suggestIndustryPlaceholder') || ''}
-                className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-              />
-            </label>
+          <div className="space-y-4">
+            <p className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.profileHint')}
+            </p>
+            {/* 7 模块画像表单(画像名称/简称/行业 同时是 topic.name/target/industry) */}
+            <BrandProfileForm
+              profile={profile}
+              onChange={setProfile}
+              readOnly={readOnly}
+            />
+            {/* 画像里没有 aliases — 单独留 */}
+            <section
+              className="rounded-md p-4"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+            >
+              <h3 className="text-sm font-semibold text-primary mb-3">
+                {t('dashboard.aiTelemetry.form.aliasesSectionTitle')}
+              </h3>
+              <label className="block">
+                <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.aliases')}</span>
+                <input
+                  type="text" value={aliasesText} onChange={e => setAliasesText(e.target.value)}
+                  placeholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
+                  className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
+                  disabled={readOnly}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                />
+                <span className="text-xs text-muted">
+                  {t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
+                </span>
+              </label>
+            </section>
           </div>
         )}
 

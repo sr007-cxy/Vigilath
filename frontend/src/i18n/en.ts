@@ -1986,10 +1986,12 @@ const en = {
                 "rate": "Rate"
               },
               "form": {
-                "step1": "Setup",
+                "step1": "Profile + Setup",
                 "step2": "Seed prompts",
                 "step3": "Prompt expansion",
-                "step1Hint": "Fill in the brand, aliases and industry — these define the entity GEO will track.",
+                "step1Hint": "Fill the brand profile (7 modules) first — profile name / short name / industry double as the topic's basics.",
+                "profileHint": "Profile name, short name and industry are stored as the topic name / target / industry; materials, pain points and slogan feed downstream content generation.",
+                "aliasesSectionTitle": "Aliases (extra)",
                 "step2Hint": "Tenant types one or more seed prompts. On save they go into the review queue; locked seeds are append-only.",
                 "step3Hint": "Fan out ~200 queries per seed (from step 2), pick what to monitor, choose engines. Locked queries are append-only.",
                 "seedPromptsLabel": "Seed prompts (this submission)",

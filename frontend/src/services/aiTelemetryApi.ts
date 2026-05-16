@@ -130,6 +130,8 @@ export interface TopicPayload {
   // Phase C — 创建 / 更新时把当前种子词附带提交,后端追加进 seed_prompts_json (pending);
   // 编辑器允许多条种子串行扇出,因此接 list。字段名跟 Topic.seed_prompts (对象数组)区分.
   seed_drafts?: string[];
+  // Phase D — 同请求带画像;后端写 profile_json + 追加 changelog。
+  profile?: BrandProfile;
 }
 
 export interface RunNowResult {

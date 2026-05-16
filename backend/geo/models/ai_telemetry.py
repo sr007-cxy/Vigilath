@@ -527,6 +527,9 @@ class TopicPayload(BaseModel):
     # 字段名跟 TopicOut.seed_prompts(SeedPromptItem 列表)区分开 — 这里只是
     # 提交的纯文本,后端补 status/timestamp 写库.
     seed_drafts: Optional[list[str]] = Field(default=None, max_length=10)
+    # Phase D — 同请求一起提交品牌画像(7 大模块);后端写 profile_json + 追加 changelog.
+    # None / 缺失 = 这次保存不动 profile_json(向后兼容老 client).
+    profile: Optional[BrandProfile] = None
 
 
 class SeedPromptSubmitPayload(BaseModel):

@@ -228,6 +228,9 @@ def create_topic(
     _validate_payload(payload)
     clusters_dump = [c.model_dump() for c in payload.clusters] if payload.clusters else []
     seed_prompts_init = _append_seed_prompts("[]", payload.seed_drafts)
+    profile_init = "{}"
+    if payload.profile is not None:
+        profile_init = json.dumps(payload.profile.model_dump(), ensure_ascii=False)
     t = AiTelemetryTopicORM(
         user_id=current_user.id,
         name=payload.name.strip(),
@@ -239,10 +242,20 @@ def create_topic(
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
         enabled=payload.enabled,
+        profile_json=profile_init,
     )
     db.add(t)
     db.commit()
     db.refresh(t)
+    # 把画像创建动作追加到 changelog(创建时 changelog 还是空,直接补一条)
+    if payload.profile is not None:
+        _append_changelog(
+            t, actor_id=current_user.id, actor_role="user", field="profile",
+            after=payload.profile.profile_name or payload.profile.company_short_name,
+            note="created with profile",
+        )
+        db.commit()
+        db.refresh(t)
     return TopicOut.from_orm_row(t)
 
 
@@ -261,6 +274,13 @@ def update_topic(
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
     t.industry = payload.industry
+    # Phase D — 编辑时如果带了 profile,就写库 + 记 changelog
+    if payload.profile is not None:
+        t.profile_json = json.dumps(payload.profile.model_dump(), ensure_ascii=False)
+        _append_changelog(
+            t, actor_id=current_user.id, actor_role="user", field="profile",
+            after=payload.profile.profile_name or payload.profile.company_short_name,
+        )
     # Phase C — payload 带 seed_prompt 时追加为 pending(若 text 已存在则跳过)
     t.seed_prompts_json = _append_seed_prompts(t.seed_prompts_json, payload.seed_drafts)
     t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
