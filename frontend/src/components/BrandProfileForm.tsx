@@ -45,18 +45,25 @@ export function BrandProfileForm({
   return (
     <div className="space-y-6">
       <Section title="一、画像基础标识">
-        <TextRow label="画像名称" required={req.has('profile_name')} readOnly={readOnly}
-                 value={profile.profile_name} onChange={v => setField('profile_name', v)} />
-        <TextRow label="公司 / 品牌全称" required={req.has('company_full_name')} readOnly={readOnly}
-                 value={profile.company_full_name} onChange={v => setField('company_full_name', v)} />
-        <TextRow label="公司 / 品牌简称" required={req.has('company_short_name')} readOnly={readOnly}
-                 value={profile.company_short_name} onChange={v => setField('company_short_name', v)} />
-        <TextRow label="所属行业 / 赛道" required={req.has('industry')} readOnly={readOnly}
-                 value={profile.industry} onChange={v => setField('industry', v)} />
+        <Pair>
+          <TextRow label="画像名称" required={req.has('profile_name')} readOnly={readOnly}
+                   value={profile.profile_name} onChange={v => setField('profile_name', v)} />
+          <TextRow label="公司 / 品牌全称" required={req.has('company_full_name')} readOnly={readOnly}
+                   value={profile.company_full_name} onChange={v => setField('company_full_name', v)} />
+        </Pair>
+        <Pair>
+          <TextRow label="公司 / 品牌简称" required={req.has('company_short_name')} readOnly={readOnly}
+                   value={profile.company_short_name} onChange={v => setField('company_short_name', v)} />
+          <TextRow label="所属行业 / 赛道" required={req.has('industry')} readOnly={readOnly}
+                   value={profile.industry} onChange={v => setField('industry', v)} />
+        </Pair>
+        <Pair>
+          <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
+                   value={profile.service_geo} onChange={v => setField('service_geo', v)} />
+          <span />
+        </Pair>
         <TagsRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
                  value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
-        <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
-                 value={profile.service_geo} onChange={v => setField('service_geo', v)} />
       </Section>
 
       <Section title="二、内容创作方向">
@@ -75,10 +82,12 @@ export function BrandProfileForm({
       </Section>
 
       <Section title="三、品牌主体信息">
-        <TextRow label="公司 / 团队规模(选填)" required={false} readOnly={readOnly}
-                 value={profile.team_size} onChange={v => setField('team_size', v)} />
-        <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
-                 value={profile.founded_year} onChange={v => setField('founded_year', v)} />
+        <Pair>
+          <TextRow label="公司 / 团队规模(选填)" required={false} readOnly={readOnly}
+                   value={profile.team_size} onChange={v => setField('team_size', v)} />
+          <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
+                   value={profile.founded_year} onChange={v => setField('founded_year', v)} />
+        </Pair>
         <TagsRow label="核心荣誉 / 背书资质" required={req.has('core_credentials')} readOnly={readOnly}
                  value={profile.core_credentials} onChange={v => setField('core_credentials', v)} />
         <TagsRow label="品牌差异化标签(3-5 个)" required={req.has('brand_diff_tags')} readOnly={readOnly}
@@ -121,10 +130,13 @@ export function BrandProfileForm({
       </Section>
 
       <Section title="七、补充素材与创作边界">
+        <Pair>
+          <TextRow label="品牌 Slogan / 宣传语(选填)" required={false} readOnly={readOnly}
+                   value={profile.brand_slogan} onChange={v => setField('brand_slogan', v)} />
+          <span />
+        </Pair>
         <TagsRow label="可提供的素材类型(选填)" required={false} readOnly={readOnly}
                  value={profile.available_materials} onChange={v => setField('available_materials', v)} />
-        <TextRow label="品牌 Slogan / 宣传语(选填)" required={false} readOnly={readOnly}
-                 value={profile.brand_slogan} onChange={v => setField('brand_slogan', v)} />
         <TextAreaRow label="本次内容想传递的核心信息" required={req.has('core_message')} readOnly={readOnly}
                      value={profile.core_message} onChange={v => setField('core_message', v)} />
         <TextAreaRow label="其他补充说明(选填)" required={false} readOnly={readOnly}
@@ -132,6 +144,11 @@ export function BrandProfileForm({
       </Section>
     </div>
   );
+}
+
+function Pair({ children }: { children: React.ReactNode }) {
+  // md+ 两列网格,sm 单列。空槽位塞 <span /> 占位即可
+  return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

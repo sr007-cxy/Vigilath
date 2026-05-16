@@ -584,23 +584,46 @@ def approve_topic(
     t.rejected_at = None
     t.reviewer_id = admin.id
 
-    # 步骤 2: 同步 selected query 状态
+    # 步骤 2: 同步收尾子项状态 —— topic 已通过意味着 admin 接纳了整张申请,
+    # 候选池里所有还在 pending 的子项视为同步通过。selected 是独立的「是否纳入
+    # 监测」开关,跟审核状态解耦。不动 rejected(admin 已明确拒过的)和 approved。
+    #
+    # 历史 bug:这里只翻 `selected=True && status!=approved`,导致 unselected 候选
+    # 和 seed_prompts 永远卡 pending,前端「外面已通过、里面待审」的状态裂开。
+    now_iso = now.isoformat()
     try:
         qarr = json.loads(t.queries_json or "[]")
     except Exception:  # noqa: BLE001
         qarr = []
-    now_iso = now.isoformat()
+    q_promoted = 0
     for q in qarr:
         if not isinstance(q, dict) or not q.get("text"):
             continue
-        if q.get("selected", True) and q.get("status") != "approved":
+        if q.get("status") == "pending":
             q["status"] = "approved"
             q["approved_at"] = now_iso
             q["reviewer_id"] = admin.id
+            q_promoted += 1
     t.queries_json = json.dumps(qarr, ensure_ascii=False)
 
+    try:
+        sarr = json.loads(t.seed_prompts_json or "[]")
+    except Exception:  # noqa: BLE001
+        sarr = []
+    s_promoted = 0
+    for s in sarr:
+        if not isinstance(s, dict) or not s.get("text"):
+            continue
+        if s.get("status") == "pending":
+            s["status"] = "approved"
+            s["approved_at"] = now_iso
+            s["reviewer_id"] = admin.id
+            s_promoted += 1
+    t.seed_prompts_json = json.dumps(sarr, ensure_ascii=False)
+
     _append_changelog(t, actor_id=admin.id, actor_role="admin",
-                      field="submission_status", before=prev_status, after="approved")
+                      field="submission_status", before=prev_status, after="approved",
+                      note=f"queries_pending→approved={q_promoted}, seeds_pending→approved={s_promoted}")
 
     db.flush()  # 让 topic 拿到最新状态用于 snapshot
 

@@ -10,7 +10,8 @@ import {
   type TopicReviewListItem, type TopicReviewDetail,
 } from '../../services/adminReviewApi';
 import type { BrandProfile, SubmissionStatus } from '../../services/aiTelemetryApi';
-import { MAX_SELECTED_QUERIES } from '../../services/aiTelemetryApi';
+import { EMPTY_BRAND_PROFILE, MAX_SELECTED_QUERIES } from '../../services/aiTelemetryApi';
+import { BrandProfileForm } from '../../components/BrandProfileForm';
 
 const STATUS_FILTERS: { key: SubmissionStatus | 'all'; label: string }[] = [
   { key: 'pending',  label: 'pending' },
@@ -188,6 +189,48 @@ function ApplicationCard({
     }
   };
 
+  // 审核期允许 admin 编辑;approved 后整张冻结(后端也会拒)。
+  const canEdit = item.submission_status !== 'approved';
+
+  const saveSeedPrompts = async (texts: string[]) => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const d = await adminReviewApi.patchTopic(item.topic_id, { seed_prompts: texts }, token);
+      setDetail(d);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveSelectedQueries = async (texts: string[]) => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const d = await adminReviewApi.patchTopic(item.topic_id, { selected_query_texts: texts }, token);
+      setDetail(d);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addQueries = async (texts: string[]) => {
+    if (busy || texts.length === 0) return;
+    setBusy(true); setErr(null);
+    try {
+      const d = await adminReviewApi.patchTopic(item.topic_id, { add_queries: texts }, token);
+      setDetail(d);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="rounded-md"
              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -221,51 +264,54 @@ function ApplicationCard({
           {!detail && <div className="text-xs text-muted">…</div>}
           {detail && (
             <>
-              {/* 画像 */}
-              <Block title={t('admin.review.section.profile')} onEdit={item.submission_status !== 'approved' ? () => {
-                setDraft(detail.profile || null); setEditingProfile(true);
-              } : undefined}>
-                {!editingProfile && <ProfileSummary profile={detail.profile} />}
+              {/* 画像 — 全 7 模块,审核期可编辑 */}
+              <Block title={t('admin.review.section.profile')}
+                     onEdit={canEdit && !editingProfile ? () => {
+                       setDraft({ ...EMPTY_BRAND_PROFILE, ...(detail.profile || {}) });
+                       setEditingProfile(true);
+                     } : undefined}>
+                {!editingProfile && (
+                  <BrandProfileForm
+                    profile={{ ...EMPTY_BRAND_PROFILE, ...(detail.profile || {}) }}
+                    onChange={() => {}} readOnly />
+                )}
                 {editingProfile && draft && (
-                  <ProfileQuickEditor draft={draft} setDraft={setDraft}
-                                      onSave={saveProfile}
-                                      onCancel={() => { setEditingProfile(false); setDraft(null); }}
-                                      busy={busy} />
+                  <div className="space-y-3">
+                    <BrandProfileForm profile={draft} onChange={setDraft} />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => { setEditingProfile(false); setDraft(null); }}
+                              className="text-xs px-3 py-1 rounded-md"
+                              style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+                        {t('admin.review.cancel')}
+                      </button>
+                      <button type="button" disabled={busy} onClick={saveProfile}
+                              className="text-xs px-3 py-1 rounded-md text-white"
+                              style={{ background: 'var(--accent-primary)', opacity: busy ? 0.5 : 1 }}>
+                        {t('admin.review.save')}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </Block>
 
-              {/* 种子 */}
+              {/* 种子 — admin 审核期可增删 */}
               <Block title={t('admin.review.section.seeds')}>
-                <ul className="text-sm space-y-1">
-                  {(detail.seed_prompts || []).map((s, i) => (
-                    <li key={i} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-primary">{s.text}</span>
-                      <StatusChip status={(s.status as SubmissionStatus)} small />
-                    </li>
-                  ))}
-                  {(detail.seed_prompts || []).length === 0 && (
-                    <li className="text-xs text-muted">—</li>
-                  )}
-                </ul>
+                <SeedsEditor seeds={detail.seed_prompts || []}
+                             canEdit={canEdit} busy={busy}
+                             onSave={saveSeedPrompts} />
               </Block>
 
-              {/* 监测问题 (selected) */}
+              {/* 监测问题 — 显示所有 query(包含未勾选),勾选切换 + 追加 */}
               <Block title={t('admin.review.section.monitored', {
                 n: detail.query_selected?.filter(Boolean).length || 0,
                 max: MAX_SELECTED_QUERIES,
               })}>
-                <ul className="text-sm space-y-1">
-                  {(detail.queries || []).map((q, i) => {
-                    const sel = (detail.query_selected || [])[i];
-                    if (!sel) return null;
-                    return (
-                      <li key={i} className="flex items-center gap-2">
-                        <span className="text-primary flex-1">{q}</span>
-                        <StatusChip status={(detail.query_statuses?.[i] || 'approved') as SubmissionStatus} small />
-                      </li>
-                    );
-                  })}
-                </ul>
+                <QueriesEditor queries={detail.queries || []}
+                               selected={detail.query_selected || []}
+                               statuses={detail.query_statuses || []}
+                               canEdit={canEdit} busy={busy}
+                               onUpdateSelected={saveSelectedQueries}
+                               onAddQueries={addQueries} />
               </Block>
 
               {/* 主题日志 */}
@@ -366,81 +412,155 @@ function Block({ title, children, onEdit }:
   );
 }
 
-function ProfileSummary({ profile }: { profile?: BrandProfile }) {
-  if (!profile) return <div className="text-xs text-muted">—</div>;
-  const rows: [string, string | string[]][] = [
-    ['公司全称', profile.company_full_name],
-    ['行业', profile.industry],
-    ['服务地域', profile.service_geo],
-    ['核心业务', profile.core_business_lines],
-    ['创作方向', profile.creation_directions],
-    ['适配平台', profile.target_platforms],
-    ['内容调性', profile.content_tones],
-    ['内容雷区', profile.content_redlines],
-    ['品牌差异化', profile.brand_diff_tags],
-    ['用户痛点', profile.user_pain_points],
-    ['品牌故事', profile.brand_story],
-    ['Slogan', profile.brand_slogan],
-    ['核心信息', profile.core_message],
-  ];
-  return (
-    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-      {rows.filter(([_, v]) => Array.isArray(v) ? v.length > 0 : !!v).map(([k, v]) => (
-        <div key={k} className="flex items-start gap-2">
-          <dt className="text-muted shrink-0 min-w-[70px]">{k}:</dt>
-          <dd className="text-primary break-words">
-            {Array.isArray(v) ? v.join(' · ') : v}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function ProfileQuickEditor({
-  draft, setDraft, onSave, onCancel, busy,
+function SeedsEditor({
+  seeds, canEdit, busy, onSave,
 }: {
-  draft: BrandProfile;
-  setDraft: (p: BrandProfile) => void;
-  onSave: () => void;
-  onCancel: () => void;
+  seeds: { text: string; status: string }[];
+  canEdit: boolean;
   busy: boolean;
+  onSave: (texts: string[]) => void;
 }) {
-  const { t } = useTranslation();
-  // Admin 编辑器 — 只暴露最常调整的几项,要改全表去 user 端 /dashboard/topics/:id/profile.
+  const [draft, setDraft] = useState('');
+  const remove = (idx: number) => {
+    const next = seeds.filter((_, i) => i !== idx).map(s => s.text);
+    onSave(next);
+  };
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (seeds.some(s => s.text === v)) { setDraft(''); return; }
+    onSave([...seeds.map(s => s.text), v]);
+    setDraft('');
+  };
+  if (seeds.length === 0 && !canEdit) {
+    return <div className="text-xs text-muted">—</div>;
+  }
   return (
     <div className="space-y-2">
-      <div className="text-[10px] text-muted">{t('admin.review.editorNote')}</div>
-      {([
-        ['profile_name', '画像名称'],
-        ['company_full_name', '公司全称'],
-        ['company_short_name', '公司简称'],
-        ['industry', '行业'],
-        ['service_geo', '服务地域'],
-        ['brand_slogan', 'Slogan'],
-        ['core_message', '核心信息'],
-      ] as [keyof BrandProfile, string][]).map(([k, label]) => (
-        <div key={k} className="flex items-center gap-2">
-          <label className="text-xs text-muted w-20 shrink-0">{label}</label>
-          <input type="text" value={(draft[k] as string) || ''}
-                 onChange={e => setDraft({ ...draft, [k]: e.target.value })}
+      <ul className="text-sm space-y-1">
+        {seeds.map((s, i) => (
+          <li key={i} className="flex items-center gap-2 flex-wrap">
+            <span className="text-primary flex-1 break-words">{s.text}</span>
+            <StatusChip status={(s.status as SubmissionStatus)} small />
+            {canEdit && (
+              <button type="button" onClick={() => remove(i)} disabled={busy}
+                      className="text-xs px-1.5 py-0.5 rounded-md"
+                      style={{ color: '#ef4444', background: 'var(--bg-card)',
+                               opacity: busy ? 0.5 : 1 }}
+                      title="删除该种子">×</button>
+            )}
+          </li>
+        ))}
+        {seeds.length === 0 && <li className="text-xs text-muted">—</li>}
+      </ul>
+      {canEdit && (
+        <div className="flex gap-2">
+          <input type="text" value={draft}
+                 onChange={e => setDraft(e.target.value)}
+                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                 placeholder="新增种子词,回车或点添加"
+                 disabled={busy}
                  className="flex-1 text-xs px-2 py-1 rounded-md"
                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
                           border: '1px solid var(--border-color)' }} />
+          <button type="button" onClick={add} disabled={busy || !draft.trim()}
+                  className="text-xs px-3 py-1 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)',
+                           opacity: (busy || !draft.trim()) ? 0.5 : 1 }}>
+            添加
+          </button>
         </div>
-      ))}
-      <div className="flex justify-end gap-2 pt-1">
-        <button type="button" onClick={onCancel}
-                className="text-xs px-3 py-1 rounded-md"
-                style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
-          {t('admin.review.cancel')}
-        </button>
-        <button type="button" disabled={busy} onClick={onSave}
-                className="text-xs px-3 py-1 rounded-md text-white"
-                style={{ background: 'var(--accent-primary)', opacity: busy ? 0.5 : 1 }}>
-          {t('admin.review.save')}
-        </button>
+      )}
+    </div>
+  );
+}
+
+
+function QueriesEditor({
+  queries, selected, statuses, canEdit, busy, onUpdateSelected, onAddQueries,
+}: {
+  queries: string[];
+  selected: boolean[];
+  statuses: string[];
+  canEdit: boolean;
+  busy: boolean;
+  onUpdateSelected: (texts: string[]) => void;
+  onAddQueries: (texts: string[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const selectedTextsNow = queries.filter((_, i) => selected[i]);
+
+  const toggle = (i: number) => {
+    const next = queries.filter((_, idx) => {
+      const isSel = selected[idx] ?? false;
+      return idx === i ? !isSel : isSel;
+    });
+    if (next.length > MAX_SELECTED_QUERIES) {
+      return;
+    }
+    onUpdateSelected(next);
+  };
+
+  const addOne = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (queries.includes(v)) { setDraft(''); return; }
+    onAddQueries([v]);
+    setDraft('');
+  };
+
+  if (queries.length === 0 && !canEdit) {
+    return <div className="text-xs text-muted">—</div>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] text-muted">
+        {selectedTextsNow.length}/{MAX_SELECTED_QUERIES} 已勾选 · {queries.length} 个候选
       </div>
+      <ul className="text-sm space-y-1 max-h-72 overflow-auto pr-1">
+        {queries.map((q, i) => {
+          const sel = selected[i] ?? false;
+          const status = (statuses[i] || 'approved') as SubmissionStatus;
+          return (
+            <li key={i} className="flex items-center gap-2"
+                style={{ opacity: status === 'rejected' ? 0.5 : 1 }}>
+              {canEdit ? (
+                <input type="checkbox" checked={sel}
+                       disabled={busy || (!sel && selectedTextsNow.length >= MAX_SELECTED_QUERIES)}
+                       onChange={() => toggle(i)}
+                       style={{ accentColor: 'var(--accent-primary)' }} />
+              ) : (
+                <span className="w-3 h-3 inline-block"
+                      style={{ background: sel ? 'var(--accent-primary)' : 'transparent',
+                               border: '1px solid var(--border-color)',
+                               borderRadius: 2 }} />
+              )}
+              <span className="text-primary flex-1 break-words">{q}</span>
+              <StatusChip status={status} small />
+            </li>
+          );
+        })}
+        {queries.length === 0 && <li className="text-xs text-muted">暂无候选</li>}
+      </ul>
+      {canEdit && (
+        <div className="flex gap-2">
+          <input type="text" value={draft}
+                 onChange={e => setDraft(e.target.value)}
+                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOne(); } }}
+                 placeholder="新增监测问题(approved,需手动勾选)"
+                 disabled={busy}
+                 className="flex-1 text-xs px-2 py-1 rounded-md"
+                 style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)' }} />
+          <button type="button" onClick={addOne} disabled={busy || !draft.trim()}
+                  className="text-xs px-3 py-1 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)',
+                           opacity: (busy || !draft.trim()) ? 0.5 : 1 }}>
+            添加
+          </button>
+        </div>
+      )}
     </div>
   );
 }

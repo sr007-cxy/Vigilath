@@ -42,6 +42,11 @@ export interface SelectedItem {
   selected: boolean;
 }
 
+export interface ExtractProfileResp {
+  profile: BrandProfile;
+  used_model: string;
+}
+
 export const topicProfileApi = {
   async updateProfile(topicId: number, profile: BrandProfile, token: string): Promise<Topic> {
     return request<Topic>('PUT', `/topics/${topicId}/profile`, token, profile);
@@ -58,5 +63,8 @@ export const topicProfileApi = {
   },
   async submitForReview(topicId: number, token: string): Promise<Topic> {
     return request<Topic>('POST', `/topics/${topicId}/submit-for-review`, token);
+  },
+  async extractProfile(text: string, token: string): Promise<ExtractProfileResp> {
+    return request<ExtractProfileResp>('POST', '/profile/extract', token, { text });
   },
 };

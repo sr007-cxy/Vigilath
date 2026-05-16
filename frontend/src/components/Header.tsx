@@ -5,6 +5,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthModal } from '../contexts/AuthModalContext';
 import { switchLanguage } from '../i18n';
+import { authApi } from '../services/authApi';
 
 export function Header() {
   const { t, i18n } = useTranslation();
@@ -136,6 +137,28 @@ export function Header() {
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // 自愈:老版本登录写入的 localStorage.user 只有 email,没有 is_admin。
+  // 检测到这种残缺记录就用 token 调一次 /me 把完整 profile 补回去,
+  // 避免要求 admin 重新登录才能看到工作台入口。
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    try {
+      const stored = localStorage.getItem('user');
+      const parsed = stored ? JSON.parse(stored) : null;
+      if (parsed && typeof parsed.is_admin === 'undefined') {
+        const token = localStorage.getItem('token');
+        if (token) {
+          authApi.getCurrentUser(token).then((me) => {
+            localStorage.setItem('user', JSON.stringify(me));
+            loadUserFromLocalStorage();
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [isLoggedIn]);
 
   // Reactive: when login state changes (same tab), refresh user display immediately
   useEffect(() => {

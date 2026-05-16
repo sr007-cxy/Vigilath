@@ -1843,6 +1843,7 @@ const en = {
               "statuses": {
                 "draft": "Draft",
                 "reviewing": "In review",
+                "rejected": "Rejected",
                 "enabled": "Active",
                 "disabled": "Disabled"
               },
@@ -1986,7 +1987,7 @@ const en = {
                 "rate": "Rate"
               },
               "form": {
-                "step1": "Profile + Setup",
+                "step1": "Setup",
                 "step2": "Seed prompts",
                 "step3": "Prompt expansion",
                 "step1Hint": "Fill the brand profile (7 modules) first — profile name / short name / industry double as the topic's basics.",
@@ -2047,7 +2048,8 @@ const en = {
                 "enabled": "Enabled",
                 "scheduleNote": "Once enabled, this topic runs automatically every day.",
                 "runNow": "Run once now",
-                "save": "Save",
+                "save": "Save draft",
+                "saveAndSubmit": "Save & submit for review",
                 "cancel": "Cancel"
               },
               "engine": {

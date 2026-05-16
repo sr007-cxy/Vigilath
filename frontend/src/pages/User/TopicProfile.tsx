@@ -19,6 +19,7 @@ import {
   BrandProfileForm, PROFILE_REQUIRED_FIELDS as REQUIRED_FIELDS,
   profileMissingFields,
 } from '../../components/BrandProfileForm';
+import { ProfileImporter } from '../../components/ProfileImporter';
 
 type Tab = 'profile' | 'seeds' | 'monitor';
 
@@ -163,8 +164,12 @@ export function TopicProfile() {
       </div>
 
       {tab === 'profile' && (
-        <BrandProfileForm profile={profile} onChange={setProfile}
-                          readOnly={!isEditable} requiredKeys={REQUIRED_FIELDS} />
+        <div className="space-y-4">
+          <ProfileImporter profile={profile} onApply={setProfile}
+                           token={token} disabled={!isEditable} />
+          <BrandProfileForm profile={profile} onChange={setProfile}
+                            readOnly={!isEditable} requiredKeys={REQUIRED_FIELDS} />
+        </div>
       )}
       {tab === 'seeds' && (
         <SeedsView topic={topic} onChange={refresh} token={token} readOnly={!isEditable} />

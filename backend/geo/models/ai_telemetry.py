@@ -421,6 +421,16 @@ class SelectedQueriesPayload(BaseModel):
     items: list[MonitoredQueryItem] = Field(..., max_length=500)
 
 
+class ProfileExtractPayload(BaseModel):
+    """AI 智能填充 — 用户拖入文件或粘贴的原始文本."""
+    text: str = Field(..., min_length=10, max_length=60000)
+
+
+class ProfileExtractOut(BaseModel):
+    profile: BrandProfile
+    used_model: str
+
+
 # ─────────────── Phase D — 执行计划书 / 内容文档 ──────────────
 
 

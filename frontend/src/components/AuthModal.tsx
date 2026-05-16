@@ -56,11 +56,19 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     };
   }, [isOpen]);
 
-  const handleGoogleSuccess = (accessToken: string, profile: { email: string }) => {
-    // Header reads localStorage.user (not AuthContext) to render the logged-in
-    // email, so we must mirror what the password login path writes. Skip this
-    // and the token is valid but the header still shows "Log in".
-    localStorage.setItem('user', JSON.stringify({ email: profile.email }));
+  // 登录成功后回填 localStorage.user。Header 从这里读 is_admin 决定
+  // 「工作台」入口是否渲染,光写 email 会让 admin 看不到入口。
+  const persistUser = async (accessToken: string, fallbackEmail: string) => {
+    try {
+      const me = await authApi.getCurrentUser(accessToken);
+      localStorage.setItem('user', JSON.stringify(me));
+    } catch {
+      localStorage.setItem('user', JSON.stringify({ email: fallbackEmail }));
+    }
+  };
+
+  const handleGoogleSuccess = async (accessToken: string, profile: { email: string }) => {
+    await persistUser(accessToken, profile.email);
     setToken(accessToken);
     onClose();
     if (onSuccess) {
@@ -77,7 +85,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
 
     try {
       const response = await authApi.login(email, password);
-      localStorage.setItem('user', JSON.stringify({ email }));
+      await persistUser(response.access_token, email);
       setToken(response.access_token);
       onClose();
       if (onSuccess) {
@@ -106,7 +114,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     try {
       await authApi.register(email, password);
       const loginRes = await authApi.login(email, password);
-      localStorage.setItem('user', JSON.stringify({ email }));
+      await persistUser(loginRes.access_token, email);
       setToken(loginRes.access_token);
       onClose();
       if (onSuccess) {

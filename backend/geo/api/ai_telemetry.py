@@ -26,13 +26,15 @@ from geo.models.ai_telemetry import (
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
     FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_SELECTED_QUERIES,
-    OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist, QueryHitCell,
+    OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist,
+    ProfileExtractOut, ProfileExtractPayload, QueryHitCell,
     ResponseOut, RunNowCitation,
     RunNowResult, RunOut, SeedPromptSubmitPayload,
     SelectedQueriesPayload, ShareOfVoiceOut,
     TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
+from geo.services.profile_extractor import extract_profile_from_text
 from geo.models.user import User
 from sqlalchemy import func
 
@@ -647,6 +649,29 @@ async def run_now(
     except httpx.HTTPError as e:
         log.warning("telemetry-service run-now failed: %s", e)
         raise HTTPException(502, f"telemetry-service unavailable: {e}")
+
+
+# ─────────────── AI 智能填充 — 原始资料 → 品牌画像 ────────────
+
+
+@router.post("/profile/extract", response_model=ProfileExtractOut)
+def extract_profile_endpoint(
+    payload: ProfileExtractPayload,
+    current_user: User = Depends(get_current_user),
+):
+    """前端 step1「设置」里把用户拖入的文件文本 / 粘贴的原始资料丢给 LLM,
+    抽取出一份 BrandProfile 回填。空字段由调用方决定是否合并(默认只填空缺)。
+
+    503 = 后端没配 DEEPSEEK_API_KEY 或 OPENROUTER_API_KEY。
+    """
+    try:
+        profile, model_id = extract_profile_from_text(payload.text)
+    except Exception as e:  # noqa: BLE001
+        log.warning("profile extract failed for user %s: %s", current_user.id, e)
+        raise HTTPException(502, f"AI 解析失败: {e}")
+    if not model_id:
+        raise HTTPException(503, "未配置 DEEPSEEK_API_KEY / OPENROUTER_API_KEY,AI 智能填充不可用")
+    return ProfileExtractOut(profile=profile, used_model=model_id)
 
 
 # ─────────────── 候选 query 生成(DeepSeek)— 建话题时用 ───────────

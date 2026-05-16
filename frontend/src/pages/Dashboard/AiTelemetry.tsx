@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
 import { BrandProfileForm } from '../../components/BrandProfileForm';
+import { ProfileImporter } from '../../components/ProfileImporter';
+import { topicProfileApi } from '../../services/topicProfileApi';
 import {
   aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
   type BrandProfile,
@@ -366,18 +368,24 @@ function TopicTable({
   );
 }
 
-type TopicStatus = 'draft' | 'reviewing' | 'enabled' | 'disabled';
+type TopicStatus = 'draft' | 'reviewing' | 'rejected' | 'enabled' | 'disabled';
 
 function deriveTopicStatus(tp: Topic): TopicStatus {
+  // submission_status 是审核主真相;旧逻辑(看 seed_prompts.pending)会让"draft 但种子是 pending"
+  // 错误显示为"审核中",于是用户以为提交了,但 admin 那边查 submission_status='pending' 看不到。
+  const sub = tp.submission_status;
+  if (sub === 'pending') return 'reviewing';
+  if (sub === 'rejected') return 'rejected';
+  if (sub === 'approved') return tp.enabled === false ? 'disabled' : 'enabled';
+  // draft 或 undefined
   if (!tp.enabled) return 'disabled';
-  if (tp.seed_prompts?.some(s => s.status === 'pending')) return 'reviewing';
-  if (!tp.last_run_at || tp.queries.length === 0) return 'draft';
-  return 'enabled';
+  return 'draft';
 }
 
 const TOPIC_STATUS_STYLE: Record<TopicStatus, { bg: string; fg: string }> = {
   draft:    { bg: 'rgba(59,130,246,0.15)', fg: '#3b82f6' },
   reviewing:{ bg: 'rgba(234,179,8,0.15)',  fg: '#b45309' },
+  rejected: { bg: 'rgba(239,68,68,0.15)',  fg: '#dc2626' },
   enabled:  { bg: 'rgba(34,197,94,0.15)',  fg: '#16a34a' },
   disabled: { bg: 'var(--bg-input)',       fg: 'var(--text-muted)' },
 };
@@ -1645,31 +1653,53 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
     };
   };
 
+  // 把"保存"流程抽成纯函数,返回 saved topic;handleSave / handleSubmitForReview 复用
+  const persistTopic = async (): Promise<Topic | null> => {
+    if (!valid) return null;
+    if (initial?.id) {
+      const existingTexts = new Set(seedPrompts.map(s => s.text));
+      const newSeeds = seeds.map(s => s.trim()).filter(s => s && !existingTexts.has(s));
+      for (const s of newSeeds) {
+        await handleSubmitSeed(s);
+      }
+    }
+    const saved = await onSave(buildPayload());
+    if (!initial?.id && saved?.id) {
+      const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
+      for (const s of cleanSeeds) {
+        try {
+          await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
+        } catch (e) {
+          setSeedSubmitErr(e instanceof Error ? e.message : String(e));
+        }
+      }
+    }
+    return saved;
+  };
+
   const handleSave = async () => {
     if (!valid) return;
     setSaving(true);
     try {
-      // Phase C 编辑场景 — 把新增的种子词先 POST 到审核队列再 PUT topic
-      if (initial?.id) {
-        const existingTexts = new Set(seedPrompts.map(s => s.text));
-        const newSeeds = seeds.map(s => s.trim()).filter(s => s && !existingTexts.has(s));
-        for (const s of newSeeds) {
-          await handleSubmitSeed(s);
-        }
-      }
-      const saved = await onSave(buildPayload());
-      // 新建场景 — 拿到 topic.id 后再把本次填的种子词逐条 POST,保证 seed_prompts 落库
-      if (!initial?.id && saved?.id) {
-        const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
-        for (const s of cleanSeeds) {
-          try {
-            await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
-          } catch (e) {
-            setSeedSubmitErr(e instanceof Error ? e.message : String(e));
-          }
-        }
+      await persistTopic();
+      onSaveDone();
+    } finally { setSaving(false); }
+  };
+
+  // 「保存并提交审核」— save → submit-for-review → 关闭。
+  // 后端 422 = 画像或种子或 selected 不达标,把后端 detail 暴露给用户。
+  const handleSubmitForReview = async () => {
+    if (!valid || saving) return;
+    setSaving(true); setSubmitErr(null);
+    try {
+      const saved = await persistTopic();
+      if (saved?.id) {
+        await topicProfileApi.submitForReview(saved.id, token);
       }
       onSaveDone();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSubmitErr(msg);
     } finally { setSaving(false); }
   };
 
@@ -1722,6 +1752,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
     () => initial?.seed_prompts || []
   );
   const [seedSubmitErr, setSeedSubmitErr] = useState<string | null>(null);
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   // step 3 用于挖掘候选的"种子选择" — 来源是 step 2 新加 + 服务端已固化的种子词;
   // 默认全选,用户在 step 3 可勾掉个别种子只针对剩下的去扇出
@@ -1841,6 +1872,8 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             <p className="text-xs text-muted">
               {t('dashboard.aiTelemetry.form.profileHint')}
             </p>
+            <ProfileImporter profile={profile} onApply={setProfile}
+                             token={token} disabled={readOnly} />
             {/* 7 模块画像表单(画像名称/简称/行业 同时是 topic.name/target/industry) */}
             <BrandProfileForm
               profile={profile}
@@ -2228,16 +2261,31 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             </button>
           )}
           {step === 3 && !readOnly && (
-            <button
-              type="button" onClick={handleSave} disabled={!valid || saving}
-              className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-              style={{ background: 'var(--accent-primary)' }}
-            >
-              {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
-            </button>
+            <>
+              <button
+                type="button" onClick={handleSave} disabled={!valid || saving}
+                className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                         border: '1px solid var(--border-color)' }}
+              >
+                {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
+              </button>
+              <button
+                type="button" onClick={handleSubmitForReview} disabled={!valid || saving}
+                className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+                style={{ background: 'var(--accent-primary)' }}
+              >
+                {saving ? '…' : t('dashboard.aiTelemetry.form.saveAndSubmit')}
+              </button>
+            </>
           )}
         </div>
       </footer>
+      {submitErr && (
+        <div className="px-5 pb-3 text-xs" style={{ color: '#ef4444' }}>
+          ⚠ {submitErr}
+        </div>
+      )}
     </section>
   );
 }

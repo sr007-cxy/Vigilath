@@ -1849,6 +1849,7 @@ const zh = {
               "statuses": {
                 "draft": "编辑",
                 "reviewing": "审核中",
+                "rejected": "已驳回",
                 "enabled": "启用",
                 "disabled": "弃用"
               },
@@ -1992,7 +1993,7 @@ const zh = {
                 "rate": "评分"
               },
               "form": {
-                "step1": "画像 + 设置",
+                "step1": "设置",
                 "step2": "种子提示词",
                 "step3": "提示词扩展",
                 "step1Hint": "先填品牌画像(7 大模块) — 画像名称 / 简称 / 行业 同时作为主题的基础设置",
@@ -2053,7 +2054,8 @@ const zh = {
                 "enabled": "启用",
                 "scheduleNote": "※ 启用后每天自动跑一次,无需手动设置时间",
                 "runNow": "立即试跑一次",
-                "save": "保存",
+                "save": "保存草稿",
+                "saveAndSubmit": "保存并提交审核",
                 "cancel": "取消"
               },
               "engine": {
