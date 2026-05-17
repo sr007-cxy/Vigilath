@@ -316,8 +316,29 @@ export function Home() {
             </div>
           </section>
 
-          {/* Brand Growth Engine Section — 全流程工作台入口(单卡) */}
+          {/* Brand Growth Engine Section — section header + 单卡(对仗「高级检测能力」结构) */}
           <section className="mt-10 sm:mt-30">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-secondary"
+                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-xs font-semibold text-secondary">
+                    {t('home.brandGrowth.badge')}
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                  <span className="gradient-text">{t('home.brandGrowth.title')}</span>
+                </h2>
+                <p className="text-secondary text-sm sm:text-base max-w-2xl">
+                  {t('home.brandGrowth.subtitle')}
+                </p>
+              </div>
+            </div>
+
             <div
               role="button"
               onClick={() => {
@@ -334,16 +355,8 @@ export function Home() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-surface border border-soft mb-2">
-                  <span className="text-[11px] font-semibold text-secondary">
-                    {t('home.brandGrowth.badge')}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-bold mb-1.5 tracking-tight">
-                  <span className="gradient-text">{t('home.brandGrowth.title')}</span>
-                </h2>
                 <p className="text-secondary text-sm sm:text-base leading-relaxed">
-                  {t('home.brandGrowth.subtitle')}
+                  {t('home.brandGrowth.cardDesc')}
                 </p>
               </div>
               <div className="shrink-0">

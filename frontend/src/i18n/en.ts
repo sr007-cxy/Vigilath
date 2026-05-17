@@ -345,6 +345,7 @@ const en = {
               "subtitle": "Fill in a brand profile once — AI expands monitored queries, drafts content, and walks the whole review-and-publish flow.",
               "cta": "Open workbench",
               "ctaUnauth": "Log in to enter",
+              "cardDesc": "Fill in a brand profile; AI expands monitored queries, drafts ~50 pieces of content, and after review you mark platforms + media to publish.",
               "cards": {
                 "profile": {
                   "title": "Profile + one-click AI fill",
