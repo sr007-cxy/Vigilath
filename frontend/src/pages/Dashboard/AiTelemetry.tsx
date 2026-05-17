@@ -2061,6 +2061,22 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
                 </span>
               </div>
 
+              {/* 手动添加 — 即便没跑 DeepSeek 也能直接填要监测的问题。
+                  写入 suggestions(score=0, 无 cluster_id) + 自动勾进 picked. */}
+              <ManualQueryAdder
+                disabled={readOnly}
+                pickedCap={pickedCap}
+                addQuery={(text) => {
+                  const v = text.trim();
+                  if (!v) return false;
+                  if (suggestions.some(q => q.text === v) || picked.has(v)) return false;
+                  if (picked.size >= QUERY_MAX_PICK) return false;
+                  setSuggestions(prev => [...prev, { text: v, score: 0, sources: [] }]);
+                  setPicked(prev => new Set(prev).add(v));
+                  return true;
+                }}
+              />
+
               {suggestions.length === 0 ? (
                 <div
                   className="rounded-md p-6 text-xs text-muted text-center"
@@ -2291,6 +2307,63 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
         </div>
       )}
     </section>
+  );
+}
+
+function ManualQueryAdder({
+  disabled, pickedCap, addQuery,
+}: {
+  disabled: boolean;
+  pickedCap: boolean;
+  addQuery: (text: string) => boolean;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState('');
+  const [hint, setHint] = useState<string | null>(null);
+
+  const submit = () => {
+    const v = draft.trim();
+    if (!v) return;
+    const ok = addQuery(v);
+    if (ok) {
+      setDraft('');
+      setHint(null);
+    } else {
+      setHint(
+        pickedCap
+          ? t('dashboard.aiTelemetry.form.manualAddCap')
+          : t('dashboard.aiTelemetry.form.manualAddDuplicate'),
+      );
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-2">
+      <div className="flex-1">
+        <input
+          type="text" value={draft}
+          disabled={disabled || pickedCap}
+          onChange={e => { setDraft(e.target.value); if (hint) setHint(null); }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
+          placeholder={t('dashboard.aiTelemetry.form.manualAddPlaceholder') || ''}
+          className="w-full px-3 py-1.5 rounded-md text-xs"
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)',
+                   color: 'var(--text-primary)', opacity: (disabled || pickedCap) ? 0.5 : 1 }}
+        />
+        {hint && <div className="mt-1 text-[11px]" style={{ color: '#f59e0b' }}>{hint}</div>}
+      </div>
+      <button
+        type="button" onClick={submit}
+        disabled={disabled || pickedCap || !draft.trim()}
+        className="px-3 py-1.5 text-xs rounded-md text-white whitespace-nowrap"
+        style={{
+          background: 'var(--accent-primary)',
+          opacity: (disabled || pickedCap || !draft.trim()) ? 0.4 : 1,
+        }}
+      >
+        {t('dashboard.aiTelemetry.form.manualAddBtn')}
+      </button>
+    </div>
   );
 }
 
