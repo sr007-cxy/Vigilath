@@ -88,6 +88,8 @@ def _has_meaningful_change(acc: SentimentAccountORM, payload: SentimentAccountUp
     list_fields = (
         ("keywords", "keywords_json"), ("excludes", "excludes_json"),
         ("aliases", "aliases_json"), ("media_allowlist", "media_allowlist_json"),
+        ("weixin_album_urls", "weixin_album_urls_json"),
+        ("newsnow_sources", "newsnow_sources_json"),
     )
     for in_name, db_name in list_fields:
         v = getattr(payload, in_name, None)
@@ -205,6 +207,8 @@ def create_account(
         excludes_json=json.dumps(payload.excludes, ensure_ascii=False),
         media_allowlist_json=json.dumps(payload.media_allowlist, ensure_ascii=False),
         notify_emails_json=json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False),
+        weixin_album_urls_json=json.dumps(payload.weixin_album_urls, ensure_ascii=False),
+        newsnow_sources_json=json.dumps(payload.newsnow_sources, ensure_ascii=False),
         active=True,
         last_run_status="pending" if payload.run_now else None,
     )
@@ -250,6 +254,10 @@ def update_account(
         acc.media_allowlist_json = json.dumps(payload.media_allowlist, ensure_ascii=False)
     if payload.notify_emails is not None:
         acc.notify_emails_json = json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False)
+    if payload.weixin_album_urls is not None:
+        acc.weixin_album_urls_json = json.dumps(payload.weixin_album_urls, ensure_ascii=False)
+    if payload.newsnow_sources is not None:
+        acc.newsnow_sources_json = json.dumps(payload.newsnow_sources, ensure_ascii=False)
     if payload.active is not None: acc.active = payload.active
 
     # keyword_groups 变化时,优先以 group 为准重算 keywords_json;

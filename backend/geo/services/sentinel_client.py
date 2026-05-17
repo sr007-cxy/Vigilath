@@ -400,6 +400,49 @@ def crawl_sina_stock(*, account_id: int, ticker: str, pages: int = 1, timeout: i
     return _crawl_generic("run-crawl-sina-stock", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
 
 
+def crawl_weixin_album(
+    *, account_id: int, album_urls: list[str],
+    hydrate_body: bool = False,
+    max_articles_per_album: Optional[int] = None,
+    timeout: int = 300,
+) -> dict:
+    """微信公众号合集枚举(无 cookie)。timeout 300s — 500+ 文章大号可能跑分钟级。
+    album_urls 空 list 时 sentinel-service 直接返 {skipped: ...},不耗时。
+    """
+    payload = {
+        "account_id": account_id,
+        "album_urls": album_urls,
+        "hydrate_body": hydrate_body,
+        "max_articles_per_album": max_articles_per_album,
+    }
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-weixin-album", json=payload, headers=_headers(),
+        ))
+
+
+def crawl_newsnow(
+    *, account_id: int, source_ids: list[str], symbol: str,
+    keywords: Optional[list[str]] = None,
+    base_url: Optional[str] = None,
+    timeout: int = 120,
+) -> dict:
+    """轮询自托管 newsnow 热榜。keywords 空 = 不过滤入全量。
+    source_ids 空 list 时 sentinel-service 直接返 {skipped: ...},不耗时。
+    """
+    payload = {
+        "account_id": account_id,
+        "source_ids": source_ids,
+        "keywords": keywords or [],
+        "symbol": symbol,
+        "base_url": base_url,
+    }
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-crawl-newsnow", json=payload, headers=_headers(),
+        ))
+
+
 def run_respond(
     *, account_id: int, ticker: str,
     source: Optional[str] = None,

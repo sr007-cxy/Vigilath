@@ -123,6 +123,12 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
             target = acc.target
 
             # 每条 = (name, callable) — callable 不带参,用 lambda 捕获 args
+            # 读两个可选数据源配置 — 空 list 时下面对应 crawler 不入 task 列表
+            weixin_album_urls = json.loads(acc.weixin_album_urls_json or "[]")
+            newsnow_sources = json.loads(acc.newsnow_sources_json or "[]")
+            # newsnow 用 aliases + keywords + target 一起作标题过滤
+            newsnow_filter_kw = list({target, *aliases, *keywords})
+
             crawler_tasks: list[tuple[str, callable]] = [
                 ("eastmoney",
                  lambda: sentinel_client.crawl_eastmoney(account_id=account_id, symbol=ticker, pages=10)),
@@ -155,6 +161,27 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 ("36kr",
                  lambda: sentinel_client.crawl_36kr(account_id=account_id, keyword=target, pages=3)),
             ]
+            # 仅当账号配置非空才加入,避免每次跑都打 sentinel-service 然后返 skipped
+            if weixin_album_urls:
+                crawler_tasks.append((
+                    "weixin_album",
+                    lambda: sentinel_client.crawl_weixin_album(
+                        account_id=account_id,
+                        album_urls=weixin_album_urls,
+                        hydrate_body=True,
+                        max_articles_per_album=200,
+                    ),
+                ))
+            if newsnow_sources:
+                crawler_tasks.append((
+                    "newsnow",
+                    lambda: sentinel_client.crawl_newsnow(
+                        account_id=account_id,
+                        source_ids=newsnow_sources,
+                        keywords=newsnow_filter_kw,
+                        symbol=ticker,
+                    ),
+                ))
             crawlers_stats: dict = {}
             from concurrent.futures import ThreadPoolExecutor, as_completed
             # 13 个 crawler,并发 8 是个合理上限(避免同时打太多 sentinel HTTP 请求,

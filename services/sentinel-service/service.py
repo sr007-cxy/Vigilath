@@ -96,6 +96,8 @@ from crawler.eastmoney_announcement import EastmoneyAnnouncementClient  # type: 
 from crawler.eastmoney_research import EastmoneyResearchClient          # type: ignore  # noqa: E402
 from crawler.eastmoney_industry import EastmoneyIndustryClient          # type: ignore  # noqa: E402
 from crawler.sina_stock_news import SinaStockNewsClient                  # type: ignore  # noqa: E402
+from crawler.weixin_album import WeixinAlbumClient                       # type: ignore  # noqa: E402
+from crawler.newsnow_hub import NewsnowHubClient                         # type: ignore  # noqa: E402
 from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
 
 # Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
@@ -275,6 +277,31 @@ class CrawlGenericRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
+
+
+class CrawlWeixinAlbumRequest(BaseModel):
+    """微信公众号合集抓取请求."""
+    account_id: int
+    album_urls: list[str] = Field(default_factory=list,
+                                  description="合集 URL 列表(__biz + album_id 完整 URL)")
+    hydrate_body: bool = Field(False,
+                               description="是否额外抓 mp.weixin 正文(每篇 +1-2s)")
+    max_articles_per_album: Optional[int] = Field(
+        None, description="单合集上限保护;None=全量")
+
+
+class CrawlNewsnowRequest(BaseModel):
+    """NewsNow 热榜聚合抓取请求."""
+    account_id: int
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="newsnow source 列表,如 ['weibo','zhihu','v2ex','toutiao']")
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="标题子串过滤;空 list = 全量入库不过滤")
+    symbol: str = Field(..., description="入库 symbol(通常 = account.ticker)")
+    base_url: Optional[str] = Field(
+        None, description="覆盖 NEWSNOW_BASE_URL env;None=用容器默认")
 
 
 # ── FastAPI app ────────────────────────────────────────────────
@@ -544,6 +571,53 @@ app.post("/run-crawl-eastmoney-ann")(_generic_crawl_endpoint(EastmoneyAnnounceme
 app.post("/run-crawl-eastmoney-research")(_generic_crawl_endpoint(EastmoneyResearchClient, "eastmoney_research"))
 app.post("/run-crawl-eastmoney-industry")(_generic_crawl_endpoint(EastmoneyIndustryClient, "eastmoney_industry"))
 app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "sina_stock"))
+
+
+@app.post("/run-crawl-weixin-album")
+async def run_crawl_weixin_album(req: CrawlWeixinAlbumRequest) -> dict:
+    """按合集 URL 全量枚举微信公众号文章(无 cookie,无 LLM)."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            if not req.album_urls:
+                return {"total": 0, "inserted": 0, "skipped": "no album_urls configured"}
+            client = WeixinAlbumClient(hydrate_body=req.hydrate_body)
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.fetch_albums(
+                req.album_urls, max_articles_per_album=req.max_articles_per_album,
+            ):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted,
+                    "albums": len(req.album_urls)}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-crawl-newsnow")
+async def run_crawl_newsnow(req: CrawlNewsnowRequest) -> dict:
+    """轮询自托管 newsnow 热榜聚合(无 LLM)."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            if not req.source_ids:
+                return {"total": 0, "inserted": 0, "skipped": "no source_ids configured"}
+            client = NewsnowHubClient(base_url=req.base_url)
+            conn = _patched_connect()
+            init_schema(conn)
+            total = inserted = 0
+            for rec in client.fetch_sources(
+                req.source_ids, keywords=req.keywords, symbol=req.symbol,
+            ):
+                if upsert_post(conn, rec):
+                    inserted += 1
+                total += 1
+            conn.commit()
+            return {"total": total, "inserted": inserted,
+                    "sources": len(req.source_ids),
+                    "filtered": bool(req.keywords)}
+        return await asyncio.to_thread(_wrap, _do)
 
 
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────

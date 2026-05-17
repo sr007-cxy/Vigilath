@@ -75,6 +75,13 @@ class SentimentAccountORM(Base):
     media_allowlist_json = Column(Text, default="[]")
     notify_emails_json = Column(Text, default="[]")
 
+    # 微信公众号合集 URL 列表 — 周级别盯防 KOL/竞品官号,getalbum 接口枚举.
+    # 空 list = 不启用 weixin_album crawler.
+    weixin_album_urls_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    # newsnow source id 列表(如 ['weibo','zhihu','v2ex','toutiao'])— 走自托管
+    # newsnow 容器拉热榜,本地按 aliases+keywords 过滤标题.空 list = 不启用.
+    newsnow_sources_json = Column(Text, nullable=False, default="[]", server_default="[]")
+
     active = Column(Boolean, nullable=False, default=True)
 
     # 任务状态机
@@ -166,6 +173,8 @@ class SentimentAccountCreate(BaseModel):
     excludes: list[str] = Field(default_factory=list)
     media_allowlist: list[str] = Field(default_factory=list)
     notify_emails: list[EmailStr] = Field(default_factory=list, max_length=10)
+    weixin_album_urls: list[str] = Field(default_factory=list)
+    newsnow_sources: list[str] = Field(default_factory=list)
     run_now: bool = True
 
 
@@ -179,6 +188,8 @@ class SentimentAccountUpdate(BaseModel):
     excludes: Optional[list[str]] = None
     media_allowlist: Optional[list[str]] = None
     notify_emails: Optional[list[EmailStr]] = None
+    weixin_album_urls: Optional[list[str]] = None
+    newsnow_sources: Optional[list[str]] = None
     active: Optional[bool] = None
 
 
@@ -194,6 +205,8 @@ class SentimentAccountOut(BaseModel):
     excludes: list[str]
     media_allowlist: list[str]
     notify_emails: list[str]
+    weixin_album_urls: list[str] = Field(default_factory=list)
+    newsnow_sources: list[str] = Field(default_factory=list)
     active: bool
     last_run_at: Optional[datetime]
     last_run_status: Optional[str]
@@ -214,6 +227,8 @@ class SentimentAccountOut(BaseModel):
             excludes=json.loads(row.excludes_json or "[]"),
             media_allowlist=json.loads(row.media_allowlist_json or "[]"),
             notify_emails=json.loads(row.notify_emails_json or "[]"),
+            weixin_album_urls=json.loads(row.weixin_album_urls_json or "[]"),
+            newsnow_sources=json.loads(row.newsnow_sources_json or "[]"),
             active=row.active,
             last_run_at=_as_utc(row.last_run_at),
             last_run_status=row.last_run_status,

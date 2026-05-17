@@ -45,6 +45,10 @@ export interface SentimentAccount {
   /** 媒体白名单(平台 code 列表,空数组 = 全平台). */
   media_allowlist: string[];
   notify_emails: string[];
+  /** 微信公众号合集 URL 列表 — 周级别盯防 KOL/竞品官号. 空 = 不启用. */
+  weixin_album_urls: string[];
+  /** newsnow source id 列表(如 ['weibo','zhihu','v2ex']). 空 = 不启用. */
+  newsnow_sources: string[];
   active: boolean;
   last_run_at: string | null;
   last_run_status: RunStatus;
@@ -62,6 +66,8 @@ export interface AccountCreatePayload {
   excludes?: string[];
   media_allowlist?: string[];
   notify_emails?: string[];
+  weixin_album_urls?: string[];
+  newsnow_sources?: string[];
   run_now?: boolean;
 }
 
@@ -75,6 +81,8 @@ export type AccountUpdatePayload = Partial<{
   excludes: string[];
   media_allowlist: string[];
   notify_emails: string[];
+  weixin_album_urls: string[];
+  newsnow_sources: string[];
   active: boolean;
 }>;
 

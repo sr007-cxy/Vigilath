@@ -55,6 +55,8 @@ export function BrandSettingsTab() {
   const [excludes, setExcludes] = useState<string[]>([]);
   const [mediaAllowlist, setMediaAllowlist] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
+  const [weixinAlbumUrls, setWeixinAlbumUrls] = useState<string[]>([]);
+  const [newsnowSources, setNewsnowSources] = useState<string[]>([]);
 
   useEffect(() => {
     if (!account) return;
@@ -76,6 +78,8 @@ export function BrandSettingsTab() {
     setExcludes(account.excludes ?? []);
     setMediaAllowlist(account.media_allowlist ?? []);
     setEmails(account.notify_emails ?? []);
+    setWeixinAlbumUrls(account.weixin_album_urls ?? []);
+    setNewsnowSources(account.newsnow_sources ?? []);
   }, [account, usingMock]);
 
   const knowledgeFromApi = (knowledgeQuery.data ?? []).reduce(
@@ -122,6 +126,8 @@ export function BrandSettingsTab() {
     aliases, intent: intents.length > 0 ? intents.join('、') : undefined,
     keyword_groups: keywordGroups,
     excludes, media_allowlist: mediaAllowlist, notify_emails: emails,
+    weixin_album_urls: weixinAlbumUrls,
+    newsnow_sources: newsnowSources,
   });
 
   const persistKnowledge = async () => {
@@ -220,6 +226,34 @@ export function BrandSettingsTab() {
         </Field>
         <Field label={t('account.brand.fields.mediaAllowlist')}>
           <MediaAllowlistEditor value={mediaAllowlist} onChange={setMediaAllowlist} />
+        </Field>
+      </Section>
+
+      {/* ── 区块 2.5: 扩展数据源(可选,默认关闭) ── */}
+      <Section title={t('account.brand.sections.extraSources', '扩展数据源(可选)')}>
+        <Field label={t('account.brand.fields.weixinAlbumUrls', '微信公众号合集 URL')}>
+          <TagInput
+            value={weixinAlbumUrls}
+            onChange={setWeixinAlbumUrls}
+            placeholder="https://mp.weixin.qq.com/mp/appmsgalbum?__biz=...&album_id=..."
+            max={20}
+          />
+          <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+            周级别盯防几个高价值公众号(竞品官号 / 行业 KOL / 监管口径号)。
+            粘贴合集 URL 即可,无 cookie。空 = 不启用。
+          </p>
+        </Field>
+        <Field label={t('account.brand.fields.newsnowSources', 'NewsNow 热榜源订阅')}>
+          <TagInput
+            value={newsnowSources}
+            onChange={setNewsnowSources}
+            placeholder="weibo / zhihu / v2ex / hupu / toutiao / ithome / ..."
+            suggestions={['weibo', 'zhihu', 'v2ex', 'hupu', 'toutiao', 'ithome', 'douban', 'juejin', '36kr']}
+          />
+          <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+            从自托管 newsnow 容器拉热榜,本地按品牌名 + 别名 + 关键词过滤标题。
+            空 = 不启用。
+          </p>
         </Field>
       </Section>
 
