@@ -214,80 +214,6 @@ export function Home() {
             </div>
           </section>
 
-          {/* Brand Growth Engine Section — 全流程工作台入口(画像 / 监测扩展 / 内容审核发布) */}
-          <section className="mt-10 sm:mt-30">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-secondary"
-                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <span className="text-xs font-semibold text-secondary">
-                    {t('home.brandGrowth.badge')}
-                  </span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
-                  <span className="gradient-text">{t('home.brandGrowth.title')}</span>
-                </h2>
-                <p className="text-secondary text-sm sm:text-base max-w-2xl">
-                  {t('home.brandGrowth.subtitle')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isLoggedIn) { openAuthModal('login'); return; }
-                  navigate('/dashboard');
-                }}
-                className="btn-solid self-start sm:self-end rounded-full py-2.5 px-5 text-sm font-semibold transition-all duration-200 whitespace-nowrap"
-              >
-                {isLoggedIn ? t('home.brandGrowth.cta') : t('home.brandGrowth.ctaUnauth')}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {(['profile', 'monitor', 'content'] as const).map((key, idx) => (
-                <div
-                  role="button"
-                  key={key}
-                  onClick={() => {
-                    if (!isLoggedIn) { openAuthModal('login'); return; }
-                    navigate('/dashboard');
-                  }}
-                  className="group flex gap-4 relative text-left card p-6 hover:-translate-y-0.5"
-                >
-                  <div className="icon-tile w-12 h-12 rounded-xl flex items-center justify-center mb-5 group-hover:scale-105 transition-transform duration-200 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      {idx === 0 && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      )}
-                      {idx === 1 && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      )}
-                      {idx === 2 && (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      )}
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold mb-2 text-primary">
-                      {t(`home.brandGrowth.cards.${key}.title`)}
-                    </h3>
-                    <p className="text-sm text-secondary leading-relaxed m-0">
-                      {t(`home.brandGrowth.cards.${key}.desc`)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
           {/* Advanced Detection Section */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
@@ -387,6 +313,47 @@ export function Home() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+
+          {/* Brand Growth Engine Section — 全流程工作台入口(单卡) */}
+          <section className="mt-10 sm:mt-30">
+            <div
+              role="button"
+              onClick={() => {
+                if (!isLoggedIn) { openAuthModal('login'); return; }
+                navigate('/dashboard');
+              }}
+              className="card p-6 sm:p-8 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-left flex flex-col sm:flex-row sm:items-center gap-6"
+            >
+              <div className="icon-tile w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 sm:h-8 sm:w-8"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-surface border border-soft mb-2">
+                  <span className="text-[11px] font-semibold text-secondary">
+                    {t('home.brandGrowth.badge')}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold mb-1.5 tracking-tight">
+                  <span className="gradient-text">{t('home.brandGrowth.title')}</span>
+                </h2>
+                <p className="text-secondary text-sm sm:text-base leading-relaxed">
+                  {t('home.brandGrowth.subtitle')}
+                </p>
+              </div>
+              <div className="shrink-0">
+                <span className="btn-solid inline-flex items-center gap-1.5 rounded-full py-2.5 px-5 text-sm font-semibold whitespace-nowrap">
+                  {isLoggedIn ? t('home.brandGrowth.cta') : t('home.brandGrowth.ctaUnauth')}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </div>
             </div>
           </section>
         </div>
