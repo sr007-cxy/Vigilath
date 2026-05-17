@@ -2708,6 +2708,7 @@ const zh = {
             "review": {
               "title": "审核",
               "subtitle": "审核甲方提交的资料 + 种子 + 监测问题;通过即跑、生成执行计划书并触发内容生成",
+              "openDetail": "查看 / 编辑",
               "empty": "暂无符合条件的申请",
               "refresh": "刷新",
               "approve": "通过",

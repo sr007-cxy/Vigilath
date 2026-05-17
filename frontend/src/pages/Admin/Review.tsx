@@ -189,8 +189,9 @@ function ApplicationCard({
     }
   };
 
-  // 审核期允许 admin 编辑;approved 后整张冻结(后端也会拒)。
-  const canEdit = item.submission_status !== 'approved';
+  // admin 是终审 — 任意 submission_status 都允许编辑(approved 后也能修正,
+  // 后端 PATCH 端点同样放开了 LOCKED_STATUS 校验)。
+  const canEdit = true;
 
   const saveSeedPrompts = async (texts: string[]) => {
     if (busy) return;
@@ -232,10 +233,11 @@ function ApplicationCard({
   };
 
   return (
+    <>
     <section className="rounded-md"
              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
       <button type="button" onClick={onToggle}
-              className="w-full p-3 flex items-start gap-3 flex-wrap text-left">
+              className="w-full p-3 flex items-start gap-3 flex-wrap text-left hover:opacity-90">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-primary">{item.profile_name || item.topic_name}</span>
@@ -261,12 +263,39 @@ function ApplicationCard({
             )}
           </div>
         </div>
-        <span className="text-xs text-accent">{expanded ? '−' : '+'}</span>
+        <span className="text-xs px-2 py-0.5 rounded-md shrink-0"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--accent-primary)' }}>
+          {t('admin.review.openDetail')}
+        </span>
       </button>
+    </section>
 
-      {expanded && (
-        <div className="px-3 pb-3 space-y-3 border-t pt-3"
-             style={{ borderColor: 'var(--border-color)' }}>
+    {expanded && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+           style={{ background: 'rgba(0,0,0,0.5)' }}
+           onClick={onToggle}>
+        <div className="rounded-md w-full max-w-4xl max-h-[92vh] flex flex-col"
+             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+             onClick={e => e.stopPropagation()}>
+          <div className="p-4 flex items-start justify-between gap-3 border-b"
+               style={{ borderColor: 'var(--border-color)' }}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold text-primary">
+                  {item.profile_name || item.topic_name}
+                </h2>
+                <span className="text-xs text-muted">#{item.topic_id}</span>
+                <StatusChip status={item.submission_status} />
+              </div>
+              <div className="text-xs text-secondary mt-1">
+                {item.user_email}{item.industry && ` · ${item.industry}`}
+              </div>
+            </div>
+            <button type="button" onClick={onToggle}
+                    className="text-muted hover:text-primary text-lg leading-none px-2">✕</button>
+          </div>
+
+          <div className="p-4 overflow-auto flex-1 space-y-3">
           {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
           {!detail && <div className="text-xs text-muted">…</div>}
           {detail && (
@@ -399,9 +428,11 @@ function ApplicationCard({
               )}
             </>
           )}
+          </div>
         </div>
-      )}
-    </section>
+      </div>
+    )}
+    </>
   );
 }
 

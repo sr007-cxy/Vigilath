@@ -2702,6 +2702,7 @@ const en = {
             "review": {
               "title": "Review",
               "subtitle": "Review tenant-submitted profile + seeds + monitored queries; approval triggers a run, generates the execution plan and queues content generation",
+              "openDetail": "View / Edit",
               "empty": "No applications match this filter",
               "refresh": "Refresh",
               "approve": "Approve",

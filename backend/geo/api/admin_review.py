@@ -350,11 +350,11 @@ def admin_patch_topic(
     admin = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """admin 在审核期编辑申请.changelog 全程追加,actor_role=admin."""
+    """admin 编辑申请.changelog 全程追加,actor_role=admin.
+    任意 submission_status 都允许 — admin 是终审,approved 之后也能修正
+    资料/种子/监测问题(已生成的内容稿件不会自动重跑,需手动触发).
+    """
     t = _load_topic_or_404(db, topic_id)
-    if t.submission_status not in ("pending", "draft", "rejected"):
-        raise HTTPException(409, {"code": "LOCKED_STATUS",
-                                  "message": f"submission_status={t.submission_status}"})
 
     actor_id = admin.id
 
