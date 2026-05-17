@@ -376,11 +376,13 @@ class BrandProfile(BaseModel):
     extra_notes: str = Field("", max_length=2000)                                # 其他补充说明(选填)
 
 
-# 7 大模块的必填字段清单 — submit-for-review 校验用
+# 画像必填字段清单 — submit-for-review 校验用。
+# 「内容创作方向」整节(creation_directions / copywriting_types / target_platforms /
+# content_tones / content_redlines)2026-05-17 起从画像表单移除 — 这部分由
+# 「内容发布策略」阶段决定,不再在画像里强制。schema 字段保留,老数据兼容。
 PROFILE_REQUIRED_FIELDS: tuple[str, ...] = (
     "profile_name", "company_full_name", "company_short_name",
     "industry", "core_business_lines", "service_geo",
-    "creation_directions", "copywriting_types", "target_platforms", "content_tones",
     "founded_year", "core_credentials", "brand_diff_tags",
     "core_service_overview", "service_features", "service_process", "target_scenarios",
     "target_audience", "user_pain_points", "user_faqs", "decision_factors",
