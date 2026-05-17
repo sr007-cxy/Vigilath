@@ -125,14 +125,70 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, str]:
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"unexpected {provider} response shape: {e}")
     parsed = _parse_json_loose(content)
-    allowed = set(BrandProfile.model_fields.keys())
-    safe = {k: v for k, v in parsed.items() if k in allowed and v is not None}
+    safe = _coerce_to_profile_fields(parsed)
     try:
         profile = BrandProfile(**safe)
     except Exception as e:  # noqa: BLE001
+        # 真挂了再降级 — 之前所有 list 超长都会触发 max_length 校验失败,
+        # 导致整张画像都空;coerce 之后这条路径基本不会进了
         log.warning("BrandProfile 映射失败,降级用空资料: %s; raw=%s", e, content[:300])
         profile = BrandProfile()
     return profile, model_id
+
+
+def _coerce_to_profile_fields(parsed: dict) -> dict:
+    """把 LLM 输出按 BrandProfile schema 强制兜底:
+      - list 字段超 max_length 的截断到上限
+      - LLM 给了 string 但 schema 要 list → 拆成单元素 list
+      - LLM 给了 list 但 schema 要 string → join 成多行
+      - None / 异常类型 → 丢弃(走默认值)
+    防止单条字段 hard-fail 让整张画像归零.
+    """
+    out: dict = {}
+    for name, field in BrandProfile.model_fields.items():
+        if name not in parsed:
+            continue
+        raw = parsed[name]
+        if raw is None:
+            continue
+        ann = field.annotation
+        # 拿 max_length(Field(..., max_length=N))
+        max_len = None
+        for m in (field.metadata or []):
+            ml = getattr(m, "max_length", None)
+            if ml is not None:
+                max_len = ml
+                break
+
+        is_list_field = _is_list_annotation(ann)
+        if is_list_field:
+            if isinstance(raw, list):
+                items = [str(x).strip() for x in raw if x is not None and str(x).strip()]
+            elif isinstance(raw, str):
+                s = raw.strip()
+                items = [s] if s else []
+            else:
+                continue
+            if max_len is not None and len(items) > max_len:
+                items = items[:max_len]
+            out[name] = items
+        else:
+            # 字符串字段
+            if isinstance(raw, list):
+                s = "\n".join(str(x).strip() for x in raw if x is not None and str(x).strip())
+            else:
+                s = str(raw)
+            if max_len is not None and len(s) > max_len:
+                s = s[:max_len]
+            out[name] = s
+    return out
+
+
+def _is_list_annotation(ann) -> bool:
+    """判断 Pydantic 字段类型是否是 list[...]."""
+    import typing
+    origin = typing.get_origin(ann)
+    return origin in (list, typing.List)
 
 
 # ─────────────── 上传文件 → 纯文本 ─────────────────────────
