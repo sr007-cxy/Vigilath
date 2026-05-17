@@ -47,6 +47,8 @@ export interface SentimentAccountMock {
   excludes: string[];
   media_allowlist: string[];
   notify_emails: string[];
+  weixin_album_urls: string[];
+  newsnow_sources: string[];
   active: boolean;
   last_run_at: string | null;
   last_run_status: RunStatus;
@@ -75,6 +77,8 @@ export const mockAccount: SentimentAccountMock = {
   excludes: ['招聘', '实习'],
   media_allowlist: [],
   notify_emails: ['ir@vnet.com', 'pr@vnet.com'],
+  weixin_album_urls: [],
+  newsnow_sources: [],
   active: true,
   last_run_at: '2026-05-06T05:00:00+08:00',
   last_run_status: 'success',
