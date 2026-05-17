@@ -776,3 +776,55 @@ def get_execution_plan(
     if not plan:
         raise HTTPException(404, "no execution plan generated")
     return _to_plan_out(db, plan)
+
+
+@router.post("/topic/{topic_id}/rerun", response_model=TopicExecutionPlanOut)
+def rerun_topic(
+    topic_id: int,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """重新触发跑批 — 给 plan failed / run_id 缺失 / 想再跑一次的场景用.
+
+    调用 telemetry-service /run-topic 拿新 run_id,
+    更新当前 topic 最新的 execution plan(run_id / status / error)并返回.
+    没 plan 时新建一条.
+    """
+    t = _load_topic_or_404(db, topic_id)
+    run_id = _trigger_run_topic_sync(topic_id)
+
+    plan = (
+        db.query(AiTelemetryTopicExecutionPlanORM)
+          .filter(AiTelemetryTopicExecutionPlanORM.topic_id == topic_id)
+          .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+          .first()
+    )
+    if plan is None:
+        # 没历史 plan,直接补一条
+        snapshot = _build_execution_plan_snapshot(t, run_id)
+        plan = AiTelemetryTopicExecutionPlanORM(
+            topic_id=topic_id,
+            generated_by_reviewer_id=admin.id,
+            overview_json=json.dumps(snapshot["overview"], ensure_ascii=False),
+            topic_changelog_snapshot_json=json.dumps(snapshot["changelog"], ensure_ascii=False),
+            expansion_log_snapshot_json=json.dumps(snapshot["expansion_log"], ensure_ascii=False),
+            monitored_queries_snapshot_json=json.dumps(snapshot["monitored_queries"], ensure_ascii=False),
+            run_id=run_id,
+            status="ready" if run_id is not None else "failed",
+            error=None if run_id is not None else "telemetry-service /run-topic failed",
+        )
+        db.add(plan)
+    else:
+        plan.run_id = run_id
+        plan.status = "ready" if run_id is not None else "failed"
+        plan.error = None if run_id is not None else "telemetry-service /run-topic failed"
+        plan.generated_at = datetime.utcnow()
+        plan.generated_by_reviewer_id = admin.id
+
+    _append_changelog(t, actor_id=admin.id, actor_role="admin",
+                      field="rerun", after=f"run_id={run_id}",
+                      note="admin 手动重新触发跑批")
+
+    db.commit()
+    db.refresh(plan)
+    return _to_plan_out(db, plan)

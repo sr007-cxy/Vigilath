@@ -2752,6 +2752,7 @@ const zh = {
               "title": "执行计划书",
               "subtitle": "项目总体状况 / 主题日志 / 泛化日志 / 运行进度",
               "backToReview": "返回审核",
+              "rerun": "重新触发跑批",
               "errorPrefix": "错误",
               "section": {
                 "overview": "项目总体状况",

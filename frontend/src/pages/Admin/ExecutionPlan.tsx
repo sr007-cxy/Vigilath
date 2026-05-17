@@ -15,6 +15,7 @@ export function AdminExecutionPlan() {
   const tid = Number(topicId);
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [rerunBusy, setRerunBusy] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const fetchOnce = useCallback(async () => {
@@ -47,11 +48,35 @@ export function AdminExecutionPlan() {
           <h1 className="text-xl font-semibold text-primary">{t('admin.executionPlan.title')}</h1>
           <p className="text-xs text-secondary mt-0.5">{t('admin.executionPlan.subtitle')}</p>
         </div>
-        <button type="button" onClick={() => navigate('/workbench/review')}
-                className="text-xs px-3 py-1.5 rounded-md"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-          ← {t('admin.executionPlan.backToReview')}
-        </button>
+        <div className="flex items-center gap-2">
+          {plan && (plan.status === 'failed' || !plan.run_id) && (
+            <button type="button" disabled={rerunBusy}
+                    onClick={async () => {
+                      if (rerunBusy) return;
+                      setRerunBusy(true); setErr(null);
+                      try {
+                        const p = await adminReviewApi.rerunTopic(tid, token);
+                        setPlan(p);
+                        if (!pollRef.current) {
+                          pollRef.current = window.setInterval(fetchOnce, 3000);
+                        }
+                      } catch (e: unknown) {
+                        setErr(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setRerunBusy(false);
+                      }
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-md text-white"
+                    style={{ background: 'var(--accent-primary)', opacity: rerunBusy ? 0.5 : 1 }}>
+              {rerunBusy ? '…' : t('admin.executionPlan.rerun')}
+            </button>
+          )}
+          <button type="button" onClick={() => navigate('/workbench/review')}
+                  className="text-xs px-3 py-1.5 rounded-md"
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+            ← {t('admin.executionPlan.backToReview')}
+          </button>
+        </div>
       </header>
 
       {err && (

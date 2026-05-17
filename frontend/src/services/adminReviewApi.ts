@@ -167,6 +167,9 @@ export const adminReviewApi = {
   async rejectTopic(topicId: number, reason: string, token: string): Promise<void> {
     return request<void>('POST', `/topic/${topicId}/reject`, token, { reason });
   },
+  async rerunTopic(topicId: number, token: string): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>('POST', `/topic/${topicId}/rerun`, token);
+  },
   async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);
   },

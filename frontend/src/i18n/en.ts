@@ -2746,6 +2746,7 @@ const en = {
               "title": "Execution Plan",
               "subtitle": "Overview / Topic changelog / Expansion log / Run progress",
               "backToReview": "Back to review",
+              "rerun": "Re-trigger run",
               "errorPrefix": "Error",
               "section": {
                 "overview": "Project overview",
