@@ -71,7 +71,7 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
         setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(humanizeFetchError(e));
     } finally {
       setBusy(false);
     }
@@ -93,7 +93,7 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
         setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(humanizeFetchError(e));
     } finally {
       setBusy(false);
     }
@@ -213,7 +213,7 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
                       className="text-xs px-3 py-1.5 rounded-md text-white"
                       style={{ background: 'var(--accent-primary)',
                                opacity: (disabled || busy || text.trim().length < 10) ? 0.5 : 1 }}>
-                {busy ? '解析中…' : 'AI 解析(填充空白)'}
+                {busy ? '解析中…' : 'AI 解析'}
               </button>
               <button type="button" disabled={disabled || busy || text.trim().length < 10}
                       onClick={() => callExtract(text, 'overwrite')}
@@ -240,6 +240,16 @@ function isBlank(v: unknown): boolean {
   if (typeof v === 'string') return v.trim().length === 0;
   if (Array.isArray(v)) return v.length === 0;
   return false;
+}
+
+// 把 fetch 抛的 TypeError("Failed to fetch") 翻译成对用户更友好的提示.
+// 常见诱因:中间代理(BMS02 EIP 映射)在 60s 把长连接砍掉,导致连接重置.
+function humanizeFetchError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    return 'AI 解析连接被中断 — 多半是中间代理在 60s 把长请求砍掉了。请把原文缩短到 1000 字以内,或分两段粘贴再重试。';
+  }
+  return raw;
 }
 
 function mergeProfile(
