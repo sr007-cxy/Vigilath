@@ -339,6 +339,27 @@ const en = {
               "cta": "Be discovered globally, Be Chosen By AI",
               "contactSales": "Contact Sales"
             },
+            "brandGrowth": {
+              "badge": "End-to-end workbench",
+              "title": "Brand Growth Engine",
+              "subtitle": "Fill in a brand profile once — AI expands monitored queries, drafts content, and walks the whole review-and-publish flow.",
+              "cta": "Open workbench",
+              "ctaUnauth": "Log in to enter",
+              "cards": {
+                "profile": {
+                  "title": "Profile + one-click AI fill",
+                  "desc": "Paste a company brief or drop a .docx/.txt — AI extracts all 7 modules for you."
+                },
+                "monitor": {
+                  "title": "Seed → monitored query expansion",
+                  "desc": "DeepSeek expands candidate questions; pick up to 50 for daily monitoring."
+                },
+                "content": {
+                  "title": "Content generation + review",
+                  "desc": "On approval, an LLM drafts every piece against your profile; after review, mark platforms and media to publish."
+                }
+              }
+            },
             "advanced": {
               "badge": "Members Only",
               "title": "Advanced Detection",
@@ -1789,6 +1810,7 @@ const en = {
               "config": "Config",
               "compose": "Content",
               "posts": "Distribution",
+              "content": "Content",
               "aiTelemetry": "AI Detection",
               "insights": "Recommendations",
               "adminWorkbench": "Admin"
@@ -2158,6 +2180,74 @@ const en = {
               "dispatchHint": "Each channel will be scheduled and tracked independently",
               "pickedCount": "Picked {{n}} channels",
               "confirmDispatch": "Confirm dispatch"
+            },
+            "content": {
+              "subtitle": "AI-generated and user-submitted drafts in one place; once approved, ops picks media and platforms to publish",
+              "noTopic": "No topic yet — create one under Config first",
+              "empty": "No articles match the current filter",
+              "topicNotApproved": "Your topic profile isn't approved yet — finish and submit it under Topic Profile before submitting articles or scheduling AI generation",
+              "submitMyArticleBtn": "Submit my article",
+              "aiScheduleBtn": "AI schedule",
+              "filterStatusLabel": "Status",
+              "filterSourceLabel": "Source",
+              "statusFilter": {
+                "all": "All",
+                "draft": "Draft",
+                "pending_review": "Pending",
+                "approved": "Approved",
+                "rejected": "Needs fix",
+                "published": "Published"
+              },
+              "sourceFilter": {
+                "all": "All",
+                "ai": "AI generated",
+                "user": "User submitted"
+              },
+              "statsCard": {
+                "published": "Published",
+                "pending_review": "In review",
+                "rejected": "Needs fix",
+                "draft": "Drafts",
+                "aiSchedule": "AI auto-gen"
+              },
+              "aiOnAtTime": "Daily {{time}}",
+              "aiOff": "Off",
+              "rejectReasonLabel": "Reject reason",
+              "generationErrorLabel": "Generation failed",
+              "publishedToLabel": "Published to",
+              "emptyBody": "(empty body)",
+              "editBtn": "Edit",
+              "cancelBtn": "Cancel",
+              "saveBtn": "Save",
+              "saveDraftBtn": "Save draft",
+              "submitForReviewBtn": "Submit for review",
+              "submitDrawerTitle": "Submit my article",
+              "submitDrawerHint": "Submitting puts the article in the ops review queue; once approved, ops will pick media and platforms to publish",
+              "submitTopicLabel": "Topic",
+              "submitLinkedQueryLabel": "Linked monitoring question (optional — used for downstream attribution)",
+              "submitLinkedQueryNone": "None (free-form draft)",
+              "submitTitleLabel": "Title",
+              "submitTitlePh": "e.g. Antitrust compliance — 2026 deep dive",
+              "submitSummaryLabel": "Summary (optional, used as card preview)",
+              "submitSummaryPh": "Under 200 chars, capture the core message",
+              "submitBodyLabel": "Body (Markdown)",
+              "submitBodyPh": "Paste or type Markdown text",
+              "submitErrEmpty": "Title and body are required",
+              "scheduleDrawerTitle": "AI auto-generation",
+              "scheduleDrawerHint": "When enabled, the system generates N article drafts each day from this topic's profile + seeds + monitoring questions",
+              "scheduleEnableLabel": "Enable daily auto-generation",
+              "scheduleTimeLabel": "Time",
+              "scheduleCountLabel": "Count per day",
+              "scheduleTimeNote": "Timezone Asia/Shanghai",
+              "scheduleSourcesTitle": "Sources (read-only)",
+              "scheduleProfile": "Topic profile",
+              "scheduleFields": "fields filled",
+              "scheduleSeeds": "Seed prompts",
+              "scheduleMonitored": "Selected monitoring questions",
+              "scheduleLastRunAt": "Last auto run",
+              "scheduleSaved": "Settings saved",
+              "runNowBtn": "Run a batch now",
+              "runNowQueued": "Queued {{n}} drafts — check back in the draft list shortly"
             },
             "stats": {
               "title": "Analytics",
@@ -2689,7 +2779,16 @@ const en = {
               "publishPlatformLabel": "Choose platforms (multi-select)",
               "publishMediaLabel": "Media / account (optional)",
               "publishMediaPlaceholder": "e.g. official brand account",
-              "confirmPublish": "Publish to {{n}} platform(s)"
+              "publishUrlPlaceholder": "Live URL after publishing (optional)",
+              "publishPickerHint": "One row per (platform, media) — the same article can target multiple accounts with their own live URLs",
+              "addPublishRow": "Add row",
+              "confirmPublish": "Publish to {{n}} channel(s)",
+              "sourceLabel": "Source",
+              "sourceFilter": {
+                "all": "All",
+                "ai": "AI",
+                "user": "User"
+              }
             }
           },
           "topic": {

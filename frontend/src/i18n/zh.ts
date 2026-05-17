@@ -87,7 +87,7 @@ const zh = {
             "login": "登录",
             "register": "注册",
             "signedInAs": "已登录为",
-            "dashboard": "AI 品牌增长",
+            "dashboard": "品牌增长",
             "adminReview": "审核",
             "adminContentReview": "内容审核",
             "adminWorkbench": "工作台",
@@ -339,10 +339,31 @@ const zh = {
               "cta": "被全球发现,被 AI 选择",
               "contactSales": "联系销售"
             },
+            "brandGrowth": {
+              "badge": "全流程工作台",
+              "title": "品牌增长引擎",
+              "subtitle": "填一份品牌资料,AI 自动扩展监测问题、生成内容稿件、走完审核与发布全流程。",
+              "cta": "进入工作台",
+              "ctaUnauth": "登录后进入",
+              "cards": {
+                "profile": {
+                  "title": "品牌资料 + 一键 AI 智能填充",
+                  "desc": "粘贴公司简介或拖入 .docx / .txt,AI 自动抽取 7 大模块品牌资料,免去逐项填写。"
+                },
+                "monitor": {
+                  "title": "种子词 → 监测问题扩展",
+                  "desc": "DeepSeek 扩展候选监测问题,勾选最多 50 条进入正式监测。"
+                },
+                "content": {
+                  "title": "内容稿件生成与审核",
+                  "desc": "审核通过后,LLM 按你的品牌资料生成全部稿件,平台审核后可选择平台与媒体发布。"
+                }
+              }
+            },
             "advanced": {
               "badge": "会员专享",
               "title": "高级检测能力",
-              "subtitle": "解锁专业 GEO & AEO 工具，全面了解 AI 引擎如何感知您的品牌。",
+              "subtitle": "解锁专业 GEO & AEO 工具,全面了解 AI 引擎如何感知您的品牌。",
               "upgrade": "升级解锁",
               "comingSoon": "功能即将上线",
               "tierModal": {
@@ -1789,12 +1810,13 @@ const zh = {
             }
           },
           "dashboard": {
-            "title": "AI 品牌增长",
+            "title": "品牌增长",
             "nav": {
               "sentiment": "舆情监测",
               "config": "配置",
               "compose": "内容创作",
               "posts": "内容投放",
+              "content": "内容",
               "aiTelemetry": "AI 检测",
               "insights": "优化建议",
               "adminWorkbench": "工作台"
@@ -2164,6 +2186,74 @@ const zh = {
               "dispatchHint": "勾选要派发的渠道,每个渠道会独立排期 + 跟踪状态",
               "pickedCount": "已选 {{n}} 个渠道",
               "confirmDispatch": "确认派稿"
+            },
+            "content": {
+              "subtitle": "AI 自动生成 + 自己提交的稿件统一看板;审核通过后由运营选择媒体和平台发布",
+              "noTopic": "暂无主题,先到「配置」新建",
+              "empty": "当前筛选条件下没有文章",
+              "topicNotApproved": "主题资料还没有审核通过,暂不能投稿或触发 AI 生成 — 请先到「主题资料」补全并提交审核",
+              "submitMyArticleBtn": "提交我的文章",
+              "aiScheduleBtn": "AI 排程",
+              "filterStatusLabel": "状态",
+              "filterSourceLabel": "来源",
+              "statusFilter": {
+                "all": "全部",
+                "draft": "草稿",
+                "pending_review": "审核中",
+                "approved": "已通过",
+                "rejected": "已驳回",
+                "published": "已发布"
+              },
+              "sourceFilter": {
+                "all": "全部",
+                "ai": "AI 生成",
+                "user": "用户提交"
+              },
+              "statsCard": {
+                "published": "已发布",
+                "pending_review": "待审核",
+                "rejected": "待修改",
+                "draft": "草稿",
+                "aiSchedule": "AI 自动生成"
+              },
+              "aiOnAtTime": "每天 {{time}}",
+              "aiOff": "未启用",
+              "rejectReasonLabel": "驳回原因",
+              "generationErrorLabel": "生成失败",
+              "publishedToLabel": "已发布到",
+              "emptyBody": "(没有正文)",
+              "editBtn": "编辑",
+              "cancelBtn": "取消",
+              "saveBtn": "保存",
+              "saveDraftBtn": "存草稿",
+              "submitForReviewBtn": "提交审核",
+              "submitDrawerTitle": "提交我的文章",
+              "submitDrawerHint": "提交后会进入运营审核队列;审核通过后,运营会选择媒体与平台并发布",
+              "submitTopicLabel": "归属主题",
+              "submitLinkedQueryLabel": "关联监测问题(可选 — 用于后续效果归因)",
+              "submitLinkedQueryNone": "不关联(自由稿)",
+              "submitTitleLabel": "标题",
+              "submitTitlePh": "如:反垄断合规要点 2026 深度解读",
+              "submitSummaryLabel": "摘要(可选,卡片预览用)",
+              "submitSummaryPh": "200 字内,概括文章核心信息",
+              "submitBodyLabel": "正文(Markdown)",
+              "submitBodyPh": "粘贴或输入 Markdown 文本",
+              "submitErrEmpty": "标题和正文不能为空",
+              "scheduleDrawerTitle": "AI 自动生成设置",
+              "scheduleDrawerHint": "启用后,系统会每天到点根据该主题的资料 + 种子词 + 监测问题,自动生成 N 篇文案进草稿队列",
+              "scheduleEnableLabel": "启用每日自动生成",
+              "scheduleTimeLabel": "生成时间",
+              "scheduleCountLabel": "每次生成数量",
+              "scheduleTimeNote": "时区 Asia/Shanghai",
+              "scheduleSourcesTitle": "生成依据(只读)",
+              "scheduleProfile": "主题资料",
+              "scheduleFields": "字段已填",
+              "scheduleSeeds": "种子词",
+              "scheduleMonitored": "已勾选监测问题",
+              "scheduleLastRunAt": "上次自动跑批",
+              "scheduleSaved": "已保存设置",
+              "runNowBtn": "立即生成一批",
+              "runNowQueued": "已触发生成 {{n}} 篇,稍后到草稿列表查看"
             },
             "stats": {
               "title": "数据分析",
@@ -2695,7 +2785,16 @@ const zh = {
               "publishPlatformLabel": "选择发布平台(多选)",
               "publishMediaLabel": "媒体 / 账号名(选填,选多个平台会沿用同一个名称)",
               "publishMediaPlaceholder": "如:品牌官方账号",
-              "confirmPublish": "确认发布到 {{n}} 个平台"
+              "publishUrlPlaceholder": "发布后的链接(选填)",
+              "publishPickerHint": "每个平台 + 媒体单独一行;同一稿子可投到多家不同账号,每行可单独填发布链接",
+              "addPublishRow": "再加一行",
+              "confirmPublish": "确认发布到 {{n}} 个渠道",
+              "sourceLabel": "来源",
+              "sourceFilter": {
+                "all": "全部",
+                "ai": "AI 生成",
+                "user": "用户提交"
+              }
             }
           },
           "topic": {
