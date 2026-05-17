@@ -1525,11 +1525,11 @@ interface TopicEditorProps {
 function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDone }: TopicEditorProps) {
   const readOnly = mode === 'view';
   const { t } = useTranslation();
-  // Phase D — 画像作为 Step 1 的核心;name/target/industry 从画像取值;只保留 aliases 单独输入
+  // Phase D — 资料作为 Step 1 的核心;name/target/industry 从资料取值;只保留 aliases 单独输入
   const [profile, setProfile] = useState<BrandProfile>(
     () => ({ ...EMPTY_BRAND_PROFILE, ...(initial?.profile || {}) }),
   );
-  // 画像里没有 aliases 字段,单独留一个文本输入 — 仅 topic 表用
+  // 资料里没有 aliases 字段,单独留一个文本输入 — 仅 topic 表用
   const name = profile.profile_name;
   const target = profile.company_short_name;
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
@@ -1696,7 +1696,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
   };
 
   // 「保存并提交审核」— save → submit-for-review → 关闭。
-  // 后端 422 = 画像或种子或 selected 不达标,把后端 detail 暴露给用户。
+  // 后端 422 = 资料或种子或 selected 不达标,把后端 detail 暴露给用户。
   const handleSubmitForReview = async () => {
     if (!valid || saving) return;
     setSaving(true); setSubmitErr(null);
@@ -1883,13 +1883,13 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             </p>
             <ProfileImporter profile={profile} onApply={setProfile}
                              token={token} disabled={readOnly} />
-            {/* 7 模块画像表单(画像名称/简称/行业 同时是 topic.name/target/industry) */}
+            {/* 6 模块资料表单(名称/简称/行业 同时是 topic.name/target/industry) */}
             <BrandProfileForm
               profile={profile}
               onChange={setProfile}
               readOnly={readOnly}
             />
-            {/* 画像里没有 aliases — 单独留 */}
+            {/* 资料里没有 aliases — 单独留 */}
             <section
               className="rounded-md p-4"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}

@@ -1857,8 +1857,8 @@ const zh = {
                 "edit": "编辑",
                 "delete": "删除",
                 "view": "查看",
-                "profile": "画像",
-                "profileHint": "填写品牌画像 / 种子词 / 监测问题,提交平台审核",
+                "profile": "资料",
+                "profileHint": "填写品牌资料 / 种子词 / 监测问题,提交平台审核",
                 "run": "跑一次",
                 "running": "运行中",
                 "enabled": "已启用",
@@ -1996,9 +1996,9 @@ const zh = {
                 "step1": "设置",
                 "step2": "种子提示词",
                 "step3": "提示词扩展",
-                "step1Hint": "先填品牌画像(7 大模块) — 画像名称 / 简称 / 行业 同时作为主题的基础设置",
-                "profileHint": "画像里的「画像名称」「公司简称」「行业」会作为本主题的名称 / 检测词 / 行业;素材、用户痛点、Slogan 等会用于后续文案生成",
-                "aliasesSectionTitle": "别名(画像之外补充)",
+                "step1Hint": "先填品牌资料(6 大模块) — 名称 / 简称 / 行业 同时作为主题的基础设置",
+                "profileHint": "资料里的「名称」「公司简称」「行业」会作为本主题的名称 / 检测词 / 行业;素材、用户痛点、Slogan 等会用于后续文案生成",
+                "aliasesSectionTitle": "别名(资料之外补充)",
                 "step2Hint": "甲方手填多条种子提示词。保存后进入审核队列,已生效的种子只能新增,不能修改",
                 "step3Hint": "基于步骤 2 的种子扇出约 200 条/种子的候选问题,勾选并选择 AI 引擎。Query 一经生效只能新增,不能修改",
                 "seedPromptsLabel": "种子提示词(本次提交)",
@@ -2611,7 +2611,7 @@ const zh = {
           "admin": {
             "review": {
               "title": "审核",
-              "subtitle": "审核甲方提交的画像 + 种子 + 监测问题;通过即跑、生成执行计划书并触发内容生成",
+              "subtitle": "审核甲方提交的资料 + 种子 + 监测问题;通过即跑、生成执行计划书并触发内容生成",
               "empty": "暂无符合条件的申请",
               "refresh": "刷新",
               "approve": "通过",
@@ -2621,7 +2621,7 @@ const zh = {
               "rejectReasonLabel": "拒绝原因(会随邮件通知用户):",
               "edit": "编辑",
               "save": "保存",
-              "editorNote": "只编辑常用字段;完整画像请由用户在 /dashboard/topics/:id/profile 操作",
+              "editorNote": "只编辑常用字段;完整资料请由用户在 /dashboard/topics/:id/profile 操作",
               "viewPlan": "查看执行计划书",
               "filter": {
                 "all": "全部",
@@ -2636,7 +2636,7 @@ const zh = {
                 "submittedAt": "提交于"
               },
               "section": {
-                "profile": "品牌画像",
+                "profile": "品牌资料",
                 "seeds": "种子提示词",
                 "monitored": "监测问题 ({{n}}/{{max}})",
                 "changelog": "主题日志"
@@ -2700,21 +2700,21 @@ const zh = {
           },
           "topic": {
             "profile": {
-              "title": "主题画像",
-              "subtitle": "提交品牌画像 + 种子词 + 监测问题(≤50),通过审核后会自动生成执行计划书和文案稿",
+              "title": "主题资料",
+              "subtitle": "提交品牌资料 + 种子词 + 监测问题(≤50),通过审核后会自动生成执行计划书和文案稿",
               "backToDashboard": "返回主控台",
               "notFound": "主题不存在",
               "saved": "已保存",
               "saving": "保存中…",
               "submitted": "已提交审核,等待平台运营批复",
               "submitting": "提交中…",
-              "save": "保存画像",
+              "save": "保存资料",
               "submitForReview": "提交审核",
               "missing": "还有 {{n}} 个必填项未完成",
               "allFilled": "必填项已全部填写",
               "selectedNow": "监测问题 {{n}}/{{max}}",
               "tab": {
-                "profile": "品牌画像",
+                "profile": "品牌资料",
                 "seeds": "种子提示词",
                 "monitor": "监测问题"
               },
@@ -2725,7 +2725,7 @@ const zh = {
                 "rejected": "已拒绝"
               },
               "statusHint": {
-                "draft": "完成画像并勾选监测问题后可提交审核",
+                "draft": "完成资料并勾选监测问题后可提交审核",
                 "pending": "平台运营审核中,暂无法编辑",
                 "approved": "已通过审核,执行计划书已生成,文案稿正在异步生成",
                 "rejected": "未通过审核,请按邮件反馈调整后重新提交"
@@ -2738,7 +2738,7 @@ const zh = {
               },
               "monitor": {
                 "expandTitle": "用种子词扩展监测问题候选",
-                "expandHint": "LLM 会基于画像 + 种子词扩展候选,你勾选最多 50 条作为正式监测问题",
+                "expandHint": "LLM 会基于资料 + 种子词扩展候选,你勾选最多 50 条作为正式监测问题",
                 "seedPlaceholder": "种子词(如「遗产继承」)",
                 "expand": "扩展候选",
                 "selectedHint": "已勾选 {{n}}/{{max}} 个监测问题",

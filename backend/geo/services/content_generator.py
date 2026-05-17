@@ -1,11 +1,11 @@
 """Phase D — 内容文案生成 service.
 
-入口 `schedule_generation(topic_id, plan_id)` 在 admin 通过画像审核时由
+入口 `schedule_generation(topic_id, plan_id)` 在 admin 通过资料审核时由
 admin_review.approve_topic 通过 FastAPI BackgroundTasks 异步触发。
 
 流程:
-  1. 加载 topic 的画像 + 通过的监测问题(approved 且 selected)
-  2. 对每条监测问题,组装 prompt(画像中创作方向/文案类型/平台/调性/雷区/Slogan)
+  1. 加载 topic 的资料 + 通过的监测问题(approved 且 selected)
+  2. 对每条监测问题,组装 prompt(资料中创作方向/文案类型/平台/调性/雷区/Slogan)
   3. 调用 LLM(DeepSeek) 拿输出(JSON {title, body, summary})
   4. 落 TopicGeneratedDocORM(status=draft)
 
@@ -145,7 +145,7 @@ def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str
     """
     system_prompt = _build_system_prompt(profile)
     user_prompt = (
-        f"针对下面这个问题,写一篇符合画像调性的文案稿。\n"
+        f"针对下面这个问题,写一篇符合资料调性的文案稿。\n"
         f"问题:{query}\n\n"
         f"输出严格 JSON,字段:\n"
         f'  "title": 文案标题(吸睛,≤30 字),\n'
@@ -198,8 +198,8 @@ def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str
 
 
 def _build_system_prompt(profile: BrandProfile) -> str:
-    """画像 → 系统提示词,挑跟"文案创作"相关的字段."""
-    parts: list[str] = ["你是品牌内容文案专家,根据下面的品牌画像写文案稿:"]
+    """资料 → 系统提示词,挑跟"文案创作"相关的字段."""
+    parts: list[str] = ["你是品牌内容文案专家,根据下面的品牌资料写文案稿:"]
     if profile.company_full_name:
         parts.append(f"- 品牌全称:{profile.company_full_name}")
     if profile.company_short_name:

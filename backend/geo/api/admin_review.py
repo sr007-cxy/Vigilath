@@ -2,8 +2,8 @@
 
 Phase D 新增端点(以 topic 为整体审核单位):
 - GET    /admin/review/topics                          — 列出全部 topic 申请,带 status 过滤
-- GET    /admin/review/topic/{id}                      — 单条申请的完整资料(画像 / 种子 / 监测问题 / 日志)
-- PATCH  /admin/review/topic/{id}                      — admin 修改画像 / 种子 / 监测问题(走 changelog)
+- GET    /admin/review/topic/{id}                      — 单条申请的完整资料(资料 / 种子 / 监测问题 / 日志)
+- PATCH  /admin/review/topic/{id}                      — admin 修改资料 / 种子 / 监测问题(走 changelog)
 - POST   /admin/review/topic/{id}/approve              — 通过:跑一次 + 生成执行计划书 + 异步生成文案稿 + 邮件
 - POST   /admin/review/topic/{id}/reject               — 拒绝 + 邮件
 - GET    /admin/review/topic/{id}/execution-plan       — 拿执行计划书(含 4 分区 + 运行进度,轮询用)
@@ -335,7 +335,7 @@ def get_topic_review_detail(
 
 
 class AdminPatchTopicPayload(BaseModel):
-    """admin 编辑画像 / 种子 / queries 任一字段;字段缺省 = 不改."""
+    """admin 编辑资料 / 种子 / queries 任一字段;字段缺省 = 不改."""
     profile: Optional[BrandProfile] = None
     seed_prompts: Optional[list[str]] = None         # 若给,以这份替换种子列表(text 集合)
     selected_query_texts: Optional[list[str]] = None  # 若给,把这些 text 的 selected 设 True,其余 False
@@ -571,7 +571,7 @@ def approve_topic(
     2. 所有 selected query 同步 status=approved(approved_at / reviewer_id 也填)
     3. 触发 telemetry-service /run-topic 跑一次 → 拿 run_id
     4. 创建 ExecutionPlan 行(snapshot + run_id),返回给前端
-    5. 异步:基于画像 + 监测问题生成内容文案稿
+    5. 异步:基于资料 + 监测问题生成内容文案稿
     6. 异步:发邮件通知用户
     """
     t = _load_topic_or_404(db, topic_id)

@@ -249,7 +249,7 @@ class EmailService:
             html = f"""
             <html>
               <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-                <h2 style="color: #111827;">你的画像申请已通过审核</h2>
+                <h2 style="color: #111827;">你的资料申请已通过审核</h2>
                 <p>主题:<strong>{topic_name}</strong></p>
                 <p>我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
                 {cta_block}
@@ -259,7 +259,7 @@ class EmailService:
             </html>
             """
             text_lines = [
-                f"你的画像申请已通过审核",
+                f"你的资料申请已通过审核",
                 f"主题:{topic_name}",
                 "",
                 "我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书。",
@@ -279,23 +279,23 @@ class EmailService:
         html = f"""
         <html>
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-            <h2 style="color: #111827;">你的画像申请未通过审核</h2>
+            <h2 style="color: #111827;">你的资料申请未通过审核</h2>
             <p>主题:<strong>{topic_name}</strong></p>
             {reason_block}
-            <p>请按反馈调整画像 / 种子 / 监测问题后,重新提交审核。</p>
+            <p>请按反馈调整资料 / 种子 / 监测问题后,重新提交审核。</p>
             <p>— GEO 团队</p>
           </body>
         </html>
         """
         text_lines = [
-            "你的画像申请未通过审核",
+            "你的资料申请未通过审核",
             f"主题:{topic_name}",
             "",
         ]
         if reject_reason:
             text_lines.append(f"未通过原因:{reject_reason}")
             text_lines.append("")
-        text_lines += ["请按反馈调整画像后重新提交审核。", "", "— GEO 团队"]
+        text_lines += ["请按反馈调整资料后重新提交审核。", "", "— GEO 团队"]
         return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
 
     def send_content_review_result_email(

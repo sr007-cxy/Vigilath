@@ -61,7 +61,7 @@ class AiTelemetryTopicORM(Base):
     enabled = Column(Boolean, nullable=False, default=True)
 
     # v3(Phase D)审核工作流:整张申请的状态机 + 资料快照
-    # profile_json:7 大模块品牌画像表单(画像基础 / 内容创作方向 / 品牌主体 / 服务核心 / 用户痛点 / 品牌故事 / 创作边界)
+    # profile_json:6 大模块品牌资料表单(基础标识 / 品牌主体 / 服务核心 / 目标用户 / 品牌故事 / 创作边界)
     profile_json = Column(Text, nullable=False, default="{}")
     submission_status = Column(String, nullable=False, default="draft")
     # ↑ draft / pending / approved / rejected — 与 seed_prompts_json[].status 是两层:整张申请 + 单条种子词
@@ -69,7 +69,7 @@ class AiTelemetryTopicORM(Base):
     approved_at = Column(DateTime, nullable=True)
     rejected_at = Column(DateTime, nullable=True)
     reviewer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    # 主题日志:每次画像/种子/queries 变更追加一条 {at, actor_id, actor_role, field, before, after}
+    # 主题日志:每次资料/种子/queries 变更追加一条 {at, actor_id, actor_role, field, before, after}
     topic_changelog_json = Column(Text, nullable=False, default="[]")
     # 泛化日志:种子词 → LLM 扩展 query 候选的调用记录 [{at, seed, model, expanded_count, raw_excerpt}]
     expansion_log_json = Column(Text, nullable=False, default="[]")
@@ -221,7 +221,7 @@ class AiTelemetryTopicBriefingORM(Base):
 class AiTelemetryTopicExecutionPlanORM(Base):
     """v3(Phase D)— 审核通过时生成的执行计划书快照.
 
-    包含:画像 + 监测问题 + 主题/泛化日志的不变副本(后续即便 topic 被编辑也保留生成时形态)
+    包含:资料 + 监测问题 + 主题/泛化日志的不变副本(后续即便 topic 被编辑也保留生成时形态)
     + 指向那次"通过即跑"的 run_id,运行进度由 _query_hits 表实时聚合.
     """
     __tablename__ = "ai_telemetry_topic_execution_plans"
@@ -232,7 +232,7 @@ class AiTelemetryTopicExecutionPlanORM(Base):
     generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     generated_by_reviewer_id = Column(Integer, nullable=True)
 
-    # 项目总体状况快照:画像 + 监测问题数 + 引擎清单
+    # 项目总体状况快照:资料 + 监测问题数 + 引擎清单
     overview_json = Column(Text, nullable=False, default="{}")
     # 主题日志快照(生成那一刻的 topic_changelog_json 副本)
     topic_changelog_snapshot_json = Column(Text, nullable=False, default="[]")
@@ -247,7 +247,7 @@ class AiTelemetryTopicExecutionPlanORM(Base):
 
 
 class TopicGeneratedDocORM(Base):
-    """v3(Phase D)— 基于画像 + 通过的监测问题,LLM 生成的内容文案稿.
+    """v3(Phase D)— 基于资料 + 通过的监测问题,LLM 生成的内容文案稿.
 
     生命周期:draft → pending_review → approved/rejected → published(approved 后选发布平台 / 媒体)
     publish_targets_json 不真实调外部平台 OpenAPI,只记录"标注为已发布到哪里".
@@ -320,17 +320,17 @@ class QueryItem(BaseModel):
     selected: bool = True
 
 
-# ─────────────── Phase D — 品牌画像(7 大模块) ──────────────
+# ─────────────── Phase D — 品牌资料(6 大模块) ──────────────
 
 
 class BrandProfile(BaseModel):
-    """用户提交资料时填的 7 大模块表单.
+    """用户提交资料时填的 6 大模块表单.
 
-    画像跟 topic 一一对应,序列化进 topic.profile_json.
+    资料跟 topic 一一对应,序列化进 topic.profile_json.
     必填项见各字段 Field 注解(min_length / 默认值);submit-for-review 端点会再做完整校验.
     """
-    # 一、画像基础标识
-    profile_name: str = Field("", max_length=128)               # 画像名称
+    # 一、资料基础标识
+    profile_name: str = Field("", max_length=128)               # 资料名称
     company_full_name: str = Field("", max_length=256)          # 公司 / 品牌全称
     company_short_name: str = Field("", max_length=64)          # 公司 / 品牌简称
     industry: str = Field("", max_length=128)                   # 所属行业 / 赛道
@@ -358,7 +358,7 @@ class BrandProfile(BaseModel):
     service_guarantees: list[str] = Field(default_factory=list, max_length=20)   # 服务交付保障(选填)
 
     # 五、目标用户与痛点
-    target_audience: list[str] = Field(default_factory=list, max_length=20)      # 核心目标用户画像
+    target_audience: list[str] = Field(default_factory=list, max_length=20)      # 核心目标用户资料
     user_pain_points: list[str] = Field(default_factory=list, max_length=20)     # 用户核心痛点
     user_faqs: list[str] = Field(default_factory=list, max_length=20)            # 用户高频疑问 / 常见误区
     decision_factors: list[str] = Field(default_factory=list, max_length=20)     # 用户决策关键因素
@@ -376,10 +376,10 @@ class BrandProfile(BaseModel):
     extra_notes: str = Field("", max_length=2000)                                # 其他补充说明(选填)
 
 
-# 画像必填字段清单 — submit-for-review 校验用。
+# 资料必填字段清单 — submit-for-review 校验用。
 # 「内容创作方向」整节(creation_directions / copywriting_types / target_platforms /
-# content_tones / content_redlines)2026-05-17 起从画像表单移除 — 这部分由
-# 「内容发布策略」阶段决定,不再在画像里强制。schema 字段保留,老数据兼容。
+# content_tones / content_redlines)2026-05-17 起从资料表单移除 — 这部分由
+# 「内容发布策略」阶段决定,不再在资料里强制。schema 字段保留,老数据兼容。
 PROFILE_REQUIRED_FIELDS: tuple[str, ...] = (
     "profile_name", "company_full_name", "company_short_name",
     "industry", "core_business_lines", "service_geo",
@@ -412,7 +412,7 @@ class ExpansionLogEntry(BaseModel):
 
 
 class SubmitForReviewPayload(BaseModel):
-    """提交审核 — 校验:画像必填齐 + ≥1 个 pending/approved 种子 + ≤50 个 selected query."""
+    """提交审核 — 校验:资料必填齐 + ≥1 个 pending/approved 种子 + ≤50 个 selected query."""
     pass
 
 
@@ -546,7 +546,7 @@ class TopicPayload(BaseModel):
     # 字段名跟 TopicOut.seed_prompts(SeedPromptItem 列表)区分开 — 这里只是
     # 提交的纯文本,后端补 status/timestamp 写库.
     seed_drafts: Optional[list[str]] = Field(default=None, max_length=10)
-    # Phase D — 同请求一起提交品牌画像(7 大模块);后端写 profile_json + 追加 changelog.
+    # Phase D — 同请求一起提交品牌资料(6 大模块);后端写 profile_json + 追加 changelog.
     # None / 缺失 = 这次保存不动 profile_json(向后兼容老 client).
     profile: Optional[BrandProfile] = None
 

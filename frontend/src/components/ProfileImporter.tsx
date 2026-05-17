@@ -1,11 +1,11 @@
-// AI 智能填充 — 拖入文件 / 粘贴文本 → 后端 LLM 抽取 BrandProfile → 合并回画像表单.
+// AI 智能填充 — 拖入文件 / 粘贴文本 → 后端 LLM 抽取 BrandProfile → 合并回资料表单.
 //
 // 后端路由:POST /api/ai-telemetry/profile/extract (geo/api/ai_telemetry.py)
 // 复用同一个 DeepSeek 通道(直连 + OpenRouter fallback)。后端没配 key 时返回 503,
 // 这里弹错误提示给用户而不是静默吞。
 //
 // 合并策略:
-//   - 「填充空白」:只填当前画像里为空的字段(数组空、字符串为空白),不动用户已经手填的
+//   - 「填充空白」:只填当前资料里为空的字段(数组空、字符串为空白),不动用户已经手填的
 //   - 「全部覆盖」:LLM 抽到的非空值都覆盖现有值
 // 默认是「填充空白」,避免一不小心把用户精心写好的内容冲掉。
 //
@@ -151,7 +151,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
         <div>
           <h3 className="text-sm font-semibold text-primary">AI 智能填充</h3>
           <p className="text-xs text-muted mt-0.5">
-            拖入 .txt / .md / .docx,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 7 大模块。
+            拖入 .txt / .md / .docx,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 6 大模块。
           </p>
         </div>
         <button type="button" onClick={() => setOpen(o => !o)}
@@ -190,7 +190,7 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
 
           <textarea value={text} onChange={e => setText(e.target.value.slice(0, MAX_TEXT_LEN))}
                     rows={6}
-                    placeholder="或直接粘贴公司简介 / 官网文案 / PRD,AI 会从中抽取 7 大模块字段..."
+                    placeholder="或直接粘贴公司简介 / 官网文案 / PRD,AI 会从中抽取 6 大模块字段..."
                     disabled={disabled || busy}
                     className="w-full text-sm px-3 py-2 rounded-md"
                     style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',

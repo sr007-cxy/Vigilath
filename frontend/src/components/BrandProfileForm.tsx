@@ -1,4 +1,4 @@
-// 品牌画像表单(7 大模块)— TopicEditor 和 /dashboard/topics/:id/profile 共用.
+// 品牌资料表单(6 大模块)— TopicEditor 和 /dashboard/topics/:id/profile 共用.
 //
 // 字段定义见 services/aiTelemetryApi.ts 的 BrandProfile.
 // 必填项校验在调用方传 requiredKeys 控制(因为 admin 编辑器 vs 用户提交审核要求不同).
@@ -9,7 +9,7 @@ import type { BrandProfile } from '../services/aiTelemetryApi';
 // 用户提交审核时必填的核心字段(跟后端 PROFILE_REQUIRED_FIELDS 对齐)
 // 二、内容创作方向(creation_directions / copywriting_types / target_platforms /
 // content_tones / content_redlines)整节移除 — 这些由内容审核 / 投放策略阶段
-// 决定,不在画像表单里强制填。BrandProfile schema 字段保留(老数据不破),
+// 决定,不在资料表单里强制填。BrandProfile schema 字段保留(老数据不破),
 // content_generator 的 prompt 拼装如果读到空就跳过。
 export const PROFILE_REQUIRED_FIELDS: (keyof BrandProfile)[] = [
   'profile_name', 'company_full_name', 'company_short_name',
@@ -47,9 +47,9 @@ export function BrandProfileForm({
   };
   return (
     <div className="space-y-6">
-      <Section title="一、画像基础标识">
+      <Section title="一、基础标识">
         <Pair>
-          <TextRow label="画像名称" required={req.has('profile_name')} readOnly={readOnly}
+          <TextRow label="名称" required={req.has('profile_name')} readOnly={readOnly}
                    value={profile.profile_name} onChange={v => setField('profile_name', v)} />
           <TextRow label="公司 / 品牌全称" required={req.has('company_full_name')} readOnly={readOnly}
                    value={profile.company_full_name} onChange={v => setField('company_full_name', v)} />
@@ -96,7 +96,7 @@ export function BrandProfileForm({
       </Section>
 
       <Section title="四、目标用户与痛点">
-        <TagsRow label="核心目标用户画像" required={req.has('target_audience')} readOnly={readOnly}
+        <TagsRow label="核心目标用户" required={req.has('target_audience')} readOnly={readOnly}
                  value={profile.target_audience} onChange={v => setField('target_audience', v)} />
         <TagsRow label="用户核心痛点(分点)" required={req.has('user_pain_points')} readOnly={readOnly}
                  value={profile.user_pain_points} onChange={v => setField('user_pain_points', v)} />

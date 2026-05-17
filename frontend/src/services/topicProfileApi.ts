@@ -1,4 +1,4 @@
-// Phase D — 用户侧 topic 画像 / 监测问题勾选 / 提交审核 API client.
+// Phase D — 用户侧 topic 资料 / 监测问题勾选 / 提交审核 API client.
 //
 // 服务端关联路由:backend/geo/api/ai_telemetry.py
 //  PUT  /api/ai-telemetry/topics/{id}/profile

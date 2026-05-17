@@ -1,5 +1,5 @@
 // Admin 审核 — Phase D:按申请聚合(每张卡片 = 一个 topic 申请).
-// 展示画像 + 种子 + 监测问题;支持 admin 内联修改 / 批准 / 拒绝.
+// 展示资料 + 种子 + 监测问题;支持 admin 内联修改 / 批准 / 拒绝.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -271,7 +271,7 @@ function ApplicationCard({
           {!detail && <div className="text-xs text-muted">…</div>}
           {detail && (
             <>
-              {/* 画像 — 全 7 模块,审核期可编辑 */}
+              {/* 资料 — 全 6 模块,审核期可编辑 */}
               <Block title={t('admin.review.section.profile')}
                      onEdit={canEdit && !editingProfile ? () => {
                        setDraft({ ...EMPTY_BRAND_PROFILE, ...(detail.profile || {}) });

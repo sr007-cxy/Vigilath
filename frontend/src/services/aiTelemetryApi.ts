@@ -39,7 +39,7 @@ export interface Topic {
   enabled: boolean;
   last_run_at?: string | null;
   last_run_status?: 'success' | 'failed' | 'running' | null;
-  // Phase D — 画像 + 申请状态机
+  // Phase D — 资料 + 申请状态机
   profile?: BrandProfile;
   submission_status?: SubmissionStatus;
   submitted_at?: string | null;
@@ -55,9 +55,9 @@ export interface Topic {
 
 export type SubmissionStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 
-// Phase D — 品牌画像 (7 大模块)
+// Phase D — 品牌资料 (6 大模块)
 export interface BrandProfile {
-  // 一、画像基础标识
+  // 一、资料基础标识
   profile_name: string;
   company_full_name: string;
   company_short_name: string;
@@ -132,7 +132,7 @@ export interface TopicPayload {
   // Phase C — 创建 / 更新时把当前种子词附带提交,后端追加进 seed_prompts_json (pending);
   // 编辑器允许多条种子串行扇出,因此接 list。字段名跟 Topic.seed_prompts (对象数组)区分.
   seed_drafts?: string[];
-  // Phase D — 同请求带画像;后端写 profile_json + 追加 changelog。
+  // Phase D — 同请求带资料;后端写 profile_json + 追加 changelog。
   profile?: BrandProfile;
 }
 

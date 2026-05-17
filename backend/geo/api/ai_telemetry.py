@@ -252,7 +252,7 @@ def create_topic(
     db.add(t)
     db.commit()
     db.refresh(t)
-    # 把画像创建动作追加到 changelog(创建时 changelog 还是空,直接补一条)
+    # 把资料创建动作追加到 changelog(创建时 changelog 还是空,直接补一条)
     if payload.profile is not None:
         _append_changelog(
             t, actor_id=current_user.id, actor_role="user", field="profile",
@@ -347,7 +347,7 @@ def submit_seed_prompt(
     return TopicOut.from_orm_row(t)
 
 
-# ─────────── Phase D — 画像 / 提交审核 / 监测问题勾选 ────────────
+# ─────────── Phase D — 资料 / 提交审核 / 监测问题勾选 ────────────
 
 
 def _append_changelog(t: AiTelemetryTopicORM, *, actor_id: int | None, actor_role: str,
@@ -445,7 +445,7 @@ def update_topic_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """更新 topic 的品牌画像(7 大模块).只允许在 draft/rejected 状态下改."""
+    """更新 topic 的品牌资料(6 大模块).只允许在 draft/rejected 状态下改."""
     t = _get_topic_or_404(db, topic_id, current_user.id)
     _ensure_editable(t)
     old_profile_summary = ""
@@ -551,14 +551,14 @@ def submit_topic_for_review(
 
     校验:
       - submission_status ∈ {draft, rejected}
-      - 画像 PROFILE_REQUIRED_FIELDS 都非空
+      - 资料 PROFILE_REQUIRED_FIELDS 都非空
       - 至少 1 条种子(pending 或 approved)
       - selected query 数 ∈ [1, 50]
     """
     t = _get_topic_or_404(db, topic_id, current_user.id)
     _ensure_editable(t)
 
-    # 1) 画像必填校验
+    # 1) 资料必填校验
     try:
         profile_raw = json.loads(t.profile_json or "{}")
     except Exception:  # noqa: BLE001
@@ -576,7 +576,7 @@ def submit_topic_for_review(
             detail={
                 "code": "PROFILE_INCOMPLETE",
                 "field": "profile",
-                "message": "画像必填项缺失",
+                "message": "资料必填项缺失",
                 "missing": missing,
             },
         )
@@ -663,7 +663,7 @@ async def run_now(
         raise HTTPException(502, f"telemetry-service unavailable: {e}")
 
 
-# ─────────────── AI 智能填充 — 原始资料 → 品牌画像 ────────────
+# ─────────────── AI 智能填充 — 原始资料 → 品牌资料 ────────────
 
 
 # 上传单个文件大小上限 — 10MB。
@@ -674,7 +674,7 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 def _do_extract(text: str, user_id: int) -> ProfileExtractOut:
     if not text or len(text.strip()) < 10:
-        raise HTTPException(400, "原始资料过短(<10 字符),无法抽取画像")
+        raise HTTPException(400, "原始资料过短(<10 字符),无法抽取资料")
     if len(text) > MAX_EXTRACTED_TEXT:
         text = text[:MAX_EXTRACTED_TEXT]
     try:

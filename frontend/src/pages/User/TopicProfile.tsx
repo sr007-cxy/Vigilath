@@ -1,11 +1,11 @@
-// Phase D — 用户侧画像编辑 + 监测问题勾选 + 提交审核.
+// Phase D — 用户侧资料编辑 + 监测问题勾选 + 提交审核.
 // 路由:/dashboard/topics/:topicId/profile
 //
 // 状态机:
 //   draft → (submit) → pending → admin review → approved | rejected
 //   rejected 可重新编辑后再 submit;approved 后整张表只读
 //
-// 三 tab:画像 / 种子词 / 监测问题(候选 + 勾选 ≤50)
+// 三 tab:资料 / 种子词 / 监测问题(候选 + 勾选 ≤50)
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -116,7 +116,7 @@ export function TopicProfile() {
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto p-4 md:p-6">
-      <PageHead titleKey="topic.profile.title" titleFallback="主题画像" />
+      <PageHead titleKey="topic.profile.title" titleFallback="主题资料" />
 
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -338,7 +338,7 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 当前已知 query(画像里) + selected map
+  // 当前已知 query(资料里) + selected map
   const existing = useMemo(() => {
     const m = new Map<string, boolean>();
     (topic.queries || []).forEach((q, i) => m.set(q, (topic.query_selected || [])[i] ?? true));
