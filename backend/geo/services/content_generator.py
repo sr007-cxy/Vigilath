@@ -49,24 +49,46 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = int(os.environ.get("GEO_CONTENT_TIMEOUT", "180"))
 
 
-def schedule_generation(*, topic_id: int, plan_id: int | None = None) -> None:
+def schedule_generation(
+    *,
+    topic_id: int,
+    plan_id: int | None = None,
+    max_docs: int | None = None,
+    queries_override: list[str] | None = None,
+    mark_auto_run: bool = False,
+) -> None:
     """fire-and-forget thread.BackgroundTasks 已是 fire-and-forget,
     但为了不阻塞 FastAPI 的事件循环(LLM 单条 30-90s),再起一个 daemon thread.
+
+    参数:
+      max_docs            — 限制本次生成的稿件数;不传则按 env / 50 兜底
+      queries_override    — 指定本次要写的 query 列表;不传则从 topic 拉 approved+selected
+      mark_auto_run       — True 时写 auto_generate_last_run_at(cron / 立即生成入口用)
     """
     thread = threading.Thread(
-        target=_run_generation_safe, args=(topic_id, plan_id), daemon=True,
+        target=_run_generation_safe,
+        args=(topic_id, plan_id, max_docs, queries_override, mark_auto_run),
+        daemon=True,
     )
     thread.start()
 
 
-def _run_generation_safe(topic_id: int, plan_id: int | None) -> None:
+def _run_generation_safe(
+    topic_id: int, plan_id: int | None,
+    max_docs: int | None, queries_override: list[str] | None,
+    mark_auto_run: bool,
+) -> None:
     try:
-        _run_generation(topic_id, plan_id)
+        _run_generation(topic_id, plan_id, max_docs, queries_override, mark_auto_run)
     except Exception as e:  # noqa: BLE001
         log.exception("content generation crashed for topic %d: %s", topic_id, e)
 
 
-def _run_generation(topic_id: int, plan_id: int | None) -> None:
+def _run_generation(
+    topic_id: int, plan_id: int | None,
+    max_docs_override: int | None, queries_override: list[str] | None,
+    mark_auto_run: bool,
+) -> None:
     db = SessionLocal()
     try:
         t = db.get(AiTelemetryTopicORM, topic_id)
@@ -83,20 +105,25 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
             profile = BrandProfile(**profile_data)
         except Exception:  # noqa: BLE001
             profile = BrandProfile()
-        try:
-            qarr = json.loads(t.queries_json or "[]")
-        except Exception:  # noqa: BLE001
-            qarr = []
-        queries = [
-            q["text"] for q in qarr
-            if isinstance(q, dict) and q.get("text")
-            and q.get("selected", True) and q.get("status") == "approved"
-        ]
+        if queries_override is not None:
+            queries = [q for q in queries_override if isinstance(q, str) and q.strip()]
+        else:
+            try:
+                qarr = json.loads(t.queries_json or "[]")
+            except Exception:  # noqa: BLE001
+                qarr = []
+            queries = [
+                q["text"] for q in qarr
+                if isinstance(q, dict) and q.get("text")
+                and q.get("selected", True) and q.get("status") == "approved"
+            ]
         if not queries:
-            log.info("content gen: no approved+selected queries on topic %d", topic_id)
+            log.info("content gen: no queries to write for topic %d", topic_id)
             return
-        max_docs = min(int(os.environ.get("GEO_CONTENT_MAX_DOCS", "50")), len(queries))
-        queries = queries[:max_docs]
+        env_cap = int(os.environ.get("GEO_CONTENT_MAX_DOCS", "50"))
+        cap = max_docs_override if max_docs_override and max_docs_override > 0 else env_cap
+        cap = min(cap, env_cap, len(queries))
+        queries = queries[:cap]
 
         ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
         or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -112,7 +139,7 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
             doc = TopicGeneratedDocORM(
                 topic_id=topic_id, execution_plan_id=plan_id,
                 source_query_text=q, status="draft",
-                llm_model=model_id,
+                llm_model=model_id, source="ai",
             )
             if not provider:
                 doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
@@ -129,6 +156,8 @@ def _run_generation(topic_id: int, plan_id: int | None) -> None:
                 doc.generation_error = str(e)[:500]
                 doc.title = f"[生成失败] {q}"
             db.add(doc)
+        if mark_auto_run:
+            t.auto_generate_last_run_at = datetime.utcnow()
         db.commit()
         log.info("content gen done for topic %d: %d docs", topic_id, len(queries))
     finally:

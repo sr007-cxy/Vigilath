@@ -22,8 +22,8 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   { to: '/dashboard', end: true, icon: 'config', labelKey: 'dashboard.nav.config' },
-  { to: '/dashboard/compose', end: false, icon: 'compose', labelKey: 'dashboard.nav.compose' },
-  { to: '/dashboard/posts', end: false, icon: 'posts', labelKey: 'dashboard.nav.posts' },
+  // Phase D.1 — 内容 + 投放合并:一份「内容」菜单覆盖起稿 / 用户提交 / 状态查看 / 发布媒体
+  { to: '/dashboard/content', end: false, icon: 'compose', labelKey: 'dashboard.nav.content' },
   // AI 遥测 = 概览 / 引用追踪 / 遥测详情(原"跑批结果")
   { to: '/dashboard/ai-telemetry', end: false, icon: 'telemetry', labelKey: 'dashboard.nav.aiTelemetry' },
   // 优化建议从原 AI 遥测 tab 提级到一级菜单

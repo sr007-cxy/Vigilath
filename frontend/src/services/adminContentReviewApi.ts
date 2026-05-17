@@ -6,6 +6,7 @@ import { localizedHeaders, readApiError } from './apiError';
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
 export type DocStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
+export type DocSource = 'ai' | 'user';
 
 export interface TopicWithDocs {
   topic_id: number;
@@ -23,6 +24,7 @@ export interface TopicWithDocs {
 export interface PublishTarget {
   platform: string;
   media: string;
+  url?: string;
   marked_at?: string;
   marked_by?: number;
 }
@@ -44,6 +46,7 @@ export interface GeneratedDoc {
   reviewer_id?: number | null;
   reject_reason?: string | null;
   publish_targets: PublishTarget[];
+  source: DocSource;
 }
 
 async function request<T>(
@@ -70,9 +73,17 @@ export const adminContentReviewApi = {
   async listTopics(token: string): Promise<TopicWithDocs[]> {
     return request('GET', '/topics', token);
   },
-  async listDocs(topicId: number, status: string | undefined, token: string): Promise<GeneratedDoc[]> {
-    const qs = status ? `?status=${status}` : '';
-    return request('GET', `/topics/${topicId}/docs${qs}`, token);
+  async listDocs(
+    topicId: number,
+    status: string | undefined,
+    token: string,
+    source?: DocSource,
+  ): Promise<GeneratedDoc[]> {
+    const qs = new URLSearchParams();
+    if (status) qs.set('status', status);
+    if (source) qs.set('source', source);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request('GET', `/topics/${topicId}/docs${suffix}`, token);
   },
   async getDoc(docId: number, token: string): Promise<GeneratedDoc> {
     return request('GET', `/docs/${docId}`, token);
@@ -86,7 +97,11 @@ export const adminContentReviewApi = {
   async rejectDoc(docId: number, reason: string, token: string): Promise<GeneratedDoc> {
     return request('POST', `/docs/${docId}/reject`, token, { reason });
   },
-  async publishDoc(docId: number, targets: { platform: string; media: string }[], token: string): Promise<GeneratedDoc> {
+  async publishDoc(
+    docId: number,
+    targets: { platform: string; media: string; url?: string }[],
+    token: string,
+  ): Promise<GeneratedDoc> {
     return request('POST', `/docs/${docId}/publish`, token, { publish_targets: targets });
   },
 };

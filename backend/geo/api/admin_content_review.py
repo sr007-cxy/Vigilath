@@ -94,6 +94,7 @@ def list_topics_with_docs(
 def list_topic_docs(
     topic_id: int,
     status: Optional[str] = None,
+    source: Optional[str] = None,
     _admin = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -103,12 +104,17 @@ def list_topic_docs(
       - 不传:全部
       - "draft" / "pending_review" / "approved" / "rejected" / "published":精确匹配
       - "to_review":draft + pending_review(常用过滤,默认 admin 视角想看的)
+    source 过滤:
+      - 不传 / "all":全部
+      - "ai" / "user":只看对应来源
     """
     q = db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic_id)
     if status == "to_review":
         q = q.filter(TopicGeneratedDocORM.status.in_(["draft", "pending_review"]))
     elif status:
         q = q.filter(TopicGeneratedDocORM.status == status)
+    if source in ("ai", "user"):
+        q = q.filter(TopicGeneratedDocORM.source == source)
     rows = q.order_by(TopicGeneratedDocORM.id.desc()).all()
     return [GeneratedDocOut.from_orm_row(r) for r in rows]
 
@@ -222,6 +228,7 @@ def publish_doc(
         {
             "platform": t.platform,
             "media": t.media,
+            "url": (t.url or "").strip(),
             "marked_at": now_iso,
             "marked_by": admin.id,
         }

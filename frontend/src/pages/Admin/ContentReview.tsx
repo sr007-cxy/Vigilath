@@ -7,10 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import {
   adminContentReviewApi,
-  type DocStatus, type GeneratedDoc, type TopicWithDocs,
+  type DocSource, type DocStatus, type GeneratedDoc, type TopicWithDocs,
 } from '../../services/adminContentReviewApi';
 
 type StatusFilter = DocStatus | 'to_review' | 'all';
+type SourceFilter = DocSource | 'all';
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'to_review',      label: 'to_review' },
@@ -31,6 +32,7 @@ export function AdminContentReview() {
   const [topicId, setTopicId] = useState<number | null>(null);
   const [docs, setDocs] = useState<GeneratedDoc[]>([]);
   const [status, setStatus] = useState<StatusFilter>('to_review');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -61,6 +63,7 @@ export function AdminContentReview() {
     try {
       const ds = await adminContentReviewApi.listDocs(
         topicId, status === 'all' ? undefined : status, token,
+        sourceFilter === 'all' ? undefined : sourceFilter,
       );
       setDocs(ds);
     } catch (e: unknown) {
@@ -68,7 +71,7 @@ export function AdminContentReview() {
     } finally {
       setLoading(false);
     }
-  }, [topicId, status, token]);
+  }, [topicId, status, sourceFilter, token]);
 
   useEffect(() => {
     if (!isAdmin) { navigate('/dashboard', { replace: true }); return; }
@@ -148,6 +151,23 @@ export function AdminContentReview() {
           </div>
         </div>
 
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-muted">{t('admin.contentReview.sourceLabel')}</label>
+          <div className="flex gap-1">
+            {(['all', 'ai', 'user'] as SourceFilter[]).map(k => (
+              <button key={k} type="button" onClick={() => setSourceFilter(k)}
+                      className="text-xs px-2.5 py-1 rounded-md"
+                      style={{
+                        background: sourceFilter === k ? 'var(--accent-primary)' : 'var(--bg-input)',
+                        color: sourceFilter === k ? '#fff' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}>
+                {t(`admin.contentReview.sourceFilter.${k}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1" />
 
         {picked.size > 0 && (
@@ -210,6 +230,7 @@ function DocCard({ doc, pickable, picked, onPick, onOpen }: {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-primary">{doc.title || `#${doc.id}`}</span>
           <DocStatusChip status={doc.status} />
+          <DocSourceChip source={doc.source} />
           {doc.generation_error && (
             <span className="text-[10px]" style={{ color: '#ef4444' }}>
               ⚠ {t('admin.contentReview.genError')}
@@ -242,6 +263,19 @@ function DocCard({ doc, pickable, picked, onPick, onOpen }: {
         {t('admin.contentReview.view')}
       </button>
     </section>
+  );
+}
+
+function DocSourceChip({ source }: { source: DocSource }) {
+  const { t } = useTranslation();
+  const cm = source === 'ai'
+    ? { c: '#8b5cf6', bg: 'rgba(139,92,246,0.15)' }
+    : { c: '#06b6d4', bg: 'rgba(6,182,212,0.15)' };
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: cm.bg, color: cm.c }}>
+      {t(`admin.contentReview.sourceFilter.${source}`)}
+    </span>
   );
 }
 
@@ -291,9 +325,12 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-semibold text-primary">{doc.title || `#${doc.id}`}</h2>
               <DocStatusChip status={doc.status} />
+              <DocSourceChip source={doc.source} />
             </div>
             <div className="text-xs text-muted mt-1">
-              {doc.source_query_text} · {doc.llm_model} · {new Date(doc.created_at).toLocaleString()}
+              {doc.source_query_text}
+              {doc.llm_model && <> · {doc.llm_model}</>}
+              {' · '}{new Date(doc.created_at).toLocaleString()}
             </div>
           </div>
           <button type="button" onClick={onClose} className="text-muted hover:text-primary">✕</button>
@@ -320,11 +357,16 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
           {doc.publish_targets.length > 0 && (
             <div>
               <p className="text-xs text-muted mb-1">{t('admin.contentReview.publishedTo')}:</p>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {doc.publish_targets.map((p, i) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full"
+                  <span key={i}
+                        className="text-[11px] px-2 py-0.5 rounded-full inline-flex items-center gap-1.5"
                         style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
                     {p.platform}{p.media ? ` / ${p.media}` : ''}
+                    {p.url && (
+                      <a href={p.url} target="_blank" rel="noreferrer"
+                         className="underline opacity-80 hover:opacity-100">🔗</a>
+                    )}
                     <span className="text-muted ml-1">
                       {p.marked_at && new Date(p.marked_at).toLocaleDateString()}
                     </span>
@@ -398,65 +440,99 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
 
 const PLATFORM_OPTIONS = ['抖音', '小红书', '视频号', '公众号', 'B站', '知乎', '微博', 'Twitter', 'LinkedIn'];
 
+interface PublishRow {
+  platform: string;
+  media: string;
+  url: string;
+}
+
 function PublishPicker({ onCancel, onConfirm }: {
-  onCancel: () => void; onConfirm: (targets: { platform: string; media: string }[]) => void;
+  onCancel: () => void;
+  onConfirm: (targets: { platform: string; media: string; url?: string }[]) => void;
 }) {
   const { t } = useTranslation();
-  const [platforms, setPlatforms] = useState<Set<string>>(new Set());
-  const [media, setMedia] = useState('');
+  // 同一稿子可能投到多家平台 + 多个媒体号,所以一行一组 (platform, media, url)
+  const [rows, setRows] = useState<PublishRow[]>([
+    { platform: PLATFORM_OPTIONS[0], media: '', url: '' },
+  ]);
 
-  const toggle = (p: string) => setPlatforms(prev => {
-    const n = new Set(prev);
-    if (n.has(p)) n.delete(p); else n.add(p);
-    return n;
-  });
+  const update = (idx: number, patch: Partial<PublishRow>) => {
+    setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+  const addRow = () => setRows(prev => [...prev, { platform: PLATFORM_OPTIONS[0], media: '', url: '' }]);
+  const removeRow = (idx: number) => setRows(prev =>
+    prev.length === 1 ? prev : prev.filter((_, i) => i !== idx),
+  );
 
+  const validRows = rows.filter(r => r.platform.trim());
   const submit = () => {
-    if (platforms.size === 0) return;
-    const targets = Array.from(platforms).map(p => ({ platform: p, media: media.trim() }));
-    onConfirm(targets);
+    if (validRows.length === 0) return;
+    onConfirm(validRows.map(r => ({
+      platform: r.platform.trim(),
+      media: r.media.trim(),
+      url: r.url.trim() || undefined,
+    })));
   };
 
   return (
     <div className="p-3 border-t space-y-3"
          style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
-      <p className="text-xs text-secondary">{t('admin.contentReview.publishPlatformLabel')}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {PLATFORM_OPTIONS.map(p => {
-          const on = platforms.has(p);
-          return (
-            <button key={p} type="button" onClick={() => toggle(p)}
-                    className="text-xs px-3 py-1 rounded-full"
+      <p className="text-xs text-secondary">{t('admin.contentReview.publishPickerHint')}</p>
+
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-12 gap-2 items-start">
+            <select value={r.platform}
+                    onChange={e => update(i, { platform: e.target.value })}
+                    className="col-span-3 text-xs px-2 py-1.5 rounded-md"
+                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                             border: '1px solid var(--border-color)' }}>
+              {PLATFORM_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <input type="text" value={r.media}
+                   onChange={e => update(i, { media: e.target.value })}
+                   placeholder={t('admin.contentReview.publishMediaPlaceholder')}
+                   className="col-span-4 text-xs px-2 py-1.5 rounded-md"
+                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                            border: '1px solid var(--border-color)' }} />
+            <input type="url" value={r.url}
+                   onChange={e => update(i, { url: e.target.value })}
+                   placeholder={t('admin.contentReview.publishUrlPlaceholder')}
+                   className="col-span-4 text-xs px-2 py-1.5 rounded-md"
+                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                            border: '1px solid var(--border-color)' }} />
+            <button type="button" onClick={() => removeRow(i)}
+                    disabled={rows.length === 1}
+                    className="col-span-1 text-xs px-2 py-1.5 rounded-md"
                     style={{
-                      background: on ? 'var(--accent-primary)' : 'var(--bg-input)',
-                      color: on ? '#fff' : 'var(--text-secondary)',
+                      background: 'var(--bg-input)',
+                      color: rows.length === 1 ? 'var(--text-muted)' : '#ef4444',
                       border: '1px solid var(--border-color)',
+                      opacity: rows.length === 1 ? 0.5 : 1,
                     }}>
-              {p}
+              ✕
             </button>
-          );
-        })}
+          </div>
+        ))}
       </div>
-      <div>
-        <label className="text-xs text-muted block mb-1">
-          {t('admin.contentReview.publishMediaLabel')}
-        </label>
-        <input type="text" value={media} onChange={e => setMedia(e.target.value)}
-               placeholder={t('admin.contentReview.publishMediaPlaceholder')}
-               className="w-full text-sm px-3 py-2 rounded-md"
-               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                        border: '1px solid var(--border-color)' }} />
-      </div>
+
+      <button type="button" onClick={addRow}
+              className="text-xs px-3 py-1 rounded-md"
+              style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)',
+                       border: '1px dashed var(--border-color)' }}>
+        + {t('admin.contentReview.addPublishRow')}
+      </button>
+
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel}
                 className="text-xs px-3 py-1 rounded-md"
                 style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
           {t('admin.contentReview.cancel')}
         </button>
-        <button type="button" disabled={platforms.size === 0} onClick={submit}
+        <button type="button" disabled={validRows.length === 0} onClick={submit}
                 className="text-xs px-3 py-1 rounded-md text-white"
-                style={{ background: '#3b82f6', opacity: platforms.size === 0 ? 0.5 : 1 }}>
-          {t('admin.contentReview.confirmPublish', { n: platforms.size })}
+                style={{ background: '#3b82f6', opacity: validRows.length === 0 ? 0.5 : 1 }}>
+          {t('admin.contentReview.confirmPublish', { n: validRows.length })}
         </button>
       </div>
     </div>

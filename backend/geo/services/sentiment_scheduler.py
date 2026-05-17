@@ -163,6 +163,13 @@ def start() -> None:
         max_instances=1,
     )
 
+    # Phase D.1 — 内容自动生成 cron 复用同一个 APScheduler 进程
+    try:
+        from geo.services.content_scheduler import attach as _attach_content_cron
+        _attach_content_cron(_scheduler)
+    except Exception as e:  # noqa: BLE001
+        log.warning("[content-cron] attach failed: %s", e)
+
     _scheduler.start()
     log.info(
         "[sentinel-scheduler] started: every %dh at :%02d %s, zombie_timeout=%dmin, cleanup=10min",

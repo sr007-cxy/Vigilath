@@ -38,8 +38,7 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ de
 const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
 const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
-const Compose = lazy(() => import('./pages/Dashboard/Compose').then(m => ({ default: m.Compose })));
-const DashboardPosts = lazy(() => import('./pages/Dashboard/Posts').then(m => ({ default: m.Posts })));
+const Content = lazy(() => import('./pages/Dashboard/Content').then(m => ({ default: m.Content })));
 const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
 const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
 const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
@@ -113,8 +112,11 @@ function App() {
                 {/* 首页 = 配置(原 AI 遥测的「主题配置」tab)
                     key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
                 <Route index element={<AiTelemetry key="config" views={['config']} />} />
-                <Route path="compose" element={<Compose />} />
-                <Route path="posts" element={<DashboardPosts />} />
+                {/* 内容(合并 compose + posts)— 一屏 AI 生成 / 用户提交 / 状态 / 已发布媒体 */}
+                <Route path="content" element={<Content />} />
+                {/* 老路由保持可达,统一跳新页 */}
+                <Route path="compose" element={<Navigate to="/dashboard/content" replace />} />
+                <Route path="posts" element={<Navigate to="/dashboard/content" replace />} />
                 {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
                 <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />
                 {/* 优化建议提升为顶级 */}

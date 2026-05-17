@@ -49,6 +49,11 @@ export interface Topic {
   selected_query_count?: number;
   // 修订号:每次编辑都 +1。后端 _append_changelog 是单一来源。
   version?: number;
+  // Phase D.1 — AI 自动生成排程
+  auto_generate_enabled?: boolean;
+  auto_generate_time?: string;    // "HH:MM"
+  auto_generate_count?: number;
+  auto_generate_last_run_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

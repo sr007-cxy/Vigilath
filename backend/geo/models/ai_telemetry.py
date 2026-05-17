@@ -77,6 +77,13 @@ class AiTelemetryTopicORM(Base):
     last_run_at = Column(DateTime, nullable=True)
     last_run_status = Column(String, nullable=True)             # success / failed / running
 
+    # v3.1 — AI 自动生成排程(2026-05-17):每个 topic 一份。
+    # cron 每天 02:00 起每小时扫一次,匹配 auto_generate_time 的 topic 各触发一次。
+    auto_generate_enabled = Column(Boolean, nullable=False, default=False)
+    auto_generate_time = Column(String(length=8), nullable=False, default="09:00")  # "HH:MM",24h, Asia/Shanghai
+    auto_generate_count = Column(Integer, nullable=False, default=3)                 # 每次跑几条 query → 几篇稿
+    auto_generate_last_run_at = Column(DateTime, nullable=True)                       # 上次自动跑批的 UTC
+
     # 修订号 — 每次任何字段改动(包括 admin 编辑 / 审核状态机迁移)都 +1。
     # 跟 topic_changelog_json 配对:changelog 第 N 条对应的就是 version=N+1 的快照。
     # 新建 topic 时 version=1;每次 _append_changelog 都 bump 一次。
@@ -276,8 +283,10 @@ class TopicGeneratedDocORM(Base):
     review_decision_at = Column(DateTime, nullable=True)
     reviewer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reject_reason = Column(Text, nullable=True)
-    # [{platform: "抖音"|"小红书"|"视频号"|"公众号", media: "...", marked_at, marked_by}]
+    # [{platform: "抖音"|"小红书"|"视频号"|"公众号", media: "...", url?, marked_at, marked_by}]
     publish_targets_json = Column(Text, nullable=False, default="[]")
+    # v3.1 — 内容来源(2026-05-17):'ai' = AI 自动 / admin 触发生成;'user' = 用户自带稿
+    source = Column(String(length=8), nullable=False, default="ai", index=True)
 
 
 # ─────────────────────────── Schemas ──────────────────────────
@@ -493,6 +502,8 @@ class GeneratedDocOut(BaseModel):
     reviewer_id: Optional[int]
     reject_reason: Optional[str]
     publish_targets: list[dict]
+    # v3.1 — 'ai' / 'user'
+    source: str = "ai"
 
     @classmethod
     def from_orm_row(cls, r: "TopicGeneratedDocORM") -> "GeneratedDocOut":
@@ -512,16 +523,46 @@ class GeneratedDocOut(BaseModel):
             status=r.status, selected_for_review=bool(r.selected_for_review),
             review_decision_at=r.review_decision_at, reviewer_id=r.reviewer_id,
             reject_reason=r.reject_reason, publish_targets=targets,
+            source=getattr(r, "source", None) or "ai",
         )
 
 
 class PublishTargetItem(BaseModel):
     platform: str = Field(..., min_length=1, max_length=32)
     media: str = Field("", max_length=128)
+    url: str = Field("", max_length=512)
 
 
 class PublishPayload(BaseModel):
     publish_targets: list[PublishTargetItem] = Field(..., min_length=1, max_length=20)
+
+
+# v3.1 — 用户提交 / 编辑自己写的文章
+class UserDocSubmitPayload(BaseModel):
+    """用户提交自己写的稿件 — POST /api/content/topics/{topic_id}/docs."""
+    title: str = Field(..., min_length=1, max_length=200)
+    body_markdown: str = Field(..., min_length=1, max_length=100000)
+    summary: str = Field("", max_length=500)
+    # 关联监测问题(可选,影响后续效果归因);为空 = 自由稿
+    source_query_text: str = Field("", max_length=1000)
+    # "draft" = 仅保存,留在用户侧;"pending_review" = 直接进 admin 队列
+    submit_for_review: bool = False
+
+
+class UserDocUpdatePayload(BaseModel):
+    """用户编辑自己的 draft / rejected 稿子."""
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    body_markdown: Optional[str] = Field(None, min_length=1, max_length=100000)
+    summary: Optional[str] = Field(None, max_length=500)
+    source_query_text: Optional[str] = Field(None, max_length=1000)
+
+
+# v3.1 — AI 自动生成排程配置
+class AutoGenerateConfigPayload(BaseModel):
+    enabled: bool
+    # "HH:MM",24h,Asia/Shanghai;后端校验格式
+    time: str = Field("09:00", min_length=4, max_length=5)
+    count: int = Field(3, ge=1, le=20)
 
 
 class RejectDocPayload(BaseModel):
@@ -585,6 +626,11 @@ class TopicOut(BaseModel):
     reviewer_id: Optional[int] = None
     selected_query_count: int = 0           # 当前 selected=True 的 query 数,前端徽章用
     version: int = 1                        # 修订号:每次 _append_changelog 自增,前端徽章 "v3"
+    # v3.1 — AI 自动生成排程
+    auto_generate_enabled: bool = False
+    auto_generate_time: str = "09:00"
+    auto_generate_count: int = 3
+    auto_generate_last_run_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -654,6 +700,10 @@ class TopicOut(BaseModel):
             reviewer_id=getattr(r, "reviewer_id", None),
             selected_query_count=sum(1 for s in selected if s),
             version=int(getattr(r, "version", 1) or 1),
+            auto_generate_enabled=bool(getattr(r, "auto_generate_enabled", False) or False),
+            auto_generate_time=str(getattr(r, "auto_generate_time", None) or "09:00"),
+            auto_generate_count=int(getattr(r, "auto_generate_count", 3) or 3),
+            auto_generate_last_run_at=getattr(r, "auto_generate_last_run_at", None),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
