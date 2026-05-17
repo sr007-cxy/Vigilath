@@ -454,6 +454,24 @@ class TopicProgressCell(BaseModel):
     last_checked_at: Optional[datetime] = None
 
 
+class PublishPlanItem(BaseModel):
+    """发文计划单行 — 一个监测问题 → 一篇内容 → 一天发一个平台.
+
+    优先级:
+      - high: 监测命中率 0%(AI 完全没提及品牌,要补内容)
+      - med:  0 < 命中率 < 50%(部分命中,补强)
+      - low:  >= 50%(已有覆盖,可不发或低频)
+    """
+    day: int                              # 第几天(0=今天)
+    publish_date: str                     # YYYY-MM-DD
+    query: str
+    coverage_pct: float                   # AI 命中率 0-100
+    priority: str                         # high / med / low
+    doc_id: Optional[int] = None          # 关联的内容文档(已生成才有)
+    doc_status: Optional[str] = None      # draft / pending_review / approved / rejected / published
+    suggested_platforms: list[str] = Field(default_factory=list)
+
+
 class TopicExecutionPlanOut(BaseModel):
     id: int
     topic_id: int
@@ -475,6 +493,8 @@ class TopicExecutionPlanOut(BaseModel):
     progress: list[TopicProgressCell] = Field(default_factory=list)
     progress_done: int = 0
     progress_total: int = 0
+    # 发文计划 — 按 query 命中情况排优先级,每天 1 篇,关联已生成的内容文档
+    publishing_plan: list[PublishPlanItem] = Field(default_factory=list)
 
 
 class GeneratedDocOut(BaseModel):

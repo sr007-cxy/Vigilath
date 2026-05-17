@@ -114,6 +114,17 @@ export interface TopicProgressCell {
   last_checked_at?: string | null;
 }
 
+export interface PublishPlanItem {
+  day: number;
+  publish_date: string;
+  query: string;
+  coverage_pct: number;
+  priority: 'high' | 'med' | 'low';
+  doc_id?: number | null;
+  doc_status?: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | null;
+  suggested_platforms: string[];
+}
+
 export interface ExecutionPlan {
   id: number;
   topic_id: number;
@@ -130,6 +141,7 @@ export interface ExecutionPlan {
   progress: TopicProgressCell[];
   progress_done: number;
   progress_total: number;
+  publishing_plan: PublishPlanItem[];
 }
 
 export const adminReviewApi = {

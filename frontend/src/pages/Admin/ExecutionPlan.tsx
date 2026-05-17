@@ -92,9 +92,10 @@ export function AdminExecutionPlan() {
       {plan && (
         <div className="space-y-4">
           <OverviewSection plan={plan} />
+          <ProgressSection plan={plan} />
+          <PublishingPlanSection plan={plan} />
           <ChangelogSection plan={plan} />
           <ExpansionSection plan={plan} />
-          <ProgressSection plan={plan} />
         </div>
       )}
     </div>
@@ -235,6 +236,103 @@ function ProgressSection({ plan }: { plan: ExecutionPlan }) {
             ))}
           </div>
         )}
+      </div>
+    </SectionCard>
+  );
+}
+
+function PublishingPlanSection({ plan }: { plan: ExecutionPlan }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const items = plan.publishing_plan || [];
+  if (items.length === 0) {
+    return null;
+  }
+  const PRI_STYLE: Record<string, { c: string; bg: string; label: string }> = {
+    high: { c: '#ef4444', bg: 'rgba(239,68,68,0.10)', label: t('admin.executionPlan.priority.high') },
+    med:  { c: '#eab308', bg: 'rgba(234,179,8,0.10)', label: t('admin.executionPlan.priority.med') },
+    low:  { c: '#10b981', bg: 'rgba(16,185,129,0.10)', label: t('admin.executionPlan.priority.low') },
+  };
+  const DOC_STATUS_LABEL: Record<string, string> = {
+    draft: t('admin.executionPlan.docStatus.draft'),
+    pending_review: t('admin.executionPlan.docStatus.pending_review'),
+    approved: t('admin.executionPlan.docStatus.approved'),
+    rejected: t('admin.executionPlan.docStatus.rejected'),
+    published: t('admin.executionPlan.docStatus.published'),
+  };
+  return (
+    <SectionCard title={t('admin.executionPlan.section.publishingPlan', { n: items.length })}>
+      <p className="text-xs text-muted mb-3">
+        {t('admin.executionPlan.publishingPlanHint')}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left" style={{ color: 'var(--text-muted)' }}>
+              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.date')}</th>
+              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.query')}</th>
+              <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.coverage')}</th>
+              <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.priority')}</th>
+              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.platforms')}</th>
+              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.doc')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it, i) => {
+              const pri = PRI_STYLE[it.priority] || PRI_STYLE.med;
+              return (
+                <tr key={i}
+                    className="cursor-pointer"
+                    style={{ borderTop: '1px solid var(--border-color)' }}
+                    onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
+                  <td className="py-2 px-2 tabular-nums text-primary whitespace-nowrap">
+                    {it.publish_date}
+                    <span className="text-muted ml-1">(D+{it.day})</span>
+                  </td>
+                  <td className="py-2 px-2 text-primary max-w-[320px] truncate" title={it.query}>
+                    {it.query}
+                  </td>
+                  <td className="py-2 px-2 text-center tabular-nums">
+                    <span style={{ color: it.coverage_pct === 0 ? '#ef4444'
+                                       : it.coverage_pct < 50 ? '#eab308' : '#10b981' }}>
+                      {it.coverage_pct.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-2 px-2 text-center">
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                          style={{ background: pri.bg, color: pri.c }}>
+                      {pri.label}
+                    </span>
+                  </td>
+                  <td className="py-2 px-2">
+                    {it.suggested_platforms.slice(0, 4).map((p, j) => (
+                      <span key={j} className="inline-block mr-1 px-1.5 py-0.5 rounded-full text-[10px]"
+                            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        {p}
+                      </span>
+                    ))}
+                  </td>
+                  <td className="py-2 px-2">
+                    {it.doc_id ? (
+                      <span className="text-[10px]">
+                        #{it.doc_id}
+                        {it.doc_status && (
+                          <span className="ml-1 text-muted">
+                            ({DOC_STATUS_LABEL[it.doc_status] || it.doc_status})
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-muted text-[10px]">
+                        {t('admin.executionPlan.docStatus.notGenerated')}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </SectionCard>
   );

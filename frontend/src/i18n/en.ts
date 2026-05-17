@@ -2752,7 +2752,30 @@ const en = {
                 "overview": "Project overview",
                 "changelog": "Topic changelog ({{n}})",
                 "expansion": "Expansion log ({{n}})",
-                "progress": "Run progress"
+                "progress": "Run progress",
+                "publishingPlan": "Publishing plan ({{n}} articles)"
+              },
+              "publishingPlanHint": "Ordered by AI coverage — lower coverage means the AI engines haven't picked up your brand for that question yet, so it needs the most content. One article per day; click a row to jump to content review.",
+              "col": {
+                "date": "Date",
+                "query": "Monitored question",
+                "coverage": "AI coverage",
+                "priority": "Priority",
+                "platforms": "Suggested platforms",
+                "doc": "Article"
+              },
+              "priority": {
+                "high": "Urgent",
+                "med": "Reinforce",
+                "low": "Optional"
+              },
+              "docStatus": {
+                "draft": "Draft",
+                "pending_review": "In review",
+                "approved": "Approved",
+                "rejected": "Rejected",
+                "published": "Published",
+                "notGenerated": "Not yet"
               }
             },
             "contentReview": {

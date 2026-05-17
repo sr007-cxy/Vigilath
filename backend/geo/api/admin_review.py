@@ -27,8 +27,8 @@ from geo.api.ai_telemetry import get_db, _append_changelog
 from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryRunORM, AiTelemetryTopicORM,
     AiTelemetryTopicExecutionPlanORM, BrandProfile, MAX_SELECTED_QUERIES,
-    TopicChangelogEntry, TopicExecutionPlanOut, TopicProgressCell,
-    ExpansionLogEntry, TopicOut,
+    PublishPlanItem, TopicChangelogEntry, TopicExecutionPlanOut, TopicGeneratedDocORM,
+    TopicProgressCell, ExpansionLogEntry, TopicOut,
 )
 from geo.models.user import UserORM
 
@@ -702,6 +702,90 @@ def reject_topic(
 # ───────────── 执行计划书 — 拉取 + 运行进度 ─────────────
 
 
+DEFAULT_PUBLISH_PLATFORMS = ["公众号", "小红书", "抖音", "视频号"]
+
+
+def _build_publishing_plan(
+    db: Session, topic_id: int,
+    monitored: list[str], overview: dict,
+) -> list[PublishPlanItem]:
+    """按 query 命中率排优先级,每天 1 篇,关联现有 generated docs."""
+    # 拿所有相关 cell,按 query 聚合
+    cells = (
+        db.query(AiTelemetryQueryHitORM)
+          .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
+          .all()
+    )
+    by_query: dict[str, dict] = {}
+    for c in cells:
+        if c.query not in monitored:
+            continue
+        agg = by_query.setdefault(c.query, {"runs": 0, "hits": 0})
+        agg["runs"] += c.total_runs or 0
+        agg["hits"] += c.total_hits or 0
+
+    # 拿已生成的内容文档,by source_query_text 对齐
+    docs = (
+        db.query(TopicGeneratedDocORM)
+          .filter(TopicGeneratedDocORM.topic_id == topic_id)
+          .all()
+    )
+    doc_by_query: dict[str, TopicGeneratedDocORM] = {}
+    for d in docs:
+        if d.source_query_text and d.source_query_text not in doc_by_query:
+            doc_by_query[d.source_query_text] = d
+
+    # 平台:从 overview 里取(plan 生成时画像快照),空则用默认
+    snapshot_profile = overview.get("profile_snapshot") if isinstance(overview, dict) else None
+    platforms: list[str] = []
+    if isinstance(snapshot_profile, dict):
+        raw = snapshot_profile.get("target_platforms") or []
+        if isinstance(raw, list):
+            platforms = [str(p) for p in raw if p]
+    if not platforms:
+        platforms = DEFAULT_PUBLISH_PLATFORMS
+
+    items_raw: list[dict] = []
+    for q in monitored:
+        agg = by_query.get(q, {"runs": 0, "hits": 0})
+        runs = agg["runs"]
+        hits = agg["hits"]
+        coverage = round(hits / runs * 100, 1) if runs > 0 else 0.0
+        if coverage == 0:
+            priority = "high"
+        elif coverage < 50:
+            priority = "med"
+        else:
+            priority = "low"
+        doc = doc_by_query.get(q)
+        items_raw.append({
+            "query": q,
+            "coverage_pct": coverage,
+            "priority": priority,
+            "doc_id": doc.id if doc else None,
+            "doc_status": doc.status if doc else None,
+        })
+
+    # 排序:优先级高 → 低,同级按 query 字典序
+    pri_rank = {"high": 0, "med": 1, "low": 2}
+    items_raw.sort(key=lambda x: (pri_rank.get(x["priority"], 9), x["query"]))
+
+    today = datetime.utcnow().date()
+    out: list[PublishPlanItem] = []
+    for idx, it in enumerate(items_raw):
+        out.append(PublishPlanItem(
+            day=idx,
+            publish_date=(today + timedelta(days=idx)).isoformat(),
+            query=it["query"],
+            coverage_pct=it["coverage_pct"],
+            priority=it["priority"],
+            doc_id=it["doc_id"],
+            doc_status=it["doc_status"],
+            suggested_platforms=platforms,
+        ))
+    return out
+
+
 def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicExecutionPlanOut:
     overview = json.loads(plan.overview_json or "{}")
     if not isinstance(overview, dict):
@@ -720,6 +804,7 @@ def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicEx
         monitored = []
     if not isinstance(monitored, list):
         monitored = []
+    monitored = [str(x) for x in monitored if x]
 
     # 实时聚合运行进度
     run_status: str | None = None
@@ -744,6 +829,9 @@ def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicEx
             ))
             if c.status == "done":
                 done += 1
+
+    publishing_plan = _build_publishing_plan(db, plan.topic_id, monitored, overview)
+
     return TopicExecutionPlanOut(
         id=plan.id, topic_id=plan.topic_id,
         generated_at=plan.generated_at,
@@ -752,11 +840,12 @@ def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicEx
         overview=overview,
         topic_changelog=changelog,
         expansion_log=expansion,
-        monitored_queries=[str(x) for x in monitored if x],
+        monitored_queries=monitored,
         run_id=plan.run_id, run_status=run_status,
         progress=progress_cells,
         progress_done=done,
         progress_total=len(progress_cells),
+        publishing_plan=publishing_plan,
     )
 
 

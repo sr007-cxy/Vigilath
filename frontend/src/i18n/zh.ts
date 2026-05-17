@@ -2758,7 +2758,30 @@ const zh = {
                 "overview": "项目总体状况",
                 "changelog": "主题日志 ({{n}})",
                 "expansion": "泛化日志 ({{n}})",
-                "progress": "运行进度"
+                "progress": "运行进度",
+                "publishingPlan": "发文计划 ({{n}} 篇)"
+              },
+              "publishingPlanHint": "根据 AI 引擎命中率排优先级 — 命中率越低代表 AI 越不知道你的品牌,越要补内容。每天 1 篇,点行跳到内容审核.",
+              "col": {
+                "date": "发布日期",
+                "query": "监测问题",
+                "coverage": "AI 命中率",
+                "priority": "优先级",
+                "platforms": "建议平台",
+                "doc": "内容稿件"
+              },
+              "priority": {
+                "high": "急需",
+                "med": "补强",
+                "low": "可选"
+              },
+              "docStatus": {
+                "draft": "草稿",
+                "pending_review": "审核中",
+                "approved": "已通过",
+                "rejected": "已拒绝",
+                "published": "已发布",
+                "notGenerated": "未生成"
               }
             },
             "contentReview": {
