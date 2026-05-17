@@ -86,17 +86,12 @@ export interface BrandProfile {
   service_process: string[];
   target_scenarios: string[];
   service_guarantees: string[];
-  // 五、目标用户与痛点
-  target_audience: string[];
-  user_pain_points: string[];
-  user_faqs: string[];
-  decision_factors: string[];
-  // 六、品牌故事与情感素材
+  // 四、品牌故事与情感素材(原五,2026-05-17 删了「目标用户与痛点」节)
   brand_story: string;
   key_person_story: string;
   case_stories: string[];
   brand_values: string;
-  // 七、补充素材与创作边界
+  // 五、补充素材与创作边界(原七)
   available_materials: string[];
   brand_slogan: string;
   core_message: string;
@@ -111,7 +106,6 @@ export const EMPTY_BRAND_PROFILE: BrandProfile = {
   team_size: '', founded_year: '', core_credentials: [], brand_diff_tags: [],
   core_service_overview: '', service_features: [], service_process: [],
   target_scenarios: [], service_guarantees: [],
-  target_audience: [], user_pain_points: [], user_faqs: [], decision_factors: [],
   brand_story: '', key_person_story: '', case_stories: [], brand_values: '',
   available_materials: [], brand_slogan: '', core_message: '', extra_notes: '',
 };

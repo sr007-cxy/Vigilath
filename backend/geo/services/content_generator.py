@@ -251,10 +251,6 @@ def _build_system_prompt(profile: BrandProfile) -> str:
         parts.append(f"- 内容调性:{', '.join(profile.content_tones)}")
     if profile.content_redlines:
         parts.append(f"- 内容雷区(禁止):{', '.join(profile.content_redlines)}")
-    if profile.target_audience:
-        parts.append(f"- 目标用户:{', '.join(profile.target_audience)}")
-    if profile.user_pain_points:
-        parts.append(f"- 用户痛点:{', '.join(profile.user_pain_points)}")
     if profile.brand_slogan:
         parts.append(f"- Slogan:{profile.brand_slogan}")
     if profile.core_message:

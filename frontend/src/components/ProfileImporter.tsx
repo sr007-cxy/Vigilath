@@ -66,9 +66,9 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
       if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
       const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
       if (changed === 0) {
-        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(原文可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
+        setOkMsg(`没解出可用字段(原文可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}`);
       }
     } catch (e) {
       setErr(humanizeFetchError(e));
@@ -88,9 +88,9 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
       if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
       const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
       if (changed === 0) {
-        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(文件可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
+        setOkMsg(`没解出可用字段(文件可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}`);
       }
     } catch (e) {
       setErr(humanizeFetchError(e));

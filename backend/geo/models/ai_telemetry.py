@@ -366,19 +366,13 @@ class BrandProfile(BaseModel):
     target_scenarios: list[str] = Field(default_factory=list, max_length=20)     # 服务覆盖场景 / 客户类型
     service_guarantees: list[str] = Field(default_factory=list, max_length=20)   # 服务交付保障(选填)
 
-    # 五、目标用户与痛点
-    target_audience: list[str] = Field(default_factory=list, max_length=20)      # 核心目标用户资料
-    user_pain_points: list[str] = Field(default_factory=list, max_length=20)     # 用户核心痛点
-    user_faqs: list[str] = Field(default_factory=list, max_length=20)            # 用户高频疑问 / 常见误区
-    decision_factors: list[str] = Field(default_factory=list, max_length=20)     # 用户决策关键因素
-
-    # 六、品牌故事与情感素材
+    # 四、品牌故事与情感素材(原五,2026-05-17 起删了「目标用户与痛点」节)
     brand_story: str = Field("", max_length=2000)                                # 品牌故事 / 成立初衷
     key_person_story: str = Field("", max_length=2000)                           # 核心人物故事(选填)
     case_stories: list[str] = Field(default_factory=list, max_length=20)         # 典型案例(选填)
     brand_values: str = Field("", max_length=1000)                               # 品牌价值观 / 服务理念
 
-    # 七、补充素材与创作边界
+    # 五、补充素材与创作边界(原七)
     available_materials: list[str] = Field(default_factory=list, max_length=20)  # 可提供的素材类型(选填)
     brand_slogan: str = Field("", max_length=256)                                # Slogan / 宣传语(选填)
     core_message: str = Field("", max_length=1000)                               # 本次内容核心信息
@@ -389,14 +383,12 @@ class BrandProfile(BaseModel):
 # 「内容创作方向」整节(creation_directions / copywriting_types / target_platforms /
 # content_tones / content_redlines)2026-05-17 起从资料表单移除 — 这部分由
 # 「内容发布策略」阶段决定,不再在资料里强制。schema 字段保留,老数据兼容。
+# 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填,
+# 其他模块(品牌主体 / 产品服务 / 品牌故事 / 补充素材)都改成选填:
+# 用户上传的资料是后续生稿的素材库,鼓励多填但不强迫;LLM 拿到什么用什么.
 PROFILE_REQUIRED_FIELDS: tuple[str, ...] = (
     "profile_name", "company_full_name", "company_short_name",
     "industry", "core_business_lines", "service_geo",
-    "founded_year", "core_credentials", "brand_diff_tags",
-    "core_service_overview", "service_features", "service_process", "target_scenarios",
-    "target_audience", "user_pain_points", "user_faqs", "decision_factors",
-    "brand_story", "brand_values",
-    "core_message",
 )
 
 

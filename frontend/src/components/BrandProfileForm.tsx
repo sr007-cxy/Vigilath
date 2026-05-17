@@ -11,14 +11,11 @@ import type { BrandProfile } from '../services/aiTelemetryApi';
 // content_tones / content_redlines)整节移除 — 这些由内容审核 / 投放策略阶段
 // 决定,不在资料表单里强制填。BrandProfile schema 字段保留(老数据不破),
 // content_generator 的 prompt 拼装如果读到空就跳过。
+// 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填,
+// 其他模块都是「素材库」性质,鼓励多填但不卡死;LLM 拿到什么用什么.
 export const PROFILE_REQUIRED_FIELDS: (keyof BrandProfile)[] = [
   'profile_name', 'company_full_name', 'company_short_name',
   'industry', 'core_business_lines', 'service_geo',
-  'founded_year', 'core_credentials', 'brand_diff_tags',
-  'core_service_overview', 'service_features', 'service_process', 'target_scenarios',
-  'target_audience', 'user_pain_points', 'user_faqs', 'decision_factors',
-  'brand_story', 'brand_values',
-  'core_message',
 ];
 
 export function isProfileFieldFilled(profile: BrandProfile, key: keyof BrandProfile): boolean {
@@ -95,18 +92,7 @@ export function BrandProfileForm({
                  value={profile.service_guarantees} onChange={v => setField('service_guarantees', v)} />
       </Section>
 
-      <Section title="四、目标用户与痛点">
-        <TagsRow label="核心目标用户" required={req.has('target_audience')} readOnly={readOnly}
-                 value={profile.target_audience} onChange={v => setField('target_audience', v)} />
-        <TagsRow label="用户核心痛点(分点)" required={req.has('user_pain_points')} readOnly={readOnly}
-                 value={profile.user_pain_points} onChange={v => setField('user_pain_points', v)} />
-        <TagsRow label="用户高频疑问 / 常见误区" required={req.has('user_faqs')} readOnly={readOnly}
-                 value={profile.user_faqs} onChange={v => setField('user_faqs', v)} />
-        <TagsRow label="用户决策关键因素" required={req.has('decision_factors')} readOnly={readOnly}
-                 value={profile.decision_factors} onChange={v => setField('decision_factors', v)} />
-      </Section>
-
-      <Section title="五、品牌故事与情感素材">
+      <Section title="四、品牌故事与情感素材">
         <TextAreaRow label="品牌故事 / 成立初衷" required={req.has('brand_story')} readOnly={readOnly}
                      value={profile.brand_story} onChange={v => setField('brand_story', v)} />
         <TextAreaRow label="核心人物故事(选填)" required={false} readOnly={readOnly}
@@ -117,7 +103,7 @@ export function BrandProfileForm({
                      value={profile.brand_values} onChange={v => setField('brand_values', v)} />
       </Section>
 
-      <Section title="六、补充素材与创作边界">
+      <Section title="五、补充素材与创作边界">
         <Pair>
           <TextRow label="品牌 Slogan / 宣传语(选填)" required={false} readOnly={readOnly}
                    value={profile.brand_slogan} onChange={v => setField('brand_slogan', v)} />
