@@ -65,8 +65,11 @@ async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> d
                 "video_url": None, "source_url": None, "error": str(e)}
 
 
-async def run_topic_once(topic: TopicORM) -> None:
+async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None) -> None:
     """对一个 topic 把 (queries × engines) 全部跑完并落库.
+
+    existing_run_id 非空时复用已建的 RunORM(由 /run-topic HTTP handler 同步建一行
+    返回给调用方,这里只补 cell 初始化 + 实际跑批 + finish_run).
 
     单 Response 落库时:detect_hit + update_query_hit_after_response 都在同一 session.
     Run 整体结束后:fire-and-forget LLM 抽取(EXTRACT_AFTER_RUN=1 时).
@@ -79,8 +82,11 @@ async def run_topic_once(topic: TopicORM) -> None:
         return
 
     with db_session() as s:
-        run = start_run(s, topic_id)
-        run_id = run.id
+        if existing_run_id is not None:
+            run_id = existing_run_id
+        else:
+            run = start_run(s, topic_id)
+            run_id = run.id
         # 矩阵初始化(对新 query / engine 也要建 cell)
         # 这里 topic 是从外部 expunge 进来的副本,先 merge 再操作
         t_managed = s.merge(topic)
