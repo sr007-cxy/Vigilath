@@ -148,7 +148,19 @@ class WeixinAlbumClient:
         return items, cont, last_msgid, last_itemidx
 
     def _fetch_body(self, article_url: str) -> Optional[str]:
-        """抓 mp.weixin 文章正文.SSR HTML,解析 #js_content."""
+        """抓 mp.weixin 文章正文.
+
+        微信 2026 起把单 msg 页改成 SPA swiper,#js_content 变空 placeholder,
+        正文靠 JS 渲染.静态 fetch 拿不到.但 <meta name="description"> 里有
+        编者按 / 摘要,SEO 用途,300-1000 字够 LLM 做 sentiment 判断.
+
+        多策略:
+        1. <meta name="description"> content(新 SPA 格式必有,首选)
+        2. #js_content text(老格式仍在小部分文章里 retain)
+        3. .rich_media_content text(另一种老 selector)
+
+        都没命中返 None.
+        """
         try:
             r = self.session.get(article_url, timeout=15)
             r.raise_for_status()
@@ -157,12 +169,31 @@ class WeixinAlbumClient:
             return None
 
         soup = BeautifulSoup(r.text, "lxml")
+
+        # 1. meta description(SPA 新格式 + 老格式 fallback,最稳)
+        meta = soup.select_one('meta[name="description"]')
+        if meta:
+            desc = (meta.get("content") or "").strip()
+            # 微信把换行编成 \n 字面量(\x0a),先复原
+            desc = desc.replace("\\n", "\n").replace("\x0a", "\n")
+            if desc:
+                return desc[:5000]
+
+        # 2. #js_content(老 SSR 格式)
         content_div = soup.select_one("#js_content")
-        if not content_div:
-            return None
-        text = content_div.get_text(separator="\n", strip=True)
-        # 截前 5000 字,避免单篇撑爆 SQLite
-        return text[:5000] if text else None
+        if content_div:
+            text = content_div.get_text(separator="\n", strip=True)
+            if text:
+                return text[:5000]
+
+        # 3. .rich_media_content(替代老 selector)
+        rm = soup.select_one(".rich_media_content")
+        if rm:
+            text = rm.get_text(separator="\n", strip=True)
+            if text:
+                return text[:5000]
+
+        return None
 
 
 def _extract_album_params(album_url: str) -> tuple[Optional[str], Optional[str]]:
