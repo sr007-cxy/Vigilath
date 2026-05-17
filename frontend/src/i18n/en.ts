@@ -1810,7 +1810,7 @@ const en = {
               "config": "Config",
               "compose": "Content",
               "posts": "Distribution",
-              "content": "Content",
+              "content": "Content Distribution",
               "aiTelemetry": "AI Detection",
               "insights": "Recommendations",
               "adminWorkbench": "Admin"

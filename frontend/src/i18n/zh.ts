@@ -1816,7 +1816,7 @@ const zh = {
               "config": "配置",
               "compose": "内容创作",
               "posts": "内容投放",
-              "content": "内容",
+              "content": "内容投放",
               "aiTelemetry": "AI 检测",
               "insights": "优化建议",
               "adminWorkbench": "工作台"
