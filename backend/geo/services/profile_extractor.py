@@ -66,14 +66,23 @@ _SCHEMA_HINT = """\
   "available_materials": ["..."],
   "brand_slogan": "...",
   "core_message": "...",
-  "extra_notes": "..."
+  "extra_notes": "...",
+  "seed_suggestions": ["...", "..."]
 }
+
+seed_suggestions 是给后续监测扩展用的「种子提示词」,要求:
+- 3-8 条,每条 4-12 字
+- 用真实用户会去问 AI 的口吻(短问 / 名词短语),不要写成长句
+- 围绕本品牌的核心业务 / 用户痛点 / 行业关键词;避开品牌名本身
+- 例子:跨境并购 / 律所推荐 / 遗产继承 / 跨境支付
+
 只输出一个 JSON 对象,不要加 ``` 围栏,不要写解释文本。
 """
 
 SYSTEM_PROMPT = (
     "你是品牌资料分析师,把用户给的原始资料(公司简介 / 官网文案 / PRD / 产品说明 / "
-    "市场材料等)抽取为结构化「品牌资料」JSON。\n" + _SCHEMA_HINT
+    "市场材料等)抽取为结构化「品牌资料」JSON,并顺手给出几条可用作 AI 监测的"
+    "「种子提示词」。\n" + _SCHEMA_HINT
 )
 
 
@@ -88,10 +97,11 @@ def _resolve_provider() -> tuple[str | None, str, str]:
     return None, "", ""
 
 
-def extract_profile_from_text(text: str) -> tuple[BrandProfile, str]:
+def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
+    """returns (profile, seed_suggestions, model_id);model_id="" 表示 provider 不可用."""
     provider, model_id, api_key = _resolve_provider()
     if not provider:
-        return BrandProfile(), ""
+        return BrandProfile(), [], ""
 
     if provider == "deepseek":
         url = f"{DEEPSEEK_BASE_URL}/chat/completions"
@@ -133,7 +143,21 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, str]:
         # 导致整张画像都空;coerce 之后这条路径基本不会进了
         log.warning("BrandProfile 映射失败,降级用空资料: %s; raw=%s", e, content[:300])
         profile = BrandProfile()
-    return profile, model_id
+    # seed_suggestions:LLM 给的种子词候选,清洗 + 去重 + 限长(1-30 字,最多 8 条)
+    raw_seeds = parsed.get("seed_suggestions") or []
+    seeds: list[str] = []
+    seen: set[str] = set()
+    if isinstance(raw_seeds, list):
+        for s in raw_seeds:
+            if not isinstance(s, str):
+                continue
+            v = s.strip()
+            if 1 <= len(v) <= 30 and v not in seen:
+                seen.add(v)
+                seeds.append(v)
+            if len(seeds) >= 8:
+                break
+    return profile, seeds, model_id
 
 
 def _coerce_to_profile_fields(parsed: dict) -> dict:

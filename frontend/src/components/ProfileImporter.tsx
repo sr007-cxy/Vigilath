@@ -30,9 +30,13 @@ interface ProfileImporterProps {
   onApply: (next: BrandProfile) => void;
   token: string;
   disabled?: boolean;
+  // 可选:把 LLM 顺手给的种子提示词候选合并到种子词步骤。
+  // 调用方负责去重 — Importer 拿到的就是 LLM 清洗后的清单。
+  // TopicEditor 里有种子 state,会传;TopicProfile 的种子在另一个 tab + 后端表里,不传。
+  onApplySeeds?: (suggestions: string[]) => void;
 }
 
-export function ProfileImporter({ profile, onApply, token, disabled }: ProfileImporterProps) {
+export function ProfileImporter({ profile, onApply, token, disabled, onApplySeeds }: ProfileImporterProps) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -58,10 +62,13 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
       const merged = mergeProfile(profileRef.current, resp.profile, mode);
       const changed = countChanged(profileRef.current, merged);
       onApply(merged);
+      const seeds = resp.seed_suggestions || [];
+      if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
+      const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
       if (changed === 0) {
-        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(原文可能太短或没有品牌信息),可手动调整后再试`);
+        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(原文可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段(模型:${resp.used_model})`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -77,10 +84,13 @@ export function ProfileImporter({ profile, onApply, token, disabled }: ProfileIm
       const merged = mergeProfile(profileRef.current, resp.profile, mode);
       const changed = countChanged(profileRef.current, merged);
       onApply(merged);
+      const seeds = resp.seed_suggestions || [];
+      if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
+      const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
       if (changed === 0) {
-        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(文件可能太短或没有品牌信息),可手动调整后再试`);
+        setOkMsg(`模型 ${resp.used_model} 没解出可用字段(文件可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段(模型:${resp.used_model})`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}(模型:${resp.used_model})`);
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));

@@ -438,6 +438,8 @@ class ProfileExtractPayload(BaseModel):
 class ProfileExtractOut(BaseModel):
     profile: BrandProfile
     used_model: str
+    # LLM 顺手给的种子提示词候选(3-8 条)。前端步骤 2 用它预填,用户可保留/删改。
+    seed_suggestions: list[str] = Field(default_factory=list)
 
 
 # ─────────────── Phase D — 执行计划书 / 内容文档 ──────────────

@@ -678,13 +678,15 @@ def _do_extract(text: str, user_id: int) -> ProfileExtractOut:
     if len(text) > MAX_EXTRACTED_TEXT:
         text = text[:MAX_EXTRACTED_TEXT]
     try:
-        profile, model_id = extract_profile_from_text(text)
+        profile, seed_suggestions, model_id = extract_profile_from_text(text)
     except Exception as e:  # noqa: BLE001
         log.warning("profile extract failed for user %s: %s", user_id, e)
         raise HTTPException(502, f"AI 解析失败: {e}")
     if not model_id:
         raise HTTPException(503, "未配置 DEEPSEEK_API_KEY / OPENROUTER_API_KEY,AI 智能填充不可用")
-    return ProfileExtractOut(profile=profile, used_model=model_id)
+    return ProfileExtractOut(
+        profile=profile, used_model=model_id, seed_suggestions=seed_suggestions,
+    )
 
 
 @router.post("/profile/extract", response_model=ProfileExtractOut)

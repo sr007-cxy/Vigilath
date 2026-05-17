@@ -45,6 +45,8 @@ export interface SelectedItem {
 export interface ExtractProfileResp {
   profile: BrandProfile;
   used_model: string;
+  // LLM 顺手给的种子提示词候选(可能空)。前端在编辑器里会附加到种子词步骤。
+  seed_suggestions?: string[];
 }
 
 export const topicProfileApi = {

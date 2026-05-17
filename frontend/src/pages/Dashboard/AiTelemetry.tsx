@@ -1882,7 +1882,18 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
               {t('dashboard.aiTelemetry.form.profileHint')}
             </p>
             <ProfileImporter profile={profile} onApply={setProfile}
-                             token={token} disabled={readOnly} />
+                             token={token} disabled={readOnly}
+                             onApplySeeds={suggestions => {
+                               // LLM 顺手给的种子词候选 — 跟用户已填的合并去重(用户已填的优先保留)
+                               setSeeds(prev => {
+                                 const have = new Set(prev.map(s => s.trim()).filter(Boolean));
+                                 const merged = [...prev];
+                                 for (const s of suggestions) {
+                                   if (s && !have.has(s)) { merged.push(s); have.add(s); }
+                                 }
+                                 return merged;
+                               });
+                             }} />
             {/* 6 模块资料表单(名称/简称/行业 同时是 topic.name/target/industry) */}
             <BrandProfileForm
               profile={profile}
