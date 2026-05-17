@@ -103,6 +103,25 @@ def _stop_sentiment_scheduler() -> None:
     except Exception:  # noqa: BLE001
         pass
 
+
+# Phase D.1 — 内容自动生成 cron(独立 leader env,跟 sentiment 解耦)
+@app.on_event("startup")
+def _start_content_scheduler() -> None:
+    try:
+        from geo.services.content_scheduler import maybe_start_from_env
+        maybe_start_from_env()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("content scheduler failed to start: %s", e)
+
+
+@app.on_event("shutdown")
+def _stop_content_scheduler() -> None:
+    try:
+        from geo.services.content_scheduler import shutdown
+        shutdown()
+    except Exception:  # noqa: BLE001
+        pass
+
 # Endpoint-level timing. Only logs /api/check* to keep noise down — other
 # endpoints (auth, usage polling, account pages) are fast and not interesting
 # for perf analysis. Also stamps the response with X-Process-Time in ms so

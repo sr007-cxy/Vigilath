@@ -94,8 +94,11 @@ def hourly_tick() -> None:
         db.close()
 
 
+_scheduler = None
+
+
 def attach(scheduler) -> None:
-    """挂载到外部 APScheduler 实例.被 sentiment_scheduler.start() 调用."""
+    """挂载到外部 APScheduler 实例(供其它进程内 scheduler 共用)."""
     scheduler.add_job(
         hourly_tick,
         trigger="cron", minute=START_MINUTE,
@@ -106,3 +109,43 @@ def attach(scheduler) -> None:
         max_instances=1,
     )
     log.info("[content-cron] attached: every hour at :%02d", START_MINUTE)
+
+
+def start() -> None:
+    """独立启动一个 APScheduler 实例,只挂 content cron.
+
+    跟 sentiment_scheduler 解耦 — 测试 / 生产环境里舆情已经有独立的
+    geo-sentinel.service 跑,backend 进程不能再叠加 sentiment hourly job,
+    否则任务会重复执行。所以内容生成走自己的 leader env。
+    """
+    global _scheduler
+    if _scheduler is not None:
+        log.warning("[content-scheduler] already started")
+        return
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+    except ImportError:
+        log.error("[content-scheduler] APScheduler not installed; "
+                  "run: pip install 'apscheduler[sqlalchemy]'")
+        return
+    _scheduler = BackgroundScheduler(timezone=TIMEZONE)
+    attach(_scheduler)
+    _scheduler.start()
+    log.info("[content-scheduler] started independently (tz=%s)", TIMEZONE)
+
+
+def shutdown() -> None:
+    global _scheduler
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
+        log.info("[content-scheduler] stopped")
+
+
+def maybe_start_from_env() -> None:
+    """在 main.py 的 startup hook 里调.GEO_CONTENT_SCHEDULER_LEADER=1 才起."""
+    if os.environ.get("GEO_CONTENT_SCHEDULER_LEADER", "0") == "1":
+        log.info("[content-scheduler] leader mode, starting…")
+        start()
+    else:
+        log.info("[content-scheduler] not leader, skip")
