@@ -174,8 +174,12 @@ class WeixinAlbumClient:
         meta = soup.select_one('meta[name="description"]')
         if meta:
             desc = (meta.get("content") or "").strip()
-            # 微信把换行编成 \n 字面量(\x0a),先复原
-            desc = desc.replace("\\n", "\n").replace("\x0a", "\n")
+            # 微信 meta description 把换行编成字面 escape 序列(`\x0a` / `\n` 四字符),
+            # 不是真实 byte.LLM 拿到字面量会把 sentiment 误判,先复原.
+            desc = (desc
+                    .replace("\\x0a", "\n")
+                    .replace("\\n", "\n")
+                    .replace("\\t", " "))
             if desc:
                 return desc[:5000]
 
