@@ -2073,6 +2073,7 @@ const en = {
                 "runNow": "Run once now",
                 "save": "Save draft",
                 "saveAndSubmit": "Save & submit for review",
+                "submit": "Submit",
                 "cancel": "Cancel"
               },
               "engine": {

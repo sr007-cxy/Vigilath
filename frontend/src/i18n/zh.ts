@@ -2079,6 +2079,7 @@ const zh = {
                 "runNow": "立即试跑一次",
                 "save": "保存草稿",
                 "saveAndSubmit": "保存并提交审核",
+                "submit": "提交",
                 "cancel": "取消"
               },
               "engine": {

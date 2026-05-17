@@ -1686,16 +1686,10 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
     return saved;
   };
 
-  const handleSave = async () => {
-    if (!valid) return;
-    setSaving(true);
-    try {
-      await persistTopic();
-      onSaveDone();
-    } finally { setSaving(false); }
-  };
+  // 「保存」按钮已合并到「提交」(handleSubmitForReview),用户保存即触发审核。
+  // 如未来要恢复"草稿保存"功能,可重新加 const handleSave = ... 包 persistTopic。
 
-  // 「保存并提交审核」— save → submit-for-review → 关闭。
+  // 「提交」— save → submit-for-review → 关闭。
   // 后端 422 = 资料或种子或 selected 不达标,把后端 detail 暴露给用户。
   const handleSubmitForReview = async () => {
     if (!valid || saving) return;
@@ -2281,23 +2275,13 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             </button>
           )}
           {step === 3 && !readOnly && (
-            <>
-              <button
-                type="button" onClick={handleSave} disabled={!valid || saving}
-                className="px-3 py-1.5 text-sm rounded-md disabled:opacity-40"
-                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)',
-                         border: '1px solid var(--border-color)' }}
-              >
-                {saving ? '…' : t('dashboard.aiTelemetry.form.save')}
-              </button>
-              <button
-                type="button" onClick={handleSubmitForReview} disabled={!valid || saving}
-                className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-                style={{ background: 'var(--accent-primary)' }}
-              >
-                {saving ? '…' : t('dashboard.aiTelemetry.form.saveAndSubmit')}
-              </button>
-            </>
+            <button
+              type="button" onClick={handleSubmitForReview} disabled={!valid || saving}
+              className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+              style={{ background: 'var(--accent-primary)' }}
+            >
+              {saving ? '…' : t('dashboard.aiTelemetry.form.submit')}
+            </button>
           )}
         </div>
       </footer>
