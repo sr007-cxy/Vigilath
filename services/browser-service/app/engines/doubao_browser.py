@@ -60,6 +60,7 @@ async def _close_headed(ctx, browser=None, pw=None) -> None:
         except Exception:
             pass
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+from ..session_store import report_session_outcome
 
 
 def _is_xvfb_display() -> bool:
@@ -496,6 +497,9 @@ class DoubaoBrowserAdapter(EngineAdapter):
                     if use_headed
                     else "Install Xvfb and set DISPLAY so Doubao can run headed."
                 )
+                # 上报 pool: 这条 session 被 CAPTCHA 挑了,calculate captcha_count + 1.
+                # 累计达阈值(目前 3 次)backend 会自动 quarantine,下次 check-out 跳过。
+                report_session_outcome("doubao", captcha_triggered=True)
                 return EngineResult(
                     engine=self.name, query=query,
                     error=(
@@ -548,6 +552,8 @@ class DoubaoBrowserAdapter(EngineAdapter):
 
             await _close_headed(ctx, headed_browser, headed_pw)
 
+            # 成功 path:session 安全过关,告诉 pool no CAPTCHA → 不动 captcha_count。
+            report_session_outcome("doubao", captcha_triggered=False)
             return EngineResult(
                 engine=self.name,
                 query=query,
@@ -556,6 +562,8 @@ class DoubaoBrowserAdapter(EngineAdapter):
                 video_path=video_path,
             )
         except Exception as e:
+            # 例外:不知道是 CAPTCHA 还是别的,保守按 no-CAPTCHA 处理(避免误隔离)。
+            report_session_outcome("doubao", captcha_triggered=False)
             return EngineResult(engine=self.name, query=query, error=str(e))
 
     async def _capture_video(self, page) -> str | None:
