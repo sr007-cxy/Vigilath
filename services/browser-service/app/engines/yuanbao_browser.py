@@ -95,35 +95,10 @@ class YuanbaoBrowserAdapter(EngineAdapter):
 
     CHAT_URL = "https://yuanbao.tencent.com/chat?searchType=network"
 
-    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.
-    # ⚠ 2026-05-18 DOM probe 在 yuanbao 上**没找到任何 text 匹配** "新对话/新建" 的元素 —
-    # 入口 URL `/chat?searchType=network` 会自动 redirect 到旧 conversation
-    # (e.g. `/chat/naQivTmsDa`),侧栏的"新对话"按钮**可能是 icon-only 无 text**.
-    # 第二轮 probe 要按 [aria-label]/[role='button']/SVG 找,暂用 best-guess 占位.
-    async def _start_new_chat(self, page) -> None:
-        candidates = [
-            "button:has-text('新对话')",
-            "button:has-text('新建对话')",
-            "[role='button']:has-text('新对话')",
-            "[aria-label*='新对话']",
-            "[aria-label*='New chat']",
-            "a:has-text('新对话')",
-            "text=新对话",
-        ]
-        import sys
-        for sel in candidates:
-            try:
-                btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1500):
-                    await btn.click()
-                    await human_delay(0.5, 1.0)
-                    sys.__stdout__.write(f"[Yuanbao-new-chat] clicked via {sel!r}\n")
-                    sys.__stdout__.flush()
-                    return
-            except Exception:
-                continue
-        sys.__stdout__.write("[Yuanbao-new-chat] button NOT found — needs DOM probe\n")
-        sys.__stdout__.flush()
+    # NOTE(D3 2026-05-18):yuanbao 早就有 _start_new_chat 在本类下方 line 280 附近,
+    # 用 `[data-desc="new-chat"]` + `text=发起新对话` 双 fallback,已 production
+    # 验证.D3 期间一度误加了一个 best-guess 重复版本(用 "新对话" 文本),被下面
+    # 那个真版本 override 了,后来发现后删除.D4 EngineSession 用的就是下面那个.
 
     # Selectors
     AI_BUBBLE_SEL = ".agent-chat__bubble--ai"
