@@ -40,7 +40,21 @@ class DeepSeekBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # 答案正文候选 selector — DS UI 改版后 .ds-markdown 不再稳定,
+    # 加一层 fallback。顺序按特异性递减,稳定性轮询和 final extract 都用同一组。
+    _ANSWER_SELECTORS = (
+        ".ds-markdown",
+        ".markdown",
+        "[class*='ds-markdown']",
+        "[class*='markdown-body']",
+        "[class*='message-content']",
+        "[class*='msg-content']",
+        "[class*='_response_']",
+        "[class*='message'][class*='assistant']",
+    )
+
     async def search(self, query: str) -> EngineResult:
+        import sys
         try:
             page, ctx = await create_stealth_page("deepseek", record_video=self._record_video)
             await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
@@ -62,7 +76,15 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             await self._enable_smart_search(page)
 
             # Type query into the textarea
-            textarea = page.locator("textarea").first
+            try:
+                textarea = page.locator("textarea").first
+                await textarea.wait_for(state="visible", timeout=10000)
+            except Exception:
+                await ctx.close()
+                return EngineResult(
+                    engine=self.name, query=query,
+                    error="DeepSeek textarea not visible — login may have expired",
+                )
             await textarea.click()
             await textarea.fill(query)
             await human_delay(0.5, 1.0)
@@ -71,36 +93,39 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             await page.keyboard.press("Enter")
 
             # Wait for response to complete via content-stability polling.
-            # Old approach (Stop-button text detection) broke when DeepSeek
-            # switched to SVG-icon buttons without text content.
+            # 轮询多个候选 selector,任一非空且稳定 5s 即可。
+            # 之前只盯 .ds-markdown,DS 改版后这个 class 不出现,
+            # 120s 轮询全程空文本,answer 拿到 ""。
             await asyncio.sleep(3)
             last_len = 0
             stable_count = 0
-            for _ in range(120):
+            matched_sel = None
+            for _ in range(150):
                 await asyncio.sleep(1)
-                try:
-                    answer_els = await page.locator(".ds-markdown").all()
-                    if answer_els:
-                        cur_text = await answer_els[-1].inner_text()
-                        cur_len = len(cur_text)
-                        if cur_len > 0 and cur_len == last_len:
-                            stable_count += 1
-                            if stable_count >= 5:
-                                break
-                        else:
-                            last_len = cur_len
-                            stable_count = 0
-                except Exception:
-                    pass
-
-            # Extract answer text — try multiple selectors
-            answer = ""
-            for sel in [".ds-markdown", ".markdown"]:
-                answer_els = await page.locator(sel).all()
-                if answer_els:
-                    answer = await answer_els[-1].inner_text()
-                    if answer.strip():
+                cur_text, cur_sel = await self._read_answer_text(page)
+                cur_len = len(cur_text)
+                if cur_len > 0 and cur_len == last_len:
+                    stable_count += 1
+                    if stable_count >= 5:
+                        matched_sel = cur_sel
                         break
+                else:
+                    last_len = cur_len
+                    stable_count = 0
+                    if cur_sel:
+                        matched_sel = cur_sel
+
+            sys.__stdout__.write(
+                f"[DS-wait] final last_len={last_len} matched_sel={matched_sel!r}\n"
+            )
+            sys.__stdout__.flush()
+
+            # Extract answer text — same selector ladder as the poll loop.
+            answer, _ = await self._read_answer_text(page)
+
+            # 仍然空答案 → dump 诊断信息,后端把 error 透传到 UI 上排查
+            if not answer.strip():
+                await self._diagnose_empty_answer(page)
 
             # Extract citations
             citations = await self._extract_citations(page, answer)
@@ -126,6 +151,61 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             )
         except Exception as e:
             return EngineResult(engine=self.name, query=query, error=str(e))
+
+    async def _read_answer_text(self, page) -> tuple[str, str | None]:
+        """Try each candidate answer selector, return (text, winning_selector).
+
+        Used by both the stability poll loop and the final extract step so they
+        stay in lockstep — wait sees content; extract pulls the same content.
+        """
+        for sel in self._ANSWER_SELECTORS:
+            try:
+                els = await page.locator(sel).all()
+                if not els:
+                    continue
+                text = await els[-1].inner_text()
+                if text and text.strip():
+                    return text, sel
+            except Exception:
+                continue
+        return "", None
+
+    async def _diagnose_empty_answer(self, page) -> None:
+        """Dump page-state probe when no answer was extracted.
+
+        DS 改 DOM 或 session 过期都会出现空答案,但用户拿到的只是 "—"。
+        在日志里 dump 一次 visible text / 候选 selector 命中数,运维能从
+        browser-service stdout 一眼看出是 selector 漂移还是登录态丢了。
+        """
+        import sys
+        try:
+            probe = await page.evaluate(
+                """(sels) => {
+                    const counts = {};
+                    for (const s of sels) {
+                        try { counts[s] = document.querySelectorAll(s).length; }
+                        catch (e) { counts[s] = 'err:' + e.message; }
+                    }
+                    const bodyLen = (document.body.innerText || '').length;
+                    // Login wall / paywall / rate-limit hints
+                    const text = (document.body.innerText || '').slice(0, 4000);
+                    const hints = {};
+                    for (const kw of ['登录', 'Sign in', 'Login', '验证', 'CAPTCHA',
+                                      '太频繁', 'rate limit', '繁忙', '请稍后']) {
+                        if (text.includes(kw)) hints[kw] = true;
+                    }
+                    return { counts, bodyLen, hints };
+                }""",
+                list(self._ANSWER_SELECTORS),
+            )
+            sys.__stdout__.write(
+                f"[DS-empty-answer] selector_hits={probe['counts']} "
+                f"body_len={probe['bodyLen']} hints={probe['hints']}\n"
+            )
+            sys.__stdout__.flush()
+        except Exception as e:
+            sys.__stdout__.write(f"[DS-empty-answer] probe failed: {e}\n")
+            sys.__stdout__.flush()
 
     async def _dismiss_cookie_banner(self, page) -> None:
         """Dismiss the cookie consent popup if visible."""
@@ -232,7 +312,8 @@ class DeepSeekBrowserAdapter(EngineAdapter):
 
         # Try to find citation links in the answer area (updated selectors)
         try:
-            for sel in [".ds-markdown a[href]", ".markdown a[href]"]:
+            link_selectors = [f"{s} a[href]" for s in self._ANSWER_SELECTORS]
+            for sel in link_selectors:
                 links = await page.locator(sel).all()
                 if links:
                     seen = set()

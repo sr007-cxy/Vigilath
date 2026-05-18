@@ -64,6 +64,25 @@ async def main():
     headed_browser = getattr(page, "_headed_browser", None)
     headed_pw = getattr(page, "_pw_ref", None)
 
+    # Shrink viewport so the page layout reflows into the small Xvfb screen
+    # (默认 ctx 是 1920x1080,但 VNC 投到 Mac 上时 Xvfb 通常缩到 1280x720,
+    # 1080 高的 viewport 输入框被裁在屏外,manual_login 没法 submit).
+    # 优先读 MANUAL_LOGIN_VIEWPORT="W,H"。
+    # 默认 1280x600 — 因为 Playwright 的 viewport 是 PAGE viewport,
+    # 浏览器实际窗口 = page + ~95px (tab + URL bar),所以 720 page 会让
+    # 整个窗口 815 高,在 1280x720 Xvfb 下底部 95px 出屏。1280x600 留够空间。
+    import os as _os
+    vp_raw = _os.environ.get("MANUAL_LOGIN_VIEWPORT", "1280,600").strip()
+    try:
+        vw, vh = (int(x) for x in vp_raw.split(","))
+    except ValueError:
+        vw, vh = 1280, 720
+    try:
+        await page.set_viewport_size({"width": vw, "height": vh})
+        print(f"  viewport: {vw}x{vh}")
+    except Exception as e:
+        print(f"  set_viewport_size warning: {e}")
+
     print(f"  → opening {url}")
     try:
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)

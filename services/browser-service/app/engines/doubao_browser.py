@@ -338,6 +338,24 @@ class DoubaoBrowserAdapter(EngineAdapter):
             sys.__stdout__.write("[Doubao-step] dismiss popups\n"); sys.__stdout__.flush()
             await self._dismiss_popups(page)
 
+            # Click "新对话" to start a fresh conversation. /chat/ auto-resumes
+            # the last session,导致连续多 query 在同一会话里堆栈,
+            # _get_last_assistant_text 永远抓到的是上一轮答案 / 侧栏标题。
+            sys.__stdout__.write("[Doubao-step] start new chat\n"); sys.__stdout__.flush()
+            await self._start_new_chat(page)
+
+            # Warm-up: ByteDance escalates from slider to image CAPTCHA when a
+            # fresh context jumps straight from goto → focus input → submit.
+            # 3-6 秒鼠标乱晃 + 微 scroll 让 timing chain 看起来像人在"环顾一下页面"。
+            # 之前 DEV 版本砍掉了这段(理由"patchright 已经做 stealth"),实测拿到
+            # fresh session 也照样挑 CAPTCHA — patchright 治 CDP signal,治不了
+            # 行为时序 signal。
+            sys.__stdout__.write("[Doubao-step] simulate browsing warm-up\n"); sys.__stdout__.flush()
+            try:
+                await simulate_browsing(page, duration=random.uniform(3.0, 6.0))
+            except Exception as e:
+                sys.__stdout__.write(f"[Doubao-step] simulate_browsing warning: {e}\n"); sys.__stdout__.flush()
+
             sys.__stdout__.write("[Doubao-step] find input\n"); sys.__stdout__.flush()
             input_el = await self._find_input(page)
             if input_el is None:
@@ -346,15 +364,32 @@ class DoubaoBrowserAdapter(EngineAdapter):
                     engine=self.name, query=query, error="input not found"
                 )
 
-            sys.__stdout__.write("[Doubao-step] click + insert_text query\n"); sys.__stdout__.flush()
-            await input_el.click()
-            await human_delay(0.5, 1.0)
+            # Click input with human-like mouse path, then a "thinking pause"
+            # before typing (real users focus → think → type, not focus → type).
+            sys.__stdout__.write("[Doubao-step] click input + thinking pause\n"); sys.__stdout__.flush()
+            try:
+                box = await input_el.bounding_box()
+                if box:
+                    cx = box["x"] + box["width"] / 2
+                    cy = box["y"] + box["height"] / 2
+                    await human_click(page, cx, cy)
+                else:
+                    await input_el.click()
+            except Exception:
+                await input_el.click()
+            await human_delay(1.2, 2.8)
+
             typed_query = f"{query}，请展示引用来源"
-            # keyboard.insert_text 一次性插入文本(走 Input.insertText CDP 命令,
-            # 不模拟键盘事件),unicode 完整 + 比 fill() 更通用 ——
-            # CloakBrowser 的 fill() 对 Semi Design textarea 不生效,insert_text 可以。
-            await page.keyboard.insert_text(typed_query)
-            await human_delay(0.6, 1.2)
+            # Per-char typing with random delay. fill() / insert_text 一次性灌全文
+            # 是最强的 bot signature — ByteDance 单看这一项就足以从 slider CAPTCHA
+            # 升级到图像 CAPTCHA(后者我们解不了)。60-220ms 抖动 ≈ 真人中文输入法
+            # 节奏(每个汉字一次回车或一次选词)。
+            sys.__stdout__.write("[Doubao-step] per-char type query\n"); sys.__stdout__.flush()
+            for ch in typed_query:
+                await page.keyboard.type(ch, delay=random.randint(60, 220))
+
+            # Post-typing review pause (humans scan their own message before sending).
+            await human_delay(0.8, 2.2)
 
             # Submit ONCE: prefer the send button (what real users click), fall
             # back to Enter only if the button is missing. Double-submitting
@@ -631,6 +666,42 @@ class DoubaoBrowserAdapter(EngineAdapter):
             except Exception:
                 continue
 
+    async def _start_new_chat(self, page) -> None:
+        """Click the "新对话" sidebar button to reset the conversation.
+
+        Doubao 2026-04 侧栏顶部有一个"新对话"按钮 — 多套 DOM 同时存在
+        (A/B test):
+          - 旧版:`<div class="font-semibold ...">新对话</div>`
+          - 新版:`<div class="... s-font-small ..."><span>新对话</span></div>`
+            外层是 `[class*='nav-link-']` 或 `group/sidebar_nav_item` 容器
+        统一用 Playwright 的 text-locator + ancestor 兜底 — 命中文本节点后
+        click 自动冒泡到最近 cursor-pointer 祖先。如果整个 DOM 里只有
+        一处"新对话"文本(用过来 vm03 dump 确认了),text-locator 不会
+        误点侧栏历史会话(那些是其他 title)。
+        """
+        candidates = [
+            "[class*='nav-link-']:has-text('新对话')",
+            "[class*='sidebar_nav_item']:has-text('新对话')",
+            "div.font-semibold:text-is('新对话')",
+            "button:text-is('新对话')",
+            "[role='button']:text-is('新对话')",
+            "text=新对话",  # 最宽松兜底
+        ]
+        for sel in candidates:
+            try:
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1500):
+                    await btn.click()
+                    await human_delay(0.8, 1.5)
+                    sys.__stdout__.write(f"[Doubao-new-chat] clicked via selector={sel!r}\n")
+                    sys.__stdout__.flush()
+                    return
+            except Exception:
+                continue
+
+        sys.__stdout__.write("[Doubao-new-chat] button not found via any selector\n")
+        sys.__stdout__.flush()
+
     # ── Enable web search toggle ───────────────────────────────
 
     # ── Input detection ────────────────────────────────────────
@@ -692,20 +763,48 @@ class DoubaoBrowserAdapter(EngineAdapter):
             elapsed += poll_interval
 
     async def _get_last_assistant_text(self, page) -> str:
-        """Get the text content of the last assistant message bubble."""
-        # Primary: content containers (Doubao 2026-04 uses hashed class names
-        # like content-pWK1u_).  Try broad patterns first.
+        """Get the text content of the last assistant message bubble.
+
+        必须 scope 到 .message-list-* 主消息区。Doubao 2026-04 侧栏的
+        会话列表用 chat-item-*,标题里就有 .content-* 类的标题文本(例如
+        "脑部疾病生物制药公司及引用来源"),如果用 [class*='content-']
+        这种宽匹配,会把侧栏最后一条会话标题当成"最新答案",所有 query
+        返回都变成同一段侧栏标题。修复:
+          1) 只在 .message-list- 主区(或退化到无 sidebar 的 page)里找
+          2) 拒绝 chat-item-* / nav-link-* / sidebar-* 命中
+        """
+        # 主路径:JS 内做"在 .message-list- 里找最后一个 receive 行"。
+        # 避开侧栏(chat-item-*)与导航(nav-link-*)。
+        try:
+            text = await page.evaluate("""() => {
+                // 优先 .message-list-*(Doubao 2026-04 主消息区)。
+                const list = document.querySelector('[class*="message-list-"]');
+                const root = list || document.body;
+                const rows = root.querySelectorAll('.v_list_row');
+                for (let i = rows.length - 1; i >= 0; i--) {
+                    const row = rows[i];
+                    // 跳过 user side(send-msg)
+                    if (row.querySelector('[class*="send-msg"], [data-send]')) continue;
+                    // 跳过被 sidebar 包裹的(防御性 — message-list 内不该出现)
+                    if (row.closest('[class*="chat-item-"], [class*="nav-link-"], [class*="sidebar"], nav')) continue;
+                    // 优先抓答案正文容器(content-pWK1u_ 这种 hash class)
+                    const contentEl = row.querySelector('[class*="content-"]:not([class*="chat-item-"]):not([class*="send-msg"])');
+                    const text = (contentEl ? contentEl.innerText : row.innerText) || '';
+                    if (text.trim().length > 10) return text;
+                }
+                return '';
+            }""")
+            if text and text.strip():
+                return text
+        except Exception:
+            pass
+
+        # 退化路径:在 .message-list- 内试更具体的 selectors
         for sel in [
-            "[data-foundation-type='receive-message']",
-            "[class*='receive-msg']",
-            "[class*='markdown-body']",
-            "[class*='markdown']",
-            "[class*='rich-text']",
-            "[class*='msg-content']",
-            "[class*='message-content']",
-            "[class*='chat-item']",
-            "[class*='content-'][class*='pWK']",
-            "[class*='content-']",
+            "[class*='message-list-'] [class*='markdown-body']",
+            "[class*='message-list-'] [class*='markdown']",
+            "[class*='message-list-'] [class*='rich-text']",
+            "[class*='message-list-'] [class*='content-'][class*='pWK']",
         ]:
             try:
                 els = await page.locator(sel).all()
@@ -715,44 +814,6 @@ class DoubaoBrowserAdapter(EngineAdapter):
                         return text
             except Exception:
                 continue
-
-        # Fallback: JS probe — last v_list_row without send-msg marker
-        try:
-            text = await page.evaluate("""() => {
-                const rows = document.querySelectorAll('.v_list_row');
-                for (let i = rows.length - 1; i >= 0; i--) {
-                    // Skip user messages: look for send-side markers
-                    const sendBubble = rows[i].querySelector(
-                        '[class*="send-msg"], [class*="send-msg"], [data-send]'
-                    );
-                    if (sendBubble) continue;
-                    const content = rows[i].innerText || '';
-                    if (content.trim().length > 10) return content;
-                }
-                return '';
-            }""")
-            if text and text.strip():
-                return text
-        except Exception:
-            pass
-
-        # Last resort: grab the largest text block on the page
-        try:
-            text = await page.evaluate("""() => {
-                const all = document.querySelectorAll('div, section, article');
-                let best = '';
-                for (const el of all) {
-                    // Only consider leaf-ish elements (no block children with text)
-                    if (el.children.length > 5) continue;
-                    const t = (el.innerText || '').trim();
-                    if (t.length > best.length && t.length > 50) best = t;
-                }
-                return best;
-            }""")
-            if text and text.strip():
-                return text
-        except Exception:
-            pass
 
         return ""
 

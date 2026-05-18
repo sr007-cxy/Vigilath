@@ -180,8 +180,11 @@ class QwenBrowserAdapter(EngineAdapter):
             # ── streaming-done 检测 ──
             # 轮询 `.response-message-content` inner_text,连续 stable_secs
             # 未变 & thinking 动画已消失 → 视为生成完成。
+            # max_wait 给到 150s ── 联网搜索 + 长答案的 query 60s 不够,
+            # 之前会在 "正在读取来源..." 这种流式中间态就 early-return,
+            # 拿到的"答案"其实是状态文案。
             await human_delay(2, 3)
-            await self._wait_for_stable_answer(page, max_wait=60, stable_secs=2.0)
+            await self._wait_for_stable_answer(page, max_wait=150, stable_secs=2.5)
 
             await human_delay(1.0, 2.0)
 
@@ -227,6 +230,33 @@ class QwenBrowserAdapter(EngineAdapter):
             except Exception:
                 continue
 
+    # 流式中间态文案 — 出现这些前缀/包含这些字串的文本不算 "已完成"。
+    # Qwen 联网搜索阶段会把"正在读取来源…" / "正在搜索网络" 暂时写进
+    # response-message-content,如果只比 inner_text 是否变化,这段文字
+    # 在 2 秒内不会变,就被当成 final answer 抓出去了。
+    _STATUS_PHRASES = (
+        "正在读取来源",
+        "正在搜索",
+        "正在思考",
+        "正在生成",
+        "思考中",
+        "搜索中",
+        "读取中",
+        "Searching",
+        "Reading sources",
+        "Thinking",
+    )
+
+    def _is_status_only(self, text: str) -> bool:
+        """True if text is purely a transient loading status (no real answer yet)."""
+        if not text:
+            return True
+        stripped = text.strip()
+        # 长度 < 30 且整条以状态短语开头(常见模式 "正在读取来源..."),视为未完成
+        if len(stripped) < 30 and any(p in stripped for p in self._STATUS_PHRASES):
+            return True
+        return False
+
     async def _wait_for_stable_answer(
         self, page, max_wait: float = 180.0, stable_secs: float = 2.0
     ) -> None:
@@ -235,6 +265,9 @@ class QwenBrowserAdapter(EngineAdapter):
         关键:必须盯答案正文,不能盯整个 assistant 容器。
         thinking 阶段容器里只有状态卡文案("已经完成思考" 等),
         如果 stability 检查命中状态卡,会在答案开始 stream 之前就 early-return。
+
+        还要拒绝 "正在读取来源..." 这类状态文案 — 它会在 response-message-content
+        里短暂停留几秒不变,如果只比稳定性会误判为 final。
         """
         poll_interval = 0.6
         last_text = ""
@@ -251,7 +284,13 @@ class QwenBrowserAdapter(EngineAdapter):
                 cur = last_text
 
             # 必须有实质内容 (>8 字符,避过 "思考中..." 这类占位)
-            if cur and len(cur.strip()) > 8 and cur == last_text:
+            # 且不能是纯状态文案("正在读取来源...")
+            if (
+                cur
+                and len(cur.strip()) > 8
+                and cur == last_text
+                and not self._is_status_only(cur)
+            ):
                 if stable_since is None:
                     stable_since = elapsed
                 elif elapsed - stable_since >= stable_secs:
@@ -275,6 +314,9 @@ class QwenBrowserAdapter(EngineAdapter):
 
         直接拿答案正文,绕开 thinking status card 的 "已搜索 N 条" / "已经完成思考" 等噪声。
         若答案正文为空(罕见边界),回退到 ASSISTANT_SEL 容器 + 噪声剔除。
+
+        最后一道防线:如果抓到的全是 "正在读取来源..." 这类流式中间态
+        (超时 fallback),清掉这些字串,留下空字符串而不是误导前端。
         """
         # 首选:直接从答案正文抓
         try:
@@ -282,7 +324,9 @@ class QwenBrowserAdapter(EngineAdapter):
             if ans_els:
                 raw = await ans_els[-1].inner_text()
                 if raw and raw.strip():
-                    return re.sub(r"\n{3,}", "\n\n", raw).strip()
+                    cleaned = self._scrub_status_noise(raw)
+                    if cleaned.strip():
+                        return cleaned
         except Exception:
             pass
 
@@ -295,17 +339,29 @@ class QwenBrowserAdapter(EngineAdapter):
         except Exception:
             return ""
 
+        return self._scrub_status_noise(raw)
+
+    def _scrub_status_noise(self, raw: str) -> str:
+        """剔除 thinking status card 文案 + 流式中间态。"""
+        if not raw:
+            return ""
         cleaned = raw
         for noise in (
             "正在搜索网络",
+            "正在读取来源",
+            "正在思考",
+            "正在生成",
+            "正在搜索",
             "跳过",
             "已深度思考",
             "已搜索网络",
             "已经完成思考",
         ):
             cleaned = cleaned.replace(noise, "")
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
-        return cleaned
+        # 末尾省略号也清掉,避免留下孤儿 "..."
+        cleaned = re.sub(r"\.{3,}", "", cleaned)
+        cleaned = re.sub(r"…+", "", cleaned)
+        return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
     async def _capture_body(self, response, bucket: List[str]) -> None:
         """Read a response body, stash text containing citation-shaped JSON."""
