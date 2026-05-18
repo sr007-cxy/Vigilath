@@ -48,16 +48,33 @@ def _browser_url(engine: str) -> str:
 
 
 async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> dict[str, Any]:
-    """统一引擎调度入口:海外 5 引擎走 OpenRouter API,国内 5 引擎走 browser-service /search.
+    """统一引擎调度入口:海外 5 引擎走 OpenRouter API,国内 5 引擎走 browser-service.
+
+    D4(2026-05-18)起:CN 引擎优先 /search-hot(hot browser 复用,30% 加速).
+    若 worker 返 501(engine 还没适配 hot protocol),自动降级到 /search.
 
     返回 shape:{engine, query, answer, citations, video_url, source_url, error}
-    历史命名保留(原只支持 browser),内部分发新增 API 路径.
     """
     if is_openrouter_engine(engine):
         return await call_openrouter(client, engine, query, timeout=PER_QUERY_TIMEOUT)
-    url = f"{_browser_url(engine)}/search"
+    base = _browser_url(engine)
+    body = {"engine": engine, "query": query}
+
+    # Path 1: hot — D4 路径,工作的就用,501 才 fallback
     try:
-        r = await client.post(url, json={"engine": engine, "query": query}, timeout=PER_QUERY_TIMEOUT)
+        r = await client.post(f"{base}/search-hot", json=body, timeout=PER_QUERY_TIMEOUT)
+        if r.status_code == 501:
+            # Engine 没适配 hot protocol → 降到 /search
+            log.info("engine=%s not hot-adapted (501), fallback to /search", engine)
+        else:
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPError as e:
+        log.warning("engine=%s /search-hot HTTP error: %s, fallback to /search", engine, e)
+
+    # Path 2: cold(legacy)— /search-hot 失败 / 501 都走这里
+    try:
+        r = await client.post(f"{base}/search", json=body, timeout=PER_QUERY_TIMEOUT)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPError as e:
