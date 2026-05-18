@@ -2020,6 +2020,9 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
   const name = profile.profile_name;
   const target = profile.company_short_name;
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
+  // 没 topicId 时图片 / 视频先暂存在浏览器,持久化到 TopicEditor 这一层避免 step 切换丢失.
+  // persistTopic 拿到 saved.id 后一次性 flush 到服务器.
+  const [pendingMediaFiles, setPendingMediaFiles] = useState<File[]>([]);
   // 引擎选择 UI 已隐藏 — 默认走 5 个国内引擎,编辑场景保留原配置;
   // enabled 同样固定 true(产品口径:种子提示词都按每天跑)
   const engines = useMemo<Set<EngineId>>(
@@ -2169,6 +2172,22 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
           setSeedSubmitErr(e instanceof Error ? e.message : String(e));
         }
       }
+    }
+    // 把浏览器里暂存的图片 / 视频 flush 到刚保存的 topic 上。
+    // 失败一个不影响其它 — 错误聚合后通过 setSubmitErr 暴露,不阻断主流程。
+    if (saved?.id && pendingMediaFiles.length > 0) {
+      const failed: string[] = [];
+      for (const f of pendingMediaFiles) {
+        try {
+          await topicProfileApi.uploadMedia(saved.id, f, token);
+        } catch (e) {
+          failed.push(`${f.name}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      if (failed.length > 0) {
+        setSubmitErr(`部分素材上传失败:\n${failed.join('\n')}`);
+      }
+      setPendingMediaFiles([]);
     }
     return saved;
   };
@@ -2365,6 +2384,8 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             <ProfileImporter profile={profile} onApply={setProfile}
                              token={token} disabled={readOnly}
                              topicId={initial?.id}
+                             pendingMediaFiles={pendingMediaFiles}
+                             onPendingMediaFilesChange={setPendingMediaFiles}
                              onApplySeeds={suggestions => {
                                // LLM 顺手给的种子词候选 — 跟用户已填的合并去重(用户已填的优先保留)
                                setSeeds(prev => {

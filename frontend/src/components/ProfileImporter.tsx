@@ -40,11 +40,18 @@ interface ProfileImporterProps {
   disabled?: boolean;
   // 可选:把 LLM 顺手给的种子提示词候选合并到种子词步骤。
   onApplySeeds?: (suggestions: string[]) => void;
-  // 可选:topic ID — 没有则禁用「图片 / 视频」子页,提示先保存 topic.
+  // 可选:topic ID — 已存在的主题直接走服务器上传。
   topicId?: number;
+  // 可选:本地暂存的待上传文件(没 topicId 时用)。父组件持有,
+  // 这样切 step / 关闭 modal 不丢;TopicEditor 在 persistTopic 拿到 saved.id 后批量 flush。
+  pendingMediaFiles?: File[];
+  onPendingMediaFilesChange?: (files: File[]) => void;
 }
 
-export function ProfileImporter({ profile, onApply, token, disabled, onApplySeeds, topicId }: ProfileImporterProps) {
+export function ProfileImporter({
+  profile, onApply, token, disabled, onApplySeeds,
+  topicId, pendingMediaFiles, onPendingMediaFilesChange,
+}: ProfileImporterProps) {
   const [tab, setTab] = useState<SubTab>('text');
   const [open, setOpen] = useState(true);
 
@@ -79,7 +86,9 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
                          disabled={disabled} onApplySeeds={onApplySeeds} />
           )}
           {tab === 'media' && (
-            <MediaSection topicId={topicId} token={token} disabled={disabled} />
+            <MediaSection topicId={topicId} token={token} disabled={disabled}
+                          pendingFiles={pendingMediaFiles}
+                          onPendingFilesChange={onPendingMediaFilesChange} />
           )}
         </>
       )}
@@ -286,20 +295,33 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
 
 
 // ─────────────── 子页 ② 图片 / 视频 ────────────────────────
+//
+// 两条上传路径:
+//   1) topicId 已就绪(编辑场景 / TopicProfile)→ 直接 POST 到服务器
+//   2) topicId 还没有(新建场景,用户还没保存主题)→ File 留在 parent 暂存,
+//      显示本地预览;parent 在保存主题拿到 saved.id 后再批量 flush。
+//
+// pendingFiles / onPendingFilesChange 是 controlled — 由 parent (TopicEditor) 持有,
+// 不放 MediaSection 内部 state,因为 step 1 ↔ step 2 切换会让本 section unmount。
 
 interface MediaSectionProps {
   topicId?: number;
   token: string;
   disabled?: boolean;
+  pendingFiles?: File[];
+  onPendingFilesChange?: (files: File[]) => void;
 }
 
-function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
+function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesChange }: MediaSectionProps) {
   const [list, setList] = useState<TopicMedia[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const stagingEnabled = typeof onPendingFilesChange === 'function';
+  const pending = pendingFiles || [];
 
   const refresh = async () => {
     if (!topicId) return;
@@ -316,17 +338,22 @@ function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
 
   useEffect(() => { if (topicId) refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [topicId]);
 
-  const upload = async (file: File) => {
-    if (!topicId || busy || disabled) return;
+  // 校验 — 跟后端 ALLOWED_MEDIA_EXTS 对齐,文本错误友好化.
+  const validate = (file: File): string | null => {
     const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
     if (!ACCEPT_MEDIA_EXTS.includes(ext)) {
-      setErr(`不支持的格式 ${ext || '未知'};只接受 ${ACCEPT_MEDIA_EXTS.join(' / ')}`);
-      return;
+      return `不支持的格式 ${ext || '未知'};只接受 ${ACCEPT_MEDIA_EXTS.join(' / ')}`;
     }
     if (file.size > MAX_MEDIA_BYTES) {
-      setErr(`文件过大(${Math.floor(file.size / 1024 / 1024)} MB > ${MAX_MEDIA_BYTES / 1024 / 1024} MB 上限)`);
-      return;
+      return `文件过大(${Math.floor(file.size / 1024 / 1024)} MB > ${MAX_MEDIA_BYTES / 1024 / 1024} MB 上限)`;
     }
+    return null;
+  };
+
+  const uploadOne = async (file: File) => {
+    if (!topicId) return;
+    const v = validate(file);
+    if (v) { setErr(v); return; }
     setBusy(true); setErr(null);
     try {
       const m = await topicProfileApi.uploadMedia(topicId, file, token);
@@ -336,6 +363,14 @@ function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const stageOne = (file: File) => {
+    if (!stagingEnabled) return;
+    const v = validate(file);
+    if (v) { setErr(v); return; }
+    setErr(null);
+    onPendingFilesChange!([...pending, file]);
   };
 
   const remove = async (mediaId: number) => {
@@ -351,27 +386,40 @@ function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
     }
   };
 
+  const removePending = (idx: number) => {
+    if (!stagingEnabled) return;
+    onPendingFilesChange!(pending.filter((_, i) => i !== idx));
+  };
+
+  const handleFiles = (files: File[]) => {
+    if (disabled || busy) return;
+    for (const f of files) {
+      if (topicId) void uploadOne(f);
+      else if (stagingEnabled) stageOne(f);
+    }
+  };
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDrag(false);
-    if (disabled || busy || !topicId) return;
-    const files = Array.from(e.dataTransfer.files || []);
-    files.forEach(f => { void upload(f); });
+    handleFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach(f => { void upload(f); });
+    handleFiles(Array.from(e.target.files || []));
     e.target.value = '';
   };
 
-  if (!topicId) {
+  // 既没 topicId、parent 也不提供暂存接口 → 给一个降级提示(目前没有调用方走到这里,留个保险)
+  if (!topicId && !stagingEnabled) {
     return (
       <div className="rounded-md p-4 text-xs text-secondary"
            style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}>
-        请先在「基础标识」中填好资料并保存主题;主题创建后,这里可以上传图片 / 视频作为后续发文素材库。
+        请先保存主题后再上传图片 / 视频。
       </div>
     );
   }
+
+  const totalEmpty = !loading && list.length === 0 && pending.length === 0;
 
   return (
     <div className="space-y-3">
@@ -392,6 +440,11 @@ function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
             <span className="block text-muted mt-1">
               支持 {IMAGE_EXTS.join(' / ')} / {VIDEO_EXTS.join(' / ')};单文件最大 {MAX_MEDIA_BYTES / 1024 / 1024} MB
             </span>
+            {!topicId && stagingEnabled && (
+              <span className="block mt-1" style={{ color: 'var(--accent-primary)' }}>
+                主题尚未保存 — 文件先暂存浏览器,保存主题后会自动批量上传
+              </span>
+            )}
           </>
         )}
         <input ref={fileInputRef} type="file" multiple
@@ -401,20 +454,54 @@ function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
 
       {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
       {busy && <div className="text-xs text-muted">上传中…</div>}
-
       {loading && <div className="text-xs text-muted">加载中…</div>}
-
-      {list.length === 0 && !loading && (
+      {totalEmpty && (
         <div className="text-xs text-muted py-4 text-center">尚未上传任何素材</div>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {pending.map((f, i) => (
+          <PendingCard key={`pending-${i}-${f.name}`} file={f}
+                       onRemove={() => removePending(i)} disabled={disabled} />
+        ))}
         {list.map(m => (
           <MediaCard key={m.id} media={m} token={token}
                      onRemove={() => remove(m.id)}
                      disabled={disabled || busy} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function PendingCard({ file, onRemove, disabled }: {
+  file: File; onRemove: () => void; disabled?: boolean;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImage = IMAGE_EXTS.includes((file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase());
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return (
+    <div className="relative rounded-md overflow-hidden group"
+         style={{ background: 'var(--bg-input)', border: '1px dashed var(--accent-primary)' }}>
+      <div className="aspect-square flex items-center justify-center text-xs text-muted">
+        {!url && <span>…</span>}
+        {url && isImage && <img src={url} alt={file.name} className="w-full h-full object-cover" />}
+        {url && !isImage && <video src={url} controls className="w-full h-full object-cover" />}
+      </div>
+      <div className="px-2 py-1 text-[10px] truncate"
+           style={{ color: 'var(--accent-primary)' }}
+           title={file.name}>
+        暂存 · {file.name}
+      </div>
+      <button type="button" onClick={onRemove} disabled={disabled}
+              className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }}>
+        移除
+      </button>
     </div>
   );
 }
