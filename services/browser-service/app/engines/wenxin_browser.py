@@ -6,6 +6,7 @@ chat.baidu.com 是百度 AI 搜索,带 web 引用的版本。匿名也可用,回
 
 from __future__ import annotations
 
+import asyncio
 import re
 import sys
 from typing import List
@@ -37,7 +38,16 @@ class WenxinBrowserAdapter(EngineAdapter):
     async def search(self, query: str) -> EngineResult:
         try:
             page, ctx = await create_stealth_page("wenxin", record_video=self._record_video)
-            await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
+            # chat.baidu.com 起一个 302 → 主站,domcontentloaded 触发慢(尤其 vm03 网络抖),
+            # 30s 经常 timeout。拉到 60s + 失败 fallback 用 load(更早触发)。
+            try:
+                await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=60000)
+            except Exception:
+                try:
+                    await page.goto(self.CHAT_URL, wait_until="load", timeout=60000)
+                except Exception as e:
+                    await ctx.close()
+                    return EngineResult(engine=self.name, query=query, error=f"goto failed: {e}")
             await human_delay(2, 3)
 
             await self._dismiss_popups(page)
@@ -60,18 +70,27 @@ class WenxinBrowserAdapter(EngineAdapter):
 
             # Wait for streaming to finish using stability detection.
             # chat.baidu.com uses `.cosd-markdown-content-typingall` during streaming
-            # and removes it when done. Fallback: polling inner_text stability.
+            # and removes it when done。
+            #
+            # ⚠ 之前 60s timeout 对复杂 query(FDI/反垄断律师推荐这种 1500+字)
+            # 不够,wait 提前 timeout 退出后 extract 拿到的是流式中间态(~600 字)。
+            # 实测 1.5K 字 query 需 ~90-120s。timeout 拉到 180s + 加 stability double
+            # check(typing 消失后再 poll inner_text 稳定 3s 才返回),跟 qwen 同款。
             await human_delay(3, 5)
             try:
-                # Primary: wait for typing indicator to disappear
                 await page.wait_for_function(
                     """() => !document.querySelector('.cosd-markdown-content-typingall')
                            && !document.querySelector('.cosd-markdown-loading')
                            && !document.querySelector('[data-auto-test="stop_response"]')""",
-                    timeout=60000,
+                    timeout=180000,
                 )
             except Exception:
-                pass
+                sys.__stdout__.write("[Wenxin-wait] typing indicator wait timed out (180s) — extracting whatever's there\n")
+                sys.__stdout__.flush()
+
+            # 二次确认:typing 消失后再 poll answer container inner_text 稳定 3 秒,
+            # 防止 typing class 被瞬间 toggle 误判完成。max 30s 兜底。
+            await self._wait_text_stable(page, max_wait=30, stable_secs=3.0)
 
             # Extra settle time for final markdown render
             await human_delay(1.0, 2.0)
@@ -132,6 +151,25 @@ class WenxinBrowserAdapter(EngineAdapter):
             # citation 折叠在 "参考 N 个网页" chip 里,需点击展开才能抓 a[href]
             await self._expand_references(page)
 
+            # 一次性 dump 渲染后 answer-container 的 HTML — 排查 "只有半个数据" 用,
+            # 落盘到 /tmp/wenxin_dump.html(只 dump 一次,文件已存在就跳过)
+            try:
+                import os as _os
+                dp = "/tmp/wenxin_dump.html"
+                if not _os.path.exists(dp):
+                    html = await page.evaluate("""() => {
+                        const el = document.querySelector('div.conversation-flow-answer-container:last-child') ||
+                                   document.querySelector('div.conversation-flow-answer-container');
+                        return el ? el.outerHTML : document.body.innerHTML;
+                    }""")
+                    with open(dp, "w", encoding="utf-8") as f:
+                        f.write(html)
+                    sys.__stdout__.write(f"[Wenxin-probe] dumped answer HTML ({len(html)} bytes) -> {dp}\n")
+                    sys.__stdout__.flush()
+            except Exception as _e:
+                sys.__stdout__.write(f"[Wenxin-probe] dump failed: {_e}\n")
+                sys.__stdout__.flush()
+
             citations = await self._extract_citations(page, answer)
 
             await save_page_session("wenxin", ctx)
@@ -155,6 +193,41 @@ class WenxinBrowserAdapter(EngineAdapter):
             )
         except Exception as e:
             return EngineResult(engine=self.name, query=query, error=str(e))
+
+    async def _wait_text_stable(self, page, max_wait: float = 30.0, stable_secs: float = 3.0) -> None:
+        """Poll the last answer container's inner_text until it stops growing.
+
+        Belt-and-suspenders 兜底:wait_for_function 看的是 `.cosd-markdown-content-typingall`
+        DOM class,但 wenxin 偶尔在两个段落之间瞬间 toggle 这个 class —— wait 看到 false
+        立刻 return,然后下个段落开 stream,extract 就拿不到。
+        这里再 poll inner_text 长度,直到 stable_secs 没增长,确认整个流真的完了。
+        """
+        poll = 0.6
+        last_len = -1
+        stable_since = None
+        elapsed = 0.0
+        while elapsed < max_wait:
+            try:
+                container = page.locator("div.conversation-flow-answer-container").last
+                if await container.count() > 0:
+                    cur = (await container.inner_text()).strip()
+                else:
+                    cur = ""
+            except Exception:
+                cur = ""
+
+            cur_len = len(cur)
+            if cur_len > 0 and cur_len == last_len:
+                if stable_since is None:
+                    stable_since = elapsed
+                elif elapsed - stable_since >= stable_secs:
+                    return
+            else:
+                last_len = cur_len
+                stable_since = None
+
+            await asyncio.sleep(poll)
+            elapsed += poll
 
     async def _expand_references(self, page) -> None:
         """Click "参考 N 个网页" chip to expand the source drawer.

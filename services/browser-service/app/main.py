@@ -161,11 +161,15 @@ async def search(req: SearchRequest):
     except asyncio.TimeoutError:
         raise HTTPException(status_code=429, detail="Too many concurrent queries")
 
+    # 全局 search timeout — 必须 > 各 engine 内部 wait timeout(目前 wenxin 内部
+     # 180s typing wait + 30s stable double-check,加上 goto/输入/extract = 总耗
+    # 可能到 240s)。默认 300s,通过 ENGINE_SEARCH_TIMEOUT 可调。
+    search_timeout = int(os.environ.get("ENGINE_SEARCH_TIMEOUT", "300"))
     start = time.time()
     try:
         result: EngineResult = await asyncio.wait_for(
             adapter.search(req.query),
-            timeout=180,
+            timeout=search_timeout,
         )
         elapsed = time.time() - start
         print(
@@ -194,7 +198,7 @@ async def search(req: SearchRequest):
             video_url=video_url,
         )
     except asyncio.TimeoutError:
-        return SearchResponse(engine=req.engine, query=req.query, error="timeout (180s)")
+        return SearchResponse(engine=req.engine, query=req.query, error=f"timeout ({search_timeout}s)")
     except Exception as e:
         return SearchResponse(engine=req.engine, query=req.query, error=str(e))
     finally:
