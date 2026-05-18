@@ -57,19 +57,24 @@ class EngineSession:
 
     # ── Lifecycle ────────────────────────────────────────────────
     async def init(self) -> None:
-        """Launch browser + load session + adapter._prepare_page."""
+        """Launch browser + load session + adapter._prepare_page.
+
+        Adapter 可选实现 _create_hot_page(返回 (page, ctx))覆盖默认的
+        create_stealth_page 调用 — 豆包必须用,因为它走 cloakbrowser + headed.
+        """
         if not self._has_hot_protocol():
             raise NotImplementedError(
                 f"engine {self.engine_name} 没实现 hot protocol "
-                "(_prepare_page + _query_with_page).D4 阶段仅 deepseek 支持."
+                "(_prepare_page + _query_with_page)."
             )
         async with self._lock:
             if self._initialized:
                 return
             t0 = time.time()
-            # session_store.load_storage_state(engine) 在 create_stealth_page 内部
-            # 已经做了 pool check-out + fallback,这里直接用即可
-            self.page, self.ctx = await create_stealth_page(self.engine_name)
+            if hasattr(self.adapter, "_create_hot_page"):
+                self.page, self.ctx = await self.adapter._create_hot_page()
+            else:
+                self.page, self.ctx = await create_stealth_page(self.engine_name)
             await self.adapter._prepare_page(self.page, self.ctx)
             self._initialized = True
             _log.info("[hot-session] %s init OK in %.1fs", self.engine_name, time.time() - t0)
@@ -121,13 +126,16 @@ class EngineSession:
     async def _close_inner(self, check_in_result: str) -> None:
         if self.ctx is not None:
             try:
-                await self.ctx.close()
+                # Adapter 可选实现 _close_hot_page(page, ctx) 处理 cloakbrowser 等
+                # 特殊清理(豆包有 headed_browser + headed_pw 要 close).
+                if hasattr(self.adapter, "_close_hot_page"):
+                    await self.adapter._close_hot_page(self.page, self.ctx)
+                else:
+                    await self.ctx.close()
             except Exception:
                 pass
             self.ctx = None
             self.page = None
-        # check-in 当前 session;session_store 的 _last_checkout 是 thread-local,
-        # init/query 是 async task 共享同一个 thread-local,这里能 hit 同一条
         report_session_outcome(self.engine_name, result=check_in_result)
 
 

@@ -153,6 +153,146 @@ class DoubaoBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # D4c(2026-05-18):hot browser protocol —— EngineSession 用 _create_hot_page +
+    # _prepare_page + _query_with_page + _close_hot_page 复用 cloakbrowser ctx.
+    # search() **不动**,保持 one-shot 零回归.
+    async def _create_hot_page(self):
+        """豆包专用:Xvfb + headed + cloakbrowser/patchright + channel=chrome.
+
+        参数全跟 search() 那一段对齐 — profile pin Linux x86_64,channel=chrome.
+        """
+        import os
+        # Xvfb 启动(若 DISPLAY 未设)
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        page, ctx = await create_headed_page(
+            "doubao",
+            profile=profile,
+            record_video=self._record_video,
+            channel="chrome",
+        )
+        return page, ctx
+
+    async def _close_hot_page(self, page, ctx) -> None:
+        """豆包专用:cloakbrowser 的 headed_browser + pw_ref 也要 close."""
+        headed_browser = getattr(page, "_headed_browser", None)
+        headed_pw = getattr(page, "_pw_ref", None)
+        await _close_headed(ctx, headed_browser, headed_pw)
+
+
+    #
+    # 注意 doubao 特殊性(deploy doc 第 9 节):
+    #   - 走 create_headed_page (cloakbrowser / patchright + Xvfb)
+    #   - 每条 query 之前必须 simulate_browsing 暖身(ByteDance 看时序)
+    #   - per-char keyboard.type(60-220ms 抖动),不能 fill / insert_text
+    #   - 发送优先 send button,Enter 兜底
+    #   - CAPTCHA 路径要 dump screenshot + 报 FailureType=captcha 让 pool 隔离
+    #   - 没法在 _prepare_page 里做 simulate_browsing(那是 per-query 行为)
+    async def _prepare_page(self, page, ctx) -> None:
+        """Hot init:goto + 网络抓包 listener + popups + 预检 captcha.
+
+        不做 _start_new_chat / simulate_browsing — 那俩 per-query.
+        """
+        # 网络抓包 — listener 挂 page,每次 query 前 clear list
+        self._captured_bodies = []
+
+        def _on_response(response):
+            url_l = response.url.lower()
+            if not any(kw in url_l for kw in ("/api/", "chat", "completion", "search")):
+                return
+            ctype = (response.headers.get("content-type") or "").lower()
+            if ctype and not any(
+                t in ctype for t in ("json", "event-stream", "text/plain", "text/html")
+            ):
+                return
+            try:
+                asyncio.create_task(self._capture_body(response, self._captured_bodies))
+            except Exception:
+                pass
+
+        page.on("response", _on_response)
+
+        await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
+        await human_delay(3, 5)
+        # 初始 captcha 预检(很罕见,但出现就该立即放弃这个 session)
+        if await self._check_captcha(page):
+            raise RuntimeError(
+                "captcha on initial load — session needs rotate (login_lost/captcha state)"
+            )
+        await self._dismiss_popups(page)
+
+    async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
+        """Hot query:reset chat → warm-up → input → submit → wait → extract.
+
+        captcha mid-query → 返回 error,EngineSession 据此调 rotate.
+        """
+        # 清上一轮的网络 body 累积
+        self._captured_bodies = []
+
+        sys.__stdout__.write("[Doubao-hot] start new chat\n"); sys.__stdout__.flush()
+        await self._start_new_chat(page)
+
+        sys.__stdout__.write("[Doubao-hot] simulate warm-up\n"); sys.__stdout__.flush()
+        try:
+            await simulate_browsing(page, duration=random.uniform(3.0, 6.0))
+        except Exception as e:
+            sys.__stdout__.write(f"[Doubao-hot] simulate warning: {e}\n"); sys.__stdout__.flush()
+
+        input_el = await self._find_input(page)
+        if input_el is None:
+            return EngineResult(engine=self.name, query=query, error="input not found")
+
+        try:
+            box = await input_el.bounding_box()
+            if box:
+                cx = box["x"] + box["width"] / 2
+                cy = box["y"] + box["height"] / 2
+                await human_click(page, cx, cy)
+            else:
+                await input_el.click()
+        except Exception:
+            await input_el.click()
+        await human_delay(1.2, 2.8)
+
+        typed_query = f"{query},请展示引用来源"
+        for ch in typed_query:
+            await page.keyboard.type(ch, delay=random.randint(60, 220))
+        await human_delay(0.8, 2.2)
+
+        # Submit
+        submitted = False
+        try:
+            send_btn = page.locator(
+                "[data-testid='send-button'], "
+                "button[aria-label='发送'], "
+                "button[aria-label='Send'], "
+                "button:has(svg) >> nth=-1"
+            ).first
+            if await send_btn.is_visible(timeout=1500):
+                await send_btn.click()
+                submitted = True
+        except Exception:
+            pass
+        if not submitted:
+            await page.keyboard.press("Enter")
+
+        # Post-submit CAPTCHA(豆包关键防线)
+        await human_delay(3, 5)
+        if await self._check_captcha(page):
+            return EngineResult(
+                engine=self.name, query=query,
+                error="CAPTCHA: ByteDance challenged the request after submit",
+            )
+
+        await self._wait_for_stable_answer(page, max_wait=90, stable_secs=3.0)
+        await human_delay(1.0, 2.0)
+
+        answer = await self._extract_answer(page)
+        citations = await self._extract_citations(page, answer)
+        return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
+
     async def search(self, query: str) -> EngineResult:
         import os
         # Pin a single device profile for the whole query lifecycle.
