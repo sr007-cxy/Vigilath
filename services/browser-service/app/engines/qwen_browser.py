@@ -1,4 +1,11 @@
-"""Qwen (通义千问) browser adapter — automates chat.qwen.ai.
+"""Qwen (通义千问) browser adapter — automates tongyi.aliyun.com.
+
+⚠️ DOM 适配迁移中(2026-05-18):URL 已切到国内 tongyi.aliyun.com,但下面
+所有 selector(`.qwen-chat-message-assistant` / `.response-message-content` /
+`.qwen-chat-thinking-status-card-title-animate` / `textarea.message-input-textarea`)
+是为 chat.qwen.ai 调出来的,**在 tongyi.aliyun.com 上几乎肯定不工作**。
+等用户上传一份 tongyi session 后,在 vm03 用 headed 模式抓真实 DOM 再补适配。
+当前状态:probe 会失败,但 URL/host_permissions 链路已通,session 已能上传/分发。
 
 Qwen Web UI 自动判断是否需要联网搜索,搜索时会显示
 `qwen-chat-thinking-status-card-title-animate` 动画卡片(文案"正在搜索网络"),
@@ -114,7 +121,7 @@ class QwenBrowserAdapter(EngineAdapter):
         import os
         self._record_video = os.environ.get("GEO_RECORD_VIDEO", "").strip() in ("1", "true")
 
-    CHAT_URL = "https://chat.qwen.ai/"
+    CHAT_URL = "https://tongyi.aliyun.com/"
     ASSISTANT_SEL = ".qwen-chat-message-assistant"
     # 只匹配答案正文,不包含 thinking status card 的文案
     ANSWER_SEL = ".qwen-chat-message-assistant .response-message-content"

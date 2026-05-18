@@ -13,8 +13,8 @@
 
   "host_permissions": [
     "https://*.doubao.com/*",
-    "https://chat.qwen.ai/*",
-    "https://*.qwen.ai/*",
+    "https://tongyi.aliyun.com/*",
+    "https://*.aliyun.com/*",
     "https://chat.deepseek.com/*",
     "https://*.deepseek.com/*",
     "https://yiyan.baidu.com/*",

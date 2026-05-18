@@ -12,9 +12,9 @@ const ENGINES = {
   },
   qwen: {
     name: "通义千问",
-    hostKeywords: ["qwen.ai"],
-    cookieDomains: [".qwen.ai", "chat.qwen.ai"],
-    primaryOrigin: "https://chat.qwen.ai",
+    hostKeywords: ["tongyi.aliyun.com"],
+    cookieDomains: [".aliyun.com", "tongyi.aliyun.com"],
+    primaryOrigin: "https://tongyi.aliyun.com",
   },
   deepseek: {
     name: "DeepSeek",
