@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from geo.database import SessionLocal
 from geo.models.engine_sessions import (
     EngineSessionORM,
+    FailureType,
     PoolStatusEntry,
     SessionCheckIn,
     SessionCheckedOut,
@@ -77,6 +78,24 @@ def _valid_engines() -> set[str]:
 
 
 _CAPTCHA_QUARANTINE_THRESHOLD = 3   # 累计被挑 CAPTCHA 3 次 → quarantine
+
+# ── Quarantine policy(D2 — P1 失败信号 enum 化)──────────────────
+#
+# 各 FailureType 触发 quarantine 的政策:
+#   - threshold: 累计达 N 次 quarantine
+#   - immediate: 单次就 quarantine(像 login_lost 这种不可逆 fail)
+#   - skip: 不计入 session 账,通常是 worker 端问题(crash)
+#
+# policy=None 表示 SUCCESS,重置所有 fail_counts(防止旧失败累积到永远)。
+_QUARANTINE_POLICY: dict[FailureType, dict] = {
+    FailureType.SUCCESS:        {"reset": True},
+    FailureType.CAPTCHA:        {"threshold": 3, "legacy_col": "captcha_count"},
+    FailureType.LOGIN_LOST:     {"immediate": True},
+    FailureType.EMPTY_ANSWER:   {"threshold": 5},
+    FailureType.DOM_NOT_FOUND:  {"threshold": 3, "alert": True},  # alert: 可能引擎改版
+    FailureType.TIMEOUT:        {"threshold": 5},
+    FailureType.CRASH:          {"skip": True},
+}
 
 
 # ── Endpoints ───────────────────────────────────────────────────────
@@ -167,19 +186,63 @@ def check_in(
     db: Session = Depends(get_db),
     _auth: None = Depends(_require_service_token),
 ):
-    """browser-service 报告 session 用完了 + 是否触发了 CAPTCHA。
+    """browser-service 报告 session 用完 + 本次 FailureType。
 
-    没 CAPTCHA → noop(use_count 已在 check-out 时增加)
-    挑了 CAPTCHA → captcha_count += 1, 累计达阈值就 quarantine
+    SUCCESS  → 重置 fail_counts(防止历史失败永远累积)
+    CAPTCHA  → captcha_count++,阈值 3 → quarantine
+    LOGIN_LOST → 立即 quarantine(session 已失效,不留)
+    EMPTY_ANSWER / TIMEOUT → fail_counts[type]++,阈值 5 → quarantine
+    DOM_NOT_FOUND → fail_counts[type]++,阈值 3 → quarantine + alert
+    CRASH    → skip(不计 session 账,认为是 worker 端问题)
+
+    Backward-compat:旧 worker 仍发 captcha_triggered=true/false,SessionCheckIn
+    的 validator 已经把它翻译成 result=CAPTCHA/SUCCESS,这里只看 payload.result.
     """
     row = db.query(EngineSessionORM).get(payload.id)
     if row is None:
         raise HTTPException(404, f"session id={payload.id} not found")
 
-    if payload.captcha_triggered:
-        row.captcha_count = (row.captcha_count or 0) + 1
-        if row.captcha_count >= _CAPTCHA_QUARANTINE_THRESHOLD:
+    result = payload.result
+    policy = _QUARANTINE_POLICY.get(result, {})
+
+    # 解析现有 fail_counts(SQLite 存 JSON string)
+    try:
+        fc = json.loads(row.fail_counts_json or "{}")
+    except json.JSONDecodeError:
+        fc = {}
+
+    if policy.get("reset"):
+        # SUCCESS:清空累积失败,但保留 captcha_count(captcha 是独立 counter)
+        fc = {}
+    elif policy.get("skip"):
+        # CRASH:认为是 worker 端问题,不动 session 账
+        pass
+    elif policy.get("immediate"):
+        # LOGIN_LOST:立即 quarantine
+        row.status = "quarantined"
+        fc[result.value] = fc.get(result.value, 0) + 1
+        row.last_fail_type = result.value
+        row.last_fail_at = datetime.utcnow()
+    else:
+        # 累计型:计数 + 达阈值 quarantine
+        fc[result.value] = fc.get(result.value, 0) + 1
+        row.last_fail_type = result.value
+        row.last_fail_at = datetime.utcnow()
+        # captcha 用历史独立列,其他用 fail_counts_json
+        if policy.get("legacy_col") == "captcha_count":
+            row.captcha_count = (row.captcha_count or 0) + 1
+            count_for_threshold = row.captcha_count
+        else:
+            count_for_threshold = fc[result.value]
+        threshold = policy.get("threshold")
+        if threshold is not None and count_for_threshold >= threshold:
             row.status = "quarantined"
+
+    row.fail_counts_json = json.dumps(fc)
+
+    # 释放 lease(P3 D4 才用,但 D2 顺手清,避免下次 check-out 看到 stale lease)
+    row.leased_by_worker_id = None
+    row.leased_until = None
 
     db.commit()
     return {
@@ -187,6 +250,8 @@ def check_in(
         "status": row.status,
         "use_count": row.use_count,
         "captcha_count": row.captcha_count,
+        "fail_counts": fc,
+        "last_fail_type": row.last_fail_type,
     }
 
 

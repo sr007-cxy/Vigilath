@@ -109,8 +109,29 @@ def _pool_checkout(engine_name: str) -> Optional[dict]:
         return None
 
 
-def report_session_outcome(engine_name: str, captcha_triggered: bool) -> None:
+# D2(2026-05-18):check-in 升级为 enum FailureType 上报,后端按类型应用不同
+# quarantine 政策。旧调用点 `report_session_outcome(engine, captcha_triggered=bool)`
+# 被翻译成 SUCCESS / CAPTCHA。新调用建议直接传 result 字符串。
+_VALID_RESULTS = {
+    "success", "captcha", "empty_answer", "login_lost",
+    "dom_not_found", "timeout", "crash",
+}
+
+
+def report_session_outcome(
+    engine_name: str,
+    captcha_triggered: bool | None = None,
+    *,
+    result: str | None = None,
+    error_msg: str | None = None,
+) -> None:
     """Notify pool that the session we just checked out was used.
+
+    Two equivalent calling styles:
+      - 旧: report_session_outcome("doubao", captcha_triggered=True)
+            → 翻译成 result="captcha"
+      - 新: report_session_outcome("doubao", result="empty_answer",
+                                    error_msg="answer was empty after 60s")
 
     No-op if pool isn't configured or no check-out was recorded for this engine
     in the current thread (e.g. we fell back to file). Safe to call always.
@@ -121,19 +142,34 @@ def report_session_outcome(engine_name: str, captcha_triggered: bool) -> None:
     sid = slots.pop(engine_name, None)
     if sid is None:
         return
+
+    # 调用点签名翻译
+    if result is None:
+        if captcha_triggered is True:
+            result = "captcha"
+        else:
+            result = "success"
+    if result not in _VALID_RESULTS:
+        _log.warning("[session-pool] engine=%s: invalid result=%r, downgrading to 'crash'",
+                     engine_name, result)
+        result = "crash"
+
+    body = {"id": sid, "result": result}
+    if error_msg:
+        body["error_msg"] = error_msg[:500]  # 截断防爆 log
     try:
         with httpx.Client(timeout=_POOL_HTTP_TIMEOUT) as client:
             r = client.post(
                 f"{_POOL_URL}/api/engine-sessions/check-in",
                 headers={"X-Service-Token": _POOL_TOKEN, "Content-Type": "application/json"},
-                json={"id": sid, "captcha_triggered": captcha_triggered},
+                json=body,
             )
         if r.status_code != 200:
             _log.warning("[session-pool] engine=%s: check-in HTTP %d: %s",
                          engine_name, r.status_code, r.text[:200])
         else:
-            _log.info("[session-pool] engine=%s id=%s checked in (captcha=%s) → %s",
-                      engine_name, sid, captcha_triggered, r.json())
+            _log.info("[session-pool] engine=%s id=%s checked in (result=%s) → %s",
+                      engine_name, sid, result, r.json())
     except Exception as e:
         _log.warning("[session-pool] engine=%s: check-in failed: %s", engine_name, e)
 
