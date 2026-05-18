@@ -99,15 +99,19 @@ class WenxinBrowserAdapter(EngineAdapter):
         await page.keyboard.press("Enter")
 
         await human_delay(3, 5)
+        # 同 search() — 真实 streaming indicator 是 stopBtn / stopDealBtn /
+        # name-msg-animation,旧 .cosd- 保留兜底。
         try:
             await page.wait_for_function(
-                """() => !document.querySelector('.cosd-markdown-content-typingall')
-                       && !document.querySelector('.cosd-markdown-loading')
+                """() => !document.querySelector('[class*="stopBtn"]')
+                       && !document.querySelector('[class*="stopDealBtn"]')
+                       && !document.querySelector('[class*="name-msg-animation"]')
+                       && !document.querySelector('.cosd-markdown-content-typingall')
                        && !document.querySelector('[data-auto-test="stop_response"]')""",
                 timeout=180000,
             )
         except Exception:
-            sys.__stdout__.write("[Wenxin-hot] typing wait timeout 180s\n"); sys.__stdout__.flush()
+            sys.__stdout__.write("[Wenxin-hot] streaming wait timeout 180s\n"); sys.__stdout__.flush()
         await self._wait_text_stable(page, max_wait=30, stable_secs=3.0)
         await human_delay(1.0, 2.0)
 
@@ -178,19 +182,25 @@ class WenxinBrowserAdapter(EngineAdapter):
             # 实测 1.5K 字 query 需 ~90-120s。timeout 拉到 180s + 加 stability double
             # check(typing 消失后再 poll inner_text 稳定 3s 才返回),跟 qwen 同款。
             await human_delay(3, 5)
+            # 2026-05-18 DOM probe 实测:yiyan 改版后旧 `.cosd-` 前缀全废,
+            # 真实"还在生成"标记是 [class*=stopBtn] / [class*=stopDealBtn] /
+            # [class*=name-msg-animation](后者是 inline-combo)。所有这些缺席 = 完成.
+            # 旧 .cosd- selectors 保留作历史变体兜底,无害.
             try:
                 await page.wait_for_function(
-                    """() => !document.querySelector('.cosd-markdown-content-typingall')
-                           && !document.querySelector('.cosd-markdown-loading')
+                    """() => !document.querySelector('[class*="stopBtn"]')
+                           && !document.querySelector('[class*="stopDealBtn"]')
+                           && !document.querySelector('[class*="name-msg-animation"]')
+                           && !document.querySelector('.cosd-markdown-content-typingall')
                            && !document.querySelector('[data-auto-test="stop_response"]')""",
                     timeout=180000,
                 )
             except Exception:
-                sys.__stdout__.write("[Wenxin-wait] typing indicator wait timed out (180s) — extracting whatever's there\n")
+                sys.__stdout__.write("[Wenxin-wait] streaming indicator wait timed out (180s)\n")
                 sys.__stdout__.flush()
 
-            # 二次确认:typing 消失后再 poll answer container inner_text 稳定 3 秒,
-            # 防止 typing class 被瞬间 toggle 误判完成。max 30s 兜底。
+            # 二次确认:stop 消失后再 poll answer container inner_text 稳定 3 秒,
+            # 防止 stop button 被瞬间 toggle 误判完成。max 30s 兜底。
             await self._wait_text_stable(page, max_wait=30, stable_secs=3.0)
 
             # Extra settle time for final markdown render
