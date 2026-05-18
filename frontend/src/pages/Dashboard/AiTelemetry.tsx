@@ -438,7 +438,7 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
       // 加载今天 + 昨天的 runs 的 responses(昨天用于算 citations 增量)
       const dayStart = startOfDay(new Date()).getTime();
       const need = rs.filter(r => {
-        const ts = new Date(r.started_at).getTime();
+        const ts = parseApiTs(r.started_at).getTime();
         return ts >= dayStart - 86400000 && ts < dayStart + 86400000;
       });
       const pairs = await Promise.all(need.map(async r => {
@@ -463,9 +463,9 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
 
   const topic = topics.find(tp => tp.id === topicId) ?? null;
   const dayStart = startOfDay(new Date()).getTime();
-  const todayRuns = runs.filter(r => new Date(r.started_at).getTime() >= dayStart);
+  const todayRuns = runs.filter(r => parseApiTs(r.started_at).getTime() >= dayStart);
   const yesterdayRuns = runs.filter(r => {
-    const ts = new Date(r.started_at).getTime();
+    const ts = parseApiTs(r.started_at).getTime();
     return ts >= dayStart - 86400000 && ts < dayStart;
   });
   const todayResponses = todayRuns.flatMap(r => responsesByRun[r.id] ?? []);
@@ -536,6 +536,13 @@ function startOfDay(d: Date): Date {
   return x;
 }
 
+// 后端 datetime.utcnow() 序列化为 naive ISO(无 Z),JS 默认按本地时区解析会偏 8h —
+// 这里显式补 Z,让它按 UTC 解析,本地化的活交给 toLocaleString 之类
+function parseApiTs(s: string): Date {
+  if (!s) return new Date(NaN);
+  return new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z');
+}
+
 function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
   topic: Topic;
   todayRuns: RunSummary[];
@@ -568,8 +575,8 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
   const elapsedSecs = (() => {
     const finished = todayRuns.filter(r => r.finished_at);
     if (finished.length === 0) return 0;
-    const start = Math.min(...todayRuns.map(r => new Date(r.started_at).getTime()));
-    const end = Math.max(...finished.map(r => new Date(r.finished_at!).getTime()));
+    const start = Math.min(...todayRuns.map(r => parseApiTs(r.started_at).getTime()));
+    const end = Math.max(...finished.map(r => parseApiTs(r.finished_at!).getTime()));
     return Math.max(1, Math.round((end - start) / 1000));
   })();
 
@@ -655,7 +662,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
         )}
         <span className="text-muted ml-auto">
           {t('dashboard.aiTelemetry.today.runStartedAt', {
-            time: new Date(Math.min(...todayRuns.map(r => new Date(r.started_at).getTime()))).toLocaleTimeString(),
+            time: new Date(Math.min(...todayRuns.map(r => parseApiTs(r.started_at).getTime()))).toLocaleTimeString(),
           })}
         </span>
       </div>
