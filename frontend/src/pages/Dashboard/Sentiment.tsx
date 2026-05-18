@@ -175,7 +175,7 @@ export function Sentiment() {
 
           <div className="space-y-4 min-w-0">
             {view === 'newsnow' ? (
-              <HotTopicsPanel usingMock={usingMock} />
+              <HotTopicsPanel usingMock={usingMock} account={acct} />
             ) : (
               <>
             <StatusBanner

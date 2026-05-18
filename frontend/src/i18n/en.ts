@@ -2397,12 +2397,17 @@ const en = {
                 "viewDetail": "View",
                 "hotTopics": {
                   "title": "Live hot topics",
-                  "subtitle": "Aggregated trending feeds across major platforms — shown regardless of brand keywords",
+                  "subtitle": "Aggregated trending feeds — items matching your brand keywords are auto-highlighted 🔥",
                   "refresh": "Refresh",
+                  "refreshAll": "Refresh all",
+                  "filterBy": "Filter",
                   "fetchedAt": "Updated {{ago}}",
                   "empty": "No items — platform may be rate-limited or service unconfigured",
+                  "noCategory": "No category selected — pick at least one above",
                   "openSource": "Open source ↗",
                   "viewAll": "More ↗",
+                  "brandHint": "Items matching \"{{brand}}\" are highlighted",
+                  "brandHits": "{{count}} brand-keyword hits",
                   "categories": {
                     "social": "Social",
                     "news": "News",
@@ -2410,7 +2415,7 @@ const en = {
                     "finance": "Finance"
                   },
                   "loading": "Loading...",
-                  "error": "Failed to load hot topics"
+                  "error": "Failed to load"
                 }
               },
               "articles": {

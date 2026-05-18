@@ -2403,12 +2403,17 @@ const zh = {
                 "viewDetail": "查看",
                 "hotTopics": {
                   "title": "实时热点 · 今日热榜",
-                  "subtitle": "聚合主流平台热搜,品牌词无关也展示",
+                  "subtitle": "聚合主流平台热搜,命中品牌词的条目自动高亮 🔥",
                   "refresh": "刷新",
+                  "refreshAll": "全部刷新",
+                  "filterBy": "类别筛选",
                   "fetchedAt": "更新于 {{ago}}",
                   "empty": "暂无热点,可能是该平台风控或服务未配置",
+                  "noCategory": "未选择任何类别,请勾选上方至少一个类别",
                   "openSource": "打开站点 ↗",
                   "viewAll": "查看更多 ↗",
+                  "brandHint": "命中「{{brand}}」相关词高亮",
+                  "brandHits": "{{count}} 条命中品牌词",
                   "categories": {
                     "social": "社交",
                     "news": "门户",
@@ -2416,7 +2421,7 @@ const zh = {
                     "finance": "财经"
                   },
                   "loading": "加载中...",
-                  "error": "热榜加载失败"
+                  "error": "加载失败"
                 }
               },
               "articles": {
