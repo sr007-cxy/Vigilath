@@ -2348,6 +2348,8 @@ const en = {
                 "empty": "No monitoring tasks",
                 "reports": "My reports",
                 "noKeywords": "No detection terms configured",
+                "tools": "Tools",
+                "newsnow": "Live hot topics",
                 "kinds": {
                   "entity": "Entity",
                   "legal": "Legal",

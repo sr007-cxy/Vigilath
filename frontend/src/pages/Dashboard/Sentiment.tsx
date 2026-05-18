@@ -24,6 +24,7 @@ import { ArticlesTab } from './sentiment/tabs/ArticlesTab';
 import { BriefsTab } from './sentiment/tabs/BriefsTab';
 import { StatusBanner, FirstRunWaiting } from './sentiment/components/StatusBanner';
 import { AccountSidebar } from './sentiment/components/AccountSidebar';
+import { HotTopicsPanel } from './sentiment/components/HotTopicsPanel';
 
 type TabKey = 'today' | 'articles' | 'briefs';
 const TAB_KEYS: TabKey[] = ['today', 'articles', 'briefs'];
@@ -87,11 +88,27 @@ export function Sentiment() {
   const lastRunAt = usingMock ? acct.last_run_at : (runStatusQuery.data?.last_run_at ?? acct.last_run_at);
 
   const tab = (params.get('tab') as TabKey) || 'today';
+  const view: 'account' | 'newsnow' = params.get('view') === 'newsnow' ? 'newsnow' : 'account';
   const setTab = (k: TabKey) => {
     const next = new URLSearchParams(params);
     next.set('tab', k);
     next.delete('post');
+    next.delete('view');
     setParams(next);
+  };
+  const selectNewsnow = () => {
+    const next = new URLSearchParams(params);
+    next.set('view', 'newsnow');
+    next.delete('post');
+    setParams(next);
+  };
+  const handleSelectAccount = (id: number) => {
+    setSelectedId(id);
+    if (params.get('view')) {
+      const next = new URLSearchParams(params);
+      next.delete('view');
+      setParams(next);
+    }
   };
 
   const ago = lastRunAt ? timeAgo(lastRunAt) : '';
@@ -151,10 +168,16 @@ export function Sentiment() {
           <AccountSidebar
             accounts={usingMock ? [acct] : accounts}
             selectedId={acct.id}
-            onSelect={(id) => setSelectedId(id)}
+            onSelect={handleSelectAccount}
+            view={view}
+            onSelectNewsnow={selectNewsnow}
           />
 
           <div className="space-y-4 min-w-0">
+            {view === 'newsnow' ? (
+              <HotTopicsPanel usingMock={usingMock} />
+            ) : (
+              <>
             <StatusBanner
               status={status as never}
               error={error}
@@ -217,6 +240,8 @@ export function Sentiment() {
                 {tab === 'today' && <TodayTab account={acct} usingMock={usingMock} />}
                 {tab === 'articles' && <ArticlesTab account={acct} usingMock={usingMock} />}
                 {tab === 'briefs' && <BriefsTab account={acct} usingMock={usingMock} />}
+              </>
+            )}
               </>
             )}
           </div>

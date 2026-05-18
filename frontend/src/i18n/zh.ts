@@ -2354,6 +2354,8 @@ const zh = {
                 "empty": "暂无监测任务",
                 "reports": "我的报告",
                 "noKeywords": "未配置检测词",
+                "tools": "工具",
+                "newsnow": "实时热榜",
                 "kinds": {
                   "entity": "公司主体",
                   "legal": "法院诉讼",

@@ -24,6 +24,10 @@ interface Props {
   accounts: SentimentAccount[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  /** 当前视图 — 'newsnow' 时账户选中态隐藏,工具组高亮 */
+  view?: 'account' | 'newsnow';
+  /** 点击"实时热榜"工具项 */
+  onSelectNewsnow?: () => void;
 }
 
 const COLLAPSED_KEY = 'sentiment.sidebar.collapsedNodes';
@@ -33,7 +37,10 @@ function nodeId(...parts: (string | number)[]): string {
   return parts.join('-');
 }
 
-export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
+export function AccountSidebar({
+  accounts, selectedId, onSelect,
+  view = 'account', onSelectNewsnow,
+}: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const activeQ = params.get('q') ?? '';
@@ -93,6 +100,9 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
     setQuery(term);
   };
 
+  // view==='newsnow' 时账户行不显示选中态(但内部 selectedId 仍保留,切回 'account' 视图能恢复)
+  const effectiveSelectedId = view === 'account' ? selectedId : null;
+
   if (!accounts.length) {
     return (
       <aside className="rounded-xl p-4 text-xs text-muted" style={cardStyle}>
@@ -124,7 +134,7 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
                   level={0}
                   expandable
                   expanded={!brandCollapsed}
-                  selected={items.some(a => a.id === selectedId)}
+                  selected={items.some(a => a.id === effectiveSelectedId)}
                   onToggle={() => toggleNode(brandNodeId)}
                   onClick={() => toggleNode(brandNodeId)}
                   label={target}
@@ -134,7 +144,7 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
                   <AccountNode key={a.id}
                     account={a}
                     level={1}
-                    selectedId={selectedId}
+                    selectedId={effectiveSelectedId}
                     activeQ={activeQ}
                     collapsed={collapsed}
                     onToggleNode={toggleNode}
@@ -152,7 +162,7 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
             <AccountNode key={a.id}
               account={a}
               level={0}
-              selectedId={selectedId}
+              selectedId={effectiveSelectedId}
               activeQ={activeQ}
               collapsed={collapsed}
               onToggleNode={toggleNode}
@@ -173,6 +183,20 @@ export function AccountSidebar({ accounts, selectedId, onSelect }: Props) {
           {t('dashboard.sentiment.sidebar.newTask')}
         </Link>
       </footer>
+
+      {/* 工具组 — 与账户监测解耦的辅助功能(实时热榜等)*/}
+      <div className="px-2 pt-3 mt-2" style={{ borderTop: '1px solid var(--border-color)' }}>
+        <div className="px-2 mb-1.5 text-[10px] font-semibold text-secondary uppercase tracking-wider">
+          {t('dashboard.sentiment.sidebar.tools')}
+        </div>
+        <TreeRow
+          level={0}
+          selected={view === 'newsnow'}
+          onClick={() => onSelectNewsnow?.()}
+          label={t('dashboard.sentiment.sidebar.newsnow')}
+          bold
+        />
+      </div>
     </aside>
   );
 }
