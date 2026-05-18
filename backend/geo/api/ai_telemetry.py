@@ -13,6 +13,10 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from pathlib import Path
+import mimetypes
+import uuid
 from sqlalchemy.orm import Session
 
 from datetime import datetime, timedelta, timezone
@@ -31,6 +35,7 @@ from geo.models.ai_telemetry import (
     ResponseOut, RunNowCitation,
     RunNowResult, RunOut, SeedPromptSubmitPayload,
     SelectedQueriesPayload, ShareOfVoiceOut,
+    TopicMediaOut, TopicMediaORM,
     TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
@@ -732,6 +737,138 @@ async def extract_profile_file_endpoint(
     except FileParseError as e:
         raise HTTPException(415, str(e))
     return _do_extract(text, current_user.id)
+
+
+# ─────────────── Topic 媒体素材(图片 / 视频)— 资料上传 弹窗用 ──────────
+#
+# 资料上传:文本类走 /profile/extract*,LLM 抽完直接回填表单,不持久化;
+# 媒体类(图片/视频)走本节 — 落 data/topic_media/{topic_id}/{uuid}.ext + DB 登记,
+# 后续生稿 / 发文时引用。
+
+MEDIA_DIR_NAME = "topic_media"
+MAX_MEDIA_BYTES = 50 * 1024 * 1024   # 单文件 50 MB,视频也够用
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+ALLOWED_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".mkv"}
+ALLOWED_MEDIA_EXTS = ALLOWED_IMAGE_EXTS | ALLOWED_VIDEO_EXTS
+
+
+def _media_root() -> Path:
+    # 沿用项目 data/ 目录约定(DATABASE_URL 默认 sqlite:///./data/geo_checker.db)
+    root = Path(os.environ.get("GEO_DATA_DIR") or "./data") / MEDIA_DIR_NAME
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _serialize_media(m: TopicMediaORM) -> TopicMediaOut:
+    return TopicMediaOut(
+        id=m.id, topic_id=m.topic_id,
+        filename=m.filename or "", kind=m.kind or "image",
+        mime=m.mime or "", size=m.size or 0,
+        url=f"/api/ai-telemetry/topics/{m.topic_id}/media/{m.id}/blob",
+        uploaded_at=m.uploaded_at,
+    )
+
+
+@router.get("/topics/{topic_id}/media", response_model=list[TopicMediaOut])
+def list_topic_media(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_topic_or_404(db, topic_id, current_user.id)
+    rows = (
+        db.query(TopicMediaORM)
+          .filter_by(topic_id=topic_id, user_id=current_user.id)
+          .order_by(TopicMediaORM.uploaded_at.desc())
+          .all()
+    )
+    return [_serialize_media(m) for m in rows]
+
+
+@router.post("/topics/{topic_id}/media", response_model=TopicMediaOut, status_code=201)
+async def upload_topic_media(
+    topic_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """资料上传 — 图片 / 视频。
+
+    400 = 缺文件 / 空 / 太大
+    415 = 后缀不在白名单(.jpg/.png/.mp4/...)
+    """
+    _get_topic_or_404(db, topic_id, current_user.id)
+    if not file or not file.filename:
+        raise HTTPException(400, "请上传一个文件")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_MEDIA_EXTS:
+        raise HTTPException(415, f"不支持的格式 {ext or '未知'};只接受图片(.jpg/.png/.gif/.webp)与视频(.mp4/.mov/.webm)")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "文件为空")
+    if len(raw) > MAX_MEDIA_BYTES:
+        raise HTTPException(
+            400,
+            f"文件过大({len(raw) // 1024 // 1024} MB > {MAX_MEDIA_BYTES // 1024 // 1024} MB 上限)",
+        )
+    kind = "video" if ext in ALLOWED_VIDEO_EXTS else "image"
+    mime = file.content_type or mimetypes.guess_type(file.filename)[0] or ""
+
+    topic_dir = _media_root() / str(topic_id)
+    topic_dir.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    stored_path = topic_dir / stored_name
+    stored_path.write_bytes(raw)
+
+    row = TopicMediaORM(
+        topic_id=topic_id, user_id=current_user.id,
+        filename=file.filename[:255], kind=kind, mime=mime[:128],
+        size=len(raw), storage_path=str(stored_path),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _serialize_media(row)
+
+
+@router.get("/topics/{topic_id}/media/{media_id}/blob")
+def get_topic_media_blob(
+    topic_id: int,
+    media_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """流式回吐媒体文件 — 仅 topic owner 可读."""
+    _get_topic_or_404(db, topic_id, current_user.id)
+    row = db.get(TopicMediaORM, media_id)
+    if not row or row.topic_id != topic_id or row.user_id != current_user.id:
+        raise HTTPException(404, "media not found")
+    p = Path(row.storage_path)
+    if not p.exists():
+        raise HTTPException(410, "文件已丢失")
+    return FileResponse(p, media_type=row.mime or "application/octet-stream",
+                        filename=row.filename or p.name)
+
+
+@router.delete("/topics/{topic_id}/media/{media_id}", status_code=204)
+def delete_topic_media(
+    topic_id: int,
+    media_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _get_topic_or_404(db, topic_id, current_user.id)
+    row = db.get(TopicMediaORM, media_id)
+    if not row or row.topic_id != topic_id or row.user_id != current_user.id:
+        raise HTTPException(404, "media not found")
+    p = Path(row.storage_path)
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError as e:
+        log.warning("failed to unlink media file %s: %s", p, e)
+    db.delete(row)
+    db.commit()
 
 
 # ─────────────── 候选 query 生成(DeepSeek)— 建话题时用 ───────────

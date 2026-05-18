@@ -1,7 +1,12 @@
-// 品牌资料表单(6 大模块)— TopicEditor 和 /dashboard/topics/:id/profile 共用.
+// 品牌资料表单 — TopicEditor 和 /dashboard/topics/:id/profile 共用.
 //
 // 字段定义见 services/aiTelemetryApi.ts 的 BrandProfile.
 // 必填项校验在调用方传 requiredKeys 控制(因为 admin 编辑器 vs 用户提交审核要求不同).
+//
+// 2026-05-18:
+//   - 5 节由竖排改为顶部 tab 切换,缩短单页长度
+//   - 别名(target_aliases)从外层独立 section 移入「基础标识」tab,
+//     调用方可选传 `aliases` + `onAliasesChange`(只有 TopicEditor 用)
 
 import { useState } from 'react';
 import type { BrandProfile } from '../services/aiTelemetryApi';
@@ -28,94 +33,167 @@ export function profileMissingFields(profile: BrandProfile, required = PROFILE_R
   return required.filter(k => !isProfileFieldFilled(profile, k));
 }
 
+type SectionKey = 'basic' | 'subject' | 'service' | 'story' | 'extra';
+
+const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'basic',   label: '一、基础标识' },
+  { key: 'subject', label: '二、品牌主体信息' },
+  { key: 'service', label: '三、产品 / 服务核心信息' },
+  { key: 'story',   label: '四、品牌故事与情感素材' },
+  { key: 'extra',   label: '五、补充素材与创作边界' },
+];
+
 interface ProfileFormProps {
   profile: BrandProfile;
   onChange: (p: BrandProfile) => void;
   readOnly?: boolean;
   requiredKeys?: (keyof BrandProfile)[];
+  // 别名(可选)— 仅 TopicEditor 用;不传则不在「基础标识」里渲染别名输入。
+  // 用文本(逗号 / 换行分隔)是因为外层就是这么持久化的,直接复用语义,
+  // 父组件 split → string[] 自己负责。
+  aliasesText?: string;
+  onAliasesTextChange?: (v: string) => void;
+  aliasesCount?: number;
+  aliasesLabel?: string;
+  aliasesPlaceholder?: string;
+  aliasesHint?: string;
 }
 
 export function BrandProfileForm({
   profile, onChange, readOnly = false, requiredKeys = PROFILE_REQUIRED_FIELDS,
+  aliasesText, onAliasesTextChange, aliasesCount,
+  aliasesLabel, aliasesPlaceholder, aliasesHint,
 }: ProfileFormProps) {
   const req = new Set(requiredKeys);
   const setField = <K extends keyof BrandProfile>(key: K, value: BrandProfile[K]) => {
     onChange({ ...profile, [key]: value });
   };
+  const [tab, setTab] = useState<SectionKey>('basic');
+  const showAliases = typeof aliasesText === 'string' && typeof onAliasesTextChange === 'function';
+
   return (
-    <div className="space-y-6">
-      <Section title="一、基础标识">
-        <Pair>
-          <TextRow label="名称" required={req.has('profile_name')} readOnly={readOnly}
-                   value={profile.profile_name} onChange={v => setField('profile_name', v)} />
-          <TextRow label="公司 / 品牌全称" required={req.has('company_full_name')} readOnly={readOnly}
-                   value={profile.company_full_name} onChange={v => setField('company_full_name', v)} />
-        </Pair>
-        <Pair>
-          <TextRow label="公司 / 品牌简称" required={req.has('company_short_name')} readOnly={readOnly}
-                   value={profile.company_short_name} onChange={v => setField('company_short_name', v)} />
-          <TextRow label="所属行业 / 赛道" required={req.has('industry')} readOnly={readOnly}
-                   value={profile.industry} onChange={v => setField('industry', v)} />
-        </Pair>
-        <Pair>
-          <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
-                   value={profile.service_geo} onChange={v => setField('service_geo', v)} />
-          <span />
-        </Pair>
-        <TagsRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
-                 value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
-      </Section>
+    <div className="space-y-3">
+      <div className="flex gap-1 border-b overflow-x-auto"
+           style={{ borderColor: 'var(--border-color)' }}>
+        {SECTIONS.map(s => (
+          <button key={s.key} type="button" onClick={() => setTab(s.key)}
+                  className="px-3 py-2 text-sm whitespace-nowrap -mb-px"
+                  style={{
+                    borderBottom: tab === s.key ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                    color: tab === s.key ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-      <Section title="二、品牌主体信息">
-        <Pair>
-          <TextRow label="公司 / 团队规模(选填)" required={false} readOnly={readOnly}
-                   value={profile.team_size} onChange={v => setField('team_size', v)} />
-          <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
-                   value={profile.founded_year} onChange={v => setField('founded_year', v)} />
-        </Pair>
-        <TagsRow label="核心荣誉 / 背书资质" required={req.has('core_credentials')} readOnly={readOnly}
-                 value={profile.core_credentials} onChange={v => setField('core_credentials', v)} />
-        <TagsRow label="品牌差异化标签(3-5 个)" required={req.has('brand_diff_tags')} readOnly={readOnly}
-                 value={profile.brand_diff_tags} onChange={v => setField('brand_diff_tags', v)} />
-      </Section>
+      <section className="rounded-md p-4"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <div className="space-y-3">
+          {tab === 'basic' && (
+            <>
+              <Pair>
+                <TextRow label="名称" required={req.has('profile_name')} readOnly={readOnly}
+                         value={profile.profile_name} onChange={v => setField('profile_name', v)} />
+                <TextRow label="公司 / 品牌全称" required={req.has('company_full_name')} readOnly={readOnly}
+                         value={profile.company_full_name} onChange={v => setField('company_full_name', v)} />
+              </Pair>
+              <Pair>
+                <TextRow label="公司 / 品牌简称" required={req.has('company_short_name')} readOnly={readOnly}
+                         value={profile.company_short_name} onChange={v => setField('company_short_name', v)} />
+                <TextRow label="所属行业 / 赛道" required={req.has('industry')} readOnly={readOnly}
+                         value={profile.industry} onChange={v => setField('industry', v)} />
+              </Pair>
+              <Pair>
+                <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
+                         value={profile.service_geo} onChange={v => setField('service_geo', v)} />
+                <span />
+              </Pair>
+              <TagsRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
+                       value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
+              {showAliases && (
+                <div>
+                  <Label text={aliasesLabel || '别名 / 简称(逗号分隔,最多 10 个)'} required={false} />
+                  <input type="text" disabled={readOnly}
+                         value={aliasesText}
+                         onChange={e => onAliasesTextChange!(e.target.value)}
+                         placeholder={aliasesPlaceholder}
+                         className="w-full text-sm px-3 py-2 rounded-md"
+                         style={{
+                           background: 'var(--bg-input)', color: 'var(--text-primary)',
+                           border: '1px solid var(--border-color)',
+                           opacity: readOnly ? 0.6 : 1,
+                         }} />
+                  {(aliasesHint || typeof aliasesCount === 'number') && (
+                    <span className="block mt-1 text-xs text-muted">
+                      {aliasesHint || `已识别 ${aliasesCount} 个别名`}
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
-      <Section title="三、产品 / 服务核心信息">
-        <TextAreaRow label="核心服务概述" required={req.has('core_service_overview')} readOnly={readOnly}
-                     value={profile.core_service_overview} onChange={v => setField('core_service_overview', v)} />
-        <TagsRow label="服务核心特点(分点)" required={req.has('service_features')} readOnly={readOnly}
-                 value={profile.service_features} onChange={v => setField('service_features', v)} />
-        <TagsRow label="服务关键流程 / 环节" required={req.has('service_process')} readOnly={readOnly}
-                 value={profile.service_process} onChange={v => setField('service_process', v)} />
-        <TagsRow label="服务覆盖场景 / 客户类型" required={req.has('target_scenarios')} readOnly={readOnly}
-                 value={profile.target_scenarios} onChange={v => setField('target_scenarios', v)} />
-        <TagsRow label="服务交付保障(选填)" required={false} readOnly={readOnly}
-                 value={profile.service_guarantees} onChange={v => setField('service_guarantees', v)} />
-      </Section>
+          {tab === 'subject' && (
+            <>
+              <Pair>
+                <TextRow label="公司 / 团队规模(选填)" required={false} readOnly={readOnly}
+                         value={profile.team_size} onChange={v => setField('team_size', v)} />
+                <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
+                         value={profile.founded_year} onChange={v => setField('founded_year', v)} />
+              </Pair>
+              <TagsRow label="核心荣誉 / 背书资质" required={req.has('core_credentials')} readOnly={readOnly}
+                       value={profile.core_credentials} onChange={v => setField('core_credentials', v)} />
+              <TagsRow label="品牌差异化标签(3-5 个)" required={req.has('brand_diff_tags')} readOnly={readOnly}
+                       value={profile.brand_diff_tags} onChange={v => setField('brand_diff_tags', v)} />
+            </>
+          )}
 
-      <Section title="四、品牌故事与情感素材">
-        <TextAreaRow label="品牌故事 / 成立初衷" required={req.has('brand_story')} readOnly={readOnly}
-                     value={profile.brand_story} onChange={v => setField('brand_story', v)} />
-        <TextAreaRow label="核心人物故事(选填)" required={false} readOnly={readOnly}
-                     value={profile.key_person_story} onChange={v => setField('key_person_story', v)} />
-        <TagsRow label="典型案例 / 客户故事(脱敏)(选填)" required={false} readOnly={readOnly}
-                 value={profile.case_stories} onChange={v => setField('case_stories', v)} />
-        <TextAreaRow label="品牌价值观 / 服务理念" required={req.has('brand_values')} readOnly={readOnly}
-                     value={profile.brand_values} onChange={v => setField('brand_values', v)} />
-      </Section>
+          {tab === 'service' && (
+            <>
+              <TextAreaRow label="核心服务概述" required={req.has('core_service_overview')} readOnly={readOnly}
+                           value={profile.core_service_overview} onChange={v => setField('core_service_overview', v)} />
+              <TagsRow label="服务核心特点(分点)" required={req.has('service_features')} readOnly={readOnly}
+                       value={profile.service_features} onChange={v => setField('service_features', v)} />
+              <TagsRow label="服务关键流程 / 环节" required={req.has('service_process')} readOnly={readOnly}
+                       value={profile.service_process} onChange={v => setField('service_process', v)} />
+              <TagsRow label="服务覆盖场景 / 客户类型" required={req.has('target_scenarios')} readOnly={readOnly}
+                       value={profile.target_scenarios} onChange={v => setField('target_scenarios', v)} />
+              <TagsRow label="服务交付保障(选填)" required={false} readOnly={readOnly}
+                       value={profile.service_guarantees} onChange={v => setField('service_guarantees', v)} />
+            </>
+          )}
 
-      <Section title="五、补充素材与创作边界">
-        <Pair>
-          <TextRow label="品牌 Slogan / 宣传语(选填)" required={false} readOnly={readOnly}
-                   value={profile.brand_slogan} onChange={v => setField('brand_slogan', v)} />
-          <span />
-        </Pair>
-        <TagsRow label="可提供的素材类型(选填)" required={false} readOnly={readOnly}
-                 value={profile.available_materials} onChange={v => setField('available_materials', v)} />
-        <TextAreaRow label="本次内容想传递的核心信息" required={req.has('core_message')} readOnly={readOnly}
-                     value={profile.core_message} onChange={v => setField('core_message', v)} />
-        <TextAreaRow label="其他补充说明(选填)" required={false} readOnly={readOnly}
-                     value={profile.extra_notes} onChange={v => setField('extra_notes', v)} />
-      </Section>
+          {tab === 'story' && (
+            <>
+              <TextAreaRow label="品牌故事 / 成立初衷" required={req.has('brand_story')} readOnly={readOnly}
+                           value={profile.brand_story} onChange={v => setField('brand_story', v)} />
+              <TextAreaRow label="核心人物故事(选填)" required={false} readOnly={readOnly}
+                           value={profile.key_person_story} onChange={v => setField('key_person_story', v)} />
+              <TagsRow label="典型案例 / 客户故事(脱敏)(选填)" required={false} readOnly={readOnly}
+                       value={profile.case_stories} onChange={v => setField('case_stories', v)} />
+              <TextAreaRow label="品牌价值观 / 服务理念" required={req.has('brand_values')} readOnly={readOnly}
+                           value={profile.brand_values} onChange={v => setField('brand_values', v)} />
+            </>
+          )}
+
+          {tab === 'extra' && (
+            <>
+              <Pair>
+                <TextRow label="品牌 Slogan / 宣传语(选填)" required={false} readOnly={readOnly}
+                         value={profile.brand_slogan} onChange={v => setField('brand_slogan', v)} />
+                <span />
+              </Pair>
+              <TagsRow label="可提供的素材类型(选填)" required={false} readOnly={readOnly}
+                       value={profile.available_materials} onChange={v => setField('available_materials', v)} />
+              <TextAreaRow label="本次内容想传递的核心信息" required={req.has('core_message')} readOnly={readOnly}
+                           value={profile.core_message} onChange={v => setField('core_message', v)} />
+              <TextAreaRow label="其他补充说明(选填)" required={false} readOnly={readOnly}
+                           value={profile.extra_notes} onChange={v => setField('extra_notes', v)} />
+            </>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -123,16 +201,6 @@ export function BrandProfileForm({
 function Pair({ children }: { children: React.ReactNode }) {
   // md+ 两列网格,sm 单列。空槽位塞 <span /> 占位即可
   return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>;
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-md p-4"
-             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <h3 className="text-sm font-semibold text-primary mb-3">{title}</h3>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
 }
 
 function Label({ text, required }: { text: string; required: boolean }) {

@@ -166,7 +166,8 @@ export function TopicProfile() {
       {tab === 'profile' && (
         <div className="space-y-4">
           <ProfileImporter profile={profile} onApply={setProfile}
-                           token={token} disabled={!isEditable} />
+                           token={token} disabled={!isEditable}
+                           topicId={topic.id} />
           <BrandProfileForm profile={profile} onChange={setProfile}
                             readOnly={!isEditable} requiredKeys={REQUIRED_FIELDS} />
         </div>

@@ -49,6 +49,18 @@ export interface ExtractProfileResp {
   seed_suggestions?: string[];
 }
 
+// 2026-05-18 — topic 媒体素材(图片 / 视频),「资料上传」弹窗里的非文本资料
+export interface TopicMedia {
+  id: number;
+  topic_id: number;
+  filename: string;
+  kind: 'image' | 'video';
+  mime: string;
+  size: number;
+  url: string;       // 后端给的 /topics/{id}/media/{mid}/blob,带 Bearer 才能读
+  uploaded_at: string;
+}
+
 export const topicProfileApi = {
   async updateProfile(topicId: number, profile: BrandProfile, token: string): Promise<Topic> {
     return request<Topic>('PUT', `/topics/${topicId}/profile`, token, profile);
@@ -84,5 +96,26 @@ export const topicProfileApi = {
       throw new Error(msg);
     }
     return resp.json();
+  },
+
+  async listMedia(topicId: number, token: string): Promise<TopicMedia[]> {
+    return request<TopicMedia[]>('GET', `/topics/${topicId}/media`, token);
+  },
+  async uploadMedia(topicId: number, file: File, token: string): Promise<TopicMedia> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    const resp = await fetch(`${API_BASE}/ai-telemetry/topics/${topicId}/media`, {
+      method: 'POST',
+      headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
+      body: fd,
+    });
+    if (!resp.ok) {
+      const msg = await readApiError(resp, '上传失败');
+      throw new Error(msg);
+    }
+    return resp.json();
+  },
+  async deleteMedia(topicId: number, mediaId: number, token: string): Promise<void> {
+    await request<void>('DELETE', `/topics/${topicId}/media/${mediaId}`, token);
   },
 };

@@ -2364,6 +2364,7 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
             </p>
             <ProfileImporter profile={profile} onApply={setProfile}
                              token={token} disabled={readOnly}
+                             topicId={initial?.id}
                              onApplySeeds={suggestions => {
                                // LLM 顺手给的种子词候选 — 跟用户已填的合并去重(用户已填的优先保留)
                                setSeeds(prev => {
@@ -2375,34 +2376,19 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
                                  return merged;
                                });
                              }} />
-            {/* 6 模块资料表单(名称/简称/行业 同时是 topic.name/target/industry) */}
+            {/* 6 模块资料表单(名称/简称/行业 同时是 topic.name/target/industry)
+                别名(target_aliases)已收纳到「基础标识」tab 内,不再单独成节 */}
             <BrandProfileForm
               profile={profile}
               onChange={setProfile}
               readOnly={readOnly}
+              aliasesText={aliasesText}
+              onAliasesTextChange={setAliasesText}
+              aliasesCount={aliases.length}
+              aliasesLabel={t('dashboard.aiTelemetry.form.aliases')}
+              aliasesPlaceholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
+              aliasesHint={t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
             />
-            {/* 资料里没有 aliases — 单独留 */}
-            <section
-              className="rounded-md p-4"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-            >
-              <h3 className="text-sm font-semibold text-primary mb-3">
-                {t('dashboard.aiTelemetry.form.aliasesSectionTitle')}
-              </h3>
-              <label className="block">
-                <span className="text-xs text-secondary">{t('dashboard.aiTelemetry.form.aliases')}</span>
-                <input
-                  type="text" value={aliasesText} onChange={e => setAliasesText(e.target.value)}
-                  placeholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
-                  className="mt-1 w-full px-3 py-1.5 rounded-md text-sm"
-                  disabled={readOnly}
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-                />
-                <span className="text-xs text-muted">
-                  {t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
-                </span>
-              </label>
-            </section>
           </div>
         )}
 

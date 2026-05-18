@@ -1,29 +1,37 @@
-// AI 智能填充 — 拖入文件 / 粘贴文本 → 后端 LLM 抽取 BrandProfile → 合并回资料表单.
+// 资料上传 — 两类资料分两个 sub-tab.
 //
-// 后端路由:POST /api/ai-telemetry/profile/extract (geo/api/ai_telemetry.py)
-// 复用同一个 DeepSeek 通道(直连 + OpenRouter fallback)。后端没配 key 时返回 503,
-// 这里弹错误提示给用户而不是静默吞。
+// ① 文本资料(.txt / .md / .docx / 文本粘贴):走 LLM 抽取,自动回填 BrandProfile.
+//    后端:POST /api/ai-telemetry/profile/extract(JSON)/ /profile/extract-file(multipart)
+//    没配 DEEPSEEK_API_KEY 时后端 503,前端弹错误而不是静默吞.
 //
-// 合并策略:
-//   - 「填充空白」:只填当前资料里为空的字段(数组空、字符串为空白),不动用户已经手填的
+// ② 图片 / 视频:落服务器(data/topic_media/{topic_id}/),作为后续生稿 / 发文的素材库.
+//    后端:POST /topics/{id}/media,GET /topics/{id}/media,DELETE /topics/{id}/media/{mid}.
+//    需要 topicId — 新建 topic 时还没有 ID,这一栏会显示「先保存主题以启用素材上传」.
+//
+// 合并策略(仅文本):
+//   - 「填充空白」:只填当前资料里为空的字段
 //   - 「全部覆盖」:LLM 抽到的非空值都覆盖现有值
-// 默认是「填充空白」,避免一不小心把用户精心写好的内容冲掉。
-//
-// 交互:
-//   - 默认展开,免得用户看不到拖放区
-//   - 拖入文件后自动用「填充空白」调用一次后端;粘贴文本走 textarea + 手动按钮
+//   默认是「填充空白」,避免覆盖用户已经手填的内容.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BrandProfile } from '../services/aiTelemetryApi';
-import { topicProfileApi } from '../services/topicProfileApi';
+import { topicProfileApi, type TopicMedia } from '../services/topicProfileApi';
 
-// 收窄到三种格式 — txt/md 客户端 file.text() 直读,docx 二进制走后端解析。
-// .pdf / .doc / .csv / .json 等都不接受;PDF 扫描件常抽不到字反而误导用户。
+// 文本类 — 客户端 file.text() 读得到的就直接走 JSON 路径,docx 走 multipart 后端解析.
+// PDF / .doc 都不接受;扫描版 PDF 抽不到字反而误导用户.
 const TEXT_EXTS = ['.txt', '.md'];
 const BINARY_EXTS = ['.docx'];
-const ACCEPT_EXTS = [...TEXT_EXTS, ...BINARY_EXTS];
+const ACCEPT_TEXT_EXTS = [...TEXT_EXTS, ...BINARY_EXTS];
 const MAX_TEXT_LEN = 60000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+// 媒体类 — 跟后端 ALLOWED_MEDIA_EXTS 对齐
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+const VIDEO_EXTS = ['.mp4', '.mov', '.webm', '.m4v', '.mkv'];
+const ACCEPT_MEDIA_EXTS = [...IMAGE_EXTS, ...VIDEO_EXTS];
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+
+type SubTab = 'text' | 'media';
 
 interface ProfileImporterProps {
   profile: BrandProfile;
@@ -31,20 +39,87 @@ interface ProfileImporterProps {
   token: string;
   disabled?: boolean;
   // 可选:把 LLM 顺手给的种子提示词候选合并到种子词步骤。
-  // 调用方负责去重 — Importer 拿到的就是 LLM 清洗后的清单。
-  // TopicEditor 里有种子 state,会传;TopicProfile 的种子在另一个 tab + 后端表里,不传。
+  onApplySeeds?: (suggestions: string[]) => void;
+  // 可选:topic ID — 没有则禁用「图片 / 视频」子页,提示先保存 topic.
+  topicId?: number;
+}
+
+export function ProfileImporter({ profile, onApply, token, disabled, onApplySeeds, topicId }: ProfileImporterProps) {
+  const [tab, setTab] = useState<SubTab>('text');
+  const [open, setOpen] = useState(true);
+
+  return (
+    <section className="rounded-md p-4"
+             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <header className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-primary">资料上传</h3>
+          <p className="text-xs text-muted mt-0.5">
+            文本资料 AI 解析后自动回填表单;图片 / 视频 落服务器作为后续发文素材库。
+          </p>
+        </div>
+        <button type="button" onClick={() => setOpen(o => !o)}
+                disabled={disabled}
+                className="text-xs px-2.5 py-1 rounded-md"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                         opacity: disabled ? 0.5 : 1 }}>
+          {open ? '收起' : '展开'}
+        </button>
+      </header>
+
+      {open && (
+        <>
+          <div className="flex gap-1 border-b mb-3" style={{ borderColor: 'var(--border-color)' }}>
+            <SubTabBtn active={tab === 'text'} onClick={() => setTab('text')}>文本资料(自动回填)</SubTabBtn>
+            <SubTabBtn active={tab === 'media'} onClick={() => setTab('media')}>图片 / 视频(发文素材)</SubTabBtn>
+          </div>
+
+          {tab === 'text' && (
+            <TextSection profile={profile} onApply={onApply} token={token}
+                         disabled={disabled} onApplySeeds={onApplySeeds} />
+          )}
+          {tab === 'media' && (
+            <MediaSection topicId={topicId} token={token} disabled={disabled} />
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function SubTabBtn({ active, onClick, children }: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick}
+            className="px-3 py-1.5 text-xs -mb-px"
+            style={{
+              borderBottom: active ? '2px solid var(--accent-primary)' : '2px solid transparent',
+              color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
+            }}>
+      {children}
+    </button>
+  );
+}
+
+
+// ─────────────── 子页 ① 文本资料 ────────────────────────────
+
+interface TextSectionProps {
+  profile: BrandProfile;
+  onApply: (next: BrandProfile) => void;
+  token: string;
+  disabled?: boolean;
   onApplySeeds?: (suggestions: string[]) => void;
 }
 
-export function ProfileImporter({ profile, onApply, token, disabled, onApplySeeds }: ProfileImporterProps) {
+function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSectionProps) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
-  const [open, setOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // 单一可信源:当前 profile 通过 ref 暴露给 callExtract,避免 merge 用旧 props。
   // 拖入后立刻 setText + 异步 callExtract,closure 抓的 profile 是回调时的 props,
   // 父组件 re-render 后 profile 新值靠 ref 取。
   const profileRef = useRef(profile);
@@ -109,7 +184,7 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
       } else if (ext === '.pdf') {
         setErr('暂不支持 PDF,请复制内容粘贴到下方文本框,或另存为 .docx / .txt / .md');
       } else {
-        setErr(`不支持的文件类型(${ext || '未知'});只接受 ${ACCEPT_EXTS.join(' / ')}`);
+        setErr(`不支持的文件类型(${ext || '未知'});只接受 ${ACCEPT_TEXT_EXTS.join(' / ')}`);
       }
       return;
     }
@@ -119,7 +194,6 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
     }
 
     if (isBinary) {
-      // PDF / Word — 二进制,前端 file.text() 拿不到字,直接 multipart 给后端
       setText('');
       setErr(null);
       setOkMsg(`已上传 ${file.name}(${Math.floor(file.size / 1024)} KB),后端正在解析…`);
@@ -127,7 +201,6 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
       return;
     }
 
-    // 文本类 — 客户端读出后塞到 textarea,顺便走旧的 /profile/extract JSON 路径
     try {
       const content = await file.text();
       const trimmed = content.length > MAX_TEXT_LEN ? content.slice(0, MAX_TEXT_LEN) : content;
@@ -155,80 +228,249 @@ export function ProfileImporter({ profile, onApply, token, disabled, onApplySeed
   };
 
   return (
-    <section className="rounded-md p-4"
-             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <header className="flex items-center justify-between gap-3 mb-2">
-        <div>
-          <h3 className="text-sm font-semibold text-primary">AI 智能填充</h3>
-          <p className="text-xs text-muted mt-0.5">
-            拖入 .txt / .md / .docx,或粘贴公司简介 / 官网文案 / PRD,AI 帮你自动填好下面 6 大模块。
-          </p>
-        </div>
-        <button type="button" onClick={() => setOpen(o => !o)}
-                disabled={disabled}
-                className="text-xs px-2.5 py-1 rounded-md"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                         opacity: disabled ? 0.5 : 1 }}>
-          {open ? '收起' : '展开'}
-        </button>
-      </header>
+    <div className="space-y-3">
+      <div onDragOver={e => { e.preventDefault(); if (!disabled && !busy) setDrag(true); }}
+           onDragLeave={() => setDrag(false)}
+           onDrop={onDrop}
+           onClick={() => fileInputRef.current?.click()}
+           className="rounded-md p-4 text-center text-xs cursor-pointer transition-colors"
+           style={{
+             border: `1px dashed ${drag ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+             background: drag ? 'rgba(99,102,241,0.06)' : 'var(--bg-input)',
+             color: 'var(--text-secondary)',
+             opacity: disabled ? 0.5 : 1,
+           }}>
+        {drag ? '松开以读取' : (
+          <>
+            拖入文件或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
+            <span className="block text-muted mt-1">
+              支持 .txt / .md / .docx;PDF / Word(.doc)请复制内容粘贴到下方
+            </span>
+          </>
+        )}
+        <input ref={fileInputRef} type="file" accept={ACCEPT_TEXT_EXTS.join(',')}
+               className="hidden" onChange={onPickFile} disabled={disabled || busy} />
+      </div>
 
-      {open && (
-        <div className="space-y-3">
-          <div onDragOver={e => { e.preventDefault(); if (!disabled && !busy) setDrag(true); }}
-               onDragLeave={() => setDrag(false)}
-               onDrop={onDrop}
-               onClick={() => fileInputRef.current?.click()}
-               className="rounded-md p-4 text-center text-xs cursor-pointer transition-colors"
-               style={{
-                 border: `1px dashed ${drag ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                 background: drag ? 'rgba(99,102,241,0.06)' : 'var(--bg-input)',
-                 color: 'var(--text-secondary)',
-                 opacity: disabled ? 0.5 : 1,
-               }}>
-            {drag ? '松开以读取' : (
-              <>
-                拖入文件或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
-                <span className="block text-muted mt-1">
-                  支持 .txt / .md / .docx;PDF / Word(.doc)请复制内容粘贴到下方
-                </span>
-              </>
-            )}
-            <input ref={fileInputRef} type="file" accept={ACCEPT_EXTS.join(',')}
-                   className="hidden" onChange={onPickFile} disabled={disabled || busy} />
-          </div>
-
-          <textarea value={text} onChange={e => setText(e.target.value.slice(0, MAX_TEXT_LEN))}
-                    rows={6}
-                    placeholder="或直接粘贴公司简介 / 官网文案 / PRD,AI 会从中抽取 6 大模块字段..."
-                    disabled={disabled || busy}
-                    className="w-full text-sm px-3 py-2 rounded-md"
-                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                             border: '1px solid var(--border-color)' }} />
-          <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-            <span className="text-muted">{text.length.toLocaleString()} / {MAX_TEXT_LEN.toLocaleString()} 字</span>
-            <div className="flex items-center gap-2">
-              <button type="button" disabled={disabled || busy || text.trim().length < 10}
-                      onClick={() => callExtract(text, 'fill-blank')}
-                      className="text-xs px-3 py-1.5 rounded-md text-white"
-                      style={{ background: 'var(--accent-primary)',
-                               opacity: (disabled || busy || text.trim().length < 10) ? 0.5 : 1 }}>
-                {busy ? '解析中…' : 'AI 解析'}
-              </button>
-              <button type="button" disabled={disabled || busy || text.trim().length < 10}
-                      onClick={() => callExtract(text, 'overwrite')}
-                      className="text-xs px-3 py-1.5 rounded-md"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                               opacity: (disabled || busy || text.trim().length < 10) ? 0.5 : 1 }}>
-                全部覆盖
-              </button>
-            </div>
-          </div>
-          {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
-          {okMsg && <div className="text-xs" style={{ color: '#10b981' }}>{okMsg}</div>}
+      <textarea value={text} onChange={e => setText(e.target.value.slice(0, MAX_TEXT_LEN))}
+                rows={6}
+                placeholder="或直接粘贴公司简介 / 官网文案 / PRD,AI 会从中抽取 6 大模块字段..."
+                disabled={disabled || busy}
+                className="w-full text-sm px-3 py-2 rounded-md"
+                style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                         border: '1px solid var(--border-color)' }} />
+      <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+        <span className="text-muted">{text.length.toLocaleString()} / {MAX_TEXT_LEN.toLocaleString()} 字</span>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={disabled || busy || text.trim().length < 10}
+                  onClick={() => callExtract(text, 'fill-blank')}
+                  className="text-xs px-3 py-1.5 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)',
+                           opacity: (disabled || busy || text.trim().length < 10) ? 0.5 : 1 }}>
+            {busy ? '解析中…' : 'AI 解析'}
+          </button>
+          <button type="button" disabled={disabled || busy || text.trim().length < 10}
+                  onClick={() => callExtract(text, 'overwrite')}
+                  className="text-xs px-3 py-1.5 rounded-md"
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                           opacity: (disabled || busy || text.trim().length < 10) ? 0.5 : 1 }}>
+            全部覆盖
+          </button>
         </div>
+      </div>
+      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+      {okMsg && <div className="text-xs" style={{ color: '#10b981' }}>{okMsg}</div>}
+    </div>
+  );
+}
+
+
+// ─────────────── 子页 ② 图片 / 视频 ────────────────────────
+
+interface MediaSectionProps {
+  topicId?: number;
+  token: string;
+  disabled?: boolean;
+}
+
+function MediaSection({ topicId, token, disabled }: MediaSectionProps) {
+  const [list, setList] = useState<TopicMedia[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [drag, setDrag] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const refresh = async () => {
+    if (!topicId) return;
+    setLoading(true); setErr(null);
+    try {
+      const items = await topicProfileApi.listMedia(topicId, token);
+      setList(items);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { if (topicId) refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [topicId]);
+
+  const upload = async (file: File) => {
+    if (!topicId || busy || disabled) return;
+    const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
+    if (!ACCEPT_MEDIA_EXTS.includes(ext)) {
+      setErr(`不支持的格式 ${ext || '未知'};只接受 ${ACCEPT_MEDIA_EXTS.join(' / ')}`);
+      return;
+    }
+    if (file.size > MAX_MEDIA_BYTES) {
+      setErr(`文件过大(${Math.floor(file.size / 1024 / 1024)} MB > ${MAX_MEDIA_BYTES / 1024 / 1024} MB 上限)`);
+      return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      const m = await topicProfileApi.uploadMedia(topicId, file, token);
+      setList(prev => [m, ...prev]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (mediaId: number) => {
+    if (!topicId || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await topicProfileApi.deleteMedia(topicId, mediaId, token);
+      setList(prev => prev.filter(m => m.id !== mediaId));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDrag(false);
+    if (disabled || busy || !topicId) return;
+    const files = Array.from(e.dataTransfer.files || []);
+    files.forEach(f => { void upload(f); });
+  };
+
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(f => { void upload(f); });
+    e.target.value = '';
+  };
+
+  if (!topicId) {
+    return (
+      <div className="rounded-md p-4 text-xs text-secondary"
+           style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}>
+        请先在「基础标识」中填好资料并保存主题;主题创建后,这里可以上传图片 / 视频作为后续发文素材库。
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div onDragOver={e => { e.preventDefault(); if (!disabled && !busy) setDrag(true); }}
+           onDragLeave={() => setDrag(false)}
+           onDrop={onDrop}
+           onClick={() => fileInputRef.current?.click()}
+           className="rounded-md p-4 text-center text-xs cursor-pointer transition-colors"
+           style={{
+             border: `1px dashed ${drag ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+             background: drag ? 'rgba(99,102,241,0.06)' : 'var(--bg-input)',
+             color: 'var(--text-secondary)',
+             opacity: (disabled || busy) ? 0.5 : 1,
+           }}>
+        {drag ? '松开以上传' : (
+          <>
+            拖入图片 / 视频或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
+            <span className="block text-muted mt-1">
+              支持 {IMAGE_EXTS.join(' / ')} / {VIDEO_EXTS.join(' / ')};单文件最大 {MAX_MEDIA_BYTES / 1024 / 1024} MB
+            </span>
+          </>
+        )}
+        <input ref={fileInputRef} type="file" multiple
+               accept={ACCEPT_MEDIA_EXTS.join(',')}
+               className="hidden" onChange={onPickFiles} disabled={disabled || busy} />
+      </div>
+
+      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+      {busy && <div className="text-xs text-muted">上传中…</div>}
+
+      {loading && <div className="text-xs text-muted">加载中…</div>}
+
+      {list.length === 0 && !loading && (
+        <div className="text-xs text-muted py-4 text-center">尚未上传任何素材</div>
       )}
-    </section>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {list.map(m => (
+          <MediaCard key={m.id} media={m} token={token}
+                     onRemove={() => remove(m.id)}
+                     disabled={disabled || busy} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MediaCard({ media, token, onRemove, disabled }: {
+  media: TopicMedia; token: string; onRemove: () => void; disabled?: boolean;
+}) {
+  // 后端 blob 路由要 Bearer,直接 <img src> 拿不到 — 用 fetch + objectURL.
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+    (async () => {
+      try {
+        const resp = await fetch(media.url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        if (cancelled) return;
+        createdUrl = URL.createObjectURL(blob);
+        setBlobUrl(createdUrl);
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [media.url, token]);
+
+  return (
+    <div className="relative rounded-md overflow-hidden group"
+         style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+      <div className="aspect-square flex items-center justify-center text-xs text-muted">
+        {err && <span style={{ color: '#ef4444' }}>{err}</span>}
+        {!err && !blobUrl && <span>…</span>}
+        {!err && blobUrl && media.kind === 'image' && (
+          <img src={blobUrl} alt={media.filename}
+               className="w-full h-full object-cover" />
+        )}
+        {!err && blobUrl && media.kind === 'video' && (
+          <video src={blobUrl} controls className="w-full h-full object-cover" />
+        )}
+      </div>
+      <div className="px-2 py-1 text-[10px] text-secondary truncate"
+           title={media.filename}>
+        {media.filename}
+      </div>
+      <button type="button" onClick={onRemove} disabled={disabled}
+              className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }}>
+        删除
+      </button>
+    </div>
   );
 }
 

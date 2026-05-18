@@ -289,6 +289,36 @@ class TopicGeneratedDocORM(Base):
     source = Column(String(length=8), nullable=False, default="ai", index=True)
 
 
+class TopicMediaORM(Base):
+    """v3.2(2026-05-18)— 用户为某 topic 上传的图片 / 视频素材.
+
+    资料上传弹窗里两类东西:
+      - 文本类(.txt/.md/.docx/PDF):走 /profile/extract*,LLM 抽完直接回填资料表单,
+        不持久化原文件;
+      - 媒体类(.jpg/.png/.mp4/...):走本表 — 直接落盘 + 数据库登记一条,
+        后续做内容生稿 / 发文时作为素材库引用。
+
+    storage_path 是 data/topic_media/{topic_id}/{uuid}.{ext} 的相对路径;
+    GET /media/{id}/blob 流式返回时拼回根目录读。
+    """
+    __tablename__ = "topic_media"
+    __table_args__ = (
+        Index("idx_topic_media_topic", "topic_id"),
+        Index("idx_topic_media_user", "user_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    filename = Column(String(length=255), nullable=False, default="")  # 用户上传时的原始文件名
+    kind = Column(String(length=8), nullable=False, default="image")    # "image" | "video"
+    mime = Column(String(length=128), nullable=False, default="")
+    size = Column(Integer, nullable=False, default=0)                   # 字节数
+    storage_path = Column(String(length=512), nullable=False, default="")
+    uploaded_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 # ─────────────────────────── Schemas ──────────────────────────
 
 
@@ -583,6 +613,19 @@ class RejectDocPayload(BaseModel):
 
 class SelectDocsPayload(BaseModel):
     doc_ids: list[int] = Field(..., min_length=1, max_length=100)
+
+
+class TopicMediaOut(BaseModel):
+    """topic 的图片 / 视频素材 — 给前端 GET /topics/{id}/media 用."""
+    id: int
+    topic_id: int
+    filename: str
+    kind: str           # "image" | "video"
+    mime: str
+    size: int
+    # 前端拉文件的 URL — 跟 /blob 路由对齐,不暴露 storage_path
+    url: str
+    uploaded_at: datetime
 
 
 class TopicPayload(BaseModel):
