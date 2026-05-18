@@ -1,26 +1,18 @@
 """Qwen (通义千问) browser adapter — automates tongyi.aliyun.com.
 
-⚠️ DOM 适配迁移中(2026-05-18):URL 已切到国内 tongyi.aliyun.com,但下面
-所有 selector(`.qwen-chat-message-assistant` / `.response-message-content` /
-`.qwen-chat-thinking-status-card-title-animate` / `textarea.message-input-textarea`)
-是为 chat.qwen.ai 调出来的,**在 tongyi.aliyun.com 上几乎肯定不工作**。
-等用户上传一份 tongyi session 后,在 vm03 用 headed 模式抓真实 DOM 再补适配。
-当前状态:probe 会失败,但 URL/host_permissions 链路已通,session 已能上传/分发。
+2026-05-18 迁移自 chat.qwen.ai → tongyi.aliyun.com:
+- chat.qwen.ai 是阿里出海版,可用邮箱登录
+- tongyi.aliyun.com 是国内主站,手机号登录,跟用户的扩展插件域名一致
 
-Qwen Web UI 自动判断是否需要联网搜索,搜索时会显示
-`qwen-chat-thinking-status-card-title-animate` 动画卡片(文案"正在搜索网络"),
-旁边是"跳过"按钮(不要点)。streaming 结束后卡片的 animate class 消失并显示
-"已搜索 N 条"静态文案,message 容器里填充实际答案。
+迁移策略:DOM selector 选 "通用 + fallback 链",不写死 tongyi 特定 class —
+React Ant Design 类型的 chat 应用通用模式:
+  - 输入框:textarea / contenteditable,带 chat-related placeholder
+  - 提交:Enter(Shift+Enter 换行)
+  - 完成信号:连续 N 秒文本无变化 AND 没有可见的 "停止/Stop" 按钮
+  - 答案容器:最后一条 user message 后面的 message bubble
 
-无 Stop/停止 按钮,所以等待策略用 "assistant 消息 inner_text 稳定 N 秒"
-(engine-agnostic,不依赖 Qwen 特定 DOM 细节)。
-
-Citation 提取:Qwen 的内联引用不是 `<a href>`,而是
-`<span class="qwen-markdown-citation">` 包 `.qwen-chat-markdown-tokens-hostname`
-显示 hostname(例如 `zh.wikipedia.org`)或中文来源名(例如 `百度`、`四川在线`)。
-完整 URL 只在 tooltip/展开的 source drawer 里,tooltip 非 hover 不渲染;
-为避免一条条 hover 拖慢抓取,采取 hostname→URL 合成策略,并对常见中文来源
-做一层 display-name → domain 映射。
+日后稳定下来再针对 tongyi 抓特定 selector 减少 false-positive。
+首次 probe 失败时,搜 `[Qwen-probe]` 日志,会打出 stage / count / selector 命中信息.
 """
 
 from __future__ import annotations
@@ -35,13 +27,15 @@ from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
 
 
 _QWEN_BLOCK_HOSTS = (
-    "qwen.ai", "aliyun.com", "alibabacloud.com", "alicdn.com", "w3.org",
-    "googletagmanager.com", "google-analytics.com", "googlesyndication.com",
-    "doubleclick.net", "facebook.net", "analytics",
+    # 自家域,citation 不收
+    "qwen.ai", "tongyi.aliyun.com", "aliyun.com", "alibabacloud.com",
+    "alicdn.com", "alipay.com", "taobao.com", "tmall.com",
+    # 通用埋点/CDN
+    "w3.org", "googletagmanager.com", "google-analytics.com",
+    "googlesyndication.com", "doubleclick.net", "facebook.net", "analytics",
 )
 
-# 中文来源显示名 → 实际 domain。Qwen 常把 baidu.com 等渲染成中文品牌名,
-# 这里做一层映射,未命中的中文名保留原样当 domain 用(聚合仍能工作)。
+# 中文来源显示名 → 实际 domain(沿用,跟具体引擎无关)
 _CN_DISPLAY_TO_DOMAIN = {
     "百度": "baidu.com",
     "百度百科": "baike.baidu.com",
@@ -74,43 +68,12 @@ _CN_DISPLAY_TO_DOMAIN = {
     "环球网": "huanqiu.com",
     "光明网": "gmw.cn",
     "四川在线": "scol.com.cn",
-    "南方日报": "nfnews.com",
-    "南方周末": "infzm.com",
-    "经济观察报": "eeo.com.cn",
-    "证券时报": "stcn.com",
-    "中国证券报": "cs.com.cn",
-    "每日经济新闻": "nbd.com.cn",
-    "21世纪经济报道": "21jingji.com",
-    "中关村在线": "zol.com.cn",
-    "太平洋电脑网": "pconline.com.cn",
-    "爱卡汽车": "xcar.com.cn",
-    "汽车之家": "autohome.com.cn",
-    "懂车帝": "dongchedi.com",
-    "易车": "yiche.com",
 }
 
 
-def _hostname_to_citation(raw: str, position: int) -> Citation | None:
-    h = (raw or "").strip()
-    if not h:
-        return None
-    # 真实 hostname(包含 "." 或就是 localhost)
-    if "." in h and not any(c in h for c in (" ", "\n", "\t")):
-        domain = h[4:] if h.startswith("www.") else h
-        if any(b in domain for b in _QWEN_BLOCK_HOSTS):
-            return None
-        return Citation(
-            url=f"https://{h}", domain=domain, title=h, position=position
-        )
-    # 中文展示名 → domain 映射
-    mapped = _CN_DISPLAY_TO_DOMAIN.get(h)
-    if mapped:
-        return Citation(
-            url=f"https://{mapped}", domain=mapped, title=h, position=position
-        )
-    # 未知中文展示名(罕见,未命中映射表):丢弃 — 下游会以 url 重建 Citation,
-    # 传空 url 进去会让 domain 也丢失,还不如不要这一条。
-    return None
+def _log(msg: str) -> None:
+    sys.__stdout__.write(f"[Qwen-probe] {msg}\n")
+    sys.__stdout__.flush()
 
 
 class QwenBrowserAdapter(EngineAdapter):
@@ -121,19 +84,53 @@ class QwenBrowserAdapter(EngineAdapter):
         import os
         self._record_video = os.environ.get("GEO_RECORD_VIDEO", "").strip() in ("1", "true")
 
+    # tongyi.aliyun.com 入口 — 登录后会自动跳到 /qianwen/ 或类似 chat 子路径,
+    # 不写死后缀,让站点自己 redirect。
     CHAT_URL = "https://tongyi.aliyun.com/"
-    ASSISTANT_SEL = ".qwen-chat-message-assistant"
-    # 只匹配答案正文,不包含 thinking status card 的文案
-    ANSWER_SEL = ".qwen-chat-message-assistant .response-message-content"
-    THINKING_ANIM_SEL = ".qwen-chat-thinking-status-card-title-animate"
+
+    # 输入框 selector 候选链(按命中优先级)。
+    # 现代 React chat 应用要么是 textarea,要么是 contenteditable div。
+    INPUT_CANDIDATES = (
+        "textarea[placeholder*='提问']",
+        "textarea[placeholder*='输入']",
+        "textarea[placeholder*='对话']",
+        "textarea[placeholder*='Message']",
+        "div[contenteditable='true'][role='textbox']",
+        "div[contenteditable='true']",
+        "textarea",
+    )
+
+    # 答案容器候选链 — 抓"最后一条 assistant message"
+    # tongyi 没确切 DOM 之前,先用通用 React chat 常见命名 pattern。
+    ASSISTANT_CANDIDATES = (
+        "[data-message-role='assistant']",
+        "[data-role='assistant']",
+        "[class*='assistant-message']",
+        "[class*='answer-content']",
+        "[class*='chatItem-answer']",
+        "[class*='message-item-answer']",
+        "[class*='ai-message']",
+        # 末位兜底:任意被标为 ai/bot 的 message
+        "[class*='message'][class*='bot']",
+        "[class*='message'][class*='ai']",
+    )
+
+    # 流式中"停止生成"按钮 — 它在,说明还没生成完。
+    STOP_BUTTON_CANDIDATES = (
+        "button:has-text('停止')",
+        "button:has-text('Stop')",
+        "[aria-label*='停止']",
+        "[aria-label*='Stop']",
+        "button[class*='stop']",
+    )
 
     async def is_available(self) -> bool:
         try:
             page, ctx = await create_stealth_page("qwen")
             await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=15000)
-            logged_in = await page.locator("textarea.message-input-textarea").count() > 0
+            input_el = await self._find_input(page, timeout=8000)
             await ctx.close()
-            return logged_in
+            return input_el is not None
         except Exception:
             return False
 
@@ -141,16 +138,15 @@ class QwenBrowserAdapter(EngineAdapter):
         try:
             page, ctx = await create_stealth_page("qwen", record_video=self._record_video)
 
-            # 网络抓包:Qwen 的 chat API 流里带着完整 source URL 的 JSON。
-            # 在 goto 前注册 listener,覆盖整个请求生命周期。
+            # 网络抓包:tongyi 的 chat API 流也带 citation URL,JSON 路径未知,
+            # 通用提取"任意 https?:// URL"已足够覆盖。
             captured_bodies: List[str] = []
             self._captured_bodies = captured_bodies
 
             def _on_response(response):
                 url_l = response.url.lower()
-                if not any(kw in url_l for kw in ("/api/", "chat", "completion", "search")):
+                if not any(kw in url_l for kw in ("/api/", "chat", "completion", "search", "stream")):
                     return
-                # 避免把静态资源(图/字体)吞下来
                 ctype = (response.headers.get("content-type") or "").lower()
                 if ctype and not any(
                     t in ctype for t in ("json", "event-stream", "text/plain", "text/html")
@@ -165,38 +161,56 @@ class QwenBrowserAdapter(EngineAdapter):
 
             await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
             await human_delay(2, 3)
+            _log(f"navigated to {page.url}")
 
             await self._dismiss_popups(page)
 
-            input_el = page.locator("textarea.message-input-textarea").first
-            try:
-                await input_el.wait_for(state="visible", timeout=10000)
-            except Exception:
+            input_el = await self._find_input(page, timeout=12000)
+            if input_el is None:
                 await ctx.close()
-                return EngineResult(engine=self.name, query=query, error="input not visible")
+                return EngineResult(engine=self.name, query=query, error="input not visible (tongyi DOM)")
 
-            await input_el.click()
+            # 填 query — 先 click 聚焦,再 fill / type fallback
+            try:
+                await input_el.click()
+                await human_delay(0.2, 0.5)
+            except Exception:
+                pass
+            filled = False
             try:
                 await input_el.fill(query)
+                filled = True
             except Exception:
-                await input_el.type(query)
-            await human_delay(0.5, 1.0)
+                pass
+            if not filled:
+                # contenteditable 不支持 fill,用 type
+                try:
+                    await page.keyboard.insert_text(query)
+                    filled = True
+                except Exception:
+                    pass
+            if not filled:
+                await input_el.type(query, delay=20)
 
+            await human_delay(0.5, 1.0)
             await page.keyboard.press("Enter")
 
-            # ── streaming-done 检测 ──
-            # 轮询 `.response-message-content` inner_text,连续 stable_secs
-            # 未变 & thinking 动画已消失 → 视为生成完成。
-            # max_wait 给到 150s ── 联网搜索 + 长答案的 query 60s 不够,
-            # 之前会在 "正在读取来源..." 这种流式中间态就 early-return,
-            # 拿到的"答案"其实是状态文案。
+            # ── 等生成完 ──
+            # 策略:轮询最后一个 assistant 容器 inner_text,连续 stable_secs 不变
+            # AND 没有可见的 "停止" 按钮 → 生成结束。
             await human_delay(2, 3)
-            await self._wait_for_stable_answer(page, max_wait=150, stable_secs=2.5)
-
+            assistant_sel = await self._wait_for_stable_answer(
+                page, max_wait=180, stable_secs=2.5
+            )
             await human_delay(1.0, 2.0)
 
-            answer = await self._extract_answer(page)
-            citations = await self._extract_citations(page, answer)
+            answer = await self._extract_answer(page, assistant_sel)
+            citations = await self._extract_citations(page, answer, assistant_sel)
+
+            _log(
+                f"final: answer_len={len(answer)} citations={len(citations)} "
+                f"sel={assistant_sel!r}"
+            )
 
             await save_page_session("qwen", ctx)
 
@@ -218,7 +232,31 @@ class QwenBrowserAdapter(EngineAdapter):
                 video_path=video_path,
             )
         except Exception as e:
+            _log(f"search crashed: {type(e).__name__}: {e}")
             return EngineResult(engine=self.name, query=query, error=str(e))
+
+    async def _find_input(self, page, timeout: float = 10000):
+        """逐个 selector 试,返回第一个可见的 input/contenteditable。"""
+        # poll 一段时间 — 页面 hydrate 慢
+        deadline = timeout
+        elapsed = 0
+        step = 500
+        last_counts: dict[str, int] = {}
+        while elapsed < deadline:
+            for sel in self.INPUT_CANDIDATES:
+                try:
+                    loc = page.locator(sel).first
+                    cnt = await page.locator(sel).count()
+                    last_counts[sel] = cnt
+                    if cnt > 0 and await loc.is_visible():
+                        _log(f"input hit: {sel} (visible)")
+                        return loc
+                except Exception:
+                    continue
+            await asyncio.sleep(step / 1000)
+            elapsed += step
+        _log(f"input not found after {timeout}ms; counts={last_counts}")
+        return None
 
     async def _dismiss_popups(self, page) -> None:
         for sel in [
@@ -226,21 +264,19 @@ class QwenBrowserAdapter(EngineAdapter):
             "text=同意",
             "text=Accept",
             "text=接受全部",
+            "text=不再提示",
             "[aria-label='close']",
             "[aria-label='Close']",
+            ".ant-modal-close",
         ]:
             try:
                 btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1000):
+                if await btn.is_visible(timeout=800):
                     await btn.click()
-                    await human_delay(0.3, 0.8)
+                    await human_delay(0.3, 0.6)
             except Exception:
                 continue
 
-    # 流式中间态文案 — 出现这些前缀/包含这些字串的文本不算 "已完成"。
-    # Qwen 联网搜索阶段会把"正在读取来源…" / "正在搜索网络" 暂时写进
-    # response-message-content,如果只比 inner_text 是否变化,这段文字
-    # 在 2 秒内不会变,就被当成 final answer 抓出去了。
     _STATUS_PHRASES = (
         "正在读取来源",
         "正在搜索",
@@ -255,60 +291,66 @@ class QwenBrowserAdapter(EngineAdapter):
     )
 
     def _is_status_only(self, text: str) -> bool:
-        """True if text is purely a transient loading status (no real answer yet)."""
         if not text:
             return True
         stripped = text.strip()
-        # 长度 < 30 且整条以状态短语开头(常见模式 "正在读取来源..."),视为未完成
         if len(stripped) < 30 and any(p in stripped for p in self._STATUS_PHRASES):
             return True
         return False
 
     async def _wait_for_stable_answer(
-        self, page, max_wait: float = 180.0, stable_secs: float = 2.0
-    ) -> None:
-        """轮询**答案正文**(response-message-content) inner_text,连续 stable_secs 未变即返回。
+        self, page, max_wait: float = 180.0, stable_secs: float = 2.5
+    ) -> str | None:
+        """轮询找到的 assistant selector,等其 inner_text 稳定 + 无停止按钮。
 
-        关键:必须盯答案正文,不能盯整个 assistant 容器。
-        thinking 阶段容器里只有状态卡文案("已经完成思考" 等),
-        如果 stability 检查命中状态卡,会在答案开始 stream 之前就 early-return。
-
-        还要拒绝 "正在读取来源..." 这类状态文案 — 它会在 response-message-content
-        里短暂停留几秒不变,如果只比稳定性会误判为 final。
+        返回胜出的 selector(后续 _extract_answer / _extract_citations 复用),
+        或 None(超时)。
         """
         poll_interval = 0.6
         last_text = ""
         stable_since = None
         elapsed = 0.0
-        while elapsed < max_wait:
-            try:
-                ans_els = await page.locator(self.ANSWER_SEL).all()
-                if ans_els:
-                    cur = await ans_els[-1].inner_text()
-                else:
-                    cur = ""
-            except Exception:
-                cur = last_text
+        winning_sel: str | None = None
 
-            # 必须有实质内容 (>8 字符,避过 "思考中..." 这类占位)
-            # 且不能是纯状态文案("正在读取来源...")
+        while elapsed < max_wait:
+            # 找到当前命中的 assistant 容器(每轮重检 — 流式期间容器才出现)
+            cur = ""
+            sel_hit = None
+            for sel in self.ASSISTANT_CANDIDATES:
+                try:
+                    els = await page.locator(sel).all()
+                    if not els:
+                        continue
+                    text = await els[-1].inner_text()
+                    if text and len(text.strip()) > len(cur.strip()):
+                        cur = text
+                        sel_hit = sel
+                except Exception:
+                    continue
+
+            # 检查 "停止生成" 按钮是否还在
+            stop_visible = False
+            for sb in self.STOP_BUTTON_CANDIDATES:
+                try:
+                    if await page.locator(sb).first.is_visible(timeout=200):
+                        stop_visible = True
+                        break
+                except Exception:
+                    continue
+
             if (
                 cur
                 and len(cur.strip()) > 8
                 and cur == last_text
                 and not self._is_status_only(cur)
+                and not stop_visible
             ):
                 if stable_since is None:
                     stable_since = elapsed
                 elif elapsed - stable_since >= stable_secs:
-                    # 再确认 thinking 动画已停
-                    try:
-                        anim_count = await page.locator(self.THINKING_ANIM_SEL).count()
-                    except Exception:
-                        anim_count = 0
-                    if anim_count == 0:
-                        return
-                    stable_since = None
+                    winning_sel = sel_hit
+                    _log(f"stable@{elapsed:.1f}s len={len(cur)} sel={sel_hit!r}")
+                    return winning_sel
             else:
                 last_text = cur
                 stable_since = None
@@ -316,83 +358,56 @@ class QwenBrowserAdapter(EngineAdapter):
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
-    async def _extract_answer(self, page) -> str:
-        """抓最后一条 response-message-content 的 text。
+        _log(f"wait timeout @ {max_wait}s, last_len={len(last_text)} stop_visible={stop_visible}")
+        return winning_sel  # 即便超时也返回找到的 selector,extract 还能抢救
 
-        直接拿答案正文,绕开 thinking status card 的 "已搜索 N 条" / "已经完成思考" 等噪声。
-        若答案正文为空(罕见边界),回退到 ASSISTANT_SEL 容器 + 噪声剔除。
-
-        最后一道防线:如果抓到的全是 "正在读取来源..." 这类流式中间态
-        (超时 fallback),清掉这些字串,留下空字符串而不是误导前端。
-        """
-        # 首选:直接从答案正文抓
-        try:
-            ans_els = await page.locator(self.ANSWER_SEL).all()
-            if ans_els:
-                raw = await ans_els[-1].inner_text()
+    async def _extract_answer(self, page, assistant_sel: str | None) -> str:
+        sels = [assistant_sel] if assistant_sel else []
+        sels.extend(s for s in self.ASSISTANT_CANDIDATES if s != assistant_sel)
+        for sel in sels:
+            if not sel:
+                continue
+            try:
+                els = await page.locator(sel).all()
+                if not els:
+                    continue
+                raw = await els[-1].inner_text()
                 if raw and raw.strip():
                     cleaned = self._scrub_status_noise(raw)
                     if cleaned.strip():
                         return cleaned
-        except Exception:
-            pass
-
-        # 回退:整个 assistant 容器 + 噪声剔除
-        try:
-            assist_els = await page.locator(self.ASSISTANT_SEL).all()
-            if not assist_els:
-                return ""
-            raw = await assist_els[-1].inner_text()
-        except Exception:
-            return ""
-
-        return self._scrub_status_noise(raw)
+            except Exception:
+                continue
+        return ""
 
     def _scrub_status_noise(self, raw: str) -> str:
-        """剔除 thinking status card 文案 + 流式中间态。"""
         if not raw:
             return ""
         cleaned = raw
         for noise in (
-            "正在搜索网络",
-            "正在读取来源",
-            "正在思考",
-            "正在生成",
-            "正在搜索",
-            "跳过",
-            "已深度思考",
-            "已搜索网络",
-            "已经完成思考",
+            "正在搜索网络", "正在读取来源", "正在思考", "正在生成", "正在搜索",
+            "跳过", "已深度思考", "已搜索网络", "已经完成思考",
         ):
             cleaned = cleaned.replace(noise, "")
-        # 末尾省略号也清掉,避免留下孤儿 "..."
         cleaned = re.sub(r"\.{3,}", "", cleaned)
         cleaned = re.sub(r"…+", "", cleaned)
         return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
     async def _capture_body(self, response, bucket: List[str]) -> None:
-        """Read a response body, stash text containing citation-shaped JSON."""
         try:
             text = await response.text()
         except Exception:
             return
-        if not text:
+        if not text or "http" not in text:
             return
-        # 只保留看起来带链接信息的 body,避开鉴权/无用响应
-        if "http" not in text:
-            return
-        # 单条 body 最多 400KB,防止 SSE 巨流吞内存
         bucket.append(text[:400_000])
 
-    async def _extract_citations(self, page, answer: str) -> List[Citation]:
-        """Additive 多路径提取,所有路径都跑 + 全局 seen_keys 去重。
+    async def _extract_citations(
+        self, page, answer: str, assistant_sel: str | None
+    ) -> List[Citation]:
+        """多路径提取:网络抓包 + assistant 容器 `<a>` + 答案正文裸 URL。
 
-        Path 优先级(早出现的路径决定 citation 的 position 序号):
-          1. 网络抓包 — Qwen chat API 流里的 JSON 通常自带完整 URL(最权威)
-          2. Source drawer — 点 "+N" 折叠卡,抓 drawer 里新出现的 `<a href>`
-          3. Assistant 容器内原生 `<a href>`(少数变体 UI)
-          4. 内联 `.qwen-markdown-citation` hostname → 合成 URL(兜底补集)
-          5. 答案正文里的裸 URL
+        tongyi 的具体 citation DOM 待 v2 适配,先用通用 `<a href>` 扫描兜底。
         """
         citations: List[Citation] = []
         seen_keys: set[str] = set()
@@ -404,7 +419,6 @@ class QwenBrowserAdapter(EngineAdapter):
             if not key or key in seen_keys:
                 return
             seen_keys.add(key)
-            # 重新按插入顺序编位置号
             citations.append(
                 Citation(
                     url=cit.url,
@@ -415,24 +429,21 @@ class QwenBrowserAdapter(EngineAdapter):
                 )
             )
 
-        # ── 1) Network-capture: 从抓到的 API 响应体里提 URL
+        # 1) Network capture
         net_urls: List[str] = []
         try:
             for body in getattr(self, "_captured_bodies", []) or []:
-                # 优先匹配 JSON 的 url/link/href 字段
                 for m in re.finditer(
                     r'"(?:url|link|href|source_url|web_url|redirect_url)"\s*:\s*"'
                     r'(https?://[^"\\\s]+)"',
                     body,
                 ):
                     net_urls.append(m.group(1))
-                # 再兜底扫所有 JSON-escaped URL token(SSE chunks 有时转义)
                 for m in re.finditer(r'https?:\\?/\\?/[^\s"<>\\]{4,500}', body):
                     u = m.group(0).replace("\\/", "/")
                     net_urls.append(u)
         except Exception:
             pass
-        # 去重保顺序 + 过滤内网/自家域
         net_urls = list(dict.fromkeys(net_urls))
         for u in net_urls:
             if any(b in u for b in _QWEN_BLOCK_HOSTS):
@@ -441,201 +452,32 @@ class QwenBrowserAdapter(EngineAdapter):
                 continue
             _add(Citation.from_url(u))
 
-        # ── 2) DOM: 内联 hostnames(备用映射 + probe 信号)
-        try:
-            inline_hostnames = await page.evaluate(
-                """() => {
-                    const out = [];
-                    document.querySelectorAll(
-                        '.qwen-chat-message-assistant .qwen-markdown-citation '
-                        + '.qwen-chat-markdown-tokens-hostname'
-                    ).forEach(el => {
-                        const t = (el.innerText || el.textContent || '').trim();
-                        if (t) out.push(t);
-                    });
-                    return out;
-                }"""
-            ) or []
-        except Exception:
-            inline_hostnames = []
+        # 2) Assistant 容器 `<a href>`
+        if assistant_sel:
+            try:
+                links = await page.locator(f"{assistant_sel} a[href^='http']").all()
+                for link in links:
+                    try:
+                        href = await link.get_attribute("href")
+                        title = await link.inner_text()
+                    except Exception:
+                        continue
+                    if not href or not href.startswith("http"):
+                        continue
+                    if any(b in href for b in _QWEN_BLOCK_HOSTS):
+                        continue
+                    _add(Citation.from_url(href, title=title))
+            except Exception:
+                pass
 
-        # ── 3) DOM: 点击 source drawer(多策略点击)
-        drawer_links: List[dict] = []
-        try:
-            drawer_links = await self._open_source_drawer_and_collect(page)
-        except Exception as e:
-            sys.__stdout__.write(
-                f"[Qwen-probe] drawer open failed: {type(e).__name__}: {e}\n"
-            )
-            sys.__stdout__.flush()
-
-        for link in drawer_links:
-            href = link.get("href") or ""
-            title = link.get("title") or ""
-            if not href.startswith("http"):
-                continue
-            if any(b in href for b in _QWEN_BLOCK_HOSTS):
-                continue
-            _add(Citation.from_url(href, title=title))
-
-        # ── 4) Assistant 容器原生 `<a href>`(additive 补集)
-        try:
-            links = await page.locator(f"{self.ASSISTANT_SEL} a[href^='http']").all()
-            for link in links:
-                try:
-                    href = await link.get_attribute("href")
-                    title = await link.inner_text()
-                except Exception:
-                    continue
-                if not href or not href.startswith("http"):
-                    continue
-                if any(b in href for b in _QWEN_BLOCK_HOSTS):
-                    continue
-                _add(Citation.from_url(href, title=title))
-        except Exception:
-            pass
-
-        # ── 5) 内联 hostname → 合成 URL(补 drawer/网络没抓到的)
-        for h in inline_hostnames:
-            _add(_hostname_to_citation(h, position=0))
-
-        # ── 6) 答案正文裸 URL(最后兜底)
+        # 3) 答案正文裸 URL
         for u in extract_urls_from_text(answer):
             if any(b in u for b in _QWEN_BLOCK_HOSTS):
                 continue
             _add(Citation.from_url(u))
 
-        sys.__stdout__.write(
-            f"[Qwen-probe] net_urls={len(net_urls)} "
-            f"inline_hostnames={len(inline_hostnames)} "
-            f"drawer_links={len(drawer_links)} citations={len(citations)}\n"
+        _log(
+            f"citations: net={len(net_urls)} dom_a=(included above) "
+            f"final={len(citations)}"
         )
-        sys.__stdout__.flush()
-
         return citations
-
-    async def _open_source_drawer_and_collect(self, page) -> List[dict]:
-        """Click the "+N" source fold card, read URLs from the drawer, close it.
-
-        Qwen uses React synthetic events, so Playwright's native `locator.click()`
-        sometimes "clicks" but the handler doesn't fire. We try a ladder:
-          1. locator.click()
-          2. locator.click(force=True)
-          3. JS `.click()` on the DOM element
-          4. JS `dispatchEvent(new MouseEvent('click', {bubbles:true}))`
-        First strategy that actually yields new `<a href>` wins.
-        """
-        # Card 本体 + count 徽章 两个候选元素,按序尝试
-        card_sel = (
-            f"{self.ASSISTANT_SEL} "
-            ".qwen-chat-package-comp-source-list .qwen-chat-search-card"
-        )
-        badge_sel = f"{self.ASSISTANT_SEL} .qwen-chat-fold-source-count"
-
-        try:
-            has_card = await page.locator(card_sel).count() > 0
-        except Exception:
-            has_card = False
-        if not has_card:
-            return []
-
-        # Snapshot existing anchors so we can diff
-        try:
-            pre_hrefs = await page.evaluate(
-                """() => Array.from(document.querySelectorAll('a[href]'))
-                       .map(a => a.href).filter(h => h.startsWith('http'))"""
-            ) or []
-        except Exception:
-            pre_hrefs = []
-        pre_set = list(set(pre_hrefs))
-
-        # 先滚到可见
-        try:
-            await page.locator(card_sel).last.scroll_into_view_if_needed(timeout=1500)
-        except Exception:
-            pass
-
-        async def _diff_new_anchors() -> List[dict]:
-            try:
-                return await page.evaluate(
-                    """(preHrefs) => {
-                        const pre = new Set(preHrefs);
-                        const seen = new Set();
-                        const out = [];
-                        document.querySelectorAll('a[href]').forEach(a => {
-                            const href = a.href;
-                            if (!href.startsWith('http')) return;
-                            if (pre.has(href)) return;
-                            if (seen.has(href)) return;
-                            seen.add(href);
-                            out.push({
-                                href,
-                                title: (a.innerText || a.textContent || '').trim().slice(0, 200),
-                            });
-                        });
-                        return out;
-                    }""",
-                    pre_set,
-                ) or []
-            except Exception:
-                return []
-
-        strategies = [
-            ("pw_click_card",    lambda: page.locator(card_sel).last.click(timeout=2000)),
-            ("pw_click_badge",   lambda: page.locator(badge_sel).last.click(timeout=2000)),
-            ("pw_click_forced",  lambda: page.locator(card_sel).last.click(timeout=2000, force=True)),
-            ("js_click",         lambda: page.evaluate(
-                f"""() => {{
-                    const els = document.querySelectorAll({card_sel!r});
-                    if (els.length) els[els.length - 1].click();
-                }}"""
-            )),
-            ("js_dispatch",      lambda: page.evaluate(
-                f"""() => {{
-                    const els = document.querySelectorAll({card_sel!r});
-                    if (!els.length) return;
-                    const el = els[els.length - 1];
-                    ['mousedown', 'mouseup', 'click'].forEach(type => {{
-                        el.dispatchEvent(new MouseEvent(type, {{
-                            bubbles: true, cancelable: true, view: window
-                        }}));
-                    }});
-                }}"""
-            )),
-        ]
-
-        drawer_links: List[dict] = []
-        winning_strategy = None
-        for name, action in strategies:
-            try:
-                await action()
-            except Exception:
-                continue
-            # Poll up to 2s after each attempt
-            for _ in range(7):
-                await asyncio.sleep(0.3)
-                drawer_links = await _diff_new_anchors()
-                if drawer_links:
-                    winning_strategy = name
-                    break
-            if drawer_links:
-                break
-
-        if winning_strategy:
-            sys.__stdout__.write(
-                f"[Qwen-probe] drawer opened via {winning_strategy} "
-                f"(new_links={len(drawer_links)})\n"
-            )
-        else:
-            sys.__stdout__.write(
-                "[Qwen-probe] drawer click: all 5 strategies yielded 0 new links\n"
-            )
-        sys.__stdout__.flush()
-
-        # Close drawer so the next query starts clean
-        try:
-            await page.keyboard.press("Escape")
-        except Exception:
-            pass
-
-        return drawer_links
