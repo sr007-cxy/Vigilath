@@ -815,17 +815,18 @@ class DoubaoBrowserAdapter(EngineAdapter):
                 continue
 
     async def _start_new_chat(self, page) -> None:
-        """Click the "新对话" sidebar button to reset the conversation.
+        """Click "新对话" + 校验 reset 真正生效.
 
-        Doubao 2026-04 侧栏顶部有一个"新对话"按钮 — 多套 DOM 同时存在
-        (A/B test):
-          - 旧版:`<div class="font-semibold ...">新对话</div>`
-          - 新版:`<div class="... s-font-small ..."><span>新对话</span></div>`
-            外层是 `[class*='nav-link-']` 或 `group/sidebar_nav_item` 容器
-        统一用 Playwright 的 text-locator + ancestor 兜底 — 命中文本节点后
-        click 自动冒泡到最近 cursor-pointer 祖先。如果整个 DOM 里只有
-        一处"新对话"文本(用过来 vm03 dump 确认了),text-locator 不会
-        误点侧栏历史会话(那些是其他 title)。
+        D4c(2026-05-18):hot 模式下,光点 click 不够 — 若 page transition 还
+        没完就开始 type query,query 会进**旧会话**(实测 hot 跑 3 次 "你好"
+        前 2 次拿到 500+ 字上下文答案,第 3 次才回归 ~100 字).
+
+        新流程:
+          1. 记录 click 前 URL + message-list 行数
+          2. 按 selector 候选点击(同旧逻辑)
+          3. 等 URL 变到 `/chat/`(无 slug)OR message-list 清空 — 最多 5s
+          4. 若 5s 仍未 reset,补一次 click 重试(最多 2 轮);仍失败 log warning
+             返回(caller 拿到旧会话答案,正确性靠下游 hit 判定补救)
         """
         candidates = [
             "[class*='nav-link-']:has-text('新对话')",
@@ -833,21 +834,77 @@ class DoubaoBrowserAdapter(EngineAdapter):
             "div.font-semibold:text-is('新对话')",
             "button:text-is('新对话')",
             "[role='button']:text-is('新对话')",
-            "text=新对话",  # 最宽松兜底
+            "text=新对话",
         ]
-        for sel in candidates:
-            try:
-                btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1500):
-                    await btn.click()
-                    await human_delay(0.8, 1.5)
-                    sys.__stdout__.write(f"[Doubao-new-chat] clicked via selector={sel!r}\n")
-                    sys.__stdout__.flush()
-                    return
-            except Exception:
-                continue
 
-        sys.__stdout__.write("[Doubao-new-chat] button not found via any selector\n")
+        async def _count_rows() -> int:
+            try:
+                return await page.evaluate("""() => {
+                    const list = document.querySelector('[class*="message-list-"]');
+                    if (!list) return 0;
+                    return list.querySelectorAll('.v_list_row').length;
+                }""")
+            except Exception:
+                return -1
+
+        url_before = page.url
+        rows_before = await _count_rows()
+
+        for attempt in range(2):
+            clicked = False
+            for sel in candidates:
+                try:
+                    btn = page.locator(sel).first
+                    if await btn.is_visible(timeout=1500):
+                        await btn.click()
+                        clicked = True
+                        sys.__stdout__.write(
+                            f"[Doubao-new-chat] attempt {attempt+1} clicked via {sel!r}\n"
+                        )
+                        sys.__stdout__.flush()
+                        break
+                except Exception:
+                    continue
+            if not clicked:
+                sys.__stdout__.write(
+                    f"[Doubao-new-chat] attempt {attempt+1}: button not found\n"
+                )
+                sys.__stdout__.flush()
+                return
+
+            # 等 reset 生效:URL 变到 `/chat/`(无 slug)OR 行数减少
+            reset_ok = False
+            for _ in range(25):  # 25 × 0.2s = 5s
+                await asyncio.sleep(0.2)
+                url_now = page.url
+                # URL 校验:斜杠后没有 slug = /chat/ 或 /chat
+                url_reset = (
+                    url_now.endswith("/chat/") or url_now.endswith("/chat")
+                ) and url_now != url_before
+                rows_now = await _count_rows()
+                rows_reset = rows_before > 0 and rows_now == 0
+                if url_reset or rows_reset:
+                    reset_ok = True
+                    sys.__stdout__.write(
+                        f"[Doubao-new-chat] verified reset (url_reset={url_reset} "
+                        f"rows {rows_before}->{rows_now})\n"
+                    )
+                    sys.__stdout__.flush()
+                    break
+
+            if reset_ok:
+                await human_delay(0.5, 1.0)  # 再给 UI 一点 settle 时间
+                return
+
+            sys.__stdout__.write(
+                f"[Doubao-new-chat] attempt {attempt+1}: reset NOT verified after 5s "
+                f"(url stayed={url_before == page.url}, rows {rows_before}->{await _count_rows()})\n"
+            )
+            sys.__stdout__.flush()
+            await human_delay(0.5, 1.0)  # 重试前小歇
+
+        # 2 轮都没 reset 成功 — 让 caller 知道(可能拿到旧会话)
+        sys.__stdout__.write("[Doubao-new-chat] ⚠ both attempts failed to verify reset\n")
         sys.__stdout__.flush()
 
     # ── Enable web search toggle ───────────────────────────────
