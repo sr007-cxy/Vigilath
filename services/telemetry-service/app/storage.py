@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Iterator
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, create_engine,
+    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, create_engine, event,
 )
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -27,6 +27,23 @@ DATABASE_URL = os.environ.get(
 _connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
+
+# SQLite 跟 geo-backend 共享同一个 db 文件 — backend 在 approve / cron 时持写锁,
+# telemetry 这边也要并发写 runs / responses。这里设置:
+#  - busy_timeout=30s:撞到瞬时锁就等,不要直接抛 OperationalError
+#  - 复用 backend 已经开启的 WAL / synchronous=NORMAL(open 一下就行,backend 写过)
+if "sqlite" in DATABASE_URL:
+    @event.listens_for(engine, "connect")
+    def _sqlite_busy_timeout(dbapi_conn, _connection_record):
+        if type(dbapi_conn).__module__ != "sqlite3":
+            return
+        cur = dbapi_conn.cursor()
+        try:
+            cur.execute("PRAGMA busy_timeout=30000")
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cur.close()
 
 Base = declarative_base()
 

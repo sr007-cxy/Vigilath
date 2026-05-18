@@ -627,7 +627,11 @@ def approve_topic(
                       field="submission_status", before=prev_status, after="approved",
                       note=f"queries_pending→approved={q_promoted}, seeds_pending→approved={s_promoted}")
 
-    db.flush()  # 让 topic 拿到最新状态用于 snapshot
+    # 提前 commit:必须在 HTTP 调 telemetry-service /run-topic 之前释放 SQLite 写锁,
+    # 否则 telemetry 进程写 ai_telemetry_runs 会撞 `database is locked` 死等到 5s
+    # busy_timeout 超时返回 500(就是「telemetry-service /run-topic failed」的根因)。
+    db.commit()
+    db.refresh(t)
 
     # 步骤 3: 触发跑一次
     run_id = _trigger_run_topic_sync(topic_id)
