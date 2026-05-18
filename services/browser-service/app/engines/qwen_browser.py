@@ -245,22 +245,17 @@ class QwenBrowserAdapter(EngineAdapter):
     # 防止上一条 query 的对话被当成 context 影响下一条答案。
     # 当前 search() 还是 one-shot 模式,这个方法暂未被调用,留给 D4 的 EngineSession.
     async def _start_new_chat(self, page) -> None:
-        """Click "新对话" / sidebar 顶部新建按钮以开启新会话.
+        """Click "新建对话" sidebar button to reset conversation.
 
-        www.qianwen.com 实测的 DOM 待补 — 当前用多 selector 候选 + 兜底.
-        首次跑到没命中时,搜 [Qwen-new-chat] 日志看哪些 selector 都没匹配,
-        然后在 vm03 抓真实 DOM patch.
+        www.qianwen.com 实测(2026-05-18 DOM probe):侧栏顶 `<button>` 文本 = "新建对话"
+        (注意是"新**建**对话",不是"新对话")。`<button>` 标签罕见所以最稳;text-is
+        匹配兜底("新对话" 也保留 in case 改版又改回去).
         """
         candidates = [
-            "[class*='nav-link-']:has-text('新对话')",
-            "[class*='sidebar']:has-text('新对话')",
-            "button:has-text('新对话')",
             "button:has-text('新建对话')",
-            "button:has-text('新建会话')",
-            "[role='button']:has-text('新对话')",
-            "[aria-label*='新对话']",
-            "[aria-label*='New chat']",
-            "a[href*='/chat']:has-text('新对话')",
+            "button:has-text('新对话')",
+            "[class*='sideBar']:has-text('新建对话')",
+            "text=新建对话",
             "text=新对话",
         ]
         for sel in candidates:

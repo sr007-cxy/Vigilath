@@ -95,8 +95,11 @@ class YuanbaoBrowserAdapter(EngineAdapter):
 
     CHAT_URL = "https://yuanbao.tencent.com/chat?searchType=network"
 
-    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.DOM 待补 —
-    # 等 vm03 抓真实 DOM 后 patch.[Yuanbao-new-chat] 日志会指示哪些都没匹配.
+    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.
+    # ⚠ 2026-05-18 DOM probe 在 yuanbao 上**没找到任何 text 匹配** "新对话/新建" 的元素 —
+    # 入口 URL `/chat?searchType=network` 会自动 redirect 到旧 conversation
+    # (e.g. `/chat/naQivTmsDa`),侧栏的"新对话"按钮**可能是 icon-only 无 text**.
+    # 第二轮 probe 要按 [aria-label]/[role='button']/SVG 找,暂用 best-guess 占位.
     async def _start_new_chat(self, page) -> None:
         candidates = [
             "button:has-text('新对话')",

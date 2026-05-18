@@ -23,17 +23,15 @@ class WenxinBrowserAdapter(EngineAdapter):
         import os
         self._record_video = os.environ.get("GEO_RECORD_VIDEO", "").strip() in ("1", "true")
 
-    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.真实 DOM 待补 —
-    # 等用户上传 wenxin session 后在 vm03 跑 DOM probe.目前是 best-guess selector
-    # + 兜底 text 匹配,找不到时 [Wenxin-new-chat] 日志会告诉你.
     async def _start_new_chat(self, page) -> None:
+        """yiyan.baidu.com 实测(2026-05-18 DOM probe):侧栏顶部 div 容器
+        class 模式 `sidebarNewSession__<hash>`(CSS module,前缀稳定 hash 变),
+        text="新对话".用前缀匹配最稳.
+        """
         candidates = [
-            "button:has-text('新对话')",
-            "button:has-text('新建对话')",
-            "[role='button']:has-text('新对话')",
-            "[aria-label*='新对话']",
-            "[aria-label*='New chat']",
-            "a:has-text('新对话')",
+            "[class*='sidebarNewSession']",
+            "[class*='sideBarTop']:has-text('新对话')",
+            "div[class*='sidebarNewSession']:has-text('新对话')",
             "text=新对话",
         ]
         import sys

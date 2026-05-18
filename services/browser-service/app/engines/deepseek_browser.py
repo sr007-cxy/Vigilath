@@ -44,14 +44,16 @@ class DeepSeekBrowserAdapter(EngineAdapter):
     # 前调用,重置 conversation 防止上下文串扰。one-shot search() 走 inline 那段
     # 不重复 — 那段直接 click("text=开启新对话")。
     async def _start_new_chat(self, page) -> None:
+        """chat.deepseek.com 实测(2026-05-18 DOM probe):按钮文本 = "开启新对话",
+        class 是 hashed CSS module(`_5a8ac7a`)不稳,所以走 text 匹配最靠谱.
+        """
         candidates = [
             "text=开启新对话",
-            "button:has-text('新对话')",
-            "button:has-text('新建对话')",
             "[role='button']:has-text('开启新对话')",
-            "[aria-label*='新对话']",
-            "[aria-label*='New chat']",
+            ":text-is('开启新对话')",
+            # Fallback if text changes back to "新对话":
             "text=新对话",
+            "button:has-text('新对话')",
         ]
         import sys
         for sel in candidates:
