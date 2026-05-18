@@ -6,7 +6,8 @@ import { localizedHeaders, readApiError } from './apiError';
 import type {
   AccountCreatePayload, AccountUpdatePayload,
   Brief, BriefsResponse, DraftGenerateResult, DraftsResponse,
-  KnowledgeDoc, PostsResponse, PostsQuery, RunStatusPayload,
+  KnowledgeDoc, NewsnowHotResponse, NewsnowSourcesResponse,
+  PostsResponse, PostsQuery, RunStatusPayload,
   SentimentAccount, SentimentPlatform, TodayResponse,
 } from '../types/sentiment';
 
@@ -143,6 +144,16 @@ export const sentimentApi = {
     token: string,
   ): Promise<DraftGenerateResult> {
     return request<DraftGenerateResult>('POST', '/drafts/generate', token, payload);
+  },
+
+  // ── newsnow 实时热点(不绑 account)──
+  listNewsnowSources(token: string): Promise<NewsnowSourcesResponse> {
+    return request<NewsnowSourcesResponse>('GET', '/newsnow/sources', token);
+  },
+
+  getNewsnowHot(source: string, token: string, limit = 30): Promise<NewsnowHotResponse> {
+    const usp = new URLSearchParams({ source, limit: String(limit) });
+    return request<NewsnowHotResponse>('GET', `/newsnow/hot?${usp.toString()}`, token);
   },
 
   // ── 知识库 ──

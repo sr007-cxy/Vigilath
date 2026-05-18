@@ -435,6 +435,26 @@ def proxy_today(
     return _proxy(sentinel_client.get_today, account_id, ticker, days)
 
 
+# ─────────────────── newsnow 实时热点(不绑 account)──────────────
+
+
+@router.get("/newsnow/sources")
+def proxy_newsnow_sources(
+    current_user: User = Depends(get_current_user),
+):
+    """newsnow 推荐源目录(静态)。仅要求登录,不绑 account。"""
+    return _proxy(sentinel_client.list_newsnow_sources)
+
+
+@router.get("/newsnow/hot")
+def proxy_newsnow_hot(
+    source: str, limit: int = 30,
+    current_user: User = Depends(get_current_user),
+):
+    """指定 source 当前热榜(实时新闻 / 今日热点用)。"""
+    return _proxy(sentinel_client.get_newsnow_hot, source, limit)
+
+
 # ─────────────────────────── 草稿生成 ────────────────────────
 
 

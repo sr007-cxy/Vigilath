@@ -297,3 +297,43 @@ export interface TodayResponse {
   latest_brief: Brief | null;
   top_posts: SentimentPost[];
 }
+
+// ─────────────── newsnow 实时热点(不绑 account)──────────────
+// 数据极薄:只有 title + url + 极少 extra(微博/知乎偶尔含 hotness)。
+// 无时间戳 / 无正文 / 无作者 — 这是 newsnow 接口的天花板。
+// fetched_at 由后端注入,代表"这一拉的时刻"。
+
+export type NewsnowCategory = 'social' | 'news' | 'tech' | 'finance' | string;
+
+export interface NewsnowSource {
+  id: string;
+  name_zh: string;
+  name_en: string;
+  category: NewsnowCategory;
+}
+
+export interface NewsnowSourcesResponse {
+  count: number;
+  items: NewsnowSource[];
+}
+
+export interface NewsnowItem {
+  id?: string | number;
+  title: string;
+  url?: string;
+  mobileUrl?: string;
+  /** newsnow 偶尔在 extra 里塞 hotness / icon / info,前端用 string 渲染 */
+  extra?: {
+    info?: string;
+    icon?: string;
+    hover?: string;
+    [k: string]: unknown;
+  };
+}
+
+export interface NewsnowHotResponse {
+  source: string;
+  items: NewsnowItem[];
+  count: number;
+  fetched_at: string;
+}

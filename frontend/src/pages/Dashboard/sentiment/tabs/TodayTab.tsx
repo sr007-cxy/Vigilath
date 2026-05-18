@@ -12,6 +12,7 @@ import { SentimentChart } from '../components/SentimentChart';
 import { RiskPie } from '../components/RiskPie';
 import { BriefRenderer } from '../components/BriefRenderer';
 import { PostCard } from '../components/PostCard';
+import { HotTopicsPanel } from '../components/HotTopicsPanel';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -53,18 +54,38 @@ export function TodayTab({ account, usingMock }: Props) {
       }
     : data;
 
+  // 实时热点独立于账号分析数据 — 不论 isLoading/error/no-data 都展示
+  const hotTopics = <HotTopicsPanel usingMock={usingMock} />;
+
   if (!usingMock && isLoading) {
-    return <SkeletonCard label={t('common.loading') || 'Loading...'} />;
+    return (
+      <div className="space-y-4">
+        {hotTopics}
+        <SkeletonCard label={t('common.loading') || 'Loading...'} />
+      </div>
+    );
   }
   if (!usingMock && error) {
-    return <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />;
+    return (
+      <div className="space-y-4">
+        {hotTopics}
+        <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />
+      </div>
+    );
   }
   if (!today) {
-    return <SkeletonCard label="暂无数据" />;
+    return (
+      <div className="space-y-4">
+        {hotTopics}
+        <SkeletonCard label="暂无数据" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
+      {hotTopics}
+
       <KpiCards data={today.kpi} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">

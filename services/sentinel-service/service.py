@@ -620,6 +620,74 @@ async def run_crawl_newsnow(req: CrawlNewsnowRequest) -> dict:
         return await asyncio.to_thread(_wrap, _do)
 
 
+# ── newsnow 实时热点(只读 / 不绑 account / 不入库) ─────────────
+# 用于前端"实时新闻 / 今日热点"面板:纯转发自托管 newsnow JSON,
+# 不消费 keywords 也不落 posts 表,只展示给用户看。
+# 与 /run-crawl-newsnow 互补:那条路径走 account.newsnow_sources +
+# keywords 过滤,产物落 posts 进入分析管线;本路径是"裸热榜"。
+_NEWSNOW_SOURCE_CATALOG: list[dict] = [
+    # 推荐顺序 ≈ 国内可用 + 群众反应面优先
+    {"id": "weibo",       "name_zh": "微博热搜",      "name_en": "Weibo",         "category": "social"},
+    {"id": "zhihu",       "name_zh": "知乎热榜",      "name_en": "Zhihu",         "category": "social"},
+    {"id": "douyin",      "name_zh": "抖音热榜",      "name_en": "Douyin",        "category": "social"},
+    {"id": "kuaishou",    "name_zh": "快手热榜",      "name_en": "Kuaishou",      "category": "social"},
+    {"id": "bilibili",    "name_zh": "B 站热搜",      "name_en": "Bilibili",      "category": "social"},
+    {"id": "tieba",       "name_zh": "百度贴吧",      "name_en": "Tieba",         "category": "social"},
+    {"id": "hupu",        "name_zh": "虎扑步行街",    "name_en": "Hupu",          "category": "social"},
+    {"id": "douban",      "name_zh": "豆瓣热榜",      "name_en": "Douban",        "category": "social"},
+    {"id": "toutiao",     "name_zh": "今日头条",      "name_en": "Toutiao",       "category": "news"},
+    {"id": "baidu",       "name_zh": "百度热搜",      "name_en": "Baidu",         "category": "news"},
+    {"id": "thepaper",    "name_zh": "澎湃新闻",      "name_en": "ThePaper",      "category": "news"},
+    {"id": "ifeng",       "name_zh": "凤凰新闻",      "name_en": "iFeng",         "category": "news"},
+    {"id": "ithome",      "name_zh": "IT 之家",       "name_en": "IThome",        "category": "tech"},
+    {"id": "36kr",        "name_zh": "36 氪",         "name_en": "36Kr",          "category": "tech"},
+    {"id": "huxiu",       "name_zh": "虎嗅",          "name_en": "Huxiu",         "category": "tech"},
+    {"id": "juejin",      "name_zh": "掘金",          "name_en": "Juejin",        "category": "tech"},
+    {"id": "ghxi",        "name_zh": "果核剥壳",      "name_en": "Ghxi",          "category": "tech"},
+    {"id": "sspai",       "name_zh": "少数派",        "name_en": "Sspai",         "category": "tech"},
+    {"id": "smzdm",       "name_zh": "什么值得买",    "name_en": "SMZDM",         "category": "tech"},
+    {"id": "xueqiu",      "name_zh": "雪球热帖",      "name_en": "Xueqiu",        "category": "finance"},
+    {"id": "gelonghui",   "name_zh": "格隆汇",        "name_en": "Gelonghui",     "category": "finance"},
+    {"id": "wallstreetcn", "name_zh": "华尔街见闻",   "name_en": "WallstreetCN",  "category": "finance"},
+    {"id": "cls",         "name_zh": "财联社",        "name_en": "CaiLianShe",    "category": "finance"},
+    {"id": "jin10",       "name_zh": "金十数据",      "name_en": "Jin10",         "category": "finance"},
+    {"id": "fastbull",    "name_zh": "法布财经",      "name_en": "FastBull",      "category": "finance"},
+]
+
+
+@app.get("/newsnow/sources")
+def newsnow_sources() -> dict:
+    """返回 newsnow 推荐源目录(静态)。前端用来渲染 tab 切换。"""
+    return {"count": len(_NEWSNOW_SOURCE_CATALOG), "items": _NEWSNOW_SOURCE_CATALOG}
+
+
+@app.get("/newsnow/hot")
+async def newsnow_hot(source: str, limit: int = 30) -> dict:
+    """拉指定 source 的当前热榜(实时新闻 / 今日热点用)。
+    - 不落库、不分析、不过滤,纯转发 newsnow JSON
+    - 当 newsnow 不可达时返回 items=[] + error,前端友好降级
+    - limit 默认 30,上限 100
+    """
+    source = (source or "").strip().lower()
+    if not source:
+        raise HTTPException(400, "missing required query param: source")
+    limit = max(1, min(int(limit), 100))
+
+    def _do() -> dict:
+        from datetime import datetime, timezone
+        client = NewsnowHubClient()
+        items = client.fetch_source(source)
+        # 友好降级:newsnow 不返时间戳,前端展示用 fetched_at = 服务端时间
+        return {
+            "source": source,
+            "items": items[:limit] if items else [],
+            "count": min(len(items), limit) if items else 0,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    return await asyncio.to_thread(_do)
+
+
 # ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
 @app.get("/accounts/{account_id}/posts")
 def list_posts(account_id: int, ticker: str, limit: int = 50,

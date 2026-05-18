@@ -235,6 +235,31 @@ export function useDrafts(accountId: number | null, ticker: string | null) {
   });
 }
 
+// ─────────────────── newsnow 实时热点 ──────────────────
+
+/** 推荐源目录(静态)。staleTime 长 — 几乎不变。 */
+export function useNewsnowSources() {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: ['sentiment', 'newsnow-sources'],
+    queryFn: () => sentimentApi.listNewsnowSources(token!),
+    enabled: !!token,
+    staleTime: 60 * 60_000,
+  });
+}
+
+/** 指定 source 的热榜。newsnow 自身缓存 30 分钟,前端 5 分钟过期触发刷新。 */
+export function useNewsnowHot(source: string | null, limit = 30) {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: ['sentiment', 'newsnow-hot', source, limit],
+    queryFn: () => sentimentApi.getNewsnowHot(source!, token!, limit),
+    enabled: !!token && !!source,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useGenerateDraft() {
   const { token } = useAuth();
   const qc = useQueryClient();

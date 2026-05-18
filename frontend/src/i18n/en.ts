@@ -2392,7 +2392,24 @@ const en = {
                 "topRisk": "Top 5 high-risk posts",
                 "viewFull": "View full →",
                 "writeReply": "Draft reply",
-                "viewDetail": "View"
+                "viewDetail": "View",
+                "hotTopics": {
+                  "title": "Live hot topics",
+                  "subtitle": "Aggregated trending feeds across major platforms — shown regardless of brand keywords",
+                  "refresh": "Refresh",
+                  "fetchedAt": "Updated {{ago}}",
+                  "empty": "No items — platform may be rate-limited or service unconfigured",
+                  "openSource": "Open source ↗",
+                  "viewAll": "More ↗",
+                  "categories": {
+                    "social": "Social",
+                    "news": "News",
+                    "tech": "Tech",
+                    "finance": "Finance"
+                  },
+                  "loading": "Loading...",
+                  "error": "Failed to load hot topics"
+                }
               },
               "articles": {
                 "filters": {

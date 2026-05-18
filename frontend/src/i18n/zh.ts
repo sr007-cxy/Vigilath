@@ -2398,7 +2398,24 @@ const zh = {
                 "topRisk": "高风险帖 Top 5",
                 "viewFull": "完整查看 →",
                 "writeReply": "写回应",
-                "viewDetail": "查看"
+                "viewDetail": "查看",
+                "hotTopics": {
+                  "title": "实时热点 · 今日热榜",
+                  "subtitle": "聚合主流平台热搜,品牌词无关也展示",
+                  "refresh": "刷新",
+                  "fetchedAt": "更新于 {{ago}}",
+                  "empty": "暂无热点,可能是该平台风控或服务未配置",
+                  "openSource": "打开站点 ↗",
+                  "viewAll": "查看更多 ↗",
+                  "categories": {
+                    "social": "社交",
+                    "news": "门户",
+                    "tech": "科技",
+                    "finance": "财经"
+                  },
+                  "loading": "加载中...",
+                  "error": "热榜加载失败"
+                }
               },
               "articles": {
                 "filters": {

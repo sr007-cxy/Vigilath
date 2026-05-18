@@ -523,6 +523,25 @@ def get_today(account_id: int, ticker: str, days: int = 7) -> dict:
         return r.json()
 
 
+def list_newsnow_sources() -> dict:
+    """newsnow 推荐源目录(静态,渲染 tab 切换用)。"""
+    with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
+        r = client.get(f"{SENTINEL_URL}/newsnow/sources")
+        r.raise_for_status()
+        return r.json()
+
+
+def get_newsnow_hot(source: str, limit: int = 30) -> dict:
+    """指定 source 的当前热榜(纯转发,不入库)。"""
+    with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
+        r = client.get(
+            f"{SENTINEL_URL}/newsnow/hot",
+            params={"source": source, "limit": limit},
+        )
+        r.raise_for_status()
+        return r.json()
+
+
 def health() -> dict:
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
         r = client.get(f"{SENTINEL_URL}/health")
