@@ -132,88 +132,83 @@ class QwenBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
-    async def search(self, query: str) -> EngineResult:
+    # D4d(2026-05-18):hot browser protocol —— EngineSession 用 _prepare_page +
+    # _query_with_page 复用 page,跟 search() 共享 helper.
+    async def _prepare_page(self, page, ctx) -> None:
+        """Hot init:goto + 弹窗 + 校验 input 可见(否则视为登录失效).
+
+        故意不挂 network capture(qianwen 的 chat API 含 nav/analytics URL
+        会污染 citation,详见 v2 fix).
+        """
+        await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
+        await human_delay(2, 3)
+        _log(f"prepare_page landed at {page.url}")
+        await self._dismiss_popups(page)
+        input_el = await self._find_input(page, timeout=12000)
+        if input_el is None:
+            raise RuntimeError("input not visible after prepare — session likely expired")
+
+    async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
+        """Hot query:reset → input → submit → wait → extract."""
+        await self._start_new_chat(page)
+        # _find_input 每次重做(reset 后 DOM 可能短暂消失)
+        input_el = await self._find_input(page, timeout=8000)
+        if input_el is None:
+            return EngineResult(engine=self.name, query=query, error="input not visible (tongyi DOM)")
         try:
-            page, ctx = await create_stealth_page("qwen", record_video=self._record_video)
-
-            # ⚠ 故意不挂网络抓包 listener — chat API stream 含大量 CDN/analytics URL,
-            # 通用 regex 全收会把"AI 引用总数"虚高到 89+。真正的 citation 应该
-            # 在 .chat-answers-card-wrap 容器的 <a href> 里(走 DOM 提取)。
-            # 如日后发现 qianwen DOM 不再带 <a>(改成纯文本+下钻),再恢复网络抓包
-            # 并加 "URL 必须出现在 answer 正文里"的严格 filter。
-
-            await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
-            await human_delay(2, 3)
-            _log(f"navigated to {page.url}")
-
-            await self._dismiss_popups(page)
-
-            input_el = await self._find_input(page, timeout=12000)
-            if input_el is None:
-                await ctx.close()
-                return EngineResult(engine=self.name, query=query, error="input not visible (tongyi DOM)")
-
-            # 填 query — 先 click 聚焦,再 fill / type fallback
+            await input_el.click()
+            await human_delay(0.2, 0.5)
+        except Exception:
+            pass
+        filled = False
+        try:
+            await input_el.fill(query)
+            filled = True
+        except Exception:
+            pass
+        if not filled:
             try:
-                await input_el.click()
-                await human_delay(0.2, 0.5)
-            except Exception:
-                pass
-            filled = False
-            try:
-                await input_el.fill(query)
+                await page.keyboard.insert_text(query)
                 filled = True
             except Exception:
                 pass
-            if not filled:
-                # contenteditable 不支持 fill,用 type
-                try:
-                    await page.keyboard.insert_text(query)
-                    filled = True
-                except Exception:
-                    pass
-            if not filled:
-                await input_el.type(query, delay=20)
+        if not filled:
+            await input_el.type(query, delay=20)
+        await human_delay(0.5, 1.0)
+        await page.keyboard.press("Enter")
 
-            await human_delay(0.5, 1.0)
-            await page.keyboard.press("Enter")
+        await human_delay(2, 3)
+        assistant_sel = await self._wait_for_stable_answer(
+            page, max_wait=180, stable_secs=2.5
+        )
+        await human_delay(1.0, 2.0)
 
-            # ── 等生成完 ──
-            # 策略:轮询最后一个 assistant 容器 inner_text,连续 stable_secs 不变
-            # AND 没有可见的 "停止" 按钮 → 生成结束。
-            await human_delay(2, 3)
-            assistant_sel = await self._wait_for_stable_answer(
-                page, max_wait=180, stable_secs=2.5
-            )
-            await human_delay(1.0, 2.0)
+        answer = await self._extract_answer(page, assistant_sel)
+        citations = await self._extract_citations(page, answer, assistant_sel)
+        _log(f"hot query: ans_len={len(answer)} cite={len(citations)} sel={assistant_sel!r}")
+        return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
 
-            answer = await self._extract_answer(page, assistant_sel)
-            citations = await self._extract_citations(page, answer, assistant_sel)
+    async def search(self, query: str) -> EngineResult:
+        """One-shot:launch → _prepare_page → _query_with_page → save + close.
 
-            _log(
-                f"final: answer_len={len(answer)} citations={len(citations)} "
-                f"sel={assistant_sel!r}"
-            )
+        共用 hot 协议方法,行为零回归.
+        """
+        try:
+            page, ctx = await create_stealth_page("qwen", record_video=self._record_video)
+            await self._prepare_page(page, ctx)
+            result = await self._query_with_page(page, ctx, query)
 
             await save_page_session("qwen", ctx)
 
-            video_path = None
             if self._record_video:
                 try:
                     from ..video_store import get_video_path
-                    video_path = await get_video_path(page)
+                    result.video_path = await get_video_path(page)
                 except Exception:
                     pass
 
             await ctx.close()
-
-            return EngineResult(
-                engine=self.name,
-                query=query,
-                answer=answer,
-                citations=citations,
-                video_path=video_path,
-            )
+            return result
         except Exception as e:
             _log(f"search crashed: {type(e).__name__}: {e}")
             return EngineResult(engine=self.name, query=query, error=str(e))
