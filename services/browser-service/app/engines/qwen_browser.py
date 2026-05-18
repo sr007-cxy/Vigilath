@@ -99,19 +99,18 @@ class QwenBrowserAdapter(EngineAdapter):
         "textarea",
     )
 
-    # 答案容器候选链 — 抓"最后一条 assistant message"
-    # tongyi 没确切 DOM 之前,先用通用 React chat 常见命名 pattern。
+    # 答案容器候选链 — 抓"最后一条 assistant message"。
+    # www.qianwen.com 实测真实 DOM(2026-05-18):
+    #   .chat-answers-card-wrap (data-chat-answers-wrap=...) 是单条答案的稳定外壳,
+    #   只含 assistant 答案,不含 user 提问。 .answer-common-card 是同条更窄的内层。
     ASSISTANT_CANDIDATES = (
+        "[data-chat-answers-wrap]",
+        ".chat-answers-card-wrap",
+        ".answer-common-card",
+        # 通用 fallback(若日后改版,大概率还能撞上一个)
         "[data-message-role='assistant']",
         "[data-role='assistant']",
         "[class*='assistant-message']",
-        "[class*='answer-content']",
-        "[class*='chatItem-answer']",
-        "[class*='message-item-answer']",
-        "[class*='ai-message']",
-        # 末位兜底:任意被标为 ai/bot 的 message
-        "[class*='message'][class*='bot']",
-        "[class*='message'][class*='ai']",
     )
 
     # 流式中"停止生成"按钮 — 它在,说明还没生成完。
@@ -137,26 +136,11 @@ class QwenBrowserAdapter(EngineAdapter):
         try:
             page, ctx = await create_stealth_page("qwen", record_video=self._record_video)
 
-            # 网络抓包:tongyi 的 chat API 流也带 citation URL,JSON 路径未知,
-            # 通用提取"任意 https?:// URL"已足够覆盖。
-            captured_bodies: List[str] = []
-            self._captured_bodies = captured_bodies
-
-            def _on_response(response):
-                url_l = response.url.lower()
-                if not any(kw in url_l for kw in ("/api/", "chat", "completion", "search", "stream")):
-                    return
-                ctype = (response.headers.get("content-type") or "").lower()
-                if ctype and not any(
-                    t in ctype for t in ("json", "event-stream", "text/plain", "text/html")
-                ):
-                    return
-                try:
-                    asyncio.create_task(self._capture_body(response, captured_bodies))
-                except Exception:
-                    pass
-
-            page.on("response", _on_response)
+            # ⚠ 故意不挂网络抓包 listener — chat API stream 含大量 CDN/analytics URL,
+            # 通用 regex 全收会把"AI 引用总数"虚高到 89+。真正的 citation 应该
+            # 在 .chat-answers-card-wrap 容器的 <a href> 里(走 DOM 提取)。
+            # 如日后发现 qianwen DOM 不再带 <a>(改成纯文本+下钻),再恢复网络抓包
+            # 并加 "URL 必须出现在 answer 正文里"的严格 filter。
 
             await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
             await human_delay(2, 3)
@@ -392,21 +376,14 @@ class QwenBrowserAdapter(EngineAdapter):
         cleaned = re.sub(r"…+", "", cleaned)
         return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
-    async def _capture_body(self, response, bucket: List[str]) -> None:
-        try:
-            text = await response.text()
-        except Exception:
-            return
-        if not text or "http" not in text:
-            return
-        bucket.append(text[:400_000])
-
     async def _extract_citations(
         self, page, answer: str, assistant_sel: str | None
     ) -> List[Citation]:
-        """多路径提取:网络抓包 + assistant 容器 `<a>` + 答案正文裸 URL。
+        """citation 提取严格 scope 到 assistant 容器内的 <a href> + 答案正文裸 URL。
 
-        tongyi 的具体 citation DOM 待 v2 适配,先用通用 `<a href>` 扫描兜底。
+        故意**不**走网络抓包 — qianwen 的 chat API stream 里塞了大量 CDN/analytics
+        URL,通用 regex 会把 KPI"AI 引用总数"虚高到 80+。日后若发现 qianwen 答案
+        改成纯文本+source drawer,再补一个严格 scope 的 drawer click ladder。
         """
         citations: List[Citation] = []
         seen_keys: set[str] = set()
@@ -428,30 +405,8 @@ class QwenBrowserAdapter(EngineAdapter):
                 )
             )
 
-        # 1) Network capture
-        net_urls: List[str] = []
-        try:
-            for body in getattr(self, "_captured_bodies", []) or []:
-                for m in re.finditer(
-                    r'"(?:url|link|href|source_url|web_url|redirect_url)"\s*:\s*"'
-                    r'(https?://[^"\\\s]+)"',
-                    body,
-                ):
-                    net_urls.append(m.group(1))
-                for m in re.finditer(r'https?:\\?/\\?/[^\s"<>\\]{4,500}', body):
-                    u = m.group(0).replace("\\/", "/")
-                    net_urls.append(u)
-        except Exception:
-            pass
-        net_urls = list(dict.fromkeys(net_urls))
-        for u in net_urls:
-            if any(b in u for b in _QWEN_BLOCK_HOSTS):
-                continue
-            if not u.startswith("http"):
-                continue
-            _add(Citation.from_url(u))
-
-        # 2) Assistant 容器 `<a href>`
+        # 1) Assistant 容器内的 `<a href>`(主路径)
+        dom_count = 0
         if assistant_sel:
             try:
                 links = await page.locator(f"{assistant_sel} a[href^='http']").all()
@@ -466,17 +421,17 @@ class QwenBrowserAdapter(EngineAdapter):
                     if any(b in href for b in _QWEN_BLOCK_HOSTS):
                         continue
                     _add(Citation.from_url(href, title=title))
+                    dom_count += 1
             except Exception:
                 pass
 
-        # 3) 答案正文裸 URL
+        # 2) 答案正文里的裸 URL(补集 — markdown 里写出来但没渲染成 <a> 的情况)
+        text_count = 0
         for u in extract_urls_from_text(answer):
             if any(b in u for b in _QWEN_BLOCK_HOSTS):
                 continue
-            _add(Citation.from_url(u))
+            if _add(Citation.from_url(u)) is not None:
+                text_count += 1
 
-        _log(
-            f"citations: net={len(net_urls)} dom_a=(included above) "
-            f"final={len(citations)}"
-        )
+        _log(f"citations: dom_a={dom_count} text_url={text_count} final={len(citations)}")
         return citations
