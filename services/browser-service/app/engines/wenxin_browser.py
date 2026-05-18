@@ -99,19 +99,9 @@ class WenxinBrowserAdapter(EngineAdapter):
         await page.keyboard.press("Enter")
 
         await human_delay(3, 5)
-        # 同 search() — 真实 streaming indicator 是 stopBtn / stopDealBtn /
-        # name-msg-animation,旧 .cosd- 保留兜底。
-        try:
-            await page.wait_for_function(
-                """() => !document.querySelector('[class*="stopBtn"]')
-                       && !document.querySelector('[class*="stopDealBtn"]')
-                       && !document.querySelector('[class*="name-msg-animation"]')
-                       && !document.querySelector('.cosd-markdown-content-typingall')
-                       && !document.querySelector('[data-auto-test="stop_response"]')""",
-                timeout=180000,
-            )
-        except Exception:
-            sys.__stdout__.write("[Wenxin-hot] streaming wait timeout 180s\n"); sys.__stdout__.flush()
+        # 同 search() — Python 端主动 poll(raf 在 streaming 结束后停跑,
+        # wait_for_function 不可靠).参见 _wait_streaming_done 注释.
+        await self._wait_streaming_done(page, max_wait=30)
         await self._wait_text_stable(page, max_wait=30, stable_secs=3.0)
         await human_delay(1.0, 2.0)
 
@@ -182,22 +172,12 @@ class WenxinBrowserAdapter(EngineAdapter):
             # 实测 1.5K 字 query 需 ~90-120s。timeout 拉到 180s + 加 stability double
             # check(typing 消失后再 poll inner_text 稳定 3s 才返回),跟 qwen 同款。
             await human_delay(3, 5)
-            # 2026-05-18 DOM probe 实测:yiyan 改版后旧 `.cosd-` 前缀全废,
-            # 真实"还在生成"标记是 [class*=stopBtn] / [class*=stopDealBtn] /
-            # [class*=name-msg-animation](后者是 inline-combo)。所有这些缺席 = 完成.
-            # 旧 .cosd- selectors 保留作历史变体兜底,无害.
-            try:
-                await page.wait_for_function(
-                    """() => !document.querySelector('[class*="stopBtn"]')
-                           && !document.querySelector('[class*="stopDealBtn"]')
-                           && !document.querySelector('[class*="name-msg-animation"]')
-                           && !document.querySelector('.cosd-markdown-content-typingall')
-                           && !document.querySelector('[data-auto-test="stop_response"]')""",
-                    timeout=180000,
-                )
-            except Exception:
-                sys.__stdout__.write("[Wenxin-wait] streaming indicator wait timed out (180s)\n")
-                sys.__stdout__.flush()
+            # 2026-05-18:streaming indicator 真实 selector 是 [class*=stopBtn]
+            # / [class*=stopDealBtn] / [class*=name-msg-animation],t=3s 时
+            # 出现,t=6s 后全消失.但 page.wait_for_function 用 raf 轮询,在
+            # streaming 结束后浏览器不再 paint,raf 不触发,导致 180s 时间撑满.
+            # 改成 Python 端 0.5s 主动 evaluate poll,绕开 raf 问题.
+            await self._wait_streaming_done(page, max_wait=30)
 
             # 二次确认:stop 消失后再 poll answer container inner_text 稳定 3 秒,
             # 防止 stop button 被瞬间 toggle 误判完成。max 30s 兜底。
@@ -304,6 +284,46 @@ class WenxinBrowserAdapter(EngineAdapter):
             )
         except Exception as e:
             return EngineResult(engine=self.name, query=query, error=str(e))
+
+    async def _wait_streaming_done(self, page, max_wait: float = 30.0) -> None:
+        """Python 端主动 poll streaming indicator 消失.
+
+        为什么不用 page.wait_for_function:Playwright 的 wait_for_function 用
+        raf(requestAnimationFrame)调度回调.wenxin streaming 结束后浏览器进入
+        idle 状态不再 paint,raf 不再 fire,wait_for_function 撑满 180s timeout.
+        page.evaluate 是同步 RPC,不依赖 raf,稳定.
+
+        Streaming indicator(2026-05-18 实测):
+          - [class*='stopBtn']         主停止按钮 wrapper
+          - [class*='stopDealBtn']     停止按钮另一个变体
+          - [class*='name-msg-animation']  "AI 回答中" 动画 inline class
+        全部 cnt=0 = streaming 结束.
+        """
+        poll = 0.5
+        elapsed = 0.0
+        while elapsed < max_wait:
+            try:
+                still = await page.evaluate(
+                    """() => !!(
+                        document.querySelector('[class*="stopBtn"]')
+                     || document.querySelector('[class*="stopDealBtn"]')
+                     || document.querySelector('[class*="name-msg-animation"]')
+                    )"""
+                )
+            except Exception:
+                still = False
+            if not still:
+                sys.__stdout__.write(
+                    f"[Wenxin-streaming] indicator gone after {elapsed:.1f}s\n"
+                )
+                sys.__stdout__.flush()
+                return
+            await asyncio.sleep(poll)
+            elapsed += poll
+        sys.__stdout__.write(
+            f"[Wenxin-streaming] indicator still present after {max_wait}s — extracting whatever's there\n"
+        )
+        sys.__stdout__.flush()
 
     async def _wait_text_stable(self, page, max_wait: float = 30.0, stable_secs: float = 3.0) -> None:
         """Poll the last answer container's inner_text until it stops growing.
