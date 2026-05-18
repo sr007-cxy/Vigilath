@@ -40,6 +40,34 @@ class DeepSeekBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # D3(2026-05-18):提取出 method 供 hot browser EngineSession 在每次 query
+    # 前调用,重置 conversation 防止上下文串扰。one-shot search() 走 inline 那段
+    # 不重复 — 那段直接 click("text=开启新对话")。
+    async def _start_new_chat(self, page) -> None:
+        candidates = [
+            "text=开启新对话",
+            "button:has-text('新对话')",
+            "button:has-text('新建对话')",
+            "[role='button']:has-text('开启新对话')",
+            "[aria-label*='新对话']",
+            "[aria-label*='New chat']",
+            "text=新对话",
+        ]
+        import sys
+        for sel in candidates:
+            try:
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1500):
+                    await btn.click()
+                    await human_delay(0.5, 1.0)
+                    sys.__stdout__.write(f"[DeepSeek-new-chat] clicked via {sel!r}\n")
+                    sys.__stdout__.flush()
+                    return
+            except Exception:
+                continue
+        sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector\n")
+        sys.__stdout__.flush()
+
     # 答案正文候选 selector — DS UI 改版后 .ds-markdown 不再稳定,
     # 加一层 fallback。顺序按特异性递减,稳定性轮询和 final extract 都用同一组。
     _ANSWER_SELECTORS = (

@@ -23,6 +23,34 @@ class WenxinBrowserAdapter(EngineAdapter):
         import os
         self._record_video = os.environ.get("GEO_RECORD_VIDEO", "").strip() in ("1", "true")
 
+    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.真实 DOM 待补 —
+    # 等用户上传 wenxin session 后在 vm03 跑 DOM probe.目前是 best-guess selector
+    # + 兜底 text 匹配,找不到时 [Wenxin-new-chat] 日志会告诉你.
+    async def _start_new_chat(self, page) -> None:
+        candidates = [
+            "button:has-text('新对话')",
+            "button:has-text('新建对话')",
+            "[role='button']:has-text('新对话')",
+            "[aria-label*='新对话']",
+            "[aria-label*='New chat']",
+            "a:has-text('新对话')",
+            "text=新对话",
+        ]
+        import sys
+        for sel in candidates:
+            try:
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1500):
+                    await btn.click()
+                    await human_delay(0.5, 1.0)
+                    sys.__stdout__.write(f"[Wenxin-new-chat] clicked via {sel!r}\n")
+                    sys.__stdout__.flush()
+                    return
+            except Exception:
+                continue
+        sys.__stdout__.write("[Wenxin-new-chat] button NOT found — needs DOM probe\n")
+        sys.__stdout__.flush()
+
     CHAT_URL = "https://chat.baidu.com/"
 
     async def is_available(self) -> bool:

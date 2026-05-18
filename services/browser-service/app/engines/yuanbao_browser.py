@@ -95,6 +95,33 @@ class YuanbaoBrowserAdapter(EngineAdapter):
 
     CHAT_URL = "https://yuanbao.tencent.com/chat?searchType=network"
 
+    # D3(2026-05-18):hot browser 用,每次 query 前 reset 对话.DOM 待补 —
+    # 等 vm03 抓真实 DOM 后 patch.[Yuanbao-new-chat] 日志会指示哪些都没匹配.
+    async def _start_new_chat(self, page) -> None:
+        candidates = [
+            "button:has-text('新对话')",
+            "button:has-text('新建对话')",
+            "[role='button']:has-text('新对话')",
+            "[aria-label*='新对话']",
+            "[aria-label*='New chat']",
+            "a:has-text('新对话')",
+            "text=新对话",
+        ]
+        import sys
+        for sel in candidates:
+            try:
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1500):
+                    await btn.click()
+                    await human_delay(0.5, 1.0)
+                    sys.__stdout__.write(f"[Yuanbao-new-chat] clicked via {sel!r}\n")
+                    sys.__stdout__.flush()
+                    return
+            except Exception:
+                continue
+        sys.__stdout__.write("[Yuanbao-new-chat] button NOT found — needs DOM probe\n")
+        sys.__stdout__.flush()
+
     # Selectors
     AI_BUBBLE_SEL = ".agent-chat__bubble--ai"
     MARKDOWN_SEL = ".hyc-common-markdown"
