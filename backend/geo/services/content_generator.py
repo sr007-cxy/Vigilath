@@ -173,13 +173,22 @@ def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str
     两条路 schema 都是 OpenAI 兼容 /chat/completions.
     """
     system_prompt = _build_system_prompt(profile)
+    # 2026-05-18:稿件直接用于公众号 / 小红书 / 抖音 / 视频号发文,前端用
+    # whitespace-pre-wrap 直出。Markdown 符号(#/**/-) 在这些平台上会以原文
+    # 显示成乱码,所以这里强制要求 LLM 输出**纯净排版文本**。
     user_prompt = (
-        f"针对下面这个问题,写一篇符合资料调性的文案稿。\n"
+        f"针对下面这个问题,写一篇符合资料调性、可以直接复制到公众号/小红书/抖音文案区发布的文章。\n"
         f"问题:{query}\n\n"
         f"输出严格 JSON,字段:\n"
-        f'  "title": 文案标题(吸睛,≤30 字),\n'
-        f'  "summary": 200 字内的摘要(用于卡片预览),\n'
-        f'  "body": Markdown 正文(800-1500 字,有小标题/分段)。\n'
+        f'  "title": 文案标题(吸睛,≤30 字,纯文本不要带任何符号修饰),\n'
+        f'  "summary": 200 字内的摘要(纯文本,用于卡片预览),\n'
+        f'  "body": 文章正文(800-1500 字)。\n\n'
+        f"正文排版强制要求(违反会导致稿件不可用):\n"
+        f"  1. 严禁使用 Markdown / HTML 标记 — 不要出现 # ## ### **加粗** *斜体* `代码` > 引用 [链接](url) ![图片] 等任何符号;\n"
+        f"  2. 严禁使用 - * 1. 等列表前缀;需要分点时用「一、二、三、」或「①②③」中文序号开头另起一段;\n"
+        f"  3. 小标题独占一行、不加任何符号修饰,正文段落与小标题之间空一行;\n"
+        f"  4. 段落与段落之间用一个空行分隔,段内不要硬换行;\n"
+        f"  5. 所有标点用中文全角(,。!?:;「」),英文术语 / 数字保留原样即可。\n\n"
         f"只输出 JSON,不要包前后 ``` 围栏。"
     )
     if provider == "deepseek":
@@ -218,12 +227,66 @@ def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"unexpected {provider} response shape: {e}")
     parsed = _parse_json_loose(content)
-    title = str(parsed.get("title") or "")[:200]
-    body = str(parsed.get("body") or "")
-    summary = str(parsed.get("summary") or "")[:500]
+    title = _strip_md_inline(str(parsed.get("title") or ""))[:200]
+    body = _strip_md_block(str(parsed.get("body") or ""))
+    summary = _strip_md_inline(str(parsed.get("summary") or ""))[:500]
     if not title or not body:
         raise RuntimeError("LLM returned empty title/body")
     return title, body, summary
+
+
+# ─────────── Markdown 兜底清洗 ───────────
+# prompt 已经明令禁止 MD,但 LLM 偶尔会偷偷出 `**xxx**` / `# 标题` / `- 项`,
+# 直接落到稿件里就会以原始符号显示在公众号 / 小红书。这里做一次轻量正则清理:
+# 只剥**安全的**结构性符号,不动正文文字。粗暴 strip 不是目标——目标是「人眼
+# 读起来跟纯文本一样」。
+
+import re as _re
+
+# 行首 # / ## / ### / ####...  → 留文字、独占一行(LLM 一般用作小标题)
+_RE_HEADING = _re.compile(r"(?m)^\s{0,3}#{1,6}\s+")
+# 行首  -  /  *  /  •  /  · / 数字. / 数字) — 列表前缀,直接删掉,正文用「一、」中文序号
+_RE_LIST_PREFIX = _re.compile(r"(?m)^\s{0,3}([\-\*•·]|\d+[.)、])\s+")
+# 行首 > 引用
+_RE_BLOCKQUOTE = _re.compile(r"(?m)^\s{0,3}>\s?")
+# **加粗** / __加粗__ → 文字
+_RE_BOLD = _re.compile(r"\*\*([^*\n]+?)\*\*|__([^_\n]+?)__")
+# *斜体* / _斜体_ → 文字(注意要避免把孤立的 * 当列表前缀;前面已处理)
+_RE_ITALIC = _re.compile(r"(?<!\*)\*([^*\n]+?)\*(?!\*)|(?<!_)_([^_\n]+?)_(?!_)")
+# `代码` → 文字
+_RE_INLINE_CODE = _re.compile(r"`([^`\n]+?)`")
+# ```围栏``` 整段保留内容,只剥围栏
+_RE_FENCE = _re.compile(r"```[a-zA-Z0-9]*\n?([\s\S]*?)```")
+# [文字](链接) → 文字;![alt](链接) → alt
+_RE_LINK = _re.compile(r"!?\[([^\]\n]*?)\]\([^)\n]*?\)")
+# 表格分隔行 |---|---|
+_RE_TABLE_SEP = _re.compile(r"(?m)^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$")
+
+
+def _strip_md_inline(s: str) -> str:
+    """单行用 — 标题 / 摘要,清行内符号 + 折叠多空格."""
+    s = _RE_BOLD.sub(lambda m: m.group(1) or m.group(2) or "", s)
+    s = _RE_ITALIC.sub(lambda m: m.group(1) or m.group(2) or "", s)
+    s = _RE_INLINE_CODE.sub(r"\1", s)
+    s = _RE_LINK.sub(r"\1", s)
+    return s.strip()
+
+
+def _strip_md_block(s: str) -> str:
+    """正文用 — 先剥块级符号(标题/列表/引用/围栏/表格分隔),再走行内清理.
+    最后压缩 3+ 连续空行到 2 行,避免段落空白爆炸.
+    """
+    s = _RE_FENCE.sub(r"\1", s)
+    s = _RE_HEADING.sub("", s)
+    s = _RE_BLOCKQUOTE.sub("", s)
+    s = _RE_LIST_PREFIX.sub("", s)
+    s = _RE_TABLE_SEP.sub("", s)
+    s = _RE_BOLD.sub(lambda m: m.group(1) or m.group(2) or "", s)
+    s = _RE_ITALIC.sub(lambda m: m.group(1) or m.group(2) or "", s)
+    s = _RE_INLINE_CODE.sub(r"\1", s)
+    s = _RE_LINK.sub(r"\1", s)
+    s = _re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
 
 
 def _build_system_prompt(profile: BrandProfile) -> str:
