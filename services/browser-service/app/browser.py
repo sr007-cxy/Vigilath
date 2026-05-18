@@ -396,9 +396,20 @@ async def save_page_session(engine_name: str, context) -> None:
     save_storage_state(engine_name, state)
 
 
+_HUMAN_DELAY_SCALE = float(os.environ.get("BROWSER_DELAY_SCALE", "1.0"))
+
+
 async def human_delay(min_s: float = 1.0, max_s: float = 3.0) -> None:
-    """Random delay to simulate human timing."""
-    await asyncio.sleep(random.uniform(min_s, max_s))
+    """Random delay to simulate human timing.
+
+    全局缩放因子 BROWSER_DELAY_SCALE(env)允许在不动 100+ 调用点的前提下
+    集体提速。默认 1.0(原值);production 推荐 0.25-0.4(对应日批跑批速度
+    提升 1.5-2x,反检测信号略减但仍非零)。如果检测到 captcha 增多,把它
+    调回去就行。设 0 完全跳过(测试用,不要 production)。
+    """
+    if _HUMAN_DELAY_SCALE <= 0:
+        return
+    await asyncio.sleep(random.uniform(min_s * _HUMAN_DELAY_SCALE, max_s * _HUMAN_DELAY_SCALE))
 
 
 async def human_type(page, selector: str, text: str, delay_ms: int = 0) -> None:
