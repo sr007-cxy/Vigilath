@@ -83,85 +83,93 @@ class DeepSeekBrowserAdapter(EngineAdapter):
         "[class*='message'][class*='assistant']",
     )
 
-    async def search(self, query: str) -> EngineResult:
+    # D4(2026-05-18):search() 拆成 _prepare_page + _query_with_page,
+    # 让 EngineSession 能复用 hot browser.search() 自己也用这俩,所以
+    # one-shot 行为 100% 不变.
+    async def _prepare_page(self, page, ctx) -> None:
+        """开始 query 前的所有"准备好"工作 — goto + banner + 智能搜索 toggle 等.
+
+        EngineSession.init() 在 worker 启动时调一次;search() 也调.
+        _start_new_chat 不在这一步,留给每次 query 前调用以重置 conversation.
+        """
+        await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
+        await human_delay(2, 3)
+        await self._dismiss_cookie_banner(page)
+        # 启用智能搜索 — 一次性,后续 query 都用这个 toggle
+        await self._enable_smart_search(page)
+
+    async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
+        """假设 page 已 _prepare_page 过,在该 page 上跑一次 query.
+
+        EngineSession.query() 在每次调用前先调 _start_new_chat,再调本方法.
+        search() 也走这条路径,只是它在外面包了 launch + close.
+        """
         import sys
+        # 1) 重置 chat(EngineSession 已经调过 _start_new_chat 也无所谓 — idempotent)
+        await self._start_new_chat(page)
+        # 2) 找 textarea
+        try:
+            textarea = page.locator("textarea").first
+            await textarea.wait_for(state="visible", timeout=10000)
+        except Exception:
+            return EngineResult(
+                engine=self.name, query=query,
+                error="DeepSeek textarea not visible — login may have expired",
+            )
+        await textarea.click()
+        await textarea.fill(query)
+        await human_delay(0.5, 1.0)
+        await page.keyboard.press("Enter")
+
+        # 3) 轮询稳定答案(原 search() 同款 150 × 1s)
+        await asyncio.sleep(3)
+        last_len = 0
+        stable_count = 0
+        matched_sel = None
+        for _ in range(150):
+            await asyncio.sleep(1)
+            cur_text, cur_sel = await self._read_answer_text(page)
+            cur_len = len(cur_text)
+            if cur_len > 0 and cur_len == last_len:
+                stable_count += 1
+                if stable_count >= 5:
+                    matched_sel = cur_sel
+                    break
+            else:
+                last_len = cur_len
+                stable_count = 0
+                if cur_sel:
+                    matched_sel = cur_sel
+        sys.__stdout__.write(
+            f"[DS-wait] final last_len={last_len} matched_sel={matched_sel!r}\n"
+        )
+        sys.__stdout__.flush()
+
+        # 4) Extract
+        answer, _ = await self._read_answer_text(page)
+        if not answer.strip():
+            await self._diagnose_empty_answer(page)
+        citations = await self._extract_citations(page, answer)
+
+        return EngineResult(
+            engine=self.name,
+            query=query,
+            answer=answer,
+            citations=citations,
+        )
+
+    async def search(self, query: str) -> EngineResult:
+        """One-shot search:launch → prepare → query → save + close.
+
+        EngineSession 走 hot 路径不调本方法.两条路径共用 _prepare_page +
+        _query_with_page,行为一致.
+        """
         try:
             page, ctx = await create_stealth_page("deepseek", record_video=self._record_video)
-            await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
-            await human_delay(2, 3)
-
-            # Dismiss cookie consent banner if present
-            await self._dismiss_cookie_banner(page)
-
-            # Click "开启新对话" to start a fresh chat (avoids context pollution)
-            try:
-                new_chat_btn = page.locator("text=开启新对话").first
-                if await new_chat_btn.is_visible(timeout=2000):
-                    await new_chat_btn.click()
-                    await human_delay(1, 2)
-            except Exception:
-                pass
-
-            # Enable "智能搜索" (Smart Search) for web results
-            await self._enable_smart_search(page)
-
-            # Type query into the textarea
-            try:
-                textarea = page.locator("textarea").first
-                await textarea.wait_for(state="visible", timeout=10000)
-            except Exception:
-                await ctx.close()
-                return EngineResult(
-                    engine=self.name, query=query,
-                    error="DeepSeek textarea not visible — login may have expired",
-                )
-            await textarea.click()
-            await textarea.fill(query)
-            await human_delay(0.5, 1.0)
-
-            # Submit
-            await page.keyboard.press("Enter")
-
-            # Wait for response to complete via content-stability polling.
-            # 轮询多个候选 selector,任一非空且稳定 5s 即可。
-            # 之前只盯 .ds-markdown,DS 改版后这个 class 不出现,
-            # 120s 轮询全程空文本,answer 拿到 ""。
-            await asyncio.sleep(3)
-            last_len = 0
-            stable_count = 0
-            matched_sel = None
-            for _ in range(150):
-                await asyncio.sleep(1)
-                cur_text, cur_sel = await self._read_answer_text(page)
-                cur_len = len(cur_text)
-                if cur_len > 0 and cur_len == last_len:
-                    stable_count += 1
-                    if stable_count >= 5:
-                        matched_sel = cur_sel
-                        break
-                else:
-                    last_len = cur_len
-                    stable_count = 0
-                    if cur_sel:
-                        matched_sel = cur_sel
-
-            sys.__stdout__.write(
-                f"[DS-wait] final last_len={last_len} matched_sel={matched_sel!r}\n"
-            )
-            sys.__stdout__.flush()
-
-            # Extract answer text — same selector ladder as the poll loop.
-            answer, _ = await self._read_answer_text(page)
-
-            # 仍然空答案 → dump 诊断信息,后端把 error 透传到 UI 上排查
-            if not answer.strip():
-                await self._diagnose_empty_answer(page)
-
-            # Extract citations
-            citations = await self._extract_citations(page, answer)
+            await self._prepare_page(page, ctx)
+            result = await self._query_with_page(page, ctx, query)
 
             await save_page_session("deepseek", ctx)
-
             video_path = None
             if self._record_video:
                 try:
@@ -169,16 +177,11 @@ class DeepSeekBrowserAdapter(EngineAdapter):
                     video_path = await get_video_path(page)
                 except Exception:
                     pass
-
             await ctx.close()
-
-            return EngineResult(
-                engine=self.name,
-                query=query,
-                answer=answer,
-                citations=citations,
-                video_path=video_path,
-            )
+            # video_path 仅 one-shot 模式带,EngineResult 上没有 video_path 字段单独传
+            if video_path is not None:
+                result.video_path = video_path
+            return result
         except Exception as e:
             return EngineResult(engine=self.name, query=query, error=str(e))
 

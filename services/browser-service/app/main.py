@@ -56,6 +56,11 @@ ENGINE_DISPLAY_NAMES = {
 _adapters: dict[str, EngineAdapter] = {}
 _semaphore: Optional[asyncio.Semaphore] = None
 
+# D4 hot browser:engine_name → EngineSession.lazy 创建,首次 /search-hot 触发.
+from .engine_session import EngineSession  # noqa: E402
+_hot_sessions: dict[str, EngineSession] = {}
+_hot_lock = asyncio.Lock()  # 保护 _hot_sessions dict
+
 
 def _load_adapters() -> None:
     global _semaphore
@@ -91,6 +96,13 @@ async def lifespan(app: FastAPI):
     _load_adapters()
     print(f"[START] region={REGION} engines={list(_adapters.keys())} max_concurrent={MAX_CONCURRENT}")
     yield
+    # D4:关掉所有 hot sessions
+    for engine, sess in list(_hot_sessions.items()):
+        try:
+            await sess.close()
+            print(f"[STOP] hot session {engine} closed")
+        except Exception as e:
+            print(f"[STOP] hot session {engine} close failed: {e}")
     # Cleanup: close browser if needed
     from .browser import close_browser
     await close_browser()
@@ -203,6 +215,88 @@ async def search(req: SearchRequest):
         return SearchResponse(engine=req.engine, query=req.query, error=str(e))
     finally:
         _semaphore.release()
+
+
+# D4 hot-browser endpoint ─────────────────────────────────────
+# 同 /search,但走 EngineSession 复用 browser context.engine 必须实现
+# _prepare_page + _query_with_page(目前仅 deepseek).返回相同 SearchResponse.
+
+@app.post("/search-hot", response_model=SearchResponse)
+async def search_hot(req: SearchRequest):
+    adapter = _adapters.get(req.engine)
+    if not adapter:
+        raise HTTPException(status_code=400, detail=f"Unknown engine: {req.engine}")
+
+    # lazy 创建 + init EngineSession(线程/任务 safe)
+    async with _hot_lock:
+        sess = _hot_sessions.get(req.engine)
+        if sess is None:
+            sess = EngineSession(req.engine, adapter)
+            _hot_sessions[req.engine] = sess
+
+    try:
+        if not sess._initialized:
+            await sess.init()  # 首次:launch + prepare
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except Exception as e:
+        return SearchResponse(engine=req.engine, query=req.query, error=f"hot-session init failed: {e}")
+
+    search_timeout = int(os.environ.get("ENGINE_SEARCH_TIMEOUT", "300"))
+    start = time.time()
+    try:
+        result: EngineResult = await asyncio.wait_for(
+            sess.query(req.query),
+            timeout=search_timeout,
+        )
+        elapsed = time.time() - start
+        print(
+            f"[SEARCH-HOT] engine={req.engine} query={req.query[:30]!r} "
+            f"ans_len={len(result.answer or '')} cites={len(result.citations or [])} "
+            f"err={result.error!r} {elapsed:.1f}s q#{sess.query_count}"
+        )
+        return SearchResponse(
+            engine=result.engine,
+            query=result.query,
+            answer=result.answer or "",
+            citations=[
+                CitationOut(
+                    url=c.url, domain=c.domain, title=c.title,
+                    snippet=c.snippet, position=c.position,
+                )
+                for c in (result.citations or [])
+            ],
+            error=result.error,
+            video_url=None,  # hot 模式下视频暂不支持
+        )
+    except asyncio.TimeoutError:
+        return SearchResponse(engine=req.engine, query=req.query, error=f"timeout ({search_timeout}s)")
+    except Exception as e:
+        return SearchResponse(engine=req.engine, query=req.query, error=str(e))
+
+
+@app.get("/hot-sessions")
+async def list_hot_sessions():
+    """Debug: list active hot sessions + stats."""
+    return [
+        {
+            "engine": eng,
+            "initialized": s._initialized,
+            "query_count": s.query_count,
+            "last_used_at": s.last_used_at,
+        }
+        for eng, s in _hot_sessions.items()
+    ]
+
+
+@app.post("/hot-sessions/{engine}/rotate")
+async def rotate_hot_session(engine: str, reason: str = "manual"):
+    """Force rotate (close + reopen with fresh session)."""
+    sess = _hot_sessions.get(engine)
+    if sess is None:
+        raise HTTPException(status_code=404, detail=f"no hot session for engine={engine}")
+    await sess.rotate(reason=reason)
+    return {"engine": engine, "rotated": True}
 
 
 # ── Session management ─────────────────────────────────────────
