@@ -332,7 +332,6 @@ function DocCard({ doc, onOpen }: { doc: ContentDoc; onOpen: () => void }) {
       )}
       <div className="mt-2 flex items-center gap-3 text-[11px] text-muted flex-wrap">
         <span>📅 {new Date(doc.created_at).toLocaleString()}</span>
-        {doc.llm_model && <span>🤖 {doc.llm_model}</span>}
         {doc.publish_targets.length > 0 && (
           <span className="inline-flex items-center gap-1">
             🌐 {doc.publish_targets.map((p, i) => (
@@ -452,7 +451,6 @@ function DocDetailDrawer({
             </div>
             <div className="text-xs text-muted mt-1">
               {doc.source_query_text && <span>Q: {doc.source_query_text} · </span>}
-              {doc.llm_model && <span>{doc.llm_model} · </span>}
               <span>{new Date(doc.created_at).toLocaleString()}</span>
             </div>
           </div>

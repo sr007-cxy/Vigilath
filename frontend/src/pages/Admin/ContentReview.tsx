@@ -329,7 +329,6 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
             </div>
             <div className="text-xs text-muted mt-1">
               {doc.source_query_text}
-              {doc.llm_model && <> · {doc.llm_model}</>}
               {' · '}{new Date(doc.created_at).toLocaleString()}
             </div>
           </div>
