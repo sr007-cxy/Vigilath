@@ -61,6 +61,81 @@ class WenxinBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # D4d(2026-05-18):hot browser protocol — _prepare_page + _query_with_page
+    # 共享 search() 的 helpers,search() 本身**不动**,one-shot 零回归.
+    async def _prepare_page(self, page, ctx) -> None:
+        """Hot init:goto + 弹窗;_start_new_chat 留给每次 query."""
+        try:
+            await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=60000)
+        except Exception:
+            await page.goto(self.CHAT_URL, wait_until="load", timeout=60000)
+        await human_delay(2, 3)
+        await self._dismiss_popups(page)
+        input_el = page.locator("textarea, [contenteditable='true']").first
+        try:
+            await input_el.wait_for(state="visible", timeout=10000)
+        except Exception:
+            raise RuntimeError("input not visible after prepare — session likely expired")
+
+    async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
+        """Hot query:reset → input → submit → wait → extract.
+
+        共用 search() 的 _wait_text_stable / _expand_references / _extract_citations.
+        """
+        await self._start_new_chat(page)
+        await human_delay(0.5, 1.0)
+
+        input_el = page.locator("textarea, [contenteditable='true']").first
+        try:
+            await input_el.wait_for(state="visible", timeout=10000)
+        except Exception:
+            return EngineResult(engine=self.name, query=query, error="input not visible")
+        await input_el.click()
+        try:
+            await input_el.fill(query)
+        except Exception:
+            await input_el.type(query)
+        await human_delay(0.5, 1.0)
+        await page.keyboard.press("Enter")
+
+        await human_delay(3, 5)
+        try:
+            await page.wait_for_function(
+                """() => !document.querySelector('.cosd-markdown-content-typingall')
+                       && !document.querySelector('.cosd-markdown-loading')
+                       && !document.querySelector('[data-auto-test="stop_response"]')""",
+                timeout=180000,
+            )
+        except Exception:
+            sys.__stdout__.write("[Wenxin-hot] typing wait timeout 180s\n"); sys.__stdout__.flush()
+        await self._wait_text_stable(page, max_wait=30, stable_secs=3.0)
+        await human_delay(1.0, 2.0)
+
+        # 用 search() 内同样的 multi-block answer 拼接逻辑(精简版)
+        answer = ""
+        try:
+            container = page.locator("div.conversation-flow-answer-container").last
+            if await container.count() > 0:
+                blocks = await container.locator(".cosd-markdown-content, .cosd-markdown, .ai-markdown").all()
+                parts: list[str] = []
+                seen: set[str] = set()
+                for b in blocks:
+                    try:
+                        t = (await b.inner_text()).strip()
+                    except Exception:
+                        continue
+                    if t and t not in seen:
+                        seen.add(t)
+                        parts.append(t)
+                if parts:
+                    answer = "\n\n".join(parts)
+        except Exception:
+            pass
+
+        await self._expand_references(page)
+        citations = await self._extract_citations(page, answer)
+        return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
+
     async def search(self, query: str) -> EngineResult:
         try:
             page, ctx = await create_stealth_page("wenxin", record_video=self._record_video)

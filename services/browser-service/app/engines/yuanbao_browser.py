@@ -120,6 +120,70 @@ class YuanbaoBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # D4d(2026-05-18):hot browser protocol — _prepare_page + _query_with_page
+    # 共享 search() 的 helpers,search() 本身**不动**,one-shot 零回归.
+    async def _prepare_page(self, page, ctx) -> None:
+        """Hot init:网络抓包 listener + goto + sessionStorage 强制联网搜索 + 弹窗."""
+        self._captured_bodies = []
+
+        def _on_response(response):
+            url_l = response.url.lower()
+            if not any(kw in url_l for kw in ("/api/chat", "/api/conv", "completion", "search")):
+                return
+            ctype = (response.headers.get("content-type") or "").lower()
+            if ctype and not any(
+                t in ctype for t in ("json", "event-stream", "text/plain", "text/html")
+            ):
+                return
+            try:
+                asyncio.create_task(self._capture_body(response, self._captured_bodies))
+            except Exception:
+                pass
+
+        page.on("response", _on_response)
+        await page.goto(self.CHAT_URL, wait_until="domcontentloaded", timeout=30000)
+        await human_delay(2, 4)
+        try:
+            await page.evaluate(
+                'sessionStorage.setItem("YB_ASK_AI_SEARCH_TYPE_NETWORK", "1")'
+            )
+        except Exception:
+            pass
+        await self._dismiss_popups(page)
+
+    async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
+        """Hot query:reset → input → submit → wait → extract."""
+        self._captured_bodies = []  # 清上一轮
+        await self._start_new_chat(page)
+        await self._enable_web_search(page)
+
+        input_el = await self._find_input(page)
+        if input_el is None:
+            return EngineResult(engine=self.name, query=query, error="input not found")
+        try:
+            placeholder = await input_el.get_attribute("data-placeholder") or ""
+            if "登录" in placeholder:
+                return EngineResult(
+                    engine=self.name, query=query,
+                    error=f"login required (placeholder: {placeholder})"
+                )
+        except Exception:
+            pass
+        await input_el.click()
+        try:
+            await input_el.fill(query)
+        except Exception:
+            await input_el.type(query, delay=80)
+        await human_delay(0.5, 1.0)
+        await page.keyboard.press("Enter")
+        await human_delay(3, 5)
+        await self._wait_for_stable_answer(page, max_wait=60, stable_secs=2.5)
+        await human_delay(1.0, 2.0)
+
+        answer = await self._extract_answer(page)
+        citations = await self._extract_citations(page, answer)
+        return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
+
     async def search(self, query: str) -> EngineResult:
         try:
             page, ctx = await create_stealth_page("yuanbao", record_video=self._record_video)
