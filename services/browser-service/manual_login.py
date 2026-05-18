@@ -34,7 +34,7 @@ from app.anti_detect import _pick_profile
 # Per-engine config: chat URL, fingerprint platform pin, channel
 _ENGINE_CFG = {
     "doubao":   ("https://www.doubao.com/chat/", "Linux x86_64", "chrome"),
-    "qwen":     ("https://tongyi.aliyun.com/",    None,           None),
+    "qwen":     ("https://www.qianwen.com/",      None,           None),
     "deepseek": ("https://chat.deepseek.com/",    None,           None),
     "wenxin":   ("https://yiyan.baidu.com/",      None,           None),
     "yuanbao":  ("https://yuanbao.tencent.com/",  None,           None),

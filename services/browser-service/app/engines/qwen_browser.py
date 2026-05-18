@@ -1,8 +1,8 @@
-"""Qwen (通义千问) browser adapter — automates tongyi.aliyun.com.
+"""Qwen (通义千问) browser adapter — automates www.qianwen.com.
 
-2026-05-18 迁移自 chat.qwen.ai → tongyi.aliyun.com:
+2026-05-18 迁移自 chat.qwen.ai → www.qianwen.com:
 - chat.qwen.ai 是阿里出海版,可用邮箱登录
-- tongyi.aliyun.com 是国内主站,手机号登录,跟用户的扩展插件域名一致
+- www.qianwen.com 是千问国内主站,手机号登录,跟用户的扩展插件域名一致
 
 迁移策略:DOM selector 选 "通用 + fallback 链",不写死 tongyi 特定 class —
 React Ant Design 类型的 chat 应用通用模式:
@@ -28,8 +28,8 @@ from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
 
 _QWEN_BLOCK_HOSTS = (
     # 自家域,citation 不收
-    "qwen.ai", "tongyi.aliyun.com", "aliyun.com", "alibabacloud.com",
-    "alicdn.com", "alipay.com", "taobao.com", "tmall.com",
+    "qwen.ai", "qianwen.com", "tongyi.aliyun.com", "aliyun.com",
+    "alibabacloud.com", "alicdn.com", "alipay.com", "taobao.com", "tmall.com",
     # 通用埋点/CDN
     "w3.org", "googletagmanager.com", "google-analytics.com",
     "googlesyndication.com", "doubleclick.net", "facebook.net", "analytics",
@@ -84,9 +84,8 @@ class QwenBrowserAdapter(EngineAdapter):
         import os
         self._record_video = os.environ.get("GEO_RECORD_VIDEO", "").strip() in ("1", "true")
 
-    # tongyi.aliyun.com 入口 — 登录后会自动跳到 /qianwen/ 或类似 chat 子路径,
-    # 不写死后缀,让站点自己 redirect。
-    CHAT_URL = "https://tongyi.aliyun.com/"
+    # www.qianwen.com 入口 — 登录后自动进 chat 页,不写死后缀,让站点自己 redirect。
+    CHAT_URL = "https://www.qianwen.com/"
 
     # 输入框 selector 候选链(按命中优先级)。
     # 现代 React chat 应用要么是 textarea,要么是 contenteditable div。

@@ -31,7 +31,7 @@
 
 1. 新标签页打开引擎的 chat 页:
    - 豆包      https://www.doubao.com/chat/
-   - 通义千问  https://tongyi.aliyun.com/
+   - 通义千问  https://www.qianwen.com/
    - DeepSeek  https://chat.deepseek.com/
    - 文心一言  https://yiyan.baidu.com/
    - 腾讯元宝  https://yuanbao.tencent.com/
