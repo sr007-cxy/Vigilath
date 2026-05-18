@@ -118,7 +118,7 @@ function App() {
                 <Route path="compose" element={<Navigate to="/dashboard/content" replace />} />
                 <Route path="posts" element={<Navigate to="/dashboard/content" replace />} />
                 {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
-                <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['overview', 'tracking', 'results']} />} />
+                <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['today', 'overview', 'tracking', 'results']} />} />
                 {/* 优化建议提升为顶级 */}
                 <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
               </Route>

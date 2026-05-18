@@ -31,7 +31,7 @@ import {
 } from 'recharts';
 import { Tooltip as HintTooltip } from '../../components/Tooltip';
 
-type TabKey = 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
+type TabKey = 'today' | 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
 
 const ENGINE_COLORS: Record<EngineId, string> = {
   deepseek: '#5B6CFF', doubao: '#FF7043', qwen: '#7E57C2',
@@ -81,7 +81,7 @@ function ReviewBadgeLabel({ keyName }: { keyName: string }) {
   return <>{t(keyName)}</>;
 }
 
-const ALL_TABS: TabKey[] = ['overview', 'tracking', 'briefings', 'config', 'results'];
+const ALL_TABS: TabKey[] = ['today', 'overview', 'tracking', 'briefings', 'config', 'results'];
 
 export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const { t } = useTranslation();
@@ -247,6 +247,10 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
         </div>
       )}
 
+      {currentTab ==='today' && (
+        <TodayTab topics={topics} token={token}
+          topicId={sharedTopicId} onTopicChange={setSharedTopicId} />
+      )}
       {currentTab ==='overview' && (
         <OverviewTab topics={topics} token={token}
           topicId={sharedTopicId} onTopicChange={setSharedTopicId} />
@@ -407,6 +411,484 @@ function formatTime(iso?: string | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return d.toLocaleDateString();
+}
+
+// ── 今日 ───────────────────────────────────────────────────────
+
+function TodayTab({ topics, token, topicId, onTopicChange }: {
+  topics: Topic[]; token: string;
+  topicId: number | null; onTopicChange: (id: number | null) => void;
+}) {
+  const { t } = useTranslation();
+  const setTopicId = onTopicChange;
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [responsesByRun, setResponsesByRun] = useState<Record<number, ResponseRow[]>>({});
+  const [loading, setLoading] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+
+  useEffect(() => {
+    if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
+  }, [topics, topicId, setTopicId]);
+
+  const load = async (tid: number) => {
+    setLoading(true);
+    try {
+      const rs = await aiTelemetryApi.listRuns(tid, token);
+      setRuns(rs);
+      // 加载今天 + 昨天的 runs 的 responses(昨天用于算 citations 增量)
+      const dayStart = startOfDay(new Date()).getTime();
+      const need = rs.filter(r => {
+        const ts = new Date(r.started_at).getTime();
+        return ts >= dayStart - 86400000 && ts < dayStart + 86400000;
+      });
+      const pairs = await Promise.all(need.map(async r => {
+        try { return [r.id, await aiTelemetryApi.listResponses(r.id, token)] as const; }
+        catch { return [r.id, [] as ResponseRow[]] as const; }
+      }));
+      const map: Record<number, ResponseRow[]> = {};
+      for (const [id, rows] of pairs) map[id] = rows;
+      setResponsesByRun(map);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (topicId === null) return;
+    load(topicId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId, token]);
+
+  if (topics.length === 0) {
+    return <EmptyHint text={t('dashboard.aiTelemetry.today.noTopics')} />;
+  }
+
+  const topic = topics.find(tp => tp.id === topicId) ?? null;
+  const dayStart = startOfDay(new Date()).getTime();
+  const todayRuns = runs.filter(r => new Date(r.started_at).getTime() >= dayStart);
+  const yesterdayRuns = runs.filter(r => {
+    const ts = new Date(r.started_at).getTime();
+    return ts >= dayStart - 86400000 && ts < dayStart;
+  });
+  const todayResponses = todayRuns.flatMap(r => responsesByRun[r.id] ?? []);
+  const yesterdayResponses = yesterdayRuns.flatMap(r => responsesByRun[r.id] ?? []);
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-input)', border: '1px solid var(--border-color)',
+    color: 'var(--text-primary)',
+  };
+
+  const handleRunNow = async () => {
+    if (topicId === null || triggering) return;
+    setTriggering(true);
+    try {
+      await aiTelemetryApi.triggerRun(topicId, token);
+      // 后端异步,等一下再 refresh
+      setTimeout(() => { if (topicId !== null) load(topicId); }, 1500);
+    } finally { setTriggering(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 顶部:topic 选 + 立即检测 */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="text-xs text-secondary">
+          {t('dashboard.aiTelemetry.today.selectTopic')}
+          <select
+            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+            className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
+          >
+            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={handleRunNow}
+          disabled={triggering || topicId === null}
+          className="px-3 py-1.5 text-xs rounded-md text-white disabled:opacity-50"
+          style={{ background: 'var(--accent-primary)' }}
+        >
+          {triggering
+            ? t('dashboard.aiTelemetry.actions.running')
+            : t('dashboard.aiTelemetry.today.runNow')}
+        </button>
+      </div>
+
+      {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
+
+      {!loading && todayRuns.length === 0 && (
+        <EmptyHint text={t('dashboard.aiTelemetry.today.noRunToday')} />
+      )}
+
+      {!loading && todayRuns.length > 0 && topic && (
+        <TodayBody
+          topic={topic}
+          todayRuns={todayRuns}
+          todayResponses={todayResponses}
+          yesterdayResponses={yesterdayResponses}
+        />
+      )}
+    </div>
+  );
+}
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
+  topic: Topic;
+  todayRuns: RunSummary[];
+  todayResponses: ResponseRow[];
+  yesterdayResponses: ResponseRow[];
+}) {
+  const { t } = useTranslation();
+  const enginesAll = topic.engines.length > 0 ? topic.engines : CN_ENGINES;
+  const queriesAll = topic.queries;
+
+  // 每引擎状态:done(有成功) / failed(只有 error) / pending(还没回来)
+  const engineStatus = useMemo(() => {
+    const map: Record<string, 'done' | 'failed' | 'pending'> = {};
+    const anyRunning = todayRuns.some(r => r.status === 'running');
+    for (const e of enginesAll) {
+      const rows = todayResponses.filter(r => r.engine === e);
+      const ok = rows.filter(r => !r.error).length;
+      const err = rows.filter(r => r.error).length;
+      if (ok > 0) map[e] = 'done';
+      else if (err > 0) map[e] = 'failed';
+      else map[e] = anyRunning ? 'pending' : 'failed';
+    }
+    return map;
+  }, [enginesAll, todayResponses, todayRuns]);
+
+  const enginesDone = enginesAll.filter(e => engineStatus[e] === 'done').length;
+  const enginesFailed = enginesAll.filter(e => engineStatus[e] === 'failed');
+  const enginesRunning = enginesAll.filter(e => engineStatus[e] === 'pending').length;
+  const allDone = enginesDone === enginesAll.length;
+  const elapsedSecs = (() => {
+    const finished = todayRuns.filter(r => r.finished_at);
+    if (finished.length === 0) return 0;
+    const start = Math.min(...todayRuns.map(r => new Date(r.started_at).getTime()));
+    const end = Math.max(...finished.map(r => new Date(r.finished_at!).getTime()));
+    return Math.max(1, Math.round((end - start) / 1000));
+  })();
+
+  // KPIs
+  const okResponses = todayResponses.filter(r => !r.error);
+  const hits = okResponses.filter(r => r.hit === true).length;
+  const mentionRate = okResponses.length > 0 ? Math.round(hits / okResponses.length * 100) : 0;
+  const citationsToday = okResponses.reduce((s, r) => s + r.citations.length, 0);
+  const citationsYesterday = yesterdayResponses
+    .filter(r => !r.error)
+    .reduce((s, r) => s + r.citations.length, 0);
+  const citationsDelta = citationsToday - citationsYesterday;
+
+  // 矩阵:queries × engines
+  const cellMap = useMemo(() => {
+    const m: Record<string, ResponseRow[]> = {};
+    for (const r of todayResponses) {
+      const k = `${r.query}|${r.engine}`;
+      (m[k] = m[k] || []).push(r);
+    }
+    return m;
+  }, [todayResponses]);
+  const cellState = (q: string, e: string): 'hit' | 'miss' | 'err' | 'none' => {
+    const rows = cellMap[`${q}|${e}`] || [];
+    if (rows.length === 0) return 'none';
+    if (rows.some(r => r.hit === true)) return 'hit';
+    if (rows.some(r => !r.error && r.hit === false)) return 'miss';
+    if (rows.some(r => r.error)) return 'err';
+    return 'none';
+  };
+  const queryHitCount = (q: string) => {
+    let hit = 0, ran = 0;
+    for (const e of enginesAll) {
+      const s = cellState(q, e);
+      if (s === 'hit') { hit++; ran++; }
+      else if (s === 'miss' || s === 'err') ran++;
+    }
+    return { hit, ran };
+  };
+
+  // 今日新增引用
+  const citedDomains = useMemo(() => {
+    const map = new Map<string, { url: string; title: string; domain: string; count: number; engines: Set<string> }>();
+    for (const r of okResponses) {
+      for (const c of r.citations) {
+        const k = c.url;
+        const cur = map.get(k);
+        if (cur) { cur.count++; cur.engines.add(r.engine); }
+        else map.set(k, { url: c.url, title: c.title, domain: c.domain, count: 1, engines: new Set([r.engine]) });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [okResponses]);
+
+  // 盲区:今日所有 engine 都未提及的 query
+  const blindQueries = queriesAll.filter(q => {
+    const { hit, ran } = queryHitCount(q);
+    return ran > 0 && hit === 0;
+  });
+
+  const cardBg: React.CSSProperties = {
+    background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 状态条 */}
+      <div className="px-4 py-2.5 rounded-lg flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" style={cardBg}>
+        <span className="text-secondary">{t('dashboard.aiTelemetry.today.runStatus')}:</span>
+        {allDone
+          ? <span className="text-emerald-500">
+              ● {t('dashboard.aiTelemetry.today.runStatusAllDone', { total: enginesAll.length, secs: elapsedSecs })}
+            </span>
+          : <span className="text-blue-500">
+              ● {t('dashboard.aiTelemetry.today.runStatusRunning', {
+                  done: enginesDone, total: enginesAll.length, running: enginesRunning,
+                })}
+            </span>}
+        {enginesFailed.length > 0 && (
+          <span className="text-rose-500">
+            ⚠ {t('dashboard.aiTelemetry.today.runStatusFailed', { failed: enginesFailed.length })}
+          </span>
+        )}
+        <span className="text-muted ml-auto">
+          {t('dashboard.aiTelemetry.today.runStartedAt', {
+            time: new Date(Math.min(...todayRuns.map(r => new Date(r.started_at).getTime()))).toLocaleTimeString(),
+          })}
+        </span>
+      </div>
+
+      {/* KPI 4 张卡 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <TodayKpiCard
+          label={t('dashboard.aiTelemetry.today.kpiQueries')}
+          value={queriesAll.length}
+          sub={t('dashboard.aiTelemetry.today.kpiQueriesUnit', {
+            engines: enginesAll.length,
+            calls: queriesAll.length * enginesAll.length,
+          })}
+        />
+        <TodayKpiCard
+          label={t('dashboard.aiTelemetry.today.kpiMentionRate')}
+          value={`${mentionRate}%`}
+          sub={t('dashboard.aiTelemetry.today.kpiMentionRateUnit', { hits, total: okResponses.length })}
+          hint={t('dashboard.aiTelemetry.today.tipMentionRate')}
+        />
+        <TodayKpiCard
+          label={t('dashboard.aiTelemetry.today.kpiCitations')}
+          value={citationsToday}
+          sub={citationsDelta > 0
+            ? t('dashboard.aiTelemetry.today.kpiCitationsDeltaUp', { n: citationsDelta })
+            : citationsDelta < 0
+              ? t('dashboard.aiTelemetry.today.kpiCitationsDeltaDown', { n: citationsDelta })
+              : t('dashboard.aiTelemetry.today.kpiCitationsDeltaSame')}
+          subColor={citationsDelta > 0 ? '#10b981' : citationsDelta < 0 ? '#ef4444' : undefined}
+          hint={t('dashboard.aiTelemetry.today.tipCitations')}
+        />
+        <TodayKpiCard
+          label={t('dashboard.aiTelemetry.today.kpiEngines')}
+          value={t('dashboard.aiTelemetry.today.kpiEnginesUnit', { done: enginesDone, total: enginesAll.length })}
+          sub={enginesFailed.length > 0
+            ? t('dashboard.aiTelemetry.today.kpiEnginesFailed', {
+                names: enginesFailed.map(e => engineName(e, t)).join(' / '),
+              })
+            : ''}
+          subColor={enginesFailed.length > 0 ? '#ef4444' : undefined}
+          hint={t('dashboard.aiTelemetry.today.tipEngines')}
+        />
+      </div>
+
+      {/* 命中矩阵 */}
+      <div className="rounded-lg overflow-hidden" style={cardBg}>
+        <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
+          <div className="text-sm font-medium text-primary">
+            {t('dashboard.aiTelemetry.today.matrixTitle')}
+          </div>
+          <div className="text-xs text-muted mt-0.5">
+            {t('dashboard.aiTelemetry.today.matrixHint')}
+          </div>
+        </div>
+        {queriesAll.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted">
+            {t('dashboard.aiTelemetry.today.matrixEmpty')}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                  <th className="text-left px-3 py-2 font-medium sticky left-0 z-10"
+                      style={{ background: 'var(--bg-secondary)', minWidth: 240 }}>
+                    {t('dashboard.aiTelemetry.today.matrixColQuery')}
+                  </th>
+                  {enginesAll.map(e => (
+                    <th key={e} className="text-center px-2 py-2 font-medium">
+                      <div>{engineName(e, t)}</div>
+                      <EngineStatusDot status={engineStatus[e]} />
+                    </th>
+                  ))}
+                  <th className="text-center px-3 py-2 font-medium">
+                    {t('dashboard.aiTelemetry.today.matrixColHits')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {queriesAll.map((q, i) => {
+                  const { hit, ran } = queryHitCount(q);
+                  return (
+                    <tr key={i} style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <td className="px-3 py-2 text-secondary sticky left-0"
+                          style={{ background: 'var(--bg-card)', maxWidth: 320 }}
+                          title={q}>
+                        <span className="line-clamp-2">{q}</span>
+                      </td>
+                      {enginesAll.map(e => (
+                        <td key={e} className="text-center px-2 py-2">
+                          <CellGlyph state={cellState(q, e)} />
+                        </td>
+                      ))}
+                      <td className="text-center px-3 py-2 text-secondary tabular-nums">
+                        {ran === 0
+                          ? '—'
+                          : t('dashboard.aiTelemetry.today.matrixRowHitRate', { hits: hit, total: ran })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 今日新增引用 + 盲区 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-lg" style={cardBg}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
+            <div className="text-sm font-medium text-primary">
+              {t('dashboard.aiTelemetry.today.citedTitle')}
+            </div>
+            <div className="text-xs text-muted mt-0.5">
+              {t('dashboard.aiTelemetry.today.citedHint')}
+            </div>
+          </div>
+          {citedDomains.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted">
+              {t('dashboard.aiTelemetry.today.citedEmpty')}
+            </div>
+          ) : (
+            <div className="max-h-80 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                    <th className="text-left px-3 py-2 font-medium w-8">
+                      {t('dashboard.aiTelemetry.today.citedColRank')}
+                    </th>
+                    <th className="text-left px-3 py-2 font-medium">
+                      {t('dashboard.aiTelemetry.today.citedColTitle')}
+                    </th>
+                    <th className="text-left px-3 py-2 font-medium">
+                      {t('dashboard.aiTelemetry.today.citedColEngines')}
+                    </th>
+                    <th className="text-right px-3 py-2 font-medium w-16">
+                      {t('dashboard.aiTelemetry.today.citedColCount')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {citedDomains.map((c, i) => (
+                    <tr key={c.url} style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <td className="px-3 py-2 text-muted tabular-nums">{i + 1}</td>
+                      <td className="px-3 py-2">
+                        <a href={c.url} target="_blank" rel="noreferrer"
+                           className="hover:underline block truncate max-w-[18rem]"
+                           style={{ color: 'var(--accent-primary)' }}
+                           title={c.title || c.url}>
+                          {c.title || c.url}
+                        </a>
+                        <div className="text-[10px] text-muted">{c.domain}</div>
+                      </td>
+                      <td className="px-3 py-2 text-secondary">
+                        {Array.from(c.engines).map(e => engineName(e, t)).join(', ')}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-primary">{c.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg" style={cardBg}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
+            <div className="text-sm font-medium text-primary">
+              {t('dashboard.aiTelemetry.today.blindTitle')}
+            </div>
+            <div className="text-xs text-muted mt-0.5">
+              {t('dashboard.aiTelemetry.today.blindHint')}
+            </div>
+          </div>
+          {blindQueries.length === 0 ? (
+            <div className="py-8 text-center text-sm text-emerald-500">
+              ✓ {t('dashboard.aiTelemetry.today.blindEmpty')}
+            </div>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto">
+              {blindQueries.map((q, i) => (
+                <li key={i}
+                    className="px-4 py-2 text-sm text-primary"
+                    style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-color)' }}>
+                  <span className="text-rose-500 mr-2">✕</span>{q}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function engineName(e: string, t: ReturnType<typeof useTranslation>['t']): string {
+  return t(`dashboard.aiTelemetry.engine.${e}`, e);
+}
+
+function TodayKpiCard({ label, value, sub, subColor, hint }: {
+  label: string; value: number | string; sub?: string; subColor?: string; hint?: string;
+}) {
+  return (
+    <div className="rounded-lg px-4 py-3"
+         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="text-xs text-secondary flex items-center gap-1">
+        {label}{hint && <InfoHint text={hint} />}
+      </div>
+      <div className="text-xl font-semibold text-primary mt-1 tabular-nums">{value}</div>
+      {sub && (
+        <div className="text-[11px] mt-0.5" style={{ color: subColor || 'var(--text-muted)' }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CellGlyph({ state }: { state: 'hit' | 'miss' | 'err' | 'none' }) {
+  if (state === 'hit') return <span className="inline-block w-5 h-5 rounded-full text-emerald-500" title="hit">✓</span>;
+  if (state === 'miss') return <span className="inline-block w-5 h-5 text-muted" title="miss">✕</span>;
+  if (state === 'err') return <span className="inline-block w-5 h-5 text-rose-500" title="error">⚠</span>;
+  return <span className="inline-block w-5 h-5 text-amber-500" title="no data">◐</span>;
+}
+
+function EngineStatusDot({ status }: { status?: 'done' | 'failed' | 'pending' }) {
+  const color = status === 'done' ? '#10b981'
+    : status === 'failed' ? '#ef4444'
+    : '#f59e0b';
+  return (
+    <span className="inline-block w-1.5 h-1.5 rounded-full mt-0.5" style={{ background: color }} />
+  );
 }
 
 // ── 概览 ───────────────────────────────────────────────────────
