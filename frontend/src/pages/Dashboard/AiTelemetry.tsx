@@ -884,9 +884,7 @@ function TodayKpiCard({ label, value, sub, subColor, hint }: {
 
 function CellGlyph({ state }: { state: 'hit' | 'miss' | 'err' | 'none' }) {
   if (state === 'hit') return <span className="inline-block w-5 h-5 rounded-full text-emerald-500" title="hit">✓</span>;
-  if (state === 'miss') return <span className="inline-block w-5 h-5 text-muted" title="miss">✕</span>;
-  if (state === 'err') return <span className="inline-block w-5 h-5 text-rose-500" title="error">⚠</span>;
-  return <span className="inline-block w-5 h-5 text-amber-500" title="no data">◐</span>;
+  return <span className="inline-block w-5 h-5 text-muted" title="not mentioned">✕</span>;
 }
 
 function EngineStatusDot({ status }: { status?: 'done' | 'failed' | 'pending' }) {

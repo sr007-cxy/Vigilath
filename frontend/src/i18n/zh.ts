@@ -1961,7 +1961,7 @@ const zh = {
                 "kpiEnginesUnit": "{{done}} / {{total}}",
                 "kpiEnginesFailed": "{{names}} 跑批失败",
                 "matrixTitle": "今日命中表(问题 × 引擎)",
-                "matrixHint": "✓ = 答案里提到你品牌 · ✕ = 未提到 · ◐ = 该引擎今天没成功",
+                "matrixHint": "✓ = 答案里提到你品牌 · ✕ = 未提到",
                 "matrixColQuery": "问题",
                 "matrixColHits": "命中率",
                 "matrixEmpty": "今日还没有数据",

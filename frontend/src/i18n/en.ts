@@ -1955,7 +1955,7 @@ const en = {
                 "kpiEnginesUnit": "{{done}} / {{total}}",
                 "kpiEnginesFailed": "{{names}} failed",
                 "matrixTitle": "Hit matrix (query × engine)",
-                "matrixHint": "✓ = brand mentioned · ✕ = not mentioned · ◐ = engine had no successful run today",
+                "matrixHint": "✓ = brand mentioned · ✕ = not mentioned",
                 "matrixColQuery": "Query",
                 "matrixColHits": "Hit rate",
                 "matrixEmpty": "No data for today yet",
