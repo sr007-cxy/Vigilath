@@ -3192,7 +3192,7 @@ function CellBadge({ cell, onClick }: { cell: QueryHitCell | undefined; onClick:
         border: hit ? '1px solid rgba(16,185,129,0.4)' : '1px solid transparent',
       }}
       title={hit ? `${cell.total_hits}/${cell.total_runs} 命中` : `${cell.total_runs} 次跑批 0 命中`}>
-      {hit ? `✓ ${date}` : '✓'}
+      {hit ? `✓ ${date}` : '✕'}
     </button>
   );
 }
