@@ -136,9 +136,13 @@ def _run_generation(
             provider, model_id = None, DEEPSEEK_MODEL
 
         for q in queries:
+            # 2026-05-18:AI 生稿直接进 admin 审核队列。文章审核走 admin 单审,
+            # 用户侧没有「送审」环节,落 draft 等于卡死。同步把 selected_for_review
+            # 置 True,跟 admin /docs/select 选稿后的状态一致。
             doc = TopicGeneratedDocORM(
                 topic_id=topic_id, execution_plan_id=plan_id,
-                source_query_text=q, status="draft",
+                source_query_text=q, status="pending_review",
+                selected_for_review=True,
                 llm_model=model_id, source="ai",
             )
             if not provider:
