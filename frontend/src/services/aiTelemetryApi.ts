@@ -54,6 +54,8 @@ export interface Topic {
   auto_generate_time?: string;    // "HH:MM"
   auto_generate_count?: number;
   auto_generate_last_run_at?: string | null;
+  // v1.4 — admin 配的扩展提示词;TopicOut 返回但普通用户不渲染
+  prompt_extension?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -133,6 +135,8 @@ export interface TopicPayload {
   seed_drafts?: string[];
   // Phase D — 同请求带资料;后端写 profile_json + 追加 changelog。
   profile?: BrandProfile;
+  // v1.4 — admin 工作台编辑时可写;普通用户编辑时即使带也会被后端忽略
+  prompt_extension?: string | null;
 }
 
 export interface RunNowResult {
@@ -179,6 +183,8 @@ export interface ResponseRow {
   created_at: string;
   hit?: boolean;
   hit_excerpt?: string | null;
+  mention_position?: string | null;
+  brand_rank?: number | null;
 }
 
 // ─── v1 引用追踪 ──────────────────────────────────────────
@@ -381,6 +387,58 @@ export interface IntentBreakdown {
   clusters: ClusterBreakdownItem[];
   uncategorized: ClusterBreakdownItem;
 }
+
+// ── 品牌增长页 — 雷达 5 维 + 行业基准 + 竞品替代证据 ───────
+export interface PositionBreakdown {
+  top1_pct: number;
+  top3_pct: number;
+  top5_pct: number;
+  visible_pct: number;
+  source_pct: number;
+}
+
+export interface PositionBreakdownResp {
+  topic_id: number;
+  period_days: number;
+  industry: string;
+  total_cells: number;
+  total_queries: number;
+  breakdown: PositionBreakdown;
+  industry_baseline: PositionBreakdown | null;
+}
+
+export interface IndustryBenchmark {
+  industry: string;
+  sample_size: number;
+  breakdown: PositionBreakdown | null;
+}
+
+export interface CompetitorSubstitutionItem {
+  query: string;
+  competitor_name: string;
+  competitor_count: number;
+  sample_response_id: number;
+  sample_snippet: string;
+}
+
+export interface AdminAccount {
+  id: number;
+  email: string;
+  name?: string | null;
+  is_active: boolean;
+  is_admin: boolean;
+  topic_count: number;
+  has_prompt_extension: boolean;
+}
+
+export interface CompetitorSubstitutionResp {
+  topic_id: number;
+  period_days: number;
+  competitor_filter: string | null;
+  items: CompetitorSubstitutionItem[];
+  total: number;
+}
+
 
 export function isMockMode(): boolean {
   return String(import.meta.env.VITE_USE_MOCK_AI_TELEMETRY || '').toLowerCase() === '1';
@@ -646,6 +704,57 @@ export const aiTelemetryApi = {
   async postBriefingFeedback(briefingId: number, score: number, token: string): Promise<void> {
     if (isMockMode()) return Promise.resolve();
     return request<void>('POST', `/briefings/${briefingId}/feedback`, token, { score });
+  },
+
+  // ── 品牌增长页 — Phase 1 后端聚合的真值接口 ─────────────
+  async getPositionBreakdown(
+    topicId: number, periodDays: number, token: string,
+  ): Promise<PositionBreakdownResp> {
+    return request<PositionBreakdownResp>(
+      'GET', `/topics/${topicId}/position-breakdown?period=${periodDays}`, token,
+    );
+  },
+
+  async getIndustryBenchmark(
+    industry: string, periodDays: number, token: string,
+  ): Promise<IndustryBenchmark> {
+    const qs = new URLSearchParams({ industry, period: String(periodDays) }).toString();
+    return request<IndustryBenchmark>('GET', `/benchmarks/industry?${qs}`, token);
+  },
+
+  async getCompetitorSubstitutions(
+    topicId: number, periodDays: number, token: string,
+    opts: { competitor?: string; limit?: number } = {},
+  ): Promise<CompetitorSubstitutionResp> {
+    const params = new URLSearchParams({ period: String(periodDays) });
+    if (opts.competitor) params.set('competitor', opts.competitor);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    return request<CompetitorSubstitutionResp>(
+      'GET', `/topics/${topicId}/competitor-substitutions?${params.toString()}`, token,
+    );
+  },
+
+  // ── admin 跨用户管理 ─────────────────────────────────
+  async adminListAccounts(token: string): Promise<AdminAccount[]> {
+    return request<AdminAccount[]>('GET', '/admin/accounts', token);
+  },
+  async adminListUserTopics(userId: number, token: string): Promise<Topic[]> {
+    return request<Topic[]>('GET', `/admin/users/${userId}/topics`, token);
+  },
+
+  async listTopicResponses(
+    topicId: number, token: string,
+    opts: { engine?: string; domain?: string; query?: string; period?: number; limit?: number } = {},
+  ): Promise<ResponseRow[]> {
+    const params = new URLSearchParams();
+    if (opts.engine) params.set('engine', opts.engine);
+    if (opts.domain) params.set('domain', opts.domain);
+    if (opts.query) params.set('query', opts.query);
+    if (opts.period) params.set('period', String(opts.period));
+    if (opts.limit) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    const suffix = qs ? `?${qs}` : '';
+    return request<ResponseRow[]>('GET', `/topics/${topicId}/responses${suffix}`, token);
   },
 };
 

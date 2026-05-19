@@ -89,6 +89,10 @@ class AiTelemetryTopicORM(Base):
     # 新建 topic 时 version=1;每次 _append_changelog 都 bump 一次。
     version = Column(Integer, nullable=False, default=1)
 
+    # admin 给单 topic 配的扩展提示词,跑批组装 prompt 时拼到模板末尾。
+    # 普通用户不可见;只 /workbench/accounts/:userId/topic 能编辑。
+    prompt_extension = Column(Text, nullable=True)
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -136,6 +140,9 @@ class AiTelemetryResponseORM(Base):
     # v1.3 提及位置(检索排名简化版):lead(开头)/ body(中段)/ tail(末尾)/ unknown
     # 未命中 (hit=False) 时为 NULL
     mention_position = Column(String, nullable=True)
+    # v1.4(品牌增长页)— 品牌在 AI 答复中第几个被提到,1-based。未命中 / 未抽取时 NULL。
+    # 用来聚 Top1/Top3/Top5 占比;mention_position 是段落位置(lead/body/tail),与 brand_rank 不同。
+    brand_rank = Column(Integer, nullable=True)
 
 
 class AiTelemetryQueryHitORM(Base):
@@ -647,6 +654,9 @@ class TopicPayload(BaseModel):
     # Phase D — 同请求一起提交品牌资料(6 大模块);后端写 profile_json + 追加 changelog.
     # None / 缺失 = 这次保存不动 profile_json(向后兼容老 client).
     profile: Optional[BrandProfile] = None
+    # v1.4 — admin 给该 topic 配的扩展提示词;跑批组装 query 时拼到末尾。
+    # 普通用户编辑接口忽略此字段(API 层强制清空),只 admin 工作台能写。
+    prompt_extension: Optional[str] = Field(default=None, max_length=2000)
 
 
 class SeedPromptSubmitPayload(BaseModel):
@@ -686,6 +696,8 @@ class TopicOut(BaseModel):
     auto_generate_time: str = "09:00"
     auto_generate_count: int = 3
     auto_generate_last_run_at: Optional[datetime] = None
+    # v1.4 — admin 配的扩展提示词;TopicOut 暴露给 admin 前端,普通用户前端不渲染。
+    prompt_extension: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -759,6 +771,7 @@ class TopicOut(BaseModel):
             auto_generate_time=str(getattr(r, "auto_generate_time", None) or "09:00"),
             auto_generate_count=int(getattr(r, "auto_generate_count", 3) or 3),
             auto_generate_last_run_at=getattr(r, "auto_generate_last_run_at", None),
+            prompt_extension=getattr(r, "prompt_extension", None),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
@@ -809,6 +822,7 @@ class ResponseOut(BaseModel):
     hit: bool = False
     hit_excerpt: Optional[str] = None
     mention_position: Optional[str] = None
+    brand_rank: Optional[int] = None
 
 
 class KpiBlock(BaseModel):
@@ -1013,6 +1027,48 @@ class PositionDist(BaseModel):
     body: int = 0
     tail: int = 0
     unknown: int = 0
+
+
+class PositionBreakdown(BaseModel):
+    """雷达 5 维 + 右核心指标 4 卡的口径,基于 ResponseORM.brand_rank 聚合."""
+    top1_pct: float = 0.0       # COUNT(brand_rank=1) / total_cells × 100
+    top3_pct: float = 0.0       # COUNT(brand_rank<=3) / total_cells
+    top5_pct: float = 0.0       # COUNT(brand_rank<=5) / total_cells
+    visible_pct: float = 0.0    # COUNT(hit=True) / total_cells(= 可见占比)
+    source_pct: float = 0.0     # COUNT(DISTINCT query WHERE hit=True) / total_queries
+
+
+class PositionBreakdownOut(BaseModel):
+    topic_id: int
+    period_days: int
+    industry: str
+    total_cells: int
+    total_queries: int
+    breakdown: PositionBreakdown
+    industry_baseline: Optional[PositionBreakdown] = None   # 样本不足时 NULL,前端不渲染
+
+
+class IndustryBenchmarkOut(BaseModel):
+    industry: str
+    sample_size: int                # 参与聚合的 topic 数
+    breakdown: Optional[PositionBreakdown] = None    # 样本 <3 时 NULL
+
+
+class CompetitorSubstitutionItem(BaseModel):
+    """C3 竞品分析"被替代证据" — 提了竞品但没提我的 query."""
+    query: str
+    competitor_name: str
+    competitor_count: int        # 该竞品在该 query 历次答复里被提到的总次数
+    sample_response_id: int      # 用于跳转到具体证据
+    sample_snippet: str          # 短摘抄
+
+
+class CompetitorSubstitutionOut(BaseModel):
+    topic_id: int
+    period_days: int
+    competitor_filter: Optional[str]   # 单竞品筛选;None=全部
+    items: list[CompetitorSubstitutionItem]   # 按 competitor_count 降序
+    total: int
 
 
 class ShareOfVoiceOut(BaseModel):

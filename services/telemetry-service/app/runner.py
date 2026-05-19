@@ -94,6 +94,7 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
     queries, engines = parse_topic(topic)
     target, aliases = parse_target(topic)
     topic_id = topic.id
+    prompt_extension = (topic.prompt_extension or "").strip()
     if not queries or not engines:
         log.warning("topic %d empty, skip", topic_id)
         return
@@ -117,8 +118,10 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
     async with httpx.AsyncClient() as client:
         async def _one(engine: str, query: str) -> None:
             nonlocal failures
+            # admin 配置的 prompt_extension 拼到 query 末尾发给引擎,但落库 / 矩阵 cell 仍按原 query 索引
+            effective_query = f"{query}\n\n{prompt_extension}" if prompt_extension else query
             async with sem:
-                result = await _call_browser(client, engine, query)
+                result = await _call_browser(client, engine, effective_query)
             answer = result.get("answer", "") or ""
             error = result.get("error")
 
@@ -205,6 +208,13 @@ def _extract_one(target: str, response_id: int) -> None:
         r.answer_format = result.get("answer_format") or None
         # mention_position 兜底:LLM 没给 → 用 hit_excerpt 在原文里的位置算 lead/body/tail
         r.mention_position = result.get("mention_position") or _fallback_position(r.answer, r.hit_excerpt)
+        # brand_rank:LLM 给的整数(1-based);未命中或抽取失败 → 保持 NULL。
+        # 未命中场景(r.hit=False)即使 LLM 误给数字也强制 NULL,保证语义一致。
+        rank = result.get("brand_rank")
+        if r.hit and isinstance(rank, int) and rank >= 1:
+            r.brand_rank = rank
+        else:
+            r.brand_rank = None
 
 
 def _fallback_position(answer: str | None, hit_excerpt: str | None) -> str | None:

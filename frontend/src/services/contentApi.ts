@@ -95,12 +95,17 @@ async function request<T>(
 export const contentApi = {
   async listDocs(
     topicId: number,
-    opts: { status?: DocStatus | 'to_review' | 'all'; source?: DocSource | 'all' },
+    opts: {
+      status?: DocStatus | 'to_review' | 'all';
+      source?: DocSource | 'all';
+      query_hit?: 'hit' | 'miss';   // 战报页 ROI 筛选
+    },
     token: string,
   ): Promise<ContentDoc[]> {
     const qs = new URLSearchParams();
     if (opts.status && opts.status !== 'all') qs.set('status', opts.status);
     if (opts.source && opts.source !== 'all') qs.set('source', opts.source);
+    if (opts.query_hit) qs.set('query_hit', opts.query_hit);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return request('GET', `/topics/${topicId}/docs${suffix}`, token);
   },

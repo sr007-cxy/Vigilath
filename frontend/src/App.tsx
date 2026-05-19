@@ -39,10 +39,21 @@ const TermsOfUse = lazy(() => import('./pages/TermsOfUse').then(m => ({ default:
 const CookiePolicy = lazy(() => import('./pages/CookiePolicy').then(m => ({ default: m.CookiePolicy })));
 const DashboardLayout = lazy(() => import('./pages/Dashboard/DashboardLayout').then(m => ({ default: m.DashboardLayout })));
 const Content = lazy(() => import('./pages/Dashboard/Content').then(m => ({ default: m.Content })));
-const AiTelemetry = lazy(() => import('./pages/Dashboard/AiTelemetry').then(m => ({ default: m.AiTelemetry })));
+const ContentRedirect = lazy(() => import('./pages/Dashboard/ContentRedirect').then(m => ({ default: m.ContentRedirect })));
+const BrandGrowth = lazy(() => import('./pages/BrandGrowth').then(m => ({ default: m.BrandGrowth })));
+const BrandGrowthSources = lazy(() => import('./pages/BrandGrowth/Sources').then(m => ({ default: m.Sources })));
+const BrandGrowthEngines = lazy(() => import('./pages/BrandGrowth/Engines').then(m => ({ default: m.Engines })));
+const BrandGrowthCompetitors = lazy(() => import('./pages/BrandGrowth/Competitors').then(m => ({ default: m.Competitors })));
+const BrandGrowthMatrix = lazy(() => import('./pages/BrandGrowth/Matrix').then(m => ({ default: m.Matrix })));
+const BrandGrowthInsights = lazy(() => import('./pages/BrandGrowth/Insights').then(m => ({ default: m.Insights })));
+const BrandGrowthQueries = lazy(() => import('./pages/BrandGrowth/Queries').then(m => ({ default: m.Queries })));
+const BrandGrowthResponses = lazy(() => import('./pages/BrandGrowth/Responses').then(m => ({ default: m.Responses })));
+const BrandGrowthPublished = lazy(() => import('./pages/BrandGrowth/Published').then(m => ({ default: m.Published })));
 const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
 const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
+const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
+const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
 const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
@@ -108,25 +119,35 @@ function App() {
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>
               <Route path="/dashboard/topics/:topicId/profile" element={<TopicProfile />} />
+              {/* 品牌增长 — 全宽,无 sidebar */}
+              <Route path="/brand-growth" element={<BrandGrowth />} />
+              <Route path="/brand-growth/sources" element={<BrandGrowthSources />} />
+              <Route path="/brand-growth/engines" element={<BrandGrowthEngines />} />
+              <Route path="/brand-growth/competitors" element={<BrandGrowthCompetitors />} />
+              <Route path="/brand-growth/matrix" element={<BrandGrowthMatrix />} />
+              <Route path="/brand-growth/insights" element={<BrandGrowthInsights />} />
+              <Route path="/brand-growth/queries" element={<BrandGrowthQueries />} />
+              <Route path="/brand-growth/responses" element={<BrandGrowthResponses />} />
+              <Route path="/brand-growth/published" element={<BrandGrowthPublished />} />
               <Route path="/dashboard" element={<DashboardLayout />}>
-                {/* 首页 = 配置(原 AI 遥测的「主题配置」tab)
-                    key 强制不同 route 间 remount,否则 tab state 会跨页串味 */}
-                <Route index element={<AiTelemetry key="config" views={['config']} />} />
-                {/* 内容(合并 compose + posts)— 一屏 AI 生成 / 用户提交 / 状态 / 已发布媒体 */}
-                <Route path="content" element={<Content />} />
-                {/* 老路由保持可达,统一跳新页 */}
-                <Route path="compose" element={<Navigate to="/dashboard/content" replace />} />
-                <Route path="posts" element={<Navigate to="/dashboard/content" replace />} />
-                {/* AI 遥测 = 概览 + 引用追踪 + 遥测详情 */}
-                <Route path="ai-telemetry" element={<AiTelemetry key="telemetry" views={['today', 'overview', 'tracking', 'results']} />} />
-                {/* 优化建议提升为顶级 */}
-                <Route path="insights" element={<AiTelemetry key="insights" views={['briefings']} />} />
+                {/* 首页 → /brand-growth(无 sidebar 全宽页) */}
+                <Route index element={<Navigate to="/brand-growth" replace />} />
+                {/* 内容入口砍掉:普通用户去 /brand-growth/published(战报),admin 去 /workbench/content-management */}
+                <Route path="content" element={<ContentRedirect />} />
+                {/* 老路由统一跳新页 */}
+                <Route path="compose" element={<Navigate to="/brand-growth/published" replace />} />
+                <Route path="posts" element={<Navigate to="/brand-growth/published" replace />} />
+                <Route path="ai-telemetry" element={<Navigate to="/brand-growth" replace />} />
+                <Route path="insights" element={<Navigate to="/brand-growth/insights" replace />} />
               </Route>
               {/* 工作台 — admin 专属,独立 sidebar 不混 AEO 菜单 */}
               <Route path="/workbench" element={<WorkbenchLayout />}>
                 <Route index element={<Navigate to="review" replace />} />
                 <Route path="review" element={<AdminReview />} />
                 <Route path="content-review" element={<AdminContentReview />} />
+                <Route path="content-management" element={<Content />} />
+                <Route path="accounts" element={<AdminAccounts />} />
+                <Route path="accounts/:userId/topics" element={<AdminAccountTopics />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}

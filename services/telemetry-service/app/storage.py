@@ -60,6 +60,7 @@ class TopicORM(Base):
     enabled = Column(Boolean, nullable=False, default=True)
     last_run_at = Column(DateTime, nullable=True)
     last_run_status = Column(String, nullable=True)
+    prompt_extension = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -97,6 +98,8 @@ class ResponseORM(Base):
     answer_format = Column(String, nullable=True)
     # v1.3 提及位置
     mention_position = Column(String, nullable=True)
+    # v1.4 品牌排名(1-based,LLM 抽取)
+    brand_rank = Column(Integer, nullable=True)
 
 
 class QueryHitORM(Base):

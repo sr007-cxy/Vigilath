@@ -18,7 +18,7 @@ import importlib
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def _chat_json(prompt: str, *, temperature: float = 0.3,
 
 # ─────────────────── prompt 模板(版本化) ──────────────────
 
-EXTRACT_PROMPT_VERSION = "extract_v1"
+EXTRACT_PROMPT_VERSION = "extract_v2"
 CELL_PROMPT_VERSION = "cell_v1"
 BRIEFING_PROMPT_VERSION = "briefing_v1"
 
@@ -123,17 +123,25 @@ Query:{query}
    - body:出现在中段(30%-70%)或列表 4-7 项
    - tail:出现在末尾(后 30%)或列表 8+ / 一笔带过
    - unknown:检索词没出现,或难以判断位置
+5. brand_rank:检索词「{target}」是答复里第几个被「实质性推荐 / 列入榜单 / 着重介绍」的同类实体
+   (1-based,数字)。判定原则:
+   - 看「实体级别的推荐次序」,不只是字面出现次序。例如答复列出 1.A 2.B 3.{target} 4.C,
+     即使 {target} 在文本里第 4 个字符位置才出现,brand_rank 也是 3
+   - 如果只是顺带提一句(没列入排序 / 没推荐),不算入次序,brand_rank 设为相对最后位次
+   - 如果检索词「{target}」根本没出现,或难以判断,返回 null
 
 【硬约束】
 - 严格输出 JSON,不要解释、不要 markdown 包裹
 - 不要编造未在原文出现的实体名(competitors 必须能在答复里找到 snippet)
 - 中文识别 + 中文 snippet
+- brand_rank 是整数或 null,绝不返回字符串
 
 【输出格式】
 {{"competitors": [{{"name":"...","count":1,"snippet":"..."}}],
   "answer_format": "...",
   "citation_domains": ["site.com", ...],
-  "mention_position": "lead"}}
+  "mention_position": "lead",
+  "brand_rank": 3}}
 """
 
 
@@ -151,11 +159,23 @@ def extract_response_insights(*, target: str, query: str, engine: str,
     pos = (parsed.get("mention_position") or "").strip().lower()
     if pos not in {"lead", "body", "tail", "unknown"}:
         pos = None
+    rank_raw = parsed.get("brand_rank")
+    brand_rank: Optional[int] = None
+    if isinstance(rank_raw, int) and rank_raw >= 1:
+        brand_rank = rank_raw
+    elif isinstance(rank_raw, str):
+        try:
+            v = int(rank_raw.strip())
+            if v >= 1:
+                brand_rank = v
+        except (ValueError, AttributeError):
+            pass
     return {
         "competitors": parsed.get("competitors") or [],
         "answer_format": parsed.get("answer_format") or None,
         "citation_domains": parsed.get("citation_domains") or [],
         "mention_position": pos,
+        "brand_rank": brand_rank,
         "llm_model": model,
     }
 

@@ -253,7 +253,7 @@ export function Header() {
                         </Link>
                       )}
                       <Link
-                        to="/dashboard"
+                        to="/brand-growth"
                         onClick={() => setIsDropdownOpen(false)}
                         className="w-full px-4 py-2 text-left text-sm transition-colors duration-200 flex items-center gap-2 bg-surface-hover"
                         style={{ color: 'var(--text-secondary)' }}

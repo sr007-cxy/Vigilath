@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from geo.api.auth import get_current_user
 from geo.api.ai_telemetry import get_db
 from geo.models.ai_telemetry import (
-    AiTelemetryTopicORM, AutoGenerateConfigPayload,
+    AiTelemetryQueryHitORM, AiTelemetryTopicORM, AutoGenerateConfigPayload,
     GeneratedDocOut, TopicGeneratedDocORM,
     UserDocSubmitPayload, UserDocUpdatePayload,
 )
@@ -77,9 +77,17 @@ def list_my_docs(
     topic_id: int,
     status: Optional[str] = None,
     source: Optional[str] = None,
+    query_hit: Optional[str] = None,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """投放战报页 / Content 列表通用接口。
+
+    - status: 单状态 / `to_review` / None=全部
+    - source: ai / user
+    - query_hit: `hit` 表示 source_query_text 对应 query 已被 AI 命中过(至少一引擎);
+                 `miss` 表示发布了但 AI 还没引;None 不筛
+    """
     _own_topic_or_404(db, topic_id, current_user.id)
     q = db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic_id)
     if status:
@@ -90,6 +98,21 @@ def list_my_docs(
     if source in ("ai", "user"):
         q = q.filter(TopicGeneratedDocORM.source == source)
     rows = q.order_by(TopicGeneratedDocORM.id.desc()).all()
+
+    if query_hit in ("hit", "miss"):
+        hit_queries: set[str] = set(
+            row.query for row in (
+                db.query(AiTelemetryQueryHitORM.query)
+                  .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
+                  .filter(AiTelemetryQueryHitORM.total_hits > 0)
+                  .all()
+            )
+        )
+        if query_hit == "hit":
+            rows = [r for r in rows if (r.source_query_text or "") in hit_queries]
+        else:
+            rows = [r for r in rows if (r.source_query_text or "") and (r.source_query_text not in hit_queries)]
+
     return [GeneratedDocOut.from_orm_row(r) for r in rows]
 
 

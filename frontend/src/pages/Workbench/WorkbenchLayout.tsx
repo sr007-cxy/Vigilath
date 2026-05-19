@@ -23,6 +23,8 @@ interface StoredUser {
 const sidebarItems = [
   { to: '/workbench/review', end: false, icon: 'review', labelKey: 'nav.adminReview' },
   { to: '/workbench/content-review', end: false, icon: 'content', labelKey: 'nav.adminContentReview' },
+  { to: '/workbench/content-management', end: false, icon: 'content', labelKey: 'nav.adminContentManagement' },
+  { to: '/workbench/accounts', end: false, icon: 'review', labelKey: 'nav.adminAccounts' },
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {

@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 import mimetypes
 import uuid
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from datetime import datetime, timedelta, timezone
@@ -31,6 +32,8 @@ from geo.models.ai_telemetry import (
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
     FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_SELECTED_QUERIES,
     OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist,
+    PositionBreakdown, PositionBreakdownOut, IndustryBenchmarkOut,
+    CompetitorSubstitutionItem, CompetitorSubstitutionOut,
     ProfileExtractOut, ProfileExtractPayload, QueryHitCell,
     ResponseOut, RunNowCitation,
     RunNowResult, RunOut, SeedPromptSubmitPayload,
@@ -205,14 +208,84 @@ def _validate_query_diff(payload_queries: list[str], existing_raw: str | None) -
         )
 
 
-def _get_topic_or_404(db: Session, topic_id: int, user_id: int) -> AiTelemetryTopicORM:
+def _get_topic_or_404(
+    db: Session, topic_id: int, user_id: int, *, allow_admin_user: Optional[User] = None,
+) -> AiTelemetryTopicORM:
+    """常规调用 owner-only。
+    传 allow_admin_user 时,若该用户 is_admin=True 则跳过 user_id 校验(admin 替别人改主题)。
+    """
     t = db.get(AiTelemetryTopicORM, topic_id)
-    if not t or t.user_id != user_id:
+    if not t:
         raise HTTPException(404, "topic not found")
+    if t.user_id != user_id:
+        if not (allow_admin_user is not None and getattr(allow_admin_user, "is_admin", False)):
+            raise HTTPException(404, "topic not found")
     return t
 
 
 # ─────────────────────────── CRUD ──────────────────────────────
+
+
+# ─────── admin 跨用户管理(/workbench/accounts) ────────
+
+
+def _require_admin(user: User) -> None:
+    if not getattr(user, "is_admin", False):
+        raise HTTPException(403, "admin only")
+
+
+class AdminAccountSummary(BaseModel):
+    id: int
+    email: str
+    name: Optional[str] = None
+    is_active: bool = True
+    is_admin: bool = False
+    topic_count: int
+    has_prompt_extension: bool
+
+
+@router.get("/admin/accounts", response_model=list[AdminAccountSummary])
+def admin_list_accounts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    from geo.models.user import UserORM
+    users = db.query(UserORM).order_by(UserORM.id.asc()).all()
+    out: list[AdminAccountSummary] = []
+    for u in users:
+        topics = (
+            db.query(AiTelemetryTopicORM)
+              .filter(AiTelemetryTopicORM.user_id == u.id)
+              .all()
+        )
+        has_ext = any((t.prompt_extension or "").strip() for t in topics)
+        out.append(AdminAccountSummary(
+            id=u.id,
+            email=u.email or "",
+            name=getattr(u, "name", None),
+            is_active=getattr(u, "is_active", True),
+            is_admin=bool(getattr(u, "is_admin", False)),
+            topic_count=len(topics),
+            has_prompt_extension=has_ext,
+        ))
+    return out
+
+
+@router.get("/admin/users/{user_id}/topics", response_model=list[TopicOut])
+def admin_list_user_topics(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    rows = (
+        db.query(AiTelemetryTopicORM)
+          .filter_by(user_id=user_id)
+          .order_by(AiTelemetryTopicORM.created_at.desc())
+          .all()
+    )
+    return [TopicOut.from_orm_row(r) for r in rows]
 
 
 @router.get("/topics", response_model=list[TopicOut])
@@ -253,6 +326,8 @@ def create_topic(
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
         enabled=payload.enabled,
         profile_json=profile_init,
+        # admin 自己创建主题也能写 prompt_extension;普通用户即使提交了也忽略
+        prompt_extension=(payload.prompt_extension if getattr(current_user, "is_admin", False) else None),
     )
     db.add(t)
     db.commit()
@@ -277,7 +352,7 @@ def update_topic(
     db: Session = Depends(get_db),
 ):
     _validate_payload(payload)
-    t = _get_topic_or_404(db, topic_id, current_user.id)
+    t = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     # Phase C — 只增不改:approved query 不允许从 payload 消失
     _validate_query_diff(payload.queries, t.queries_json)
     t.name = payload.name.strip()
@@ -301,6 +376,9 @@ def update_topic(
         )
     t.engines_json = json.dumps(payload.engines, ensure_ascii=False)
     t.enabled = payload.enabled
+    # 只 admin 能改 prompt_extension;普通用户的 payload.prompt_extension 一律忽略(不动 DB)
+    if getattr(current_user, "is_admin", False) and payload.prompt_extension is not None:
+        t.prompt_extension = payload.prompt_extension.strip() or None
     db.commit()
     db.refresh(t)
     return TopicOut.from_orm_row(t)
@@ -1362,6 +1440,67 @@ def list_responses(
             video_url=r.video_url, source_url=r.source_url, error=r.error,
             created_at=r.created_at,
             hit=bool(r.hit), hit_excerpt=r.hit_excerpt,
+            mention_position=r.mention_position, brand_rank=r.brand_rank,
+        ))
+    return out
+
+
+@router.get("/topics/{topic_id}/responses", response_model=list[ResponseOut])
+def list_topic_responses(
+    topic_id: int,
+    engine: Optional[str] = None,
+    domain: Optional[str] = None,
+    query: Optional[str] = None,
+    period: int = 30,
+    limit: int = 200,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """topic 维度的 responses 列表 — 给品牌增长子页(信源 / 平台 / 关键词)下钻用。
+
+    - engine: 单引擎筛选
+    - domain: 命中该域(citation_domains_json 含)
+    - query: 锁定单 query
+    - period: 近 N 天(1-90)
+    """
+    _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
+
+    q = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= cutoff)
+    )
+    if engine:
+        q = q.filter(AiTelemetryResponseORM.engine == engine)
+    if query:
+        q = q.filter(AiTelemetryResponseORM.query == query)
+    rows = q.order_by(AiTelemetryResponseORM.created_at.desc()).limit(max(1, min(limit, 500))).all()
+
+    # domain 过滤走应用层 — citation_domains_json 是 JSON list,跨方言 LIKE 不可靠
+    if domain:
+        d = domain.strip().lower()
+        filtered = []
+        for r in rows:
+            try:
+                doms = json.loads(r.citation_domains_json or "[]")
+            except Exception:  # noqa: BLE001
+                doms = []
+            if any(d == (x or "").strip().lower() for x in doms):
+                filtered.append(r)
+        rows = filtered
+
+    out = []
+    for r in rows:
+        cites = json.loads(r.citations_json or "[]")
+        out.append(ResponseOut(
+            id=r.id, engine=r.engine, query=r.query,
+            answer=r.answer, citations=cites,
+            video_url=r.video_url, source_url=r.source_url, error=r.error,
+            created_at=r.created_at,
+            hit=bool(r.hit), hit_excerpt=r.hit_excerpt,
+            mention_position=r.mention_position, brand_rank=r.brand_rank,
         ))
     return out
 
@@ -1564,6 +1703,247 @@ def get_share_of_voice(
         optimal_rate_pct=optimal_pct,
         total_runs=int(total_runs),
         sample_size=len(rows),
+    )
+
+
+def _aggregate_position_breakdown(
+    rows: list[AiTelemetryResponseORM], total_queries: int,
+) -> PositionBreakdown:
+    """口径:per-response 维度,跟现有 overview.visibility 对齐。
+
+    - top1/3/5_pct = COUNT(brand_rank<=N) / total_responses_ok × 100
+    - visible_pct = COUNT(hit=True) / total_responses_ok × 100
+    - source_pct = COUNT(DISTINCT query WHERE any response hit=True) / total_queries × 100
+    """
+    total_ok = 0
+    top1 = top3 = top5 = visible = 0
+    queries_with_hit: set[str] = set()
+    for r in rows:
+        if r.error:
+            continue
+        total_ok += 1
+        if r.hit:
+            visible += 1
+            queries_with_hit.add(r.query)
+        rank = r.brand_rank
+        if isinstance(rank, int) and rank >= 1:
+            if rank == 1:
+                top1 += 1
+            if rank <= 3:
+                top3 += 1
+            if rank <= 5:
+                top5 += 1
+    if total_ok == 0:
+        return PositionBreakdown()
+    return PositionBreakdown(
+        top1_pct=round(top1 / total_ok * 100, 2),
+        top3_pct=round(top3 / total_ok * 100, 2),
+        top5_pct=round(top5 / total_ok * 100, 2),
+        visible_pct=round(visible / total_ok * 100, 2),
+        source_pct=round(len(queries_with_hit) / total_queries * 100, 2) if total_queries > 0 else 0.0,
+    )
+
+
+@router.get("/topics/{topic_id}/position-breakdown", response_model=PositionBreakdownOut)
+def get_position_breakdown(
+    topic_id: int, period: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """雷达 5 维 + 右核心指标卡 — 基于 brand_rank 聚合。
+
+    返回本期 breakdown + 行业基准(样本不足时 industry_baseline = None)。
+    """
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
+
+    rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= cutoff)
+          .all()
+    )
+
+    try:
+        queries_raw = json.loads(topic.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        queries_raw = []
+    total_queries = 0
+    for q in queries_raw:
+        if isinstance(q, str) and q.strip():
+            total_queries += 1
+        elif isinstance(q, dict) and (q.get("text") or "").strip():
+            total_queries += 1
+
+    breakdown = _aggregate_position_breakdown(rows, total_queries)
+    industry = (topic.industry or "").strip()
+    industry_baseline = _compute_industry_baseline(db, industry, period_days) if industry else None
+
+    return PositionBreakdownOut(
+        topic_id=topic_id,
+        period_days=period_days,
+        industry=industry,
+        total_cells=len(rows),
+        total_queries=total_queries,
+        breakdown=breakdown,
+        industry_baseline=industry_baseline,
+    )
+
+
+MIN_INDUSTRY_BASELINE_SAMPLES = 3
+
+
+def _compute_industry_baseline(
+    db: Session, industry: str, period_days: int,
+) -> Optional[PositionBreakdown]:
+    """跨租户聚 industry 内所有 topic 的 P50 breakdown。
+
+    样本量 <3 个 topic 返回 None(前端不渲染基准多边形 / 行业小字),避免 mock。
+    """
+    if not industry:
+        return None
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
+    topics = (
+        db.query(AiTelemetryTopicORM)
+          .filter(AiTelemetryTopicORM.industry == industry)
+          .all()
+    )
+    if len(topics) < MIN_INDUSTRY_BASELINE_SAMPLES:
+        return None
+
+    per_topic: list[PositionBreakdown] = []
+    for t in topics:
+        rows = (
+            db.query(AiTelemetryResponseORM)
+              .filter(AiTelemetryResponseORM.topic_id == t.id)
+              .filter(AiTelemetryResponseORM.created_at >= cutoff)
+              .all()
+        )
+        if not rows:
+            continue
+        try:
+            queries_raw = json.loads(t.queries_json or "[]")
+        except Exception:  # noqa: BLE001
+            queries_raw = []
+        tq = sum(
+            1 for q in queries_raw
+            if (isinstance(q, str) and q.strip())
+            or (isinstance(q, dict) and (q.get("text") or "").strip())
+        )
+        per_topic.append(_aggregate_position_breakdown(rows, tq))
+
+    if len(per_topic) < MIN_INDUSTRY_BASELINE_SAMPLES:
+        return None
+
+    def _p50(values: list[float]) -> float:
+        s = sorted(values)
+        n = len(s)
+        if n == 0:
+            return 0.0
+        if n % 2 == 1:
+            return s[n // 2]
+        return round((s[n // 2 - 1] + s[n // 2]) / 2, 2)
+
+    return PositionBreakdown(
+        top1_pct=_p50([b.top1_pct for b in per_topic]),
+        top3_pct=_p50([b.top3_pct for b in per_topic]),
+        top5_pct=_p50([b.top5_pct for b in per_topic]),
+        visible_pct=_p50([b.visible_pct for b in per_topic]),
+        source_pct=_p50([b.source_pct for b in per_topic]),
+    )
+
+
+@router.get("/benchmarks/industry", response_model=IndustryBenchmarkOut)
+def get_industry_benchmark(
+    industry: str, period: int = 30,
+    current_user: User = Depends(get_current_user),  # noqa: ARG001
+    db: Session = Depends(get_db),
+):
+    """跨租户行业基准 — 样本不足返回 breakdown=None。"""
+    industry_clean = (industry or "").strip()
+    period_days = max(1, min(period, 90))
+    sample_topics = (
+        db.query(func.count(AiTelemetryTopicORM.id))
+          .filter(AiTelemetryTopicORM.industry == industry_clean)
+          .scalar() or 0
+    )
+    breakdown = _compute_industry_baseline(db, industry_clean, period_days) if industry_clean else None
+    return IndustryBenchmarkOut(
+        industry=industry_clean,
+        sample_size=int(sample_topics),
+        breakdown=breakdown,
+    )
+
+
+@router.get("/topics/{topic_id}/competitor-substitutions", response_model=CompetitorSubstitutionOut)
+def get_competitor_substitutions(
+    topic_id: int, period: int = 30,
+    competitor: Optional[str] = None, limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """C3 "被替代证据" — 提了竞品但没提我的 query 列表。
+
+    口径:近 period 天内,(query, engine) 维度下 hit=False(未命中本品)
+          但 competitors_json 非空的 responses;按 query × competitor 聚 count。
+    """
+    _get_topic_or_404(db, topic_id, current_user.id)
+    period_days = max(1, min(period, 90))
+    cutoff = datetime.utcnow() - timedelta(days=period_days)
+
+    rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .filter(AiTelemetryResponseORM.created_at >= cutoff)
+          .filter(AiTelemetryResponseORM.hit == False)  # noqa: E712
+          .filter(AiTelemetryResponseORM.error.is_(None))
+          .filter(AiTelemetryResponseORM.competitors_json.isnot(None))
+          .all()
+    )
+
+    # (query, competitor_name) -> {count, sample_response_id, sample_snippet}
+    agg: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        try:
+            comps = json.loads(r.competitors_json or "[]")
+        except Exception:  # noqa: BLE001
+            continue
+        for c in comps:
+            if not isinstance(c, dict):
+                continue
+            name = (c.get("name") or "").strip()
+            cnt = int(c.get("count") or 0)
+            snippet = (c.get("snippet") or "")[:200]
+            if not name or cnt <= 0:
+                continue
+            if competitor and competitor.strip() and name != competitor.strip():
+                continue
+            key = (r.query, name)
+            cur = agg.get(key)
+            if cur is None:
+                agg[key] = {
+                    "count": cnt,
+                    "sample_response_id": r.id,
+                    "sample_snippet": snippet,
+                }
+            else:
+                cur["count"] += cnt
+
+    items = [
+        CompetitorSubstitutionItem(
+            query=q, competitor_name=name,
+            competitor_count=v["count"],
+            sample_response_id=v["sample_response_id"],
+            sample_snippet=v["sample_snippet"],
+        )
+        for (q, name), v in agg.items()
+    ]
+    items.sort(key=lambda x: (-x.competitor_count, x.query, x.competitor_name))
+    return CompetitorSubstitutionOut(
+        topic_id=topic_id, period_days=period_days,
+        competitor_filter=(competitor.strip() if competitor else None),
+        items=items[:limit], total=len(items),
     )
 
 
