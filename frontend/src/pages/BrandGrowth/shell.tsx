@@ -57,21 +57,42 @@ export function BrandGrowthHeader({
   breadcrumb?: { label: string; to: string }[];
   state: ShellState;
 }) {
+  const subtitle = state.topic
+    ? `${state.topic.name} · 近 ${state.period} 天`
+    : '近 ' + state.period + ' 天';
   return (
-    <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-card)' }}>
-      <div className="flex flex-wrap items-center gap-3 justify-between">
-        <div className="flex flex-col gap-1">
-          {breadcrumb && breadcrumb.length > 0 && (
-            <div className="text-xs text-muted">
-              {breadcrumb.map((b, i) => (
-                <span key={i}>
-                  <Link to={b.to} className="hover:underline">{b.label}</Link>
-                  {i < breadcrumb.length - 1 ? ' / ' : ''}
-                </span>
-              ))}
+    <div className="px-6 py-4 border-b backdrop-blur"
+      style={{ borderColor: 'var(--border-color)', background: 'color-mix(in srgb, var(--bg-card) 80%, transparent)' }}>
+      <div className="flex flex-wrap items-center gap-3 justify-between max-w-[1400px] mx-auto">
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 60%, #8b5cf6))',
+              color: 'white',
+            }}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </span>
+          <div className="flex flex-col min-w-0">
+            {breadcrumb && breadcrumb.length > 0 && (
+              <div className="text-[11px] text-muted truncate">
+                {breadcrumb.map((b, i) => (
+                  <span key={i}>
+                    <Link to={b.to} className="hover:underline">{b.label}</Link>
+                    {i < breadcrumb.length - 1 ? ' · ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h1 className="text-lg font-semibold text-primary truncate">{title}</h1>
+              <span className="text-xs text-muted truncate">{subtitle}</span>
             </div>
-          )}
-          <h1 className="text-xl font-semibold text-primary">{title}</h1>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <TopicPicker state={state} />

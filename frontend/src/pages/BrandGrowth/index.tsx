@@ -453,8 +453,11 @@ function CardShell({ title, action, children }: {
 }) {
   return (
     <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-primary">{title}</h3>
+      <div className="flex items-center justify-between mb-4 pb-2.5 border-b" style={{ borderColor: 'var(--border-color)' }}>
+        <h3 className="text-sm font-medium text-primary flex items-center gap-2">
+          <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
+          {title}
+        </h3>
         {action}
       </div>
       {children}

@@ -100,12 +100,15 @@ def _validate_payload(payload: TopicPayload) -> None:
 
 
 def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
-                       cluster_ids: list[int] | None = None) -> str:
+                       cluster_ids: list[int] | None = None,
+                       *, new_status: str = "pending",
+                       reviewer_id: int | None = None) -> str:
     """把 query 列表升级为 [{text, created_at, cluster_id?, status, ...}] 形态.
 
     Phase C 起每条 query 都带 `status`(pending/approved/rejected):
     - 已存在的 query:沿用原 status / created_at / cluster_id / submitted_at / approved_at
-    - 新加的 query:status="pending", submitted_at=now
+    - 新加的 query:默认 status="pending", submitted_at=now
+      admin 替别人配主题时传 new_status="approved" 跳过审核
     - 校验:不允许删除 approved 的 query(由 caller `_validate_query_diff` 提前拦截)
     """
     now_iso = datetime.utcnow().isoformat()
@@ -131,13 +134,16 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
             item.setdefault("created_at", now_iso)
             item.setdefault("status", "approved")
         else:
-            # 新 query — 待审核
             item = {
                 "text": q,
                 "created_at": now_iso,
-                "status": "pending",
+                "status": new_status,
                 "submitted_at": now_iso,
             }
+            if new_status == "approved":
+                item["approved_at"] = now_iso
+                if reviewer_id is not None:
+                    item["reviewer_id"] = reviewer_id
         cid: int | None = None
         if cluster_ok and isinstance(cluster_ids[i], int) and int(cluster_ids[i]) >= 0:
             cid = int(cluster_ids[i])
@@ -149,11 +155,14 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
     return json.dumps(out, ensure_ascii=False)
 
 
-def _append_seed_prompts(existing_raw: str | None, texts: list[str] | None) -> str:
-    """把 payload.seed_drafts(若非空)逐条追加到 seed_prompts_json,状态=pending.
+def _append_seed_prompts(existing_raw: str | None, texts: list[str] | None,
+                          *, new_status: str = "pending",
+                          reviewer_id: int | None = None) -> str:
+    """把 payload.seed_drafts(若非空)逐条追加到 seed_prompts_json.
 
     幂等:文本已在列表里(不论状态)则跳过.
     texts 为 None / 空列表 / 全空字符串 则原样返回 existing.
+    new_status 默认 "pending";admin 替别人配主题时传 "approved" 跳过审核.
     """
     raw = existing_raw or "[]"
     if not texts:
@@ -171,11 +180,16 @@ def _append_seed_prompts(existing_raw: str | None, texts: list[str] | None) -> s
         cleaned = (raw_text or "").strip()
         if not cleaned or cleaned in existing_texts:
             continue
-        items.append({
+        item = {
             "text": cleaned,
-            "status": "pending",
+            "status": new_status,
             "submitted_at": now_iso,
-        })
+        }
+        if new_status == "approved":
+            item["approved_at"] = now_iso
+            if reviewer_id is not None:
+                item["reviewer_id"] = reviewer_id
+        items.append(item)
         existing_texts.add(cleaned)
         changed = True
     return json.dumps(items, ensure_ascii=False) if changed else raw
@@ -286,6 +300,70 @@ def admin_list_user_topics(
           .all()
     )
     return [TopicOut.from_orm_row(r) for r in rows]
+
+
+@router.post(
+    "/admin/users/{user_id}/topics",
+    response_model=TopicOut,
+    status_code=201,
+)
+def admin_create_topic_for_user(
+    user_id: int,
+    payload: TopicPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """admin 替指定 user 直接创建主题 — 跳过审核,落库即 approved.
+
+    跟用户走 create_topic + submit-for-review + admin approve 的三段式不同,
+    这里一步到位:queries/seeds 全部 status=approved, topic.submission_status=approved.
+    """
+    _require_admin(current_user)
+    from geo.models.user import UserORM
+    target_user = db.get(UserORM, user_id)
+    if not target_user:
+        raise HTTPException(404, "user not found")
+    _validate_payload(payload)
+    clusters_dump = [c.model_dump() for c in payload.clusters] if payload.clusters else []
+    seed_prompts_init = _append_seed_prompts(
+        "[]", payload.seed_drafts,
+        new_status="approved", reviewer_id=current_user.id,
+    )
+    profile_init = "{}"
+    if payload.profile is not None:
+        profile_init = json.dumps(payload.profile.model_dump(), ensure_ascii=False)
+    now = datetime.utcnow()
+    t = AiTelemetryTopicORM(
+        user_id=user_id,
+        name=payload.name.strip(),
+        target=payload.target,
+        target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
+        industry=payload.industry,
+        seed_prompts_json=seed_prompts_init,
+        queries_json=_queries_with_meta(
+            payload.queries, None, payload.query_cluster_ids,
+            new_status="approved", reviewer_id=current_user.id,
+        ),
+        clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
+        engines_json=json.dumps(payload.engines, ensure_ascii=False),
+        enabled=payload.enabled,
+        profile_json=profile_init,
+        prompt_extension=payload.prompt_extension,
+        submission_status="approved",
+        approved_at=now,
+        reviewer_id=current_user.id,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    _append_changelog(
+        t, actor_id=current_user.id, actor_role="admin",
+        field="submission_status", after="approved",
+        note=f"admin created for user {user_id}",
+    )
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
 
 
 @router.get("/topics", response_model=list[TopicOut])

@@ -742,6 +742,13 @@ export const aiTelemetryApi = {
     return request<Topic[]>('GET', `/admin/users/${userId}/topics`, token);
   },
 
+  // admin 替指定 user 直接创建主题(跳过审核,落库即 approved)
+  async adminCreateTopicForUser(
+    userId: number, payload: TopicPayload, token: string,
+  ): Promise<Topic> {
+    return request<Topic>('POST', `/admin/users/${userId}/topics`, token, payload);
+  },
+
   async listTopicResponses(
     topicId: number, token: string,
     opts: { engine?: string; domain?: string; query?: string; period?: number; limit?: number } = {},
