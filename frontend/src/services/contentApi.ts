@@ -34,6 +34,8 @@ export interface ContentDoc {
   reject_reason?: string | null;
   publish_targets: PublishTarget[];
   source: DocSource;
+  // URL 级 ROI 命中:{engine: [response_id]} — 空对象表示没被 AI 引用过
+  cited_by: Record<string, number[]>;
 }
 
 export interface ContentStats {

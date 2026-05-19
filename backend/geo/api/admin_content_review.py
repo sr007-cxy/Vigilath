@@ -268,3 +268,26 @@ def _send_safe(*, to: str, doc_title: str, decision: str,
         )
     except Exception as e:  # noqa: BLE001
         log.warning("content review email failed: %s", e)
+
+
+# ─────────────────────── URL 级 ROI 重算 ──────────────────────────
+
+class RebuildCitedByPayload(BaseModel):
+    topic_id: Optional[int] = None  # 不传 = 全 topic
+    replace: bool = False            # 默认合并;True = 重算覆盖
+
+
+@router.post("/rebuild-cited-by")
+def rebuild_cited_by(
+    payload: RebuildCitedByPayload,
+    _admin = Depends(require_admin),
+    db: Session = Depends(get_db),  # noqa: ARG001  # 用 backfill 自带 session
+):
+    """把 ai_telemetry_responses.citations_json 跟 doc.publish_targets_json 取交集,
+    回填 doc.cited_by_json。topic_id 不传则全量。
+
+    幂等;admin / cron 都可调。
+    """
+    from geo.services.backfill_cited_by import run as run_backfill
+    stats = run_backfill(topic_id=payload.topic_id, dry_run=False, replace=payload.replace)
+    return stats

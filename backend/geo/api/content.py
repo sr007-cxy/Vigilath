@@ -16,6 +16,7 @@ admin 可越权访问由 /api/admin/content-review/* 提供,这里不做。
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session
 from geo.api.auth import get_current_user
 from geo.api.ai_telemetry import get_db
 from geo.models.ai_telemetry import (
-    AiTelemetryQueryHitORM, AiTelemetryTopicORM, AutoGenerateConfigPayload,
+    AiTelemetryTopicORM, AutoGenerateConfigPayload,
     GeneratedDocOut, TopicGeneratedDocORM,
     UserDocSubmitPayload, UserDocUpdatePayload,
 )
@@ -85,8 +86,8 @@ def list_my_docs(
 
     - status: 单状态 / `to_review` / None=全部
     - source: ai / user
-    - query_hit: `hit` 表示 source_query_text 对应 query 已被 AI 命中过(至少一引擎);
-                 `miss` 表示发布了但 AI 还没引;None 不筛
+    - query_hit: `hit` = AI 真实引用过 doc 的投放 URL(看 cited_by_json);
+                 `miss` = 有投放 URL 但还没被引;None 不筛
     """
     _own_topic_or_404(db, topic_id, current_user.id)
     q = db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic_id)
@@ -100,18 +101,23 @@ def list_my_docs(
     rows = q.order_by(TopicGeneratedDocORM.id.desc()).all()
 
     if query_hit in ("hit", "miss"):
-        hit_queries: set[str] = set(
-            row.query for row in (
-                db.query(AiTelemetryQueryHitORM.query)
-                  .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
-                  .filter(AiTelemetryQueryHitORM.total_hits > 0)
-                  .all()
-            )
-        )
+        def _has_publish_url(r: TopicGeneratedDocORM) -> bool:
+            return bool(r.publish_targets_json and r.publish_targets_json not in ("", "[]"))
+
+        def _is_cited(r: TopicGeneratedDocORM) -> bool:
+            raw = getattr(r, "cited_by_json", None) or "{}"
+            if raw in ("", "{}"):
+                return False
+            try:
+                data = json.loads(raw)
+            except Exception:  # noqa: BLE001
+                return False
+            return isinstance(data, dict) and any(data.values())
+
         if query_hit == "hit":
-            rows = [r for r in rows if (r.source_query_text or "") in hit_queries]
+            rows = [r for r in rows if _is_cited(r)]
         else:
-            rows = [r for r in rows if (r.source_query_text or "") and (r.source_query_text not in hit_queries)]
+            rows = [r for r in rows if _has_publish_url(r) and not _is_cited(r)]
 
     return [GeneratedDocOut.from_orm_row(r) for r in rows]
 

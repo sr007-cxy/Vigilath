@@ -295,6 +295,11 @@ class TopicGeneratedDocORM(Base):
     # v3.1 — 内容来源(2026-05-17):'ai' = AI 自动 / admin 触发生成;'user' = 用户自带稿
     source = Column(String(length=8), nullable=False, default="ai", index=True)
 
+    # URL 级 ROI 命中(2026-05-19):AI 答复 citations_json 里出现 publish_targets[].url 时,
+    # 按引擎记 response_id 列表。空 `{}` = 还没被任何引擎引过。
+    # 形态:{"deepseek": [response_id, ...], "doubao": [...], ...}
+    cited_by_json = Column(Text, nullable=False, default="{}")
+
 
 class TopicMediaORM(Base):
     """v3.2(2026-05-18)— 用户为某 topic 上传的图片 / 视频素材.
@@ -553,6 +558,8 @@ class GeneratedDocOut(BaseModel):
     publish_targets: list[dict]
     # v3.1 — 'ai' / 'user'
     source: str = "ai"
+    # 2026-05-19 — URL 级 ROI 命中:{engine: [response_id]}
+    cited_by: dict[str, list[int]] = Field(default_factory=dict)
 
     @classmethod
     def from_orm_row(cls, r: "TopicGeneratedDocORM") -> "GeneratedDocOut":
@@ -562,6 +569,12 @@ class GeneratedDocOut(BaseModel):
             targets = []
         if not isinstance(targets, list):
             targets = []
+        try:
+            cited = json.loads(getattr(r, "cited_by_json", None) or "{}")
+        except Exception:  # noqa: BLE001
+            cited = {}
+        if not isinstance(cited, dict):
+            cited = {}
         return cls(
             id=r.id, topic_id=r.topic_id, execution_plan_id=r.execution_plan_id,
             created_at=r.created_at,
@@ -573,6 +586,7 @@ class GeneratedDocOut(BaseModel):
             review_decision_at=r.review_decision_at, reviewer_id=r.reviewer_id,
             reject_reason=r.reject_reason, publish_targets=targets,
             source=getattr(r, "source", None) or "ai",
+            cited_by=cited,
         )
 
 

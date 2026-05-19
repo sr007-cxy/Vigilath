@@ -96,6 +96,9 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
   const earliestMark = doc.publish_targets
     .map(t => t.marked_at).filter(Boolean).sort()[0];
   const ts = earliestMark || doc.review_decision_at;
+  const citedEngines = Object.entries(doc.cited_by || {})
+    .filter(([, ids]) => ids && ids.length > 0)
+    .map(([eng, ids]) => ({ eng, count: ids.length }));
   return (
     <li className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
       <div className="flex justify-between mb-2">
@@ -108,6 +111,18 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
       </div>
       <h3 className="text-base font-medium text-primary mb-2">{doc.title}</h3>
       {doc.summary && <p className="text-sm text-secondary mb-3 line-clamp-2">{doc.summary}</p>}
+
+      {citedEngines.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <span className="text-[10px] text-muted self-center">AI 引用:</span>
+          {citedEngines.map(({ eng, count }) => (
+            <span key={eng} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded"
+              style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
+              {eng} · {count}
+            </span>
+          ))}
+        </div>
+      )}
 
       {doc.publish_targets.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
