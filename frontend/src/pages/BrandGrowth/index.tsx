@@ -6,10 +6,13 @@ import {
   type Briefing, type Topic,
 } from '../../services/aiTelemetryApi';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
+import { useBgLang } from './lang';
+import { InfoHint } from './charts';
 
 export function BrandGrowth() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="品牌增长">
+    <BrandGrowthShell title={L.pageTitle}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -51,6 +54,7 @@ function Body({ state }: { state: ShellState }) {
 // ── 顶部 3 大数 ───────────────────────────────────────
 function TopMetricsRow({ overview, topic }: { overview: Overview | null; topic: Topic }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   const total = overview?.citations.value ?? 0;
   const owned = overview?.owned_split.owned ?? 0;
   const other = overview?.owned_split.other ?? 0;
@@ -59,18 +63,18 @@ function TopMetricsRow({ overview, topic }: { overview: Overview | null; topic: 
   const tq = topic.id;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <BigMetric label="推荐总词数" value={total} delta={totalDelta}
+      <BigMetric label={L.metricCitations} value={total} delta={totalDelta} hint={L.hintTopMetrics}
         onClick={() => navigate(`/brand-growth/responses?topic=${tq}`)} />
-      <BigMetric label="权威媒体推荐数" value={owned} delta={ownedDelta}
+      <BigMetric label={L.metricOwnedCitations} value={owned} delta={ownedDelta}
         onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=owned`)} />
-      <BigMetric label="第三方引用总数" value={other}
+      <BigMetric label={L.metricOtherCitations} value={other}
         onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=third_party`)} />
     </div>
   );
 }
 
-function BigMetric({ label, value, delta, onClick }: {
-  label: string; value: number; delta?: number | null; onClick?: () => void;
+function BigMetric({ label, value, delta, onClick, hint }: {
+  label: string; value: number; delta?: number | null; onClick?: () => void; hint?: string;
 }) {
   return (
     <button
@@ -79,7 +83,9 @@ function BigMetric({ label, value, delta, onClick }: {
       className="p-5 rounded-lg text-left transition hover:scale-[1.01]"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
     >
-      <div className="text-xs text-muted mb-2">{label}</div>
+      <div className="text-xs text-muted mb-2 flex items-center gap-1.5">
+        {label}{hint && <InfoHint text={hint} />}
+      </div>
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-bold text-primary tabular-nums">{value.toLocaleString()}</span>
         {typeof delta === 'number' && delta !== 0 && (
@@ -96,15 +102,16 @@ function BigMetric({ label, value, delta, onClick }: {
 // ── 雷达(5 维)──────────────────────────────────────
 function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   if (!pb) {
-    return <CardShell title="趋势分图(5 维占比)"><div className="text-xs text-muted py-10 text-center">暂无数据</div></CardShell>;
+    return <CardShell title={L.blockRadar} hint={L.hintRadar}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
   const dims: { key: 'top1_pct' | 'top3_pct' | 'top5_pct' | 'visible_pct' | 'source_pct'; label: string; layer: string }[] = [
-    { key: 'top1_pct', label: 'Top1 占比', layer: 'top1' },
-    { key: 'visible_pct', label: '可见占比', layer: 'visible' },
-    { key: 'source_pct', label: '信源占比', layer: 'source' },
-    { key: 'top5_pct', label: 'Top5 占比', layer: 'top5' },
-    { key: 'top3_pct', label: 'Top3 占比', layer: 'top3' },
+    { key: 'top1_pct', label: L.metricTop1, layer: 'top1' },
+    { key: 'visible_pct', label: L.metricVisible, layer: 'visible' },
+    { key: 'source_pct', label: L.metricSource, layer: 'source' },
+    { key: 'top5_pct', label: L.metricTop5, layer: 'top5' },
+    { key: 'top3_pct', label: L.metricTop3, layer: 'top3' },
   ];
   const max = Math.max(1, ...dims.map(d => pb.breakdown[d.key]));
   const baseline = pb.industry_baseline;
@@ -126,7 +133,7 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
   const basePts = baseline ? points(dims.map(d => baseline[d.key])) : null;
 
   return (
-    <CardShell title="趋势分图(5 维占比)">
+    <CardShell title={L.blockRadar} hint={L.hintRadar}>
       <div className="flex-1 flex items-center justify-center">
         <svg viewBox="0 0 260 260" className="w-full max-w-[260px]">
           {[0.25, 0.5, 0.75, 1].map(s => (
@@ -153,7 +160,7 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
         </svg>
       </div>
       {!baseline && (
-        <div className="text-[10px] text-muted text-center mt-2">行业基准样本不足,暂不展示</div>
+        <div className="text-[10px] text-muted text-center mt-2">{L.industryBaselineMissing}</div>
       )}
     </CardShell>
   );
@@ -223,47 +230,48 @@ interface EntryCard {
 
 function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: PositionBreakdownResp | null }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   const tid = overview?.topic_id ?? pb?.topic_id ?? 0;
   const cards: EntryCard[] = [
     {
-      kind: 'sources', title: '信源分析',
-      sub: overview?.top_domains[0] ? `Top: ${overview.top_domains[0].domain}` : '—',
+      kind: 'sources', title: L.entrySources,
+      sub: overview?.top_domains[0] ? `Top: ${overview.top_domains[0].domain}` : L.entrySourcesEmpty,
       to: `/brand-growth/sources?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(20,184,166,0.32))', fg: '#0d9488' },
     },
     {
-      kind: 'engines', title: '平台分析',
-      sub: `${overview?.engines_covered.value ?? 0} / ${overview?.engines_total ?? 0} 引擎`,
+      kind: 'engines', title: L.entryEngines,
+      sub: `${overview?.engines_covered.value ?? 0} / ${overview?.engines_total ?? 0} ${L.entryEnginesSub}`,
       to: `/brand-growth/engines?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(59,130,246,0.32))', fg: '#2563eb' },
     },
     {
-      kind: 'competitors', title: '竞品分析',
-      sub: '被替代证据 →',
+      kind: 'competitors', title: L.entryCompetitors,
+      sub: L.entryCompetitorsSub,
       to: `/brand-growth/competitors?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(249,115,22,0.32))', fg: '#ea580c' },
     },
     {
-      kind: 'matrix', title: 'AI 词测验',
-      sub: '命中矩阵 →',
+      kind: 'matrix', title: L.entryMatrix,
+      sub: L.entryMatrixSub,
       to: `/brand-growth/matrix?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.18), rgba(244,63,94,0.32))', fg: '#e11d48' },
     },
     {
-      kind: 'insights', title: '智能洞察',
-      sub: 'briefings + 诊断',
+      kind: 'insights', title: L.entryInsights,
+      sub: L.entryInsightsSub,
       to: `/brand-growth/insights?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.32))', fg: '#ca8a04' },
     },
     {
-      kind: 'queries', title: '关键词管理',
-      sub: '只读 · 配置在 admin',
+      kind: 'queries', title: L.entryQueries,
+      sub: L.entryQueriesSub,
       to: `/brand-growth/queries?topic=${tid}`,
       tint: { bg: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(168,85,247,0.32))', fg: '#9333ea' },
     },
   ];
   return (
-    <CardShell title="功能入口">
+    <CardShell title={L.blockEntries} hint={L.hintEntries}>
       <div className="grid grid-cols-3 grid-rows-2 gap-3 flex-1">
         {cards.map(c => (
           <button
@@ -337,22 +345,23 @@ interface MetricCard {
 
 function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   if (!pb) {
-    return <CardShell title="核心指标表现"><div className="text-xs text-muted py-10 text-center">暂无数据</div></CardShell>;
+    return <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
   const baseline = pb.industry_baseline;
   const metrics: MetricCard[] = [
-    { key: 'top1_pct', label: 'Top1 占比', layer: 'top1', icon: 'medal',
+    { key: 'top1_pct', label: L.metricTop1, layer: 'top1', icon: 'medal',
       tint: { bg: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.22))', fg: '#10b981' } },
-    { key: 'visible_pct', label: '可见占比', layer: 'visible', icon: 'eye',
+    { key: 'visible_pct', label: L.metricVisible, layer: 'visible', icon: 'eye',
       tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(244,63,94,0.22))', fg: '#e11d48' } },
-    { key: 'top5_pct', label: 'Top5 占比', layer: 'top5', icon: 'star',
+    { key: 'top5_pct', label: L.metricTop5, layer: 'top5', icon: 'star',
       tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.12), rgba(20,184,166,0.22))', fg: '#0d9488' } },
-    { key: 'source_pct', label: '信源占比', layer: 'source', icon: 'link',
+    { key: 'source_pct', label: L.metricSource, layer: 'source', icon: 'link',
       tint: { bg: 'linear-gradient(135deg, rgba(244,114,182,0.12), rgba(244,114,182,0.22))', fg: '#db2777' } },
   ];
   return (
-    <CardShell title="核心指标表现">
+    <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}>
       <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
         {metrics.map(m => {
           const v = pb.breakdown[m.key];
@@ -378,7 +387,7 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
                 {v.toFixed(2)}%
               </div>
               <div className="text-[10px] text-muted">
-                {bv !== null ? `行业 ${bv.toFixed(2)}%` : '行业基准样本不足'}
+                {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
               </div>
             </button>
           );
@@ -388,24 +397,25 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
   );
 }
 
-// ── 报告明细(briefings) ──────────────────────────────
+// ── 报告明细(周报) ──────────────────────────────────
 function BriefingsBlock({ briefings, topic }: { briefings: Briefing[]; topic: Topic }) {
+  const L = useBgLang();
   return (
     <CardShell
-      title="报告明细"
-      action={<Link to={`/brand-growth/insights?topic=${topic.id}`} className="text-xs text-accent">查看全部 →</Link>}
+      title={L.blockBriefings} hint={L.hintBriefings}
+      action={<Link to={`/brand-growth/insights?topic=${topic.id}`} className="text-xs text-accent">{L.viewAll}</Link>}
     >
       {briefings.length === 0 ? (
-        <div className="text-xs text-muted py-6 text-center">暂无 briefing</div>
+        <div className="text-xs text-muted py-6 text-center">{L.emptyBriefings}</div>
       ) : (
         <ul className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
           {briefings.slice(0, 6).map(b => (
             <li key={b.id} className="py-2">
               <Link to={`/brand-growth/insights?topic=${topic.id}&briefing=${b.id}`}
                 className="text-sm text-primary hover:underline block truncate">
-                Briefing · {new Date(b.period_start).toLocaleDateString()} → {new Date(b.period_end).toLocaleDateString()}
+                {L.insightsBriefingItem(new Date(b.period_start).toLocaleDateString(), new Date(b.period_end).toLocaleDateString())}
               </Link>
-              <div className="text-[10px] text-muted">生成于 {new Date(b.generated_at).toLocaleDateString()}</div>
+              <div className="text-[10px] text-muted">{L.insightsBriefingGenerated(new Date(b.generated_at).toLocaleDateString())}</div>
             </li>
           ))}
         </ul>
@@ -416,13 +426,14 @@ function BriefingsBlock({ briefings, topic }: { briefings: Briefing[]; topic: To
 
 // ── 投放战果 ─────────────────────────────────────────
 function PublishedFeedBlock({ published, topic }: { published: ContentDoc[]; topic: Topic }) {
+  const L = useBgLang();
   return (
     <CardShell
-      title="投放战果"
-      action={<Link to={`/brand-growth/published?topic=${topic.id}`} className="text-xs text-accent">查看全部 →</Link>}
+      title={L.blockPublished} hint={L.hintPublished}
+      action={<Link to={`/brand-growth/published?topic=${topic.id}`} className="text-xs text-accent">{L.viewAll}</Link>}
     >
       {published.length === 0 ? (
-        <div className="text-xs text-muted py-6 text-center">暂无已投放内容</div>
+        <div className="text-xs text-muted py-6 text-center">{L.emptyPublished}</div>
       ) : (
         <ul className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
           {published.slice(0, 6).map(d => {
@@ -438,7 +449,7 @@ function PublishedFeedBlock({ published, topic }: { published: ContentDoc[]; top
                   {d.title}
                 </a>
                 <div className="text-[10px] text-muted">
-                  {target ? `${target.platform} · ${target.media}` : '未标记平台'}
+                  {target ? `${target.platform} · ${target.media}` : '—'}
                 </div>
               </li>
             );
@@ -450,8 +461,8 @@ function PublishedFeedBlock({ published, topic }: { published: ContentDoc[]; top
 }
 
 // ── shared ───────────────────────────────────────────
-function CardShell({ title, action, children }: {
-  title: string; action?: React.ReactNode; children: React.ReactNode;
+function CardShell({ title, action, hint, children }: {
+  title: string; action?: React.ReactNode; hint?: string; children: React.ReactNode;
 }) {
   return (
     <div className="p-4 rounded-lg h-full flex flex-col"
@@ -461,6 +472,7 @@ function CardShell({ title, action, children }: {
         <h3 className="text-sm font-medium text-primary flex items-center gap-2">
           <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
           {title}
+          {hint && <InfoHint text={hint} />}
         </h3>
         {action}
       </div>

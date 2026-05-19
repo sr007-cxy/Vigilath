@@ -4,10 +4,13 @@ import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type TrackingMatrix, type IntentBreakdown,
 } from '../../services/aiTelemetryApi';
+import { useBgLang, engineLabel } from './lang';
+import { InfoHint } from './charts';
 
 export function Queries() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="关键词管理" breadcrumb={[{ label: '品牌增长', to: '/brand-growth' }]}>
+    <BrandGrowthShell title={L.queriesTitle} breadcrumb={[{ label: L.pageTitle, to: '/brand-growth' }]}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -16,6 +19,7 @@ export function Queries() {
 function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
   const navigate = useNavigate();
+  const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [intent, setIntent] = useState<IntentBreakdown | null>(null);
 
@@ -41,24 +45,24 @@ function Body({ state }: { state: ShellState }) {
     });
   }, [matrix]);
 
-  if (!topic || !matrix) return <div className="text-muted">加载中…</div>;
+  if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
   return (
     <div className="grid gap-4">
-      <div className="text-xs text-muted">
-        共 {matrix.queries.length} 条 query · {matrix.engines.length} 个引擎
-        · 编辑入口在 admin 工作台
+      <div className="text-xs text-muted flex items-center gap-1.5">
+        {L.queriesSummary(matrix.queries.length, matrix.engines.length)}
+        <InfoHint text={L.hintQueries} />
       </div>
 
       <div className="p-3 rounded-lg overflow-x-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
         <table className="w-full text-xs">
           <thead>
             <tr className="text-muted">
-              <th className="text-left px-2 py-2">Query</th>
-              <th className="text-right px-2 py-2">命中率</th>
-              <th className="text-right px-2 py-2">runs</th>
-              <th className="text-right px-2 py-2">hits</th>
-              <th className="text-left px-2 py-2">首次命中引擎</th>
+              <th className="text-left px-2 py-2">{L.queriesColQuery}</th>
+              <th className="text-right px-2 py-2">{L.queriesColHitRate}</th>
+              <th className="text-right px-2 py-2">{L.queriesColRuns}</th>
+              <th className="text-right px-2 py-2">{L.queriesColHits}</th>
+              <th className="text-left px-2 py-2">{L.queriesColFirstEngine}</th>
               <th />
             </tr>
           </thead>
@@ -69,14 +73,14 @@ function Body({ state }: { state: ShellState }) {
                 <td className="px-2 py-2 text-right tabular-nums">{(r.rate * 100).toFixed(1)}%</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.totalRuns}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.totalHits}</td>
-                <td className="px-2 py-2 text-primary">{r.firstHitEngine || '—'}</td>
+                <td className="px-2 py-2 text-primary">{r.firstHitEngine ? engineLabel(r.firstHitEngine) : L.queriesNeverHit}</td>
                 <td className="px-2 py-2">
                   <button
                     type="button"
                     onClick={() => navigate(`/brand-growth/matrix?topic=${topic.id}&q=${encodeURIComponent(r.query)}`)}
                     className="text-xs text-accent hover:underline"
                   >
-                    查矩阵 →
+                    {L.queriesViewMatrix}
                   </button>
                 </td>
               </tr>
@@ -87,7 +91,13 @@ function Body({ state }: { state: ShellState }) {
 
       {intent && intent.clusters.length > 0 && (
         <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <h3 className="text-sm font-medium text-primary mb-3">Intent 簇分布</h3>
+          <h3 className="text-sm font-medium text-primary mb-3 pb-2 border-b flex items-center gap-2"
+            style={{ borderColor: 'var(--border-color)' }}>
+            <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
+            {L.queriesIntentBlock}
+            <InfoHint text={L.hintIntentBreakdown} />
+          </h3>
+          <p className="text-[11px] text-muted mb-3">{L.queriesIntentHint}</p>
           <ul className="space-y-2">
             {intent.clusters.map(c => (
               <li key={c.cluster_id} className="flex items-center gap-2 text-xs">

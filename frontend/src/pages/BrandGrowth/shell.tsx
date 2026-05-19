@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, type Topic } from '../../services/aiTelemetryApi';
+import { useBgLang } from './lang';
 
 export type PeriodDays = 7 | 30 | 90;
 
@@ -58,9 +59,11 @@ export function BrandGrowthHeader({
   state: ShellState;
 }) {
   const navigate = useNavigate();
+  const L = useBgLang();
+  const periodLabel = `${L.topicPicker === '主题' ? `近 ${state.period} 天` : `last ${state.period}d`}`;
   const subtitle = state.topic
-    ? `${state.topic.name} · 近 ${state.period} 天`
-    : '近 ' + state.period + ' 天';
+    ? `${state.topic.name} · ${periodLabel}`
+    : periodLabel;
   const isSubPage = (breadcrumb?.length ?? 0) > 0;
   const backTo = breadcrumb && breadcrumb.length > 0 ? breadcrumb[0].to : null;
   return (
@@ -77,7 +80,7 @@ export function BrandGrowthHeader({
               }}
               className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 hover:scale-105 transition"
               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-              title="返回"
+              title={L.back}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -125,12 +128,13 @@ export function BrandGrowthHeader({
 }
 
 function TopicPicker({ state }: { state: ShellState }) {
+  const L = useBgLang();
   if (state.topics.length === 0) {
-    return <span className="text-xs text-muted">无主题</span>;
+    return <span className="text-xs text-muted">{L.noTopic}</span>;
   }
   return (
     <label className="text-xs text-secondary flex items-center gap-2">
-      主题
+      {L.topicPicker}
       <select
         value={state.topicId ?? ''}
         onChange={e => state.setTopicId(Number(e.target.value))}
@@ -146,6 +150,8 @@ function TopicPicker({ state }: { state: ShellState }) {
 }
 
 function PeriodChips({ state }: { state: ShellState }) {
+  const L = useBgLang();
+  const dayUnit = L.topicPicker === '主题' ? '天' : 'd';
   return (
     <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
       {([7, 30, 90] as PeriodDays[]).map(p => (
@@ -159,7 +165,7 @@ function PeriodChips({ state }: { state: ShellState }) {
             color: state.period === p ? 'white' : 'var(--text-secondary)',
           }}
         >
-          {p}天
+          {p}{dayUnit}
         </button>
       ))}
     </div>
@@ -178,18 +184,27 @@ export function BrandGrowthShell({
     <div className="min-h-[calc(100vh-4rem)]" style={{ background: 'var(--bg-primary)' }}>
       <PageHead titleKey="pageMeta.dashboard.title" descriptionKey="pageMeta.dashboard.description" />
       <BrandGrowthHeader title={title} breadcrumb={breadcrumb} state={state} />
-      <main className="px-6 py-6">
-        <div className="max-w-[1400px] mx-auto">
-          {state.loading ? (
-            <div className="text-center py-20 text-muted">加载中…</div>
-          ) : state.topics.length === 0 ? (
-            <EmptyState />
-          ) : (
-            children(state)
-          )}
-        </div>
-      </main>
+      <ShellMain state={state}>{children}</ShellMain>
     </div>
+  );
+}
+
+function ShellMain({ state, children }: {
+  state: ShellState; children: (state: ShellState) => React.ReactNode;
+}) {
+  const L = useBgLang();
+  return (
+    <main className="px-6 py-6">
+      <div className="max-w-[1400px] mx-auto">
+        {state.loading ? (
+          <div className="text-center py-20 text-muted">{L.loading}</div>
+        ) : state.topics.length === 0 ? (
+          <EmptyState />
+        ) : (
+          children(state)
+        )}
+      </div>
+    </main>
   );
 }
 

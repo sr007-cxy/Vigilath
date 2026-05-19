@@ -5,12 +5,15 @@ import {
   aiTelemetryApi, type TrackingMatrix, type ResponseRow, type EngineId,
   type QueryHitCell,
 } from '../../services/aiTelemetryApi';
+import { useBgLang, engineLabel } from './lang';
+import { InfoHint } from './charts';
 
 type LayerKey = 'all' | 'top1' | 'top3' | 'top5' | 'visible' | 'source';
 
 export function Matrix() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="AI 词测验" breadcrumb={[{ label: '品牌增长', to: '/brand-growth' }]}>
+    <BrandGrowthShell title={L.matrixTitle} breadcrumb={[{ label: L.pageTitle, to: '/brand-growth' }]}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -18,6 +21,7 @@ export function Matrix() {
 
 function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
+  const L = useBgLang();
   const [params, setParams] = useSearchParams();
   const layer = (params.get('layer') || 'all') as LayerKey;
   const qFilter = params.get('q') || '';
@@ -74,25 +78,33 @@ function Body({ state }: { state: ShellState }) {
     setParams(next, { replace: true });
   };
 
+  const layerName: Record<LayerKey, string> = {
+    all: L.layerAll, top1: L.layerTop1, top3: L.layerTop3,
+    top5: L.layerTop5, visible: L.layerVisible, source: L.layerSource,
+  };
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3 justify-between">
-        <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
-          {(['all', 'top1', 'top3', 'top5', 'visible', 'source'] as LayerKey[]).map(l => (
-            <button
-              key={l} type="button" onClick={() => setLayer(l)}
-              className="px-3 py-1 text-xs rounded"
-              style={{
-                background: layer === l ? 'var(--accent-primary)' : 'transparent',
-                color: layer === l ? 'white' : 'var(--text-secondary)',
-              }}
-            >
-              {l === 'all' ? '全部' : l.toUpperCase()}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
+            {(['all', 'top1', 'top3', 'top5', 'visible', 'source'] as LayerKey[]).map(l => (
+              <button
+                key={l} type="button" onClick={() => setLayer(l)}
+                className="px-3 py-1 text-xs rounded"
+                style={{
+                  background: layer === l ? 'var(--accent-primary)' : 'transparent',
+                  color: layer === l ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {layerName[l]}
+              </button>
+            ))}
+          </div>
+          <InfoHint text={L.hintMatrix} />
         </div>
         <div className="text-xs text-muted">
-          命中率 {matrix.hit_cells_pct.toFixed(1)}% · {matrix.hit_cells} / {matrix.total_cells}
+          {L.matrixHitRate} {matrix.hit_cells_pct.toFixed(1)}% · {matrix.hit_cells} / {matrix.total_cells}
         </div>
       </div>
 
@@ -100,9 +112,9 @@ function Body({ state }: { state: ShellState }) {
         <table className="text-xs">
           <thead>
             <tr>
-              <th className="text-left px-2 py-1.5 sticky left-0" style={{ background: 'var(--bg-card)' }}>Query</th>
+              <th className="text-left px-2 py-1.5 sticky left-0" style={{ background: 'var(--bg-card)' }}>{L.queriesColQuery}</th>
               {matrix.engines.map(e => (
-                <th key={e} className="px-2 py-1.5 text-muted">{e}</th>
+                <th key={e} className="px-2 py-1.5 text-muted">{engineLabel(e)}</th>
               ))}
             </tr>
           </thead>
@@ -148,6 +160,7 @@ function Body({ state }: { state: ShellState }) {
 function CellDrawer({ topicId, query, engine, token, onClose }: {
   topicId: number; query: string; engine: EngineId; token: string; onClose: () => void;
 }) {
+  const L = useBgLang();
   const [rows, setRows] = useState<ResponseRow[]>([]);
   useEffect(() => {
     aiTelemetryApi.listTopicResponses(topicId, token, { query, engine, limit: 20 })
@@ -158,8 +171,8 @@ function CellDrawer({ topicId, query, engine, token, onClose }: {
       <div className="w-full max-w-2xl h-full overflow-y-auto p-4" onClick={e => e.stopPropagation()}
         style={{ background: 'var(--bg-card)' }}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-primary">{query} × {engine}</h3>
-          <button type="button" onClick={onClose} className="text-xs text-muted">关闭</button>
+          <h3 className="text-sm font-medium text-primary">{query}{L.matrixDrawerTitleSep}{engineLabel(engine)}</h3>
+          <button type="button" onClick={onClose} className="text-xs text-muted">{L.matrixDrawerClose}</button>
         </div>
         <ul className="space-y-2">
           {rows.map(r => (
@@ -167,7 +180,7 @@ function CellDrawer({ topicId, query, engine, token, onClose }: {
               <div className="flex justify-between mb-1 text-muted">
                 <span>{new Date(r.created_at).toLocaleString()}</span>
                 <span>
-                  {r.hit ? `✓ ${r.brand_rank ? `Top${r.brand_rank}` : 'hit'}` : '✕ miss'}
+                  {r.hit ? `✓ ${r.brand_rank ? `Top${r.brand_rank}` : L.matrixCellHit}` : `✕ ${L.matrixCellMiss}`}
                 </span>
               </div>
               {r.hit_excerpt ? (

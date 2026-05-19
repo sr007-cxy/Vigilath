@@ -121,44 +121,66 @@ export function HorizontalBarChart({ items, formatValue, max }: {
   );
 }
 
-// 纵向条形图(用于 Top1/3/5 命中分布 / 时间序列)
-export function VerticalBarChart({ items, height = 200, formatValue }: {
+// 纵向条形图 — 用 HTML/CSS 不用 SVG,避免 preserveAspectRatio=none 把字横向拉扁
+export function VerticalBarChart({ items, height = 220, formatValue }: {
   items: BarItem[];
   height?: number;
   formatValue?: (v: number) => string;
 }) {
   const max = Math.max(1, ...items.map(i => i.value));
-  const barW = items.length > 0 ? 100 / items.length : 0;
-  const innerPad = 0.3;
+  if (items.length === 0) return <div className="text-xs text-muted text-center py-6">暂无数据</div>;
   return (
-    <div style={{ height }}>
-      <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="w-full h-full">
-        {[0.25, 0.5, 0.75, 1].map(g => (
-          <line key={g} x1="0" x2="100" y1={height - g * (height - 24)} y2={height - g * (height - 24)}
-            stroke="var(--border-color)" strokeWidth="0.3" strokeDasharray="2 2" />
-        ))}
+    <div className="w-full" style={{ height }}>
+      <div className="flex items-end gap-3 h-full px-2">
         {items.map((it, idx) => {
-          const h = (it.value / max) * (height - 24);
-          const x = idx * barW + barW * innerPad / 2;
-          const w = barW * (1 - innerPad);
-          const y = height - h - 18;
+          const pct = (it.value / max) * 100;
           return (
-            <g key={idx}>
-              <rect x={x} y={y} width={w} height={h} rx="0.4"
-                fill={it.color || 'var(--accent-primary)'} />
-              <text x={x + w / 2} y={height - 4} textAnchor="middle" fontSize="6" fill="var(--text-muted)">
+            <div key={idx} className="flex-1 min-w-0 flex flex-col items-center justify-end gap-1.5 h-full">
+              <span className="text-xs tabular-nums text-secondary whitespace-nowrap">
+                {formatValue ? formatValue(it.value) : it.value.toLocaleString()}
+              </span>
+              <div
+                className="w-full rounded-t transition-all"
+                style={{
+                  height: `${pct}%`,
+                  minHeight: it.value > 0 ? 4 : 0,
+                  background: it.color || 'var(--accent-primary)',
+                }}
+              />
+              <span className="text-[11px] text-muted text-center truncate w-full" title={it.label}>
                 {it.label}
-              </text>
-              {it.value > 0 && (
-                <text x={x + w / 2} y={y - 2} textAnchor="middle" fontSize="6" fill="var(--text-secondary)">
-                  {formatValue ? formatValue(it.value) : it.value}
-                </text>
-              )}
-            </g>
+              </span>
+            </div>
           );
         })}
-      </svg>
+      </div>
     </div>
+  );
+}
+
+// 模块标题旁的 ? 提示 — hover 显示 tooltip
+export function InfoHint({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group" tabIndex={0}>
+      <span
+        className="w-3.5 h-3.5 rounded-full text-[10px] flex items-center justify-center cursor-help"
+        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}
+        aria-label={text}
+      >
+        ?
+      </span>
+      <span
+        className="invisible group-hover:visible group-focus-within:visible absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 w-64 p-2 text-[11px] rounded shadow-lg"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--text-secondary)',
+          pointerEvents: 'none',
+        }}
+      >
+        {text}
+      </span>
+    </span>
   );
 }
 
