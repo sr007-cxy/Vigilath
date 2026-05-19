@@ -127,29 +127,31 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
 
   return (
     <CardShell title="趋势分图(5 维占比)">
-      <svg viewBox="0 0 260 260" className="w-full max-w-[260px] mx-auto">
-        {[0.25, 0.5, 0.75, 1].map(s => (
-          <polygon
-            key={s} fill="none" stroke="var(--border-color)" strokeWidth="0.5"
-            points={points(dims.map(() => max * s))}
-          />
-        ))}
-        {basePts && (
-          <polygon fill="rgba(148,163,184,0.18)" stroke="rgba(148,163,184,0.6)" strokeWidth="1" points={basePts} />
-        )}
-        <polygon fill="rgba(59,130,246,0.25)" stroke="var(--accent-primary)" strokeWidth="1.5" points={brandPts} />
-        {labels.map(l => (
-          <text
-            key={l.key} x={l.lx} y={l.ly}
-            fontSize="9" textAnchor="middle" dominantBaseline="middle"
-            fill="var(--text-secondary)"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${l.layer}`)}
-          >
-            {l.label}
-          </text>
-        ))}
-      </svg>
+      <div className="flex-1 flex items-center justify-center">
+        <svg viewBox="0 0 260 260" className="w-full max-w-[260px]">
+          {[0.25, 0.5, 0.75, 1].map(s => (
+            <polygon
+              key={s} fill="none" stroke="var(--border-color)" strokeWidth="0.5"
+              points={points(dims.map(() => max * s))}
+            />
+          ))}
+          {basePts && (
+            <polygon fill="rgba(148,163,184,0.18)" stroke="rgba(148,163,184,0.6)" strokeWidth="1" points={basePts} />
+          )}
+          <polygon fill="rgba(59,130,246,0.25)" stroke="var(--accent-primary)" strokeWidth="1.5" points={brandPts} />
+          {labels.map(l => (
+            <text
+              key={l.key} x={l.lx} y={l.ly}
+              fontSize="9" textAnchor="middle" dominantBaseline="middle"
+              fill="var(--text-secondary)"
+              style={{ cursor: 'pointer' }}
+              onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${l.layer}`)}
+            >
+              {l.label}
+            </text>
+          ))}
+        </svg>
+      </div>
       {!baseline && (
         <div className="text-[10px] text-muted text-center mt-2">行业基准样本不足,暂不展示</div>
       )}
@@ -262,13 +264,13 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
   ];
   return (
     <CardShell title="功能入口">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 grid-rows-2 gap-3 flex-1">
         {cards.map(c => (
           <button
             key={c.kind}
             type="button"
             onClick={() => navigate(c.to)}
-            className="flex flex-col items-center gap-2 py-4 px-2 rounded-lg text-center hover:scale-[1.04] transition"
+            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-lg text-center hover:scale-[1.04] transition h-full"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           >
             <span
@@ -351,7 +353,7 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
   ];
   return (
     <CardShell title="核心指标表现">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
         {metrics.map(m => {
           const v = pb.breakdown[m.key];
           const bv = baseline ? baseline[m.key] : null;
@@ -360,7 +362,7 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
               key={m.key}
               type="button"
               onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${m.layer}`)}
-              className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex flex-col gap-2"
+              className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex flex-col gap-2 h-full"
               style={{ background: m.tint.bg, border: '1px solid var(--border-color)' }}
             >
               <div className="flex items-center gap-2">
@@ -372,7 +374,7 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
                 </span>
                 <span className="text-xs font-medium" style={{ color: m.tint.fg }}>{m.label}</span>
               </div>
-              <div className="text-2xl font-bold tabular-nums" style={{ color: m.tint.fg }}>
+              <div className="text-2xl font-bold tabular-nums mt-auto" style={{ color: m.tint.fg }}>
                 {v.toFixed(2)}%
               </div>
               <div className="text-[10px] text-muted">
@@ -452,15 +454,17 @@ function CardShell({ title, action, children }: {
   title: string; action?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <div className="flex items-center justify-between mb-4 pb-2.5 border-b" style={{ borderColor: 'var(--border-color)' }}>
+    <div className="p-4 rounded-lg h-full flex flex-col"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="flex items-center justify-between mb-4 pb-2.5 border-b flex-shrink-0"
+        style={{ borderColor: 'var(--border-color)' }}>
         <h3 className="text-sm font-medium text-primary flex items-center gap-2">
           <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
           {title}
         </h3>
         {action}
       </div>
-      {children}
+      <div className="flex-1 flex flex-col">{children}</div>
     </div>
   );
 }
