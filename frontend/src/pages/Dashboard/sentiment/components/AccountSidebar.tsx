@@ -87,6 +87,9 @@ export function AccountSidebar({
     if (q) next.set('q', q);
     else next.delete('q');
     next.set('tab', 'articles');
+    // 关键:从「实时热榜」切回账户视图。否则 view=newsnow 在 Sentiment.tsx
+    // 强制渲 HotTopicsPanel,点 keyword 看不到任何反应。
+    next.delete('view');
     setParams(next, { replace: false });
   };
 
