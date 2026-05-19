@@ -953,7 +953,7 @@ async def upload_topic_media(
     400 = 缺文件 / 空 / 太大
     415 = 后缀不在白名单(.jpg/.png/.mp4/...)
     """
-    _get_topic_or_404(db, topic_id, current_user.id)
+    _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     if not file or not file.filename:
         raise HTTPException(400, "请上传一个文件")
     ext = Path(file.filename).suffix.lower()

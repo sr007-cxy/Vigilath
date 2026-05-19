@@ -90,6 +90,8 @@ const en = {
             "dashboard": "AEO",
             "adminReview": "Review",
             "adminContentReview": "Content Review",
+            "adminContentManagement": "Content",
+            "adminAccounts": "Accounts",
             "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",
             "account": "Account",
@@ -2121,6 +2123,7 @@ const en = {
                 "save": "Save draft",
                 "saveAndSubmit": "Save & submit for review",
                 "submit": "Submit",
+                "adminCreate": "Save",
                 "cancel": "Cancel"
               },
               "engine": {
@@ -3076,6 +3079,31 @@ const en = {
                 "expired": "Expired",
                 "failed": "Failed"
               }
+            }
+          },
+          "workbench": {
+            "adminAccounts": {
+              "title": "Accounts",
+              "heading": "Account Management",
+              "subtitle": "Configure monitoring topics for each account (profile / seeds / tracking queries). Admin-created topics go live immediately — no review step.",
+              "colId": "ID",
+              "colEmail": "Email",
+              "colName": "Name",
+              "colTopicCount": "Topics",
+              "adminBadge": "admin",
+              "configureTopics": "Configure topics"
+            },
+            "adminAccountTopics": {
+              "title": "User #{{userId}} topics",
+              "heading": "Topic configuration",
+              "newTopic": "New topic",
+              "editTopic": "Edit topic",
+              "emptyHint": "This user has no topics yet — click \"New topic\" to create one on their behalf.",
+              "metaSummary": "Target: {{target}} · {{queries}} queries · {{engines}} engines",
+              "industryLabel": "Industry",
+              "statusLabel": "Status",
+              "neverRun": "Never run",
+              "edit": "Edit"
             }
           }
         } as const;

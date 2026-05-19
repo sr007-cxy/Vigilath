@@ -90,6 +90,8 @@ const zh = {
             "dashboard": "品牌增长",
             "adminReview": "审核",
             "adminContentReview": "内容审核",
+            "adminContentManagement": "内容管理",
+            "adminAccounts": "账户管理",
             "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
             "account": "账户中心",
@@ -2127,6 +2129,7 @@ const zh = {
                 "save": "保存草稿",
                 "saveAndSubmit": "保存并提交审核",
                 "submit": "提交",
+                "adminCreate": "保存",
                 "cancel": "取消"
               },
               "engine": {
@@ -3082,6 +3085,31 @@ const zh = {
                 "expired": "已过期",
                 "failed": "失败"
               }
+            }
+          },
+          "workbench": {
+            "adminAccounts": {
+              "title": "账户管理",
+              "heading": "账户管理",
+              "subtitle": "替每个账户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
+              "colId": "ID",
+              "colEmail": "邮箱",
+              "colName": "名称",
+              "colTopicCount": "主题数",
+              "adminBadge": "admin",
+              "configureTopics": "配置主题"
+            },
+            "adminAccountTopics": {
+              "title": "用户 #{{userId}} 的主题",
+              "heading": "主题配置",
+              "newTopic": "新增主题",
+              "editTopic": "编辑主题",
+              "emptyHint": "该用户暂无主题 — 点右上「新增主题」替 ta 创建一个",
+              "metaSummary": "目标: {{target}} · {{queries}} 个监测问题 · {{engines}} 个引擎",
+              "industryLabel": "行业",
+              "statusLabel": "状态",
+              "neverRun": "尚未跑过",
+              "edit": "编辑"
             }
           }
         } as const;

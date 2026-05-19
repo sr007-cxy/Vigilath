@@ -2007,9 +2007,14 @@ interface TopicEditorProps {
   onCancel: () => void;
   onSave: (payload: TopicPayload) => Promise<Topic>;
   onSaveDone: () => void;
+  // admin 替别人配主题:传 user_id 后,新建走 admin 通道直接 approved,
+  // 跳过 submit-for-review;编辑沿用 onSave。
+  adminTargetUserId?: number;
 }
 
-function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDone }: TopicEditorProps) {
+export function TopicEditor({
+  initial, token, mode = 'edit', onCancel, onSave, onSaveDone, adminTargetUserId,
+}: TopicEditorProps) {
   const readOnly = mode === 'view';
   const { t } = useTranslation();
   // Phase D — 资料作为 Step 1 的核心;name/target/industry 从资料取值;只保留 aliases 单独输入
@@ -2162,8 +2167,13 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
         await handleSubmitSeed(s);
       }
     }
-    const saved = await onSave(buildPayload());
-    if (!initial?.id && saved?.id) {
+    // admin 替别人新建主题:走 admin 通道,seeds 一次性进 payload + 落库即 approved;
+    // 跳过下面的 submitSeedPrompt 二次循环(那条接口会把 seed 强制设回 pending)。
+    const isAdminNew = !initial?.id && typeof adminTargetUserId === 'number';
+    const saved = isAdminNew
+      ? await aiTelemetryApi.adminCreateTopicForUser(adminTargetUserId, buildPayload(), token)
+      : await onSave(buildPayload());
+    if (!isAdminNew && !initial?.id && saved?.id) {
       const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
       for (const s of cleanSeeds) {
         try {
@@ -2197,12 +2207,16 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
 
   // 「提交」— save → submit-for-review → 关闭。
   // 后端 422 = 资料或种子或 selected 不达标,把后端 detail 暴露给用户。
+  // admin 模式:不走 submit-for-review。
+  //   - 新建走 adminCreateTopicForUser,落库即 approved
+  //   - 编辑直接复用 updateTopic;approved 主题再调 submit-for-review 会 422
+  const adminMode = typeof adminTargetUserId === 'number';
   const handleSubmitForReview = async () => {
     if (!valid || saving) return;
     setSaving(true); setSubmitErr(null);
     try {
       const saved = await persistTopic();
-      if (saved?.id) {
+      if (saved?.id && !adminMode) {
         await topicProfileApi.submitForReview(saved.id, token);
       }
       onSaveDone();
@@ -2790,7 +2804,13 @@ function TopicEditor({ initial, token, mode = 'edit', onCancel, onSave, onSaveDo
               className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
               style={{ background: 'var(--accent-primary)' }}
             >
-              {saving ? '…' : t('dashboard.aiTelemetry.form.submit')}
+              {saving
+                ? '…'
+                : t(
+                  adminMode
+                    ? 'dashboard.aiTelemetry.form.adminCreate'
+                    : 'dashboard.aiTelemetry.form.submit',
+                )}
             </button>
           )}
         </div>
