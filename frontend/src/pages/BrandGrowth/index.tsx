@@ -158,54 +158,127 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
 }
 
 // ── 6 入口卡 ─────────────────────────────────────────
+type EntryIconKind = 'sources' | 'engines' | 'competitors' | 'matrix' | 'insights' | 'queries';
+
+function EntryIcon({ kind }: { kind: EntryIconKind }) {
+  const sw = 1.8;
+  switch (kind) {
+    case 'sources':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M4 6h16M4 12h10M4 18h7M19 14l3 3m0 0l-3 3m3-3H14" />
+        </svg>
+      );
+    case 'engines':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <rect x="3" y="4" width="18" height="13" rx="1.5" strokeWidth={sw} />
+          <path strokeLinecap="round" strokeWidth={sw} d="M8 20h8M12 17v3" />
+          <circle cx="8" cy="10.5" r="1.2" fill="currentColor" />
+          <circle cx="12" cy="10.5" r="1.2" fill="currentColor" />
+          <circle cx="16" cy="10.5" r="1.2" fill="currentColor" />
+        </svg>
+      );
+    case 'competitors':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+        </svg>
+      );
+    case 'matrix':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={sw} />
+          <path strokeLinecap="round" strokeWidth={sw} d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+        </svg>
+      );
+    case 'insights':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M9.66 17h4.68M12 3v1M19 6l-.7.7M21 12h-1M4 12H3M5.34 6.06l-.7-.7M8.5 14.4a5 5 0 117 0L15 15a3.4 3.4 0 00-1 2.5V18a2 2 0 01-4 0v-.5A3.4 3.4 0 009 15z" />
+        </svg>
+      );
+    case 'queries':
+      return (
+        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle cx="10.5" cy="10.5" r="6.5" strokeWidth={sw} />
+          <path strokeLinecap="round" strokeWidth={sw} d="M20 20l-4.5-4.5" />
+        </svg>
+      );
+  }
+}
+
+interface EntryCard {
+  kind: EntryIconKind;
+  title: string;
+  sub: string;
+  to: string;
+  tint: { bg: string; fg: string };  // 图标贴片 + 图标颜色
+}
+
 function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: PositionBreakdownResp | null }) {
   const navigate = useNavigate();
   const tid = overview?.topic_id ?? pb?.topic_id ?? 0;
-  const cards: { title: string; sub: string; to: string }[] = [
+  const cards: EntryCard[] = [
     {
-      title: '信源分析',
+      kind: 'sources', title: '信源分析',
       sub: overview?.top_domains[0] ? `Top: ${overview.top_domains[0].domain}` : '—',
       to: `/brand-growth/sources?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(20,184,166,0.32))', fg: '#0d9488' },
     },
     {
-      title: '平台分析',
+      kind: 'engines', title: '平台分析',
       sub: `${overview?.engines_covered.value ?? 0} / ${overview?.engines_total ?? 0} 引擎`,
       to: `/brand-growth/engines?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(59,130,246,0.32))', fg: '#2563eb' },
     },
     {
-      title: '竞品分析',
+      kind: 'competitors', title: '竞品分析',
       sub: '被替代证据 →',
       to: `/brand-growth/competitors?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(249,115,22,0.32))', fg: '#ea580c' },
     },
     {
-      title: 'AI 词测验',
+      kind: 'matrix', title: 'AI 词测验',
       sub: '命中矩阵 →',
       to: `/brand-growth/matrix?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.18), rgba(244,63,94,0.32))', fg: '#e11d48' },
     },
     {
-      title: '智能洞察',
+      kind: 'insights', title: '智能洞察',
       sub: 'briefings + 诊断',
       to: `/brand-growth/insights?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.32))', fg: '#ca8a04' },
     },
     {
-      title: '关键词管理',
+      kind: 'queries', title: '关键词管理',
       sub: '只读 · 配置在 admin',
       to: `/brand-growth/queries?topic=${tid}`,
+      tint: { bg: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(168,85,247,0.32))', fg: '#9333ea' },
     },
   ];
   return (
     <CardShell title="功能入口">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-3">
         {cards.map(c => (
           <button
-            key={c.title}
+            key={c.kind}
             type="button"
             onClick={() => navigate(c.to)}
-            className="p-3 rounded text-left hover:scale-[1.02] transition"
+            className="flex flex-col items-center gap-2 py-4 px-2 rounded-lg text-center hover:scale-[1.04] transition"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           >
-            <div className="text-sm font-medium text-primary mb-1">{c.title}</div>
-            <div className="text-[10px] text-muted truncate">{c.sub}</div>
+            <span
+              className="w-12 h-12 rounded-lg flex items-center justify-center"
+              style={{ background: c.tint.bg, color: c.tint.fg }}
+            >
+              <EntryIcon kind={c.kind} />
+            </span>
+            <div className="text-sm font-medium text-primary">{c.title}</div>
+            <div className="text-[10px] text-muted truncate w-full px-1">{c.sub}</div>
           </button>
         ))}
       </div>
@@ -214,21 +287,71 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
 }
 
 // ── 右核心指标 4+1 ────────────────────────────────────
+type MetricIconKind = 'medal' | 'eye' | 'star' | 'link';
+
+function MetricIcon({ kind }: { kind: MetricIconKind }) {
+  const sw = 1.8;
+  switch (kind) {
+    case 'medal':
+      return (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle cx="12" cy="14" r="5.5" strokeWidth={sw} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw} d="M8 2l4 6 4-6" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw} d="M10 13l1.5 1.5L14 12" />
+        </svg>
+      );
+    case 'eye':
+      return (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" />
+          <circle cx="12" cy="12" r="2.5" strokeWidth={sw} />
+        </svg>
+      );
+    case 'star':
+      return (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M12 3l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.4 6.75 19.15l1-5.85L3.5 9.15l5.9-.85L12 3z" />
+        </svg>
+      );
+    case 'link':
+      return (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={sw}
+            d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1 1M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1-1" />
+        </svg>
+      );
+  }
+}
+
+interface MetricCard {
+  key: 'top1_pct' | 'top3_pct' | 'top5_pct' | 'visible_pct' | 'source_pct';
+  label: string;
+  layer: string;
+  icon: MetricIconKind;
+  tint: { bg: string; fg: string };
+}
+
 function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
   const navigate = useNavigate();
   if (!pb) {
     return <CardShell title="核心指标表现"><div className="text-xs text-muted py-10 text-center">暂无数据</div></CardShell>;
   }
   const baseline = pb.industry_baseline;
-  const metrics: { key: keyof typeof pb.breakdown; label: string; layer: string }[] = [
-    { key: 'top1_pct', label: 'Top1 占比', layer: 'top1' },
-    { key: 'visible_pct', label: '可见占比', layer: 'visible' },
-    { key: 'top5_pct', label: 'Top5 占比', layer: 'top5' },
-    { key: 'source_pct', label: '信源占比', layer: 'source' },
+  const metrics: MetricCard[] = [
+    { key: 'top1_pct', label: 'Top1 占比', layer: 'top1', icon: 'medal',
+      tint: { bg: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.22))', fg: '#10b981' } },
+    { key: 'visible_pct', label: '可见占比', layer: 'visible', icon: 'eye',
+      tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(244,63,94,0.22))', fg: '#e11d48' } },
+    { key: 'top5_pct', label: 'Top5 占比', layer: 'top5', icon: 'star',
+      tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.12), rgba(20,184,166,0.22))', fg: '#0d9488' } },
+    { key: 'source_pct', label: '信源占比', layer: 'source', icon: 'link',
+      tint: { bg: 'linear-gradient(135deg, rgba(244,114,182,0.12), rgba(244,114,182,0.22))', fg: '#db2777' } },
   ];
   return (
     <CardShell title="核心指标表现">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         {metrics.map(m => {
           const v = pb.breakdown[m.key];
           const bv = baseline ? baseline[m.key] : null;
@@ -237,14 +360,24 @@ function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
               key={m.key}
               type="button"
               onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${m.layer}`)}
-              className="p-3 rounded text-left hover:scale-[1.02] transition"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
+              className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex flex-col gap-2"
+              style={{ background: m.tint.bg, border: '1px solid var(--border-color)' }}
             >
-              <div className="text-[10px] text-muted">{m.label}</div>
-              <div className="text-xl font-bold text-primary tabular-nums">{v.toFixed(2)}%</div>
-              {bv !== null && (
-                <div className="text-[10px] text-muted">行业 {bv.toFixed(2)}%</div>
-              )}
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.6)', color: m.tint.fg }}
+                >
+                  <MetricIcon kind={m.icon} />
+                </span>
+                <span className="text-xs font-medium" style={{ color: m.tint.fg }}>{m.label}</span>
+              </div>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: m.tint.fg }}>
+                {v.toFixed(2)}%
+              </div>
+              <div className="text-[10px] text-muted">
+                {bv !== null ? `行业 ${bv.toFixed(2)}%` : '行业基准样本不足'}
+              </div>
             </button>
           );
         })}
