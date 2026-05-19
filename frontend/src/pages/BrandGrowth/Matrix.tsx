@@ -75,7 +75,7 @@ function Body({ state }: { state: ShellState }) {
   };
 
   return (
-    <div className="max-w-[1300px] mx-auto grid gap-4">
+    <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
           {(['all', 'top1', 'top3', 'top5', 'visible', 'source'] as LayerKey[]).map(l => (

@@ -31,7 +31,7 @@ function Body({ state }: { state: ShellState }) {
   if (!topic) return null;
 
   return (
-    <div className="max-w-[1200px] mx-auto grid gap-4">
+    <div className="grid gap-4">
       <div className="text-xs text-muted">
         {engine && `引擎: ${engine} · `}
         {queryFilter && `Query: ${queryFilter} · `}

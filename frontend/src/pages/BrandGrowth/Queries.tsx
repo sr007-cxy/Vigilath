@@ -44,7 +44,7 @@ function Body({ state }: { state: ShellState }) {
   if (!topic || !matrix) return <div className="text-muted">加载中…</div>;
 
   return (
-    <div className="max-w-[1100px] mx-auto grid gap-4">
+    <div className="grid gap-4">
       <div className="text-xs text-muted">
         共 {matrix.queries.length} 条 query · {matrix.engines.length} 个引擎
         · 编辑入口在 admin 工作台

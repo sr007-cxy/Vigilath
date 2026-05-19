@@ -4,6 +4,10 @@ import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type Overview, type ResponseRow,
 } from '../../services/aiTelemetryApi';
+import {
+  DonutChart, DonutLegend, HorizontalBarChart, CHART_PALETTE,
+  type DonutSlice, type BarItem,
+} from './charts';
 
 type FilterMode = 'all' | 'owned' | 'third_party' | 'authoritative';
 
@@ -29,7 +33,7 @@ function Body({ state }: { state: ShellState }) {
 
   if (!topic || !overview) return <div className="text-muted">加载中…</div>;
 
-  // owned 判定:domain 命中 brand_keywords(简化:domain 含 target 关键词)
+  // owned 判定:domain 命中 brand_keywords
   const brandKeys = overview.brand_keywords.map(k => k.toLowerCase());
   const isOwned = (d: string) => brandKeys.some(k => d.toLowerCase().includes(k));
 
@@ -43,8 +47,26 @@ function Body({ state }: { state: ShellState }) {
     setParams(next, { replace: true });
   };
 
+  const ownedPct = overview.owned_split.owned_pct;
+  const ownedSlices: DonutSlice[] = overview.owned_split.owned + overview.owned_split.other > 0
+    ? [
+        { label: '自有 / 权威', value: overview.owned_split.owned, color: '#10b981' },
+        { label: '第三方', value: overview.owned_split.other, color: '#94a3b8' },
+      ]
+    : [];
+
+  const topNSlices: DonutSlice[] = overview.top_domains.slice(0, 7).map((d, i) => ({
+    label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
+  }));
+  const otherCount = overview.top_domains.slice(7).reduce((s, d) => s + d.count, 0);
+  if (otherCount > 0) topNSlices.push({ label: '其它', value: otherCount, color: '#475569' });
+
+  const barItems: BarItem[] = domains.map((d, i) => ({
+    label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
+  }));
+
   return (
-    <div className="max-w-[1100px] mx-auto grid gap-4">
+    <div className="grid gap-4">
       <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
         {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
           <button
@@ -60,40 +82,52 @@ function Body({ state }: { state: ShellState }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <h3 className="text-sm font-medium text-primary mb-3">Top 引用域名</h3>
-          {domains.length === 0 ? (
-            <div className="text-xs text-muted py-6 text-center">该过滤条件下暂无数据</div>
-          ) : (
-            <ul>
-              {domains.map(d => (
-                <li key={d.domain} className="flex items-center gap-2 py-1.5">
-                  <span className="text-sm text-primary flex-shrink-0 w-44 truncate">{d.domain}</span>
-                  <div className="flex-1 h-2 rounded overflow-hidden" style={{ background: 'var(--bg-input)' }}>
-                    <div className="h-full" style={{ width: `${d.pct}%`, background: 'var(--accent-primary)' }} />
-                  </div>
-                  <span className="text-xs text-muted tabular-nums w-12 text-right">{d.count}</span>
-                  <span className="text-xs text-muted tabular-nums w-16 text-right">{d.pct.toFixed(1)}%</span>
-                  <button
-                    type="button"
-                    onClick={() => setDrawerDomain(d.domain)}
-                    className="text-xs text-accent hover:underline"
-                  >
-                    样本
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <h3 className="text-sm font-medium text-primary mb-3">自有 vs 第三方</h3>
-          <OwnedSplitPie owned={overview.owned_split.owned} other={overview.owned_split.other}
-            ownedPct={overview.owned_split.owned_pct} />
-        </div>
+      {/* 双 donut 行:自有/第三方 + Top 域名构成 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card title="自有 vs 第三方">
+          <div className="grid grid-cols-[auto_1fr] gap-4 items-center flex-1">
+            <DonutChart
+              slices={ownedSlices}
+              centerText={`${ownedPct.toFixed(1)}%`}
+              centerSub="自有占比"
+            />
+            <DonutLegend slices={ownedSlices} />
+          </div>
+        </Card>
+        <Card title="Top 域名构成">
+          <div className="grid grid-cols-[auto_1fr] gap-4 items-center flex-1">
+            <DonutChart slices={topNSlices} centerText={String(overview.citations.value)} centerSub="总引用" />
+            <DonutLegend slices={topNSlices} />
+          </div>
+        </Card>
       </div>
+
+      {/* Top 引用域名条形图 */}
+      <Card
+        title={filter === 'all' ? `Top ${domains.length} 引用域名`
+          : filter === 'owned' ? '自有 / 权威域名'
+          : '第三方域名'}
+      >
+        {domains.length === 0 ? (
+          <div className="text-xs text-muted py-6 text-center">该过滤条件下暂无数据</div>
+        ) : (
+          <>
+            <HorizontalBarChart items={barItems} formatValue={v => v.toLocaleString()} />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {domains.slice(0, 12).map(d => (
+                <button
+                  key={d.domain} type="button"
+                  onClick={() => setDrawerDomain(d.domain)}
+                  className="text-xs px-2 py-0.5 rounded hover:underline"
+                  style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)' }}
+                >
+                  {d.domain} · 看样本 →
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
 
       {drawerDomain && (
         <DomainSamplesDrawer
@@ -105,18 +139,16 @@ function Body({ state }: { state: ShellState }) {
   );
 }
 
-function OwnedSplitPie({ owned, other, ownedPct }: { owned: number; other: number; ownedPct: number }) {
-  const total = owned + other;
-  if (total === 0) return <div className="text-xs text-muted text-center py-6">暂无数据</div>;
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="flex h-3 rounded overflow-hidden" style={{ background: 'var(--bg-input)' }}>
-        <div className="h-full" style={{ width: `${ownedPct}%`, background: 'var(--accent-primary)' }} />
-      </div>
-      <div className="flex justify-between mt-2 text-xs">
-        <span><span className="inline-block w-2 h-2 mr-1 align-middle" style={{ background: 'var(--accent-primary)' }} />自有 {owned} ({ownedPct.toFixed(1)}%)</span>
-        <span className="text-muted">第三方 {other}</span>
-      </div>
+    <div className="p-4 rounded-lg flex flex-col"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <h3 className="text-sm font-medium text-primary mb-3 pb-2 border-b flex items-center gap-2"
+        style={{ borderColor: 'var(--border-color)' }}>
+        <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
+        {title}
+      </h3>
+      <div className="flex-1 flex flex-col">{children}</div>
     </div>
   );
 }
