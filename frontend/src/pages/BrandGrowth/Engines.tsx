@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { aiTelemetryApi, type Overview } from '../../services/aiTelemetryApi';
-import { VerticalBarChart, CHART_PALETTE, InfoHint, type BarItem } from './charts';
+import { CHART_PALETTE, InfoHint } from './charts';
 import { useBgLang, engineLabel } from './lang';
 
 export function Engines() {
@@ -34,35 +34,38 @@ function Body({ state }: { state: ShellState }) {
   const engineTotals: { engine: string; total: number }[] = engines.map(e => ({
     engine: e, total: Object.values(matrix[e] || {}).reduce((s, n) => s + (n || 0), 0),
   }));
-  const barItems: BarItem[] = engineTotals.map((e, i) => ({
-    label: engineLabel(e.engine), value: e.total, color: CHART_PALETTE[i % CHART_PALETTE.length],
-  }));
+  const maxTotal = Math.max(1, ...engineTotals.map(e => e.total));
 
   return (
     <div className="grid gap-4">
       <Card title={L.enginesCitationsChart} hint={L.hintEngines}>
-        <VerticalBarChart items={barItems} height={220} formatValue={v => String(v)} />
-      </Card>
-
-      <Card title={L.enginesOverview} hint={L.hintEnginesOverview}>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {engineTotals.map((e, i) => (
-            <button
-              key={e.engine}
-              type="button"
-              onClick={() => navigate(`/brand-growth/responses?topic=${topic.id}&engine=${e.engine}`)}
-              className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex items-center gap-2"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
-            >
-              <span className="w-2 h-8 rounded-sm flex-shrink-0"
-                style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm text-primary font-medium truncate">{engineLabel(e.engine)}</span>
-                <span className="block text-xs text-muted">{L.enginesCitationsLabel} {e.total}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+        <ul className="space-y-2">
+          {engineTotals.map((e, i) => {
+            const pct = (e.total / maxTotal) * 100;
+            const color = CHART_PALETTE[i % CHART_PALETTE.length];
+            return (
+              <li key={e.engine}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/brand-growth/responses?topic=${topic.id}&engine=${e.engine}`)}
+                  className="w-full grid grid-cols-[7rem_1fr_4rem] items-center gap-3 px-2 py-2 rounded hover:bg-[var(--bg-input)] transition text-left"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
+                    <span className="text-sm text-primary truncate">{engineLabel(e.engine)}</span>
+                  </span>
+                  <div className="h-5 rounded overflow-hidden relative" style={{ background: 'var(--bg-input)' }}>
+                    <div className="h-full rounded transition-all"
+                      style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}dd)` }} />
+                  </div>
+                  <span className="tabular-nums text-primary text-right text-sm font-medium">
+                    {e.total.toLocaleString()}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       </Card>
 
       <Card title={L.enginesHeatmap} hint={L.hintEnginesHeatmap}>

@@ -253,18 +253,6 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
       tint: { bg: 'linear-gradient(135deg, rgba(249,115,22,0.18), rgba(249,115,22,0.32))', fg: '#ea580c' },
     },
     {
-      kind: 'matrix', title: L.entryMatrix,
-      sub: L.entryMatrixSub,
-      to: `/brand-growth/matrix?topic=${tid}`,
-      tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.18), rgba(244,63,94,0.32))', fg: '#e11d48' },
-    },
-    {
-      kind: 'insights', title: L.entryInsights,
-      sub: L.entryInsightsSub,
-      to: `/brand-growth/insights?topic=${tid}`,
-      tint: { bg: 'linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.32))', fg: '#ca8a04' },
-    },
-    {
       kind: 'queries', title: L.entryQueries,
       sub: L.entryQueriesSub,
       to: `/brand-growth/queries?topic=${tid}`,
@@ -274,23 +262,23 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
   return (
     <div className="p-4 rounded-lg h-full"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <div className="grid grid-cols-3 grid-rows-2 gap-3 h-full">
+      <div className="grid grid-cols-2 grid-rows-2 gap-3 h-full">
         {cards.map(c => (
           <button
             key={c.kind}
             type="button"
             onClick={() => navigate(c.to)}
-            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-lg text-center hover:scale-[1.04] transition h-full"
+            className="flex flex-col items-center justify-center gap-3 py-5 px-3 rounded-lg text-center hover:scale-[1.04] transition h-full"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           >
             <span
-              className="w-14 h-14 rounded-lg flex items-center justify-center"
+              className="w-16 h-16 rounded-xl flex items-center justify-center"
               style={{ background: c.tint.bg, color: c.tint.fg }}
             >
               <EntryIcon kind={c.kind} />
             </span>
-            <div className="text-sm font-medium text-primary">{c.title}</div>
-            <div className="text-[10px] text-muted truncate w-full px-1">{c.sub}</div>
+            <div className="text-base font-medium text-primary">{c.title}</div>
+            <div className="text-[11px] text-muted truncate w-full px-1">{c.sub}</div>
           </button>
         ))}
       </div>

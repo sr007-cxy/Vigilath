@@ -4,6 +4,7 @@ import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type Overview, type ResponseRow,
 } from '../../services/aiTelemetryApi';
+import { contentApi, type ContentDoc } from '../../services/contentApi';
 import {
   DonutChart, DonutLegend, HorizontalBarChart, InfoHint, CHART_PALETTE,
   type DonutSlice, type BarItem,
@@ -27,11 +28,13 @@ function Body({ state }: { state: ShellState }) {
   const [params, setParams] = useSearchParams();
   const filter: FilterMode = (params.get('filter') as FilterMode) || 'all';
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [published, setPublished] = useState<ContentDoc[]>([]);
   const [drawerDomain, setDrawerDomain] = useState<string | null>(null);
 
   useEffect(() => {
     if (!topic) return;
     aiTelemetryApi.getOverview(topic.id, period, token).then(setOverview).catch(() => setOverview(null));
+    contentApi.listDocs(topic.id, { status: 'published' }, token).then(setPublished).catch(() => setPublished([]));
   }, [token, topic?.id, period]);
 
   if (!topic || !overview) return <div className="text-muted">{L.loading}</div>;
@@ -62,7 +65,10 @@ function Body({ state }: { state: ShellState }) {
 
   const totalCitations = overview.citations.value;
   const uniqueDomains = overview.top_domains.length;
-  const ownedPct = overview.owned_split.owned_pct;
+  const citedDocCount = published.filter(d => {
+    const cb = d.cited_by || {};
+    return Object.values(cb).some(arr => Array.isArray(arr) && arr.length > 0);
+  }).length;
 
   return (
     <div className="grid gap-4">
@@ -71,9 +77,9 @@ function Body({ state }: { state: ShellState }) {
         <div className="grid grid-cols-3 gap-3">
           <StatTile label={L.sourcesCenterTotal} value={totalCitations.toLocaleString()} hint={L.hintTopMetrics}
             tint={{ bg: 'rgba(59,130,246,0.10)', fg: '#2563eb' }} />
-          <StatTile label="唯一域名数" value={uniqueDomains.toLocaleString()} hint={L.hintSourcesUnique}
+          <StatTile label="信源域名数" value={uniqueDomains.toLocaleString()} hint="AI 答复里被引到过的不同域名总数(去重)"
             tint={{ bg: 'rgba(16,185,129,0.10)', fg: '#10b981' }} />
-          <StatTile label={L.sourcesCenterOwned} value={`${ownedPct.toFixed(1)}%`} hint={L.hintSourcesOwnedPct}
+          <StatTile label="自有文章引用数" value={citedDocCount.toLocaleString()} hint="你发布的稿件里,被 AI 真实引用过的篇数(cited_by_json 非空)"
             tint={{ bg: 'rgba(244,114,182,0.10)', fg: '#db2777' }} />
         </div>
         <div className="flex items-center gap-1.5">
