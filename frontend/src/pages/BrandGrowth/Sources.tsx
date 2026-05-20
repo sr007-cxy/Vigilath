@@ -125,22 +125,25 @@ function Body({ state }: { state: ShellState }) {
         </Card>
       </div>
 
-      {/* 域名样本 chip row(底部一行) */}
+      {/* 域名 × 引擎 拆分 */}
       {domains.length > 0 && (
-        <Card title="域名引用样本">
-          <div className="flex flex-wrap gap-2">
-            {domains.slice(0, 20).map(d => (
-              <button
-                key={d.domain} type="button"
-                onClick={() => setDrawerDomain(d.domain)}
-                className="text-xs px-2.5 py-1 rounded-md transition hover:scale-[1.05]"
-                style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)', border: '1px solid var(--border-color)' }}
-              >
-                {d.domain} <span className="text-muted ml-1">· {d.count}</span>
-              </button>
+        <Card title="域名 × 引擎 引用拆分">
+          <p className="text-[11px] text-muted mb-3">
+            点击域名查看具体引用样本;条形按引擎拆分,看每个 AI 引擎都引用了谁。
+          </p>
+          <ul className="space-y-2">
+            {domains.slice(0, 15).map(d => (
+              <li key={d.domain}>
+                <DomainRow
+                  domain={d.domain}
+                  total={d.count}
+                  engineCounts={extractEngineCounts(overview.engine_domain_matrix, d.domain)}
+                  engines={overview.engines}
+                  onClick={() => setDrawerDomain(d.domain)}
+                />
+              </li>
             ))}
-          </div>
-          <div className="text-[11px] text-muted mt-3">{L.sourcesViewSamples}</div>
+          </ul>
         </Card>
       )}
 
@@ -151,6 +154,62 @@ function Body({ state }: { state: ShellState }) {
         />
       )}
     </div>
+  );
+}
+
+function extractEngineCounts(
+  matrix: Partial<Record<string, Record<string, number>>>,
+  domain: string,
+): Array<{ engine: string; count: number }> {
+  const out: Array<{ engine: string; count: number }> = [];
+  for (const [eng, dmap] of Object.entries(matrix || {})) {
+    const v = dmap?.[domain] || 0;
+    if (v > 0) out.push({ engine: eng, count: v });
+  }
+  out.sort((a, b) => b.count - a.count);
+  return out;
+}
+
+function DomainRow({
+  domain, total, engineCounts, onClick,
+}: {
+  domain: string;
+  total: number;
+  engineCounts: Array<{ engine: string; count: number }>;
+  engines: string[];
+  onClick: () => void;
+}) {
+  const sum = engineCounts.reduce((s, x) => s + x.count, 0) || total;
+  return (
+    <button
+      type="button" onClick={onClick}
+      className="w-full grid grid-cols-[10rem_1fr_auto] items-center gap-3 px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-input)] transition text-left"
+    >
+      <span className="text-primary truncate" title={domain}>{domain}</span>
+      <div className="flex h-3 rounded overflow-hidden" style={{ background: 'var(--bg-input)' }}>
+        {engineCounts.map((ec, i) => {
+          const w = (ec.count / sum) * 100;
+          const color = CHART_PALETTE[i % CHART_PALETTE.length];
+          return (
+            <div
+              key={ec.engine}
+              style={{ width: `${w}%`, background: color }}
+              title={`${engineLabel(ec.engine)}: ${ec.count}`}
+            />
+          );
+        })}
+      </div>
+      <span className="tabular-nums text-muted w-14 text-right">{total}</span>
+      <span className="col-span-3 text-[10px] text-muted flex flex-wrap gap-2 pl-[10.5rem]">
+        {engineCounts.map((ec, i) => (
+          <span key={ec.engine} className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-sm"
+              style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+            {engineLabel(ec.engine)} {ec.count}
+          </span>
+        ))}
+      </span>
+    </button>
   );
 }
 
