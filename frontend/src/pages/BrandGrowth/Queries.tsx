@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type TrackingMatrix,
@@ -30,6 +30,8 @@ function Body({ state }: { state: ShellState }) {
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [active, setActive] = useState<Row | null>(null);
+  const [seedFilter, setSeedFilter] = useState<string>('');     // '' = 全部
+  const [modelFilter, setModelFilter] = useState<EngineId | ''>(''); // '' = 全部
 
   useEffect(() => {
     if (!topic) return;
@@ -66,9 +68,29 @@ function Body({ state }: { state: ShellState }) {
     });
   }, [matrix, seedByQuery]);
 
+  // 用于筛选下拉的可选值
+  const seedOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of queryRows) if (r.seed) s.add(r.seed);
+    return Array.from(s);
+  }, [queryRows]);
+
+  const filteredRows = useMemo(() => {
+    return queryRows.filter(r => {
+      if (seedFilter && r.seed !== seedFilter) return false;
+      if (modelFilter && r.firstHitEngine !== modelFilter) return false;
+      return true;
+    });
+  }, [queryRows, seedFilter, modelFilter]);
+
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
   const brandKeywords = [topic.target, ...(topic.target_aliases || [])].filter(Boolean);
+  const inputStyle: CSSProperties = {
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
+    color: 'var(--text-primary)',
+  };
 
   return (
     <div className="grid gap-4">
@@ -77,15 +99,47 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      <div className="p-3 rounded-lg overflow-x-auto" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      {/* 筛选条:种子提示词 + 模型 */}
+      <div className="flex items-center gap-2 text-xs">
+        <select
+          value={seedFilter}
+          onChange={e => setSeedFilter(e.target.value)}
+          className="px-2 py-1 rounded-md"
+          style={{ ...inputStyle, minWidth: 140 }}
+        >
+          <option value="">{L.queriesFilterAllSeeds}</option>
+          {seedOptions.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select
+          value={modelFilter}
+          onChange={e => setModelFilter(e.target.value as EngineId | '')}
+          className="px-2 py-1 rounded-md"
+          style={{ ...inputStyle, minWidth: 140 }}
+        >
+          <option value="">{L.queriesFilterAllModels}</option>
+          {matrix.engines.map(e => <option key={e} value={e}>{engineLabel(e)}</option>)}
+        </select>
+        <span className="text-muted ml-1">
+          {filteredRows.length} / {queryRows.length}
+        </span>
+      </div>
+
+      <div
+        className="rounded-lg overflow-auto"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          maxHeight: 'clamp(420px, 70vh, 720px)',
+        }}
+      >
         <table className="w-full text-xs">
-          <thead>
-            <tr className="text-muted">
+          <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-card)' }}>
+            <tr className="text-muted" style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)' }}>
               <th className="text-right px-2 py-2 w-12">{L.queriesColIndex}</th>
               <th className="text-left px-2 py-2">{L.queriesColSeed}</th>
               <th className="text-left px-2 py-2">{L.queriesColExpansion}</th>
-              <th className="text-right px-2 py-2">
-                <span className="inline-flex items-center gap-1 justify-end">
+              <th className="text-center px-2 py-2 w-20">
+                <span className="inline-flex items-center gap-1 justify-center">
                   {L.queriesColHit}<InfoHint text={L.hintQueriesTable} />
                 </span>
               </th>
@@ -94,7 +148,13 @@ function Body({ state }: { state: ShellState }) {
             </tr>
           </thead>
           <tbody>
-            {queryRows.map((r, i) => (
+            {filteredRows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                  {L.queriesEmptyAfterFilter}
+                </td>
+              </tr>
+            ) : filteredRows.map((r, i) => (
               <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
                 <td className="px-2 py-2 text-primary truncate max-w-[160px]"
@@ -103,7 +163,19 @@ function Body({ state }: { state: ShellState }) {
                   {r.seed || L.queriesNoSeed}
                 </td>
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>{r.query}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{r.totalHits}</td>
+                <td className="px-2 py-2 text-center">
+                  {r.totalHits > 0 ? (
+                    <span
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-medium"
+                      style={{ background: 'rgba(34,197,94,0.18)', color: '#15803d' }}
+                      title={L.queriesDetailHitBadge}
+                    >
+                      ✓
+                    </span>
+                  ) : (
+                    <span className="text-muted">{L.queriesNoSeed}</span>
+                  )}
+                </td>
                 <td className="px-2 py-2 text-primary">{r.firstHitEngine ? engineLabel(r.firstHitEngine) : L.queriesNeverHit}</td>
                 <td className="px-2 py-2 text-right">
                   {r.totalHits > 0 && (
@@ -161,16 +233,16 @@ function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
       .finally(() => setLoading(false));
   }, [topicId, token, row.query]);
 
-  // 同 engine 取最近一条;命中的排前面
-  const latestByEngine = useMemo(() => {
+  // 弹窗只展示命中的引擎:按 engine 取最近一条命中(hit=true),未命中的不进结果集
+  const hitEngines = useMemo(() => {
     if (!rows) return [];
     const m = new Map<EngineId, ResponseRow>();
     for (const r of rows) {
+      if (!r.hit) continue;
       const prev = m.get(r.engine);
       if (!prev || new Date(r.created_at) > new Date(prev.created_at)) m.set(r.engine, r);
     }
-    return Array.from(m.values()).sort((a, b) =>
-      Number(b.hit ?? 0) - Number(a.hit ?? 0) || a.engine.localeCompare(b.engine));
+    return Array.from(m.values()).sort((a, b) => a.engine.localeCompare(b.engine));
   }, [rows]);
 
   return (
@@ -201,7 +273,7 @@ function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {loading ? (
             <div className="text-xs text-muted text-center py-10">{L.loading}</div>
-          ) : latestByEngine.length === 0 ? (
+          ) : hitEngines.length === 0 ? (
             <div className="text-xs text-muted text-center py-10">
               {L.queriesDetailEmpty}
               {err && <div className="mt-2 text-[10px]" style={{ color: '#ef4444' }}>{err}</div>}
@@ -209,9 +281,9 @@ function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
           ) : (
             <>
               <div className="text-[11px] text-muted">
-                {L.queriesDetailEnginesHeader(latestByEngine.length)}
+                {L.queriesDetailEnginesHeader(hitEngines.length)}
               </div>
-              {latestByEngine.map(r => (
+              {hitEngines.map(r => (
                 <EngineAnswerCard key={r.id} row={r} brandKeywords={brandKeywords} />
               ))}
             </>
@@ -232,13 +304,8 @@ function EngineAnswerCard({ row, brandKeywords }: {
       <div className="flex items-center gap-2 mb-2">
         <span className="text-primary font-medium">{engineLabel(row.engine)}</span>
         <span className="px-1.5 py-0.5 rounded text-[10px]"
-          style={{
-            background: row.hit ? 'rgba(34,197,94,0.15)' : 'rgba(148,163,184,0.15)',
-            color: row.hit ? '#15803d' : '#64748b',
-          }}>
-          {row.hit
-            ? `✓ ${row.brand_rank ? `Top${row.brand_rank}` : L.queriesDetailHitBadge}`
-            : `✕ ${L.queriesDetailMissBadge}`}
+          style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}>
+          ✓ {row.brand_rank ? `Top${row.brand_rank}` : L.queriesDetailHitBadge}
         </span>
         <span className="text-muted ml-auto">{new Date(row.created_at).toLocaleString()}</span>
       </div>

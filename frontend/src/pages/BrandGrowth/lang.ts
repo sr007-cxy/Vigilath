@@ -128,6 +128,9 @@ interface Dict {
   queriesColModel: string;
   queriesColAction: string;
   queriesNoSeed: string;
+  queriesFilterAllSeeds: string;
+  queriesFilterAllModels: string;
+  queriesEmptyAfterFilter: string;
   queriesViewMatrix: string;
   // 命中查看弹窗 (2026-05-20)
   queriesViewDetail: string;
@@ -310,6 +313,9 @@ const ZH: Dict = {
   queriesColModel: '模型',
   queriesColAction: '查看',
   queriesNoSeed: '—',
+  queriesFilterAllSeeds: '全部种子',
+  queriesFilterAllModels: '全部模型',
+  queriesEmptyAfterFilter: '当前筛选无匹配问题',
   queriesViewMatrix: '查矩阵 →',
   queriesViewDetail: '查看',
   queriesDetailEmpty: '暂无 AI 回答',
@@ -493,6 +499,9 @@ const EN: Dict = {
   queriesColModel: 'Model',
   queriesColAction: 'View',
   queriesNoSeed: '—',
+  queriesFilterAllSeeds: 'All seeds',
+  queriesFilterAllModels: 'All models',
+  queriesEmptyAfterFilter: 'No queries match the current filter',
   queriesViewMatrix: 'See matrix →',
   queriesViewDetail: 'View',
   queriesDetailEmpty: 'No AI responses',
