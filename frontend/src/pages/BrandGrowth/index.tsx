@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type Overview, type PositionBreakdownResp,
-  type Briefing, type Topic,
+  type Briefing, type Topic, type ShareOfVoice,
 } from '../../services/aiTelemetryApi';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
 import { useBgLang } from './lang';
@@ -22,6 +22,7 @@ function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [pb, setPb] = useState<PositionBreakdownResp | null>(null);
+  const [sov, setSov] = useState<ShareOfVoice | null>(null);
   const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [published, setPublished] = useState<ContentDoc[]>([]);
 
@@ -29,6 +30,7 @@ function Body({ state }: { state: ShellState }) {
     if (!topic) return;
     aiTelemetryApi.getOverview(topic.id, period, token).then(setOverview).catch(() => setOverview(null));
     aiTelemetryApi.getPositionBreakdown(topic.id, period, token).then(setPb).catch(() => setPb(null));
+    aiTelemetryApi.getShareOfVoice(topic.id, period, token).then(setSov).catch(() => setSov(null));
     aiTelemetryApi.listBriefings(topic.id, token, 10).then(setBriefings).catch(() => setBriefings([]));
     contentApi.listDocs(topic.id, { status: 'published' }, token).then(setPublished).catch(() => setPublished([]));
   }, [token, topic?.id, period]);
@@ -37,7 +39,7 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4 max-w-[1400px] mx-auto">
-      <TopMetricsRow overview={overview} published={published} topic={topic} />
+      <TopMetricsRow overview={overview} sov={sov} published={published} topic={topic} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RadarBlock pb={pb} />
         <EntryCardGrid overview={overview} pb={pb} />
@@ -52,27 +54,25 @@ function Body({ state }: { state: ShellState }) {
 }
 
 // ── 顶部 3 大数 ───────────────────────────────────────
-function TopMetricsRow({ overview, published, topic }: {
-  overview: Overview | null; published: ContentDoc[]; topic: Topic;
+function TopMetricsRow({ overview, sov, published, topic }: {
+  overview: Overview | null; sov: ShareOfVoice | null;
+  published: ContentDoc[]; topic: Topic;
 }) {
   const navigate = useNavigate();
   const L = useBgLang();
-  const total = overview?.citations.value ?? 0;
-  const totalDelta = overview?.citations.delta_pct ?? null;
+  const mentionCount = sov?.brand_count ?? 0;
+  const citationsTotal = overview?.citations.value ?? 0;
+  const citationsDelta = overview?.citations.delta_pct ?? null;
   const publishedCount = published.length;
-  const citedCount = published.filter(d => {
-    const cb = d.cited_by || {};
-    return Object.values(cb).some(arr => Array.isArray(arr) && arr.length > 0);
-  }).length;
   const tq = topic.id;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <BigMetric label={L.metricCitations} value={total} delta={totalDelta} hint={L.hintTopMetrics}
+      <BigMetric label={L.metricCitations} value={mentionCount} hint={L.hintTopMetrics}
         onClick={() => navigate(`/brand-growth/responses?topic=${tq}`)} />
       <BigMetric label={L.metricPublishedTotal} value={publishedCount} hint={L.hintPublishedTotal}
         onClick={() => navigate(`/brand-growth/published?topic=${tq}`)} />
-      <BigMetric label={L.metricCitedTotal} value={citedCount} hint={L.hintCitedTotal}
-        onClick={() => navigate(`/brand-growth/published?topic=${tq}&roi=hit`)} />
+      <BigMetric label={L.metricCitedTotal} value={citationsTotal} delta={citationsDelta} hint={L.hintCitedTotal}
+        onClick={() => navigate(`/brand-growth/sources?topic=${tq}`)} />
     </div>
   );
 }
