@@ -271,8 +271,9 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
     },
   ];
   return (
-    <CardShell title={L.blockEntries} hint={L.hintEntries}>
-      <div className="grid grid-cols-3 grid-rows-2 gap-3 flex-1">
+    <div className="p-4 rounded-lg h-full"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="grid grid-cols-3 grid-rows-2 gap-3 h-full">
         {cards.map(c => (
           <button
             key={c.kind}
@@ -282,7 +283,7 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
           >
             <span
-              className="w-12 h-12 rounded-lg flex items-center justify-center"
+              className="w-14 h-14 rounded-lg flex items-center justify-center"
               style={{ background: c.tint.bg, color: c.tint.fg }}
             >
               <EntryIcon kind={c.kind} />
@@ -292,7 +293,7 @@ function EntryCardGrid({ overview, pb }: { overview: Overview | null; pb: Positi
           </button>
         ))}
       </div>
-    </CardShell>
+    </div>
   );
 }
 
