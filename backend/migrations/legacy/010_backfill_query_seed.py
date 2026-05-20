@@ -5,8 +5,9 @@
 
 策略(从准到糙):
   1) expansion_log_json[].raw_excerpt 命中:把命中那条 log 的 seed 写入
-  2) 该 topic 只有 1 个 seed_prompt:全部 query 归属那个种子(fallback)
-  3) 否则空字符串保留(UI 显示 "—")
+  2) 子串匹配:找最长的 seed,使其文本是 query 文本的子串(大小写不敏感)
+  3) 该 topic 只有 1 个 seed_prompt:全部 query 归属那个种子(fallback)
+  4) 否则空字符串保留(UI 显示 "—")
 
 幂等:已有非空 seed 的 query 不动;可重复跑。
 
@@ -61,7 +62,20 @@ def main() -> None:
                 qt = q.get("text") or ""
                 if qt and qt in excerpt and qt not in guess:
                     guess[qt] = seed
-        # 2) 兜底:只有 1 个种子时全部 query 归属它
+        # 2) 子串匹配 — 找最长的 seed,其文本是 query 子串(大小写不敏感)
+        sorted_seeds = sorted(
+            [(sp or "") for sp in seed_texts if sp],
+            key=len, reverse=True,
+        )
+
+        def substr_match(qt: str) -> str:
+            qt_low = qt.lower()
+            for sp in sorted_seeds:
+                if sp and sp.lower() in qt_low:
+                    return sp
+            return ""
+
+        # 3) 兜底:只有 1 个种子时全部 query 归属它
         fallback = seed_texts[0] if len(seed_texts) == 1 else ""
         changed = False
         for q in queries:
@@ -70,7 +84,7 @@ def main() -> None:
             if q.get("seed"):
                 continue
             qt = q.get("text") or ""
-            new_seed = guess.get(qt) or fallback
+            new_seed = guess.get(qt) or substr_match(qt) or fallback
             if new_seed:
                 q["seed"] = new_seed
                 changed = True
