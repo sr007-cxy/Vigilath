@@ -444,9 +444,20 @@ def update_topic(
             t, actor_id=current_user.id, actor_role="user", field="profile",
             after=payload.profile.profile_name or payload.profile.company_short_name,
         )
-    # Phase C — payload 带 seed_prompt 时追加为 pending(若 text 已存在则跳过)
-    t.seed_prompts_json = _append_seed_prompts(t.seed_prompts_json, payload.seed_drafts)
-    t.queries_json = _queries_with_meta(payload.queries, t.queries_json, payload.query_cluster_ids)
+    # Phase C — payload 带 seed_prompt / query 时追加。
+    # admin 替别人改主题:新增 seed / query 直接 approved(跳过审核);
+    # 普通用户编辑:沿用默认 pending,走审核流程。
+    is_admin_actor = bool(getattr(current_user, "is_admin", False))
+    new_status = "approved" if is_admin_actor else "pending"
+    reviewer_id = current_user.id if is_admin_actor else None
+    t.seed_prompts_json = _append_seed_prompts(
+        t.seed_prompts_json, payload.seed_drafts,
+        new_status=new_status, reviewer_id=reviewer_id,
+    )
+    t.queries_json = _queries_with_meta(
+        payload.queries, t.queries_json, payload.query_cluster_ids,
+        new_status=new_status, reviewer_id=reviewer_id,
+    )
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉
     if payload.clusters is not None:
         t.clusters_json = json.dumps(
@@ -483,8 +494,8 @@ def submit_seed_prompt(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """甲方追加新种子提示词 — 默认 status=pending,等 admin 审核."""
-    t = _get_topic_or_404(db, topic_id, current_user.id)
+    """追加新种子提示词. admin 提交时直接 approved;普通用户提交走 pending → 待审核."""
+    t = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     try:
         seeds = json.loads(t.seed_prompts_json or "[]")
     except Exception:  # noqa: BLE001
@@ -495,14 +506,24 @@ def submit_seed_prompt(
     # 同一 topic 下种子词文本不允许重复
     if any(isinstance(s, dict) and s.get("text") == text for s in seeds):
         raise HTTPException(409, {"code": "DUPLICATE", "message": "种子提示词已存在"})
-    seeds.append({
+    is_admin = bool(getattr(current_user, "is_admin", False))
+    now_iso = datetime.utcnow().isoformat()
+    item: dict = {
         "text": text,
-        "status": "pending",
-        "submitted_at": datetime.utcnow().isoformat(),
-    })
+        "status": "approved" if is_admin else "pending",
+        "submitted_at": now_iso,
+    }
+    if is_admin:
+        item["approved_at"] = now_iso
+        item["reviewer_id"] = current_user.id
+    seeds.append(item)
     t.seed_prompts_json = json.dumps(seeds, ensure_ascii=False)
-    _append_changelog(t, actor_id=current_user.id, actor_role="user",
-                      field="seed_prompts", after=text, note="user submitted new seed")
+    _append_changelog(
+        t, actor_id=current_user.id,
+        actor_role="admin" if is_admin else "user",
+        field="seed_prompts", after=text,
+        note="admin submitted new seed (auto-approved)" if is_admin else "user submitted new seed",
+    )
     db.commit()
     db.refresh(t)
     return TopicOut.from_orm_row(t)
