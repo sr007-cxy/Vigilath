@@ -2564,17 +2564,18 @@ export function TopicEditor({
                 </span>
               </div>
 
-              {/* 手动添加 — 即便没跑 DeepSeek 也能直接填要监测的问题。
-                  写入 suggestions(score=0, 无 cluster_id) + 自动勾进 picked. */}
+              {/* 手动添加 — 必须选一条种子提示词归属;写入 suggestions(score=0)
+                  并打 seed 字段 + 自动勾进 picked. */}
               <ManualQueryAdder
                 disabled={readOnly}
                 pickedCap={pickedCap}
-                addQuery={(text) => {
+                seeds={allSeedTexts}
+                addQuery={(text, seed) => {
                   const v = text.trim();
                   if (!v) return false;
                   if (suggestions.some(q => q.text === v) || picked.has(v)) return false;
                   if (picked.size >= QUERY_MAX_PICK) return false;
-                  setSuggestions(prev => [...prev, { text: v, score: 0, sources: [] }]);
+                  setSuggestions(prev => [...prev, { text: v, score: 0, sources: [], seed }]);
                   setPicked(prev => new Set(prev).add(v));
                   return true;
                 }}
@@ -2822,20 +2823,35 @@ export function TopicEditor({
 }
 
 function ManualQueryAdder({
-  disabled, pickedCap, addQuery,
+  disabled, pickedCap, seeds, addQuery,
 }: {
   disabled: boolean;
   pickedCap: boolean;
-  addQuery: (text: string) => boolean;
+  seeds: string[];
+  addQuery: (text: string, seed: string) => boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
+  const [chosenSeed, setChosenSeed] = useState<string>(seeds[0] || '');
   const [hint, setHint] = useState<string | null>(null);
 
+  // seeds 列表变化(用户在 step 2 新加/删除种子)时,若当前选中的不在了就重置
+  useEffect(() => {
+    if (!seeds.includes(chosenSeed)) setChosenSeed(seeds[0] || '');
+  }, [seeds, chosenSeed]);
+
+  const noSeeds = seeds.length === 0;
+  const cantSubmit = disabled || pickedCap || noSeeds || !chosenSeed || !draft.trim();
+
   const submit = () => {
+    if (noSeeds || !chosenSeed) {
+      setHint(t('dashboard.aiTelemetry.form.manualAddNeedSeed')
+        || '请先填一条种子提示词');
+      return;
+    }
     const v = draft.trim();
     if (!v) return;
-    const ok = addQuery(v);
+    const ok = addQuery(v, chosenSeed);
     if (ok) {
       setDraft('');
       setHint(null);
@@ -2850,26 +2866,50 @@ function ManualQueryAdder({
 
   return (
     <div className="flex items-start gap-2">
+      <select
+        value={chosenSeed}
+        onChange={e => { setChosenSeed(e.target.value); if (hint) setHint(null); }}
+        disabled={disabled || pickedCap || noSeeds}
+        className="px-2 py-1.5 rounded-md text-xs shrink-0"
+        style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--text-primary)',
+          minWidth: 140, maxWidth: 220,
+          opacity: (disabled || pickedCap || noSeeds) ? 0.5 : 1,
+        }}
+        title={noSeeds
+          ? (t('dashboard.aiTelemetry.form.manualAddNeedSeed') || '请先填种子提示词')
+          : (t('dashboard.aiTelemetry.form.manualAddSeedTitle') || '关联到种子提示词')}
+      >
+        {noSeeds ? (
+          <option value="">
+            {t('dashboard.aiTelemetry.form.manualAddSeedEmpty') || '无可用种子'}
+          </option>
+        ) : (
+          seeds.map(s => <option key={s} value={s}>{s}</option>)
+        )}
+      </select>
       <div className="flex-1">
         <input
           type="text" value={draft}
-          disabled={disabled || pickedCap}
+          disabled={disabled || pickedCap || noSeeds}
           onChange={e => { setDraft(e.target.value); if (hint) setHint(null); }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
           placeholder={t('dashboard.aiTelemetry.form.manualAddPlaceholder') || ''}
           className="w-full px-3 py-1.5 rounded-md text-xs"
           style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)',
-                   color: 'var(--text-primary)', opacity: (disabled || pickedCap) ? 0.5 : 1 }}
+                   color: 'var(--text-primary)', opacity: (disabled || pickedCap || noSeeds) ? 0.5 : 1 }}
         />
         {hint && <div className="mt-1 text-[11px]" style={{ color: '#f59e0b' }}>{hint}</div>}
       </div>
       <button
         type="button" onClick={submit}
-        disabled={disabled || pickedCap || !draft.trim()}
+        disabled={cantSubmit}
         className="px-3 py-1.5 text-xs rounded-md text-white whitespace-nowrap"
         style={{
           background: 'var(--accent-primary)',
-          opacity: (disabled || pickedCap || !draft.trim()) ? 0.4 : 1,
+          opacity: cantSubmit ? 0.4 : 1,
         }}
       >
         {t('dashboard.aiTelemetry.form.manualAddBtn')}
