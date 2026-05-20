@@ -149,7 +149,6 @@ function Body({ state }: { state: ShellState }) {
           row={active}
           topicId={topic.id}
           token={token}
-          period={period}
           brandKeywords={brandKeywords}
           onClose={() => setActive(null)}
         />
@@ -159,20 +158,30 @@ function Body({ state }: { state: ShellState }) {
 }
 
 // ── 命中详情弹窗 ───────────────────────────────────────
-function QueryDetailModal({ row, topicId, token, period, brandKeywords, onClose }: {
-  row: Row; topicId: number; token: string; period: number;
+function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
+  row: Row; topicId: number; token: string;
   brandKeywords: string[]; onClose: () => void;
 }) {
   const L = useBgLang();
   const [rows, setRows] = useState<ResponseRow[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setErr(null);
+    // 弹窗里不跟随页面 period(7/30/90),直接用后端最大 90 天,避免命中
+    // 答案落在窗口外 → 弹窗看着空。
     aiTelemetryApi.listTopicResponses(topicId, token, {
-      query: row.query, period, limit: 50,
-    }).then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
-  }, [topicId, token, period, row.query]);
+      query: row.query, period: 90, limit: 50,
+    })
+      .then(setRows)
+      .catch(e => {
+        setRows([]);
+        setErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setLoading(false));
+  }, [topicId, token, row.query]);
 
   // 同 engine 取最近一条;命中的排前面
   const latestByEngine = useMemo(() => {
@@ -215,7 +224,10 @@ function QueryDetailModal({ row, topicId, token, period, brandKeywords, onClose 
           {loading ? (
             <div className="text-xs text-muted text-center py-10">{L.loading}</div>
           ) : latestByEngine.length === 0 ? (
-            <div className="text-xs text-muted text-center py-10">{L.queriesDetailEmpty}</div>
+            <div className="text-xs text-muted text-center py-10">
+              {L.queriesDetailEmpty}
+              {err && <div className="mt-2 text-[10px]" style={{ color: '#ef4444' }}>{err}</div>}
+            </div>
           ) : (
             <>
               <div className="text-[11px] text-muted">
