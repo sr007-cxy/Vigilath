@@ -6,13 +6,15 @@ import {
   type CompetitorSubstitutionItem,
 } from '../../services/aiTelemetryApi';
 import {
-  DonutChart, DonutLegend, HorizontalBarChart, CHART_PALETTE,
+  DonutChart, DonutLegend, HorizontalBarChart, InfoHint, CHART_PALETTE,
   type DonutSlice, type BarItem,
 } from './charts';
+import { useBgLang } from './lang';
 
 export function Competitors() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="竞品分析" breadcrumb={[{ label: '品牌增长', to: '/brand-growth' }]}>
+    <BrandGrowthShell title={L.competitorsTitle} breadcrumb={[{ label: L.pageTitle, to: '/brand-growth' }]}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -20,6 +22,7 @@ export function Competitors() {
 
 function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
+  const L = useBgLang();
   const [sov, setSov] = useState<ShareOfVoice | null>(null);
   const [subs, setSubs] = useState<CompetitorSubstitutionResp | null>(null);
   const [selectedComp, setSelectedComp] = useState<string | null>(null);
@@ -39,8 +42,8 @@ function Body({ state }: { state: ShellState }) {
 
   const saivSlices: DonutSlice[] = sov && (sov.brand_count + sov.competitors_count_total) > 0
     ? [
-        { label: `本品(${sov.target})`, value: sov.brand_count, color: '#3b82f6' },
-        { label: '竞品总和', value: sov.competitors_count_total, color: '#94a3b8' },
+        { label: L.competitorsBrand(sov.target), value: sov.brand_count, color: '#3b82f6' },
+        { label: L.competitorsRivalsTotal, value: sov.competitors_count_total, color: '#94a3b8' },
       ]
     : [];
 
@@ -52,21 +55,21 @@ function Body({ state }: { state: ShellState }) {
     <div className="grid gap-4">
       {sov && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card title="声量份额 SAIV">
+          <Card title={L.competitorsSaiv} hint={L.hintCompetitors}>
             {saivSlices.length === 0 ? (
-              <div className="text-xs text-muted py-10 text-center">暂无数据</div>
+              <div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div>
             ) : (
               <div className="grid grid-cols-[auto_1fr] gap-4 items-center flex-1">
                 <DonutChart
                   slices={saivSlices}
                   centerText={`${sov.saiv_pct.toFixed(1)}%`}
-                  centerSub="本品占比"
+                  centerSub={L.competitorsSaivCenter}
                 />
                 <div className="space-y-3">
                   <DonutLegend slices={saivSlices} />
                   <div className="pt-3 border-t text-xs" style={{ borderColor: 'var(--border-color)' }}>
                     <div className="flex justify-between mb-1">
-                      <span className="text-muted">命中位置分布</span>
+                      <span className="text-muted">{L.competitorsPositionDist}</span>
                     </div>
                     <PositionMiniBar sov={sov} />
                   </div>
@@ -74,9 +77,9 @@ function Body({ state }: { state: ShellState }) {
               </div>
             )}
           </Card>
-          <Card title="竞品排行 Top 10">
+          <Card title={L.competitorsTopList}>
             {compBars.length === 0 ? (
-              <div className="text-xs text-muted py-10 text-center">暂无竞品提及</div>
+              <div className="text-xs text-muted py-10 text-center">{L.competitorsSubsEmpty}</div>
             ) : (
               <HorizontalBarChart items={compBars} formatValue={v => `${v}`} />
             )}
@@ -101,13 +104,13 @@ function Body({ state }: { state: ShellState }) {
         </div>
       )}
 
-      <Card title={`被替代证据 — 提了竞品没提我${selectedComp ? `(${selectedComp})` : ''}`}
+      <Card title={L.competitorsSubstitutions(selectedComp)}
         action={selectedComp && (
           <button type="button" className="text-xs text-muted hover:text-primary"
-            onClick={() => setSelectedComp(null)}>清除筛选</button>
+            onClick={() => setSelectedComp(null)}>{L.clearFilter}</button>
         )}>
         {filteredItems.length === 0 ? (
-          <div className="text-xs text-muted text-center py-6">暂无替代证据(或本期未抽取出竞品)</div>
+          <div className="text-xs text-muted text-center py-6">{L.competitorsSubsEmpty}</div>
         ) : (
           <SubstitutionTable items={filteredItems} topicId={topic.id} />
         )}
@@ -117,14 +120,15 @@ function Body({ state }: { state: ShellState }) {
 }
 
 function PositionMiniBar({ sov }: { sov: ShareOfVoice }) {
+  const L = useBgLang();
   const { lead, body, tail, unknown } = sov.position_dist;
   const total = lead + body + tail + unknown;
-  if (total === 0) return <div className="text-[10px] text-muted">本期未命中</div>;
+  if (total === 0) return <div className="text-[10px] text-muted">{L.responsesMiss}</div>;
   const segs = [
-    { k: 'lead', v: lead, color: '#10b981', label: '开头' },
-    { k: 'body', v: body, color: '#3b82f6', label: '中段' },
-    { k: 'tail', v: tail, color: '#f59e0b', label: '末尾' },
-    { k: 'unknown', v: unknown, color: '#64748b', label: '未知' },
+    { k: 'lead', v: lead, color: '#10b981', label: L.posLead },
+    { k: 'body', v: body, color: '#3b82f6', label: L.posBody },
+    { k: 'tail', v: tail, color: '#f59e0b', label: L.posTail },
+    { k: 'unknown', v: unknown, color: '#64748b', label: L.posUnknown },
   ];
   return (
     <div>
@@ -145,7 +149,9 @@ function PositionMiniBar({ sov }: { sov: ShareOfVoice }) {
   );
 }
 
-function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Card({ title, action, hint, children }: {
+  title: string; action?: React.ReactNode; hint?: string; children: React.ReactNode;
+}) {
   return (
     <div className="p-4 rounded-lg flex flex-col"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -154,6 +160,7 @@ function Card({ title, action, children }: { title: string; action?: React.React
         <h3 className="text-sm font-medium text-primary flex items-center gap-2">
           <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
           {title}
+          {hint && <InfoHint text={hint} />}
         </h3>
         {action}
       </div>
@@ -164,14 +171,15 @@ function Card({ title, action, children }: { title: string; action?: React.React
 
 function SubstitutionTable({ items, topicId }: { items: CompetitorSubstitutionItem[]; topicId: number }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   return (
     <table className="w-full text-xs">
       <thead>
         <tr className="text-muted">
-          <th className="text-left px-2 py-1.5">Query</th>
-          <th className="text-left px-2 py-1.5">竞品</th>
-          <th className="text-right px-2 py-1.5">次数</th>
-          <th className="text-left px-2 py-1.5">证据</th>
+          <th className="text-left px-2 py-1.5">{L.competitorsSubColQuery}</th>
+          <th className="text-left px-2 py-1.5">{L.competitorsSubColRival}</th>
+          <th className="text-right px-2 py-1.5">{L.competitorsSubColCount}</th>
+          <th className="text-left px-2 py-1.5">{L.competitorsSubColEvidence}</th>
           <th />
         </tr>
       </thead>
@@ -188,7 +196,7 @@ function SubstitutionTable({ items, topicId }: { items: CompetitorSubstitutionIt
                 onClick={() => navigate(`/brand-growth/matrix?topic=${topicId}&q=${encodeURIComponent(i.query)}`)}
                 className="text-xs text-accent hover:underline"
               >
-                查矩阵 →
+                {L.competitorsSubViewMatrix}
               </button>
             </td>
           </tr>

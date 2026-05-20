@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
+import { useBgLang, engineLabel } from './lang';
+import { InfoHint } from './charts';
 
 type RoiFilter = 'all' | 'hit' | 'miss';
 
 export function Published() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="投放战果" breadcrumb={[{ label: '品牌增长', to: '/brand-growth' }]}>
+    <BrandGrowthShell title={L.publishedTitle} breadcrumb={[{ label: L.pageTitle, to: '/brand-growth' }]}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -15,6 +18,7 @@ export function Published() {
 
 function Body({ state }: { state: ShellState }) {
   const { token, topic } = state;
+  const L = useBgLang();
   const [params, setParams] = useSearchParams();
   const roi = (params.get('roi') as RoiFilter) || 'all';
   const platform = params.get('platform') || '';
@@ -48,22 +52,31 @@ function Body({ state }: { state: ShellState }) {
     setParams(next, { replace: true });
   };
 
+  const roiLabels: Record<RoiFilter, string> = {
+    all: L.publishedFilterAll,
+    hit: L.publishedFilterHit,
+    miss: L.publishedFilterMiss,
+  };
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
-          {(['all', 'hit', 'miss'] as RoiFilter[]).map(r => (
-            <button
-              key={r} type="button" onClick={() => setRoi(r)}
-              className="px-3 py-1 text-xs rounded"
-              style={{
-                background: roi === r ? 'var(--accent-primary)' : 'transparent',
-                color: roi === r ? 'white' : 'var(--text-secondary)',
-              }}
-            >
-              {r === 'all' ? '全部' : r === 'hit' ? '已被 AI 引用' : '未被引用'}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
+            {(['all', 'hit', 'miss'] as RoiFilter[]).map(r => (
+              <button
+                key={r} type="button" onClick={() => setRoi(r)}
+                className="px-3 py-1 text-xs rounded"
+                style={{
+                  background: roi === r ? 'var(--accent-primary)' : 'transparent',
+                  color: roi === r ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {roiLabels[r]}
+              </button>
+            ))}
+          </div>
+          <InfoHint text={L.hintPublished} />
         </div>
         {platforms.length > 0 && (
           <select
@@ -71,17 +84,17 @@ function Body({ state }: { state: ShellState }) {
             className="text-xs px-2 py-1 rounded"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
           >
-            <option value="">全部平台</option>
+            <option value="">{L.publishedAllPlatform}</option>
             {platforms.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         )}
-        <span className="text-xs text-muted ml-auto">共 {visible.length} 篇已投放</span>
+        <span className="text-xs text-muted ml-auto">{L.publishedTotal(visible.length)}</span>
       </div>
 
       {loading ? (
-        <div className="text-xs text-muted text-center py-10">加载中…</div>
+        <div className="text-xs text-muted text-center py-10">{L.loading}</div>
       ) : visible.length === 0 ? (
-        <div className="text-xs text-muted text-center py-10">该筛选下暂无已投放内容</div>
+        <div className="text-xs text-muted text-center py-10">{L.publishedEmpty}</div>
       ) : (
         <ul className="grid gap-3">
           {visible.map(d => <DocCard key={d.id} doc={d} topicId={topic.id} />)}
@@ -93,6 +106,7 @@ function Body({ state }: { state: ShellState }) {
 
 function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
   const navigate = useNavigate();
+  const L = useBgLang();
   const earliestMark = doc.publish_targets
     .map(t => t.marked_at).filter(Boolean).sort()[0];
   const ts = earliestMark || doc.review_decision_at;
@@ -105,20 +119,22 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
         <span className="px-2 py-0.5 rounded text-[10px]"
           style={{ background: doc.source === 'ai' ? 'rgba(59,130,246,0.15)' : 'rgba(168,85,247,0.15)',
                    color: doc.source === 'ai' ? '#3b82f6' : '#a855f7' }}>
-          {doc.source === 'ai' ? 'AI 生成' : '用户提交'}
+          {doc.source === 'ai' ? L.publishedSourceAi : L.publishedSourceUser}
         </span>
-        <span className="text-xs text-muted">已发布 · {ts ? new Date(ts).toLocaleDateString() : '—'}</span>
+        <span className="text-xs text-muted">
+          {L.publishedAt} · {ts ? new Date(ts).toLocaleDateString() : '—'}
+        </span>
       </div>
       <h3 className="text-base font-medium text-primary mb-2">{doc.title}</h3>
       {doc.summary && <p className="text-sm text-secondary mb-3 line-clamp-2">{doc.summary}</p>}
 
       {citedEngines.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
-          <span className="text-[10px] text-muted self-center">AI 引用:</span>
+          <span className="text-[10px] text-muted self-center">{L.publishedAiCited}:</span>
           {citedEngines.map(({ eng, count }) => (
             <span key={eng} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded"
               style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
-              {eng} · {count}
+              {engineLabel(eng)} · {count}
             </span>
           ))}
         </div>
@@ -143,13 +159,13 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
 
       {doc.source_query_text && (
         <div className="text-xs pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
-          <span className="text-muted">关联查询: </span>
+          <span className="text-muted">{L.publishedRelQuery}: </span>
           <button
             type="button"
             onClick={() => navigate(`/brand-growth/queries?topic=${topicId}&q=${encodeURIComponent(doc.source_query_text)}`)}
             className="text-accent hover:underline"
           >
-            {doc.source_query_text} → 看 AI 现在怎么答
+            {doc.source_query_text}{L.publishedRelQueryArrow}
           </button>
         </div>
       )}
