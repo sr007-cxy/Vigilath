@@ -10,7 +10,7 @@ import {
 } from './charts';
 import { useBgLang, engineLabel } from './lang';
 
-type FilterMode = 'all' | 'owned' | 'third_party';
+type FilterMode = 'all' | 'third_party';
 
 export function Sources() {
   const L = useBgLang();
@@ -41,7 +41,6 @@ function Body({ state }: { state: ShellState }) {
   const isOwned = (d: string) => brandKeys.some(k => d.toLowerCase().includes(k));
 
   let domains = overview.top_domains;
-  if (filter === 'owned') domains = domains.filter(d => isOwned(d.domain));
   if (filter === 'third_party') domains = domains.filter(d => !isOwned(d.domain));
 
   const setFilter = (f: FilterMode) => {
@@ -79,7 +78,7 @@ function Body({ state }: { state: ShellState }) {
         </div>
         <div className="flex items-center gap-1.5">
           <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
-            {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
+            {(['all', 'third_party'] as FilterMode[]).map(f => (
               <button
                 key={f} type="button" onClick={() => setFilter(f)}
                 className="px-3 py-1 text-xs rounded whitespace-nowrap"
@@ -88,7 +87,7 @@ function Body({ state }: { state: ShellState }) {
                   color: filter === f ? 'white' : 'var(--text-secondary)',
                 }}
               >
-                {f === 'all' ? L.sourcesFilterAll : f === 'owned' ? L.sourcesFilterOwned : L.sourcesFilterThird}
+                {f === 'all' ? L.sourcesFilterAll : L.sourcesFilterThird}
               </button>
             ))}
           </div>
@@ -113,11 +112,7 @@ function Body({ state }: { state: ShellState }) {
         </Card>
 
         <Card
-          title={
-            filter === 'all' ? L.sourcesTopList(domains.length)
-              : filter === 'owned' ? L.sourcesOwnedList
-              : L.sourcesThirdPartyList
-          }
+          title={filter === 'all' ? L.sourcesTopList(domains.length) : L.sourcesThirdPartyList}
           className="lg:col-span-3"
         >
           {domains.length === 0 ? (
