@@ -123,6 +123,25 @@ interface Dict {
   queriesIntentBlock: string;
   queriesIntentHint: string;
   queriesViewMatrix: string;
+  // 2026-05-20 — 报告明细表格
+  queriesColIdx: string;
+  queriesColSeed: string;
+  queriesColExpanded: string;
+  queriesColEngines: string;
+  queriesColAction: string;
+  queriesViewDetail: string;
+  queriesNoSeed: string;
+  queriesDetailEmpty: string;
+  queriesDetailHitBadge: string;
+  queriesDetailMissBadge: string;
+  queriesDetailClose: string;
+  queriesDetailQuery: string;
+  queriesDetailEnginesHeader: (n: number) => string;
+  queriesDetailCitations: string;
+  queriesFilterAll: string;
+  queriesFilterHit: string;
+  queriesFilterMiss: string;
+  queriesSearchPlaceholder: string;
   // 原始引用
   responsesTitle: string;
   responsesFilterSummary: (e: string | undefined, q: string | undefined, p: number, n: number) => string;
@@ -293,6 +312,24 @@ const ZH: Dict = {
   queriesIntentBlock: '问题主题分布',
   queriesIntentHint: '同类问题归到一组,看品牌在哪类问题上曝光最弱',
   queriesViewMatrix: '查矩阵 →',
+  queriesColIdx: '序号',
+  queriesColSeed: '种子提示词',
+  queriesColExpanded: '扩展的问题',
+  queriesColEngines: '平台',
+  queriesColAction: '操作',
+  queriesViewDetail: '查看',
+  queriesNoSeed: '—',
+  queriesDetailEmpty: '暂无 AI 回答',
+  queriesDetailHitBadge: '命中',
+  queriesDetailMissBadge: '未命中',
+  queriesDetailClose: '关闭',
+  queriesDetailQuery: '扩展的问题',
+  queriesDetailEnginesHeader: (n: number) => `各平台回答(${n})`,
+  queriesDetailCitations: '引用来源',
+  queriesFilterAll: '全部',
+  queriesFilterHit: '已命中',
+  queriesFilterMiss: '未命中',
+  queriesSearchPlaceholder: '搜索问题 / 种子词…',
   responsesTitle: '原始引用',
   responsesFilterSummary: (e, q, p, n) => {
     const parts: string[] = [];
@@ -465,6 +502,24 @@ const EN: Dict = {
   queriesIntentBlock: 'Query topic distribution',
   queriesIntentHint: 'Similar queries grouped; weakest groups are where you most need content',
   queriesViewMatrix: 'See matrix →',
+  queriesColIdx: '#',
+  queriesColSeed: 'Seed prompt',
+  queriesColExpanded: 'Expanded query',
+  queriesColEngines: 'Platforms',
+  queriesColAction: 'Actions',
+  queriesViewDetail: 'View',
+  queriesNoSeed: '—',
+  queriesDetailEmpty: 'No AI responses',
+  queriesDetailHitBadge: 'Hit',
+  queriesDetailMissBadge: 'Miss',
+  queriesDetailClose: 'Close',
+  queriesDetailQuery: 'Expanded query',
+  queriesDetailEnginesHeader: (n: number) => `Responses across engines (${n})`,
+  queriesDetailCitations: 'Citations',
+  queriesFilterAll: 'All',
+  queriesFilterHit: 'Hit',
+  queriesFilterMiss: 'Miss',
+  queriesSearchPlaceholder: 'Search query / seed…',
   responsesTitle: 'Raw responses',
   responsesFilterSummary: (e, q, p, n) => {
     const parts: string[] = [];

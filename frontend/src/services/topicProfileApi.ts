@@ -40,6 +40,8 @@ export interface ExpandQueriesResp {
 export interface SelectedItem {
   text: string;
   selected: boolean;
+  /** 2026-05-20 — 这条 query 来自哪个种子词;候选阶段才有,既有 query 不回填。 */
+  seed?: string;
 }
 
 export interface ExtractProfileResp {
