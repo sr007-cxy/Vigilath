@@ -31,6 +31,10 @@ from .tracking import (
 )
 from .llm import extract_response_insights
 from .openrouter import call_openrouter, is_openrouter_engine
+from .citation_match import (
+    extract_publish_urls, match_citations_to_docs, merge_cited_by,
+)
+from sqlalchemy import text
 
 log = logging.getLogger(__name__)
 
@@ -165,6 +169,12 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
     if EXTRACT_AFTER_RUN and response_ids:
         asyncio.create_task(_extract_responses_bg(topic_id, target, aliases, response_ids))
 
+    # v1.5 URL 级 ROI 命中:扫本批 responses 的 citations 跟 published doc 的投放
+    # URL 做规范化匹配,命中则按 engine 分桶写 cited_by_json。这块完全独立于 LLM
+    # 抽取,所以单独 fire-and-forget,失败不影响 LLM 抽取。
+    if response_ids:
+        asyncio.create_task(_update_cited_by_bg(topic_id, response_ids))
+
 
 async def _extract_responses_bg(
     topic_id: int, target: str, aliases: list[str], response_ids: list[int],
@@ -179,6 +189,64 @@ async def _extract_responses_bg(
                 log.warning("extract failed for response %d: %s", rid, e)
     except Exception as e:  # noqa: BLE001
         log.exception("extract bg task crashed: %s", e)
+
+
+async def _update_cited_by_bg(topic_id: int, response_ids: list[int]) -> None:
+    """v1.5 — 跑批后扫 responses 的 citations 跟 published doc 的投放 URL 做规范化匹配,
+    命中则按 engine 分桶写 cited_by_json。整体一个 DB session,失败静默。"""
+    try:
+        await asyncio.sleep(0.5)  # 让 _extract_responses_bg 先跑起来
+        await asyncio.to_thread(_update_cited_by_sync, topic_id, response_ids)
+    except Exception as e:  # noqa: BLE001
+        log.exception("cited_by bg task crashed: %s", e)
+
+
+def _update_cited_by_sync(topic_id: int, response_ids: list[int]) -> None:
+    """同步:扫所有 published doc 的 publish URL,跟本批 response 的 citations 匹配。"""
+    with db_session() as s:
+        doc_rows = s.execute(text(
+            "SELECT id, publish_targets_json, cited_by_json FROM topic_generated_docs "
+            "WHERE topic_id = :tid AND status = 'published'"
+        ), {"tid": topic_id}).mappings().all()
+        if not doc_rows:
+            return
+        doc_urls: dict[int, list[str]] = {}
+        doc_cited: dict[int, str | None] = {}
+        for row in doc_rows:
+            urls = extract_publish_urls(row["publish_targets_json"])
+            if urls:
+                doc_urls[row["id"]] = urls
+                doc_cited[row["id"]] = row["cited_by_json"]
+        if not doc_urls:
+            return
+
+        # {doc_id: {engine: {response_id, ...}}}
+        new_hits: dict[int, dict[str, set[int]]] = {}
+        for rid in response_ids:
+            r = s.get(ResponseORM, rid)
+            if r is None or r.error:
+                continue
+            try:
+                citations = json.loads(r.citations_json or "[]")
+            except Exception:  # noqa: BLE001
+                continue
+            matched = match_citations_to_docs(citations, doc_urls)
+            for doc_id in matched:
+                new_hits.setdefault(doc_id, {}).setdefault(r.engine, set()).add(r.id)
+
+        if not new_hits:
+            return
+
+        # 合并写回 cited_by_json
+        for doc_id, by_engine in new_hits.items():
+            cb = doc_cited.get(doc_id) or "{}"
+            for engine, rids in by_engine.items():
+                cb = merge_cited_by(cb, engine, rids)
+            s.execute(text(
+                "UPDATE topic_generated_docs SET cited_by_json = :cb WHERE id = :id"
+            ), {"cb": cb, "id": doc_id})
+        s.commit()
+        log.info("topic %d cited_by updated: %d docs matched", topic_id, len(new_hits))
 
 
 def _extract_one(target: str, response_id: int) -> None:
