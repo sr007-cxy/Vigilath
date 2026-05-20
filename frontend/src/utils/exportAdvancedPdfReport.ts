@@ -156,18 +156,21 @@ const dataTable = (headers: string[], rows: DataRow[]): string => {
         `<th style="padding:9px 10px;text-align:${i === 0 ? 'left' : 'center'};font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(h)}</th>`,
     )
     .join('');
+  // word-break + overflow-wrap so long CJK strings (e.g. truncated meta-desc
+  // queries) wrap inside the cell rather than overflow the table.
+  const tdBase = 'padding:9px 10px;border-bottom:1px solid #e5e7eb;word-break:break-word;overflow-wrap:anywhere;';
   const body = rows
     .map(
       (r) =>
         `<tr>${r
           .map((cell, i) => {
             if (typeof cell === 'string') {
-              return `<td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:${i === 0 ? 'left' : 'center'};color:#0f172a;${i === 0 ? 'font-weight:600;' : ''}">${escapeHtml(cell)}</td>`;
+              return `<td style="${tdBase}text-align:${i === 0 ? 'left' : 'center'};color:#0f172a;${i === 0 ? 'font-weight:600;' : ''}">${escapeHtml(cell)}</td>`;
             }
             const align = cell.align || (i === 0 ? 'left' : 'center');
             const color = cell.color || '#0f172a';
             const bold = cell.bold ? 'font-weight:700;' : '';
-            return `<td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:${align};color:${color};${bold}">${escapeHtml(cell.value)}</td>`;
+            return `<td style="${tdBase}text-align:${align};color:${color};${bold}">${escapeHtml(cell.value)}</td>`;
           })
           .join('')}</tr>`,
     )
@@ -559,7 +562,7 @@ const buildCitationBlocks = (data: CitationCheckResponse, t: TFunction, language
   blocks.push(
     scoreHero({
       scoreLabel: t('home.advanced.result.citation.overallScore') as string,
-      scoreValue: fmtPercent(data.citation_rate * 100),
+      scoreValue: fmtPercent(data.citation_rate),
       scoreSuffix: t('home.advanced.result.citation.queriesSuffix', { count: data.total_queries }) as string,
       grade: data.grade,
       rightStats: [
@@ -668,9 +671,9 @@ const buildVisibilityBlocks = (data: AiVisibilityResponse, t: TFunction, languag
       Object.entries(data.per_engine_rates).map(([engine, rate]) => [
         { value: engine, align: 'left' as const, bold: true },
         {
-          value: fmtPercent(rate * 100),
+          value: fmtPercent(rate),
           align: 'center' as const,
-          color: rate >= 0.5 ? '#166534' : rate >= 0.25 ? '#92400e' : '#991b1b',
+          color: rate >= 50 ? '#166534' : rate >= 25 ? '#92400e' : '#991b1b',
           bold: true,
         },
       ]),
@@ -704,13 +707,31 @@ const buildVisibilityBlocks = (data: AiVisibilityResponse, t: TFunction, languag
     );
   }
 
-  // Content gaps
+  // Content gaps — parsed `[engine] "query" (group)` strings into a 3-column
+  // table so CJK queries wrap inside their cell rather than overflow as one
+  // long bullet line.
   if (data.content_gaps.length > 0) {
     blocks.push(sectionHeading(t('home.advanced.result.visibility.contentGaps') as string, '#8b5cf6'));
+    const gapPattern = /^\[([^\]]+)\]\s*"(.+)"\s*\(([^)]+)\)\s*$/;
+    const rows: DataRow[] = data.content_gaps.map((g) => {
+      const m = gapPattern.exec(g);
+      if (!m) {
+        return [{ value: '—', align: 'left' as const }, { value: g, align: 'left' as const }, { value: '—', align: 'left' as const }];
+      }
+      return [
+        { value: m[1], align: 'left' as const, bold: true },
+        { value: m[2], align: 'left' as const },
+        { value: m[3], align: 'left' as const, color: '#64748b' },
+      ];
+    });
     blocks.push(
-      bulletList(
-        t('result.advancedPdf.visibility.gapsHeader', { defaultValue: 'Topics where competitors win' }) as string,
-        data.content_gaps,
+      dataTable(
+        [
+          t('result.advancedPdf.visibility.engine', { defaultValue: 'Engine' }) as string,
+          t('result.advancedPdf.visibility.gapQuery', { defaultValue: 'Query' }) as string,
+          t('result.advancedPdf.visibility.gapGroup', { defaultValue: 'Group' }) as string,
+        ],
+        rows,
       ),
     );
   }

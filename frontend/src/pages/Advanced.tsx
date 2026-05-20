@@ -17,8 +17,6 @@ import type {
   AiVisibilityResponse,
   EntityAuditResponse,
 } from '../types/advanced';
-import { SourceTracePanel } from '../components/source-analysis/SourceTracePanel';
-import { SourcePreferencePanel } from '../components/source-analysis/SourcePreferencePanel';
 import { SourceAnalysisPanel } from '../components/source-analysis/SourceAnalysisPanel';
 
 // Must match backend MODE_MIN_TIER in app/models/advanced.py.
@@ -1393,29 +1391,6 @@ function VisibilityResult({ data }: { data: AiVisibilityResponse }) {
           )}
         </SectionCard>
       </div>
-      {data.source_trace && data.source_trace.total_citations > 0 && (
-        <>
-          <SectionCard title={t('home.advanced.result.visibility.sourceTrace')} subtitle={t('home.advanced.result.entity.sourcesShort', { count: data.source_trace.total_sources })}>
-            <SourceTracePanel
-              sources={data.source_trace.sources}
-              selfCitations={data.source_trace.self_citations}
-              missingQueries={data.source_trace.missing_queries}
-              totalSources={data.source_trace.total_sources}
-              totalCitations={data.source_trace.total_citations}
-              engines={data.engines}
-            />
-          </SectionCard>
-          {data.source_preference && (
-            <SectionCard title={t('home.advanced.result.visibility.sourcePreference')}>
-              <SourcePreferencePanel
-                sourcePreference={data.source_preference}
-                sourceTrace={data.source_trace}
-                engines={data.engines}
-              />
-            </SectionCard>
-          )}
-        </>
-      )}
     </>
   );
 }

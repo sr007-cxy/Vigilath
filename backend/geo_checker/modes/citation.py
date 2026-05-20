@@ -74,15 +74,25 @@ def citation_check(url, return_data=False):
         f"Is {brand} reliable and trustworthy?",
     ]
 
-    # Fetch homepage to detect what the site is about for a category query
+    # Fetch homepage to detect what the site is about for a category query.
+    # Meta-description text often contains line breaks, double spaces, or
+    # zero-width chars — clean those out before slicing, or the rendered
+    # query looks garbled (especially in PDF where the cell wraps awkwardly).
     resp, soup = get_soup(base_url)
     if soup:
         meta_desc = soup.find("meta", attrs={"name": "description"})
         if meta_desc and meta_desc.get("content"):
-            desc = meta_desc["content"].strip()
-            # Extract a short topic from the meta description
+            raw_desc = meta_desc["content"]
+            # Drop zero-width / BOM marks, then collapse all whitespace
+            # (incl. newlines / tabs) to a single space so the truncated
+            # query reads cleanly in the PDF cell.
+            desc = re.sub(r"[\u200b-\u200f\u2060\ufeff]", "", raw_desc)
+            desc = re.sub(r"\s+", " ", desc).strip()
             if len(desc) > 10:
-                queries.append(f"Best tools for {desc[:80]}")
+                snippet = desc[:80].rstrip()
+                if len(desc) > 80:
+                    snippet += "…"
+                queries.append(f"Best tools for {snippet}")
 
     headers = {
         "Authorization": f"Bearer {api_key}",

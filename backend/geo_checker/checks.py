@@ -1270,9 +1270,9 @@ def check_authority_trust(base_url):
         for path in ["/about", "/about-us", "/team", "/authors", "/our-team", "/people"]:
             candidate = urljoin(base_url, path)
             r = fetch(candidate, timeout=8)
-            if r and r.status_code == 200 and len(r.text) > 500:
+            if r and r.status_code == 200 and len(r.content) > 500:
                 try:
-                    s = BeautifulSoup(r.text, "html.parser")
+                    s = BeautifulSoup(r.content, "html.parser")
                     bio_text = get_text_content(s)
                     if len(bio_text.split()) >= 50:
                         bio_url = candidate

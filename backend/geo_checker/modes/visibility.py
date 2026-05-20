@@ -114,12 +114,20 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     if soup:
         meta_desc = soup.find("meta", attrs={"name": "description"})
         if meta_desc and meta_desc.get("content"):
-            site_description = meta_desc["content"].strip()
+            raw_desc = meta_desc["content"]
+            # Strip zero-width / BOM marks, collapse all whitespace runs to a
+            # single space — keeps the gap-detection / category queries clean
+            # so they don't render as visually broken in the PDF.
+            cleaned = re.sub(r"[​-‏⁠﻿]", "", raw_desc)
+            site_description = re.sub(r"\s+", " ", cleaned).strip()
         # Also check title for category hints
         title_tag = soup.find("title")
         title_text = title_tag.get_text(strip=True) if title_tag else ""
         if site_description and len(site_description) > 10:
-            category_queries.append(f"Best tools for {site_description[:80]}")
+            snippet = site_description[:80].rstrip()
+            if len(site_description) > 80:
+                snippet += "…"
+            category_queries.append(f"Best tools for {snippet}")
         if title_text and brand.lower() in title_text.lower():
             # Extract what comes after brand in title
             parts = title_text.lower().split(brand.lower(), 1)

@@ -49,11 +49,19 @@ def fetch(url, timeout=15, allow_redirects=True):
 def get_soup(base_url):
     """Fetch *base_url* and return (response, BeautifulSoup). Returns
     (None, None) on failure so callers can short-circuit with a single
-    falsy check."""
+    falsy check.
+
+    Uses ``resp.content`` (raw bytes) instead of ``resp.text``: when the
+    HTTP Content-Type lacks a ``charset`` directive, ``requests`` defaults
+    to ISO-8859-1 per RFC 2616, mangling UTF-8 Chinese pages (the meta
+    description in `--citation-check` ended up as `æªåºæ¥å£`-style mojibake).
+    BeautifulSoup's UnicodeDammit reads the HTML's own `<meta charset>`
+    and decodes correctly.
+    """
     resp = fetch(base_url)
     if not resp or resp.status_code != 200:
         return None, None
-    return resp, BeautifulSoup(resp.text, "html.parser")
+    return resp, BeautifulSoup(resp.content, "html.parser")
 
 
 def get_text_content(soup):
