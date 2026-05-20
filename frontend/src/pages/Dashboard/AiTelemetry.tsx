@@ -22,7 +22,7 @@ import {
   type OwnedSplit,
   type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
   type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
-  type QueryCandidate, type ClusterMeta,
+  type QueryCandidate,
   type SeedPrompt, type ReviewStatus,
 } from '../../services/aiTelemetryApi';
 import {
@@ -2050,23 +2050,17 @@ export function TopicEditor({
   const industry = profile.industry;
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
-  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数),如果主题
-  // 已存过 cluster_ids 就把簇 ID 一并回填,允许下次保存继续按簇分组
+  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数);
+  // 2026-05-20 起 picker 按 seed 分组,seed 来自 initial.query_seeds(legacy 为 "")。
   const [suggestions, setSuggestions] = useState<QueryCandidate[]>(() => {
     const qs = initial?.queries || [];
-    const cids = initial?.query_cluster_ids || [];
+    const seedsArr = initial?.query_seeds || [];
     return qs.map((text, i) => ({
       text, score: 0, sources: [],
-      ...(typeof cids[i] === 'number' && cids[i] >= 0 ? { cluster_id: cids[i] } : {}),
+      ...(seedsArr[i] ? { seed: seedsArr[i] } : {}),
     }));
   });
-  const [clusters, setClusters] = useState<ClusterMeta[]>(
-    () => (initial?.clusters || []).map(c => ({
-      cluster_id: c.cluster_id, label: c.label, size: c.size,
-      medoid_index: 0,  // 持久化时没存 medoid_index,这里用 0 占位
-    })),
-  );
-  const [collapsedClusters, setCollapsedClusters] = useState<Set<number>>(new Set());
+  const [collapsedSeeds, setCollapsedSeeds] = useState<Set<string>>(new Set());
   const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
   const [queryFilter, setQueryFilter] = useState('');
   const [sortByScore, setSortByScore] = useState(true);
@@ -2087,31 +2081,47 @@ export function TopicEditor({
     return out;
   }, [suggestions, queryFilter, sortByScore]);
 
-  // 按 cluster 分组渲染。clusters 为空时返回 null → 走平铺渲染回退
-  const groupedByCluster = useMemo<{ cluster: ClusterMeta; items: QueryCandidate[] }[] | null>(() => {
-    if (clusters.length === 0) return null;
-    const byId = new Map<number, QueryCandidate[]>();
-    for (const q of filteredSuggestions) {
-      const cid = q.cluster_id ?? -1;
-      if (!byId.has(cid)) byId.set(cid, []);
-      byId.get(cid)!.push(q);
+  // 按种子提示词分组渲染。组顺序:先按 `seeds`(用户编辑器里现存的种子),再补
+  // suggestions 里出现但 seeds 没列的(防止数据漂移)。
+  // 只有 ≥2 个 seed 时才分组;单 seed / 零 seed 直接平铺。
+  // q.seed 为空(legacy 或手动添加无 seed)的归"未分组",作为最后一组。
+  const groupedBySeed = useMemo<{ seed: string; items: QueryCandidate[] }[] | null>(() => {
+    const order: string[] = [];
+    const seen = new Set<string>();
+    for (const s of seeds) {
+      const t = s.trim();
+      if (t && !seen.has(t)) { seen.add(t); order.push(t); }
     }
-    return clusters
-      .map(c => ({ cluster: c, items: byId.get(c.cluster_id) || [] }))
-      .filter(g => g.items.length > 0);
-  }, [filteredSuggestions, clusters]);
+    for (const q of suggestions) {
+      const t = (q.seed || '').trim();
+      if (t && !seen.has(t)) { seen.add(t); order.push(t); }
+    }
+    if (order.length < 2) return null;
+    const groups: { seed: string; items: QueryCandidate[] }[] = order.map(s => ({ seed: s, items: [] }));
+    const byKey = new Map(groups.map(g => [g.seed, g]));
+    const ungrouped: QueryCandidate[] = [];
+    for (const q of filteredSuggestions) {
+      const t = (q.seed || '').trim();
+      const g = t ? byKey.get(t) : undefined;
+      if (g) g.items.push(q);
+      else ungrouped.push(q);
+    }
+    const out = groups.filter(g => g.items.length > 0);
+    if (ungrouped.length > 0) out.push({ seed: '', items: ungrouped });
+    return out;
+  }, [filteredSuggestions, seeds, suggestions]);
 
-  const toggleClusterCollapse = (cid: number) => {
-    setCollapsedClusters(prev => {
+  const toggleSeedCollapse = (seed: string) => {
+    setCollapsedSeeds(prev => {
       const next = new Set(prev);
-      if (next.has(cid)) next.delete(cid); else next.add(cid);
+      if (next.has(seed)) next.delete(seed); else next.add(seed);
       return next;
     });
   };
-  const pickAllInCluster = (cid: number) => {
+  const pickAllInSeed = (seed: string) => {
     setPicked(prev => {
       const next = new Set(prev);
-      const items = suggestions.filter(q => (q.cluster_id ?? -1) === cid);
+      const items = suggestions.filter(q => (q.seed || '').trim() === seed);
       for (const q of items) {
         if (next.size >= QUERY_MAX_PICK) break;
         next.add(q.text);
@@ -2125,17 +2135,14 @@ export function TopicEditor({
     && queries.length > 0 && engines.size > 0;
 
   const buildPayload = (): TopicPayload => {
-    // 按 queries 顺序回填 cluster_id;suggestions 里没记 cluster_id 的就给 -1
-    const textToCluster = new Map<string, number>();
+    // 按 queries 顺序回填 seed — suggestions 里 q.seed 是这条候选当时被哪条种子词扩展出来的。
+    // backend `_queries_with_meta` 会把 seed 持久化进 queries_json[].seed。
+    const textToSeed = new Map<string, string>();
     for (const q of suggestions) {
-      if (typeof q.cluster_id === 'number') textToCluster.set(q.text, q.cluster_id);
+      if (q.seed && !textToSeed.has(q.text)) textToSeed.set(q.text, q.seed);
     }
-    const query_cluster_ids = queries.map(q => textToCluster.get(q) ?? -1);
-    const hasAnyCluster = query_cluster_ids.some(c => c >= 0);
-    // cluster_ids 和 clusters 必须同进同出 — 只发其一会留下 "queries 没簇但
-    // clusters_json 还在" 的孤儿态(topic#2 就是这么坏的)。
-    // hasAnyCluster=false 时两个都不发,backend `_queries_with_meta` 会按 text
-    // 沿用历史 cluster_id;clusters_json 也保持不动。
+    const query_seeds = queries.map(q => textToSeed.get(q) || '');
+    const hasAnySeed = query_seeds.some(s => s);
     // Phase C — 把所有种子词附带提交;后端去重 + 自动追加为 pending
     const seedTexts = seeds.map(s => s.trim()).filter(Boolean);
     return {
@@ -2144,12 +2151,7 @@ export function TopicEditor({
       target_aliases: aliases,
       industry: industry.trim(),
       queries,
-      ...(hasAnyCluster ? {
-        query_cluster_ids,
-        clusters: clusters.map(c => ({
-          cluster_id: c.cluster_id, label: c.label, size: c.size,
-        })),
-      } : {}),
+      ...(hasAnySeed ? { query_seeds } : {}),
       engines: Array.from(engines),
       enabled,
       ...(seedTexts.length > 0 ? { seed_drafts: seedTexts } : {}),
@@ -2232,14 +2234,12 @@ export function TopicEditor({
     setSuggesting(true);
     setSuggestErr(null);
     try {
-      // 多个种子串行扇出 — 每个 seed 的 cluster_id 用 i*1000 做命名空间隔离,
-      // 避免不同种子的 cluster 0 互相覆盖。queries 全局去重。
-      const accClusters: ClusterMeta[] = [];
+      // 多个种子串行扇出 — 每条候选打上 `seed` 字段,picker 按 seed 分组渲染。
+      // queries 全局去重(相同文本不同 seed 视作同一候选,沿用先到的 seed)。
       const seenText = new Set(suggestions.map(q => q.text));
       const additions: QueryCandidate[] = [];
 
       for (let i = 0; i < validSeeds.length; i++) {
-        const offset = i * 1000;
         const res = await aiTelemetryApi.suggestQueries({
           seed: validSeeds[i], count: SUGGEST_COUNT,
           target: target.trim(),
@@ -2249,20 +2249,12 @@ export function TopicEditor({
         for (const q of res.queries) {
           if (seenText.has(q.text)) continue;
           seenText.add(q.text);
-          additions.push({
-            ...q,
-            cluster_id: typeof q.cluster_id === 'number' ? q.cluster_id + offset : undefined,
-          });
-        }
-        for (const c of (res.clusters || [])) {
-          accClusters.push({ ...c, cluster_id: c.cluster_id + offset });
+          additions.push({ ...q, seed: validSeeds[i] });
         }
       }
 
       setSuggestions(prev => [...prev, ...additions]);
-      // clusters 覆盖(每次"挖掘"是一次完整重聚类,旧簇 ID 与新簇 ID 不可比)
-      setClusters(accClusters);
-      setCollapsedClusters(new Set());
+      setCollapsedSeeds(new Set());
     } catch (e: unknown) {
       setSuggestErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -2672,7 +2664,7 @@ export function TopicEditor({
                           </label>
                         );
                       };
-                      if (!groupedByCluster) {
+                      if (!groupedBySeed) {
                         return (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1">
                             {filteredSuggestions.map(renderRow)}
@@ -2681,11 +2673,13 @@ export function TopicEditor({
                       }
                       return (
                         <div className="space-y-2">
-                          {groupedByCluster.map(({ cluster, items }) => {
-                            const collapsed = collapsedClusters.has(cluster.cluster_id);
-                            const pickedInCluster = items.filter(q => picked.has(q.text)).length;
+                          {groupedBySeed.map(({ seed, items }) => {
+                            const collapsed = collapsedSeeds.has(seed);
+                            const pickedInGroup = items.filter(q => picked.has(q.text)).length;
+                            const headerLabel = seed
+                              || (t('dashboard.aiTelemetry.form.seedGroupUngrouped') || '未分组');
                             return (
-                              <div key={cluster.cluster_id}>
+                              <div key={seed || '__ungrouped__'}>
                                 <div
                                   className="flex items-center gap-2 px-1 py-1 rounded sticky top-0"
                                   style={{
@@ -2695,7 +2689,7 @@ export function TopicEditor({
                                 >
                                   <button
                                     type="button"
-                                    onClick={() => toggleClusterCollapse(cluster.cluster_id)}
+                                    onClick={() => toggleSeedCollapse(seed)}
                                     className="text-xs px-1"
                                     style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
                                   >
@@ -2703,15 +2697,15 @@ export function TopicEditor({
                                   </button>
                                   <span className="text-xs font-medium break-all flex-1"
                                         style={{ color: 'var(--text-primary)' }}>
-                                    {cluster.label}
+                                    {headerLabel}
                                   </span>
                                   <span className="text-xs font-mono tabular-nums shrink-0"
                                         style={{ color: 'var(--text-muted)' }}>
-                                    {pickedInCluster} / {items.length}
+                                    {pickedInGroup} / {items.length}
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => pickAllInCluster(cluster.cluster_id)}
+                                    onClick={() => pickAllInSeed(seed)}
                                     disabled={pickedCap}
                                     className="text-xs px-2 py-0.5 rounded shrink-0"
                                     style={{

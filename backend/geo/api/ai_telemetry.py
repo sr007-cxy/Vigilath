@@ -68,10 +68,12 @@ def _validate_payload(payload: TopicPayload) -> None:
     bad = [e for e in payload.engines if e not in VALID_ENGINES]
     if bad:
         raise HTTPException(400, f"unknown engines: {bad}")
-    # de-dup + strip — 同步把 query_cluster_ids 按位置剔除/对齐
+    # de-dup + strip — 同步把 query_cluster_ids / query_seeds 按位置剔除/对齐
     cluster_ids_in = payload.query_cluster_ids if payload.query_cluster_ids else []
+    seeds_in = payload.query_seeds if payload.query_seeds else []
     cleaned_queries: list[str] = []
     cleaned_clusters: list[int] = []
+    cleaned_seeds: list[str] = []
     seen: set[str] = set()
     for i, q in enumerate(payload.queries):
         q = q.strip()
@@ -80,11 +82,16 @@ def _validate_payload(payload: TopicPayload) -> None:
             cleaned_queries.append(q)
             if i < len(cluster_ids_in):
                 cleaned_clusters.append(int(cluster_ids_in[i]))
+            if i < len(seeds_in):
+                cleaned_seeds.append((seeds_in[i] or "").strip()[:200])
     if not cleaned_queries:
         raise HTTPException(400, "queries cannot be empty")
     payload.queries = cleaned_queries
     payload.query_cluster_ids = (
         cleaned_clusters if len(cleaned_clusters) == len(cleaned_queries) else None
+    )
+    payload.query_seeds = (
+        cleaned_seeds if len(cleaned_seeds) == len(cleaned_queries) else None
     )
     payload.engines = list(dict.fromkeys(payload.engines))
     # target / aliases cleanup
@@ -101,6 +108,7 @@ def _validate_payload(payload: TopicPayload) -> None:
 
 def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
                        cluster_ids: list[int] | None = None,
+                       seeds: list[str] | None = None,
                        *, new_status: str = "pending",
                        reviewer_id: int | None = None) -> str:
     """把 query 列表升级为 [{text, created_at, cluster_id?, status, ...}] 形态.
@@ -126,10 +134,11 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
     except Exception:  # noqa: BLE001
         pass
     cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
+    seeds_ok = isinstance(seeds, list) and len(seeds) == len(payload_queries)
     out = []
     seen_text: set[str] = set()
     for i, q in enumerate(payload_queries):
-        # payload 内部去重 — 同一 text 只取首次出现,丢掉对应 cluster_id
+        # payload 内部去重 — 同一 text 只取首次出现,丢掉对应 cluster_id / seed
         if q in seen_text:
             continue
         seen_text.add(q)
@@ -156,6 +165,11 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
             cid = int(item["cluster_id"])
         if cid is not None:
             item["cluster_id"] = cid
+        # seed:payload 带就回填(空字符串不覆盖已有非空 seed,避免误清历史归属)。
+        if seeds_ok:
+            new_seed = (seeds[i] or "").strip()
+            if new_seed and not item.get("seed"):
+                item["seed"] = new_seed
         out.append(item)
     return json.dumps(out, ensure_ascii=False)
 
@@ -346,7 +360,7 @@ def admin_create_topic_for_user(
         industry=payload.industry,
         seed_prompts_json=seed_prompts_init,
         queries_json=_queries_with_meta(
-            payload.queries, None, payload.query_cluster_ids,
+            payload.queries, None, payload.query_cluster_ids, payload.query_seeds,
             new_status="approved", reviewer_id=current_user.id,
         ),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
@@ -404,7 +418,9 @@ def create_topic(
         target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
         industry=payload.industry,
         seed_prompts_json=seed_prompts_init,
-        queries_json=_queries_with_meta(payload.queries, None, payload.query_cluster_ids),
+        queries_json=_queries_with_meta(
+            payload.queries, None, payload.query_cluster_ids, payload.query_seeds,
+        ),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
         enabled=payload.enabled,
@@ -460,7 +476,7 @@ def update_topic(
         new_status=new_status, reviewer_id=reviewer_id,
     )
     t.queries_json = _queries_with_meta(
-        payload.queries, t.queries_json, payload.query_cluster_ids,
+        payload.queries, t.queries_json, payload.query_cluster_ids, payload.query_seeds,
         new_status=new_status, reviewer_id=reviewer_id,
     )
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉

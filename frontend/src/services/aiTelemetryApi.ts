@@ -129,6 +129,9 @@ export interface TopicPayload {
   queries: string[];
   query_cluster_ids?: number[];
   clusters?: ClusterMetaPersist[];
+  // 2026-05-20 — 与 queries 同长,每条 query 来自哪个种子提示词。
+  // picker 按种子分组,保存时把映射一并传后端,持久化到 queries_json[].seed。
+  query_seeds?: string[];
   engines: EngineId[];
   enabled: boolean;
   // Phase C — 创建 / 更新时把当前种子词附带提交,后端追加进 seed_prompts_json (pending);
@@ -153,6 +156,9 @@ export interface QueryCandidate {
   score: number;
   sources: string[];
   cluster_id?: number;
+  // 2026-05-20 — 这条候选是哪个种子提示词扩展出来的。
+  // picker 用它做"按种子分组渲染"(不再用 cluster_id)。
+  seed?: string;
 }
 
 export interface ClusterMeta {
