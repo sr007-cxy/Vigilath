@@ -694,15 +694,22 @@ def update_selected_queries(
         if not text:
             continue
         desired_texts.add(text)
+        seed = (getattr(item, "seed", None) or "").strip()[:200]
         if text in by_text:
             by_text[text]["selected"] = bool(item.selected)
+            # 第一次提交带 seed 时回填;已有非空 seed 不覆盖,避免误改历史归属
+            if seed and not by_text[text].get("seed"):
+                by_text[text]["seed"] = seed
         else:
-            upgraded.append({
+            new_q: dict = {
                 "text": text,
                 "status": "pending",
                 "submitted_at": now_iso,
                 "selected": bool(item.selected),
-            })
+            }
+            if seed:
+                new_q["seed"] = seed
+            upgraded.append(new_q)
             by_text[text] = upgraded[-1]
     # 不在 payload 里的:保留原状态,selected=False
     for text, q in by_text.items():
