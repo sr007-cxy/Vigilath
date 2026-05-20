@@ -128,8 +128,6 @@ interface Dict {
   queriesColModel: string;
   queriesColAction: string;
   queriesNoSeed: string;
-  queriesIntentBlock: string;
-  queriesIntentHint: string;
   queriesViewMatrix: string;
   // 命中查看弹窗 (2026-05-20)
   queriesViewDetail: string;
@@ -196,7 +194,6 @@ interface Dict {
   hintInsightsView: string;
   hintQueries: string;
   hintQueriesTable: string;
-  hintIntentBreakdown: string;
   hintResponses: string;
 }
 
@@ -313,8 +310,6 @@ const ZH: Dict = {
   queriesColModel: '模型',
   queriesColAction: '查看',
   queriesNoSeed: '—',
-  queriesIntentBlock: '问题主题分布',
-  queriesIntentHint: '同类问题归到一组,看品牌在哪类问题上曝光最弱',
   queriesViewMatrix: '查矩阵 →',
   queriesViewDetail: '查看',
   queriesDetailEmpty: '暂无 AI 回答',
@@ -382,7 +377,6 @@ const ZH: Dict = {
   hintInsightsView: '周报正文(LLM 生成 markdown) + 优先级标记的建议行动列表。下方可对周报质量打分 1-5',
   hintQueries: '所有监测问题的累计命中状况,只读 — 编辑 / 新增问题在 admin 工作台',
   hintQueriesTable: '每行 = 1 个监测问题。命中率 = total_hits / total_runs(全生命周期累计,不切 period)。点查矩阵看该 query 在各引擎的明细',
-  hintIntentBreakdown: '把语义相近的问题聚成一组(如"价格类"、"对比类"),看哪类问题品牌曝光最弱。条颜色:≥50% 蓝 / 25-50% 橙 / <25% 红',
   hintResponses: '原始 AI 答复流。chip 含命中状态(Top<n> / 未命中)、段落位置(开头 / 中段 / 末尾)、引用清单条数。展开看全文 + 引用列表',
 };
 
@@ -499,8 +493,6 @@ const EN: Dict = {
   queriesColModel: 'Model',
   queriesColAction: 'View',
   queriesNoSeed: '—',
-  queriesIntentBlock: 'Query topic distribution',
-  queriesIntentHint: 'Similar queries grouped; weakest groups are where you most need content',
   queriesViewMatrix: 'See matrix →',
   queriesViewDetail: 'View',
   queriesDetailEmpty: 'No AI responses',
@@ -568,7 +560,6 @@ const EN: Dict = {
   hintInsightsView: 'LLM-generated markdown body + prioritized action items. You can rate the briefing 1-5 below',
   hintQueries: 'All tracked queries with cumulative hit status (read-only). Add / edit queries in admin workbench',
   hintQueriesTable: 'One row per query. Hit rate = total_hits / total_runs (lifetime, not period-sliced). Click "See matrix" for engine-level detail',
-  hintIntentBreakdown: 'Semantically-similar queries grouped together (e.g. "pricing", "comparison"). Bar color: ≥50% blue / 25-50% orange / <25% red',
   hintResponses: 'Raw AI answer stream. Chips show hit state (Top<n> / miss), mention position (lead / body / tail), citation count. Expand to view full text + citation list',
 };
 
