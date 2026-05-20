@@ -89,7 +89,7 @@ def _chat_json(prompt: str, *, temperature: float = 0.3,
 
 # ─────────────────── prompt 模板(版本化) ──────────────────
 
-EXTRACT_PROMPT_VERSION = "extract_v2"
+EXTRACT_PROMPT_VERSION = "extract_v3"
 CELL_PROMPT_VERSION = "cell_v1"
 BRIEFING_PROMPT_VERSION = "briefing_v1"
 
@@ -114,8 +114,13 @@ Query:{query}
 {cit_lines}
 
 【任务】
-1. competitors:从答复里识别"与检索词同类的实体 / 品牌 / 律所 / 产品",最多 5 个,
-   每个含 name(原文出现的名字)、count(在答复里出现次数)、snippet(前后约 60 字上下文,带 …)
+1. competitors:先判定检索词「{target}」的**主体类型**(person / brand / product / organization),
+   然后**只抽取同类型的竞品**,最多 5 个。规则:
+   - 主体是【人物】(person,如某律师 / 创始人 / 专家)→ 只抽同行**人物**,不要把所在机构 / 公司 / 律所抽成竞品
+   - 主体是【品牌或公司】(brand / organization)→ 只抽同业**公司 / 品牌**,不要把员工或代言人抽成竞品
+   - 主体是【产品】(product)→ 只抽同类**产品**,不要把生产公司或人员抽成竞品
+   每个 item 含 name(原文出现的名字)、count(在答复里出现次数)、snippet(前后约 60 字上下文,带 …)。
+   如果答复里没有同类型竞品,competitors 返回空数组。
 2. answer_format:在以下 5 类中选一个:listicle / single_recommendation / report / case_study / qa
 3. citation_domains:答复 citations 列出的顶级域名集合(去重)
 4. mention_position:检索词「{target}」在答复里的位置 — 四选一:
