@@ -123,6 +123,14 @@ interface Dict {
   queriesIntentBlock: string;
   queriesIntentHint: string;
   queriesViewMatrix: string;
+  // 命中查看弹窗 (2026-05-20)
+  queriesViewDetail: string;
+  queriesDetailEmpty: string;
+  queriesDetailHitBadge: string;
+  queriesDetailMissBadge: string;
+  queriesDetailClose: string;
+  queriesDetailCitations: string;
+  queriesDetailEnginesHeader: (n: number) => string;
   // 原始引用
   responsesTitle: string;
   responsesFilterSummary: (e: string | undefined, q: string | undefined, p: number, n: number) => string;
@@ -293,6 +301,13 @@ const ZH: Dict = {
   queriesIntentBlock: '问题主题分布',
   queriesIntentHint: '同类问题归到一组,看品牌在哪类问题上曝光最弱',
   queriesViewMatrix: '查矩阵 →',
+  queriesViewDetail: '查看',
+  queriesDetailEmpty: '暂无 AI 回答',
+  queriesDetailHitBadge: '命中',
+  queriesDetailMissBadge: '未命中',
+  queriesDetailClose: '关闭',
+  queriesDetailCitations: '引用来源',
+  queriesDetailEnginesHeader: (n: number) => `各平台回答(${n})`,
   responsesTitle: '原始引用',
   responsesFilterSummary: (e, q, p, n) => {
     const parts: string[] = [];
@@ -465,6 +480,13 @@ const EN: Dict = {
   queriesIntentBlock: 'Query topic distribution',
   queriesIntentHint: 'Similar queries grouped; weakest groups are where you most need content',
   queriesViewMatrix: 'See matrix →',
+  queriesViewDetail: 'View',
+  queriesDetailEmpty: 'No AI responses',
+  queriesDetailHitBadge: 'Hit',
+  queriesDetailMissBadge: 'Miss',
+  queriesDetailClose: 'Close',
+  queriesDetailCitations: 'Citations',
+  queriesDetailEnginesHeader: (n: number) => `Responses across engines (${n})`,
   responsesTitle: 'Raw responses',
   responsesFilterSummary: (e, q, p, n) => {
     const parts: string[] = [];

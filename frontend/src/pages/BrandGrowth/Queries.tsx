@@ -3,9 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type TrackingMatrix, type IntentBreakdown,
+  type ResponseRow, type EngineId,
 } from '../../services/aiTelemetryApi';
 import { useBgLang, engineLabel } from './lang';
 import { InfoHint } from './charts';
+
+interface Row {
+  query: string;
+  totalRuns: number;
+  totalHits: number;
+  rate: number;
+  firstHitEngine: string;
+}
 
 export function Queries() {
   const L = useBgLang();
@@ -22,6 +31,7 @@ function Body({ state }: { state: ShellState }) {
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [intent, setIntent] = useState<IntentBreakdown | null>(null);
+  const [active, setActive] = useState<Row | null>(null);
 
   useEffect(() => {
     if (!topic) return;
@@ -29,7 +39,7 @@ function Body({ state }: { state: ShellState }) {
     aiTelemetryApi.getIntentBreakdown(topic.id, period, token).then(setIntent).catch(() => setIntent(null));
   }, [token, topic?.id, period]);
 
-  const queryRows = useMemo(() => {
+  const queryRows: Row[] = useMemo(() => {
     if (!matrix) return [];
     return matrix.queries.map(q => {
       const cells = matrix.cells.filter(c => c.query === q);
@@ -46,6 +56,8 @@ function Body({ state }: { state: ShellState }) {
   }, [matrix]);
 
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
+
+  const brandKeywords = [topic.target, ...(topic.target_aliases || [])].filter(Boolean);
 
   return (
     <div className="grid gap-4">
@@ -79,13 +91,24 @@ function Body({ state }: { state: ShellState }) {
                 <td className="px-2 py-2 text-right tabular-nums">{r.totalHits}</td>
                 <td className="px-2 py-2 text-primary">{r.firstHitEngine ? engineLabel(r.firstHitEngine) : L.queriesNeverHit}</td>
                 <td className="px-2 py-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/brand-growth/matrix?topic=${topic.id}&q=${encodeURIComponent(r.query)}`)}
-                    className="text-xs text-accent hover:underline"
-                  >
-                    {L.queriesViewMatrix}
-                  </button>
+                  <div className="flex items-center gap-3 justify-end">
+                    {r.totalHits > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActive(r)}
+                        className="text-xs text-accent hover:underline"
+                      >
+                        {L.queriesViewDetail}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/brand-growth/matrix?topic=${topic.id}&q=${encodeURIComponent(r.query)}`)}
+                      className="text-xs text-accent hover:underline"
+                    >
+                      {L.queriesViewMatrix}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -120,6 +143,170 @@ function Body({ state }: { state: ShellState }) {
           </ul>
         </div>
       )}
+
+      {active && (
+        <QueryDetailModal
+          row={active}
+          topicId={topic.id}
+          token={token}
+          period={period}
+          brandKeywords={brandKeywords}
+          onClose={() => setActive(null)}
+        />
+      )}
     </div>
   );
+}
+
+// ── 命中详情弹窗 ───────────────────────────────────────
+function QueryDetailModal({ row, topicId, token, period, brandKeywords, onClose }: {
+  row: Row; topicId: number; token: string; period: number;
+  brandKeywords: string[]; onClose: () => void;
+}) {
+  const L = useBgLang();
+  const [rows, setRows] = useState<ResponseRow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    aiTelemetryApi.listTopicResponses(topicId, token, {
+      query: row.query, period, limit: 50,
+    }).then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
+  }, [topicId, token, period, row.query]);
+
+  // 同 engine 取最近一条;命中的排前面
+  const latestByEngine = useMemo(() => {
+    if (!rows) return [];
+    const m = new Map<EngineId, ResponseRow>();
+    for (const r of rows) {
+      const prev = m.get(r.engine);
+      if (!prev || new Date(r.created_at) > new Date(prev.created_at)) m.set(r.engine, r);
+    }
+    return Array.from(m.values()).sort((a, b) =>
+      Number(b.hit ?? 0) - Number(a.hit ?? 0) || a.engine.localeCompare(b.engine));
+  }, [rows]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.55)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-lg flex flex-col"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-4 py-3 border-b flex-shrink-0"
+          style={{ borderColor: 'var(--border-color)' }}>
+          <div className="min-w-0 flex-1 text-sm font-medium text-primary leading-snug">
+            <HighlightedText text={row.query} keywords={brandKeywords} />
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-3 text-muted hover:text-primary text-lg leading-none flex-shrink-0"
+            aria-label={L.queriesDetailClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {loading ? (
+            <div className="text-xs text-muted text-center py-10">{L.loading}</div>
+          ) : latestByEngine.length === 0 ? (
+            <div className="text-xs text-muted text-center py-10">{L.queriesDetailEmpty}</div>
+          ) : (
+            <>
+              <div className="text-[11px] text-muted">
+                {L.queriesDetailEnginesHeader(latestByEngine.length)}
+              </div>
+              {latestByEngine.map(r => (
+                <EngineAnswerCard key={r.id} row={r} brandKeywords={brandKeywords} />
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EngineAnswerCard({ row, brandKeywords }: {
+  row: ResponseRow; brandKeywords: string[];
+}) {
+  const L = useBgLang();
+  return (
+    <div className="rounded-md p-3 text-xs"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-primary font-medium">{engineLabel(row.engine)}</span>
+        <span className="px-1.5 py-0.5 rounded text-[10px]"
+          style={{
+            background: row.hit ? 'rgba(34,197,94,0.15)' : 'rgba(148,163,184,0.15)',
+            color: row.hit ? '#15803d' : '#64748b',
+          }}>
+          {row.hit
+            ? `✓ ${row.brand_rank ? `Top${row.brand_rank}` : L.queriesDetailHitBadge}`
+            : `✕ ${L.queriesDetailMissBadge}`}
+        </span>
+        <span className="text-muted ml-auto">{new Date(row.created_at).toLocaleString()}</span>
+      </div>
+      <div className="text-secondary whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">
+        <HighlightedText text={row.answer || ''} keywords={brandKeywords} />
+      </div>
+      {row.citations && row.citations.length > 0 && (
+        <div className="mt-2 pt-2 border-t text-[10px]" style={{ borderColor: 'var(--border-color)' }}>
+          <div className="text-muted mb-1">{L.queriesDetailCitations}:</div>
+          <ul className="space-y-0.5">
+            {row.citations.map((c, i) => (
+              <li key={i}>
+                <a href={c.url} target="_blank" rel="noopener noreferrer"
+                  className="text-accent hover:underline">
+                  [{i + 1}] {c.domain}{c.title ? ` · ${c.title}` : ''}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 关键词高亮 ────────────────────────────────────────
+function HighlightedText({ text, keywords }: { text: string; keywords: string[] }) {
+  const parts = useMemo(() => splitByKeywords(text, keywords), [text, keywords]);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.match ? (
+          <mark key={i} className="px-0.5 rounded"
+            style={{ background: 'rgba(250,204,21,0.45)', color: 'inherit' }}>
+            {p.text}
+          </mark>
+        ) : (
+          <span key={i}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function splitByKeywords(text: string, keywords: string[]): { text: string; match: boolean }[] {
+  const kws = keywords.filter(k => k && k.length > 0).sort((a, b) => b.length - a.length);
+  if (kws.length === 0) return [{ text, match: false }];
+  const escaped = kws.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const re = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const out: { text: string; match: boolean }[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), match: false });
+    out.push({ text: m[0], match: true });
+    last = m.index + m[0].length;
+    if (m.index === re.lastIndex) re.lastIndex++;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), match: false });
+  return out;
 }
