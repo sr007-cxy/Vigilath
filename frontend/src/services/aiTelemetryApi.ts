@@ -113,7 +113,8 @@ export const EMPTY_BRAND_PROFILE: BrandProfile = {
   available_materials: [], brand_slogan: '', core_message: '', extra_notes: '',
 };
 
-export const MAX_SELECTED_QUERIES = 50;
+// 2026-05-20 起 50 → 200,扩展候选与最终勾选同上限
+export const MAX_SELECTED_QUERIES = 200;
 // 单次 seed 扩展候选上限(用户从这一批里再勾 ≤ MAX_SELECTED_QUERIES 个)
 export const MAX_EXPANSION_CANDIDATES = 200;
 

@@ -355,7 +355,7 @@ const zh = {
                 },
                 "monitor": {
                   "title": "种子词 → 监测问题扩展",
-                  "desc": "DeepSeek 扩展候选监测问题,勾选最多 50 条进入正式监测。"
+                  "desc": "DeepSeek 扩展候选监测问题,勾选最多 200 条进入正式监测。"
                 },
                 "content": {
                   "title": "内容稿件生成与审核",
@@ -2076,7 +2076,7 @@ const zh = {
                 "seedPickerLabel": "种子提示词({{selected}} / {{total}} 选中)",
                 "seedPickerEmpty": "步骤 2 还没填种子提示词 — 回到上一步添加后,这里会列出来供你勾选",
                 "expandSectionTitle": "1. 选择关键词开始扩展",
-                "candidateSectionTitle": "2. 选择要监测的问题(最多 50 个)",
+                "candidateSectionTitle": "2. 选择要监测的问题(最多 200 个)",
                 "runResultsTitle": "试跑结果 · {{count}} 条",
                 "seedPromptsTitle": "已提交的种子词(审核状态)",
                 "seedPromptsHint": "甲方提交,平台审核后生效",
@@ -2905,7 +2905,7 @@ const zh = {
           "topic": {
             "profile": {
               "title": "主题资料",
-              "subtitle": "提交品牌资料 + 种子词 + 监测问题(≤50),通过审核后会自动生成执行计划书和文案稿",
+              "subtitle": "提交品牌资料 + 种子词 + 监测问题(≤200),通过审核后会自动生成执行计划书和文案稿",
               "backToDashboard": "返回主控台",
               "notFound": "主题不存在",
               "saved": "已保存",
@@ -2942,7 +2942,7 @@ const zh = {
               },
               "monitor": {
                 "expandTitle": "用种子词扩展监测问题候选",
-                "expandHint": "LLM 会基于资料 + 种子词扩展候选,你勾选最多 50 条作为正式监测问题",
+                "expandHint": "LLM 会基于资料 + 种子词扩展候选,你勾选最多 200 条作为正式监测问题",
                 "seedPlaceholder": "种子词(如「遗产继承」)",
                 "expand": "扩展候选",
                 "selectedHint": "已勾选 {{n}}/{{max}} 个监测问题",

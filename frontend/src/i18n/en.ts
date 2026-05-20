@@ -355,7 +355,7 @@ const en = {
                 },
                 "monitor": {
                   "title": "Seed → monitored query expansion",
-                  "desc": "DeepSeek expands candidate questions; pick up to 50 for daily monitoring."
+                  "desc": "DeepSeek expands candidate questions; pick up to 200 for daily monitoring."
                 },
                 "content": {
                   "title": "Content generation + review",
@@ -2070,7 +2070,7 @@ const en = {
                 "seedPickerLabel": "Seed prompts ({{selected}} / {{total}} selected)",
                 "seedPickerEmpty": "No seeds yet in step 2 — go back and add some; they'll appear here as checkboxes.",
                 "expandSectionTitle": "1. Pick keywords to start expanding",
-                "candidateSectionTitle": "2. Pick questions to monitor (up to 50)",
+                "candidateSectionTitle": "2. Pick questions to monitor (up to 200)",
                 "runResultsTitle": "Run results · {{count}} item(s)",
                 "seedPromptsTitle": "Seed prompt review",
                 "seedPromptsHint": "Tenant submits; platform approves to lock",
@@ -2899,7 +2899,7 @@ const en = {
           "topic": {
             "profile": {
               "title": "Topic Profile",
-              "subtitle": "Submit brand profile + seeds + monitored queries (≤50). Approval auto-generates the execution plan and content drafts.",
+              "subtitle": "Submit brand profile + seeds + monitored queries (≤200). Approval auto-generates the execution plan and content drafts.",
               "backToDashboard": "Back to dashboard",
               "notFound": "Topic not found",
               "saved": "Saved",
@@ -2936,7 +2936,7 @@ const en = {
               },
               "monitor": {
                 "expandTitle": "Expand monitored-query candidates from a seed",
-                "expandHint": "LLM expands candidates based on your profile and seed. Pick up to 50 to monitor.",
+                "expandHint": "LLM expands candidates based on your profile and seed. Pick up to 200 to monitor.",
                 "seedPlaceholder": "Seed (e.g. \"inheritance law\")",
                 "expand": "Expand",
                 "selectedHint": "{{n}}/{{max}} monitored selected",
