@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type TrackingMatrix, type IntentBreakdown,
@@ -10,6 +9,7 @@ import { InfoHint } from './charts';
 
 interface Row {
   query: string;
+  seed: string;
   totalRuns: number;
   totalHits: number;
   rate: number;
@@ -27,7 +27,6 @@ export function Queries() {
 
 function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
-  const navigate = useNavigate();
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [intent, setIntent] = useState<IntentBreakdown | null>(null);
@@ -39,6 +38,18 @@ function Body({ state }: { state: ShellState }) {
     aiTelemetryApi.getIntentBreakdown(topic.id, period, token).then(setIntent).catch(() => setIntent(null));
   }, [token, topic?.id, period]);
 
+  // text → seed 映射:从 topic.queries / topic.query_seeds 同长数组建出
+  const seedByQuery = useMemo<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    if (!topic) return m;
+    const qs = topic.queries || [];
+    const seeds = topic.query_seeds || [];
+    for (let i = 0; i < qs.length; i++) {
+      m.set(qs[i], seeds[i] || '');
+    }
+    return m;
+  }, [topic]);
+
   const queryRows: Row[] = useMemo(() => {
     if (!matrix) return [];
     return matrix.queries.map(q => {
@@ -48,12 +59,14 @@ function Body({ state }: { state: ShellState }) {
       const firstHitEngine = cells.filter(c => c.first_hit_at).sort((a, b) =>
         (a.first_hit_at || '').localeCompare(b.first_hit_at || ''))[0]?.engine || '';
       return {
-        query: q, totalRuns, totalHits,
+        query: q,
+        seed: seedByQuery.get(q) || '',
+        totalRuns, totalHits,
         rate: totalRuns ? totalHits / totalRuns : 0,
         firstHitEngine,
       };
     });
-  }, [matrix]);
+  }, [matrix, seedByQuery]);
 
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
@@ -70,45 +83,40 @@ function Body({ state }: { state: ShellState }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="text-muted">
-              <th className="text-left px-2 py-2">{L.queriesColQuery}</th>
+              <th className="text-right px-2 py-2 w-12">{L.queriesColIndex}</th>
+              <th className="text-left px-2 py-2">{L.queriesColSeed}</th>
+              <th className="text-left px-2 py-2">{L.queriesColExpansion}</th>
               <th className="text-right px-2 py-2">
                 <span className="inline-flex items-center gap-1 justify-end">
-                  {L.queriesColHitRate}<InfoHint text={L.hintQueriesTable} />
+                  {L.queriesColHit}<InfoHint text={L.hintQueriesTable} />
                 </span>
               </th>
-              <th className="text-right px-2 py-2">{L.queriesColRuns}</th>
-              <th className="text-right px-2 py-2">{L.queriesColHits}</th>
-              <th className="text-left px-2 py-2">{L.queriesColFirstEngine}</th>
-              <th />
+              <th className="text-left px-2 py-2">{L.queriesColModel}</th>
+              <th className="text-right px-2 py-2 w-20">{L.queriesColAction}</th>
             </tr>
           </thead>
           <tbody>
-            {queryRows.map(r => (
+            {queryRows.map((r, i) => (
               <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-                <td className="px-2 py-2 text-primary truncate max-w-[360px]">{r.query}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{(r.rate * 100).toFixed(1)}%</td>
-                <td className="px-2 py-2 text-right tabular-nums">{r.totalRuns}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
+                <td className="px-2 py-2 text-primary truncate max-w-[160px]"
+                    style={!r.seed ? { color: 'var(--text-muted)' } : undefined}
+                    title={r.seed || undefined}>
+                  {r.seed || L.queriesNoSeed}
+                </td>
+                <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>{r.query}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.totalHits}</td>
                 <td className="px-2 py-2 text-primary">{r.firstHitEngine ? engineLabel(r.firstHitEngine) : L.queriesNeverHit}</td>
-                <td className="px-2 py-2">
-                  <div className="flex items-center gap-3 justify-end">
-                    {r.totalHits > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActive(r)}
-                        className="text-xs text-accent hover:underline"
-                      >
-                        {L.queriesViewDetail}
-                      </button>
-                    )}
+                <td className="px-2 py-2 text-right">
+                  {r.totalHits > 0 && (
                     <button
                       type="button"
-                      onClick={() => navigate(`/brand-growth/matrix?topic=${topic.id}&q=${encodeURIComponent(r.query)}`)}
+                      onClick={() => setActive(r)}
                       className="text-xs text-accent hover:underline"
                     >
-                      {L.queriesViewMatrix}
+                      {L.queriesColAction}
                     </button>
-                  </div>
+                  )}
                 </td>
               </tr>
             ))}

@@ -120,6 +120,14 @@ interface Dict {
   queriesColHits: string;
   queriesColFirstEngine: string;
   queriesNeverHit: string;
+  // 2026-05-20 — 新版 6 列表格(序号 / 种子提示词 / 扩展提示词 / 命中 / 模型 / 查看)
+  queriesColIndex: string;
+  queriesColSeed: string;
+  queriesColExpansion: string;
+  queriesColHit: string;
+  queriesColModel: string;
+  queriesColAction: string;
+  queriesNoSeed: string;
   queriesIntentBlock: string;
   queriesIntentHint: string;
   queriesViewMatrix: string;
@@ -298,6 +306,13 @@ const ZH: Dict = {
   queriesColHits: '命中数',
   queriesColFirstEngine: '首次命中引擎',
   queriesNeverHit: '尚未命中',
+  queriesColIndex: '序号',
+  queriesColSeed: '种子提示词',
+  queriesColExpansion: '扩展提示词',
+  queriesColHit: '命中',
+  queriesColModel: '模型',
+  queriesColAction: '查看',
+  queriesNoSeed: '—',
   queriesIntentBlock: '问题主题分布',
   queriesIntentHint: '同类问题归到一组,看品牌在哪类问题上曝光最弱',
   queriesViewMatrix: '查矩阵 →',
@@ -477,6 +492,13 @@ const EN: Dict = {
   queriesColHits: 'Hits',
   queriesColFirstEngine: 'First-hit engine',
   queriesNeverHit: 'never hit',
+  queriesColIndex: '#',
+  queriesColSeed: 'Seed prompt',
+  queriesColExpansion: 'Expanded query',
+  queriesColHit: 'Hits',
+  queriesColModel: 'Model',
+  queriesColAction: 'View',
+  queriesNoSeed: '—',
   queriesIntentBlock: 'Query topic distribution',
   queriesIntentHint: 'Similar queries grouped; weakest groups are where you most need content',
   queriesViewMatrix: 'See matrix →',
