@@ -1562,6 +1562,36 @@ def topic_intent_breakdown(
     )
 
 
+def _clean_citations_for_out(raw: str | None) -> list[dict]:
+    """从 citations_json 解出 list,补全 domain / title — 老 response 可能缺字段,
+    直接喂给 RunNowCitation 会 pydantic 校验失败 (端点 500)。
+    """
+    from urllib.parse import urlparse
+    try:
+        items = json.loads(raw or "[]")
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[dict] = []
+    for c in items:
+        if not isinstance(c, dict):
+            continue
+        url = (c.get("url") or "").strip()
+        if not url:
+            continue
+        domain = (c.get("domain") or "").strip()
+        if not domain:
+            try:
+                domain = urlparse(url).netloc
+            except Exception:  # noqa: BLE001
+                domain = ""
+        out.append({
+            "url": url,
+            "domain": domain,
+            "title": (c.get("title") or "").strip(),
+        })
+    return out
+
+
 @router.get("/runs/{run_id}/responses", response_model=list[ResponseOut])
 def list_responses(
     run_id: int,
@@ -1582,10 +1612,9 @@ def list_responses(
     )
     out = []
     for r in rows:
-        cites = json.loads(r.citations_json or "[]")
         out.append(ResponseOut(
             id=r.id, engine=r.engine, query=r.query,
-            answer=r.answer, citations=cites,
+            answer=r.answer, citations=_clean_citations_for_out(r.citations_json),
             video_url=r.video_url, source_url=r.source_url, error=r.error,
             created_at=r.created_at,
             hit=bool(r.hit), hit_excerpt=r.hit_excerpt,
@@ -1642,10 +1671,9 @@ def list_topic_responses(
 
     out = []
     for r in rows:
-        cites = json.loads(r.citations_json or "[]")
         out.append(ResponseOut(
             id=r.id, engine=r.engine, query=r.query,
-            answer=r.answer, citations=cites,
+            answer=r.answer, citations=_clean_citations_for_out(r.citations_json),
             video_url=r.video_url, source_url=r.source_url, error=r.error,
             created_at=r.created_at,
             hit=bool(r.hit), hit_excerpt=r.hit_excerpt,
