@@ -69,7 +69,10 @@ function Body({ state }: { state: ShellState }) {
                   <DonutLegend slices={saivSlices} />
                   <div className="pt-3 border-t text-xs" style={{ borderColor: 'var(--border-color)' }}>
                     <div className="flex justify-between mb-1">
-                      <span className="text-muted">{L.competitorsPositionDist}</span>
+                      <span className="text-muted flex items-center gap-1.5">
+                        {L.competitorsPositionDist}
+                        <InfoHint text={L.hintCompetitorsPosition} />
+                      </span>
                     </div>
                     <PositionMiniBar sov={sov} />
                   </div>
@@ -77,7 +80,7 @@ function Body({ state }: { state: ShellState }) {
               </div>
             )}
           </Card>
-          <Card title={L.competitorsTopList}>
+          <Card title={L.competitorsTopList} hint={L.hintCompetitorsTop}>
             {compBars.length === 0 ? (
               <div className="text-xs text-muted py-10 text-center">{L.competitorsSubsEmpty}</div>
             ) : (
@@ -104,7 +107,7 @@ function Body({ state }: { state: ShellState }) {
         </div>
       )}
 
-      <Card title={L.competitorsSubstitutions(selectedComp)}
+      <Card title={L.competitorsSubstitutions(selectedComp)} hint={L.hintCompetitorsSubs}
         action={selectedComp && (
           <button type="button" className="text-xs text-muted hover:text-primary"
             onClick={() => setSelectedComp(null)}>{L.clearFilter}</button>

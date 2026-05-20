@@ -129,8 +129,10 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
       {doc.summary && <p className="text-sm text-secondary mb-3 line-clamp-2">{doc.summary}</p>}
 
       {citedEngines.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          <span className="text-[10px] text-muted self-center">{L.publishedAiCited}:</span>
+        <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+          <span className="text-[10px] text-muted self-center inline-flex items-center gap-1">
+            {L.publishedAiCited}<InfoHint text={L.hintPublishedCited} />:
+          </span>
           {citedEngines.map(({ eng, count }) => (
             <span key={eng} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded"
               style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>

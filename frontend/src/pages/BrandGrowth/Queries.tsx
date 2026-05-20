@@ -59,7 +59,11 @@ function Body({ state }: { state: ShellState }) {
           <thead>
             <tr className="text-muted">
               <th className="text-left px-2 py-2">{L.queriesColQuery}</th>
-              <th className="text-right px-2 py-2">{L.queriesColHitRate}</th>
+              <th className="text-right px-2 py-2">
+                <span className="inline-flex items-center gap-1 justify-end">
+                  {L.queriesColHitRate}<InfoHint text={L.hintQueriesTable} />
+                </span>
+              </th>
               <th className="text-right px-2 py-2">{L.queriesColRuns}</th>
               <th className="text-right px-2 py-2">{L.queriesColHits}</th>
               <th className="text-left px-2 py-2">{L.queriesColFirstEngine}</th>

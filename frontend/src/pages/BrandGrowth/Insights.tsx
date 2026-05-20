@@ -113,12 +113,12 @@ function BriefingView({ b }: { b: Briefing }) {
   const L = useBgLang();
   return (
     <div>
-      <div className="text-xs text-muted mb-2">
+      <div className="text-xs text-muted mb-2 flex items-center gap-1.5">
         {L.insightsBriefingMeta(
           new Date(b.period_start).toLocaleDateString(),
           new Date(b.period_end).toLocaleDateString(),
-          b.llm_model,
         )}
+        <InfoHint text={L.hintInsightsView} />
       </div>
       <div className="text-sm text-primary whitespace-pre-wrap leading-relaxed">{b.body_md}</div>
       {b.top_actions.length > 0 && (

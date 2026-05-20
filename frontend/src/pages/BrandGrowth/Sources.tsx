@@ -70,26 +70,29 @@ function Body({ state }: { state: ShellState }) {
       {/* 顶部摘要 + 筛选 */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
         <div className="grid grid-cols-3 gap-3">
-          <StatTile label={L.sourcesCenterTotal} value={totalCitations.toLocaleString()}
+          <StatTile label={L.sourcesCenterTotal} value={totalCitations.toLocaleString()} hint={L.hintTopMetrics}
             tint={{ bg: 'rgba(59,130,246,0.10)', fg: '#2563eb' }} />
-          <StatTile label="唯一域名数" value={uniqueDomains.toLocaleString()}
+          <StatTile label="唯一域名数" value={uniqueDomains.toLocaleString()} hint={L.hintSourcesUnique}
             tint={{ bg: 'rgba(16,185,129,0.10)', fg: '#10b981' }} />
-          <StatTile label={L.sourcesCenterOwned} value={`${ownedPct.toFixed(1)}%`}
+          <StatTile label={L.sourcesCenterOwned} value={`${ownedPct.toFixed(1)}%`} hint={L.hintSourcesOwnedPct}
             tint={{ bg: 'rgba(244,114,182,0.10)', fg: '#db2777' }} />
         </div>
-        <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
-          {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
-            <button
-              key={f} type="button" onClick={() => setFilter(f)}
-              className="px-3 py-1 text-xs rounded whitespace-nowrap"
-              style={{
-                background: filter === f ? 'var(--accent-primary)' : 'transparent',
-                color: filter === f ? 'white' : 'var(--text-secondary)',
-              }}
-            >
-              {f === 'all' ? L.sourcesFilterAll : f === 'owned' ? L.sourcesFilterOwned : L.sourcesFilterThird}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
+            {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
+              <button
+                key={f} type="button" onClick={() => setFilter(f)}
+                className="px-3 py-1 text-xs rounded whitespace-nowrap"
+                style={{
+                  background: filter === f ? 'var(--accent-primary)' : 'transparent',
+                  color: filter === f ? 'white' : 'var(--text-secondary)',
+                }}
+              >
+                {f === 'all' ? L.sourcesFilterAll : f === 'owned' ? L.sourcesFilterOwned : L.sourcesFilterThird}
+              </button>
+            ))}
+          </div>
+          <InfoHint text={L.hintSourcesFilter} />
         </div>
       </div>
 
@@ -127,7 +130,7 @@ function Body({ state }: { state: ShellState }) {
 
       {/* 域名 × 引擎 拆分 */}
       {domains.length > 0 && (
-        <Card title="域名 × 引擎 引用拆分">
+        <Card title="域名 × 引擎 引用拆分" hint={L.hintSourcesDomainEngine}>
           <p className="text-[11px] text-muted mb-3">
             点击域名查看具体引用样本;条形按引擎拆分,看每个 AI 引擎都引用了谁。
           </p>
@@ -213,15 +216,17 @@ function DomainRow({
   );
 }
 
-function StatTile({ label, value, tint }: {
-  label: string; value: string; tint: { bg: string; fg: string };
+function StatTile({ label, value, tint, hint }: {
+  label: string; value: string; tint: { bg: string; fg: string }; hint?: string;
 }) {
   return (
     <div className="p-3 rounded-lg flex items-center gap-3"
       style={{ background: tint.bg, border: '1px solid var(--border-color)' }}>
       <span className="w-1.5 h-8 rounded-sm flex-shrink-0" style={{ background: tint.fg }} />
       <div className="min-w-0">
-        <div className="text-[10px] text-muted truncate">{label}</div>
+        <div className="text-[10px] text-muted truncate flex items-center gap-1">
+          {label}{hint && <InfoHint text={hint} />}
+        </div>
         <div className="text-lg font-bold tabular-nums" style={{ color: tint.fg }}>{value}</div>
       </div>
     </div>

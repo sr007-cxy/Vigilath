@@ -44,7 +44,7 @@ function Body({ state }: { state: ShellState }) {
         <VerticalBarChart items={barItems} height={220} formatValue={v => String(v)} />
       </Card>
 
-      <Card title={L.enginesOverview}>
+      <Card title={L.enginesOverview} hint={L.hintEnginesOverview}>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {engineTotals.map((e, i) => (
             <button
@@ -65,7 +65,7 @@ function Body({ state }: { state: ShellState }) {
         </div>
       </Card>
 
-      <Card title={L.enginesHeatmap}>
+      <Card title={L.enginesHeatmap} hint={L.hintEnginesHeatmap}>
         <div className="overflow-x-auto">
           <table className="text-xs">
             <thead>

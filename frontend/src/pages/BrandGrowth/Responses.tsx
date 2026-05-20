@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { aiTelemetryApi, type ResponseRow } from '../../services/aiTelemetryApi';
 import { useBgLang, engineLabel } from './lang';
+import { InfoHint } from './charts';
 
 export function Responses() {
   const L = useBgLang();
@@ -39,8 +40,9 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4">
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted flex items-center gap-1.5">
         {L.responsesFilterSummary(engine ? engineLabel(engine) : undefined, queryFilter, period, rows.length)}
+        <InfoHint text={L.hintResponses} />
       </div>
 
       {loading ? (

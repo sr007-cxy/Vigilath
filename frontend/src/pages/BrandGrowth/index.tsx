@@ -65,9 +65,9 @@ function TopMetricsRow({ overview, topic }: { overview: Overview | null; topic: 
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <BigMetric label={L.metricCitations} value={total} delta={totalDelta} hint={L.hintTopMetrics}
         onClick={() => navigate(`/brand-growth/responses?topic=${tq}`)} />
-      <BigMetric label={L.metricOwnedCitations} value={owned} delta={ownedDelta}
+      <BigMetric label={L.metricOwnedCitations} value={owned} delta={ownedDelta} hint={L.hintOwnedCitations}
         onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=owned`)} />
-      <BigMetric label={L.metricOtherCitations} value={other}
+      <BigMetric label={L.metricOtherCitations} value={other} hint={L.hintOtherCitations}
         onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=third_party`)} />
     </div>
   );

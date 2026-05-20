@@ -108,7 +108,7 @@ interface Dict {
   insightsBriefingItem: (s: string, e: string) => string;
   insightsBriefingGenerated: (t: string) => string;
   insightsPick: string;
-  insightsBriefingMeta: (s: string, e: string, m: string) => string;
+  insightsBriefingMeta: (s: string, e: string) => string;
   insightsRecommendations: string;
   insightsRecReason: string;
   // 关键词
@@ -153,18 +153,35 @@ interface Dict {
   posUnknown: string;
   // 模块说明(? 悬浮文案)
   hintTopMetrics: string;
+  hintOwnedCitations: string;
+  hintOtherCitations: string;
   hintRadar: string;
   hintEntries: string;
   hintCoreMetrics: string;
   hintBriefings: string;
   hintPublished: string;
+  hintPublishedCited: string;
   hintSources: string;
+  hintSourcesStat: string;
+  hintSourcesUnique: string;
+  hintSourcesOwnedPct: string;
+  hintSourcesFilter: string;
+  hintSourcesDomainEngine: string;
   hintEngines: string;
+  hintEnginesOverview: string;
+  hintEnginesHeatmap: string;
   hintCompetitors: string;
+  hintCompetitorsTop: string;
+  hintCompetitorsPosition: string;
+  hintCompetitorsSubs: string;
   hintMatrix: string;
+  hintMatrixTimeline: string;
   hintInsights: string;
+  hintInsightsView: string;
   hintQueries: string;
+  hintQueriesTable: string;
   hintIntentBreakdown: string;
+  hintResponses: string;
 }
 
 const ZH: Dict = {
@@ -262,7 +279,7 @@ const ZH: Dict = {
   insightsBriefingItem: (s: string, e: string) => `${s} → ${e}`,
   insightsBriefingGenerated: (t: string) => `生成于 ${t}`,
   insightsPick: '选择左侧周报查看,或点「新生成」',
-  insightsBriefingMeta: (s: string, e: string, m: string) => `${s} → ${e} · 模型 ${m}`,
+  insightsBriefingMeta: (s: string, e: string) => `${s} → ${e}`,
   insightsRecommendations: '建议行动',
   insightsRecReason: '理由',
   queriesTitle: '监测问题',
@@ -307,19 +324,36 @@ const ZH: Dict = {
   posBody: '中段',
   posTail: '末尾',
   posUnknown: '未知',
-  hintTopMetrics: '本期 AI 引擎在所有问题里提到品牌的累计次数,以及自有 / 权威媒体 vs 第三方来源拆分',
-  hintRadar: '5 个维度叠在一张图上看品牌健康度:Top1/Top3/Top5 是排名第几位,可见 = 任意提到,被引用 = 不同问题里至少被引一次',
+  hintTopMetrics: '本期 AI 引擎在所有问题里提到品牌的累计引用次数(SUM 答复里 citations 数组长度)。一条答复里同一 URL 出现多次会算多次',
+  hintOwnedCitations: '上述总数中,被引域名包含品牌关键词(target + 别名,大小写不敏感子串匹配)的部分。例如品牌为 Acme 时 acme.help.zendesk.com 也算自有',
+  hintOtherCitations: '总引用数 − 权威媒体引用数。能反映品牌在外部 / 第三方域名上的曝光面',
+  hintRadar: '5 个维度叠在一张图上看品牌健康度:Top1/Top3/Top5 是品牌在 AI 答复中是第几位提到,可见 = 任意提到,被引用 = 不同监测问题里至少被命中一次',
   hintEntries: '点任意卡片进对应子页查看明细',
-  hintCoreMetrics: '基于 LLM 抽取的 brand_rank(品牌在答复里第几个被提到)算占比;行业 P50 来自同行业多个租户的中位数',
-  hintBriefings: 'LLM 自动总结的周期报告,包含本期表现 + 优化建议',
-  hintPublished: '已发布的稿件,点 chip 跳外站。若有"AI 引用"绿标说明该投放被 AI 答复正文引用过',
-  hintSources: 'AI 答复里被作为信源的域名分布;自有 / 权威 = 域名命中品牌关键词,其他算第三方',
-  hintEngines: '不同 AI 引擎对品牌的引用频次 + 引用了哪些第三方域名(热力图越深说明该引擎依赖该域)',
-  hintCompetitors: '把品牌和被 LLM 抽出的竞品对比;"被替代证据" 列出"问题里提了竞品但没提你"的具体证据',
-  hintMatrix: '每个 (问题 × 引擎) cell 的命中状态。深绿 = Top1,中绿 = Top3,浅绿 = Top5,灰 = 未命中。点格看历次答复',
-  hintInsights: '每周自动生成一份 LLM 周报:本期 KPI + 新命中 / 流失的 cell + 下周行动建议',
-  hintQueries: '所有监测问题的命中状况,只读 — 编辑入口在 admin 工作台',
-  hintIntentBreakdown: '把语义相近的问题聚成一组(如"价格类"、"对比类"),看哪类问题品牌曝光最弱,内容补强的方向就清楚了',
+  hintCoreMetrics: '基于 LLM 抽取的 brand_rank(品牌在答复里第几个被提到)算占比。行业 P50 来自同行业 ≥3 个租户的中位数,样本不足时不展示',
+  hintBriefings: 'LLM 每周自动总结的周报,含本期 KPI 摘要 + 新命中 / 流失 cell + 行动建议。点条目看详情',
+  hintPublished: '已发布的稿件清单。点 chip 跳外站;有"AI 引用"绿标表示该投放 URL 出现在 AI 答复的引用清单里',
+  hintPublishedCited: '该 publish_targets[].url 出现在 Response.citations_json 中,按引擎分组展示被引擎引用的次数',
+  hintSources: 'AI 答复里出现过的 citation domain 排序。Top 7 单独成色块,其余合并到「其它」桶',
+  hintSourcesStat: '总引用 = 周期内所有答复的引用条数累加;唯一域名数 ≤ 10(后端只返回 Top 10);自有占比 = owned / total × 100',
+  hintSourcesUnique: '本期出现过的不同引用域名数。上限是后端返回的 Top 10 — 实际可能更多但只算 Top 10 内',
+  hintSourcesOwnedPct: '权威媒体引用 / 总引用 × 100。比例越高说明 AI 答复越倾向引用品牌自家域名',
+  hintSourcesFilter: '切换看全部 / 仅自有权威域名 / 仅第三方域名。自有判定 = 域名子串包含品牌关键词',
+  hintSourcesDomainEngine: '同一域名在不同 AI 引擎间的引用拆分。条形越长 = 该引擎引用该域名越多。点行查看引用样本',
+  hintEngines: '不同 AI 引擎对品牌相关 query 的引用频次(SUM 该引擎所有 response 的 citations 长度)',
+  hintEnginesOverview: '每个引擎在本期跑批的引用总数。点卡片跳到该引擎的原始答复列表',
+  hintEnginesHeatmap: '行 = 引擎,列 = Top 12 域名。颜色越深表示该引擎越依赖该 domain(归一化到该 domain 全局总数)。空白 = 0 次',
+  hintCompetitors: 'SAIV = 品牌提及次数 / (品牌 + 全部竞品提及总次数) × 100。竞品提及来自 LLM 抽出的 competitors_json',
+  hintCompetitorsTop: '本期被 LLM 抽出最多的竞品 Top 10,按提及次数降序。点 chip 可过滤下方「被替代证据」表',
+  hintCompetitorsPosition: '命中 hit=True 的答复里,品牌出现的段落位置:lead=首段,body=中段,tail=末段,unknown=后处理未定位',
+  hintCompetitorsSubs: '"提了竞品但没提你"的 query 清单:hit=False 但 competitors_json 非空的答复,按 (query × 竞品) 聚合次数,展示证据 snippet',
+  hintMatrix: '每个 (问题 × 引擎) cell 的累计命中状态。深绿 = Top1,中绿 = Top3,浅绿 = Top5,极浅绿 = 命中但 rank 未抽出,灰 = 未命中,占位灰底 = 还没跑过。点 cell 看历次答复',
+  hintMatrixTimeline: '每个引擎在所有 query 里最早一次首命中的日期,显示「上线后第 X 天」。X = (first_hit_at − topic.created_at).days',
+  hintInsights: '左侧周报列表,点新生成手动触发上一自然周的周报;每条选中后右侧展示正文 + 建议',
+  hintInsightsView: '周报正文(LLM 生成 markdown) + 优先级标记的建议行动列表。下方可对周报质量打分 1-5',
+  hintQueries: '所有监测问题的累计命中状况,只读 — 编辑 / 新增问题在 admin 工作台',
+  hintQueriesTable: '每行 = 1 个监测问题。命中率 = total_hits / total_runs(全生命周期累计,不切 period)。点查矩阵看该 query 在各引擎的明细',
+  hintIntentBreakdown: '把语义相近的问题聚成一组(如"价格类"、"对比类"),看哪类问题品牌曝光最弱。条颜色:≥50% 蓝 / 25-50% 橙 / <25% 红',
+  hintResponses: '原始 AI 答复流。chip 含命中状态(Top<n> / 未命中)、段落位置(开头 / 中段 / 末尾)、引用清单条数。展开看全文 + 引用列表',
 };
 
 const EN: Dict = {
@@ -417,7 +451,7 @@ const EN: Dict = {
   insightsBriefingItem: (s, e) => `${s} → ${e}`,
   insightsBriefingGenerated: (t) => `Generated ${t}`,
   insightsPick: 'Pick a briefing on the left, or click Generate',
-  insightsBriefingMeta: (s, e, m) => `${s} → ${e} · model ${m}`,
+  insightsBriefingMeta: (s, e) => `${s} → ${e}`,
   insightsRecommendations: 'Recommendations',
   insightsRecReason: 'Reason',
   queriesTitle: 'Tracked Queries',
@@ -462,19 +496,36 @@ const EN: Dict = {
   posBody: 'body',
   posTail: 'tail',
   posUnknown: 'unknown',
-  hintTopMetrics: 'Cumulative AI-engine mentions for the brand this period, split by owned/authoritative vs third-party sources',
-  hintRadar: '5 dimensions in one view: Top1/Top3/Top5 = position rank, Visible = any mention, Sourced = unique queries with at least one hit',
+  hintTopMetrics: 'Total citation count this period (SUM of citations[] across all responses). Same URL cited twice in one answer counts twice',
+  hintOwnedCitations: 'Citations whose domain matches a brand keyword (target + aliases, case-insensitive substring). e.g. brand "Acme" matches "acme.help.zendesk.com"',
+  hintOtherCitations: 'Total − authoritative. Reflects brand exposure on external / third-party domains',
+  hintRadar: '5 dimensions in one view: Top1/Top3/Top5 = brand position in the answer, Visible = any mention, Sourced = unique queries with ≥1 hit',
   hintEntries: 'Click any card to drill into the sub-page',
-  hintCoreMetrics: 'Based on LLM-extracted brand_rank (the brand’s position in the answer). Industry P50 = median across same-industry tenants',
-  hintBriefings: 'Periodic LLM summary: this-period KPIs + recommendations',
-  hintPublished: 'Published docs. Chips link to external posts; the green "cited by" badge means the AI engine quoted this URL in its answer',
-  hintSources: 'Domains cited by AI engines. Owned = domain matches brand keywords; everything else counts as third-party',
-  hintEngines: 'Per-engine citation frequency and which third-party domains it cites (darker heatmap = the engine relies more on that domain)',
-  hintCompetitors: 'Brand vs LLM-extracted competitors. "Substitution evidence" lists queries where the rival is mentioned but the brand isn’t',
-  hintMatrix: 'Hit state per (query × engine). Deep green = Top1, mid green = Top3, light green = Top5, gray = miss. Click a cell to see history',
-  hintInsights: 'Weekly LLM briefing: KPIs + newly-hit / lost cells + next-week actions',
-  hintQueries: 'All tracked queries (read-only). Edit in admin workbench',
-  hintIntentBreakdown: 'Semantically-similar queries grouped together (e.g. "pricing", "comparison"). See which group your brand is weakest in — that’s where you need more content',
+  hintCoreMetrics: 'Based on LLM-extracted brand_rank. Industry P50 = median across ≥3 same-industry tenants; hidden when sample too small',
+  hintBriefings: 'Weekly LLM-generated briefing with KPI summary + newly-hit / lost cells + recommendations. Click an item to view',
+  hintPublished: 'Published docs. Chips link to external posts; the green "cited by" badge means the URL appears in an AI answer\'s citation list',
+  hintPublishedCited: 'The publish_targets[].url appears in Response.citations_json; chips show per-engine cite count',
+  hintSources: 'Domains cited in AI answers, ranked by count. Top 7 are colored individually; the rest collapse into "Other"',
+  hintSourcesStat: 'Total citations = SUM of citations across all responses. Unique domains ≤ 10 (backend returns Top 10 only). Owned share = owned / total × 100',
+  hintSourcesUnique: 'Distinct domains cited this period. Capped at backend\'s Top 10 — real count may be higher but only Top 10 is exposed',
+  hintSourcesOwnedPct: 'Authoritative citations / total citations × 100. Higher = AI answers favor citing your own domains',
+  hintSourcesFilter: 'Toggle all / owned-only / third-party-only. Owned = domain substring contains a brand keyword',
+  hintSourcesDomainEngine: 'How each domain is cited across engines. Bar length per engine = its share. Click a row to view sample citations',
+  hintEngines: 'Citation frequency per AI engine (SUM of citations from that engine\'s responses)',
+  hintEnginesOverview: 'Per-engine total citations this period. Click a card to jump to that engine\'s raw responses',
+  hintEnginesHeatmap: 'Rows = engines, columns = Top 12 domains. Darker = engine more reliant on that domain (normalized to the domain\'s global total). Blank = 0',
+  hintCompetitors: 'SAIV = brand mention count / (brand + sum of competitor mentions) × 100. Competitor mentions come from LLM-extracted competitors_json',
+  hintCompetitorsTop: 'Top 10 LLM-extracted competitors this period, sorted by mention count. Click a chip to filter the "Substitution evidence" table below',
+  hintCompetitorsPosition: 'For hit=True responses, where the brand was mentioned: lead=first paragraph, body=middle, tail=end, unknown=post-processing couldn\'t locate',
+  hintCompetitorsSubs: '"Mentioned the rival but not you" queries: responses with hit=False but competitors_json populated, grouped by (query × rival) with an evidence snippet',
+  hintMatrix: 'Hit state per (query × engine). Deep green = Top1, mid green = Top3, light green = Top5, very light green = hit but rank unknown, gray = miss, placeholder = not yet run. Click a cell for history',
+  hintMatrixTimeline: 'For each engine, the earliest first_hit_at across all queries, shown as "day X after topic creation". X = (first_hit_at − topic.created_at).days',
+  hintInsights: 'Briefings on the left; click Generate to manually trigger for the last natural week. Selecting one shows body + recommendations on the right',
+  hintInsightsView: 'LLM-generated markdown body + prioritized action items. You can rate the briefing 1-5 below',
+  hintQueries: 'All tracked queries with cumulative hit status (read-only). Add / edit queries in admin workbench',
+  hintQueriesTable: 'One row per query. Hit rate = total_hits / total_runs (lifetime, not period-sliced). Click "See matrix" for engine-level detail',
+  hintIntentBreakdown: 'Semantically-similar queries grouped together (e.g. "pricing", "comparison"). Bar color: ≥50% blue / 25-50% orange / <25% red',
+  hintResponses: 'Raw AI answer stream. Chips show hit state (Top<n> / miss), mention position (lead / body / tail), citation count. Expand to view full text + citation list',
 };
 
 export function useBgLang(): Dict {
