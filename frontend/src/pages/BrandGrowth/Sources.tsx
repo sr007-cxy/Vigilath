@@ -5,15 +5,17 @@ import {
   aiTelemetryApi, type Overview, type ResponseRow,
 } from '../../services/aiTelemetryApi';
 import {
-  DonutChart, DonutLegend, HorizontalBarChart, CHART_PALETTE,
+  DonutChart, DonutLegend, HorizontalBarChart, InfoHint, CHART_PALETTE,
   type DonutSlice, type BarItem,
 } from './charts';
+import { useBgLang, engineLabel } from './lang';
 
-type FilterMode = 'all' | 'owned' | 'third_party' | 'authoritative';
+type FilterMode = 'all' | 'owned' | 'third_party';
 
 export function Sources() {
+  const L = useBgLang();
   return (
-    <BrandGrowthShell title="信源分析" breadcrumb={[{ label: '品牌增长', to: '/brand-growth' }]}>
+    <BrandGrowthShell title={L.sourcesTitle} breadcrumb={[{ label: L.pageTitle, to: '/brand-growth' }]}>
       {(state) => <Body state={state} />}
     </BrandGrowthShell>
   );
@@ -21,6 +23,7 @@ export function Sources() {
 
 function Body({ state }: { state: ShellState }) {
   const { token, topic, period } = state;
+  const L = useBgLang();
   const [params, setParams] = useSearchParams();
   const filter: FilterMode = (params.get('filter') as FilterMode) || 'all';
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -31,7 +34,7 @@ function Body({ state }: { state: ShellState }) {
     aiTelemetryApi.getOverview(topic.id, period, token).then(setOverview).catch(() => setOverview(null));
   }, [token, topic?.id, period]);
 
-  if (!topic || !overview) return <div className="text-muted">加载中…</div>;
+  if (!topic || !overview) return <div className="text-muted">{L.loading}</div>;
 
   // owned 判定:domain 命中 brand_keywords
   const brandKeys = overview.brand_keywords.map(k => k.toLowerCase());
@@ -47,14 +50,7 @@ function Body({ state }: { state: ShellState }) {
     setParams(next, { replace: true });
   };
 
-  const ownedPct = overview.owned_split.owned_pct;
-  const ownedSlices: DonutSlice[] = overview.owned_split.owned + overview.owned_split.other > 0
-    ? [
-        { label: '自有 / 权威', value: overview.owned_split.owned, color: '#10b981' },
-        { label: '第三方', value: overview.owned_split.other, color: '#94a3b8' },
-      ]
-    : [];
-
+  // Top 域名构成 donut(top 7 + 其它)
   const topNSlices: DonutSlice[] = overview.top_domains.slice(0, 7).map((d, i) => ({
     label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
@@ -65,69 +61,88 @@ function Body({ state }: { state: ShellState }) {
     label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
 
+  const totalCitations = overview.citations.value;
+  const uniqueDomains = overview.top_domains.length;
+  const ownedPct = overview.owned_split.owned_pct;
+
   return (
     <div className="grid gap-4">
-      <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
-        {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
-          <button
-            key={f} type="button" onClick={() => setFilter(f)}
-            className="px-3 py-1 text-xs rounded"
-            style={{
-              background: filter === f ? 'var(--accent-primary)' : 'transparent',
-              color: filter === f ? 'white' : 'var(--text-secondary)',
-            }}
-          >
-            {f === 'all' ? '全部' : f === 'owned' ? '自有 / 权威' : '第三方'}
-          </button>
-        ))}
+      {/* 顶部摘要 + 筛选 */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile label={L.sourcesCenterTotal} value={totalCitations.toLocaleString()}
+            tint={{ bg: 'rgba(59,130,246,0.10)', fg: '#2563eb' }} />
+          <StatTile label="唯一域名数" value={uniqueDomains.toLocaleString()}
+            tint={{ bg: 'rgba(16,185,129,0.10)', fg: '#10b981' }} />
+          <StatTile label={L.sourcesCenterOwned} value={`${ownedPct.toFixed(1)}%`}
+            tint={{ bg: 'rgba(244,114,182,0.10)', fg: '#db2777' }} />
+        </div>
+        <div className="flex gap-1 p-0.5 rounded w-fit" style={{ background: 'var(--bg-input)' }}>
+          {(['all', 'owned', 'third_party'] as FilterMode[]).map(f => (
+            <button
+              key={f} type="button" onClick={() => setFilter(f)}
+              className="px-3 py-1 text-xs rounded whitespace-nowrap"
+              style={{
+                background: filter === f ? 'var(--accent-primary)' : 'transparent',
+                color: filter === f ? 'white' : 'var(--text-secondary)',
+              }}
+            >
+              {f === 'all' ? L.sourcesFilterAll : f === 'owned' ? L.sourcesFilterOwned : L.sourcesFilterThird}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* 双 donut 行:自有/第三方 + Top 域名构成 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card title="自有 vs 第三方">
-          <div className="grid grid-cols-[auto_1fr] gap-4 items-center flex-1">
-            <DonutChart
-              slices={ownedSlices}
-              centerText={`${ownedPct.toFixed(1)}%`}
-              centerSub="自有占比"
-            />
-            <DonutLegend slices={ownedSlices} />
-          </div>
-        </Card>
-        <Card title="Top 域名构成">
-          <div className="grid grid-cols-[auto_1fr] gap-4 items-center flex-1">
-            <DonutChart slices={topNSlices} centerText={String(overview.citations.value)} centerSub="总引用" />
-            <DonutLegend slices={topNSlices} />
-          </div>
-        </Card>
-      </div>
-
-      {/* Top 引用域名条形图 */}
-      <Card
-        title={filter === 'all' ? `Top ${domains.length} 引用域名`
-          : filter === 'owned' ? '自有 / 权威域名'
-          : '第三方域名'}
-      >
-        {domains.length === 0 ? (
-          <div className="text-xs text-muted py-6 text-center">该过滤条件下暂无数据</div>
-        ) : (
-          <>
-            <HorizontalBarChart items={barItems} formatValue={v => v.toLocaleString()} />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {domains.slice(0, 12).map(d => (
-                <button
-                  key={d.domain} type="button"
-                  onClick={() => setDrawerDomain(d.domain)}
-                  className="text-xs px-2 py-0.5 rounded hover:underline"
-                  style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)' }}
-                >
-                  {d.domain} · 看样本 →
-                </button>
-              ))}
+      {/* 主图区:donut + bar 横排 */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <Card title={L.sourcesTopComposition} hint={L.hintSources} className="lg:col-span-2">
+          {topNSlices.length === 0 ? (
+            <div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 flex-1">
+              <DonutChart slices={topNSlices} size={200}
+                centerText={totalCitations.toLocaleString()} centerSub={L.sourcesCenterTotal} />
+              <div className="w-full max-h-44 overflow-y-auto px-1">
+                <DonutLegend slices={topNSlices} />
+              </div>
             </div>
-          </>
-        )}
-      </Card>
+          )}
+        </Card>
+
+        <Card
+          title={
+            filter === 'all' ? L.sourcesTopList(domains.length)
+              : filter === 'owned' ? L.sourcesOwnedList
+              : L.sourcesThirdPartyList
+          }
+          className="lg:col-span-3"
+        >
+          {domains.length === 0 ? (
+            <div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div>
+          ) : (
+            <HorizontalBarChart items={barItems} formatValue={v => v.toLocaleString()} />
+          )}
+        </Card>
+      </div>
+
+      {/* 域名样本 chip row(底部一行) */}
+      {domains.length > 0 && (
+        <Card title="域名引用样本">
+          <div className="flex flex-wrap gap-2">
+            {domains.slice(0, 20).map(d => (
+              <button
+                key={d.domain} type="button"
+                onClick={() => setDrawerDomain(d.domain)}
+                className="text-xs px-2.5 py-1 rounded-md transition hover:scale-[1.05]"
+                style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)', border: '1px solid var(--border-color)' }}
+              >
+                {d.domain} <span className="text-muted ml-1">· {d.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="text-[11px] text-muted mt-3">{L.sourcesViewSamples}</div>
+        </Card>
+      )}
 
       {drawerDomain && (
         <DomainSamplesDrawer
@@ -139,14 +154,32 @@ function Body({ state }: { state: ShellState }) {
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function StatTile({ label, value, tint }: {
+  label: string; value: string; tint: { bg: string; fg: string };
+}) {
   return (
-    <div className="p-4 rounded-lg flex flex-col"
+    <div className="p-3 rounded-lg flex items-center gap-3"
+      style={{ background: tint.bg, border: '1px solid var(--border-color)' }}>
+      <span className="w-1.5 h-8 rounded-sm flex-shrink-0" style={{ background: tint.fg }} />
+      <div className="min-w-0">
+        <div className="text-[10px] text-muted truncate">{label}</div>
+        <div className="text-lg font-bold tabular-nums" style={{ color: tint.fg }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, hint, className, children }: {
+  title: string; hint?: string; className?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className={`p-4 rounded-lg flex flex-col ${className ?? ''}`}
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
       <h3 className="text-sm font-medium text-primary mb-3 pb-2 border-b flex items-center gap-2"
         style={{ borderColor: 'var(--border-color)' }}>
         <span className="w-1 h-4 rounded-sm" style={{ background: 'var(--accent-primary)' }} />
         {title}
+        {hint && <InfoHint text={hint} />}
       </h3>
       <div className="flex-1 flex flex-col">{children}</div>
     </div>
@@ -158,6 +191,7 @@ function DomainSamplesDrawer({
 }: {
   topicId: number; domain: string; period: number; token: string; onClose: () => void;
 }) {
+  const L = useBgLang();
   const [rows, setRows] = useState<ResponseRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,19 +205,19 @@ function DomainSamplesDrawer({
       <div className="w-full max-w-2xl h-full overflow-y-auto p-4" onClick={e => e.stopPropagation()}
         style={{ background: 'var(--bg-card)' }}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-primary">引用样本 · {domain}</h3>
-          <button type="button" onClick={onClose} className="text-xs text-muted">关闭</button>
+          <h3 className="text-sm font-medium text-primary">{L.sourcesDrawerTitle(domain)}</h3>
+          <button type="button" onClick={onClose} className="text-xs text-muted">{L.matrixDrawerClose}</button>
         </div>
         {loading ? (
-          <div className="text-xs text-muted text-center py-6">加载中…</div>
+          <div className="text-xs text-muted text-center py-6">{L.loading}</div>
         ) : rows.length === 0 ? (
-          <div className="text-xs text-muted text-center py-6">该域名近 {period} 天无引用样本</div>
+          <div className="text-xs text-muted text-center py-6">{L.sourcesDrawerEmpty(period)}</div>
         ) : (
           <ul className="space-y-2">
             {rows.map(r => (
               <li key={r.id} className="p-2 rounded text-xs" style={{ background: 'var(--bg-input)' }}>
                 <div className="flex justify-between mb-1">
-                  <span className="text-primary">{r.engine} · {r.query}</span>
+                  <span className="text-primary">{engineLabel(r.engine)} · {r.query}</span>
                   <span className="text-muted">{new Date(r.created_at).toLocaleDateString()}</span>
                 </div>
                 {r.hit_excerpt && <div className="text-secondary line-clamp-3">{r.hit_excerpt}</div>}
