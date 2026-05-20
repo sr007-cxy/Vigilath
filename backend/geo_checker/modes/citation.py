@@ -151,7 +151,6 @@ def citation_check(url, return_data=False):
             # Check if our domain appears in citations
             domain_citations = []
             # Extract citations from the answer text
-            import re
             url_pattern = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
             found_urls = url_pattern.findall(answer)
             for url in found_urls:
