@@ -33,7 +33,6 @@ export interface Topic {
   query_cluster_ids?: number[];      // 与 queries 同长,可能为空(老主题或未聚类)
   query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
   query_selected?: boolean[];        // Phase D — 与 queries 同长,标记是否选为监测问题
-  query_seeds?: string[];            // 2026-05-20 — 与 queries 同长,种子提示词(legacy 为 "")
   clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
   seed_prompts?: SeedPrompt[];       // Phase C — 已提交的种子词列表
   engines: EngineId[];

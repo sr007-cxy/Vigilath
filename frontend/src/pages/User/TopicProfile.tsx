@@ -335,8 +335,6 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
   const [seed, setSeed] = useState('');
   const [count, setCount] = useState(30);
   const [candidates, setCandidates] = useState<string[]>([]);
-  // 候选 → 种子词的归属;同一文本既能是新候选也能是已勾的,seed 只在首次入库时写一次
-  const [candidateSeeds, setCandidateSeeds] = useState<Map<string, string>>(new Map());
   const [expanding, setExpanding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -361,20 +359,13 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
       setErr(t('topic.profile.monitor.cap', { max: MAX_SELECTED_QUERIES }));
       return;
     }
-    const items = Array.from(existing.entries()).map(([k, v]) => {
-      const item: { text: string; selected: boolean; seed?: string } = {
-        text: k, selected: k === text ? !cur : v,
-      };
-      const candSeed = candidateSeeds.get(k);
-      if (candSeed) item.seed = candSeed;
-      return item;
-    });
+    const items = Array.from(existing.entries()).map(([k, v]) => ({
+      text: k, selected: k === text ? !cur : v,
+    }));
     persistSelection(items);
   };
 
-  const persistSelection = async (
-    items: { text: string; selected: boolean; seed?: string }[],
-  ) => {
+  const persistSelection = async (items: { text: string; selected: boolean }[]) => {
     setBusy(true); setErr(null);
     try {
       await topicProfileApi.updateSelectedQueries(topic.id, items, token);
@@ -387,18 +378,11 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
   };
 
   const expand = async () => {
-    const seedTrim = seed.trim();
-    if (!seedTrim || expanding) return;
+    if (!seed.trim() || expanding) return;
     setExpanding(true); setErr(null);
     try {
-      const resp = await topicProfileApi.expandQueries(topic.id, seedTrim, count, token);
-      const qs = resp.queries || [];
-      setCandidates(qs);
-      setCandidateSeeds(prev => {
-        const next = new Map(prev);
-        qs.forEach(q => { if (!next.has(q)) next.set(q, seedTrim); });
-        return next;
-      });
+      const resp = await topicProfileApi.expandQueries(topic.id, seed.trim(), count, token);
+      setCandidates(resp.queries || []);
       onChange();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));

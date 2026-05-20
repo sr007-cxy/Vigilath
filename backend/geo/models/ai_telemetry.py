@@ -369,8 +369,6 @@ class QueryItem(BaseModel):
     reviewer_id: Optional[int] = None
     # Phase D 监测勾选:用户从扩展池里勾的 ≤50 个 → selected=True;legacy 数据默认 True
     selected: bool = True
-    # 2026-05-20 — 用户当时从哪个种子提示词扩展出这条 query;空串表示 legacy 或没记录
-    seed: str = ""
 
 
 # ─────────────── Phase D — 品牌资料(6 大模块) ──────────────
@@ -469,9 +467,6 @@ class MonitoredQueryItem(BaseModel):
     """用户勾选/取消勾选监测问题时的输入项."""
     text: str
     selected: bool
-    # 2026-05-20 — 这条 query 当时是从哪个种子词扩展出来的(候选阶段就有),
-    # 选中入库时一并持久化,后续报告 / Queries 明细按种子分组渲染。
-    seed: str = ""
 
 
 class SelectedQueriesPayload(BaseModel):
@@ -695,8 +690,6 @@ class TopicOut(BaseModel):
     query_statuses: list[ReviewStatus]
     # Phase D — 跟 queries 同长的 selected 数组(用户勾选为监测问题的标志)
     query_selected: list[bool]
-    # 2026-05-20 — 跟 queries 同长的种子词数组;legacy / 未记录的位为 ""
-    query_seeds: list[str] = Field(default_factory=list)
     clusters: list[ClusterMeta]
     seed_prompts: list[SeedPromptItem]
     engines: list[str]
@@ -735,7 +728,6 @@ class TopicOut(BaseModel):
         cluster_ids: list[int] = []
         statuses: list[str] = []
         selected: list[bool] = []
-        query_seeds: list[str] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
@@ -746,13 +738,11 @@ class TopicOut(BaseModel):
                     statuses.append(q.get("status") or "approved")
                     # legacy 无 selected 字段:默认 True(老话题的 query 默认都参与监测)
                     selected.append(bool(q.get("selected", True)))
-                    query_seeds.append(str(q.get("seed") or ""))
             elif isinstance(q, str):
                 queries.append(q)
                 cluster_ids.append(-1)
                 statuses.append("approved")
                 selected.append(True)
-                query_seeds.append("")
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         seeds_raw = json.loads(getattr(r, "seed_prompts_json", None) or "[]")
@@ -777,7 +767,6 @@ class TopicOut(BaseModel):
             query_cluster_ids=cluster_ids,
             query_statuses=statuses,
             query_selected=selected,
-            query_seeds=query_seeds,
             clusters=clusters,
             seed_prompts=seeds,
             engines=json.loads(r.engines_json or "[]"),
