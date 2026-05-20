@@ -639,15 +639,24 @@ def _seed_anchor(seed: str) -> str:
 
 
 def _drop_anchor_drift(items: list[tuple[str, str]], anchor: str) -> list[tuple[str, str]]:
-    """seed 主体词不在候选里 → 丢。anchor 空 / 长度 <2 时直通。"""
+    """seed 主体词不在候选里 → 丢。anchor 空 / 长度 <2 时直通。
+
+    保护:过滤掉 > 50% 候选时,通常说明 seed 末尾不是真身份词(抽象业务词如
+    「私募股权」末尾「股权」/「资本市场」末尾「市场」),回滚不过滤,避免把
+    候选全干掉触发 empty → 502。
+    """
     if not anchor or len(anchor) < 2:
         return items
+    if not items:
+        return items
     a_low = anchor.lower()
-    out: list[tuple[str, str]] = []
+    kept: list[tuple[str, str]] = []
     for text, source in items:
         if a_low in text.lower():
-            out.append((text, source))
-    return out
+            kept.append((text, source))
+    if len(kept) / len(items) < 0.5:
+        return items
+    return kept
 
 
 def _dedup_template_glut(scored: list[dict], prefix_len: int = 6,
