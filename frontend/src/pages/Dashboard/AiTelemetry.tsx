@@ -2463,6 +2463,7 @@ export function TopicEditor({
                   value={seeds}
                   onChange={setSeeds}
                   placeholder={t('dashboard.aiTelemetry.form.seedPromptsPlaceholder') || ''}
+                  reserved={seedPrompts.map(s => s.text)}
                 />
               </div>
               <span className="text-xs text-muted">

@@ -7,19 +7,30 @@ interface Props {
   max?: number;
   /** Clickable suggestion chips shown below the input */
   suggestions?: string[];
+  /** 已存在 / 已保存的值;输入命中时拒绝添加(value 之外的额外去重源) */
+  reserved?: string[];
 }
 
-export function TagInput({ value, onChange, placeholder, max, suggestions }: Props) {
+export function TagInput({ value, onChange, placeholder, max, suggestions, reserved }: Props) {
   const [draft, setDraft] = useState('');
+  const [dupHint, setDupHint] = useState<string | null>(null);
+
+  const isDuplicate = (v: string): boolean => {
+    if (value.includes(v)) return true;
+    if (reserved && reserved.includes(v)) return true;
+    return false;
+  };
 
   const add = () => {
     const v = draft.trim().replace(/,$/, '');
     if (!v) return;
-    if (value.includes(v)) {
+    if (isDuplicate(v)) {
+      setDupHint(v);
       setDraft('');
       return;
     }
     if (max && value.length >= max) return;
+    setDupHint(null);
     onChange([...value, v]);
     setDraft('');
   };
@@ -35,11 +46,17 @@ export function TagInput({ value, onChange, placeholder, max, suggestions }: Pro
 
   const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
-  const remainingSuggestions = suggestions?.filter(s => !value.includes(s));
+  const reservedSet = reserved ? new Set(reserved) : null;
+  const remainingSuggestions = suggestions?.filter(s => !value.includes(s) && !(reservedSet && reservedSet.has(s)));
 
   const addSuggestion = (s: string) => {
     if (max && value.length >= max) return;
-    if (!value.includes(s)) onChange([...value, s]);
+    if (isDuplicate(s)) {
+      setDupHint(s);
+      return;
+    }
+    setDupHint(null);
+    onChange([...value, s]);
   };
 
   return (
@@ -80,6 +97,9 @@ export function TagInput({ value, onChange, placeholder, max, suggestions }: Pro
           style={{ color: 'var(--text-primary)' }}
         />
       </div>
+      {dupHint && (
+        <div className="text-xs text-rose-500 mt-1">⚠ "{dupHint}" 已存在,不能重复</div>
+      )}
       {remainingSuggestions && remainingSuggestions.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1.5">
           {remainingSuggestions.map(s => (

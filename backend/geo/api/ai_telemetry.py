@@ -127,7 +127,12 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
         pass
     cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
     out = []
+    seen_text: set[str] = set()
     for i, q in enumerate(payload_queries):
+        # payload 内部去重 — 同一 text 只取首次出现,丢掉对应 cluster_id
+        if q in seen_text:
+            continue
+        seen_text.add(q)
         prev = existing_by_text.get(q)
         if prev is not None:
             item = dict(prev)
