@@ -60,13 +60,8 @@ function TopMetricsRow({ overview, matrix, published, topic }: {
 }) {
   const navigate = useNavigate();
   const L = useBgLang();
-  // AI 推荐过你的不同问题数(distinct queries with at least one hit cell)
-  const hitQueries = new Set<string>();
-  for (const c of matrix?.cells ?? []) {
-    if ((c.total_hits ?? 0) > 0) hitQueries.add(c.query);
-  }
-  const totalQueries = matrix?.queries.length ?? 0;
-  const recommendedQueryCount = hitQueries.size;
+  // 推荐词总数 = 扩展的问题总数(全量,不切命中比例)
+  const recommendedQueryCount = matrix?.queries.length ?? 0;
   const citationsTotal = overview?.citations.value ?? 0;
   const citationsDelta = overview?.citations.delta_pct ?? null;
   const publishedCount = published.length;
@@ -76,7 +71,6 @@ function TopMetricsRow({ overview, matrix, published, topic }: {
       <BigMetric
         label={L.metricCitations}
         value={recommendedQueryCount}
-        sub={totalQueries > 0 ? `/ ${totalQueries} 监测问题` : undefined}
         hint={L.hintTopMetrics}
         onClick={() => navigate(`/brand-growth/queries?topic=${tq}`)}
       />
