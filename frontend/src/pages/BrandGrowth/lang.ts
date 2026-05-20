@@ -17,8 +17,8 @@ interface Dict {
   // 主页
   pageTitle: string;
   metricCitations: string;
-  metricOwnedCitations: string;
-  metricOtherCitations: string;
+  metricPublishedTotal: string;
+  metricCitedTotal: string;
   blockRadar: string;
   blockEntries: string;
   blockCoreMetrics: string;
@@ -153,8 +153,8 @@ interface Dict {
   posUnknown: string;
   // 模块说明(? 悬浮文案)
   hintTopMetrics: string;
-  hintOwnedCitations: string;
-  hintOtherCitations: string;
+  hintPublishedTotal: string;
+  hintCitedTotal: string;
   hintRadar: string;
   hintEntries: string;
   hintCoreMetrics: string;
@@ -193,9 +193,9 @@ const ZH: Dict = {
   clearFilter: '清除筛选',
   industryBaselineMissing: '行业基准样本不足',
   pageTitle: '品牌增长',
-  metricCitations: '推荐总词数',
-  metricOwnedCitations: '权威媒体推荐数',
-  metricOtherCitations: '第三方引用总数',
+  metricCitations: '推荐词',
+  metricPublishedTotal: '媒体投放',
+  metricCitedTotal: '引用总数',
   blockRadar: '趋势分图(5 维占比)',
   blockEntries: '功能入口',
   blockCoreMetrics: '核心指标表现',
@@ -324,9 +324,9 @@ const ZH: Dict = {
   posBody: '中段',
   posTail: '末尾',
   posUnknown: '未知',
-  hintTopMetrics: '本期 AI 引擎在所有问题里提到品牌的累计引用次数(SUM 答复里 citations 数组长度)。一条答复里同一 URL 出现多次会算多次',
-  hintOwnedCitations: '上述总数中,被引域名包含品牌关键词(target + 别名,大小写不敏感子串匹配)的部分。例如品牌为 Acme 时 acme.help.zendesk.com 也算自有',
-  hintOtherCitations: '总引用数 − 权威媒体引用数。能反映品牌在外部 / 第三方域名上的曝光面',
+  hintTopMetrics: '本期 AI 引擎在所有问题里提到品牌的累计引用次数。SUM 答复里 citations 数组长度;一条答复里同一 URL 出现多次算多次',
+  hintPublishedTotal: '当前主题下所有 status=published 的稿件数。不区分平台,审核通过并标记发布即计入',
+  hintCitedTotal: '已发布稿件里被 AI 引擎真实引到过(cited_by_json 非空)的稿件数。投放 → AI 引用 的 ROI 闭环',
   hintRadar: '5 个维度叠在一张图上看品牌健康度:Top1/Top3/Top5 是品牌在 AI 答复中是第几位提到,可见 = 任意提到,被引用 = 不同监测问题里至少被命中一次',
   hintEntries: '点任意卡片进对应子页查看明细',
   hintCoreMetrics: '基于 LLM 抽取的 brand_rank(品牌在答复里第几个被提到)算占比。行业 P50 来自同行业 ≥3 个租户的中位数,样本不足时不展示',
@@ -365,9 +365,9 @@ const EN: Dict = {
   clearFilter: 'Clear filter',
   industryBaselineMissing: 'Industry baseline: not enough samples',
   pageTitle: 'Brand Growth',
-  metricCitations: 'Total Citations',
-  metricOwnedCitations: 'Authoritative Citations',
-  metricOtherCitations: 'Third-party Citations',
+  metricCitations: 'AI Mentions',
+  metricPublishedTotal: 'Published',
+  metricCitedTotal: 'Cited by AI',
   blockRadar: 'Trend (5-dim breakdown)',
   blockEntries: 'Modules',
   blockCoreMetrics: 'Core Metrics',
@@ -496,9 +496,9 @@ const EN: Dict = {
   posBody: 'body',
   posTail: 'tail',
   posUnknown: 'unknown',
-  hintTopMetrics: 'Total citation count this period (SUM of citations[] across all responses). Same URL cited twice in one answer counts twice',
-  hintOwnedCitations: 'Citations whose domain matches a brand keyword (target + aliases, case-insensitive substring). e.g. brand "Acme" matches "acme.help.zendesk.com"',
-  hintOtherCitations: 'Total − authoritative. Reflects brand exposure on external / third-party domains',
+  hintTopMetrics: 'Cumulative AI-engine mentions this period (SUM of citations[] across all responses). Same URL cited twice in one answer counts twice',
+  hintPublishedTotal: 'Count of docs with status=published under the current topic. Platform-agnostic; counts every approved + published doc',
+  hintCitedTotal: 'Number of published docs that have been actually cited by AI (cited_by_json non-empty). The publish → AI-citation ROI loop',
   hintRadar: '5 dimensions in one view: Top1/Top3/Top5 = brand position in the answer, Visible = any mention, Sourced = unique queries with ≥1 hit',
   hintEntries: 'Click any card to drill into the sub-page',
   hintCoreMetrics: 'Based on LLM-extracted brand_rank. Industry P50 = median across ≥3 same-industry tenants; hidden when sample too small',

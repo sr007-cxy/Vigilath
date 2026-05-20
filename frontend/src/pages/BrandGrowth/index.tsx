@@ -37,7 +37,7 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4 max-w-[1400px] mx-auto">
-      <TopMetricsRow overview={overview} topic={topic} />
+      <TopMetricsRow overview={overview} published={published} topic={topic} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RadarBlock pb={pb} />
         <EntryCardGrid overview={overview} pb={pb} />
@@ -52,23 +52,27 @@ function Body({ state }: { state: ShellState }) {
 }
 
 // ── 顶部 3 大数 ───────────────────────────────────────
-function TopMetricsRow({ overview, topic }: { overview: Overview | null; topic: Topic }) {
+function TopMetricsRow({ overview, published, topic }: {
+  overview: Overview | null; published: ContentDoc[]; topic: Topic;
+}) {
   const navigate = useNavigate();
   const L = useBgLang();
   const total = overview?.citations.value ?? 0;
-  const owned = overview?.owned_split.owned ?? 0;
-  const other = overview?.owned_split.other ?? 0;
   const totalDelta = overview?.citations.delta_pct ?? null;
-  const ownedDelta = overview?.owned_split.delta_pct ?? null;
+  const publishedCount = published.length;
+  const citedCount = published.filter(d => {
+    const cb = d.cited_by || {};
+    return Object.values(cb).some(arr => Array.isArray(arr) && arr.length > 0);
+  }).length;
   const tq = topic.id;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <BigMetric label={L.metricCitations} value={total} delta={totalDelta} hint={L.hintTopMetrics}
         onClick={() => navigate(`/brand-growth/responses?topic=${tq}`)} />
-      <BigMetric label={L.metricOwnedCitations} value={owned} delta={ownedDelta} hint={L.hintOwnedCitations}
-        onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=owned`)} />
-      <BigMetric label={L.metricOtherCitations} value={other} hint={L.hintOtherCitations}
-        onClick={() => navigate(`/brand-growth/sources?topic=${tq}&filter=third_party`)} />
+      <BigMetric label={L.metricPublishedTotal} value={publishedCount} hint={L.hintPublishedTotal}
+        onClick={() => navigate(`/brand-growth/published?topic=${tq}`)} />
+      <BigMetric label={L.metricCitedTotal} value={citedCount} hint={L.hintCitedTotal}
+        onClick={() => navigate(`/brand-growth/published?topic=${tq}&roi=hit`)} />
     </div>
   );
 }
