@@ -114,6 +114,8 @@ export const EMPTY_BRAND_PROFILE: BrandProfile = {
 };
 
 export const MAX_SELECTED_QUERIES = 50;
+// 单次 seed 扩展候选上限(用户从这一批里再勾 ≤ MAX_SELECTED_QUERIES 个)
+export const MAX_EXPANSION_CANDIDATES = 200;
 
 export interface ClusterMetaPersist {
   cluster_id: number;

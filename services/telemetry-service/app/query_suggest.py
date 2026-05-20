@@ -124,10 +124,27 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], industry: str,
-                     service_geo: str = "") -> str:
+                     service_geo: str = "", profile_cases: list[str] | None = None) -> str:
     alias_part = "、".join(f"「{a}」" for a in aliases) if aliases else ""
     avoid = f"「{target}」" + (f"及其别名 {alias_part}" if alias_part else "")
     ind = f"(行业:{industry})" if industry else ""
+    # 真实案例清单 —— 取用户 case_stories + core_credentials,LLM 必须优先用这些生成案例追溯型
+    cases_block = ""
+    real_cases = [c for c in (profile_cases or []) if c and c.strip()]
+    if real_cases:
+        bullets = "\n".join(f"  - {c.strip()}" for c in real_cases[:40])
+        cases_block = (
+            f"\n━━━ ⭐ 用户提供的真实经办案例 / 荣誉(案例追溯型 query 必须优先用这些)━━━\n"
+            f"以下是品牌「{target}」**自己披露过经办**的真实案件 / 荣誉 / 案例:\n"
+            f"{bullets}\n"
+            f"\n"
+            f"**这些都是品牌确认无误的真实事件 —— 不用怀疑真实性,放心生成 query**。\n"
+            f"在下方「真实事件追溯型」专节里,**至少 5 条**(尽量 8-12 条)直接基于上面这份清单生成,"
+            f"句式举例:「[清单里的某个案件/事件] 的律师团队是哪家」、「参与 [清单里的某个交易] 的"
+            f"律师是谁」、「[清单里的项目] 由哪家律所担任顾问」等。\n"
+            f"**注意**:不要在 query 里塞太多清单原文细节(如金额 / 年份 / 完整公司名),"
+            f"保留事件名 + 交易对手主体即可,真实用户问 AI 时也不会带这么多细节。\n"
+        )
     geo_lock = ""
     if service_geo.strip():
         sg = service_geo.strip()
@@ -158,6 +175,7 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
         f"你在帮品牌「{target}」{ind} 做 GEO / AEO 监测。"
         f"我们要测:**当真实用户拿这类问题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
         f"AI 会不会主动推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query,每行一条,纯中文。\n"
+        f"{cases_block}"
         f"{geo_lock}"
         f"\n"
         f"━━━ 关于数量(读这条优先于一切)━━━\n"
@@ -407,10 +425,10 @@ def _user_msg_en_generic(seed: str, count: int) -> str:
 
 
 def _user_msg(seed: str, count: int, target: str, aliases: list[str], industry: str,
-              service_geo: str = "") -> str:
+              service_geo: str = "", profile_cases: list[str] | None = None) -> str:
     cjk = _has_cjk(seed) or _has_cjk(target)
     if target.strip():
-        return _user_msg_zh_geo(seed, count, target, aliases, industry, service_geo) if cjk \
+        return _user_msg_zh_geo(seed, count, target, aliases, industry, service_geo, profile_cases) if cjk \
             else _user_msg_en_geo(seed, count, target, aliases, industry, service_geo)
     return _user_msg_zh_generic(seed, count) if cjk else _user_msg_en_generic(seed, count)
 
@@ -439,7 +457,8 @@ class DeepSeekError(Exception):
 
 
 async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
-                    industry: str, service_geo: str = "") -> list[str]:
+                    industry: str, service_geo: str = "",
+                    profile_cases: list[str] | None = None) -> list[str]:
     """调 DeepSeek 拿候选;失败抛 DeepSeekError(LLM 是主力,这一路挂了整个 endpoint 应该 5xx)."""
     api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
     if not api_key:
@@ -449,10 +468,10 @@ async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
         "model": DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": _SYSTEM_MSG},
-            {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry, service_geo)},
+            {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry, service_geo, profile_cases)},
         ],
         "temperature": 0.7,
-        "max_tokens": min(8000, raw_count * 35),
+        "max_tokens": min(16000, raw_count * 35),
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -869,6 +888,7 @@ async def suggest_queries(
     seed: str, count: int = 200, *,
     target: str = "", aliases: Optional[list[str]] = None, industry: str = "",
     service_geo: str = "",
+    profile_cases: Optional[list[str]] = None,
     include_autocomplete: bool = False,
     include_clusters: bool = True,
 ) -> tuple[list[dict], list[dict]]:
@@ -894,13 +914,14 @@ async def suggest_queries(
     aliases = [a.strip() for a in (aliases or []) if a and a.strip()]
     industry = (industry or "").strip()
     service_geo = (service_geo or "").strip()
+    profile_cases = [c.strip() for c in (profile_cases or []) if c and c.strip()][:40]
 
-    # LLM 在 raw_count > ~100 时会进入「同句式 + 字典遍历」凑数模式,质量崩塌。
-    # 硬上限到 100,模型质量在 80-100 条内可维持。dedup 后约 60-90 个候选。
-    raw_count = min(100, int(count * 1.3)) if target else min(100, count)
+    # raw_count 上限 200 — 2026-05-20 起,prompt 已加严反灌水死规则 + 用户真实案例清单,
+    # 单次 LLM 调用产出 150-200 条仍可维持质量。dedup 后约 100-180 个候选。
+    raw_count = min(200, int(count * 1.3)) if target else min(200, count)
 
     # 两路并行:LLM 必须成功(主力),autocomplete 失败吞掉
-    llm_task = _fetch_llm(seed, raw_count, target, aliases, industry, service_geo)
+    llm_task = _fetch_llm(seed, raw_count, target, aliases, industry, service_geo, profile_cases)
     if include_autocomplete:
         results = await asyncio.gather(
             llm_task, _fetch_suggest(seed), return_exceptions=True,

@@ -463,6 +463,8 @@ class SubmitForReviewPayload(BaseModel):
 
 # 监测问题 selected 上限
 MAX_SELECTED_QUERIES = 50
+# 单次 seed 扩展候选上限(用户从这一批里再勾 ≤ MAX_SELECTED_QUERIES 个)
+MAX_EXPANSION_CANDIDATES = 200
 
 
 class MonitoredQueryItem(BaseModel):

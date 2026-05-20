@@ -189,6 +189,10 @@ class SuggestQueriesBody(BaseModel):
     # 2026-05-20 — 服务地域(资料里的 service_geo)。非空时 prompt 强制把所有 query 的
     # 地点维度锁在该地域 + 全国 / 跨地区,LLM 不再随机扩其它城市/国家。
     service_geo: str = Field("", max_length=200)
+    # 2026-05-20 — 用户资料里的真实案例 / 荣誉(case_stories + core_credentials)。
+    # 非空时 prompt 把这些案例当成「案例追溯型 query」的素材源,LLM 用真实案件名生成 query,
+    # 而不是从训练数据里猜公开案件(更准、查的就是品牌自己经办过的事)。
+    profile_cases: list[str] = Field(default_factory=list, max_length=50)
 
 
 @app.post("/suggest-queries")
@@ -202,7 +206,7 @@ async def http_suggest_queries(body: SuggestQueriesBody):
         candidates, clusters = await suggest_queries(
             body.seed, body.count,
             target=body.target, aliases=body.aliases, industry=body.industry,
-            service_geo=body.service_geo,
+            service_geo=body.service_geo, profile_cases=body.profile_cases,
         )
     except DeepSeekError as e:
         status = 400 if e.code in ("invalid_seed", "no_key") else 502

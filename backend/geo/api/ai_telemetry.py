@@ -30,7 +30,7 @@ from geo.models.ai_telemetry import (
     BrandProfile, BriefingAction, BriefingFeedbackPayload, BriefingOut,
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
-    FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_SELECTED_QUERIES,
+    FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
     OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist,
     PositionBreakdown, PositionBreakdownOut, IndustryBenchmarkOut,
     CompetitorSubstitutionItem, CompetitorSubstitutionOut,
@@ -1139,10 +1139,11 @@ async def expand_queries_for_topic(
 ):
     """Phase D — 针对单个 topic 跑一次种子扩展,把调用记录写进 expansion_log_json.
 
-    body: {seed, count?=50} — count 默认 50(对应监测问题上限).
+    body: {seed, count?=50} — count 默认 50,上限 MAX_EXPANSION_CANDIDATES=200.
     resp: {seed, queries: [str, ...]} — 与 /suggest-queries 同 schema.
 
     扩展候选不直接落 queries_json — 前端拿到后让用户勾选,再调 /selected-queries.
+    用户资料里的 case_stories / core_credentials 一并送给 LLM,案例追溯型 query 直接用真实案件名。
     """
     t = _get_topic_or_404(db, topic_id, current_user.id)
     _ensure_editable(t)
@@ -1153,7 +1154,7 @@ async def expand_queries_for_topic(
         count = int(payload.get("count", 50))
     except (TypeError, ValueError):
         count = 50
-    count = max(5, min(count, MAX_SELECTED_QUERIES))
+    count = max(5, min(count, MAX_EXPANSION_CANDIDATES))
 
     target = t.target or ""
     industry = t.industry or ""
@@ -1161,16 +1162,27 @@ async def expand_queries_for_topic(
         aliases = json.loads(t.target_aliases_json or "[]")
     except Exception:  # noqa: BLE001
         aliases = []
-    # 从 topic profile 自动注入服务地域 — 用户在资料里填了"北京"就锁北京,
-    # LLM 不再随机扩到其它城市/国家。
+    # 从 topic profile 自动注入服务地域 + 真实案例清单 —— LLM 案例追溯型 query 用这些
+    # 真实案件名(比依赖 LLM 训练数据猜更准),也把地域锁住不再随机扩其它城市/国家.
+    service_geo = ""
+    profile_cases: list[str] = []
     try:
         profile_obj = json.loads(t.profile_json or "{}")
         service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
+        for key in ("case_stories", "core_credentials"):
+            for item in (profile_obj.get(key) or []):
+                s = str(item or "").strip()
+                if s:
+                    profile_cases.append(s[:500])
+                if len(profile_cases) >= 40:
+                    break
+            if len(profile_cases) >= 40:
+                break
     except Exception:  # noqa: BLE001
-        service_geo = ""
+        pass
     body = {"seed": seed, "count": count, "target": target,
             "aliases": aliases, "industry": industry,
-            "service_geo": service_geo}
+            "service_geo": service_geo, "profile_cases": profile_cases}
     url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
     try:
         async with httpx.AsyncClient(timeout=200.0) as client:

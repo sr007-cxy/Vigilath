@@ -11,7 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import {
-  aiTelemetryApi, EMPTY_BRAND_PROFILE, MAX_SELECTED_QUERIES,
+  aiTelemetryApi, EMPTY_BRAND_PROFILE, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
   type BrandProfile, type Topic, type SubmissionStatus,
 } from '../../services/aiTelemetryApi';
 import { topicProfileApi } from '../../services/topicProfileApi';
@@ -420,8 +420,8 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
                    className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-md"
                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
                             border: '1px solid var(--border-color)' }} />
-            <input type="number" min={5} max={MAX_SELECTED_QUERIES} value={count}
-                   onChange={e => setCount(Math.min(MAX_SELECTED_QUERIES, Math.max(5, +e.target.value)))}
+            <input type="number" min={5} max={MAX_EXPANSION_CANDIDATES} value={count}
+                   onChange={e => setCount(Math.min(MAX_EXPANSION_CANDIDATES, Math.max(5, +e.target.value)))}
                    className="w-20 text-sm px-3 py-2 rounded-md"
                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
                             border: '1px solid var(--border-color)' }} />
