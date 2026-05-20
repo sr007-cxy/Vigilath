@@ -1,6 +1,6 @@
 // 资料上传 — 两类资料分两个 sub-tab.
 //
-// ① 文本资料(.txt / .md / .docx / 文本粘贴):走 LLM 抽取,自动回填 BrandProfile.
+// ① 文本资料(.txt / .md / .docx / .pdf / 文本粘贴):走 LLM 抽取,自动回填 BrandProfile.
 //    后端:POST /api/ai-telemetry/profile/extract(JSON)/ /profile/extract-file(multipart)
 //    没配 DEEPSEEK_API_KEY 时后端 503,前端弹错误而不是静默吞.
 //
@@ -17,10 +17,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { BrandProfile } from '../services/aiTelemetryApi';
 import { topicProfileApi, type TopicMedia } from '../services/topicProfileApi';
 
-// 文本类 — 客户端 file.text() 读得到的就直接走 JSON 路径,docx 走 multipart 后端解析.
-// PDF / .doc 都不接受;扫描版 PDF 抽不到字反而误导用户.
+// 文本类 — 客户端 file.text() 读得到的就直接走 JSON 路径,docx / pdf 走 multipart 后端解析.
+// .doc 旧二进制和扫描版 PDF 抽不到字会在后端 415,前端再翻译成友好提示.
 const TEXT_EXTS = ['.txt', '.md'];
-const BINARY_EXTS = ['.docx'];
+const BINARY_EXTS = ['.docx', '.pdf'];
 const ACCEPT_TEXT_EXTS = [...TEXT_EXTS, ...BINARY_EXTS];
 const MAX_TEXT_LEN = 60000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -190,8 +190,6 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
     if (!isText && !isBinary) {
       if (ext === '.doc') {
         setErr('暂不支持 .doc 旧格式,请用 Word「另存为」.docx 后重试');
-      } else if (ext === '.pdf') {
-        setErr('暂不支持 PDF,请复制内容粘贴到下方文本框,或另存为 .docx / .txt / .md');
       } else {
         setErr(`不支持的文件类型(${ext || '未知'});只接受 ${ACCEPT_TEXT_EXTS.join(' / ')}`);
       }
@@ -253,7 +251,7 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
           <>
             拖入文件或<span style={{ color: 'var(--accent-primary)' }}>点击选择</span>
             <span className="block text-muted mt-1">
-              支持 .txt / .md / .docx;PDF / Word(.doc)请复制内容粘贴到下方
+              支持 .txt / .md / .docx / .pdf;.doc 旧格式请先另存为 .docx
             </span>
           </>
         )}

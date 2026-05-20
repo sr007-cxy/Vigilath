@@ -33,7 +33,7 @@ DEFAULT_TIMEOUT = int(os.environ.get("GEO_PROFILE_EXTRACT_TIMEOUT", "120"))
 
 _SCHEMA_HINT = """\
 请严格按下面 schema 输出 JSON(字段名 snake_case,缺失字段用空字符串 / 空数组,
-不要凭空捏造,但可以从原文里合理归纳):
+不要凭空捏造):
 {
   "profile_name": "...",
   "company_full_name": "...",
@@ -66,6 +66,17 @@ _SCHEMA_HINT = """\
   "seed_suggestions": ["...", "..."]
 }
 
+【核心原则:原文照搬,按段落分项,不删不缩】
+所有 list 字段(尤其是 core_credentials 核心荣誉 / case_stories 典型案例 / service_features /
+service_process / target_scenarios 等),都要遵守:
+1. 原文里每一条独立的段落 / 项目符号 / 编号条目 = list 里独立的一项,一一对应,
+   不要合并(比如原文 5 条荣誉,输出就必须是 5 条,不能压成 3 条)。
+2. 每一项原文怎么写就怎么填,完整保留原句,不要缩写、不要总结、不要改写措辞;
+   括号里的补充说明、年份、颁发机构、案例数据也都要带上。
+3. 不要因为字数多就裁掉描述 — 哪怕一条荣誉占两三行字也要完整保留;
+   除非超过 1000 字一条的极端长描述才适度截断。
+4. 不要凭空合并相似条目;原文如果分成两段写,就分两条。
+
 seed_suggestions 是给后续监测扩展用的「种子提示词」,要求:
 - 3-8 条,每条 4-12 字
 - 用真实用户会去问 AI 的口吻(短问 / 名词短语),不要写成长句
@@ -77,8 +88,11 @@ seed_suggestions 是给后续监测扩展用的「种子提示词」,要求:
 
 SYSTEM_PROMPT = (
     "你是品牌资料分析师,把用户给的原始资料(公司简介 / 官网文案 / PRD / 产品说明 / "
-    "市场材料等)抽取为结构化「品牌资料」JSON,并顺手给出几条可用作 AI 监测的"
-    "「种子提示词」。\n" + _SCHEMA_HINT
+    "市场材料等)按【原文照搬、按段落分项】的方式映射到「品牌资料」JSON,"
+    "并顺手给出几条可用作 AI 监测的「种子提示词」。\n"
+    "你的任务是把原文里已有的内容搬到对应字段,而不是当编辑去改稿、压缩或润色 — "
+    "用户后续会看到 list 里每一项,所以条目数和原文措辞必须保留。\n"
+    + _SCHEMA_HINT
 )
 
 
@@ -222,7 +236,7 @@ class FileParseError(Exception):
     pass
 
 
-SUPPORTED_EXTS = ("txt", "md", "docx")
+SUPPORTED_EXTS = ("txt", "md", "docx", "pdf")
 
 
 def file_bytes_to_text(filename: str, data: bytes) -> str:
@@ -230,17 +244,19 @@ def file_bytes_to_text(filename: str, data: bytes) -> str:
 
     支持:
     - .docx → python-docx 段落 + 表格
+    - .pdf  → pypdf 按页 + 段落抽文字(扫描件 / 图片版 PDF 抽不到字,会抛 FileParseError)
     - .txt / .md → utf-8 / gbk 兜底
 
-    其它类型(.pdf / .doc / .csv / .json …)统一 415,提示用户复制内容到文本框,
-    或另存为支持的格式。PDF 一开始上过 pypdf,扫描件抽不到字反而误导用户,
-    所以这里收紧到三种最稳的格式。
+    其它类型(.doc / .csv / .json …)统一 415,提示用户复制内容到文本框,
+    或另存为支持的格式。
     """
     name = (filename or "").lower()
     ext = name.rsplit(".", 1)[-1] if "." in name else ""
 
     if ext == "docx":
         return _truncate(_parse_docx(data))
+    if ext == "pdf":
+        return _truncate(_parse_pdf(data))
     if ext in ("txt", "md"):
         try:
             return _truncate(data.decode("utf-8"))
@@ -252,10 +268,6 @@ def file_bytes_to_text(filename: str, data: bytes) -> str:
     if ext == "doc":
         raise FileParseError(
             "暂不支持 .doc 旧二进制格式,请用 Word 「另存为」.docx 后重试"
-        )
-    if ext == "pdf":
-        raise FileParseError(
-            "暂不支持 PDF。请复制内容粘贴到文本框,或另存为 .docx / .txt / .md 后上传"
         )
     raise FileParseError(
         f"暂不支持的文件类型(.{ext or '未知'}),支持 {', '.join('.' + e for e in SUPPORTED_EXTS)}"
@@ -289,6 +301,42 @@ def _parse_docx(data: bytes) -> str:
     out = "\n".join(paras + tables).strip()
     if not out:
         raise FileParseError("这份 Word 文档为空 / 没有可抽取的文字")
+    return out
+
+
+def _parse_pdf(data: bytes) -> str:
+    """pypdf 按页抽文字,保留页内的段落换行 — LLM 后续靠这些换行识别"按段落分项"。
+
+    扫描件 / 图片版 PDF 抽不到字符,会落到 FileParseError 让前端提示用户用 Word/文本。
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError as e:
+        raise FileParseError("后端缺少 pypdf 依赖,无法解析 PDF") from e
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except Exception as e:  # noqa: BLE001
+        raise FileParseError(f"PDF 解析失败(文件可能损坏 / 加密):{e}") from e
+    if getattr(reader, "is_encrypted", False):
+        try:
+            reader.decrypt("")
+        except Exception:  # noqa: BLE001
+            raise FileParseError("PDF 已加密,请先解除密码保护再上传")
+    pages: list[str] = []
+    for page in reader.pages:
+        try:
+            t = page.extract_text() or ""
+        except Exception:  # noqa: BLE001
+            t = ""
+        t = t.strip()
+        if t:
+            pages.append(t)
+    out = "\n\n".join(pages).strip()
+    if not out:
+        raise FileParseError(
+            "这份 PDF 抽不到任何文字(可能是扫描件 / 图片版),"
+            "请用 Word 重新导出 .docx,或复制内容粘贴到文本框"
+        )
     return out
 
 

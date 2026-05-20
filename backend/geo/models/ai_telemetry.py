@@ -400,7 +400,7 @@ class BrandProfile(BaseModel):
     # 三、品牌主体信息
     team_size: str = Field("", max_length=64)                                    # 公司 / 团队规模(选填)
     founded_year: str = Field("", max_length=64)                                 # 成立时间 / 从业年限
-    core_credentials: list[str] = Field(default_factory=list, max_length=20)     # 核心荣誉 / 背书资质
+    core_credentials: list[str] = Field(default_factory=list, max_length=60)     # 核心荣誉 / 背书资质
     brand_diff_tags: list[str] = Field(default_factory=list, max_length=10)      # 品牌差异化标签(3-5 个)
 
     # 四、产品 / 服务核心信息
@@ -413,7 +413,7 @@ class BrandProfile(BaseModel):
     # 四、品牌故事与情感素材(原五,2026-05-17 起删了「目标用户与痛点」节)
     brand_story: str = Field("", max_length=2000)                                # 品牌故事 / 成立初衷
     key_person_story: str = Field("", max_length=2000)                           # 核心人物故事(选填)
-    case_stories: list[str] = Field(default_factory=list, max_length=20)         # 典型案例(选填)
+    case_stories: list[str] = Field(default_factory=list, max_length=60)         # 典型案例(选填)
     brand_values: str = Field("", max_length=1000)                               # 品牌价值观 / 服务理念
 
     # 五、补充素材与创作边界(原七)
