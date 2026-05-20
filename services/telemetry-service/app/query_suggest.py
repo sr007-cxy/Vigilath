@@ -123,14 +123,42 @@ def _tokenize(text: str) -> list[str]:
 # ─── LLM prompt 构造(GEO-aware / generic 两套)────────────
 
 
-def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], industry: str) -> str:
+def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], industry: str,
+                     service_geo: str = "") -> str:
     alias_part = "、".join(f"「{a}」" for a in aliases) if aliases else ""
     avoid = f"「{target}」" + (f"及其别名 {alias_part}" if alias_part else "")
     ind = f"(行业:{industry})" if industry else ""
+    geo_lock = ""
+    if service_geo.strip():
+        sg = service_geo.strip()
+        geo_lock = (
+            f"\n━━━ ⚠️ 地点硬约束(读这条优先于下方所有「地点维度允许扩展」的说法)━━━\n"
+            f"用户已经把服务地域明确锁定为「{sg}」。**所有 query 里的地点维度只允许出现以下取值**:\n"
+            f"  - 「{sg}」本身(及其下辖区/常见简称,例:北京 → 中关村 / 朝阳 / 海淀;上海 → 浦东 / 陆家嘴;"
+            f"广州 → 天河 / 珠江新城;深圳 → 南山 / 福田)\n"
+            f"  - 「全国」/「国内」/「跨地区」/「异地」/「外地」这种**不指明具体城市**的泛指词\n"
+            f"  - **不带地点的 query**(身份 / 处境 / 场景驱动,不出现地名)\n"
+            f"**严禁**出现「{sg}」以外的任何具体城市 / 省份 / 国家 / 海外地名:\n"
+            f"  ❌ 不要写 上海 / 深圳 / 杭州 / 香港 / 新加坡 / 纽约 / 伦敦 / 东京 / 苏黎世 / 迪拜 / 法兰克福 / "
+            f"悉尼 / 多伦多 / 首尔 / 哈尔滨 / 乌鲁木齐 / 成都 / 武汉 …… 之类任何非「{sg}」的地名\n"
+            f"  ❌ 不要写「跨境到 [国家]」「在 [城市] 做 X」凡是带「{sg}」以外的具体地名的句子\n"
+            f"违反这条约束的 query 一律作废,不要产出。\n"
+            f"\n"
+            f"配比建议:**带「{sg}」地名 ≈ 40-55% / 全国或不带地名 ≈ 45-60%**。"
+            f"不要 100% 都写「{sg}」 — 真实用户也会问不带城市限定的 query。\n"
+            f"\n"
+            f"参考好示例(seed 换成实际 seed):\n"
+            f"- 推荐一位 {sg} 做 [业务] 的 X\n"
+            f"- {sg} 哪家律所擅长 [业务]\n"
+            f"- 适合做 [业务] 的 X 推荐(不指明地点)\n"
+            f"- [身份] 第一次 [动作],该怎么找 X(不指明地点)\n"
+            f"- 跨地区做 [业务] 找 X,有靠谱推荐吗\n"
+        )
     return (
         f"你在帮品牌「{target}」{ind} 做 GEO / AEO 监测。"
         f"我们要测:**当真实用户拿这类问题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
         f"AI 会不会主动推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query,每行一条,纯中文。\n"
+        f"{geo_lock}"
         f"\n"
         f"━━━ 关于数量(读这条优先于一切)━━━\n"
         f"我要 {count} 条**不是硬指标**。如果你只能写出 25-30 条句式各异、每条出自不同人不同处境的真实 query,"
@@ -240,15 +268,29 @@ def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], ind
     )
 
 
-def _user_msg_en_geo(seed: str, count: int, target: str, aliases: list[str], industry: str) -> str:
+def _user_msg_en_geo(seed: str, count: int, target: str, aliases: list[str], industry: str,
+                     service_geo: str = "") -> str:
     alias_part = ", ".join(f'"{a}"' for a in aliases) if aliases else ""
     avoid = f'"{target}"' + (f" or its aliases {alias_part}" if alias_part else "")
     ind = f" (industry: {industry})" if industry else ""
+    geo_lock_en = ""
+    if service_geo.strip():
+        sg = service_geo.strip()
+        geo_lock_en = (
+            f"\n━━━ ⚠️ LOCATION HARD LOCK (overrides any later 'feel free to vary location' guidance) ━━━\n"
+            f"User has fixed the service region to **\"{sg}\"**. Every query's location dimension MUST be one of:\n"
+            f"  - \"{sg}\" itself (or its well-known sub-districts)\n"
+            f"  - generic non-specific phrases like \"nationwide\" / \"cross-region\" / \"remote\"\n"
+            f"  - queries with NO location at all (identity / situation driven)\n"
+            f"**DO NOT** mention any other specific city / country / overseas hub. "
+            f"Discard any query that does. Mix: ~40-55% mention \"{sg}\" by name, ~45-60% no specific location.\n"
+        )
     return (
         f"You are helping the brand \"{target}\"{ind} run a GEO / AEO audit. "
         f"What we measure: **when real users ask an AI assistant (ChatGPT / DeepSeek / "
         f"Perplexity / Claude / Gemini) about this kind of topic, will the AI naturally "
         f"recommend us?** Generate {count} candidate queries around the topic: '{seed}'.\n"
+        f"{geo_lock_en}"
         f"\n"
         f"━━━ Hard rules ━━━\n"
         f"1. **Never mention {avoid}** — naming us in the prompt is cheating; throw those out.\n"
@@ -311,11 +353,12 @@ def _user_msg_en_generic(seed: str, count: int) -> str:
     )
 
 
-def _user_msg(seed: str, count: int, target: str, aliases: list[str], industry: str) -> str:
+def _user_msg(seed: str, count: int, target: str, aliases: list[str], industry: str,
+              service_geo: str = "") -> str:
     cjk = _has_cjk(seed) or _has_cjk(target)
     if target.strip():
-        return _user_msg_zh_geo(seed, count, target, aliases, industry) if cjk \
-            else _user_msg_en_geo(seed, count, target, aliases, industry)
+        return _user_msg_zh_geo(seed, count, target, aliases, industry, service_geo) if cjk \
+            else _user_msg_en_geo(seed, count, target, aliases, industry, service_geo)
     return _user_msg_zh_generic(seed, count) if cjk else _user_msg_en_generic(seed, count)
 
 
@@ -343,7 +386,7 @@ class DeepSeekError(Exception):
 
 
 async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
-                    industry: str) -> list[str]:
+                    industry: str, service_geo: str = "") -> list[str]:
     """调 DeepSeek 拿候选;失败抛 DeepSeekError(LLM 是主力,这一路挂了整个 endpoint 应该 5xx)."""
     api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
     if not api_key:
@@ -353,7 +396,7 @@ async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
         "model": DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": _SYSTEM_MSG},
-            {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry)},
+            {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry, service_geo)},
         ],
         "temperature": 0.7,
         "max_tokens": min(8000, raw_count * 35),
@@ -763,6 +806,7 @@ def _score_candidate(text: str, seed_terms: list[str],
 async def suggest_queries(
     seed: str, count: int = 200, *,
     target: str = "", aliases: Optional[list[str]] = None, industry: str = "",
+    service_geo: str = "",
     include_autocomplete: bool = False,
     include_clusters: bool = True,
 ) -> tuple[list[dict], list[dict]]:
@@ -787,13 +831,14 @@ async def suggest_queries(
     target = (target or "").strip()
     aliases = [a.strip() for a in (aliases or []) if a and a.strip()]
     industry = (industry or "").strip()
+    service_geo = (service_geo or "").strip()
 
     # LLM 在 raw_count > ~100 时会进入「同句式 + 字典遍历」凑数模式,质量崩塌。
     # 硬上限到 100,模型质量在 80-100 条内可维持。dedup 后约 60-90 个候选。
     raw_count = min(100, int(count * 1.3)) if target else min(100, count)
 
     # 两路并行:LLM 必须成功(主力),autocomplete 失败吞掉
-    llm_task = _fetch_llm(seed, raw_count, target, aliases, industry)
+    llm_task = _fetch_llm(seed, raw_count, target, aliases, industry, service_geo)
     if include_autocomplete:
         results = await asyncio.gather(
             llm_task, _fetch_suggest(seed), return_exceptions=True,

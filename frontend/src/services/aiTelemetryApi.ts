@@ -533,6 +533,10 @@ export const aiTelemetryApi = {
     args: {
       seed: string; count: number;
       target?: string; aliases?: string[]; industry?: string;
+      // 2026-05-20 — 用户在 profile 里填的服务地域。
+      // 非空时 prompt 会把所有 query 的地点维度锁定在该地域(+ 全国 / 跨地区),
+      // 不再随机扩到其它城市/国家。
+      service_geo?: string;
     },
     token: string,
   ): Promise<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }> {
@@ -563,6 +567,7 @@ export const aiTelemetryApi = {
         target: args.target || '',
         aliases: args.aliases || [],
         industry: args.industry || '',
+        service_geo: args.service_geo || '',
       },
     );
   },

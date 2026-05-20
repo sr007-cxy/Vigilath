@@ -2245,6 +2245,8 @@ export function TopicEditor({
           target: target.trim(),
           aliases,
           industry: industry.trim(),
+          // 资料里的服务地域 — 让 LLM 把地点维度锁在用户实际经营区域
+          service_geo: (profile.service_geo || '').trim(),
         }, token);
         for (const q of res.queries) {
           if (seenText.has(q.text)) continue;

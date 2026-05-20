@@ -1102,6 +1102,7 @@ async def suggest_queries(
 
     target = (payload.get("target") or "").strip()
     industry = (payload.get("industry") or "").strip()
+    service_geo = (payload.get("service_geo") or "").strip()[:200]
     aliases_in = payload.get("aliases") or []
     if not isinstance(aliases_in, list):
         aliases_in = []
@@ -1110,6 +1111,7 @@ async def suggest_queries(
     body = {
         "seed": seed, "count": count,
         "target": target, "aliases": aliases, "industry": industry,
+        "service_geo": service_geo,
     }
     url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
     try:
@@ -1159,8 +1161,16 @@ async def expand_queries_for_topic(
         aliases = json.loads(t.target_aliases_json or "[]")
     except Exception:  # noqa: BLE001
         aliases = []
+    # 从 topic profile 自动注入服务地域 — 用户在资料里填了"北京"就锁北京,
+    # LLM 不再随机扩到其它城市/国家。
+    try:
+        profile_obj = json.loads(t.profile_json or "{}")
+        service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
+    except Exception:  # noqa: BLE001
+        service_geo = ""
     body = {"seed": seed, "count": count, "target": target,
-            "aliases": aliases, "industry": industry}
+            "aliases": aliases, "industry": industry,
+            "service_geo": service_geo}
     url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
     try:
         async with httpx.AsyncClient(timeout=200.0) as client:

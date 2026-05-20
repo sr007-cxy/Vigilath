@@ -186,6 +186,9 @@ class SuggestQueriesBody(BaseModel):
     target: str = Field("", max_length=200)
     aliases: list[str] = Field(default_factory=list, max_length=20)
     industry: str = Field("", max_length=100)
+    # 2026-05-20 — 服务地域(资料里的 service_geo)。非空时 prompt 强制把所有 query 的
+    # 地点维度锁在该地域 + 全国 / 跨地区,LLM 不再随机扩其它城市/国家。
+    service_geo: str = Field("", max_length=200)
 
 
 @app.post("/suggest-queries")
@@ -199,6 +202,7 @@ async def http_suggest_queries(body: SuggestQueriesBody):
         candidates, clusters = await suggest_queries(
             body.seed, body.count,
             target=body.target, aliases=body.aliases, industry=body.industry,
+            service_geo=body.service_geo,
         )
     except DeepSeekError as e:
         status = 400 if e.code in ("invalid_seed", "no_key") else 502
