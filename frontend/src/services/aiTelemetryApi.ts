@@ -407,14 +407,34 @@ export interface PositionBreakdown {
   source_pct: number;
 }
 
+export interface EngineSlice {
+  engine: string;
+  breakdown: PositionBreakdown;
+  total_queries: number;
+}
+
+export interface GroupBreakdown {
+  scope: 'seed' | 'query';
+  total_queries: number;
+  total_engines: number;
+  total_cells: number;
+  breakdown: PositionBreakdown;
+  by_engine: EngineSlice[];
+}
+
 export interface PositionBreakdownResp {
   topic_id: number;
   period_days: number;
   industry: string;
+  // 兼容字段:与 query_group 同值,RadarBlock 仍读这里
   total_cells: number;
   total_queries: number;
   breakdown: PositionBreakdown;
   industry_baseline: PositionBreakdown | null;
+  // 新增:种子组 / 全 query 组 / engine 枚举
+  seed_group: GroupBreakdown | null;
+  query_group: GroupBreakdown | null;
+  engines: string[];
 }
 
 export interface IndustryBenchmark {

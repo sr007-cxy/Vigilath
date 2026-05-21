@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import (
@@ -1086,14 +1086,36 @@ class PositionBreakdown(BaseModel):
     source_pct: float = 0.0     # 至少一个 cell hit=True 的 query 数 / N × 100
 
 
+class EngineSlice(BaseModel):
+    """某 engine 在某 group 下的单引擎切片(分母 = group 内 query 数 × 1)。"""
+    engine: str
+    breakdown: PositionBreakdown
+    total_queries: int
+
+
+class GroupBreakdown(BaseModel):
+    """一组 query(种子组 或 全 query 组)的指标汇总 + 各 engine 切片。"""
+    scope: Literal["seed", "query"]
+    total_queries: int                       # seed: len(seed_prompts);query: N
+    total_engines: int                       # M
+    total_cells: int                         # = total_queries × total_engines
+    breakdown: PositionBreakdown             # 该组全 engine 汇总
+    by_engine: list[EngineSlice] = Field(default_factory=list)
+
+
 class PositionBreakdownOut(BaseModel):
     topic_id: int
     period_days: int
     industry: str
+    # 兼容字段 — 与 query_group 同值,RadarBlock 等老消费者继续读这里
     total_cells: int
     total_queries: int
     breakdown: PositionBreakdown
     industry_baseline: Optional[PositionBreakdown] = None   # 样本不足时 NULL,前端不渲染
+    # 新增:种子组 / 全 query 组 / engine 枚举
+    seed_group: Optional[GroupBreakdown] = None             # seed_prompts_json 为空时 NULL
+    query_group: Optional[GroupBreakdown] = None            # 兼容期可空,新前端必读
+    engines: list[str] = Field(default_factory=list)        # topic.engines_json 顺序
 
 
 class IndustryBenchmarkOut(BaseModel):

@@ -32,7 +32,8 @@ from geo.models.ai_telemetry import (
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
     FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
     OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist,
-    PositionBreakdown, PositionBreakdownOut, IndustryBenchmarkOut,
+    PositionBreakdown, PositionBreakdownOut, GroupBreakdown, EngineSlice,
+    IndustryBenchmarkOut,
     CompetitorSubstitutionItem, CompetitorSubstitutionOut,
     ProfileExtractOut, ProfileExtractPayload, QueryHitCell,
     ResponseOut, RunNowCitation,
@@ -2025,6 +2026,9 @@ def get_share_of_voice(
 
 def _aggregate_position_breakdown(
     rows: list[AiTelemetryResponseORM], total_queries: int, total_engines: int,
+    *,
+    allowed_queries: Optional[set[str]] = None,
+    allowed_engines: Optional[set[str]] = None,
 ) -> PositionBreakdown:
     """口径:cell × lifetime 维度。分母 = 监测问题数 × 模型数(N×M);
     分子 = 全生命周期内、cell 满足条件的格子数。同一 cell 多次跑批只算 1,
@@ -2035,12 +2039,19 @@ def _aggregate_position_breakdown(
     - top3_pct    = COUNT(cell with MIN(brand_rank)≤3)     / (N×M)
     - top5_pct    = COUNT(cell with MIN(brand_rank)≤5)     / (N×M)
     - source_pct  = COUNT(DISTINCT query with any cell hit) / N
+
+    可选 allowed_queries / allowed_engines 用于种子组 / 单 engine 切片:
+    传 None 表示该维度不过滤;传 set 表示只统计 r.query / r.engine 在 set 内的 rows。
     """
     # (query, engine) → {hit: bool, min_rank: int|None}
     cells: dict[tuple[str, str], dict] = {}
     queries_with_hit: set[str] = set()
     for r in rows:
         if r.error:
+            continue
+        if allowed_queries is not None and r.query not in allowed_queries:
+            continue
+        if allowed_engines is not None and r.engine not in allowed_engines:
             continue
         key = (r.query, r.engine)
         c = cells.setdefault(key, {"hit": False, "min_rank": None})
@@ -2103,9 +2114,69 @@ def get_position_breakdown(
         engines_raw = json.loads(topic.engines_json or "[]")
     except Exception:  # noqa: BLE001
         engines_raw = []
-    total_engines = sum(1 for e in engines_raw if isinstance(e, str) and e.strip())
+    engines_list = [e.strip() for e in engines_raw if isinstance(e, str) and e.strip()]
+    total_engines = len(engines_list)
 
-    breakdown = _aggregate_position_breakdown(rows, total_queries, total_engines)
+    # 种子组 query 集合 — 来自 topic.seed_prompts_json,只要 text 非空即纳入
+    try:
+        seed_prompts_raw = json.loads(topic.seed_prompts_json or "[]")
+    except Exception:  # noqa: BLE001
+        seed_prompts_raw = []
+    seed_texts: set[str] = set()
+    for p in seed_prompts_raw:
+        if isinstance(p, dict):
+            t = (p.get("text") or "").strip()
+        elif isinstance(p, str):
+            t = p.strip()
+        else:
+            t = ""
+        if t:
+            seed_texts.add(t)
+    seed_total = len(seed_texts)
+
+    # —— Query 组(全部 query,= 旧行为)——
+    query_overall = _aggregate_position_breakdown(rows, total_queries, total_engines)
+    query_by_engine: list[EngineSlice] = []
+    for eng in engines_list:
+        eng_breakdown = _aggregate_position_breakdown(
+            rows, total_queries, 1, allowed_engines={eng},
+        )
+        query_by_engine.append(EngineSlice(
+            engine=eng, breakdown=eng_breakdown, total_queries=total_queries,
+        ))
+    query_group = GroupBreakdown(
+        scope="query",
+        total_queries=total_queries,
+        total_engines=total_engines,
+        total_cells=total_queries * total_engines,
+        breakdown=query_overall,
+        by_engine=query_by_engine,
+    )
+
+    # —— 种子组(可空)——
+    seed_group: Optional[GroupBreakdown] = None
+    if seed_total > 0 and total_engines > 0:
+        seed_overall = _aggregate_position_breakdown(
+            rows, seed_total, total_engines, allowed_queries=seed_texts,
+        )
+        seed_by_engine: list[EngineSlice] = []
+        for eng in engines_list:
+            eng_breakdown = _aggregate_position_breakdown(
+                rows, seed_total, 1,
+                allowed_queries=seed_texts, allowed_engines={eng},
+            )
+            seed_by_engine.append(EngineSlice(
+                engine=eng, breakdown=eng_breakdown, total_queries=seed_total,
+            ))
+        seed_group = GroupBreakdown(
+            scope="seed",
+            total_queries=seed_total,
+            total_engines=total_engines,
+            total_cells=seed_total * total_engines,
+            breakdown=seed_overall,
+            by_engine=seed_by_engine,
+        )
+
     industry = (topic.industry or "").strip()
     industry_baseline = _compute_industry_baseline(db, industry) if industry else None
 
@@ -2115,8 +2186,11 @@ def get_position_breakdown(
         industry=industry,
         total_cells=total_queries * total_engines,
         total_queries=total_queries,
-        breakdown=breakdown,
+        breakdown=query_overall,
         industry_baseline=industry_baseline,
+        seed_group=seed_group,
+        query_group=query_group,
+        engines=engines_list,
     )
 
 

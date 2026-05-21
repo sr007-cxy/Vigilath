@@ -46,6 +46,16 @@ interface Dict {
   metricVisible: string;
   metricSource: string;
   industryLabel: string;
+  // 核心指标 — 种子组 vs 全 query 组 (2026-05-21)
+  metricsSeedTitle: string;
+  metricsQueryTitle: string;
+  metricsSeedHint: string;
+  metricsQueryHint: string;
+  seedPromptsEmpty: string;
+  // 模型多选器 (2026-05-21)
+  engineSelector: string;
+  engineSelectAll: string;
+  engineSelectionSummary: (n: number, total: number) => string;
   // 信源分析
   sourcesTitle: string;
   sourcesOwnedVsThirdParty: string;
@@ -237,6 +247,15 @@ const ZH: Dict = {
   metricVisible: '可见占比',
   metricSource: '被引用占比',
   industryLabel: '行业 P50',
+  metricsSeedTitle: '种子提示词',
+  metricsQueryTitle: '全部 Query',
+  metricsSeedHint: '只统计您配置的种子提示词,分母 = 种子词数 × 引擎数',
+  metricsQueryHint: '全部扩展后的监测问题,分母 = 问题数 × 引擎数(N×M)',
+  seedPromptsEmpty: '未配置种子提示词,无法计算种子组指标',
+  engineSelector: '模型',
+  engineSelectAll: '全选',
+  engineSelectionSummary: (n: number, total: number) =>
+    n === 0 || n === total ? `全部(${total})` : `已选 ${n}/${total}`,
   sourcesTitle: '信源分析',
   sourcesOwnedVsThirdParty: '自有 vs 第三方',
   sourcesTopComposition: 'Top 域名构成',
@@ -423,6 +442,15 @@ const EN: Dict = {
   metricVisible: 'Visibility',
   metricSource: 'Sourced rate',
   industryLabel: 'Industry P50',
+  metricsSeedTitle: 'Seed prompts',
+  metricsQueryTitle: 'All queries',
+  metricsSeedHint: 'Only the seed prompts you configured. Denominator = seed × engines',
+  metricsQueryHint: 'All expanded tracked queries. Denominator = N (queries) × M (engines)',
+  seedPromptsEmpty: 'No seed prompts configured — seed-group metrics unavailable',
+  engineSelector: 'Models',
+  engineSelectAll: 'Select all',
+  engineSelectionSummary: (n: number, total: number) =>
+    n === 0 || n === total ? `All (${total})` : `${n}/${total} selected`,
   sourcesTitle: 'Sources',
   sourcesOwnedVsThirdParty: 'Owned vs Third-party',
   sourcesTopComposition: 'Top domains composition',

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
-  aiTelemetryApi, type Overview, type PositionBreakdownResp,
+  aiTelemetryApi, type Overview, type PositionBreakdown, type PositionBreakdownResp,
+  type GroupBreakdown,
   type Briefing, type Topic, type TrackingMatrix,
 } from '../../services/aiTelemetryApi';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
-import { useBgLang } from './lang';
+import { useBgLang, engineLabel } from './lang';
 import { InfoHint } from './charts';
 
 export function BrandGrowth() {
@@ -43,7 +44,7 @@ function Body({ state }: { state: ShellState }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RadarBlock pb={pb} />
         <EntryCardGrid overview={overview} pb={pb} />
-        <CoreMetricsPanel pb={pb} />
+        <CoreMetricsPanel pb={pb} selectedEngines={state.selectedEngines} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <BriefingsBlock briefings={briefings} topic={topic} />
@@ -342,57 +343,175 @@ interface MetricCard {
   tint: { bg: string; fg: string };
 }
 
-function CoreMetricsPanel({ pb }: { pb: PositionBreakdownResp | null }) {
-  const navigate = useNavigate();
+const METRIC_CARDS: MetricCard[] = [
+  { key: 'top1_pct', label: '', layer: 'top1', icon: 'medal',
+    tint: { bg: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.22))', fg: '#10b981' } },
+  { key: 'visible_pct', label: '', layer: 'visible', icon: 'eye',
+    tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(244,63,94,0.22))', fg: '#e11d48' } },
+  { key: 'top5_pct', label: '', layer: 'top5', icon: 'star',
+    tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.12), rgba(20,184,166,0.22))', fg: '#0d9488' } },
+  { key: 'source_pct', label: '', layer: 'source', icon: 'link',
+    tint: { bg: 'linear-gradient(135deg, rgba(244,114,182,0.12), rgba(244,114,182,0.22))', fg: '#db2777' } },
+];
+
+function CoreMetricsPanel({ pb, selectedEngines }: {
+  pb: PositionBreakdownResp | null;
+  selectedEngines: string[];
+}) {
   const L = useBgLang();
   if (!pb) {
     return <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
-  const baseline = pb.industry_baseline;
-  const metrics: MetricCard[] = [
-    { key: 'top1_pct', label: L.metricTop1, layer: 'top1', icon: 'medal',
-      tint: { bg: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.22))', fg: '#10b981' } },
-    { key: 'visible_pct', label: L.metricVisible, layer: 'visible', icon: 'eye',
-      tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(244,63,94,0.22))', fg: '#e11d48' } },
-    { key: 'top5_pct', label: L.metricTop5, layer: 'top5', icon: 'star',
-      tint: { bg: 'linear-gradient(135deg, rgba(20,184,166,0.12), rgba(20,184,166,0.22))', fg: '#0d9488' } },
-    { key: 'source_pct', label: L.metricSource, layer: 'source', icon: 'link',
-      tint: { bg: 'linear-gradient(135deg, rgba(244,114,182,0.12), rgba(244,114,182,0.22))', fg: '#db2777' } },
-  ];
   return (
     <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}>
-      <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
-        {metrics.map(m => {
-          const v = pb.breakdown[m.key];
-          const bv = baseline ? baseline[m.key] : null;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${m.layer}`)}
-              className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex flex-col gap-2 h-full"
-              style={{ background: m.tint.bg, border: '1px solid var(--border-color)' }}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.6)', color: m.tint.fg }}
-                >
-                  <MetricIcon kind={m.icon} />
-                </span>
-                <span className="text-xs font-medium" style={{ color: m.tint.fg }}>{m.label}</span>
-              </div>
-              <div className="text-2xl font-bold tabular-nums mt-auto" style={{ color: m.tint.fg }}>
-                {v.toFixed(2)}%
-              </div>
-              <div className="text-[10px] text-muted">
-                {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
-              </div>
-            </button>
-          );
-        })}
+      <div className="flex flex-col gap-4 flex-1">
+        <MetricsSection
+          title={L.metricsSeedTitle} hint={L.metricsSeedHint}
+          group={pb.seed_group}
+          industryBaseline={null}
+          showBaselineRow={false}
+          selectedEngines={selectedEngines}
+          emptyText={L.seedPromptsEmpty}
+          topicId={pb.topic_id}
+        />
+        <MetricsSection
+          title={L.metricsQueryTitle} hint={L.metricsQueryHint}
+          group={pb.query_group ?? {
+            scope: 'query',
+            total_queries: pb.total_queries,
+            total_engines: pb.engines?.length ?? 0,
+            total_cells: pb.total_cells,
+            breakdown: pb.breakdown,
+            by_engine: [],
+          }}
+          industryBaseline={pb.industry_baseline}
+          showBaselineRow
+          selectedEngines={selectedEngines}
+          topicId={pb.topic_id}
+        />
       </div>
     </CardShell>
+  );
+}
+
+function MetricsSection({
+  title, hint, group, industryBaseline, showBaselineRow,
+  selectedEngines, emptyText, topicId,
+}: {
+  title: string;
+  hint: string;
+  group: GroupBreakdown | null;
+  industryBaseline: PositionBreakdown | null;
+  showBaselineRow: boolean;
+  selectedEngines: string[];
+  emptyText?: string;
+  topicId: number;
+}) {
+  const navigate = useNavigate();
+  const L = useBgLang();
+  const allEngines = group?.by_engine.map(s => s.engine) ?? [];
+  const effective = selectedEngines.length > 0
+    ? (group?.by_engine ?? []).filter(s => selectedEngines.includes(s.engine))
+    : (group?.by_engine ?? []);
+  // 全选/汇总不画 mini-bar(没有"对比"语义);选了 1 个或多个引擎才画
+  const showMiniBar =
+    selectedEngines.length > 0 &&
+    selectedEngines.length < allEngines.length &&
+    effective.length > 0;
+
+  const labelOf = (key: MetricCard['key']) => {
+    if (key === 'top1_pct') return L.metricTop1;
+    if (key === 'visible_pct') return L.metricVisible;
+    if (key === 'top5_pct') return L.metricTop5;
+    return L.metricSource;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-xs font-semibold text-primary">{title}</span>
+        <InfoHint text={hint} />
+        {group && (
+          <span className="text-[10px] text-muted ml-auto tabular-nums">
+            N={group.total_queries} · M={group.total_engines}
+          </span>
+        )}
+      </div>
+      {!group ? (
+        <div className="text-xs text-muted py-4 text-center rounded"
+          style={{ background: 'var(--bg-input)', border: '1px dashed var(--border-color)' }}>
+          {emptyText || L.sourcesNoData}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {METRIC_CARDS.map(m => {
+            const v = group.breakdown[m.key];
+            const bv = industryBaseline ? industryBaseline[m.key] : null;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => navigate(`/brand-growth/matrix?topic=${topicId}&layer=${m.layer}`)}
+                className="p-3 rounded-lg text-left hover:scale-[1.02] transition flex flex-col gap-2"
+                style={{ background: m.tint.bg, border: '1px solid var(--border-color)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.6)', color: m.tint.fg }}
+                  >
+                    <MetricIcon kind={m.icon} />
+                  </span>
+                  <span className="text-xs font-medium" style={{ color: m.tint.fg }}>{labelOf(m.key)}</span>
+                </div>
+                <div className="text-2xl font-bold tabular-nums" style={{ color: m.tint.fg }}>
+                  {v.toFixed(2)}%
+                </div>
+                {showBaselineRow && (
+                  <div className="text-[10px] text-muted">
+                    {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
+                  </div>
+                )}
+                {showMiniBar && (
+                  <EngineMiniBar slices={effective} metricKey={m.key} fg={m.tint.fg} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EngineMiniBar({ slices, metricKey, fg }: {
+  slices: { engine: string; breakdown: PositionBreakdown }[];
+  metricKey: MetricCard['key'];
+  fg: string;
+}) {
+  const max = Math.max(1, ...slices.map(s => s.breakdown[metricKey]));
+  return (
+    <div className="flex flex-col gap-0.5 mt-1">
+      {slices.map(s => {
+        const v = s.breakdown[metricKey];
+        return (
+          <div key={s.engine} className="flex items-center gap-1.5" title={`${engineLabel(s.engine)}: ${v.toFixed(2)}%`}>
+            <span className="text-[9px] w-14 truncate" style={{ color: fg, opacity: 0.85 }}>
+              {engineLabel(s.engine)}
+            </span>
+            <div className="flex-1 h-1.5 rounded overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
+              <div style={{
+                width: `${(v / max) * 100}%`, height: '100%',
+                background: fg, opacity: 0.7,
+              }} />
+            </div>
+            <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: fg, opacity: 0.85 }}>
+              {v.toFixed(1)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

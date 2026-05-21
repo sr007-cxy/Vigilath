@@ -1,8 +1,8 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, type Topic } from '../../services/aiTelemetryApi';
-import { useBgLang } from './lang';
+import { useBgLang, engineLabel } from './lang';
 
 export type PeriodDays = 7 | 30 | 90;
 
@@ -14,6 +14,9 @@ export interface ShellState {
   setTopicId: (id: number) => void;
   period: PeriodDays;
   setPeriod: (p: PeriodDays) => void;
+  // 模型多选(2026-05-21):空数组 = 全选/汇总语义
+  selectedEngines: string[];
+  setSelectedEngines: (es: string[]) => void;
   loading: boolean;
 }
 
@@ -28,6 +31,16 @@ export function useShellState(): ShellState {
   const period = ([7, 30, 90].includes(urlPeriod) ? urlPeriod : 30) as PeriodDays;
   const topicId = urlTopic > 0 ? urlTopic : (topics[0]?.id ?? null);
   const topic = topics.find(t => t.id === topicId) || null;
+
+  // engines 参数:逗号分隔,空 / 缺省 = 全选语义
+  const urlEnginesRaw = searchParams.get('engines') || '';
+  const urlEngines = urlEnginesRaw
+    .split(',').map(s => s.trim()).filter(Boolean);
+  // 与 topic.engines 取交集兜底 — 切 topic 时上一份选择可能不再适用
+  const topicEngines = topic?.engines ?? [];
+  const selectedEngines = topicEngines.length === 0
+    ? urlEngines
+    : urlEngines.filter(e => topicEngines.includes(e as Topic['engines'][number]));
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -47,8 +60,17 @@ export function useShellState(): ShellState {
     next.set('period', String(p));
     setSearchParams(next, { replace: true });
   };
+  const setSelectedEngines = (es: string[]) => {
+    const next = new URLSearchParams(searchParams);
+    if (es.length === 0) next.delete('engines');
+    else next.set('engines', es.join(','));
+    setSearchParams(next, { replace: true });
+  };
 
-  return { token, topics, topic, topicId, setTopicId, setPeriod, period, loading };
+  return {
+    token, topics, topic, topicId, setTopicId, setPeriod, period,
+    selectedEngines, setSelectedEngines, loading,
+  };
 }
 
 export function BrandGrowthHeader({
@@ -120,6 +142,7 @@ export function BrandGrowthHeader({
         </div>
         <div className="flex items-center gap-3">
           <TopicPicker state={state} />
+          <EngineMultiSelect state={state} />
           <PeriodChips state={state} />
         </div>
       </div>
@@ -146,6 +169,87 @@ function TopicPicker({ state }: { state: ShellState }) {
         ))}
       </select>
     </label>
+  );
+}
+
+function EngineMultiSelect({ state }: { state: ShellState }) {
+  const L = useBgLang();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const topicEngines = state.topic?.engines ?? [];
+  const total = topicEngines.length;
+  // selectedEngines = [] 视作"全选/汇总"
+  const effectiveCount = state.selectedEngines.length === 0 ? total : state.selectedEngines.length;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  if (total === 0) return null;
+
+  const toggle = (eng: string) => {
+    // 进入"显式选择"模式 — 从全选切到部分选
+    const cur = state.selectedEngines.length === 0 ? [...topicEngines] : state.selectedEngines;
+    const next = cur.includes(eng) ? cur.filter(e => e !== eng) : [...cur, eng];
+    // 全勾上 = 等价全选,序列化成空(URL 干净)
+    state.setSelectedEngines(next.length === total ? [] : next);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="px-2.5 py-1 text-xs rounded flex items-center gap-1.5"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+      >
+        <span className="text-secondary">{L.engineSelector}</span>
+        <span className="tabular-nums">{L.engineSelectionSummary(effectiveCount, total)}</span>
+        <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 mt-1 min-w-[180px] rounded shadow-lg z-50"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+        >
+          <div className="py-1">
+            {topicEngines.map(eng => {
+              const checked = state.selectedEngines.length === 0 || state.selectedEngines.includes(eng);
+              return (
+                <label
+                  key={eng}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:opacity-80"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(eng)}
+                  />
+                  <span>{engineLabel(eng)}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <button
+              type="button"
+              onClick={() => state.setSelectedEngines([])}
+              className="w-full px-3 py-1.5 text-xs text-secondary hover:opacity-80"
+            >
+              {L.engineSelectAll}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
