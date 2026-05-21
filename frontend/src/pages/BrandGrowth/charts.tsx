@@ -176,6 +176,7 @@ export function InfoHint({ text }: { text: string }) {
           border: '1px solid var(--border-color)',
           color: 'var(--text-secondary)',
           pointerEvents: 'none',
+          whiteSpace: 'pre-line',
         }}
       >
         {text}
