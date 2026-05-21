@@ -74,12 +74,12 @@ BrandGrowth React 页面        ← 渲染
 
 后端 `GET /topics/{id}/overview` → `OverviewOut`,前端 `index.tsx:55`。
 
-| 指标 | label | 字段 | 公式 | 取值含义 |
-|---|---|---|---|---|
-| 推荐总词数 | 「Total Citations」 | `overview.citations.value` | `SUM(len(citations_json))` 跨所有周期内 response | AI 引擎在所有问题里给出的引用 URL 总数(含错误响应也算 0)|
-| 权威媒体推荐数 | 「Authoritative Citations」 | `overview.owned_split.owned` | 单条 citation 的 `domain.lower()` 命中 `brand_keywords.lower()` 任一(`k in d`) | 自家域名 / 含品牌字串的 domain 被引次数 |
-| 第三方引用总数 | 「Third-party Citations」 | `overview.owned_split.other` | `total_citations - owned`(后端直接相减,不重新走过滤) | 除自家外的所有 citation |
-| Δ% 变化 | 红/绿小箭头 | `*.delta_pct` | `(curr - prev) / prev × 100`;`prev=0` 时为 `None`(不渲染) | 与上一窗口(`period_start - period`)同周期对比 |
+| 指标 | 分子 / 分母 或定义 | 作用 |
+|---|---|---|
+| 推荐总词数 | 本期内所有 AI 答复里出现过的引用链接累计条数;同一答复里同一链接出现多次按多次计 | 衡量 AI 在回答这个 topic 的问题时给出了多少次「引用」,数越大说明 AI 在生成答案时更依赖外部资料 |
+| 权威媒体推荐数 | 推荐总词数里,域名带品牌关键词(主词 + 别名,大小写不敏感子串)的条数 | 自家 / 含品牌字样的域名被引次数;数越高说明 AI 在写答案时越倾向引用品牌自家内容 |
+| 第三方引用总数 | 推荐总词数 − 权威媒体推荐数 | 引用落在非自家域名的次数,反映品牌在外部生态(媒体 / 行业站点 / UGC)的曝光面 |
+| Δ% 变化 | (本期数 − 上一同长度窗口数)÷ 上一同长度窗口数 × 100;上一窗口为 0 时不显示 | 与上一同长窗口的环比变化,绿涨红跌,判断短期走势 |
 
 **点击跳转**:推荐总词数 → `/responses`,权威 → `/sources?filter=owned`,第三方 → `/sources?filter=third_party`。
 
@@ -89,22 +89,23 @@ BrandGrowth React 页面        ← 渲染
 
 ### 1.2 雷达 5 维 — `RadarBlock`
 
-后端 `GET /topics/{id}/position-breakdown` → `PositionBreakdownOut`,聚合函数 `_aggregate_position_breakdown()`(`ai_telemetry.py:1813`)。**全部基于成功 response(`error IS NULL`)聚合,记为 `total_ok`**。
+后端 `GET /topics/{id}/position-breakdown`。**全部基于"本期成功答复"聚合**(本期 = 顶栏 period 切窗;"成功"= 跑批没报错的答复)。下面把这个集合的总条数简称为「本期成功答复总条数」。
 
-| 维度 | 字段 | 公式 | 业务含义 |
-|---|---|---|---|
-| Top1 占比 | `top1_pct` | `COUNT(brand_rank == 1) / total_ok × 100` | 答复里品牌**第一个**被提及的占比 |
-| Top3 占比 | `top3_pct` | `COUNT(brand_rank ≤ 3) / total_ok × 100` | 答复里品牌进前 3 的占比 |
-| Top5 占比 | `top5_pct` | `COUNT(brand_rank ≤ 5) / total_ok × 100` | 答复里品牌进前 5 的占比 |
-| 可见占比 | `visible_pct` | `COUNT(hit == True) / total_ok × 100` | 不管排第几,只要答复里提到就算 |
-| 被引用占比 | `source_pct` | `COUNT(DISTINCT query WHERE 任意 hit) / total_queries × 100` | **维度从 response 切到 query**:有多少监测问题至少被命中过一次 |
+| 维度 | 分子 / 分母 | 作用 |
+|---|---|---|
+| Top1 占比 | **分子**:本期成功答复里、品牌被排在第一位的条数;**分母**:本期成功答复总条数 × 100 | AI 把品牌放在第一位提的概率,数高 = AI 把品牌当作该领域首推 |
+| Top3 占比 | **分子**:本期成功答复里、品牌进前三位的条数;**分母**:本期成功答复总条数 × 100 | 品牌进入"主推梯队"的概率;低 = 容易被前几名挤出去 |
+| Top5 占比 | **分子**:本期成功答复里、品牌进前五位的条数;**分母**:本期成功答复总条数 × 100 | 品牌至少进入"主流候选名单"的概率;长期低说明 AI 默认根本不考虑你 |
+| 可见占比 | **分子**:本期成功答复里、至少提到一次品牌的条数;**分母**:本期成功答复总条数 × 100 | 不管排第几只要被提到就算,是"答复维度"的命中率;数高 = 品牌的"声量基础盘"健康 |
+| 被引用占比 | **分子**:至少在任一引擎被命中过一次的监测问题数;**分母**:topic 配置的总监测问题数 × 100 | 配置的 N 个问题里,有多少问题"曾经在 AI 答复中刷到过品牌";衡量监测网的覆盖率,而非命中率。**与外链引用 URL 无关**,名字易误读 |
 
-**`total_queries` 计算**(用于 source_pct 分母):
-```
-解析 topic.queries_json,对每项:
-  - str 且非空 → +1
-  - dict 且 text 非空 → +1
-```
+**「监测问题总数」怎么数**:topic 的监测问题列表里,每项只要文本非空就 +1。
+
+**粒度差异(易混点)**:
+- 可见占比是**答复维度**的比例:30 天每个问题跑 30 次答复(假设 1 个引擎),配 10 个问题就有 300 条答复;只要这 300 条里有 80 条提到品牌,可见占比就是 26.7%。
+- 被引用占比是**问题维度**的覆盖:同一 30 天,只要这 10 个问题里有 3 个问题"在 300 条答复里曾经被命中过一次以上",被引用占比就是 30%。
+
+所以同一窗口里**可见占比和被引用占比谁高谁低都可能**,两者口径不同,不该按"应该相等"理解。读图时:可见占比代表"在被回答时被提到的频率",被引用占比代表"问题列表的覆盖广度"。
 
 **行业基准多边形**(`industry_baseline`):
 - 取**同 `industry` 字段**的所有 topic
@@ -160,11 +161,11 @@ BrandGrowth React 页面        ← 渲染
 
 ### 2.1 顶部 3 stat tile
 
-| 指标 | 取值 | 含义 |
+| 指标 | 分子 / 分母 或定义 | 作用 |
 |---|---|---|
-| 总引用 | `overview.citations.value` | 同主页指标(§1.1) |
-| 唯一域名数 | `overview.top_domains.length` | **注意是 ≤ 10**(后端排序后取 Top 10)— 真实唯一 domain 可能更多,但前端只能拿到 Top 10 这个口径 |
-| 自有占比 | `overview.owned_split.owned_pct` | `owned / total_citations × 100`,1 位小数;`total=0` 时 `0.0` |
+| 总引用 | 同 §1.1「推荐总词数」:本期内所有 AI 答复里出现过的引用链接累计条数 | 衡量 AI 引用了多少次外部资料,数高 = AI 在写答案时更依赖外部资料,品牌做 PR / SEO 内容的回报面更大 |
+| 唯一域名数 | 本期出现过的不同引用域名个数;**页面上是 ≤ 10**(后端排序后只返回 Top 10),实际可能更多但页面只能拿到前 10 | 看 AI 主要从多少个 domain 取内容;数低 = 信源高度集中(常见于行业新生 / 信源垄断) |
+| 自有占比 | **分子**:引用域名带品牌关键词(子串匹配)的条数;**分母**:本期总引用条数 × 100;两数都为 0 时显示 0.0% | AI 答案的引用里有多少落在自家 / 含品牌字样的域名上;数高 = AI 写答案时高度引用自家内容,owned media 经营效果好 |
 
 ### 2.2 自有 vs 第三方 donut
 
@@ -209,20 +210,11 @@ GET /topics/{id}/responses?domain=<d>&period=&limit=
 
 `Engines.tsx`,数据复用 `overview` 接口,前端二次切片。
 
-| 指标 | 计算 | 含义 |
+| 指标 | 分子 / 分母 或定义 | 作用 |
 |---|---|---|
-| 引擎覆盖 | `engines_covered.value / engines_total` | 本期跑出 ≥1 成功 response 的引擎 / topic 配置的总引擎数 |
-| 各引擎引用次数(条形图) | 把 `trend[]` 横切到 engine 维度:`engine_total[e] = SUM_d(bucket[d][e])` | 各日各引擎的 citation 数累加 |
-| 引擎 × 域名热力图 | `engine_domain_matrix[engine][domain]` | 仅保留全局 Top 10 domain;颜色深浅按 cell count 归一化 |
-
-**`engine_domain_matrix` 构造**(`_domain_stats`,`ai_telemetry.py:1319`):
-```
-对每条 response(error IS NULL):
-  对其 citations_json 里每条 citation:
-    domain = c.domain.lower().strip(),非空才计
-    engine_domain[response.engine][domain] += 1
-最后只保留 domain ∈ Top 10 的列
-```
+| 引擎覆盖 | **分子**:本期至少跑出过一条成功答复的引擎数;**分母**:topic 配置的引擎总数 | 看监测渠道是否全部"在跑";某引擎跑批卡死 / 凭证过期会立刻反映为分子降低 |
+| 各引擎引用次数(条形图) | 单引擎在本期内所有答复里的引用链接条数累加(同链接出现多次按多次计)| 看哪个 AI 平台帮品牌"造引用"最多,资源投入可以按这个排优先级 |
+| 引擎 × 域名热力图 | 对每对 (引擎, 域名):本期内该引擎所有答复里、引用到该域名的次数。**只显示全局 Top 10 域名作为列**,颜色按格内次数归一化 | 看每个引擎"偏爱引用哪些域名";同一域名在 A 引擎热、在 B 引擎冷,说明做内容时要分平台对症下药 |
 
 > 热力图深色 = 该引擎严重依赖该 domain;浅色 = 引用过但不多;空白 = 0 次。
 
@@ -236,51 +228,47 @@ GET /topics/{id}/responses?domain=<d>&period=&limit=
 
 ### 4.1 SAIV 卡(声量份额)
 
-| 指标 | 字段 | 公式 |
+| 指标 | 分子 / 分母 或定义 | 作用 |
 |---|---|---|
-| 品牌提及次数 | `brand_count` | `COUNT(Response WHERE hit=True AND error IS NULL)` 近 period |
-| 竞品提及次数总和 | `competitors_count_total` | `SUM_{r}(SUM_{c ∈ r.competitors_json}(c.count))` 跨所有期内 response |
-| **SAIV %** | `saiv_pct` | `brand_count / (brand_count + competitors_count_total) × 100`,1 位小数 |
-| donut 主体 | 两片 | 「本品(target)」 vs 「竞品总和」 |
+| 品牌提及次数 | 本期内成功答复里至少提到一次品牌的条数(同一答复多次提品牌仍按 1 算) | 品牌侧的"声量基数" |
+| 竞品提及次数总和 | 本期内所有成功答复里、LLM 抽出的每个竞品的提及次数全部累加(同一答复里同一竞品被提多次按多次计;LLM 没抽出竞品的答复贡献 0)| 竞品侧的"声量基数" |
+| **SAIV %** | **分子**:品牌提及次数;**分母**:品牌提及次数 + 竞品提及次数总和;× 100,1 位小数 | 在所有"提到品牌或任一竞品"的语料里,品牌占了多少声量。数低 = 同样的问题 AI 更愿意提竞品而不是你;**这是品牌增长最核心的攻防指标** |
+| donut 主体 | 两片:本品 vs 竞品总和 | 视觉化 SAIV;饼图本品片小 = 需要打 4.3 节的"被替代证据" |
 
-注意:
-- 一条 response 内**多次提到竞品**走 `competitors_json[i].count` 累加,所以同 response 既能贡献 brand_count(=1)也能贡献多次竞品 count
-- LLM 抽出失败 / `competitors_json IS NULL` 不计
+注意口径不对称:品牌侧是「条数」(同答复多次提品牌仍算 1),竞品侧是「次数累加」(同答复同竞品多次按多次)。所以一条同时提到品牌 1 次 + 3 个竞品各 2 次的答复,会贡献 brand=1 / competitor=6。这种不对称使 SAIV 比单纯条数对比更"惩罚"竞品在同一答复内反复出现的场景。
 
 ### 4.2 竞品排行 Top 10 + 命中位置分布
 
-**Top 10 横条**:`competitors[]` 按 `count` 降序前 10,每条 `{name, count, pct = count / total × 100}`(total = brand + 所有竞品)。下方 chip 行可单选 → 4.3 表筛选。
+**Top 10 横条**:竞品名按本期累计提及次数降序前 10,每条显示 `名称 · 次数 · 占比`(占比 = 该竞品次数 / (品牌次数 + 全部竞品次数) × 100)。下方 chip 行可单选 → 4.3 表筛选。**作用**:看本期哪些竞品在 AI 答复里最活跃,做 PR / SEO 的反攻对象。
 
-**命中位置分布**(`position_dist`):仅 hit=True 的 response,按 `mention_position` group by:
+**命中位置分布**:只看本期内"成功且提到了品牌"的答复(hit=True),把每条按"品牌在答复里的段落位置"归到 4 类:
 
-| 字段 | 含义 | 业务解读 |
+| 段落位置 | 定义 | 作用 |
 |---|---|---|
-| `lead` | 答复**首段**就提到品牌 | 强曝光;LLM 首推 |
-| `body` | 中段提到 | 中等曝光 |
-| `tail` | 末段才提 | 弱曝光;可能只在「另外」「也可以考虑」里 |
-| `unknown` | 无法定位段落(后处理失败) | 数据缺失 |
+| 首段(lead) | 品牌出现在答复第一段 | **强曝光,AI 把品牌当首推**;数高 = 品牌已经是 AI 的默认答案 |
+| 中段(body) | 品牌出现在中间段落 | 中等曝光,品牌作为答案的一部分被列出但不是首选 |
+| 末段(tail) | 品牌出现在最后一段 | **弱曝光**,常见于「另外」「也可以考虑」之类的尾段补充;命中但实际转化价值低 |
+| 未知(unknown) | LLM 后处理无法定位段落 | 数据缺失;占比高时说明后处理 prompt 需要 tune |
 
-mini-bar 按比例填色:`lead=绿 / body=蓝 / tail=橙 / unknown=灰`。
+mini-bar 按比例填色:首段绿 / 中段蓝 / 末段橙 / 未知灰。**读法**:首段占比高且 SAIV 也高 = 品牌在 AI 心目中是绝对主推;末段占比高 = 表面命中率好看但实际曝光质量差,要在 4.3 看具体是哪些 query 把品牌压到末段。
 
-### 4.3 被替代证据(`competitor-substitutions`)
+### 4.3 被替代证据
 
-**口径**:「**提了竞品但没提我**」的 query 列表。
-```
-近 period 天 + hit=False(没命中本品) + error IS NULL + competitors_json IS NOT NULL
-按 (query, competitor.name) 聚合 count,保留第一条 answer 的 snippet 作为证据
-按 competitor_count 降序排,默认 limit 50
-```
+**口径**:本期内 + 该 query 没提到品牌 + 但 LLM 抽出至少一个竞品的答复;按 (query, 竞品名) 聚合次数,保留第一条 answer 的截段作为证据。默认按"竞品被提及次数"降序,前 50 条。
 
-每行:`query · 竞品 · 次数 · 证据 snippet · 看矩阵 →`(跳 `/matrix?q=<query>` 看该 query 的所有引擎答复)。
+**作用**:这些 query 是「竞品已经赢了你」的具体战场。每行 = 一个具体的反攻目标 — 知道是哪些用户问题、哪些竞品在抢话语权、AI 在那些问题里给出了什么样的答案。做投放 / 内容 / SEO 时优先打这些 query,效果可以直接通过下次跑批的「该 query 是否还出现在替代证据里」验证。
 
-**(可选)单竞品过滤**:在 4.2 点 chip 触发,前端 `subs.items.filter(i => i.competitor_name === selectedComp)`,**不是再调一次接口**。
+每行显示:`query · 竞品 · 次数 · 证据截段 · 看矩阵 →`(跳 `/matrix?q=<query>` 看该 query 在各引擎答复全貌)。
 
-### 4.4 优选率 `optimal_rate_pct`(隐藏字段,目前页面没直接展示)
+**(可选)单竞品过滤**:在 4.2 点 chip 触发,前端在本地过滤,不再调接口。
 
-```
-optimal_rate_pct = SUM(QueryHit.total_hits) / SUM(QueryHit.total_runs) × 100
-```
-**注意**:这个走 `AiTelemetryQueryHitORM` 的全生命周期累加,**不切 period**。和 `visible_pct` 长得像但口径不同 — 前者是 cell 累计,后者是 period 切片 per-response。
+### 4.4 优选率(隐藏字段,目前页面没直接展示)
+
+| 指标 | 分子 / 分母 | 作用 |
+|---|---|---|
+| 优选率 | **分子**:每个 (问题 × 引擎) 单元格的全生命周期累计命中次数总和;**分母**:同样口径的累计跑批总次数;× 100 | 跨整个 topic 生命周期的整体命中率,粒度细到 (问题 × 引擎) 格 |
+
+**与可见占比的区别**:优选率不切 period,是从 topic 创建起的累计;可见占比只看本期(顶栏 period)。所以新建的 topic 上线一周后看,可见占比可能 50% 但优选率因为前期跑批拉低还在 20%。**读法**:要看长期趋势用优选率,要看本期表现用可见占比。
 
 ---
 
@@ -317,12 +305,11 @@ cell_rows = AiTelemetryQueryHitORM WHERE topic_id=<id>(全生命周期)
 
 ### 5.3 命中率 KPI
 
-```
-total_cells = len(queries) × len(engines)
-hit_cells   = COUNT(cell WHERE total_hits >= 1)
-hit_pct     = hit_cells / total_cells × 100
-```
-显示在矩阵右上:「命中率 X.X% · hit_cells / total_cells」。
+| 指标 | 分子 / 分母 | 作用 |
+|---|---|---|
+| 命中率 | **分子**:全生命周期累计命中过至少一次的 (问题 × 引擎) 格子数;**分母**:监测问题数 × 引擎数(矩阵全部格子数);× 100 | 监测网整体覆盖率;数低 = 还有大片格子从来没刷到过品牌,要么是问题选得不准,要么是品牌在该引擎下根本没机会 |
+
+显示在矩阵右上:`命中率 X.X% · 已命中格数 / 全格数`。**读法**:命中率 < 30% 通常意味着 query 列表里有 1/3+ 问题跟品牌业务关系弱,可以回 admin 工作台调整 query 集合;命中率 > 80% 而 SAIV 仍偏低,说明问题"沾边但没主推",该看 §4.2 的位置分布去把末段命中升级成首段。
 
 ### 5.4 首次命中时间线(`timeline`)
 
@@ -378,42 +365,57 @@ GET /topics/{id}/responses?query=<q>&engine=<e>&limit=20
 
 ### 7.1 问题列表表
 
-前端在矩阵 cells 上按 query 维度 reduce:
+前端按 query 维度聚合矩阵数据,表头 sticky,可按种子 / 模型两个下拉筛选。
 
-| 列 | 计算 |
+| 列 | 含义 / 作用 |
 |---|---|
-| 问题 | `cell.query` |
-| 命中率 | `total_hits / total_runs`(0 时记 0)|
-| 跑批数 | `SUM(cell.total_runs WHERE cell.query == q)` 跨所有 engine |
-| 命中数 | `SUM(cell.total_hits WHERE cell.query == q)` 跨所有 engine |
-| 首次命中引擎 | 该 query 下 `first_hit_at` 最小的 cell.engine;无则「尚未命中」 |
-| 操作 | 「查矩阵 →」跳 `/matrix?q=<q>` |
+| 序号 | 在筛选后结果里的 1-based 序号(随筛选变)|
+| 种子提示词 | 该 query 在 admin 工作台是从哪条「种子提示词」扩展出来的;无种子(老 topic / 手动输入)显示「—」灰字 |
+| 扩展提示词 | 实际跑批用的 query 全文 |
+| 命中 | **二元状态(命中过 / 没命中过)**:全生命周期累计、只要该 query 在任一引擎被命中过 ≥1 次就亮绿色 ✓;0 命中显示「—」。**不是命中率** — 跑 30 次仅命中 1 次也亮 ✓。这一列对应主页雷达的「被引用占比」分子(配置的问题里有多少被刷到过);**不是「可见占比」**(后者是答复维度的比例)|
+| 模型 | 该 query 下所有"命中过"的引擎,按各引擎首次命中时间升序展开,每个引擎一枚绿色徽章。从未命中过显示「尚未命中」灰字。(2026-05-21 起:之前只显示首个命中引擎,现在显示**全部**命中过的引擎,方便看哪些 AI 平台已经覆盖、哪些还没覆盖)|
+| 查看 | 命中过 ≥1 次才显示「查看」按钮;点开弹窗看每个命中引擎的答复全文 + 引用列表 |
+
+**筛选条**(`Queries.tsx:103-125`):
+- 种子下拉:`queryRows` 里出现过的非空 seed 去重,空选项 = 全部
+- 模型下拉:`matrix.engines`(topic 配置的引擎全集);选定后用 `r.hitEngines.includes(modelFilter)` 过滤,只要该 query 有任一 engine 命中匹配就保留
+- 右侧 `filtered / total` 计数
+
+### 7.1.5 命中详情弹窗(`QueryDetailModal`)
+
+点表里「查看」触发。调 `GET /topics/{id}/responses?query=<q>&period=90&limit=50`(**period 硬编码 90,不跟随页面 period**,避免窗口外漏样本)。
+
+弹窗内对结果再做一道「**只显命中**」过滤(`Queries.tsx:237 hitEngines`):
+```
+逐 engine 取 hit=True 且 created_at 最新的一条 response,未命中的 engine 完全不进结果集
+```
+每个命中 engine 渲染一张 `EngineAnswerCard`:engine 名 + ✓Top<n> 徽章 + 时间 + 答案正文(品牌关键词黄色高亮)+ citations 列表。
 
 ### 7.2 问题主题分布(`intent-breakdown`)
 
-按 picker 端(`admin workbench`)聚出的 `cluster_id` 把本期 response 分组(`ai_telemetry.py:1401`)。
+在 admin 工作台,挑选 query 时会把语义相近的问题聚成一组(称为「主题簇」,例如「价格类」「对比类」),前端按簇分组展示。
 
-**簇定义**:`topic.clusters_json = [{cluster_id, label}]`,query 上的 `cluster_id` 来自 `queries_json[i].cluster_id`。
+每个簇:
 
-每簇返回 `ClusterBreakdownItem`:
+| 指标 | 分子 / 分母 或定义 | 作用 |
+|---|---|---|
+| 簇标签 | 例如「价格类」「对比类」,在 admin 工作台聚类后填写 | 用人类可读的标签把问题分到几大主题 |
+| 簇问题数 | 该簇里的监测问题数(topic 维度,不切 period) | 看哪一类问题被设了多少;数过低 = 该主题监测不充分 |
+| 簇答复数 | 本期内该簇所有问题在所有引擎跑出的成功答复总条数 | 该簇的"声量基数",太小说明该主题没怎么跑批 |
+| 簇命中数 | 上面簇答复数里、品牌被提到的条数 | 该簇里 AI 实际提到品牌的次数 |
+| **簇命中率** | **分子**:簇命中数;**分母**:簇答复数;0 时 0.0,保留 3 位小数 | 该主题簇的命中率;数低 = 品牌在哪类问题上曝光弱,可以针对性补内容 |
+| 簇引用数 | 该簇所有答复里引用链接累计条数 | 该主题簇被 AI 引用了多少次外部链接 |
 
-| 字段 | 含义 |
-|---|---|
-| `cluster_id` / `label` | 簇 id 和人类可读标签(例如「价格类」「对比类」)|
-| `query_count` | 该簇里的 query 数(topic 维度,不切 period)|
-| `response_count` | 本期成功 response 数(query × engine,`error IS NULL`)|
-| `mention_count` | response 里 `hit=True` 的数量 |
-| `mention_rate` | `mention_count / response_count`(0 时 0.0,3 位小数) |
-| `citation_count` | 该簇 response 的 `citations_json` 累加 |
+**簇颜色档位**(看一眼就知道哪类问题弱):
+- 簇命中率 ≥ 50% → 蓝(健康)
+- 25%–50% → 橙(普通)
+- < 25% → 红(弱)
 
-**簇颜色档位**(前端):
-- `mention_rate >= 0.5` → 蓝(健康)
-- `0.25 ≤ rate < 0.5` → 橙(普通)
-- `< 0.25` → 红(弱)
+**作用**:把"具体哪个 query 没命中"上升到"哪一类问题没命中"。红色簇里通常藏着待补的内容方向(比如对比类全红 = 没有对比稿)、价格类全红 = 没有定价内容)。
 
-**uncategorized 兜底桶**:
-- 老话题 `queries_json` 没 `cluster_id` 字段 → 全部累到这里(`cid = -1`)
-- `clusters_json` 里没列出但 response 里出现过的 cluster_id → 也合并到这里
+**未分类兜底桶**:
+- 老 topic 的问题列表没填簇 ID → 全部累到这里
+- 簇定义里没列出但答复里出现过的 ID → 也合并到这里
 
 ---
 
@@ -557,7 +559,7 @@ GET /topics/{id}/responses?query=<q>&engine=<e>&limit=20
 | Hint key | 挂载位置 | zh 文案 |
 |---|---|---|
 | `hintQueries` | 顶部摘要行 | 所有监测问题的累计命中状况,只读 — 编辑 / 新增问题在 admin 工作台 |
-| `hintQueriesTable` | 表头「命中率」列旁 | 每行 = 1 个监测问题。命中率 = total_hits / total_runs(全生命周期累计,不切 period)。点查矩阵看该 query 在各引擎的明细 |
+| `hintQueriesTable` | 表头「命中」列旁(2026-05-21 起;原挂在已移除的「命中率」列)| 每行 = 1 个监测问题。✓ 是二元状态(命中过 / 没命中过),只要任一引擎累计 `total_hits ≥ 1` 就亮,不看命中率;对应主页雷达「被引用占比」的 query 层判定,**不是「可见占比」**(后者是 response 维度的比例)。模型列展开所有命中过的引擎 |
 | `hintIntentBreakdown` | 「问题主题分布」块标题 | 把语义相近的问题聚成一组(如"价格类"、"对比类"),看哪类问题品牌曝光最弱。条颜色:≥50% 蓝 / 25-50% 橙 / <25% 红 |
 
 ### 原始引用(`/responses`)

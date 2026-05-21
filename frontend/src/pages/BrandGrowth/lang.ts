@@ -382,7 +382,7 @@ const ZH: Dict = {
   hintInsights: '左侧周报列表,点新生成手动触发上一自然周的周报;每条选中后右侧展示正文 + 建议',
   hintInsightsView: '周报正文(LLM 生成 markdown) + 优先级标记的建议行动列表。下方可对周报质量打分 1-5',
   hintQueries: '所有监测问题的累计命中状况,只读 — 编辑 / 新增问题在 admin 工作台',
-  hintQueriesTable: '每行 = 1 个监测问题。命中率 = total_hits / total_runs(全生命周期累计,不切 period)。点查矩阵看该 query 在各引擎的明细',
+  hintQueriesTable: '每行 = 1 个监测问题。✓ 是二元状态(命中过 / 没命中过),只要任一引擎累计 total_hits ≥ 1 就亮,不看命中率;对应主页雷达「被引用占比」的 query 层判定,**不是「可见占比」**(后者是 response 维度的比例)。模型列展开所有命中过的引擎',
   hintResponses: '原始 AI 答复流。chip 含命中状态(Top<n> / 未命中)、段落位置(开头 / 中段 / 末尾)、引用清单条数。展开看全文 + 引用列表',
 };
 
@@ -568,7 +568,7 @@ const EN: Dict = {
   hintInsights: 'Briefings on the left; click Generate to manually trigger for the last natural week. Selecting one shows body + recommendations on the right',
   hintInsightsView: 'LLM-generated markdown body + prioritized action items. You can rate the briefing 1-5 below',
   hintQueries: 'All tracked queries with cumulative hit status (read-only). Add / edit queries in admin workbench',
-  hintQueriesTable: 'One row per query. Hit rate = total_hits / total_runs (lifetime, not period-sliced). Click "See matrix" for engine-level detail',
+  hintQueriesTable: 'One row per query. ✓ is a binary state (ever-hit vs never-hit) — lights up as long as any engine has total_hits ≥ 1, regardless of hit rate. Maps to the radar\'s "Source share" (query-level coverage), **not** "Visible share" (which is a response-level ratio). The Model column lists every engine that has hit it',
   hintResponses: 'Raw AI answer stream. Chips show hit state (Top<n> / miss), mention position (lead / body / tail), citation count. Expand to view full text + citation list',
 };
 
