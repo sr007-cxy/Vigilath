@@ -3,8 +3,9 @@
 GEO backend 通过 HTTP 调本服务,本服务再调 yuqin 的 4 个核心函数.
 
 设计要点:
-- 多租户隔离:每个 account_id 一个独立 SQLite(data/{account_id}/yuqing.db).
-  这样不必改 yuqin schema,简单可靠.
+- 多租户隔离:每个 account_id 对应一个 PG schema(`tenant_{N}`),通过
+  `SET search_path` 路由,storage 包的 contextvar `current_account` 在请求
+  入口绑定.原历史方案是每账户一个独立 SQLite 文件(2026-05-21 切到 PG).
 - API key 注入:client 在 header 里传 X-OpenAI-Key,本服务设到 env 后透传.
 - 异常包成 dict 返回,不抛给 client(yuqin 内部用 sys.exit 的地方在主入口拦截).
 
@@ -21,7 +22,6 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,49 +32,29 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-# ── 数据目录隔离 ────────────────────────────────────────────────
+# ── 数据目录(副产物落盘:briefs / knowledge / 等)──────────────
+# 主数据(posts / analyses / briefs / drafts / query_runs)已迁到 PG schema,
+# 这个目录只保留落盘类副产物.
 DATA_DIR = Path(os.environ.get("SENTINEL_DATA_DIR", str(ROOT / "data"))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-_current_account: ContextVar[Optional[int]] = ContextVar("current_account", default=None)
-
 
 def _account_db_path(account_id: int) -> Path:
-    """每个 account 一个独立 SQLite 文件,简单可靠地多租户隔离."""
+    """历史名:返回 `account_{N}/yuqing.db` 路径,**主库已切 PG**,这里只是
+    给老 caller 借用 `.parent` 拿账户的落盘子目录(briefs / knowledge 等).
+    """
     p = DATA_DIR / f"account_{account_id}" / "yuqing.db"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
 
-# 给 yuqin 的 storage.connect 打补丁:让它读上下文变量自动选 db 路径.
-#
-# 注意 import 顺序的陷阱:
-# - `import storage.db` 会先 trigger `storage/__init__.py` 加载,而 __init__.py
-#   有 `from .db import connect` —— 这是按值拷贝函数引用,不是 alias.
-# - 所以仅改 `storage.db.connect` 不够,`storage.connect` 仍指向原始函数.
-# - 下面所有子模块 (search.pipeline / analyzer.pipeline / brief.generate /
-#   response.draft) 都用 `from storage import connect`,加载时拿到的是
-#   `storage.connect` 的快照.必须**在它们 import 之前**把 storage.connect
-#   也替换掉,否则数据会全部写到默认 DEFAULT_DB_PATH 而非 account_id 子目录.
-import storage as _yuqin_pkg     # type: ignore  # noqa: E402
-import storage.db as _yuqin_db   # type: ignore  # noqa: E402
+# 多租户 contextvar(由 storage 包统一定义,service.py 只 set/reset)
+# 这取代了历史的 6 层 monkey-patch:storage 包级 wrapper 在每次 connect()
+# 调用时动态读 contextvar,所以子模块 `from storage import connect` 拷贝
+# 函数引用的快照问题不再存在.
+from storage import current_account              # type: ignore  # noqa: E402
 
-_orig_connect = _yuqin_db.connect
-
-
-def _patched_connect(db_path=None):
-    if db_path is None:
-        aid = _current_account.get()
-        if aid is not None:
-            db_path = _account_db_path(aid)
-    return _orig_connect(db_path) if db_path else _orig_connect()
-
-
-_yuqin_db.connect = _patched_connect
-_yuqin_pkg.connect = _patched_connect   # KEY: 包级别也替换,否则下面 from storage
-                                        # import connect 会拿到原始引用
-
-# import yuqin 的入口函数(此时 storage 包级别 + 模块级 connect 都已经被打补丁)
+# yuqin 业务入口
 from search import (                              # type: ignore  # noqa: E402
     generate_monitoring_plan, run_plan,
 )
@@ -98,35 +78,7 @@ from crawler.eastmoney_industry import EastmoneyIndustryClient          # type: 
 from crawler.sina_stock_news import SinaStockNewsClient                  # type: ignore  # noqa: E402
 from crawler.weixin_album import WeixinAlbumClient                       # type: ignore  # noqa: E402
 from crawler.newsnow_hub import NewsnowHubClient                         # type: ignore  # noqa: E402
-from storage import init_schema, upsert_post      # type: ignore  # noqa: E402
-
-# Patch 兜底 — 之前发现 search.pipeline / analyzer.pipeline / brief.generate /
-# response.draft 在 import 时通过 `from storage import connect` 各自拷贝了一份
-# 引用,即便 storage 包级别 + storage.db 模块级都已 patch,这些副本仍指向原始
-# connect → 数据全写到 DEFAULT_DB_PATH(顶层 yuqing.db)而不是 account_*/.
-# 显式把每个子模块的 connect 引用都覆盖成 _patched_connect.
-import search.pipeline as _yuqin_search_pipeline   # type: ignore  # noqa: E402
-import analyzer.pipeline as _yuqin_analyzer_pipeline  # type: ignore  # noqa: E402
-import brief.generate as _yuqin_brief              # type: ignore  # noqa: E402
-import response.draft as _yuqin_response_draft     # type: ignore  # noqa: E402
-for _m in (_yuqin_search_pipeline, _yuqin_analyzer_pipeline,
-           _yuqin_brief, _yuqin_response_draft):
-    if getattr(_m, "connect", None) is _orig_connect:
-        _m.connect = _patched_connect
-
-# Sanity log: 让启动日志立刻能验证 patch 状态(避免下次再排错半小时)
-def _patch_status(m) -> str:
-    return "PATCHED" if getattr(m, "connect", None) is _patched_connect else "ORIG"
-
-print(
-    f"[patch] storage.db={_patch_status(_yuqin_db)} "
-    f"storage={_patch_status(_yuqin_pkg)} "
-    f"search.pipeline={_patch_status(_yuqin_search_pipeline)} "
-    f"analyzer.pipeline={_patch_status(_yuqin_analyzer_pipeline)} "
-    f"brief.generate={_patch_status(_yuqin_brief)} "
-    f"response.draft={_patch_status(_yuqin_response_draft)}",
-    flush=True,
-)
+from storage import connect as _yuqin_connect, init_schema, upsert_post  # type: ignore  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("sentinel")
@@ -148,7 +100,7 @@ async def _account_context(account_id: int, api_key: Optional[str]):
     sentinel-service 进程自己 env 的 OPENAI_API_KEY,让 llm_client 走
     OpenAI → Qwen fallback 链.
     """
-    token = _current_account.set(account_id)
+    token = current_account.set(account_id)
     prev_key = os.environ.get("OPENAI_API_KEY")
     overrode = False
     if _is_plausible_openai_key(api_key):
@@ -162,7 +114,7 @@ async def _account_context(account_id: int, api_key: Optional[str]):
     try:
         yield
     finally:
-        _current_account.reset(token)
+        current_account.reset(token)
         if overrode:
             if prev_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
@@ -431,7 +383,7 @@ async def run_crawl_eastmoney(req: CrawlEastmoneyRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = EastmoneyGubaClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for page in range(1, req.pages + 1):
@@ -451,7 +403,7 @@ async def run_crawl_xueqiu(req: CrawlXueqiuRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = XueqiuClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.fetch_pages(req.symbol, pages=req.pages, count=req.count):
@@ -469,7 +421,7 @@ async def run_crawl_sina(req: CrawlSinaRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = SinaFinanceClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.search_pages(req.keyword, pages=req.pages):
@@ -487,7 +439,7 @@ async def run_crawl_eastmoney_news(req: CrawlEastmoneyNewsRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = EastmoneyNewsClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.search_pages(req.keyword, pages=req.pages):
@@ -505,7 +457,7 @@ async def run_crawl_tieba(req: CrawlTiebaRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = BaiduTiebaClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.search_pages(req.keyword, pages=req.pages):
@@ -523,7 +475,7 @@ async def run_crawl_cls(req: CrawlClsRequest) -> dict:
     async with _account_context(req.account_id, None):
         def _do():
             client = ClsFinanceClient()
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.fetch_telegraph(keyword=req.keyword, count=100):
@@ -545,7 +497,7 @@ def _generic_crawl_endpoint(client_cls, source_name: str):
         async with _account_context(req.account_id, None):
             def _do():
                 client = client_cls()
-                conn = _patched_connect()
+                conn = _yuqin_connect()
                 init_schema(conn)
                 total = inserted = 0
                 for rec in client.search_pages(req.keyword, pages=req.pages):
@@ -581,7 +533,7 @@ async def run_crawl_weixin_album(req: CrawlWeixinAlbumRequest) -> dict:
             if not req.album_urls:
                 return {"total": 0, "inserted": 0, "skipped": "no album_urls configured"}
             client = WeixinAlbumClient(hydrate_body=req.hydrate_body)
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.fetch_albums(
@@ -604,7 +556,7 @@ async def run_crawl_newsnow(req: CrawlNewsnowRequest) -> dict:
             if not req.source_ids:
                 return {"total": 0, "inserted": 0, "skipped": "no source_ids configured"}
             client = NewsnowHubClient(base_url=req.base_url)
-            conn = _patched_connect()
+            conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
             for rec in client.fetch_sources(
@@ -710,7 +662,7 @@ def list_posts(account_id: int, ticker: str, limit: int = 50,
     """
     from storage import analyses_for_symbol, analyses_count_for_symbol  # type: ignore
     with _account_db_context(account_id):
-        conn = _patched_connect()
+        conn = _yuqin_connect()
         init_schema(conn)
         total = analyses_count_for_symbol(conn, ticker, days=days, start=start, end=end)
         rows = analyses_for_symbol(
@@ -730,7 +682,7 @@ def list_posts(account_id: int, ticker: str, limit: int = 50,
 def list_briefs(account_id: int, ticker: str) -> dict:
     """返回该 account 的所有简报(metadata only,body 由 /briefs/{id} 取)."""
     with _account_db_context(account_id):
-        conn = _patched_connect()
+        conn = _yuqin_connect()
         init_schema(conn)
         rows = list(conn.execute(
             "SELECT id, symbol, date, model, generated_at FROM briefs "
@@ -742,7 +694,7 @@ def list_briefs(account_id: int, ticker: str) -> dict:
 @app.get("/accounts/{account_id}/briefs/{brief_id}")
 def get_brief(account_id: int, brief_id: int) -> dict:
     with _account_db_context(account_id):
-        conn = _patched_connect()
+        conn = _yuqin_connect()
         row = conn.execute("SELECT * FROM briefs WHERE id = ?", (brief_id,)).fetchone()
         if not row:
             raise HTTPException(404, "brief not found")
@@ -752,7 +704,7 @@ def get_brief(account_id: int, brief_id: int) -> dict:
 @app.get("/accounts/{account_id}/drafts")
 def list_drafts(account_id: int, ticker: str) -> dict:
     with _account_db_context(account_id):
-        conn = _patched_connect()
+        conn = _yuqin_connect()
         init_schema(conn)
         rows = list(conn.execute(
             "SELECT * FROM drafts WHERE symbol = ? ORDER BY id DESC", (ticker,),
@@ -770,7 +722,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
     from datetime import date, datetime, timedelta
 
     with _account_db_context(account_id):
-        conn = _patched_connect()
+        conn = _yuqin_connect()
         init_schema(conn)
 
         today = date.today().isoformat()
@@ -911,11 +863,11 @@ from contextlib import contextmanager
 
 @contextmanager
 def _account_db_context(account_id: int):
-    token = _current_account.set(account_id)
+    token = current_account.set(account_id)
     try:
         yield
     finally:
-        _current_account.reset(token)
+        current_account.reset(token)
 
 
 def _summarize_plan(plan: dict) -> dict:
@@ -929,7 +881,7 @@ def _summarize_plan(plan: dict) -> dict:
 
 
 def _row_to_dict(r) -> dict:
-    """sqlite3.Row → dict,JSON 字段反序列化."""
+    """row(psycopg dict_row 已经是 dict)→ dict,JSON 字段反序列化."""
     d = dict(r)
     for k in ("emotions_json", "topics_json", "entities_json", "risk_signals_json", "citations_json"):
         if k in d and d[k]:

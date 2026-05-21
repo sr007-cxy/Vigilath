@@ -1,132 +1,170 @@
-"""SQLite storage for posts, LLM analyses, AI briefs and response drafts."""
+"""PostgreSQL storage for posts, LLM analyses, AI briefs and response drafts.
+
+多租户落地:每个 account_id 一个独立 PG schema `tenant_{N}`,
+通过 `SET search_path` 让原有未限定的 `SELECT * FROM posts` 自动路由到当前
+租户的表上(对调用方零侵入).
+
+历史背景:这个模块原来是裸 sqlite3,每账户一个 .db 文件.切 PG 时:
+- driver psycopg3,row_factory=dict_row 让 `row["col"]` 语法不变
+- `?` → `%s`
+- `INSERT OR REPLACE` → `INSERT … ON CONFLICT (...) DO UPDATE SET …`
+- `lastrowid` → `RETURNING id` + `fetchone()["id"]`
+- `json_extract(col, '$[0]')` → `(col::jsonb)->>0`(空串/NULL 用 CASE 兜底)
+- `AUTOINCREMENT` → `BIGSERIAL`
+"""
+from __future__ import annotations
+
 import json
-import sqlite3
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "yuqing.db"
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS posts (
-    source        TEXT NOT NULL,
-    post_id       TEXT NOT NULL,
-    symbol        TEXT,
-    author        TEXT,
-    title         TEXT,
-    content       TEXT,
-    publish_time  TEXT,
-    view_count    INTEGER,
-    reply_count   INTEGER,
-    like_count    INTEGER,
-    share_count   INTEGER,
-    url           TEXT,
-    ingested_at   TEXT NOT NULL,
-    PRIMARY KEY (source, post_id)
-);
-CREATE INDEX IF NOT EXISTS idx_posts_symbol ON posts(symbol);
-CREATE INDEX IF NOT EXISTS idx_posts_pubtime ON posts(publish_time);
-
-CREATE TABLE IF NOT EXISTS analyses (
-    source              TEXT NOT NULL,
-    post_id             TEXT NOT NULL,
-    symbol              TEXT,
-    is_relevant         INTEGER NOT NULL,
-    filter_reason       TEXT,
-    summary             TEXT,
-    sentiment_label     TEXT,
-    sentiment_score     REAL,
-    emotions_json       TEXT,
-    topics_json         TEXT,
-    entities_json       TEXT,
-    stance              TEXT,
-    intent              TEXT,
-    factuality          TEXT,
-    risk_level          TEXT,
-    risk_signals_json   TEXT,
-    influence_potential REAL,
-    hidden_meaning      TEXT,
-    citations_json      TEXT,
-    reasoning           TEXT,
-    model               TEXT NOT NULL,
-    analyzed_at         TEXT NOT NULL,
-    PRIMARY KEY (source, post_id)
-);
-CREATE INDEX IF NOT EXISTS idx_analyses_symbol ON analyses(symbol);
-CREATE INDEX IF NOT EXISTS idx_analyses_risk ON analyses(risk_level);
-CREATE INDEX IF NOT EXISTS idx_analyses_sentiment ON analyses(sentiment_label);
-
-CREATE TABLE IF NOT EXISTS briefs (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol        TEXT NOT NULL,
-    date          TEXT NOT NULL,
-    body          TEXT NOT NULL,
-    model         TEXT NOT NULL,
-    generated_at  TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_briefs_symbol_date ON briefs(symbol, date);
-
-CREATE TABLE IF NOT EXISTS drafts (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol            TEXT NOT NULL,
-    source            TEXT,
-    post_id           TEXT,
-    topic             TEXT,
-    variant           TEXT NOT NULL,
-    body              TEXT NOT NULL,
-    rationale         TEXT,
-    predicted_effect  TEXT,
-    cautions          TEXT,
-    model             TEXT NOT NULL,
-    generated_at      TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_drafts_symbol ON drafts(symbol);
-
-CREATE TABLE IF NOT EXISTS query_runs (
-    symbol        TEXT NOT NULL,
-    query         TEXT NOT NULL,
-    last_run_at   TEXT NOT NULL,
-    PRIMARY KEY (symbol, query)
-);
-"""
+import psycopg
+from psycopg.rows import dict_row
 
 
-def connect(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """SQLite 连接,启 WAL + 30s busy timeout.
+# DATABASE_URL 来自 systemd EnvironmentFile / .env;import 阶段不连库,
+# 真正缺值在 connect() 抛,避免 pytest collect 阶段炸.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-    背景:monitor 阶段事务很长(几十个 query × upsert_post + upsert_query_last_run
-    都在同一个 conn 上,直到外层 commit),期间若 analyze / scheduler / 另一个
-    手动 run-now 重叠,默认配置会立即抛 "database is locked".
 
-    修复(SQLite 并发标配):
-    - timeout=30:sqlite3.connect 自带的 busy timeout — 撞锁时等最多 30s 而不是
-      立刻抛.
-    - PRAGMA journal_mode=WAL:写者不阻塞读者,前端轮询 /today /posts 不会被
-      monitor 长事务卡住.WAL 是 db 级持久属性,设一次后续所有连接都受用.
-    - PRAGMA synchronous=NORMAL:WAL 下可以放宽到 NORMAL(默认 FULL 太保守),
-      显著降低 fsync 频率,提升写吞吐;crash 风险 = 最近一次 checkpoint 之前的
-      事务可能丢,对舆情数据可接受.
+# 历史 alias:storage/__init__.py 旧版 re-export 此名;新版不再用,保留空值避免
+# 上游 from storage import DEFAULT_DB_PATH 立即炸.可在 cleanup 后删.
+DEFAULT_DB_PATH: Path | None = None
+
+
+SCHEMA_STATEMENTS = (
     """
-    db_path = Path(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA synchronous = NORMAL")
-    conn.execute("PRAGMA busy_timeout = 30000")
+    CREATE TABLE IF NOT EXISTS posts (
+        source        TEXT NOT NULL,
+        post_id       TEXT NOT NULL,
+        symbol        TEXT,
+        author        TEXT,
+        title         TEXT,
+        content       TEXT,
+        publish_time  TEXT,
+        view_count    INTEGER,
+        reply_count   INTEGER,
+        like_count    INTEGER,
+        share_count   INTEGER,
+        url           TEXT,
+        ingested_at   TEXT NOT NULL,
+        PRIMARY KEY (source, post_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_posts_symbol ON posts(symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_posts_pubtime ON posts(publish_time)",
+    """
+    CREATE TABLE IF NOT EXISTS analyses (
+        source              TEXT NOT NULL,
+        post_id             TEXT NOT NULL,
+        symbol              TEXT,
+        is_relevant         INTEGER NOT NULL,
+        filter_reason       TEXT,
+        summary             TEXT,
+        sentiment_label     TEXT,
+        sentiment_score     DOUBLE PRECISION,
+        emotions_json       TEXT,
+        topics_json         TEXT,
+        entities_json       TEXT,
+        stance              TEXT,
+        intent              TEXT,
+        factuality          TEXT,
+        risk_level          TEXT,
+        risk_signals_json   TEXT,
+        influence_potential DOUBLE PRECISION,
+        hidden_meaning      TEXT,
+        citations_json      TEXT,
+        reasoning           TEXT,
+        model               TEXT NOT NULL,
+        analyzed_at         TEXT NOT NULL,
+        PRIMARY KEY (source, post_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_analyses_symbol ON analyses(symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_analyses_risk ON analyses(risk_level)",
+    "CREATE INDEX IF NOT EXISTS idx_analyses_sentiment ON analyses(sentiment_label)",
+    """
+    CREATE TABLE IF NOT EXISTS briefs (
+        id            BIGSERIAL PRIMARY KEY,
+        symbol        TEXT NOT NULL,
+        date          TEXT NOT NULL,
+        body          TEXT NOT NULL,
+        model         TEXT NOT NULL,
+        generated_at  TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_briefs_symbol_date ON briefs(symbol, date)",
+    """
+    CREATE TABLE IF NOT EXISTS drafts (
+        id                BIGSERIAL PRIMARY KEY,
+        symbol            TEXT NOT NULL,
+        source            TEXT,
+        post_id           TEXT,
+        topic             TEXT,
+        variant           TEXT NOT NULL,
+        body              TEXT NOT NULL,
+        rationale         TEXT,
+        predicted_effect  TEXT,
+        cautions          TEXT,
+        model             TEXT NOT NULL,
+        generated_at      TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_drafts_symbol ON drafts(symbol)",
+    """
+    CREATE TABLE IF NOT EXISTS query_runs (
+        symbol        TEXT NOT NULL,
+        query         TEXT NOT NULL,
+        last_run_at   TEXT NOT NULL,
+        PRIMARY KEY (symbol, query)
+    )
+    """,
+)
+
+
+def _schema_name(account_id: int) -> str:
+    # int cast 是安全卫词:account_id 来自上游 user 配置,不应直接拼 SQL 标识符.
+    return f"tenant_{int(account_id)}"
+
+
+def connect(account_id: int | None = None) -> psycopg.Connection:
+    """获取 PG 连接,可选地绑定到某个 tenant schema.
+
+    - account_id 非 None:确保 schema 存在,然后 SET search_path TO tenant_{N}, public.
+      原有未限定 SQL(`SELECT * FROM posts`)自动解析到该 schema.
+    - account_id None:连默认 search_path(运维 / 健康检查 / 不读写租户数据用).
+
+    DATABASE_URL 必须在 env 中设置,否则抛.
+    """
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL 未设置.systemd unit / .env 里加 "
+            "DATABASE_URL=postgresql://appuser:***@host:port/appdb"
+        )
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    if account_id is not None:
+        schema = _schema_name(account_id)
+        with conn.cursor() as cur:
+            cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+            cur.execute(f'SET search_path TO "{schema}", public')
+        conn.commit()
     return conn
 
 
-def init_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
-    # 老 DB 升列:like_count / share_count(2026-05-13 起 posts 表新增,
-    # ADD COLUMN IF NOT EXISTS 在 SQLite 是 3.35+,这里走 try/except 兼容)
-    for col in ("like_count INTEGER", "share_count INTEGER"):
-        try:
-            conn.execute(f"ALTER TABLE posts ADD COLUMN {col}")
-        except sqlite3.OperationalError:
-            pass  # 列已存在
+def init_schema(conn: psycopg.Connection) -> None:
+    """在 conn 当前 search_path(由 connect 绑定的 tenant)下建齐 5 张表.
+
+    幂等(CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS),每个请求入口
+    都调一次也无所谓 — 已存在的 schema/表会直接跳过.
+    """
+    with conn.cursor() as cur:
+        for stmt in SCHEMA_STATEMENTS:
+            cur.execute(stmt)
+        # 历史 ADD COLUMN 兼容:posts 后期加 like_count / share_count
+        cur.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS like_count INTEGER")
+        cur.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS share_count INTEGER")
     conn.commit()
 
 
@@ -134,193 +172,210 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def upsert_post(conn: sqlite3.Connection, rec: dict) -> bool:
+def upsert_post(conn: psycopg.Connection, rec: dict) -> bool:
     """Insert post if new; return True if inserted, False if it already existed."""
-    cur = conn.execute(
-        """
-        INSERT INTO posts (source, post_id, symbol, author, title, content,
-                           publish_time, view_count, reply_count,
-                           like_count, share_count,
-                           url, ingested_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(source, post_id) DO NOTHING
-        """,
-        (
-            rec.get("source"),
-            str(rec.get("post_id")),
-            rec.get("symbol"),
-            rec.get("author"),
-            rec.get("title"),
-            rec.get("content"),
-            rec.get("publish_time"),
-            rec.get("view_count"),
-            rec.get("reply_count"),
-            rec.get("like_count"),
-            rec.get("share_count"),
-            rec.get("url"),
-            _now(),
-        ),
-    )
-    return cur.rowcount == 1
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO posts (source, post_id, symbol, author, title, content,
+                               publish_time, view_count, reply_count,
+                               like_count, share_count,
+                               url, ingested_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (source, post_id) DO NOTHING
+            """,
+            (
+                rec.get("source"),
+                str(rec.get("post_id")),
+                rec.get("symbol"),
+                rec.get("author"),
+                rec.get("title"),
+                rec.get("content"),
+                rec.get("publish_time"),
+                rec.get("view_count"),
+                rec.get("reply_count"),
+                rec.get("like_count"),
+                rec.get("share_count"),
+                rec.get("url"),
+                _now(),
+            ),
+        )
+        return cur.rowcount == 1
 
 
-def upsert_analysis(conn: sqlite3.Connection, source: str, post_id: str,
+def upsert_analysis(conn: psycopg.Connection, source: str, post_id: str,
                     symbol: str | None, analysis: dict, model: str) -> None:
-    conn.execute(
-        """
-        INSERT OR REPLACE INTO analyses (
-            source, post_id, symbol,
-            is_relevant, filter_reason,
-            summary, sentiment_label, sentiment_score,
-            emotions_json, topics_json, entities_json,
-            stance, intent, factuality,
-            risk_level, risk_signals_json, influence_potential,
-            hidden_meaning, citations_json, reasoning,
-            model, analyzed_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        (
-            source, str(post_id), symbol,
-            1 if analysis.get("is_relevant") else 0,
-            analysis.get("filter_reason"),
-            analysis.get("summary"),
-            analysis.get("sentiment_label"),
-            analysis.get("sentiment_score"),
-            json.dumps(analysis.get("emotions") or [], ensure_ascii=False),
-            json.dumps(analysis.get("topics") or [], ensure_ascii=False),
-            json.dumps(analysis.get("entities") or [], ensure_ascii=False),
-            analysis.get("stance"),
-            analysis.get("intent"),
-            analysis.get("factuality"),
-            analysis.get("risk_level"),
-            json.dumps(analysis.get("risk_signals") or [], ensure_ascii=False),
-            analysis.get("influence_potential"),
-            analysis.get("hidden_meaning"),
-            json.dumps(analysis.get("citations") or [], ensure_ascii=False),
-            analysis.get("reasoning"),
-            model, _now(),
-        ),
-    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO analyses (
+                source, post_id, symbol,
+                is_relevant, filter_reason,
+                summary, sentiment_label, sentiment_score,
+                emotions_json, topics_json, entities_json,
+                stance, intent, factuality,
+                risk_level, risk_signals_json, influence_potential,
+                hidden_meaning, citations_json, reasoning,
+                model, analyzed_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (source, post_id) DO UPDATE SET
+                symbol              = EXCLUDED.symbol,
+                is_relevant         = EXCLUDED.is_relevant,
+                filter_reason       = EXCLUDED.filter_reason,
+                summary             = EXCLUDED.summary,
+                sentiment_label     = EXCLUDED.sentiment_label,
+                sentiment_score     = EXCLUDED.sentiment_score,
+                emotions_json       = EXCLUDED.emotions_json,
+                topics_json         = EXCLUDED.topics_json,
+                entities_json       = EXCLUDED.entities_json,
+                stance              = EXCLUDED.stance,
+                intent              = EXCLUDED.intent,
+                factuality          = EXCLUDED.factuality,
+                risk_level          = EXCLUDED.risk_level,
+                risk_signals_json   = EXCLUDED.risk_signals_json,
+                influence_potential = EXCLUDED.influence_potential,
+                hidden_meaning      = EXCLUDED.hidden_meaning,
+                citations_json      = EXCLUDED.citations_json,
+                reasoning           = EXCLUDED.reasoning,
+                model               = EXCLUDED.model,
+                analyzed_at         = EXCLUDED.analyzed_at
+            """,
+            (
+                source, str(post_id), symbol,
+                1 if analysis.get("is_relevant") else 0,
+                analysis.get("filter_reason"),
+                analysis.get("summary"),
+                analysis.get("sentiment_label"),
+                analysis.get("sentiment_score"),
+                json.dumps(analysis.get("emotions") or [], ensure_ascii=False),
+                json.dumps(analysis.get("topics") or [], ensure_ascii=False),
+                json.dumps(analysis.get("entities") or [], ensure_ascii=False),
+                analysis.get("stance"),
+                analysis.get("intent"),
+                analysis.get("factuality"),
+                analysis.get("risk_level"),
+                json.dumps(analysis.get("risk_signals") or [], ensure_ascii=False),
+                analysis.get("influence_potential"),
+                analysis.get("hidden_meaning"),
+                json.dumps(analysis.get("citations") or [], ensure_ascii=False),
+                analysis.get("reasoning"),
+                model, _now(),
+            ),
+        )
 
 
-def insert_brief(conn: sqlite3.Connection, symbol: str, date: str,
+def insert_brief(conn: psycopg.Connection, symbol: str, date: str,
                  body: str, model: str) -> int:
-    cur = conn.execute(
-        "INSERT INTO briefs (symbol, date, body, model, generated_at) VALUES (?,?,?,?,?)",
-        (symbol, date, body, model, _now()),
-    )
-    return cur.lastrowid
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO briefs (symbol, date, body, model, generated_at) "
+            "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (symbol, date, body, model, _now()),
+        )
+        row = cur.fetchone()
+        return int(row["id"])
 
 
-def insert_draft(conn: sqlite3.Connection, symbol: str,
+def insert_draft(conn: psycopg.Connection, symbol: str,
                  source: str | None, post_id: str | None, topic: str | None,
                  variant: str, body: str, rationale: str | None,
                  predicted_effect: str | None, cautions: str | None,
                  model: str) -> int:
-    cur = conn.execute(
-        """
-        INSERT INTO drafts (symbol, source, post_id, topic, variant, body,
-                            rationale, predicted_effect, cautions,
-                            model, generated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        (symbol, source, post_id, topic, variant, body,
-         rationale, predicted_effect, cautions, model, _now()),
-    )
-    return cur.lastrowid
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO drafts (symbol, source, post_id, topic, variant, body,
+                                rationale, predicted_effect, cautions,
+                                model, generated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """,
+            (symbol, source, post_id, topic, variant, body,
+             rationale, predicted_effect, cautions, model, _now()),
+        )
+        row = cur.fetchone()
+        return int(row["id"])
 
 
-def posts_for_symbol(conn: sqlite3.Connection, symbol: str) -> list[sqlite3.Row]:
-    return list(conn.execute(
-        "SELECT * FROM posts WHERE symbol = ? ORDER BY publish_time DESC",
-        (symbol,),
-    ))
+def posts_for_symbol(conn: psycopg.Connection, symbol: str) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM posts WHERE symbol = %s ORDER BY publish_time DESC",
+            (symbol,),
+        )
+        return list(cur.fetchall())
 
 
-def posts_missing_analysis(conn: sqlite3.Connection, symbol: str,
-                           limit: int | None = None) -> list[sqlite3.Row]:
+def posts_missing_analysis(conn: psycopg.Connection, symbol: str,
+                           limit: int | None = None) -> list[dict]:
     sql = """
         SELECT p.* FROM posts p
         LEFT JOIN analyses a ON a.source = p.source AND a.post_id = p.post_id
-        WHERE p.symbol = ? AND a.post_id IS NULL
+        WHERE p.symbol = %s AND a.post_id IS NULL
         ORDER BY p.publish_time DESC
     """
     params: tuple = (symbol,)
     if limit:
-        sql += " LIMIT ?"
+        sql += " LIMIT %s"
         params = (symbol, limit)
-    return list(conn.execute(sql, params))
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return list(cur.fetchall())
 
 
-# sort_by 白名单 → SQL ORDER BY 子句。
-# 全部在 SQL 层排,前端不再客户端排,避免跨 page 顺序错乱。
-# NULL 用 COALESCE 兜底为最小值,放最后。
+# sort_by 白名单 → SQL ORDER BY 子句.
+# 全部在 SQL 层排,前端不再客户端排,避免跨 page 顺序错乱.
+# NULL 用 COALESCE 兜底为最小值,放最后.
+# cluster 用 topics_json 第一个 topic;PG 下要 cast 成 jsonb,空串/NULL 兜底.
 _SORT_SQL: dict[str, str] = {
     "newest":         "COALESCE(p.publish_time, p.ingested_at) DESC",
     "oldest":         "COALESCE(p.publish_time, p.ingested_at) ASC",
-    # 互动量 = view + reply + like + share(任一缺失视作 0)
     "engagement":     ("(COALESCE(p.view_count,0) + COALESCE(p.reply_count,0) "
                        "+ COALESCE(p.like_count,0) + COALESCE(p.share_count,0)) DESC"),
     "shares":         "COALESCE(p.share_count, -1) DESC",
     "replies":        "COALESCE(p.reply_count, -1) DESC",
     "likes":          "COALESCE(p.like_count, -1) DESC",
     "views":          "COALESCE(p.view_count, -1) DESC",
-    # 聚类 = 按 topics_json 第一个 topic 字符串排,然后组内按 noteworthy
-    "cluster":        ("COALESCE(json_extract(a.topics_json, '$[0]'), '~') ASC, "
-                       "(COALESCE(a.influence_potential,0) * ABS(COALESCE(a.sentiment_score,0))) DESC"),
+    "cluster":        (
+        "COALESCE("
+        "  CASE WHEN a.topics_json IS NULL OR a.topics_json = '' OR a.topics_json = '[]' "
+        "       THEN NULL "
+        "       ELSE (a.topics_json::jsonb)->>0 END, '~') ASC, "
+        "(COALESCE(a.influence_potential,0) * ABS(COALESCE(a.sentiment_score,0))) DESC"
+    ),
     "mediaAZ":        "p.source ASC",
     "mediaZA":        "p.source DESC",
-    # 评分(sentiment_score 绝对值大 = 情感强烈)
     "scoreSentiment": "ABS(COALESCE(a.sentiment_score, 0)) DESC",
-    # 影响力(沿用历史 noteworthy = influence * |sentiment|)
     "scoreInfluence": ("(COALESCE(a.influence_potential,0) * "
                        "ABS(COALESCE(a.sentiment_score,0))) DESC"),
 }
 
 
-def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
+def analyses_for_symbol(conn: psycopg.Connection, symbol: str,
                         days: int | None = 1,
                         start: str | None = None,
                         end: str | None = None,
                         limit: int | None = None,
                         offset: int = 0,
                         sort_by: str = "newest",
-                        ) -> list[sqlite3.Row]:
-    """文章列表(舆情 Tab 用).
-
-    时间过滤基于 COALESCE(publish_time, ingested_at):
-    publish_time 有就用 publish_time,否则回退到 ingested_at(我们何时看到的)。
-    这样 search 管道里没拿到 publish_time 的帖子也能进列表,跟 /today
-    aggregation(用 ingested_at)的语义对齐。
-    三选一:
-        - start/end:ISO 时间戳,闭区间。任意一端 None 表示该侧不限。
-                     start/end 同时 None 时回退到 days 语义。
-        - days: 1=今日(默认), N>1=最近 N 天, 0/None=全部历史
-
-    排序: sort_by ∈ _SORT_SQL.keys(),默认 newest。未知值回退 newest。
-    所有 sort 都在 tie-break 末尾追加 (publish_time DESC, ingested_at DESC, post_id ASC)
-    保证分页稳定。
-    分页: limit/offset。limit None = 不限。
-    """
-    where = ["a.symbol = ?"]
+                        ) -> list[dict]:
+    """文章列表(舆情 Tab 用).参见 sqlite 版本的 docstring,语义一致."""
+    where = ["a.symbol = %s"]
     params: list = [symbol]
 
-    # ISO 8601 字符串可直接 lex 比较,保留小时/分钟精度。
     if start or end:
         if start:
-            where.append("COALESCE(p.publish_time, p.ingested_at) >= ?")
+            where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
             params.append(start)
         if end:
-            where.append("COALESCE(p.publish_time, p.ingested_at) <= ?")
+            where.append("COALESCE(p.publish_time, p.ingested_at) <= %s")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("COALESCE(p.publish_time, p.ingested_at) >= ?")
+        where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
         params.append(cutoff)
 
     order = _SORT_SQL.get(sort_by) or _SORT_SQL["newest"]
-    # tie-break:稳定分页 — 同 score / 同 source 下保证顺序固定
     tie = "p.ingested_at DESC, p.post_id ASC"
     sql = f"""
         SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
@@ -332,31 +387,32 @@ def analyses_for_symbol(conn: sqlite3.Connection, symbol: str,
         ORDER BY {order}, {tie}
     """
     if limit is not None:
-        sql += " LIMIT ? OFFSET ?"
+        sql += " LIMIT %s OFFSET %s"
         params.extend([int(limit), int(offset)])
-    return list(conn.execute(sql, tuple(params)))
+    with conn.cursor() as cur:
+        cur.execute(sql, tuple(params))
+        return list(cur.fetchall())
 
 
-def analyses_count_for_symbol(conn: sqlite3.Connection, symbol: str,
+def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
                               days: int | None = 1,
                               start: str | None = None,
                               end: str | None = None,
                               ) -> int:
-    """analyses_for_symbol 的 COUNT(*) — 给前端分页 total 用。"""
-    where = ["a.symbol = ?"]
+    where = ["a.symbol = %s"]
     params: list = [symbol]
 
     if start or end:
         if start:
-            where.append("COALESCE(p.publish_time, p.ingested_at) >= ?")
+            where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
             params.append(start)
         if end:
-            where.append("COALESCE(p.publish_time, p.ingested_at) <= ?")
+            where.append("COALESCE(p.publish_time, p.ingested_at) <= %s")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("COALESCE(p.publish_time, p.ingested_at) >= ?")
+        where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
         params.append(cutoff)
 
     sql = f"""
@@ -365,70 +421,71 @@ def analyses_count_for_symbol(conn: sqlite3.Connection, symbol: str,
         JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
         WHERE {' AND '.join(where)}
     """
-    row = conn.execute(sql, tuple(params)).fetchone()
-    return int(row["c"] if row else 0)
+    with conn.cursor() as cur:
+        cur.execute(sql, tuple(params))
+        row = cur.fetchone()
+        return int(row["c"] if row else 0)
 
 
-def analyses_for_day(conn: sqlite3.Connection, symbol: str,
-                     date: str) -> list[sqlite3.Row]:
-    """日度简报数据源.
-
-    匹配规则:**用 ingested_at 当 "今日"** —— 我们今天看到的,就是今天的舆情。
-    不再单看 publish_time;crawler 拿回的多数是历史帖,publish_time 可能
-    是几天/几月前,但今天才发现该计入今天。ingested_at 是 NOT NULL 字段,
-    精确反映 "我们何时看到这条数据"。
-    """
-    return list(conn.execute(
-        """
-        SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
-               p.reply_count, p.url, p.content
-        FROM analyses a
-        JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
-        WHERE a.symbol = ?
-          AND substr(p.ingested_at, 1, 10) = ?
-        ORDER BY coalesce(p.publish_time, p.ingested_at) DESC
-        """,
-        (symbol, date),
-    ))
+def analyses_for_day(conn: psycopg.Connection, symbol: str,
+                     date: str) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
+                   p.reply_count, p.url, p.content
+            FROM analyses a
+            JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
+            WHERE a.symbol = %s
+              AND substr(p.ingested_at, 1, 10) = %s
+            ORDER BY COALESCE(p.publish_time, p.ingested_at) DESC
+            """,
+            (symbol, date),
+        )
+        return list(cur.fetchall())
 
 
-def brand_post_lookup(conn: sqlite3.Connection, source: str,
-                      post_id: str) -> sqlite3.Row | None:
-    row = conn.execute(
-        """
-        SELECT p.*, a.summary, a.sentiment_label, a.risk_level,
-               a.topics_json, a.intent, a.stance
-        FROM posts p
-        LEFT JOIN analyses a ON a.source = p.source AND a.post_id = p.post_id
-        WHERE p.source = ? AND p.post_id = ?
-        """,
-        (source, str(post_id)),
-    ).fetchone()
-    return row
+def brand_post_lookup(conn: psycopg.Connection, source: str,
+                      post_id: str) -> dict | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT p.*, a.summary, a.sentiment_label, a.risk_level,
+                   a.topics_json, a.intent, a.stance
+            FROM posts p
+            LEFT JOIN analyses a ON a.source = p.source AND a.post_id = p.post_id
+            WHERE p.source = %s AND p.post_id = %s
+            """,
+            (source, str(post_id)),
+        )
+        return cur.fetchone()
 
 
-def get_query_last_run(conn: sqlite3.Connection, symbol: str,
+def get_query_last_run(conn: psycopg.Connection, symbol: str,
                        query: str) -> str | None:
-    row = conn.execute(
-        "SELECT last_run_at FROM query_runs WHERE symbol = ? AND query = ?",
-        (symbol, query),
-    ).fetchone()
-    return row["last_run_at"] if row else None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT last_run_at FROM query_runs WHERE symbol = %s AND query = %s",
+            (symbol, query),
+        )
+        row = cur.fetchone()
+        return row["last_run_at"] if row else None
 
 
-def upsert_query_last_run(conn: sqlite3.Connection, symbol: str,
+def upsert_query_last_run(conn: psycopg.Connection, symbol: str,
                           query: str, ts: str | None = None) -> None:
-    conn.execute(
-        """
-        INSERT INTO query_runs (symbol, query, last_run_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(symbol, query) DO UPDATE SET last_run_at = excluded.last_run_at
-        """,
-        (symbol, query, ts or _now()),
-    )
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO query_runs (symbol, query, last_run_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (symbol, query) DO UPDATE SET last_run_at = EXCLUDED.last_run_at
+            """,
+            (symbol, query, ts or _now()),
+        )
 
 
-def ingest_jsonl_dir(conn: sqlite3.Connection, data_dir: Path) -> tuple[int, int]:
+def ingest_jsonl_dir(conn: psycopg.Connection, data_dir: Path) -> tuple[int, int]:
     """Ingest every *.jsonl file in data_dir. Returns (inserted, skipped)."""
     inserted = skipped = 0
     for path in sorted(data_dir.glob("*.jsonl")):
@@ -449,7 +506,7 @@ def ingest_jsonl_dir(conn: sqlite3.Connection, data_dir: Path) -> tuple[int, int
     return inserted, skipped
 
 
-def ingest_records(conn: sqlite3.Connection, records: Iterable[dict]) -> int:
+def ingest_records(conn: psycopg.Connection, records: Iterable[dict]) -> int:
     n = 0
     for r in records:
         if upsert_post(conn, r):
