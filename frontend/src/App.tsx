@@ -54,6 +54,7 @@ const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
 const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
+const AdminAllRuns = lazy(() => import('./pages/Workbench/AdminAllRuns').then(m => ({ default: m.AdminAllRuns })));
 const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
@@ -148,6 +149,7 @@ function App() {
                 <Route path="content-management" element={<Content />} />
                 <Route path="accounts" element={<AdminAccounts />} />
                 <Route path="accounts/:userId/topics" element={<AdminAccountTopics />} />
+                <Route path="runs" element={<AdminAllRuns />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}

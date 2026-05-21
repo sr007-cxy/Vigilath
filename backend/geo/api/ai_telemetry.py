@@ -36,7 +36,7 @@ from geo.models.ai_telemetry import (
     CompetitorSubstitutionItem, CompetitorSubstitutionOut,
     ProfileExtractOut, ProfileExtractPayload, QueryHitCell,
     ResponseOut, RunNowCitation,
-    RunNowResult, RunOut, SeedPromptSubmitPayload,
+    RunNowResult, RunOut, AdminRunOut, SeedPromptSubmitPayload,
     SelectedQueriesPayload, ShareOfVoiceOut,
     TopicMediaOut, TopicMediaORM,
     TopicOut, TopicPayload, TrackingMatrixOut,
@@ -319,6 +319,95 @@ def admin_list_user_topics(
           .all()
     )
     return [TopicOut.from_orm_row(r) for r in rows]
+
+
+@router.get("/admin/runs", response_model=list[AdminRunOut])
+def admin_list_runs(
+    day: Optional[str] = None,
+    user_id: Optional[int] = None,
+    topic_id: Optional[int] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """admin 跨用户 / 跨主题跑批总览。
+    - day=YYYY-MM-DD:按当日(UTC)过滤,不传则列最近
+    - user_id / topic_id / status:可选过滤
+    - 按 started_at DESC 排序,默认 100 条
+    """
+    _require_admin(current_user)
+    from geo.models.user import UserORM
+    from sqlalchemy import case
+
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+
+    q = (
+        db.query(AiTelemetryRunORM, AiTelemetryTopicORM, UserORM)
+          .join(AiTelemetryTopicORM, AiTelemetryRunORM.topic_id == AiTelemetryTopicORM.id)
+          .join(UserORM, UserORM.id == AiTelemetryTopicORM.user_id)
+          .order_by(AiTelemetryRunORM.started_at.desc())
+    )
+    if day:
+        try:
+            d = datetime.strptime(day, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "day 必须是 YYYY-MM-DD")
+        next_d = d + timedelta(days=1)
+        q = q.filter(
+            AiTelemetryRunORM.started_at >= d,
+            AiTelemetryRunORM.started_at < next_d,
+        )
+    if user_id is not None:
+        q = q.filter(UserORM.id == user_id)
+    if topic_id is not None:
+        q = q.filter(AiTelemetryRunORM.topic_id == topic_id)
+    if status:
+        q = q.filter(AiTelemetryRunORM.status == status)
+    rows = q.offset(offset).limit(limit).all()
+
+    run_ids = [run.id for run, _, _ in rows]
+    stats: dict[int, dict[str, int]] = {}
+    if run_ids:
+        result = (
+            db.query(
+                AiTelemetryResponseORM.run_id,
+                func.count(AiTelemetryResponseORM.id).label("total"),
+                func.sum(case((AiTelemetryResponseORM.hit == True, 1), else_=0)).label("hits"),  # noqa: E712
+                func.sum(case((AiTelemetryResponseORM.error.isnot(None), 1), else_=0)).label("errs"),
+            )
+            .filter(AiTelemetryResponseORM.run_id.in_(run_ids))
+            .group_by(AiTelemetryResponseORM.run_id)
+            .all()
+        )
+        for rid, total, hits, errs in result:
+            stats[rid] = {
+                "total": int(total or 0),
+                "hits": int(hits or 0),
+                "errs": int(errs or 0),
+            }
+
+    out: list[AdminRunOut] = []
+    for run, topic, user in rows:
+        s = stats.get(run.id, {"total": 0, "hits": 0, "errs": 0})
+        out.append(AdminRunOut(
+            run_id=run.id,
+            topic_id=topic.id,
+            topic_name=topic.name,
+            topic_target=topic.target or "",
+            user_id=user.id,
+            user_email=user.email or "",
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            status=run.status,
+            error=run.error,
+            response_count=s["total"],
+            hit_count=s["hits"],
+            error_count=s["errs"],
+        ))
+    return out
 
 
 @router.post(

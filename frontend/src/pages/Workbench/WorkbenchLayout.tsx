@@ -25,6 +25,7 @@ const sidebarItems = [
   { to: '/workbench/content-review', end: false, icon: 'content', labelKey: 'nav.adminContentReview' },
   { to: '/workbench/content-management', end: false, icon: 'content', labelKey: 'nav.adminContentManagement' },
   { to: '/workbench/accounts', end: false, icon: 'review', labelKey: 'nav.adminAccounts' },
+  { to: '/workbench/runs', end: false, icon: 'review', labelKey: 'nav.adminRuns' },
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {

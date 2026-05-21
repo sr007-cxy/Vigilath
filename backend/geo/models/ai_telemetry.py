@@ -830,6 +830,23 @@ class RunOut(BaseModel):
     error: Optional[str]
     response_count: int = 0
 
+
+class AdminRunOut(BaseModel):
+    """admin 跨用户跑批总览,一行 = 一次 run。"""
+    run_id: int
+    topic_id: int
+    topic_name: str
+    topic_target: str
+    user_id: int
+    user_email: str
+    started_at: datetime
+    finished_at: Optional[datetime]
+    status: str                      # running / success / failed
+    error: Optional[str]
+    response_count: int = 0          # 该 run 的总 response 条数
+    hit_count: int = 0               # response 里 hit=True 的条数
+    error_count: int = 0             # response 里 error 非空的条数
+
     @classmethod
     def from_orm_row(cls, r, response_count: int = 0) -> "RunOut":
         return cls(

@@ -92,6 +92,7 @@ const en = {
             "adminContentReview": "Content Review",
             "adminContentManagement": "Content",
             "adminAccounts": "Accounts",
+            "adminRuns": "Runs",
             "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",
             "account": "Account",

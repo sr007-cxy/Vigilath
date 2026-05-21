@@ -92,6 +92,7 @@ const zh = {
             "adminContentReview": "内容审核",
             "adminContentManagement": "内容管理",
             "adminAccounts": "账户管理",
+            "adminRuns": "跑批结果",
             "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
             "account": "账户中心",

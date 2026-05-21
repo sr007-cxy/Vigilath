@@ -441,6 +441,22 @@ export interface AdminAccount {
   has_prompt_extension: boolean;
 }
 
+export interface AdminRun {
+  run_id: number;
+  topic_id: number;
+  topic_name: string;
+  topic_target: string;
+  user_id: number;
+  user_email: string;
+  started_at: string;
+  finished_at: string | null;
+  status: 'running' | 'success' | 'failed' | string;
+  error: string | null;
+  response_count: number;
+  hit_count: number;
+  error_count: number;
+}
+
 export interface CompetitorSubstitutionResp {
   topic_id: number;
   period_days: number;
@@ -762,6 +778,23 @@ export const aiTelemetryApi = {
     userId: number, payload: TopicPayload, token: string,
   ): Promise<Topic> {
     return request<Topic>('POST', `/admin/users/${userId}/topics`, token, payload);
+  },
+
+  // admin 跨用户跑批总览
+  async adminListRuns(
+    token: string,
+    opts: { day?: string; userId?: number; topicId?: number; status?: string; limit?: number; offset?: number } = {},
+  ): Promise<AdminRun[]> {
+    const params = new URLSearchParams();
+    if (opts.day) params.set('day', opts.day);
+    if (opts.userId !== undefined) params.set('user_id', String(opts.userId));
+    if (opts.topicId !== undefined) params.set('topic_id', String(opts.topicId));
+    if (opts.status) params.set('status', opts.status);
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    if (opts.offset !== undefined) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    const suffix = qs ? `?${qs}` : '';
+    return request<AdminRun[]>('GET', `/admin/runs${suffix}`, token);
   },
 
   async listTopicResponses(
