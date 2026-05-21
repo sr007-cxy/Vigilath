@@ -40,7 +40,7 @@ function Body({ state }: { state: ShellState }) {
       <TopMetricsRow overview={overview} matrix={matrix} published={published} topic={topic}
         selectedEngines={state.selectedEngines} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <RadarBlock pb={pb} />
+        <RadarBlock pb={pb} selectedEngines={state.selectedEngines} />
         <EntryCardGrid overview={overview} pb={pb} />
         <CoreMetricsPanel pb={pb} selectedEngines={state.selectedEngines} />
       </div>
@@ -124,8 +124,20 @@ function BigMetric({ label, value, delta, onClick, hint, sub }: {
   );
 }
 
+// 单 engine 筛选 helper — 返回该 engine 的 breakdown,否则返回全量汇总
+function pickBreakdown(pb: PositionBreakdownResp, selectedEngines: string[]): PositionBreakdown {
+  if (selectedEngines.length === 1) {
+    const slice = pb.query_group?.by_engine.find(s => s.engine === selectedEngines[0]);
+    if (slice) return slice.breakdown;
+  }
+  return pb.breakdown;
+}
+
 // ── 雷达(5 维)──────────────────────────────────────
-function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
+function RadarBlock({ pb, selectedEngines }: {
+  pb: PositionBreakdownResp | null;
+  selectedEngines: string[];
+}) {
   const navigate = useNavigate();
   const L = useBgLang();
   if (!pb) {
@@ -138,8 +150,10 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
     { key: 'top5_pct', label: L.metricTop5, layer: 'top5' },
     { key: 'top3_pct', label: L.metricTop3, layer: 'top3' },
   ];
-  const max = Math.max(1, ...dims.map(d => pb.breakdown[d.key]));
-  const baseline = pb.industry_baseline;
+  const active = pickBreakdown(pb, selectedEngines);
+  const isFiltered = selectedEngines.length === 1;
+  const max = Math.max(1, ...dims.map(d => active[d.key]));
+  const baseline = isFiltered ? null : pb.industry_baseline;
   // 简单 SVG 雷达
   const cx = 130, cy = 130, r = 100;
   const points = (vals: number[]) =>
@@ -154,7 +168,7 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
     const ly = cy + Math.sin(angle) * (r + 18);
     return { ...d, lx, ly };
   });
-  const brandPts = points(dims.map(d => pb.breakdown[d.key]));
+  const brandPts = points(dims.map(d => active[d.key]));
   const basePts = baseline ? points(dims.map(d => baseline[d.key])) : null;
 
   return (
@@ -184,7 +198,7 @@ function RadarBlock({ pb }: { pb: PositionBreakdownResp | null }) {
           ))}
         </svg>
       </div>
-      {!baseline && (
+      {!baseline && !isFiltered && (
         <div className="text-[10px] text-muted text-center mt-2">{L.industryBaselineMissing}</div>
       )}
     </CardShell>
@@ -377,17 +391,9 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
   if (!pb) {
     return <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
-  const baseline = pb.industry_baseline;
-  const byEngine = pb.query_group?.by_engine ?? [];
-  const allEngines = byEngine.map(s => s.engine);
-  const effective = selectedEngines.length > 0
-    ? byEngine.filter(s => selectedEngines.includes(s.engine))
-    : byEngine;
-  // 全选/汇总不画 mini-bar(没有"对比"语义);选了部分 engine 才画
-  const showMiniBar =
-    selectedEngines.length > 0 &&
-    selectedEngines.length < allEngines.length &&
-    effective.length > 0;
+  const active = pickBreakdown(pb, selectedEngines);
+  const isFiltered = selectedEngines.length === 1;
+  const baseline = isFiltered ? null : pb.industry_baseline;
   const labelOf = (key: MetricCard['key']) => {
     if (key === 'top1_pct') return L.metricTop1;
     if (key === 'visible_pct') return L.metricVisible;
@@ -400,17 +406,11 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
     if (key === 'top5_pct') return L.hintMetricTop5;
     return L.hintMetricSource;
   };
-  // 大数字:无过滤 / 全选 → 用 pb.breakdown(后端聚合);选了部分 engine → 算选中切片的简单平均
-  const computeValue = (key: MetricCard['key']): number => {
-    if (!showMiniBar) return pb.breakdown[key];  // 已涵盖全选 / 未选
-    if (effective.length === 0) return pb.breakdown[key];
-    return effective.reduce((s, c) => s + c.breakdown[key], 0) / effective.length;
-  };
   return (
     <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}>
       <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
         {METRIC_CARDS.map(m => {
-          const v = computeValue(m.key);
+          const v = active[m.key];
           const bv = baseline ? baseline[m.key] : null;
           return (
             <button
@@ -435,48 +435,16 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
               <div className="text-2xl font-bold tabular-nums mt-auto" style={{ color: m.tint.fg }}>
                 {v.toFixed(2)}%
               </div>
-              <div className="text-[10px] text-muted">
-                {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
-              </div>
-              {showMiniBar && (
-                <EngineMiniBar slices={effective} metricKey={m.key} fg={m.tint.fg} />
+              {!isFiltered && (
+                <div className="text-[10px] text-muted">
+                  {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
+                </div>
               )}
             </button>
           );
         })}
       </div>
     </CardShell>
-  );
-}
-
-function EngineMiniBar({ slices, metricKey, fg }: {
-  slices: { engine: string; breakdown: PositionBreakdown }[];
-  metricKey: MetricCard['key'];
-  fg: string;
-}) {
-  const max = Math.max(1, ...slices.map(s => s.breakdown[metricKey]));
-  return (
-    <div className="flex flex-col gap-0.5 mt-1">
-      {slices.map(s => {
-        const v = s.breakdown[metricKey];
-        return (
-          <div key={s.engine} className="flex items-center gap-1.5" title={`${engineLabel(s.engine)}: ${v.toFixed(2)}%`}>
-            <span className="text-[9px] w-14 truncate" style={{ color: fg, opacity: 0.85 }}>
-              {engineLabel(s.engine)}
-            </span>
-            <div className="flex-1 h-1.5 rounded overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
-              <div style={{
-                width: `${(v / max) * 100}%`, height: '100%',
-                background: fg, opacity: 0.7,
-              }} />
-            </div>
-            <span className="text-[9px] tabular-nums w-10 text-right" style={{ color: fg, opacity: 0.85 }}>
-              {v.toFixed(1)}%
-            </span>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

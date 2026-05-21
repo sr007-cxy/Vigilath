@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, type Topic } from '../../services/aiTelemetryApi';
 import { useBgLang, engineLabel } from './lang';
@@ -140,9 +140,9 @@ export function BrandGrowthHeader({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <TopicPicker state={state} />
-          <EngineMultiSelect state={state} />
+          <EngineChips state={state} />
           <PeriodChips state={state} />
         </div>
       </div>
@@ -172,83 +172,39 @@ function TopicPicker({ state }: { state: ShellState }) {
   );
 }
 
-function EngineMultiSelect({ state }: { state: ShellState }) {
+function EngineChips({ state }: { state: ShellState }) {
   const L = useBgLang();
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
   const topicEngines = state.topic?.engines ?? [];
-  const total = topicEngines.length;
-  // selectedEngines = [] 视作"全选/汇总"
-  const effectiveCount = state.selectedEngines.length === 0 ? total : state.selectedEngines.length;
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
-  if (total === 0) return null;
-
-  const toggle = (eng: string) => {
-    // 进入"显式选择"模式 — 从全选切到部分选
-    const cur = state.selectedEngines.length === 0 ? [...topicEngines] : state.selectedEngines;
-    const next = cur.includes(eng) ? cur.filter(e => e !== eng) : [...cur, eng];
-    // 全勾上 = 等价全选,序列化成空(URL 干净)
-    state.setSelectedEngines(next.length === total ? [] : next);
-  };
-
+  if (topicEngines.length === 0) return null;
+  const sole = state.selectedEngines.length === 1 ? state.selectedEngines[0] : null;
+  const allActive =
+    state.selectedEngines.length === 0 ||
+    state.selectedEngines.length >= topicEngines.length;
+  const chipStyle = (active: boolean) => ({
+    background: active ? 'var(--accent-primary)' : 'transparent',
+    color: active ? 'white' : 'var(--text-secondary)',
+  });
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="flex gap-1 p-0.5 rounded flex-wrap" style={{ background: 'var(--bg-input)' }}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        className="px-2.5 py-1 text-xs rounded flex items-center gap-1.5"
-        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+        onClick={() => state.setSelectedEngines([])}
+        className="px-3 py-1 text-xs rounded"
+        style={chipStyle(allActive)}
       >
-        <span className="text-secondary">{L.engineSelector}</span>
-        <span className="tabular-nums">{L.engineSelectionSummary(effectiveCount, total)}</span>
-        <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
+        {L.engineSelectAll}
       </button>
-      {open && (
-        <div
-          className="absolute right-0 mt-1 min-w-[180px] rounded shadow-lg z-50"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      {topicEngines.map(eng => (
+        <button
+          key={eng}
+          type="button"
+          onClick={() => state.setSelectedEngines([eng])}
+          className="px-3 py-1 text-xs rounded"
+          style={chipStyle(sole === eng)}
         >
-          <div className="py-1">
-            {topicEngines.map(eng => {
-              const checked = state.selectedEngines.length === 0 || state.selectedEngines.includes(eng);
-              return (
-                <label
-                  key={eng}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:opacity-80"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggle(eng)}
-                  />
-                  <span>{engineLabel(eng)}</span>
-                </label>
-              );
-            })}
-          </div>
-          <div className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-            <button
-              type="button"
-              onClick={() => state.setSelectedEngines([])}
-              className="w-full px-3 py-1.5 text-xs text-secondary hover:opacity-80"
-            >
-              {L.engineSelectAll}
-            </button>
-          </div>
-        </div>
-      )}
+          {engineLabel(eng)}
+        </button>
+      ))}
     </div>
   );
 }

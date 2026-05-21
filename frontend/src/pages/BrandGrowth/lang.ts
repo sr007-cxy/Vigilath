@@ -46,10 +46,8 @@ interface Dict {
   metricVisible: string;
   metricSource: string;
   industryLabel: string;
-  // 模型多选器 (2026-05-21)
-  engineSelector: string;
+  // 模型筛选 chip(2026-05-21)
   engineSelectAll: string;
-  engineSelectionSummary: (n: number, total: number) => string;
   // 信源分析
   sourcesTitle: string;
   sourcesOwnedVsThirdParty: string;
@@ -245,10 +243,7 @@ const ZH: Dict = {
   metricVisible: '可见占比',
   metricSource: '被引用占比',
   industryLabel: '行业 P50',
-  engineSelector: '模型',
-  engineSelectAll: '全选',
-  engineSelectionSummary: (n: number, total: number) =>
-    n === 0 || n === total ? `全部(${total})` : `已选 ${n}/${total}`,
+  engineSelectAll: '全部',
   sourcesTitle: '信源分析',
   sourcesOwnedVsThirdParty: '自有 vs 第三方',
   sourcesTopComposition: 'Top 域名构成',
@@ -439,10 +434,7 @@ const EN: Dict = {
   metricVisible: 'Visibility',
   metricSource: 'Sourced rate',
   industryLabel: 'Industry P50',
-  engineSelector: 'Models',
-  engineSelectAll: 'Select all',
-  engineSelectionSummary: (n: number, total: number) =>
-    n === 0 || n === total ? `All (${total})` : `${n}/${total} selected`,
+  engineSelectAll: 'All',
   sourcesTitle: 'Sources',
   sourcesOwnedVsThirdParty: 'Owned vs Third-party',
   sourcesTopComposition: 'Top domains composition',
