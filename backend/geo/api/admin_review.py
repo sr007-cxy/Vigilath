@@ -26,9 +26,13 @@ from geo.api.auth import require_admin
 from geo.api.ai_telemetry import get_db, _append_changelog
 from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryRunORM, AiTelemetryTopicORM,
-    AiTelemetryTopicExecutionPlanORM, BrandProfile, MAX_SELECTED_QUERIES,
-    PublishPlanItem, TopicChangelogEntry, TopicExecutionPlanOut, TopicGeneratedDocORM,
-    TopicProgressCell, ExpansionLogEntry, TopicOut,
+    AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicSolutionORM,
+    BrandProfile, GenerateSolutionPayload, MAX_SELECTED_QUERIES,
+    PublishPlanItem, SolutionDiagnosis, SolutionDiagnosisCheck,
+    SolutionDiagnosisCluster, SolutionKeywordTier, SolutionSevenStepItem,
+    SolutionVisionItem, TopicChangelogEntry, TopicExecutionPlanOut,
+    TopicGeneratedDocORM, TopicProgressCell, TopicSolutionOut,
+    ExpansionLogEntry, TopicOut,
 )
 from geo.models.user import UserORM
 
@@ -921,3 +925,211 @@ def rerun_topic(
     db.commit()
     db.refresh(plan)
     return _to_plan_out(db, plan)
+
+
+# ═════════════════ v3.3 — GEO 品牌增长战略方案 ═════════════════
+
+
+def _solution_to_out(sol: AiTelemetryTopicSolutionORM) -> TopicSolutionOut:
+    """ORM → TopicSolutionOut。status != ready 时各内容块为 None / 空,
+    前端按 status 渲染 loading / error / content 三态."""
+    diagnosis: SolutionDiagnosis | None = None
+    seven_steps: list[SolutionSevenStepItem] = []
+    keyword_tiers: list[SolutionKeywordTier] = []
+    vision: list[SolutionVisionItem] = []
+    brand_snapshot: BrandProfile | None = None
+
+    if sol.status == "ready":
+        try:
+            d = json.loads(sol.diagnosis_json or "{}")
+        except Exception:  # noqa: BLE001
+            d = {}
+        try:
+            n = json.loads(sol.narrative_json or "{}")
+        except Exception:  # noqa: BLE001
+            n = {}
+        try:
+            k = json.loads(sol.keywords_json or "{}")
+        except Exception:  # noqa: BLE001
+            k = {}
+        try:
+            bp = json.loads(sol.brand_snapshot_json or "{}")
+        except Exception:  # noqa: BLE001
+            bp = {}
+
+        if isinstance(bp, dict):
+            try:
+                brand_snapshot = BrandProfile(**bp)
+            except Exception:  # noqa: BLE001
+                brand_snapshot = None
+
+        if isinstance(d, dict) and d:
+            clusters_raw = d.get("clusters") or []
+            cluster_summaries = (n.get("cluster_summaries") if isinstance(n, dict) else {}) or {}
+            clusters: list[SolutionDiagnosisCluster] = []
+            for c in clusters_raw:
+                if not isinstance(c, dict):
+                    continue
+                checks_raw = c.get("checks") or []
+                checks_typed = [
+                    SolutionDiagnosisCheck(
+                        category=str(x.get("category") or ""),
+                        status=str(x.get("status") or ""),
+                        message=str(x.get("message") or ""),
+                        fix=(str(x.get("fix")) if x.get("fix") else None),
+                    )
+                    for x in checks_raw if isinstance(x, dict)
+                ]
+                clusters.append(SolutionDiagnosisCluster(
+                    key=str(c.get("key") or ""),
+                    title_zh=str(c.get("title_zh") or ""),
+                    severity=str(c.get("severity") or "low"),
+                    summary=str(cluster_summaries.get(c.get("key")) or c.get("summary") or ""),
+                    bullets=[str(b) for b in (c.get("bullets") or []) if b],
+                    checks=checks_typed,
+                ))
+            all_checks_raw = d.get("all_checks") or []
+            all_checks_typed = [
+                SolutionDiagnosisCheck(
+                    category=str(x.get("category") or ""),
+                    status=str(x.get("status") or ""),
+                    message=str(x.get("message") or ""),
+                    fix=(str(x.get("fix")) if x.get("fix") else None),
+                )
+                for x in all_checks_raw if isinstance(x, dict)
+            ]
+            diagnosis = SolutionDiagnosis(
+                url=str(d.get("url") or sol.website_url),
+                score=int(d.get("score") or 0),
+                grade=str(d.get("grade") or ""),
+                pass_count=int(d.get("pass_count") or 0),
+                warn_count=int(d.get("warn_count") or 0),
+                fail_count=int(d.get("fail_count") or 0),
+                info_count=int(d.get("info_count") or 0),
+                clusters=clusters,
+                execution_layers=[x for x in (d.get("execution_layers") or []) if isinstance(x, dict)],
+                all_checks=all_checks_typed,
+            )
+
+        if isinstance(n, dict):
+            for s in n.get("seven_steps") or []:
+                if not isinstance(s, dict):
+                    continue
+                try:
+                    seven_steps.append(SolutionSevenStepItem(
+                        step=int(s.get("step") or 0),
+                        name=str(s.get("name") or ""),
+                        core_goal=str(s.get("core_goal") or ""),
+                        core_action=str(s.get("core_action") or ""),
+                        output_value=str(s.get("output_value") or ""),
+                    ))
+                except Exception:  # noqa: BLE001
+                    continue
+            for v in n.get("vision") or []:
+                if not isinstance(v, dict):
+                    continue
+                vision.append(SolutionVisionItem(
+                    title=str(v.get("title") or ""),
+                    body=str(v.get("body") or ""),
+                ))
+
+        if isinstance(k, dict):
+            for tt in k.get("tiers") or []:
+                if not isinstance(tt, dict):
+                    continue
+                keyword_tiers.append(SolutionKeywordTier(
+                    tier=str(tt.get("tier") or ""),
+                    title_zh=str(tt.get("title_zh") or ""),
+                    description=str(tt.get("description") or ""),
+                    keywords=[str(x) for x in (tt.get("keywords") or []) if str(x).strip()],
+                ))
+
+    return TopicSolutionOut(
+        id=sol.id, topic_id=sol.topic_id, status=sol.status or "idle",
+        website_url=sol.website_url or "",
+        error=sol.error, generated_by_admin_id=sol.generated_by_admin_id,
+        llm_model=sol.llm_model or "",
+        created_at=sol.created_at, updated_at=sol.updated_at,
+        brand_snapshot=brand_snapshot, diagnosis=diagnosis,
+        seven_steps=seven_steps, keyword_tiers=keyword_tiers, vision=vision,
+    )
+
+
+@router.get("/topic/{topic_id}/solution", response_model=TopicSolutionOut)
+def get_strategic_solution(
+    topic_id: int,
+    _admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """拿这个 topic 最新的战略方案。无记录时返回 status='idle' 的存根 —
+    前端按 status 切「未生成 / 生成中 / 已生成 / 失败」四态,不用关心 404."""
+    _load_topic_or_404(db, topic_id)   # 校验 topic 存在
+    sol = (
+        db.query(AiTelemetryTopicSolutionORM)
+          .filter(AiTelemetryTopicSolutionORM.topic_id == topic_id)
+          .first()
+    )
+    if not sol:
+        return TopicSolutionOut(
+            id=0, topic_id=topic_id, status="idle", website_url="",
+            error=None, generated_by_admin_id=None, llm_model="",
+            created_at=None, updated_at=None,
+            brand_snapshot=None, diagnosis=None,
+            seven_steps=[], keyword_tiers=[], vision=[],
+        )
+    return _solution_to_out(sol)
+
+
+def _trigger_solution_generation(topic_id: int, website_url: str, admin_id: int) -> None:
+    """后台触发战略方案生成 — 走 solution_generator 的 daemon thread."""
+    try:
+        from geo.services.solution_generator import schedule_solution_generation
+        schedule_solution_generation(
+            topic_id=topic_id, website_url=website_url, admin_id=admin_id,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.warning("schedule solution generation failed: %s", e)
+
+
+@router.post("/topic/{topic_id}/solution/generate", response_model=TopicSolutionOut)
+def generate_strategic_solution(
+    topic_id: int,
+    payload: GenerateSolutionPayload,
+    background: BackgroundTasks,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """触发(或重新触发)战略方案生成 — 异步后台跑.
+
+    流程:
+      1. 先 upsert solution 行,status=generating + website_url + 清空 error
+      2. BackgroundTasks 触发 solution_generator daemon thread
+      3. 立刻返回 status=generating 给前端;前端 3s 轮询 GET solution 直到 ready/failed
+    """
+    t = _load_topic_or_404(db, topic_id)
+
+    sol = (
+        db.query(AiTelemetryTopicSolutionORM)
+          .filter(AiTelemetryTopicSolutionORM.topic_id == topic_id)
+          .first()
+    )
+    if sol is None:
+        sol = AiTelemetryTopicSolutionORM(topic_id=topic_id)
+        db.add(sol)
+    sol.status = "generating"
+    sol.website_url = payload.website_url.strip()
+    sol.error = None
+    sol.generated_by_admin_id = admin.id
+    sol.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(sol)
+
+    background.add_task(
+        _trigger_solution_generation,
+        topic_id=topic_id, website_url=sol.website_url, admin_id=admin.id,
+    )
+    _append_changelog(t, actor_id=admin.id, actor_role="admin",
+                      field="solution", after=sol.website_url,
+                      note="admin 触发战略方案生成")
+    db.commit()
+    return _solution_to_out(sol)

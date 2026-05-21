@@ -395,12 +395,22 @@ function ApplicationCard({
               )}
 
               {item.submission_status === 'approved' && (
-                <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${item.topic_id}/execution-plan`)}
-                        className="text-xs px-4 py-1.5 rounded-md text-white w-full"
-                        style={{ background: 'var(--accent-primary)' }}>
-                  {t('admin.review.viewPlan')} →
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button type="button"
+                          onClick={() => navigate(`/workbench/topics/${item.topic_id}/execution-plan`)}
+                          className="text-xs px-4 py-1.5 rounded-md text-white"
+                          style={{ background: 'var(--accent-primary)' }}>
+                    {t('admin.review.viewPlan')} →
+                  </button>
+                  <button type="button"
+                          onClick={() => navigate(`/workbench/topics/${item.topic_id}/solution`)}
+                          className="text-xs px-4 py-1.5 rounded-md"
+                          style={{ background: 'var(--bg-tertiary)',
+                                   color: 'var(--accent-primary)',
+                                   border: '1px solid var(--accent-primary)' }}>
+                    {t('admin.solution.generate')} →
+                  </button>
+                </div>
               )}
 
               {rejectOpen && (

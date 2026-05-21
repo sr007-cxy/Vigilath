@@ -2895,6 +2895,67 @@ const en = {
                 "ai": "AI",
                 "user": "User"
               }
+            },
+            "solution": {
+              "title": "GEO Brand Growth Strategy",
+              "subtitle": "Generate a deliverable strategy deck from site diagnostics + brand profile",
+              "backToReview": "Back to review",
+              "export": "Export PDF",
+              "exporting": "Exporting…",
+              "regenerate": "Regenerate",
+              "generate": "Generate strategy",
+              "generating": "Generating — first run takes 1-3 minutes, this page auto-refreshes…",
+              "generatingHint": "Scanning site + calling LLM in background; auto-refreshing every 3s",
+              "failed": "Generation failed",
+              "retry": "Retry",
+              "websiteLabel": "Brand website URL",
+              "websitePlaceholder": "https://example.com",
+              "websiteHint": "The site diagnosis runs against this URL — please use a reachable root domain",
+              "lastGeneratedAt": "Last generated",
+              "llmModel": "Model",
+              "scoreLabel": "AI Visibility Score",
+              "gradeLabel": "Grade",
+              "passLabel": "Pass",
+              "warnLabel": "Warn",
+              "failLabel": "Fail",
+              "infoLabel": "Info",
+              "section": {
+                "brand": "1. Brand positioning",
+                "diagnosis": "2. Current-state diagnosis",
+                "executionLayers": "3. GEO execution layers",
+                "sevenSteps": "4. Seven-step growth model",
+                "keywords": "5. Keyword system",
+                "vision": "6. Expected outcomes",
+                "details": "Detailed findings (25 categories)"
+              },
+              "brandFields": {
+                "industry": "Industry",
+                "service_geo": "Service geography",
+                "core_business_lines": "Core business lines",
+                "target_scenarios": "Target scenarios",
+                "brand_diff_tags": "Differentiators",
+                "brand_slogan": "Slogan",
+                "core_message": "Core message",
+                "core_service_overview": "Service overview"
+              },
+              "severityLabel": {
+                "high": "Priority gap",
+                "med": "Reinforce",
+                "low": "On par"
+              },
+              "executionLayersHint": "Three layers: Technical base → Content core → Authority push",
+              "stepCol": {
+                "step": "Step",
+                "name": "Stage",
+                "core_goal": "Goal",
+                "core_action": "Tailored action",
+                "output_value": "Output & value"
+              },
+              "noKeywords": "No keywords",
+              "emptyState": {
+                "title": "No strategy generated yet",
+                "body": "Fill in the brand website below and click the button to start diagnosis + LLM drafting."
+              }
             }
           },
           "topic": {

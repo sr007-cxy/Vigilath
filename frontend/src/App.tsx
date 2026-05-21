@@ -51,6 +51,7 @@ const BrandGrowthResponses = lazy(() => import('./pages/BrandGrowth/Responses').
 const BrandGrowthPublished = lazy(() => import('./pages/BrandGrowth/Published').then(m => ({ default: m.Published })));
 const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
 const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
+const AdminSolution = lazy(() => import('./pages/Admin/Solution').then(m => ({ default: m.AdminSolution })));
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
 const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
@@ -153,6 +154,7 @@ function App() {
                 <Route path="runs" element={<AdminAllRuns />} />
                 <Route path="runs/:runId" element={<AdminRunDetail />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
+                <Route path="topics/:topicId/solution" element={<AdminSolution />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />

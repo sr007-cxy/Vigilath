@@ -2901,6 +2901,67 @@ const zh = {
                 "ai": "AI 生成",
                 "user": "用户提交"
               }
+            },
+            "solution": {
+              "title": "GEO 品牌增长战略方案",
+              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的战略方案",
+              "backToReview": "返回审核",
+              "export": "导出 PDF",
+              "exporting": "导出中…",
+              "regenerate": "重新生成",
+              "generate": "生成战略方案",
+              "generating": "生成中,首次需 1-3 分钟,会自动刷新…",
+              "generatingHint": "已开始生成 — 后台正在扫描官网 + 调用大模型,本页 3 秒刷新一次",
+              "failed": "生成失败",
+              "retry": "重试",
+              "websiteLabel": "品牌官网网址",
+              "websitePlaceholder": "https://example.com",
+              "websiteHint": "战略方案会基于这个网址跑站内技术诊断;请填可访问的根域名",
+              "lastGeneratedAt": "上次生成时间",
+              "llmModel": "模型",
+              "scoreLabel": "AI 可见度评分",
+              "gradeLabel": "等级",
+              "passLabel": "通过",
+              "warnLabel": "警告",
+              "failLabel": "失败",
+              "infoLabel": "提示",
+              "section": {
+                "brand": "一、品牌定位",
+                "diagnosis": "二、现状深度诊断",
+                "executionLayers": "三、GEO 执行流程",
+                "sevenSteps": "四、七步生态增长模型",
+                "keywords": "五、关键词体系",
+                "vision": "六、预期愿景",
+                "details": "诊断明细(25 类)"
+              },
+              "brandFields": {
+                "industry": "行业",
+                "service_geo": "服务地域",
+                "core_business_lines": "核心业务",
+                "target_scenarios": "目标场景",
+                "brand_diff_tags": "差异化标签",
+                "brand_slogan": "Slogan",
+                "core_message": "核心信息",
+                "core_service_overview": "核心服务概述"
+              },
+              "severityLabel": {
+                "high": "重点突破",
+                "med": "建议补强",
+                "low": "已达标"
+              },
+              "executionLayersHint": "三层递进:技术地基(被 AI 识别) → 内容核心(被 AI 引用) → 权重推力(被 AI 信任)",
+              "stepCol": {
+                "step": "步骤",
+                "name": "环节",
+                "core_goal": "核心目标",
+                "core_action": "执行内容",
+                "output_value": "核心产出与价值"
+              },
+              "noKeywords": "暂无关键词",
+              "emptyState": {
+                "title": "尚未生成战略方案",
+                "body": "填入品牌官网,点击下方按钮启动诊断 + 文案生成。"
+              }
             }
           },
           "topic": {

@@ -144,6 +144,84 @@ export interface ExecutionPlan {
   publishing_plan: PublishPlanItem[];
 }
 
+// ── v3.3 战略方案 ───────────────────────────
+
+export type SolutionStatus = 'idle' | 'generating' | 'ready' | 'failed';
+export type SolutionSeverity = 'high' | 'med' | 'low';
+
+export interface SolutionDiagnosisCheck {
+  category: string;
+  status: 'PASS' | 'WARN' | 'FAIL' | 'INFO' | string;
+  message: string;
+  fix?: string | null;
+}
+
+export interface SolutionDiagnosisCluster {
+  key: string;
+  title_zh: string;
+  severity: SolutionSeverity;
+  summary: string;
+  bullets: string[];
+  checks: SolutionDiagnosisCheck[];
+}
+
+export interface SolutionExecutionLayer {
+  key: string;
+  title_zh: string;
+  hint: string;
+  clusters: string[];
+}
+
+export interface SolutionDiagnosis {
+  url: string;
+  score: number;
+  grade: string;
+  pass_count: number;
+  warn_count: number;
+  fail_count: number;
+  info_count: number;
+  clusters: SolutionDiagnosisCluster[];
+  execution_layers: SolutionExecutionLayer[];
+  all_checks: SolutionDiagnosisCheck[];
+}
+
+export interface SolutionSevenStep {
+  step: number;
+  name: string;
+  core_goal: string;
+  core_action: string;
+  output_value: string;
+}
+
+export interface SolutionKeywordTier {
+  tier: string;
+  title_zh: string;
+  description: string;
+  keywords: string[];
+}
+
+export interface SolutionVisionItem {
+  title: string;
+  body: string;
+}
+
+export interface TopicStrategicSolution {
+  id: number;
+  topic_id: number;
+  status: SolutionStatus;
+  website_url: string;
+  error?: string | null;
+  generated_by_admin_id?: number | null;
+  llm_model: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  brand_snapshot?: BrandProfile | null;
+  diagnosis?: SolutionDiagnosis | null;
+  seven_steps: SolutionSevenStep[];
+  keyword_tiers: SolutionKeywordTier[];
+  vision: SolutionVisionItem[];
+}
+
 export const adminReviewApi = {
   // Phase C 兼容入口
   async listPending(token: string): Promise<PendingReview> {
@@ -184,5 +262,19 @@ export const adminReviewApi = {
   },
   async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);
+  },
+
+  // ── v3.3 战略方案 ─────────────────────────
+  async getStrategicSolution(topicId: number, token: string): Promise<TopicStrategicSolution> {
+    // 后端无记录时返回 status='idle' 的存根,所以这里不需要 null 分支
+    return request<TopicStrategicSolution>('GET', `/topic/${topicId}/solution`, token);
+  },
+  async generateStrategicSolution(
+    topicId: number, websiteUrl: string, token: string,
+  ): Promise<TopicStrategicSolution> {
+    return request<TopicStrategicSolution>(
+      'POST', `/topic/${topicId}/solution/generate`, token,
+      { website_url: websiteUrl },
+    );
   },
 };

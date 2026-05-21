@@ -260,6 +260,43 @@ class AiTelemetryTopicExecutionPlanORM(Base):
     error = Column(Text, nullable=True)
 
 
+class AiTelemetryTopicSolutionORM(Base):
+    """v3.3(2026-05-21)— GEO 品牌增长战略方案.
+
+    每个 topic 至多一条(unique topic_id)。admin 在工作台为已审核通过的 topic 触发生成:
+      1. 跑 geo_checker.run_geo_check 拿到 25 类诊断 → diagnosis_json
+      2. 把 25 类按主题聚成 5 大短板簇 → 喂给 LLM(DeepSeek)
+      3. LLM 出方案文案(诊断叙述 / 七步定制 / 6 层关键词 / 愿景) → narrative_json / keywords_json
+      4. brand_snapshot_json:生成时 BrandProfile 的不变快照(方便后续重生成对比)
+
+    状态机:idle → generating → ready / failed。
+    重新生成会原地覆盖(unique topic_id),前一份的内容被换掉。
+    """
+    __tablename__ = "ai_telemetry_topic_solutions"
+    __table_args__ = (
+        UniqueConstraint("topic_id", name="uq_topic_solution"),
+        Index("idx_topic_solution_topic", "topic_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(length=16), nullable=False, default="idle")  # idle / generating / ready / failed
+    website_url = Column(String(length=512), nullable=False, default="")
+    # 25-类扫描结果 + 5 大短板簇 + score / grade
+    diagnosis_json = Column(Text, nullable=False, default="{}")
+    # LLM 出的文案:诊断叙述 / 七步定制 / 执行流程 / 愿景
+    narrative_json = Column(Text, nullable=False, default="{}")
+    # LLM 出的 6 层关键词体系
+    keywords_json = Column(Text, nullable=False, default="{}")
+    # 生成时 BrandProfile 快照
+    brand_snapshot_json = Column(Text, nullable=False, default="{}")
+    llm_model = Column(String(length=64), nullable=False, default="")
+    error = Column(Text, nullable=True)
+    generated_by_admin_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class TopicGeneratedDocORM(Base):
     """v3(Phase D)— 基于资料 + 通过的监测问题,LLM 生成的内容文案稿.
 
@@ -1158,3 +1195,90 @@ class ShareOfVoiceOut(BaseModel):
     optimal_rate_pct: float             # AI 答案优选率 = sum(total_hits) / sum(total_runs) × 100
     total_runs: int                     # 该 topic 累计 run 数
     sample_size: int                    # 用于聚合的 Response 行数(含 hit=False)
+
+
+# ─────────────── v3.3 — GEO 品牌增长战略方案 ──────────────
+
+
+class SolutionDiagnosisCheck(BaseModel):
+    """诊断里单条 25-类 check 的精简快照(战略方案用,不暴露 i18n key 这种细节)."""
+    category: str           # check 类别(英文 label,e.g. "Structured Data")
+    status: str             # PASS / WARN / FAIL / INFO
+    message: str            # 人类可读消息
+    fix: Optional[str] = None
+
+
+class SolutionDiagnosisCluster(BaseModel):
+    """5 大短板簇 — 把 25 类聚成主题(AI 协议 / 爬虫性能 / 结构化数据 / URL & 元标签 / 安全与内容).
+
+    `severity` 给前端排序 + 标红用:high=至少一个 FAIL,med=有 WARN 没 FAIL,low=全 PASS/INFO。
+    """
+    key: str                # cluster slug,e.g. "ai_protocol"
+    title_zh: str           # 簇中文标题
+    severity: str           # high / med / low
+    summary: str            # LLM 出的本簇短板叙述(40-120 字)
+    bullets: list[str] = Field(default_factory=list)   # 具体短板条目(每条 ≤ 60 字)
+    checks: list[SolutionDiagnosisCheck] = Field(default_factory=list)  # 该簇里的具体 check
+
+
+class SolutionDiagnosis(BaseModel):
+    """完整诊断块 — geo_checker 跑的结果 + LLM 聚类后的 5 簇 + 总分."""
+    url: str
+    score: int              # 0-100
+    grade: str              # A+/A/B/C/D/F
+    pass_count: int = 0
+    warn_count: int = 0
+    fail_count: int = 0
+    info_count: int = 0
+    clusters: list[SolutionDiagnosisCluster] = Field(default_factory=list)
+    # 三层执行流程(技术地基 / 内容核心 / 权重推力)— 基于 cluster 严重度自动派生
+    execution_layers: list[dict] = Field(default_factory=list)
+    # 原始 25 类(不聚类),前端可展开看明细
+    all_checks: list[SolutionDiagnosisCheck] = Field(default_factory=list)
+
+
+class SolutionSevenStepItem(BaseModel):
+    """七步增长模型单步 — LLM 根据品牌定制 `core_action` / `output_value`."""
+    step: int               # 1-7
+    name: str               # 中文步骤名(e.g. "种子提示词搭建")
+    core_goal: str          # 核心目标(短句)
+    core_action: str        # 针对本品牌的执行内容(LLM 出)
+    output_value: str       # 核心产出 & 价值
+
+
+class SolutionKeywordTier(BaseModel):
+    """关键词分层 — 一层 = 一类(品牌核心 / 产品 / 技术 / 场景 / 采购决策 / 痛点)."""
+    tier: str               # tier slug,e.g. "brand_core"
+    title_zh: str           # 中文层名
+    description: str        # 这一层的定位(LLM 出 1 句)
+    keywords: list[str] = Field(default_factory=list)   # 具体词条
+
+
+class SolutionVisionItem(BaseModel):
+    """预期愿景 — 行业权威 / 降低获客成本 / 全球信任 三段,LLM 据品牌定制."""
+    title: str              # 子标题
+    body: str               # 一段话(60-180 字)
+
+
+class TopicSolutionOut(BaseModel):
+    """完整战略方案 — GET /topic/{id}/solution 的响应。"""
+    id: int
+    topic_id: int
+    status: str                                      # idle / generating / ready / failed
+    website_url: str
+    error: Optional[str] = None
+    generated_by_admin_id: Optional[int] = None
+    llm_model: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    # 内容块 — status != ready 时各字段可能为空
+    brand_snapshot: Optional[BrandProfile] = None
+    diagnosis: Optional[SolutionDiagnosis] = None
+    seven_steps: list[SolutionSevenStepItem] = Field(default_factory=list)
+    keyword_tiers: list[SolutionKeywordTier] = Field(default_factory=list)
+    vision: list[SolutionVisionItem] = Field(default_factory=list)
+
+
+class GenerateSolutionPayload(BaseModel):
+    """POST /topic/{id}/solution/generate — admin 触发生成."""
+    website_url: str = Field(..., min_length=4, max_length=512)
