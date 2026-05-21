@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type Overview, type PositionBreakdown, type PositionBreakdownResp,
-  type Briefing, type Topic, type TrackingMatrix,
+  type Topic, type TrackingMatrix,
 } from '../../services/aiTelemetryApi';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
 import { useBgLang, engineLabel } from './lang';
@@ -23,7 +23,6 @@ function Body({ state }: { state: ShellState }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [pb, setPb] = useState<PositionBreakdownResp | null>(null);
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
-  const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [published, setPublished] = useState<ContentDoc[]>([]);
 
   useEffect(() => {
@@ -31,7 +30,6 @@ function Body({ state }: { state: ShellState }) {
     aiTelemetryApi.getOverview(topic.id, period, token).then(setOverview).catch(() => setOverview(null));
     aiTelemetryApi.getPositionBreakdown(topic.id, period, token).then(setPb).catch(() => setPb(null));
     aiTelemetryApi.getTrackingMatrix(topic.id, token).then(setMatrix).catch(() => setMatrix(null));
-    aiTelemetryApi.listBriefings(topic.id, token, 10).then(setBriefings).catch(() => setBriefings([]));
     contentApi.listDocs(topic.id, { status: 'published' }, token).then(setPublished).catch(() => setPublished([]));
   }, [token, topic?.id, period]);
 
@@ -39,14 +37,15 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4 max-w-[1400px] mx-auto">
-      <TopMetricsRow overview={overview} matrix={matrix} published={published} topic={topic} />
+      <TopMetricsRow overview={overview} matrix={matrix} published={published} topic={topic}
+        selectedEngines={state.selectedEngines} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RadarBlock pb={pb} />
         <EntryCardGrid overview={overview} pb={pb} />
         <CoreMetricsPanel pb={pb} selectedEngines={state.selectedEngines} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BriefingsBlock briefings={briefings} topic={topic} />
+        <TrackingDetailBlock matrix={matrix} topic={topic} />
         <PublishedFeedBlock published={published} topic={topic} />
       </div>
     </div>
@@ -54,17 +53,33 @@ function Body({ state }: { state: ShellState }) {
 }
 
 // ── 顶部 3 大数 ───────────────────────────────────────
-function TopMetricsRow({ overview, matrix, published, topic }: {
+function TopMetricsRow({ overview, matrix, published, topic, selectedEngines }: {
   overview: Overview | null; matrix: TrackingMatrix | null;
-  published: ContentDoc[]; topic: Topic;
+  published: ContentDoc[]; topic: Topic; selectedEngines: string[];
 }) {
   const navigate = useNavigate();
   const L = useBgLang();
-  // 推荐词总数 = 扩展的问题总数(全量,不切命中比例)
+  // 推荐词总数 = 扩展的问题总数(全量,与引擎过滤无关)
   const recommendedQueryCount = matrix?.queries.length ?? 0;
-  const citationsTotal = overview?.citations.value ?? 0;
-  const citationsDelta = overview?.citations.delta_pct ?? null;
   const publishedCount = published.length;
+
+  // 引用总数:有 engine 过滤时从 trend 切片求和(per-engine citation),否则用 overview.value
+  const allEngines = overview?.engines ?? [];
+  const isFiltered =
+    selectedEngines.length > 0 && selectedEngines.length < allEngines.length;
+  const citationsTotal = (() => {
+    if (!overview) return 0;
+    if (!isFiltered) return overview.citations.value;
+    let sum = 0;
+    for (const t of overview.trend) {
+      for (const eng of selectedEngines) {
+        sum += (t.values as Record<string, number>)[eng] ?? 0;
+      }
+    }
+    return sum;
+  })();
+  // 过滤后 delta 不准(后端按全量算),先隐藏
+  const citationsDelta = isFiltered ? null : (overview?.citations.delta_pct ?? null);
   const tq = topic.id;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -379,11 +394,17 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
     if (key === 'top5_pct') return L.metricTop5;
     return L.metricSource;
   };
+  // 大数字:无过滤 / 全选 → 用 pb.breakdown(后端聚合);选了部分 engine → 算选中切片的简单平均
+  const computeValue = (key: MetricCard['key']): number => {
+    if (!showMiniBar) return pb.breakdown[key];  // 已涵盖全选 / 未选
+    if (effective.length === 0) return pb.breakdown[key];
+    return effective.reduce((s, c) => s + c.breakdown[key], 0) / effective.length;
+  };
   return (
     <CardShell title={L.blockCoreMetrics} hint={L.hintCoreMetrics}>
       <div className="grid grid-cols-2 grid-rows-2 gap-3 flex-1">
         {METRIC_CARDS.map(m => {
-          const v = pb.breakdown[m.key];
+          const v = computeValue(m.key);
           const bv = baseline ? baseline[m.key] : null;
           return (
             <button
@@ -450,25 +471,47 @@ function EngineMiniBar({ slices, metricKey, fg }: {
   );
 }
 
-// ── 报告明细(周报) ──────────────────────────────────
-function BriefingsBlock({ briefings, topic }: { briefings: Briefing[]; topic: Topic }) {
+// ── 报告明细(监测问题命中明细) ────────────────────────
+function TrackingDetailBlock({ matrix, topic }: { matrix: TrackingMatrix | null; topic: Topic }) {
   const L = useBgLang();
+  // 每条 query 聚合命中引擎,优先展示已命中过的
+  const rows = (matrix?.queries ?? []).map(q => {
+    const cells = matrix?.cells.filter(c => c.query === q) ?? [];
+    const hitEngines = cells
+      .filter(c => c.total_hits > 0)
+      .sort((a, b) => (a.first_hit_at || '').localeCompare(b.first_hit_at || ''))
+      .map(c => c.engine);
+    return { query: q, hitEngines };
+  }).sort((a, b) => b.hitEngines.length - a.hitEngines.length);
   return (
     <CardShell
       title={L.blockBriefings} hint={L.hintBriefings}
-      action={<Link to={`/brand-growth/insights?topic=${topic.id}`} className="text-xs text-accent">{L.viewAll}</Link>}
+      action={<Link to={`/brand-growth/queries?topic=${topic.id}`} className="text-xs text-accent">{L.viewAll}</Link>}
     >
-      {briefings.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="text-xs text-muted py-6 text-center">{L.emptyBriefings}</div>
       ) : (
         <ul className="divide-y" style={{ borderColor: 'var(--border-color)' }}>
-          {briefings.slice(0, 6).map(b => (
-            <li key={b.id} className="py-2">
-              <Link to={`/brand-growth/insights?topic=${topic.id}&briefing=${b.id}`}
-                className="text-sm text-primary hover:underline block truncate">
-                {L.insightsBriefingItem(new Date(b.period_start).toLocaleDateString(), new Date(b.period_end).toLocaleDateString())}
+          {rows.slice(0, 6).map(r => (
+            <li key={r.query} className="py-2">
+              <Link to={`/brand-growth/queries?topic=${topic.id}`}
+                className="text-sm text-primary hover:underline block truncate"
+                title={r.query}>
+                {r.query}
               </Link>
-              <div className="text-[10px] text-muted">{L.insightsBriefingGenerated(new Date(b.generated_at).toLocaleDateString())}</div>
+              <div className="text-[10px] text-muted flex flex-wrap gap-1 mt-0.5">
+                {r.hitEngines.length === 0 ? (
+                  <span>{L.queriesNeverHit}</span>
+                ) : (
+                  r.hitEngines.map(e => (
+                    <span key={e}
+                      className="px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}>
+                      {engineLabel(e)}
+                    </span>
+                  ))
+                )}
+              </div>
             </li>
           ))}
         </ul>
