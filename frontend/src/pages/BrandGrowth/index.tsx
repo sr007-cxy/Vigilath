@@ -394,6 +394,12 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
     if (key === 'top5_pct') return L.metricTop5;
     return L.metricSource;
   };
+  const hintOf = (key: MetricCard['key']) => {
+    if (key === 'top1_pct') return L.hintMetricTop1;
+    if (key === 'visible_pct') return L.hintMetricVisible;
+    if (key === 'top5_pct') return L.hintMetricTop5;
+    return L.hintMetricSource;
+  };
   // 大数字:无过滤 / 全选 → 用 pb.breakdown(后端聚合);选了部分 engine → 算选中切片的简单平均
   const computeValue = (key: MetricCard['key']): number => {
     if (!showMiniBar) return pb.breakdown[key];  // 已涵盖全选 / 未选
@@ -421,7 +427,10 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
                 >
                   <MetricIcon kind={m.icon} />
                 </span>
-                <span className="text-xs font-medium" style={{ color: m.tint.fg }}>{labelOf(m.key)}</span>
+                <span className="text-xs font-medium flex items-center gap-1" style={{ color: m.tint.fg }}>
+                  {labelOf(m.key)}
+                  <InfoHint text={hintOf(m.key)} />
+                </span>
               </div>
               <div className="text-2xl font-bold tabular-nums mt-auto" style={{ color: m.tint.fg }}>
                 {v.toFixed(2)}%

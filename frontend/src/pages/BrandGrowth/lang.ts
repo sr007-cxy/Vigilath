@@ -179,6 +179,10 @@ interface Dict {
   hintRadar: string;
   hintEntries: string;
   hintCoreMetrics: string;
+  hintMetricTop1: string;
+  hintMetricTop5: string;
+  hintMetricVisible: string;
+  hintMetricSource: string;
   hintBriefings: string;
   hintPublished: string;
   hintPublishedCited: string;
@@ -369,6 +373,10 @@ const ZH: Dict = {
   hintRadar: '5 个维度叠在一张图上看品牌健康度:Top1/Top3/Top5 是品牌在 AI 答复中是第几位提到,可见 = 任意提到,被引用 = 不同监测问题里至少被命中一次',
   hintEntries: '点任意卡片进对应子页查看明细',
   hintCoreMetrics: '基于 LLM 抽取的 brand_rank(品牌在答复里第几个被提到)算占比。行业 P50 来自同行业 ≥3 个租户的中位数,样本不足时不展示',
+  hintMetricTop1: '品牌在答复里排第 1 个被提到的 cell 占比。分子 = cell(监测问题 × 模型)里 MIN(brand_rank)=1 的格子数;分母 = 监测问题数 × 模型数(N×M)。同一 cell 跑多次只算 1',
+  hintMetricTop5: '品牌排前 5 提及的 cell 占比。分子 = MIN(brand_rank)≤5 的 cell 数;分母 = N×M(监测问题数 × 模型数)',
+  hintMetricVisible: '品牌被任意提及过的 cell 占比(不看排名)。分子 = hit=True 过的 cell 数;分母 = N×M。比 Top1/5 宽松',
+  hintMetricSource: '问题级覆盖率 — 有引擎命中过的不同监测问题占比。分子 = 至少 1 个引擎命中过的 distinct 监测问题数;分母 = 监测问题总数 N(不再乘模型数,所以通常 > 可见占比)',
   hintBriefings: '本主题的监测问题命中明细 — 每条问题在哪些引擎上命中过。点条目看具体答复',
   hintPublished: '已发布的稿件清单。点 chip 跳外站;有"AI 引用"绿标表示该投放 URL 出现在 AI 答复的引用清单里',
   hintPublishedCited: '该 publish_targets[].url 出现在 Response.citations_json 中,按引擎分组展示被引擎引用的次数',
@@ -559,6 +567,10 @@ const EN: Dict = {
   hintRadar: '5 dimensions in one view: Top1/Top3/Top5 = brand position in the answer, Visible = any mention, Sourced = unique queries with ≥1 hit',
   hintEntries: 'Click any card to drill into the sub-page',
   hintCoreMetrics: 'Based on LLM-extracted brand_rank. Industry P50 = median across ≥3 same-industry tenants; hidden when sample too small',
+  hintMetricTop1: 'Share of (query × engine) cells where the brand is the 1st-mentioned. Numerator = cells with MIN(brand_rank)=1; denominator = #queries × #engines (N×M). One cell counts at most once across reruns',
+  hintMetricTop5: 'Share of cells where the brand ranks in the top 5. Numerator = cells with MIN(brand_rank)≤5; denominator = N×M',
+  hintMetricVisible: 'Share of cells where the brand was ever mentioned (any rank). Numerator = cells with hit=True; denominator = N×M. Looser than Top1/5',
+  hintMetricSource: 'Query-level coverage — distinct tracked queries with at least one engine hit. Numerator = distinct queries with any hit; denominator = total tracked queries N (not multiplied by engines, so usually > Visibility)',
   hintBriefings: 'Per-query hit detail for this topic — which engines have hit each query. Click a row to view the answers',
   hintPublished: 'Published docs. Chips link to external posts; the green "cited by" badge means the URL appears in an AI answer\'s citation list',
   hintPublishedCited: 'The publish_targets[].url appears in Response.citations_json; chips show per-engine cite count',
