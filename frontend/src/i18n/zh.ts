@@ -2105,7 +2105,7 @@ const zh = {
                 "manualAddPlaceholder": "手动输入想监测的问题(回车添加)",
                 "manualAddBtn": "添加",
                 "manualAddDuplicate": "该问题已在候选 / 已勾选列表里",
-                "manualAddCap": "已达 50 条上限,先取消勾选再加",
+                "manualAddCap": "已达 200 条上限,先取消勾选再加",
                 "manualAddSeedEmpty": "无可用种子",
                 "manualAddNeedSeed": "请先在第二步添加种子提示词",
                 "manualAddSeedTitle": "关联到种子提示词",

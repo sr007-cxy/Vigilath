@@ -2099,7 +2099,7 @@ const en = {
                 "manualAddPlaceholder": "Type a question you want to monitor (Enter to add)",
                 "manualAddBtn": "Add",
                 "manualAddDuplicate": "Already in candidates / picked",
-                "manualAddCap": "Hit the 50 cap — unpick something first",
+                "manualAddCap": "Hit the 200 cap — unpick something first",
                 "manualAddSeedEmpty": "No seeds yet",
                 "manualAddNeedSeed": "Add a seed prompt in step 2 first",
                 "manualAddSeedTitle": "Link this query to a seed prompt",

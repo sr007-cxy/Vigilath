@@ -2041,7 +2041,7 @@ export function TopicEditor({
   // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
   // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
   const SUGGEST_COUNT = 200;
-  const QUERY_MAX_PICK = 50;
+  const QUERY_MAX_PICK = 200;
   // 种子提示词 — 多条,用户手填。Phase C 起会经过审核固化(已固化只能新增)
   const [seeds, setSeeds] = useState<string[]>(() =>
     (initial?.seed_prompts || []).map(s => s.text).filter(Boolean)

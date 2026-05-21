@@ -661,7 +661,7 @@ class TopicPayload(BaseModel):
     target: str = Field("", max_length=128)
     target_aliases: list[str] = Field(default_factory=list, max_length=10)
     industry: str = Field("", max_length=128)
-    queries: list[str] = Field(..., min_length=1, max_length=50)
+    queries: list[str] = Field(..., min_length=1, max_length=200)
     # 与 queries 同长的 cluster_id 数组,可选;长度不齐或缺省时全部按 0 处理
     query_cluster_ids: Optional[list[int]] = None
     clusters: Optional[list[ClusterMeta]] = None

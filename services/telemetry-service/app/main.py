@@ -66,7 +66,7 @@ app = FastAPI(title="Telemetry Service", version="0.1.0", lifespan=lifespan)
 
 class RunNowBody(BaseModel):
     name: str = ""
-    queries: list[str] = Field(..., min_length=1, max_length=50)
+    queries: list[str] = Field(..., min_length=1, max_length=200)
     engines: list[str] = Field(..., min_length=1, max_length=10)
     user_id: Optional[int] = None
 
