@@ -29,7 +29,7 @@ def upgrade() -> None:
 
     with op.batch_alter_table("ai_telemetry_topics", schema=None) as batch_op:
         batch_op.add_column(sa.Column("auto_generate_enabled", sa.Boolean(),
-                                      nullable=False, server_default=sa.text("0")))
+                                      nullable=False, server_default=sa.text("false")))
         batch_op.add_column(sa.Column("auto_generate_time", sa.String(length=8),
                                       nullable=False, server_default="09:00"))
         batch_op.add_column(sa.Column("auto_generate_count", sa.Integer(),

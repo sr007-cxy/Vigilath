@@ -76,7 +76,7 @@ def upgrade() -> None:
         sa.Column("llm_model", sa.String(length=64), nullable=False, server_default=""),
         sa.Column("generation_error", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=16), nullable=False, server_default="draft"),
-        sa.Column("selected_for_review", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("selected_for_review", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("review_decision_at", sa.DateTime(), nullable=True),
         sa.Column("reviewer_id", sa.Integer(), nullable=True),
         sa.Column("reject_reason", sa.Text(), nullable=True),
