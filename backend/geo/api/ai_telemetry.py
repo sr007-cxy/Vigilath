@@ -1691,7 +1691,9 @@ def list_responses(
     if not run:
         raise HTTPException(404, "run not found")
     topic = db.get(AiTelemetryTopicORM, run.topic_id)
-    if not topic or topic.user_id != current_user.id:
+    if not topic:
+        raise HTTPException(404, "run not found")
+    if topic.user_id != current_user.id and not getattr(current_user, "is_admin", False):
         raise HTTPException(404, "run not found")
     rows = (
         db.query(AiTelemetryResponseORM)

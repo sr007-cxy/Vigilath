@@ -1,8 +1,8 @@
 // admin 跨用户 / 跨主题 / 每日跑批结果总览
 // 路由:/workbench/runs
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { aiTelemetryApi, type AdminAccount, type AdminRun } from '../../services/aiTelemetryApi';
+import { aiTelemetryApi, type AdminAccount, type AdminRun, type ResponseRow } from '../../services/aiTelemetryApi';
 
 function today(): string {
   const d = new Date();
@@ -34,6 +34,12 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+interface DetailState {
+  loading: boolean;
+  err: string | null;
+  rows: ResponseRow[];
+}
+
 export function AdminAllRuns() {
   const token = localStorage.getItem('token') || '';
   const [day, setDay] = useState<string>(today());
@@ -43,6 +49,45 @@ export function AdminAllRuns() {
   const [runs, setRuns] = useState<AdminRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [details, setDetails] = useState<Map<number, DetailState>>(new Map());
+
+  const toggleExpand = useCallback((runId: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(runId)) {
+        next.delete(runId);
+      } else {
+        next.add(runId);
+      }
+      return next;
+    });
+    setDetails(prev => {
+      if (prev.has(runId)) return prev;
+      const next = new Map(prev);
+      next.set(runId, { loading: true, err: null, rows: [] });
+      aiTelemetryApi.listResponses(runId, token)
+        .then(rows => {
+          setDetails(curr => {
+            const m = new Map(curr);
+            m.set(runId, { loading: false, err: null, rows });
+            return m;
+          });
+        })
+        .catch(e => {
+          setDetails(curr => {
+            const m = new Map(curr);
+            m.set(runId, {
+              loading: false,
+              err: e instanceof Error ? e.message : String(e),
+              rows: [],
+            });
+            return m;
+          });
+        });
+      return next;
+    });
+  }, [token]);
 
   useEffect(() => {
     aiTelemetryApi.adminListAccounts(token)
@@ -160,6 +205,7 @@ export function AdminAllRuns() {
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-card)' }}>
             <tr className="text-muted" style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)' }}>
+              <th className="w-6"></th>
               <th className="text-right px-2 py-2 w-16">Run ID</th>
               <th className="text-left px-2 py-2">用户</th>
               <th className="text-left px-2 py-2">主题</th>
@@ -174,47 +220,131 @@ export function AdminAllRuns() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-10 text-center text-muted">加载中…</td></tr>
+              <tr><td colSpan={11} className="px-3 py-10 text-center text-muted">加载中…</td></tr>
             ) : err ? (
-              <tr><td colSpan={10} className="px-3 py-10 text-center" style={{ color: '#ef4444' }}>{err}</td></tr>
+              <tr><td colSpan={11} className="px-3 py-10 text-center" style={{ color: '#ef4444' }}>{err}</td></tr>
             ) : runs.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-10 text-center text-muted">没有符合条件的跑批</td></tr>
-            ) : runs.map(r => (
-              <tr key={r.run_id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-                <td className="px-2 py-2 text-right tabular-nums text-primary">
-                  <Link to={`/workbench/topics/${r.topic_id}/execution-plan`} className="text-accent hover:underline">
-                    #{r.run_id}
-                  </Link>
-                </td>
-                <td className="px-2 py-2 text-primary truncate max-w-[200px]" title={r.user_email}>
-                  <span className="text-muted tabular-nums">#{r.user_id}</span> {r.user_email}
-                </td>
-                <td className="px-2 py-2 text-primary truncate max-w-[200px]" title={r.topic_name}>
-                  {r.topic_name}
-                </td>
-                <td className="px-2 py-2 text-secondary truncate max-w-[160px]" title={r.topic_target}>
-                  {r.topic_target || '—'}
-                </td>
-                <td className="px-2 py-2 text-secondary tabular-nums">{fmtDateTime(r.started_at)}</td>
-                <td className="px-2 py-2 text-secondary tabular-nums">{fmtDateTime(r.finished_at)}</td>
-                <td className="px-2 py-2 text-center"><StatusChip status={r.status} /></td>
-                <td className="px-2 py-2 text-right tabular-nums text-primary">
-                  {r.hit_count}/{r.response_count}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums"
-                    style={r.error_count > 0 ? { color: '#ef4444' } : undefined}>
-                  {r.error_count}
-                </td>
-                <td className="px-2 py-2 text-right">
-                  <Link to={`/workbench/topics/${r.topic_id}/execution-plan`} className="text-xs text-accent hover:underline">
-                    执行计划
-                  </Link>
-                </td>
-              </tr>
-            ))}
+              <tr><td colSpan={11} className="px-3 py-10 text-center text-muted">没有符合条件的跑批</td></tr>
+            ) : runs.map(r => {
+              const isOpen = expanded.has(r.run_id);
+              const detail = details.get(r.run_id);
+              return (
+                <Fragment key={r.run_id}>
+                  <tr className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+                    <td className="px-1 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(r.run_id)}
+                        className="text-muted hover:text-primary text-xs"
+                        aria-label={isOpen ? '收起' : '展开'}
+                      >
+                        {isOpen ? '▾' : '▸'}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums text-primary">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(r.run_id)}
+                        className="text-accent hover:underline"
+                      >
+                        #{r.run_id}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2 text-primary truncate max-w-[200px]" title={r.user_email}>
+                      <span className="text-muted tabular-nums">#{r.user_id}</span> {r.user_email}
+                    </td>
+                    <td className="px-2 py-2 text-primary truncate max-w-[200px]" title={r.topic_name}>
+                      {r.topic_name}
+                    </td>
+                    <td className="px-2 py-2 text-secondary truncate max-w-[160px]" title={r.topic_target}>
+                      {r.topic_target || '—'}
+                    </td>
+                    <td className="px-2 py-2 text-secondary tabular-nums">{fmtDateTime(r.started_at)}</td>
+                    <td className="px-2 py-2 text-secondary tabular-nums">{fmtDateTime(r.finished_at)}</td>
+                    <td className="px-2 py-2 text-center"><StatusChip status={r.status} /></td>
+                    <td className="px-2 py-2 text-right tabular-nums text-primary">
+                      {r.hit_count}/{r.response_count}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums"
+                        style={r.error_count > 0 ? { color: '#ef4444' } : undefined}>
+                      {r.error_count}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <Link to={`/workbench/topics/${r.topic_id}/execution-plan`} className="text-xs text-accent hover:underline">
+                        执行计划
+                      </Link>
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr style={{ background: 'var(--bg-input)' }}>
+                      <td></td>
+                      <td colSpan={10} className="px-2 py-2">
+                        <RunDetailTable detail={detail} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function RunDetailTable({ detail }: { detail: DetailState | undefined }) {
+  if (!detail || detail.loading) {
+    return <div className="text-xs text-muted text-center py-4">加载详情中…</div>;
+  }
+  if (detail.err) {
+    return <div className="text-xs text-center py-4" style={{ color: '#ef4444' }}>{detail.err}</div>;
+  }
+  if (detail.rows.length === 0) {
+    return <div className="text-xs text-muted text-center py-4">该跑批没有 response 记录</div>;
+  }
+  return (
+    <table className="w-full text-[11px]">
+      <thead className="text-muted">
+        <tr style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)' }}>
+          <th className="text-left px-2 py-1.5 w-24">模型</th>
+          <th className="text-left px-2 py-1.5">问题</th>
+          <th className="text-center px-2 py-1.5 w-14">命中</th>
+          <th className="text-center px-2 py-1.5 w-12">排名</th>
+          <th className="text-center px-2 py-1.5 w-14">段落</th>
+          <th className="text-left px-2 py-1.5">答复 / 错误</th>
+        </tr>
+      </thead>
+      <tbody>
+        {detail.rows.map(r => (
+          <tr key={r.id} className="border-t align-top" style={{ borderColor: 'var(--border-color)' }}>
+            <td className="px-2 py-1.5 text-primary">{r.engine}</td>
+            <td className="px-2 py-1.5 text-primary truncate max-w-[260px]" title={r.query}>{r.query}</td>
+            <td className="px-2 py-1.5 text-center">
+              {r.error ? (
+                <span className="px-1 py-0.5 rounded text-[10px]"
+                  style={{ background: 'rgba(239,68,68,0.15)', color: '#b91c1c' }}>错</span>
+              ) : r.hit ? (
+                <span className="px-1 py-0.5 rounded text-[10px]"
+                  style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}>✓</span>
+              ) : (
+                <span className="text-muted">—</span>
+              )}
+            </td>
+            <td className="px-2 py-1.5 text-center tabular-nums text-secondary">
+              {r.brand_rank != null ? r.brand_rank : '—'}
+            </td>
+            <td className="px-2 py-1.5 text-center text-secondary">{r.mention_position || '—'}</td>
+            <td className="px-2 py-1.5 text-secondary">
+              {r.error ? (
+                <span style={{ color: '#ef4444' }} title={r.error}>{r.error.slice(0, 200)}</span>
+              ) : (
+                <span title={r.answer}>{(r.answer || '').slice(0, 240) || '(空答复)'}{r.answer && r.answer.length > 240 ? '…' : ''}</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
