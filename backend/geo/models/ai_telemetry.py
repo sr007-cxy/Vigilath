@@ -1060,12 +1060,13 @@ class PositionDist(BaseModel):
 
 
 class PositionBreakdown(BaseModel):
-    """雷达 5 维 + 右核心指标 4 卡的口径,基于 ResponseORM.brand_rank 聚合."""
-    top1_pct: float = 0.0       # COUNT(brand_rank=1) / total_cells × 100
-    top3_pct: float = 0.0       # COUNT(brand_rank<=3) / total_cells
-    top5_pct: float = 0.0       # COUNT(brand_rank<=5) / total_cells
-    visible_pct: float = 0.0    # COUNT(hit=True) / total_cells(= 可见占比)
-    source_pct: float = 0.0     # COUNT(DISTINCT query WHERE hit=True) / total_queries
+    """雷达 5 维 + 右核心指标 4 卡的口径。cell × lifetime 维度,分母 N×M(问题×模型),
+    全生命周期聚合,数值单调不减(历史命中也算命中)。"""
+    top1_pct: float = 0.0       # cell 内最佳 brand_rank == 1 的 cell 数 / (N×M) × 100
+    top3_pct: float = 0.0       # cell 内最佳 brand_rank ≤ 3 的 cell 数 / (N×M) × 100
+    top5_pct: float = 0.0       # cell 内最佳 brand_rank ≤ 5 的 cell 数 / (N×M) × 100
+    visible_pct: float = 0.0    # cell 内任一 hit=True 的 cell 数 / (N×M) × 100
+    source_pct: float = 0.0     # 至少一个 cell hit=True 的 query 数 / N × 100
 
 
 class PositionBreakdownOut(BaseModel):

@@ -1884,39 +1884,47 @@ def get_share_of_voice(
 
 
 def _aggregate_position_breakdown(
-    rows: list[AiTelemetryResponseORM], total_queries: int,
+    rows: list[AiTelemetryResponseORM], total_queries: int, total_engines: int,
 ) -> PositionBreakdown:
-    """口径:per-response 维度,跟现有 overview.visibility 对齐。
+    """口径:cell × lifetime 维度。分母 = 监测问题数 × 模型数(N×M);
+    分子 = 全生命周期内、cell 满足条件的格子数。同一 cell 多次跑批只算 1,
+    历史命中也算命中,数值单调不减(除非 topic 重配清空 QueryHit)。
 
-    - top1/3/5_pct = COUNT(brand_rank<=N) / total_responses_ok × 100
-    - visible_pct = COUNT(hit=True) / total_responses_ok × 100
-    - source_pct = COUNT(DISTINCT query WHERE any response hit=True) / total_queries × 100
+    - visible_pct = COUNT(cell with any hit) / (N×M)
+    - top1_pct    = COUNT(cell with MIN(brand_rank)=1)     / (N×M)
+    - top3_pct    = COUNT(cell with MIN(brand_rank)≤3)     / (N×M)
+    - top5_pct    = COUNT(cell with MIN(brand_rank)≤5)     / (N×M)
+    - source_pct  = COUNT(DISTINCT query with any cell hit) / N
     """
-    total_ok = 0
-    top1 = top3 = top5 = visible = 0
+    # (query, engine) → {hit: bool, min_rank: int|None}
+    cells: dict[tuple[str, str], dict] = {}
     queries_with_hit: set[str] = set()
     for r in rows:
         if r.error:
             continue
-        total_ok += 1
+        key = (r.query, r.engine)
+        c = cells.setdefault(key, {"hit": False, "min_rank": None})
         if r.hit:
-            visible += 1
+            c["hit"] = True
             queries_with_hit.add(r.query)
         rank = r.brand_rank
         if isinstance(rank, int) and rank >= 1:
-            if rank == 1:
-                top1 += 1
-            if rank <= 3:
-                top3 += 1
-            if rank <= 5:
-                top5 += 1
-    if total_ok == 0:
+            if c["min_rank"] is None or rank < c["min_rank"]:
+                c["min_rank"] = rank
+
+    total_cells = total_queries * total_engines
+    if total_cells == 0:
         return PositionBreakdown()
+
+    top1 = sum(1 for c in cells.values() if c["min_rank"] == 1)
+    top3 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 3)
+    top5 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 5)
+    visible = sum(1 for c in cells.values() if c["hit"])
     return PositionBreakdown(
-        top1_pct=round(top1 / total_ok * 100, 2),
-        top3_pct=round(top3 / total_ok * 100, 2),
-        top5_pct=round(top5 / total_ok * 100, 2),
-        visible_pct=round(visible / total_ok * 100, 2),
+        top1_pct=round(top1 / total_cells * 100, 2),
+        top3_pct=round(top3 / total_cells * 100, 2),
+        top5_pct=round(top5 / total_cells * 100, 2),
+        visible_pct=round(visible / total_cells * 100, 2),
         source_pct=round(len(queries_with_hit) / total_queries * 100, 2) if total_queries > 0 else 0.0,
     )
 
@@ -1932,13 +1940,12 @@ def get_position_breakdown(
     返回本期 breakdown + 行业基准(样本不足时 industry_baseline = None)。
     """
     topic = _get_topic_or_404(db, topic_id, current_user.id)
+    # period 参数保留是为了向后兼容(前端可能仍在传),但在 lifetime 口径下不再使用。
     period_days = max(1, min(period, 90))
-    cutoff = datetime.utcnow() - timedelta(days=period_days)
 
     rows = (
         db.query(AiTelemetryResponseORM)
           .filter(AiTelemetryResponseORM.topic_id == topic_id)
-          .filter(AiTelemetryResponseORM.created_at >= cutoff)
           .all()
     )
 
@@ -1952,16 +1959,21 @@ def get_position_breakdown(
             total_queries += 1
         elif isinstance(q, dict) and (q.get("text") or "").strip():
             total_queries += 1
+    try:
+        engines_raw = json.loads(topic.engines_json or "[]")
+    except Exception:  # noqa: BLE001
+        engines_raw = []
+    total_engines = sum(1 for e in engines_raw if isinstance(e, str) and e.strip())
 
-    breakdown = _aggregate_position_breakdown(rows, total_queries)
+    breakdown = _aggregate_position_breakdown(rows, total_queries, total_engines)
     industry = (topic.industry or "").strip()
-    industry_baseline = _compute_industry_baseline(db, industry, period_days) if industry else None
+    industry_baseline = _compute_industry_baseline(db, industry) if industry else None
 
     return PositionBreakdownOut(
         topic_id=topic_id,
         period_days=period_days,
         industry=industry,
-        total_cells=len(rows),
+        total_cells=total_queries * total_engines,
         total_queries=total_queries,
         breakdown=breakdown,
         industry_baseline=industry_baseline,
@@ -1972,15 +1984,14 @@ MIN_INDUSTRY_BASELINE_SAMPLES = 3
 
 
 def _compute_industry_baseline(
-    db: Session, industry: str, period_days: int,
+    db: Session, industry: str,
 ) -> Optional[PositionBreakdown]:
-    """跨租户聚 industry 内所有 topic 的 P50 breakdown。
+    """跨租户聚 industry 内所有 topic 的 P50 breakdown(lifetime 口径,不切 period)。
 
     样本量 <3 个 topic 返回 None(前端不渲染基准多边形 / 行业小字),避免 mock。
     """
     if not industry:
         return None
-    cutoff = datetime.utcnow() - timedelta(days=period_days)
     topics = (
         db.query(AiTelemetryTopicORM)
           .filter(AiTelemetryTopicORM.industry == industry)
@@ -1994,7 +2005,6 @@ def _compute_industry_baseline(
         rows = (
             db.query(AiTelemetryResponseORM)
               .filter(AiTelemetryResponseORM.topic_id == t.id)
-              .filter(AiTelemetryResponseORM.created_at >= cutoff)
               .all()
         )
         if not rows:
@@ -2008,7 +2018,14 @@ def _compute_industry_baseline(
             if (isinstance(q, str) and q.strip())
             or (isinstance(q, dict) and (q.get("text") or "").strip())
         )
-        per_topic.append(_aggregate_position_breakdown(rows, tq))
+        try:
+            engines_raw = json.loads(t.engines_json or "[]")
+        except Exception:  # noqa: BLE001
+            engines_raw = []
+        te = sum(1 for e in engines_raw if isinstance(e, str) and e.strip())
+        if tq == 0 or te == 0:
+            continue
+        per_topic.append(_aggregate_position_breakdown(rows, tq, te))
 
     if len(per_topic) < MIN_INDUSTRY_BASELINE_SAMPLES:
         return None
@@ -2045,7 +2062,9 @@ def get_industry_benchmark(
           .filter(AiTelemetryTopicORM.industry == industry_clean)
           .scalar() or 0
     )
-    breakdown = _compute_industry_baseline(db, industry_clean, period_days) if industry_clean else None
+    # period 参数保留是向后兼容,行业基准已改 lifetime 口径
+    _ = period_days
+    breakdown = _compute_industry_baseline(db, industry_clean) if industry_clean else None
     return IndustryBenchmarkOut(
         industry=industry_clean,
         sample_size=int(sample_topics),
