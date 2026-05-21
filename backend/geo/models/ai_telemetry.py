@@ -1094,12 +1094,12 @@ class EngineSlice(BaseModel):
 
 
 class GroupBreakdown(BaseModel):
-    """一组 query(种子组 或 全 query 组)的指标汇总 + 各 engine 切片。"""
-    scope: Literal["seed", "query"]
-    total_queries: int                       # seed: len(seed_prompts);query: N
+    """一组 query 的指标汇总 + 各 engine 切片(留给未来扩展;当前只有 query 组)。"""
+    scope: Literal["query"]
+    total_queries: int                       # N
     total_engines: int                       # M
-    total_cells: int                         # = total_queries × total_engines
-    breakdown: PositionBreakdown             # 该组全 engine 汇总
+    total_cells: int                         # = N × M
+    breakdown: PositionBreakdown             # 全 engine 汇总
     by_engine: list[EngineSlice] = Field(default_factory=list)
 
 
@@ -1112,9 +1112,8 @@ class PositionBreakdownOut(BaseModel):
     total_queries: int
     breakdown: PositionBreakdown
     industry_baseline: Optional[PositionBreakdown] = None   # 样本不足时 NULL,前端不渲染
-    # 新增:种子组 / 全 query 组 / engine 枚举
-    seed_group: Optional[GroupBreakdown] = None             # seed_prompts_json 为空时 NULL
-    query_group: Optional[GroupBreakdown] = None            # 兼容期可空,新前端必读
+    # 新增:全 query 组 + 各 engine 切片(用于模型多选对比)
+    query_group: Optional[GroupBreakdown] = None
     engines: list[str] = Field(default_factory=list)        # topic.engines_json 顺序
 
 

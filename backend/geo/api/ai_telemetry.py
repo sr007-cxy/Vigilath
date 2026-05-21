@@ -2040,7 +2040,7 @@ def _aggregate_position_breakdown(
     - top5_pct    = COUNT(cell with MIN(brand_rank)≤5)     / (N×M)
     - source_pct  = COUNT(DISTINCT query with any cell hit) / N
 
-    可选 allowed_queries / allowed_engines 用于种子组 / 单 engine 切片:
+    可选 allowed_queries / allowed_engines 用于单 engine 切片:
     传 None 表示该维度不过滤;传 set 表示只统计 r.query / r.engine 在 set 内的 rows。
     """
     # (query, engine) → {hit: bool, min_rank: int|None}
@@ -2117,24 +2117,7 @@ def get_position_breakdown(
     engines_list = [e.strip() for e in engines_raw if isinstance(e, str) and e.strip()]
     total_engines = len(engines_list)
 
-    # 种子组 query 集合 — 来自 topic.seed_prompts_json,只要 text 非空即纳入
-    try:
-        seed_prompts_raw = json.loads(topic.seed_prompts_json or "[]")
-    except Exception:  # noqa: BLE001
-        seed_prompts_raw = []
-    seed_texts: set[str] = set()
-    for p in seed_prompts_raw:
-        if isinstance(p, dict):
-            t = (p.get("text") or "").strip()
-        elif isinstance(p, str):
-            t = p.strip()
-        else:
-            t = ""
-        if t:
-            seed_texts.add(t)
-    seed_total = len(seed_texts)
-
-    # —— Query 组(全部 query,= 旧行为)——
+    # 全 Query 组 + 各 engine 切片(用于模型多选对比)
     query_overall = _aggregate_position_breakdown(rows, total_queries, total_engines)
     query_by_engine: list[EngineSlice] = []
     for eng in engines_list:
@@ -2153,30 +2136,6 @@ def get_position_breakdown(
         by_engine=query_by_engine,
     )
 
-    # —— 种子组(可空)——
-    seed_group: Optional[GroupBreakdown] = None
-    if seed_total > 0 and total_engines > 0:
-        seed_overall = _aggregate_position_breakdown(
-            rows, seed_total, total_engines, allowed_queries=seed_texts,
-        )
-        seed_by_engine: list[EngineSlice] = []
-        for eng in engines_list:
-            eng_breakdown = _aggregate_position_breakdown(
-                rows, seed_total, 1,
-                allowed_queries=seed_texts, allowed_engines={eng},
-            )
-            seed_by_engine.append(EngineSlice(
-                engine=eng, breakdown=eng_breakdown, total_queries=seed_total,
-            ))
-        seed_group = GroupBreakdown(
-            scope="seed",
-            total_queries=seed_total,
-            total_engines=total_engines,
-            total_cells=seed_total * total_engines,
-            breakdown=seed_overall,
-            by_engine=seed_by_engine,
-        )
-
     industry = (topic.industry or "").strip()
     industry_baseline = _compute_industry_baseline(db, industry) if industry else None
 
@@ -2188,7 +2147,6 @@ def get_position_breakdown(
         total_queries=total_queries,
         breakdown=query_overall,
         industry_baseline=industry_baseline,
-        seed_group=seed_group,
         query_group=query_group,
         engines=engines_list,
     )

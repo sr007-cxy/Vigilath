@@ -414,7 +414,7 @@ export interface EngineSlice {
 }
 
 export interface GroupBreakdown {
-  scope: 'seed' | 'query';
+  scope: 'query';
   total_queries: number;
   total_engines: number;
   total_cells: number;
@@ -431,8 +431,7 @@ export interface PositionBreakdownResp {
   total_queries: number;
   breakdown: PositionBreakdown;
   industry_baseline: PositionBreakdown | null;
-  // 新增:种子组 / 全 query 组 / engine 枚举
-  seed_group: GroupBreakdown | null;
+  // 全 query 组 + 各 engine 切片(模型多选对比用)
   query_group: GroupBreakdown | null;
   engines: string[];
 }
