@@ -13,7 +13,7 @@ interface Row {
   totalRuns: number;
   totalHits: number;
   rate: number;
-  firstHitEngine: string;
+  hitEngines: string[];
 }
 
 export function Queries() {
@@ -56,14 +56,16 @@ function Body({ state }: { state: ShellState }) {
       const cells = matrix.cells.filter(c => c.query === q);
       const totalRuns = cells.reduce((s, c) => s + c.total_runs, 0);
       const totalHits = cells.reduce((s, c) => s + c.total_hits, 0);
-      const firstHitEngine = cells.filter(c => c.first_hit_at).sort((a, b) =>
-        (a.first_hit_at || '').localeCompare(b.first_hit_at || ''))[0]?.engine || '';
+      const hitEngines = cells
+        .filter(c => c.total_hits > 0)
+        .sort((a, b) => (a.first_hit_at || '').localeCompare(b.first_hit_at || ''))
+        .map(c => c.engine);
       return {
         query: q,
         seed: seedByQuery.get(q) || '',
         totalRuns, totalHits,
         rate: totalRuns ? totalHits / totalRuns : 0,
-        firstHitEngine,
+        hitEngines,
       };
     });
   }, [matrix, seedByQuery]);
@@ -78,7 +80,7 @@ function Body({ state }: { state: ShellState }) {
   const filteredRows = useMemo(() => {
     return queryRows.filter(r => {
       if (seedFilter && r.seed !== seedFilter) return false;
-      if (modelFilter && r.firstHitEngine !== modelFilter) return false;
+      if (modelFilter && !r.hitEngines.includes(modelFilter)) return false;
       return true;
     });
   }, [queryRows, seedFilter, modelFilter]);
@@ -176,7 +178,23 @@ function Body({ state }: { state: ShellState }) {
                     <span className="text-muted">{L.queriesNoSeed}</span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-primary">{r.firstHitEngine ? engineLabel(r.firstHitEngine) : L.queriesNeverHit}</td>
+                <td className="px-2 py-2 text-primary">
+                  {r.hitEngines.length === 0 ? (
+                    <span className="text-muted">{L.queriesNeverHit}</span>
+                  ) : (
+                    <span className="inline-flex flex-wrap gap-1">
+                      {r.hitEngines.map(e => (
+                        <span
+                          key={e}
+                          className="px-1.5 py-0.5 rounded text-[10px]"
+                          style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}
+                        >
+                          {engineLabel(e)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </td>
                 <td className="px-2 py-2 text-right">
                   {r.totalHits > 0 && (
                     <button
