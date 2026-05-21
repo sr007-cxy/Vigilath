@@ -780,6 +780,11 @@ export const aiTelemetryApi = {
     return request<Topic>('POST', `/admin/users/${userId}/topics`, token, payload);
   },
 
+  // admin 取单条 run 元信息
+  async adminGetRun(runId: number, token: string): Promise<AdminRun> {
+    return request<AdminRun>('GET', `/admin/runs/${runId}`, token);
+  },
+
   // admin 跨用户跑批总览
   async adminListRuns(
     token: string,

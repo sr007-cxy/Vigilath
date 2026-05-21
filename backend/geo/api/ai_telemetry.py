@@ -410,6 +410,55 @@ def admin_list_runs(
     return out
 
 
+@router.get("/admin/runs/{run_id}", response_model=AdminRunOut)
+def admin_get_run(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """admin 取单条 run 元信息(详情页顶部展示用)。"""
+    _require_admin(current_user)
+    from geo.models.user import UserORM
+    from sqlalchemy import case
+
+    row = (
+        db.query(AiTelemetryRunORM, AiTelemetryTopicORM, UserORM)
+          .join(AiTelemetryTopicORM, AiTelemetryRunORM.topic_id == AiTelemetryTopicORM.id)
+          .join(UserORM, UserORM.id == AiTelemetryTopicORM.user_id)
+          .filter(AiTelemetryRunORM.id == run_id)
+          .first()
+    )
+    if not row:
+        raise HTTPException(404, "run not found")
+    run, topic, user = row
+
+    stats = (
+        db.query(
+            func.count(AiTelemetryResponseORM.id).label("total"),
+            func.sum(case((AiTelemetryResponseORM.hit == True, 1), else_=0)).label("hits"),  # noqa: E712
+            func.sum(case((AiTelemetryResponseORM.error.isnot(None), 1), else_=0)).label("errs"),
+        )
+        .filter(AiTelemetryResponseORM.run_id == run_id)
+        .one()
+    )
+
+    return AdminRunOut(
+        run_id=run.id,
+        topic_id=topic.id,
+        topic_name=topic.name,
+        topic_target=topic.target or "",
+        user_id=user.id,
+        user_email=user.email or "",
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        status=run.status,
+        error=run.error,
+        response_count=int(stats[0] or 0),
+        hit_count=int(stats[1] or 0),
+        error_count=int(stats[2] or 0),
+    )
+
+
 @router.post(
     "/admin/users/{user_id}/topics",
     response_model=TopicOut,
