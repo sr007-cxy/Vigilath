@@ -4,7 +4,7 @@ import {
   aiTelemetryApi, type TrackingMatrix,
   type ResponseRow, type EngineId,
 } from '../../services/aiTelemetryApi';
-import { useBgLang, engineLabel } from './lang';
+import { useBgLang, engineLabel, sortEngines } from './lang';
 import { InfoHint } from './charts';
 
 interface Row {
@@ -56,10 +56,9 @@ function Body({ state }: { state: ShellState }) {
       const cells = matrix.cells.filter(c => c.query === q);
       const totalRuns = cells.reduce((s, c) => s + c.total_runs, 0);
       const totalHits = cells.reduce((s, c) => s + c.total_hits, 0);
-      const hitEngines = cells
-        .filter(c => c.total_hits > 0)
-        .sort((a, b) => (a.first_hit_at || '').localeCompare(b.first_hit_at || ''))
-        .map(c => c.engine);
+      const hitEngines = sortEngines(
+        cells.filter(c => c.total_hits > 0).map(c => c.engine),
+      );
       return {
         query: q,
         seed: seedByQuery.get(q) || '',
@@ -119,7 +118,7 @@ function Body({ state }: { state: ShellState }) {
           style={{ ...inputStyle, minWidth: 140 }}
         >
           <option value="">{L.queriesFilterAllModels}</option>
-          {matrix.engines.map(e => <option key={e} value={e}>{engineLabel(e)}</option>)}
+          {sortEngines(matrix.engines).map(e => <option key={e} value={e}>{engineLabel(e)}</option>)}
         </select>
         <span className="text-muted ml-1">
           {filteredRows.length} / {queryRows.length}

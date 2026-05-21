@@ -5,7 +5,7 @@ import {
   aiTelemetryApi, type TrackingMatrix, type ResponseRow, type EngineId,
   type QueryHitCell,
 } from '../../services/aiTelemetryApi';
-import { useBgLang, engineLabel } from './lang';
+import { useBgLang, engineLabel, sortEngines } from './lang';
 import { InfoHint } from './charts';
 
 type LayerKey = 'all' | 'top1' | 'top3' | 'top5' | 'visible' | 'source';
@@ -50,6 +50,7 @@ function Body({ state }: { state: ShellState }) {
   }
 
   const queries = qFilter ? matrix.queries.filter(q => q === qFilter) : matrix.queries;
+  const sortedEngines = sortEngines(matrix.engines);
 
   const cellColor = (cell: QueryHitCell): string => {
     if (cell.total_hits === 0) {
@@ -113,7 +114,7 @@ function Body({ state }: { state: ShellState }) {
           <thead>
             <tr>
               <th className="text-left px-2 py-1.5 sticky left-0" style={{ background: 'var(--bg-card)' }}>{L.queriesColQuery}</th>
-              {matrix.engines.map(e => (
+              {sortedEngines.map(e => (
                 <th key={e} className="px-2 py-1.5 text-muted">{engineLabel(e)}</th>
               ))}
             </tr>
@@ -123,7 +124,7 @@ function Body({ state }: { state: ShellState }) {
               <tr key={q}>
                 <td className="text-left px-2 py-1.5 text-primary max-w-[260px] truncate sticky left-0"
                   style={{ background: 'var(--bg-card)' }}>{q}</td>
-                {matrix.engines.map(e => {
+                {sortedEngines.map(e => {
                   const cell = matrix.cells.find(c => c.query === q && c.engine === e);
                   if (!cell) return <td key={e} />;
                   const rank = cellRank.get(`${q}|${e}`);

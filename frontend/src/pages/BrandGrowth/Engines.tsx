@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { aiTelemetryApi, type Overview } from '../../services/aiTelemetryApi';
 import { CHART_PALETTE, InfoHint } from './charts';
-import { useBgLang, engineLabel } from './lang';
+import { useBgLang, engineLabel, sortEngines } from './lang';
 
 export function Engines() {
   const L = useBgLang();
@@ -27,7 +27,7 @@ function Body({ state }: { state: ShellState }) {
 
   if (!topic || !overview) return <div className="text-muted">{L.loading}</div>;
 
-  const engines = overview.engines;
+  const engines = sortEngines(overview.engines);
   const matrix = overview.engine_domain_matrix;
   const domains = overview.top_domains.slice(0, 12);
 

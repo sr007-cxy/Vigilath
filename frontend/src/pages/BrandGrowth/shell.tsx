@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, type Topic } from '../../services/aiTelemetryApi';
-import { useBgLang, engineLabel } from './lang';
+import { useBgLang, engineLabel, sortEngines } from './lang';
 
 export type PeriodDays = 7 | 30 | 90;
 
@@ -174,7 +174,7 @@ function TopicPicker({ state }: { state: ShellState }) {
 
 function EngineChips({ state }: { state: ShellState }) {
   const L = useBgLang();
-  const topicEngines = state.topic?.engines ?? [];
+  const topicEngines = sortEngines(state.topic?.engines ?? []);
   if (topicEngines.length === 0) return null;
   const sole = state.selectedEngines.length === 1 ? state.selectedEngines[0] : null;
   const allActive =

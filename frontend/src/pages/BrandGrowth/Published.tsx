@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
-import { useBgLang, engineLabel } from './lang';
+import { useBgLang, engineLabel, ENGINE_ORDER } from './lang';
 import { InfoHint } from './charts';
 
 type RoiFilter = 'all' | 'hit' | 'miss';
@@ -112,7 +112,14 @@ function DocCard({ doc, topicId }: { doc: ContentDoc; topicId: number }) {
   const ts = earliestMark || doc.review_decision_at;
   const citedEngines = Object.entries(doc.cited_by || {})
     .filter(([, ids]) => ids && ids.length > 0)
-    .map(([eng, ids]) => ({ eng, count: ids.length }));
+    .map(([eng, ids]) => ({ eng, count: ids.length }))
+    .sort((a, b) => {
+      const ra = ENGINE_ORDER.indexOf(a.eng);
+      const rb = ENGINE_ORDER.indexOf(b.eng);
+      const ia = ra === -1 ? Number.MAX_SAFE_INTEGER : ra;
+      const ib = rb === -1 ? Number.MAX_SAFE_INTEGER : rb;
+      return ia - ib || a.eng.localeCompare(b.eng);
+    });
   return (
     <li className="p-4 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
       <div className="flex justify-between mb-2">

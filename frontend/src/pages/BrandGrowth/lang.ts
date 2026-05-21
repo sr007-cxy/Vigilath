@@ -626,3 +626,21 @@ export function engineLabel(id: string): string {
   const map = lng.startsWith('en') ? ENGINE_LABELS_EN : ENGINE_LABELS_ZH;
   return map[id] || id;
 }
+
+// 品牌增长统一引擎排序:豆包置顶,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
+export const ENGINE_ORDER: string[] = [
+  'doubao', 'deepseek', 'qwen', 'wenxin', 'yuanbao',
+  'chatgpt', 'claude', 'gemini', 'grok', 'copilot',
+];
+
+export function sortEngines<T extends string>(ids: readonly T[]): T[] {
+  const rank = (e: string) => {
+    const i = ENGINE_ORDER.indexOf(e);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return [...ids].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.localeCompare(b);
+  });
+}
