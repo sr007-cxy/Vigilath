@@ -39,10 +39,12 @@ from geo.models.ai_telemetry import (
     ResponseOut, RunNowCitation,
     RunNowResult, RunOut, AdminRunOut, SeedPromptSubmitPayload,
     SelectedQueriesPayload, ShareOfVoiceOut,
+    TopicGeneratedDocORM,
     TopicMediaOut, TopicMediaORM,
     TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
+from urllib.parse import urlparse as _urlparse
 from geo.services.profile_extractor import (
     FileParseError, MAX_EXTRACTED_TEXT,
     extract_profile_from_text, file_bytes_to_text,
@@ -2024,28 +2026,74 @@ def get_share_of_voice(
     )
 
 
+def _norm_url(u: str) -> str:
+    """URL 归一化:小写 scheme+host,去尾斜杠,保留 path/query。"""
+    if not u:
+        return ""
+    u = u.strip()
+    try:
+        p = _urlparse(u)
+        host = p.netloc.lower()
+        path = p.path.rstrip("/") or "/"
+        q = ("?" + p.query) if p.query else ""
+        return f"{p.scheme.lower()}://{host}{path}{q}"
+    except Exception:
+        return u
+
+
+def _load_owned_urls(db: Session, topic_id: int) -> set[str]:
+    """加载某主题"已发布自有文章"的归一化 URL 集合(用于信源占比分子判定)。"""
+    docs = (
+        db.query(TopicGeneratedDocORM)
+          .filter(
+              TopicGeneratedDocORM.topic_id == topic_id,
+              TopicGeneratedDocORM.status == "published",
+          )
+          .all()
+    )
+    owned: set[str] = set()
+    for d in docs:
+        try:
+            tgts = json.loads(d.publish_targets_json or "[]")
+        except Exception:  # noqa: BLE001
+            continue
+        if not isinstance(tgts, list):
+            continue
+        for t in tgts:
+            if isinstance(t, dict):
+                url = t.get("url") or ""
+                if url:
+                    owned.add(_norm_url(url))
+    return owned
+
+
 def _aggregate_position_breakdown(
     rows: list[AiTelemetryResponseORM], total_queries: int, total_engines: int,
     *,
     allowed_queries: Optional[set[str]] = None,
     allowed_engines: Optional[set[str]] = None,
+    owned_urls: Optional[set[str]] = None,
 ) -> PositionBreakdown:
-    """口径:cell × lifetime 维度。分母 = 监测问题数 × 模型数(N×M);
-    分子 = 全生命周期内、cell 满足条件的格子数。同一 cell 多次跑批只算 1,
-    历史命中也算命中,数值单调不减(除非 topic 重配清空 QueryHit)。
+    """口径:cell × lifetime 维度。
 
-    - visible_pct = COUNT(cell with any hit) / (N×M)
-    - top1_pct    = COUNT(cell with MIN(brand_rank)=1)     / (N×M)
-    - top3_pct    = COUNT(cell with MIN(brand_rank)≤3)     / (N×M)
-    - top5_pct    = COUNT(cell with MIN(brand_rank)≤5)     / (N×M)
-    - source_pct  = COUNT(DISTINCT query with any cell hit) / N
+    Top1/3/5 + 可见占比 — 同前(基于 brand_rank,分母 N×M):
+      - visible_pct = COUNT(cell with any hit) / (N×M)
+      - top1_pct    = COUNT(cell with MIN(brand_rank)=1) / (N×M)
+      - top3_pct    = COUNT(cell with MIN(brand_rank)≤3) / (N×M)
+      - top5_pct    = COUNT(cell with MIN(brand_rank)≤5) / (N×M)
 
-    可选 allowed_queries / allowed_engines 用于单 engine 切片:
-    传 None 表示该维度不过滤;传 set 表示只统计 r.query / r.engine 在 set 内的 rows。
+    source_pct(信源占比,2026-05-21 改口径)— 自有文章被引用密度:
+      - 分母 = 命中响应的 citation URL 归一化去重数(只看 hit=True)
+      - 分子 = 全部响应里 citation URL ∈ owned_urls 的条目数(不去重,
+              包括 hit=False 但引了自有 URL 的响应)
+      - owned_urls=None 或为空 → source_pct=0
+      - 因分母去重 / 分子计次,该值可能 > 100%
     """
     # (query, engine) → {hit: bool, min_rank: int|None}
     cells: dict[tuple[str, str], dict] = {}
-    queries_with_hit: set[str] = set()
+    denom_urls: set[str] = set()       # 命中响应的引用 URL 去重(信源占比分母)
+    owned_cit_count = 0                # 全部响应里 owned URL 出现条目数(信源占比分子,不去重)
+    has_owned = bool(owned_urls)
     for r in rows:
         if r.error:
             continue
@@ -2055,9 +2103,27 @@ def _aggregate_position_breakdown(
             continue
         key = (r.query, r.engine)
         c = cells.setdefault(key, {"hit": False, "min_rank": None})
+        # 解析 citations(信源占比要用 — 即便不 hit 也要扫 owned)
+        try:
+            cits = json.loads(r.citations_json or "[]")
+        except Exception:  # noqa: BLE001
+            cits = []
+        urls_norm: list[str] = []
+        if isinstance(cits, list):
+            for cit in cits:
+                if not isinstance(cit, dict):
+                    continue
+                u = cit.get("url") or ""
+                if u:
+                    urls_norm.append(_norm_url(u))
         if r.hit:
             c["hit"] = True
-            queries_with_hit.add(r.query)
+            for nu in urls_norm:
+                denom_urls.add(nu)
+        if has_owned:
+            for nu in urls_norm:
+                if nu in owned_urls:
+                    owned_cit_count += 1
         rank = r.brand_rank
         if isinstance(rank, int) and rank >= 1:
             if c["min_rank"] is None or rank < c["min_rank"]:
@@ -2071,12 +2137,13 @@ def _aggregate_position_breakdown(
     top3 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 3)
     top5 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 5)
     visible = sum(1 for c in cells.values() if c["hit"])
+    source_pct = (owned_cit_count / len(denom_urls) * 100) if denom_urls else 0.0
     return PositionBreakdown(
         top1_pct=round(top1 / total_cells * 100, 2),
         top3_pct=round(top3 / total_cells * 100, 2),
         top5_pct=round(top5 / total_cells * 100, 2),
         visible_pct=round(visible / total_cells * 100, 2),
-        source_pct=round(len(queries_with_hit) / total_queries * 100, 2) if total_queries > 0 else 0.0,
+        source_pct=round(source_pct, 2),
     )
 
 
@@ -2117,12 +2184,16 @@ def get_position_breakdown(
     engines_list = [e.strip() for e in engines_raw if isinstance(e, str) and e.strip()]
     total_engines = len(engines_list)
 
+    owned_urls = _load_owned_urls(db, topic_id)
+
     # 全 Query 组 + 各 engine 切片(用于模型多选对比)
-    query_overall = _aggregate_position_breakdown(rows, total_queries, total_engines)
+    query_overall = _aggregate_position_breakdown(
+        rows, total_queries, total_engines, owned_urls=owned_urls,
+    )
     query_by_engine: list[EngineSlice] = []
     for eng in engines_list:
         eng_breakdown = _aggregate_position_breakdown(
-            rows, total_queries, 1, allowed_engines={eng},
+            rows, total_queries, 1, allowed_engines={eng}, owned_urls=owned_urls,
         )
         query_by_engine.append(EngineSlice(
             engine=eng, breakdown=eng_breakdown, total_queries=total_queries,
@@ -2197,7 +2268,8 @@ def _compute_industry_baseline(
         te = sum(1 for e in engines_raw if isinstance(e, str) and e.strip())
         if tq == 0 or te == 0:
             continue
-        per_topic.append(_aggregate_position_breakdown(rows, tq, te))
+        owned_t = _load_owned_urls(db, t.id)
+        per_topic.append(_aggregate_position_breakdown(rows, tq, te, owned_urls=owned_t))
 
     if len(per_topic) < MIN_INDUSTRY_BASELINE_SAMPLES:
         return None
