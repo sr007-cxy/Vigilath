@@ -157,6 +157,7 @@ export function AdminRunDetail() {
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-card)' }}>
             <tr className="text-muted" style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)' }}>
+              <th className="text-right px-2 py-2 w-12">序号</th>
               <th className="text-left px-2 py-2 w-28">模型</th>
               <th className="text-left px-2 py-2">问题</th>
               <th className="text-center px-2 py-2 w-20">命中</th>
@@ -165,6 +166,7 @@ export function AdminRunDetail() {
               <th className="text-left px-2 py-2">答复 / 错误</th>
             </tr>
             <tr style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)', background: 'var(--bg-card)' }}>
+              <th className="px-2 py-1.5" />
               <th className="px-2 py-1.5">
                 <select value={engineFilter} onChange={e => setEngineFilter(e.target.value)} style={headerFilterStyle}>
                   <option value="">全部</option>
@@ -209,9 +211,10 @@ export function AdminRunDetail() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-10 text-center text-muted">当前筛选无匹配 response</td></tr>
-            ) : filtered.map(r => (
+              <tr><td colSpan={7} className="px-3 py-10 text-center text-muted">当前筛选无匹配 response</td></tr>
+            ) : filtered.map((r, i) => (
               <tr key={r.id} className="border-t align-top" style={{ borderColor: 'var(--border-color)' }}>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
                 <td className="px-2 py-2 text-primary">{r.engine}</td>
                 <td className="px-2 py-2 text-primary truncate max-w-[280px]" title={r.query}>{r.query}</td>
                 <td className="px-2 py-2 text-center">
