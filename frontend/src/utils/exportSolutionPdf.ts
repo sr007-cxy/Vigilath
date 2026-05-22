@@ -163,13 +163,19 @@ const buildClusterBlock = (c: SolutionDiagnosisCluster, language: string): strin
   const bullets = (c.bullets || []).slice(0, 6).map(b =>
     `<li style="font-size:11.5px;color:#475569;line-height:1.7;margin-bottom:2px;">${escapeHtml(b)}</li>`,
   ).join('');
-  // 标题 + 严重度 badge:html2canvas 1.4.1 在 flex 容器下 `align-items:center` 会让文字与 badge
-  // 错半行,这里用 inline-block + vertical-align:middle,稳定不抖。
+  // 标题 + 严重度 badge:html2canvas 1.4.1 下 inline-block + vertical-align:middle 也会因
+  // 两个 span 字号差 + padding 导致 badge 中线偏离 title 中线(image 5 看得到)。
+  // 改成 2 列 table:table-cell vertical-align:middle 在 html2canvas 下渲染最稳。
   const header =
-    `<div style="margin-bottom:6px;line-height:1.4;">` +
-    `<span style="display:inline-block;vertical-align:middle;font-size:13.5px;font-weight:700;color:#0f172a;margin-right:8px;">${escapeHtml(c.title_zh)}</span>` +
-    `<span style="display:inline-block;vertical-align:middle;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:${sty.bg};color:${sty.c};">${escapeHtml(sty.label)}</span>` +
-    `</div>`;
+    `<table style="border-collapse:separate;border-spacing:0;margin-bottom:6px;">` +
+    `<tr>` +
+    `<td style="vertical-align:middle;padding:0 10px 0 0;">` +
+    `<span style="font-size:13.5px;font-weight:700;color:#0f172a;">${escapeHtml(c.title_zh)}</span>` +
+    `</td>` +
+    `<td style="vertical-align:middle;">` +
+    `<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:${sty.bg};color:${sty.c};line-height:1.3;">${escapeHtml(sty.label)}</span>` +
+    `</td>` +
+    `</tr></table>`;
   return (
     blockWrapOpen('padding:3px 0;') +
     `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;">` +
