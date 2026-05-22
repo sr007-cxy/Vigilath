@@ -1,4 +1,4 @@
-// 监测报告 — admin 视角的 Stage 8 反哺看板入口.
+// 监测报告 — admin 视角的「效果查验与更新」反哺看板入口.
 // 列出所有 approved 主题,点入跳到 /brand-growth/insights(用户端反哺数据看板).
 
 import { useEffect, useState } from 'react';

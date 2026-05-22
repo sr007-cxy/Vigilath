@@ -131,7 +131,7 @@ export function AdminRunDetail() {
             to={`/workbench/topics/${run.topic_id}/execution-plan`}
             className="ml-auto text-accent hover:underline"
           >
-            执行计划 →
+            执行策略与规划 →
           </Link>
         </div>
         {run.error && (
