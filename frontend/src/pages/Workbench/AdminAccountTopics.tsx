@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
@@ -7,6 +7,7 @@ import { TopicEditor } from '../Dashboard/AiTelemetry';
 export function AdminAccountTopics() {
   const { userId } = useParams<{ userId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const { t } = useTranslation();
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -16,6 +17,8 @@ export function AdminAccountTopics() {
   const [editing, setEditing] = useState<Topic | null | undefined>(
     searchParams.get('new') === '1' ? null : undefined,
   );
+  // 保存成功后弹「审批报告」模态;关闭或点跳生成才消失
+  const [savedTopic, setSavedTopic] = useState<Topic | null>(null);
 
   // 进入新建模式后清掉 URL 参数,避免刷新页面又被自动打开
   useEffect(() => {
@@ -81,7 +84,11 @@ export function AdminAccountTopics() {
           adminTargetUserId={Number(userId)}
           onCancel={() => setEditing(undefined)}
           onSave={handleSave}
-          onSaveDone={() => { setEditing(undefined); reload(); }}
+          onSaveDone={(saved) => {
+            setEditing(undefined);
+            reload();
+            if (saved?.id) setSavedTopic(saved);
+          }}
         />
       </div>
     );
@@ -151,6 +158,77 @@ export function AdminAccountTopics() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* ── 审批报告弹窗:保存后展示,只放一个「生成 GEO 体检报告」按钮 ── */}
+      {savedTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+             onClick={() => setSavedTopic(null)}>
+          <div className="w-full max-w-md rounded-xl p-5 shadow-2xl"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-base font-semibold text-primary">
+                {t('workbench.adminAccountTopics.savedModal.title')}
+              </h2>
+              <button type="button" onClick={() => setSavedTopic(null)}
+                      className="text-muted hover:text-primary text-lg leading-none"
+                      aria-label="close">×</button>
+            </div>
+
+            <p className="text-xs text-secondary mb-3">
+              {t('workbench.adminAccountTopics.savedModal.body')}
+            </p>
+
+            <dl className="text-xs space-y-1.5 mb-5 pl-2"
+                style={{ borderLeft: '2px solid var(--accent-primary)' }}>
+              <div className="flex gap-2 pl-2">
+                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colName')}</dt>
+                <dd className="text-primary">{savedTopic.name || '—'}</dd>
+              </div>
+              <div className="flex gap-2 pl-2">
+                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colIndustry')}</dt>
+                <dd className="text-secondary">{savedTopic.industry || '—'}</dd>
+              </div>
+              <div className="flex gap-2 pl-2">
+                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colQueries')}</dt>
+                <dd className="text-secondary tabular-nums">
+                  {t('workbench.adminAccountTopics.savedModal.queriesValue', {
+                    selected: savedTopic.selected_query_count ?? savedTopic.queries.length,
+                    total: savedTopic.queries.length,
+                  })}
+                </dd>
+              </div>
+              <div className="flex gap-2 pl-2">
+                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colWebsite')}</dt>
+                <dd className="text-secondary truncate">{savedTopic.profile?.website || '—'}</dd>
+              </div>
+            </dl>
+
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setSavedTopic(null)}
+                      className="text-xs px-3 py-1.5 rounded-md"
+                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                {t('workbench.adminAccountTopics.savedModal.later')}
+              </button>
+              <button type="button"
+                      onClick={() => {
+                        const id = savedTopic.id;
+                        setSavedTopic(null);
+                        navigate(`/workbench/topics/${id}/solution`);
+                      }}
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
+                      style={{ background: 'var(--accent-primary)' }}>
+                {t('workbench.adminAccountTopics.savedModal.generateReport')} →
+              </button>
+            </div>
+
+            <p className="text-[11px] text-muted mt-4 leading-relaxed">
+              {t('workbench.adminAccountTopics.savedModal.nextHint')}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

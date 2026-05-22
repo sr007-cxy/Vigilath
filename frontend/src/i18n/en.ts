@@ -3232,7 +3232,19 @@ const en = {
               "industryLabel": "Industry",
               "statusLabel": "Status",
               "neverRun": "Never run",
-              "edit": "Edit"
+              "edit": "Edit",
+              "savedModal": {
+                "title": "Approval Snapshot",
+                "body": "Topic saved. You can now generate the GEO health report.",
+                "colName": "Topic",
+                "colIndustry": "Industry",
+                "colQueries": "Queries",
+                "queriesValue": "{{selected}} / {{total}}",
+                "colWebsite": "Website",
+                "generateReport": "Generate GEO health report",
+                "later": "Later",
+                "nextHint": "Next step: once the report is ready, you can generate the Execution Plan from there."
+              }
             }
           }
         } as const;

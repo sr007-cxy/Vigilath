@@ -2006,7 +2006,9 @@ interface TopicEditorProps {
   mode?: 'edit' | 'view';
   onCancel: () => void;
   onSave: (payload: TopicPayload) => Promise<Topic>;
-  onSaveDone: () => void;
+  // 回调可选接收 saved topic;admin 流程会用 saved.id 跳后续步骤。
+  // 老 callsite(用户端)忽略参数,签名兼容。
+  onSaveDone: (saved?: Topic) => void;
   // admin 替别人配主题:传 user_id 后,新建走 admin 通道直接 approved,
   // 跳过 submit-for-review;编辑沿用 onSave。
   adminTargetUserId?: number;
@@ -2221,7 +2223,7 @@ export function TopicEditor({
       if (saved?.id && !adminMode) {
         await topicProfileApi.submitForReview(saved.id, token);
       }
-      onSaveDone();
+      onSaveDone(saved);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSubmitErr(msg);

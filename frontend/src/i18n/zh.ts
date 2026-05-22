@@ -3238,7 +3238,19 @@ const zh = {
               "industryLabel": "行业",
               "statusLabel": "状态",
               "neverRun": "尚未跑过",
-              "edit": "编辑"
+              "edit": "编辑",
+              "savedModal": {
+                "title": "审批报告",
+                "body": "主题资料已落库,可直接生成 GEO 体检报告。",
+                "colName": "主题名",
+                "colIndustry": "行业",
+                "colQueries": "监测问题",
+                "queriesValue": "{{selected}} / {{total}} 条",
+                "colWebsite": "品牌官网",
+                "generateReport": "生成 GEO 体检报告",
+                "later": "稍后再说",
+                "nextHint": "下一步:报告生成后,可在体检报告页继续生成「执行计划书」。"
+              }
             }
           }
         } as const;
