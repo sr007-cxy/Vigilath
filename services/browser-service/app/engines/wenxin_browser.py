@@ -48,6 +48,10 @@ class WenxinBrowserAdapter(EngineAdapter):
                 continue
         sys.__stdout__.write("[Wenxin-new-chat] button NOT found — needs DOM probe\n")
         sys.__stdout__.flush()
+        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        raise RuntimeError(
+            "wenxin new-chat button not found — refusing to send query into stale session"
+        )
 
     CHAT_URL = "https://chat.baidu.com/"
 

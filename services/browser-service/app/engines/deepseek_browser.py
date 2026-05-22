@@ -69,6 +69,10 @@ class DeepSeekBrowserAdapter(EngineAdapter):
                 continue
         sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector\n")
         sys.__stdout__.flush()
+        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        raise RuntimeError(
+            "deepseek new-chat button not found — refusing to send query into stale session"
+        )
 
     # 答案正文候选 selector — DS UI 改版后 .ds-markdown 不再稳定,
     # 加一层 fallback。顺序按特异性递减,稳定性轮询和 final extract 都用同一组。

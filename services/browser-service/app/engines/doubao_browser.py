@@ -870,7 +870,8 @@ class DoubaoBrowserAdapter(EngineAdapter):
                     f"[Doubao-new-chat] attempt {attempt+1}: button not found\n"
                 )
                 sys.__stdout__.flush()
-                return
+                await human_delay(0.5, 1.0)
+                continue  # 进下一轮 attempt,而不是 return 整个函数 — 否则后续 query 进旧会话
 
             # 等 reset 生效:URL 变到 `/chat/`(无 slug)OR 行数减少
             reset_ok = False
@@ -903,9 +904,15 @@ class DoubaoBrowserAdapter(EngineAdapter):
             sys.__stdout__.flush()
             await human_delay(0.5, 1.0)  # 重试前小歇
 
-        # 2 轮都没 reset 成功 — 让 caller 知道(可能拿到旧会话)
+        # 2 轮都没 reset 成功 — raise 让 EngineSession 归 error,runner 不抽取竞品,避免污染数据.
+        # 历史教训(2026-05-14 run_id=20):reset 失败时 silent return,后续 query 进残留会话,
+        # doubao 拿到"泡泡玛特 vs MINISO LAND"的串扰回复并被 LLM 抽成竞品,污染 brand-growth 数据.
         sys.__stdout__.write("[Doubao-new-chat] ⚠ both attempts failed to verify reset\n")
         sys.__stdout__.flush()
+        raise RuntimeError(
+            "doubao new-chat reset failed after 2 attempts — refusing to send query into "
+            "a stale session (would contaminate answer with prior conversation)"
+        )
 
     # ── Enable web search toggle ───────────────────────────────
 

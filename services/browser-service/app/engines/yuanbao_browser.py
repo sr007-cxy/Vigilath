@@ -338,8 +338,13 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             if await btn.is_visible(timeout=1500):
                 await btn.click()
                 await human_delay(1, 2)
+                return
         except Exception:
             pass
+        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        raise RuntimeError(
+            "yuanbao new-chat button not found — refusing to send query into stale session"
+        )
 
     # ── Enable web search toggle ───────────────────────────────
 

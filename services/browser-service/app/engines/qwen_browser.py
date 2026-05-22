@@ -264,6 +264,10 @@ class QwenBrowserAdapter(EngineAdapter):
             except Exception:
                 continue
         _log("new-chat button NOT found — needs DOM probe to fix selector")
+        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        raise RuntimeError(
+            "qwen new-chat button not found — refusing to send query into stale session"
+        )
 
     async def _dismiss_popups(self, page) -> None:
         for sel in [
