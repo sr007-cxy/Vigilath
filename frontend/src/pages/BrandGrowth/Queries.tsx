@@ -26,12 +26,14 @@ export function Queries() {
 }
 
 function Body({ state }: { state: ShellState }) {
-  const { token, topic } = state;
+  const { token, topic, selectedEngines } = state;
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [active, setActive] = useState<Row | null>(null);
   const [seedFilter, setSeedFilter] = useState<string>('');     // '' = 全部
-  const [modelFilter, setModelFilter] = useState<EngineId | ''>(''); // '' = 全部
+
+  const soleEngine: EngineId | null =
+    selectedEngines.length === 1 ? (selectedEngines[0] as EngineId) : null;
 
   useEffect(() => {
     if (!topic) return;
@@ -79,10 +81,10 @@ function Body({ state }: { state: ShellState }) {
   const filteredRows = useMemo(() => {
     return queryRows.filter(r => {
       if (seedFilter && r.seed !== seedFilter) return false;
-      if (modelFilter && !r.hitEngines.includes(modelFilter)) return false;
+      if (soleEngine && !r.hitEngines.includes(soleEngine)) return false;
       return true;
     });
-  }, [queryRows, seedFilter, modelFilter]);
+  }, [queryRows, seedFilter, soleEngine]);
 
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
@@ -100,7 +102,7 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选条:种子提示词 + 模型 */}
+      {/* 筛选条:种子提示词(模型筛选改用顶部 chip,避免双控件) */}
       <div className="flex items-center gap-2 text-xs">
         <select
           value={seedFilter}
@@ -111,15 +113,14 @@ function Body({ state }: { state: ShellState }) {
           <option value="">{L.queriesFilterAllSeeds}</option>
           {seedOptions.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select
-          value={modelFilter}
-          onChange={e => setModelFilter(e.target.value as EngineId | '')}
-          className="px-2 py-1 rounded-md"
-          style={{ ...inputStyle, minWidth: 140 }}
-        >
-          <option value="">{L.queriesFilterAllModels}</option>
-          {sortEngines(matrix.engines).map(e => <option key={e} value={e}>{engineLabel(e)}</option>)}
-        </select>
+        {soleEngine && (
+          <span
+            className="px-2 py-0.5 rounded-md text-[11px]"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+          >
+            {L.queriesFilterEngineBadge(engineLabel(soleEngine))}
+          </span>
+        )}
         <span className="text-muted ml-1">
           {filteredRows.length} / {queryRows.length}
         </span>
@@ -178,21 +179,29 @@ function Body({ state }: { state: ShellState }) {
                   )}
                 </td>
                 <td className="px-2 py-2 text-primary">
-                  {r.hitEngines.length === 0 ? (
-                    <span className="text-muted">{L.queriesNeverHit}</span>
-                  ) : (
-                    <span className="inline-flex flex-wrap gap-1">
-                      {r.hitEngines.map(e => (
-                        <span
-                          key={e}
-                          className="px-1.5 py-0.5 rounded text-[10px]"
-                          style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}
-                        >
-                          {engineLabel(e)}
-                        </span>
-                      ))}
-                    </span>
-                  )}
+                  {(() => {
+                    // 顶部 chip 选了单一引擎 → 只渲染该引擎的命中标签;
+                    // 「全部」时仍展示该 query 命中过的全部引擎
+                    const enginesToShow = soleEngine
+                      ? (r.hitEngines.includes(soleEngine) ? [soleEngine] : [])
+                      : r.hitEngines;
+                    if (enginesToShow.length === 0) {
+                      return <span className="text-muted">{L.queriesNeverHit}</span>;
+                    }
+                    return (
+                      <span className="inline-flex flex-wrap gap-1">
+                        {enginesToShow.map(e => (
+                          <span
+                            key={e}
+                            className="px-1.5 py-0.5 rounded text-[10px]"
+                            style={{ background: 'rgba(34,197,94,0.15)', color: '#15803d' }}
+                          >
+                            {engineLabel(e)}
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-2 py-2 text-right">
                   {r.totalHits > 0 && (
@@ -217,6 +226,7 @@ function Body({ state }: { state: ShellState }) {
           topicId={topic.id}
           token={token}
           brandKeywords={brandKeywords}
+          engineFilter={soleEngine}
           onClose={() => setActive(null)}
         />
       )}
@@ -225,9 +235,9 @@ function Body({ state }: { state: ShellState }) {
 }
 
 // ── 命中详情弹窗 ───────────────────────────────────────
-function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
+function QueryDetailModal({ row, topicId, token, brandKeywords, engineFilter, onClose }: {
   row: Row; topicId: number; token: string;
-  brandKeywords: string[]; onClose: () => void;
+  brandKeywords: string[]; engineFilter: EngineId | null; onClose: () => void;
 }) {
   const L = useBgLang();
   const [rows, setRows] = useState<ResponseRow[] | null>(null);
@@ -241,6 +251,7 @@ function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
     // 答案落在窗口外 → 弹窗看着空。
     aiTelemetryApi.listTopicResponses(topicId, token, {
       query: row.query, period: 90, limit: 50,
+      ...(engineFilter ? { engine: engineFilter } : {}),
     })
       .then(setRows)
       .catch(e => {
@@ -248,19 +259,21 @@ function QueryDetailModal({ row, topicId, token, brandKeywords, onClose }: {
         setErr(e instanceof Error ? e.message : String(e));
       })
       .finally(() => setLoading(false));
-  }, [topicId, token, row.query]);
+  }, [topicId, token, row.query, engineFilter]);
 
   // 弹窗只展示命中的引擎:按 engine 取最近一条命中(hit=true),未命中的不进结果集
+  // 顶部 chip 选了单一引擎时,engineFilter 会让后端只返回该引擎,这里再做一次防御兜底
   const hitEngines = useMemo(() => {
     if (!rows) return [];
     const m = new Map<EngineId, ResponseRow>();
     for (const r of rows) {
       if (!r.hit) continue;
+      if (engineFilter && r.engine !== engineFilter) continue;
       const prev = m.get(r.engine);
       if (!prev || new Date(r.created_at) > new Date(prev.created_at)) m.set(r.engine, r);
     }
     return Array.from(m.values()).sort((a, b) => a.engine.localeCompare(b.engine));
-  }, [rows]);
+  }, [rows, engineFilter]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"

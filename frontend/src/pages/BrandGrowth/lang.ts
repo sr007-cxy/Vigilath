@@ -131,7 +131,7 @@ interface Dict {
   queriesColAction: string;
   queriesNoSeed: string;
   queriesFilterAllSeeds: string;
-  queriesFilterAllModels: string;
+  queriesFilterEngineBadge: (engine: string) => string;
   queriesEmptyAfterFilter: string;
   queriesViewMatrix: string;
   // 命中查看弹窗 (2026-05-20)
@@ -321,7 +321,7 @@ const ZH: Dict = {
   queriesColAction: '查看',
   queriesNoSeed: '—',
   queriesFilterAllSeeds: '全部种子',
-  queriesFilterAllModels: '全部模型',
+  queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
   queriesEmptyAfterFilter: '当前筛选无匹配问题',
   queriesViewMatrix: '查矩阵 →',
   queriesViewDetail: '查看',
@@ -512,7 +512,7 @@ const EN: Dict = {
   queriesColAction: 'View',
   queriesNoSeed: '—',
   queriesFilterAllSeeds: 'All seeds',
-  queriesFilterAllModels: 'All models',
+  queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,
   queriesEmptyAfterFilter: 'No queries match the current filter',
   queriesViewMatrix: 'See matrix →',
   queriesViewDetail: 'View',
