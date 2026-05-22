@@ -25,15 +25,22 @@ export function Queries() {
   );
 }
 
+type HitFilter = '' | 'hit' | 'miss'; // '' = 全部 / 'hit' = 命中 / 'miss' = 未命中
+
 function Body({ state }: { state: ShellState }) {
   const { token, topic, selectedEngines } = state;
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [active, setActive] = useState<Row | null>(null);
   const [seedFilter, setSeedFilter] = useState<string>('');     // '' = 全部
+  const [hitFilter, setHitFilter] = useState<HitFilter>('');    // 命中筛选,scope 由 soleEngine 决定
 
   const soleEngine: EngineId | null =
     selectedEngines.length === 1 ? (selectedEngines[0] as EngineId) : null;
+
+  // soleEngine 在 → 命中 = 该引擎有命中;否则 = 任一引擎有命中
+  const isHitInScope = (r: Row): boolean =>
+    soleEngine ? r.hitEngines.includes(soleEngine) : r.totalHits > 0;
 
   useEffect(() => {
     if (!topic) return;
@@ -81,10 +88,15 @@ function Body({ state }: { state: ShellState }) {
   const filteredRows = useMemo(() => {
     return queryRows.filter(r => {
       if (seedFilter && r.seed !== seedFilter) return false;
-      if (soleEngine && !r.hitEngines.includes(soleEngine)) return false;
+      if (hitFilter) {
+        const hit = isHitInScope(r);
+        if (hitFilter === 'hit' && !hit) return false;
+        if (hitFilter === 'miss' && hit) return false;
+      }
       return true;
     });
-  }, [queryRows, seedFilter, soleEngine]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryRows, seedFilter, hitFilter, soleEngine]);
 
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
@@ -102,7 +114,7 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选条:种子提示词(模型筛选改用顶部 chip,避免双控件) */}
+      {/* 筛选条:种子提示词 + 命中状态(模型筛选改用顶部 chip,避免双控件) */}
       <div className="flex items-center gap-2 text-xs">
         <select
           value={seedFilter}
@@ -112,6 +124,16 @@ function Body({ state }: { state: ShellState }) {
         >
           <option value="">{L.queriesFilterAllSeeds}</option>
           {seedOptions.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select
+          value={hitFilter}
+          onChange={e => setHitFilter(e.target.value as HitFilter)}
+          className="px-2 py-1 rounded-md"
+          style={{ ...inputStyle, minWidth: 140 }}
+        >
+          <option value="">{L.queriesFilterAllHit}</option>
+          <option value="hit">{L.queriesFilterOnlyHit}</option>
+          <option value="miss">{L.queriesFilterOnlyMiss}</option>
         </select>
         {soleEngine && (
           <span
@@ -166,7 +188,7 @@ function Body({ state }: { state: ShellState }) {
                 </td>
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>{r.query}</td>
                 <td className="px-2 py-2 text-center">
-                  {r.totalHits > 0 ? (
+                  {isHitInScope(r) ? (
                     <span
                       className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-medium"
                       style={{ background: 'rgba(34,197,94,0.18)', color: '#15803d' }}
@@ -204,7 +226,7 @@ function Body({ state }: { state: ShellState }) {
                   })()}
                 </td>
                 <td className="px-2 py-2 text-right">
-                  {r.totalHits > 0 && (
+                  {isHitInScope(r) && (
                     <button
                       type="button"
                       onClick={() => setActive(r)}
