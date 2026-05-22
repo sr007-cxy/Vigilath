@@ -54,10 +54,10 @@ Reinforcement Loop  ←  Telemetry Collection  ←  AI Crawling/Retrieval  ←  
   /workbench/review · Review.tsx                      │  ║ Stage 2           ║
   · listTopicReviews / patchTopic                    │──▶║ Intent Expansion  ║
   · 编辑 brand profile / seeds / queries              │  ║ (扩展监控查询)     ║
-  · approveTopic → 跳转执行计划书                      ┘  ╚═══════════════════╝
+  · approveTopic → 初稿方案                      ┘  ╚═══════════════════╝
             │
             ▼
-  ④ 战略方案 ★ 改名「初稿发难」★                       ┐  ╔═══════════════════╗
+  ④ 初稿方案 ★                       ┐  ╔═══════════════════╗
   /workbench/topics/:topicId/solution                 │  ║ Stage 3           ║
   Solution.tsx                                        │──▶║ Prompt Clustering ║
   · 输入品牌官网 → 一键诊断                            │  ║ (聚类 + 关键词     ║
