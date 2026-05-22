@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type AdminAccount } from '../../services/aiTelemetryApi';
 import { authApi } from '../../services/authApi';
@@ -7,18 +7,18 @@ import { authApi } from '../../services/authApi';
 export function AdminAccounts() {
   const token = localStorage.getItem('token') || '';
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // ── 新建客户表单 state ──
-  const [formOpen, setFormOpen] = useState(false);
+  // ── 新建客户弹窗 state ──
+  const [modalOpen, setModalOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -30,9 +30,29 @@ export function AdminAccounts() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const resetForm = () => {
-    setEmail(''); setPassword(''); setName('');
-    setFormErr(null);
+  // 弹窗打开时锁滚 + Esc 关
+  useEffect(() => {
+    if (!modalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) closeModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, submitting]);
+
+  const openModal = () => {
+    setEmail(''); setPassword(''); setName(''); setFormErr(null);
+    setModalOpen(true);
+  };
+  const closeModal = () => {
+    if (submitting) return;
+    setModalOpen(false);
   };
 
   const handleCreate = async () => {
@@ -45,12 +65,9 @@ export function AdminAccounts() {
     setSubmitting(true);
     try {
       const u = await authApi.register(e, p, n || undefined);
-      setOkMsg(t('workbench.adminAccounts.createForm.successHint', { id: u.id }));
-      resetForm();
-      setFormOpen(false);
-      reload();
-      // 3s 后清成功提示
-      setTimeout(() => setOkMsg(null), 4000);
+      // 注册成功 → 直接跳到这个新客户的"新建主题"页
+      setModalOpen(false);
+      navigate(`/workbench/accounts/${u.id}/topics?new=1`);
     } catch (ex: unknown) {
       setFormErr(ex instanceof Error ? ex.message : String(ex));
     } finally {
@@ -60,7 +77,7 @@ export function AdminAccounts() {
 
   return (
     <div className="max-w-[1100px] mx-auto p-6">
-      <div className="flex items-start justify-between gap-3 mb-2">
+      <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-semibold text-primary">
             {t('workbench.adminAccounts.heading')}
@@ -69,75 +86,12 @@ export function AdminAccounts() {
             {t('workbench.adminAccounts.subtitle')}
           </p>
         </div>
-        {!formOpen && (
-          <button type="button"
-                  onClick={() => { setFormOpen(true); setOkMsg(null); }}
-                  className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap"
-                  style={{ background: 'var(--accent-primary)' }}>
-            + {t('workbench.adminAccounts.newCustomer')}
-          </button>
-        )}
+        <button type="button" onClick={openModal}
+                className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap"
+                style={{ background: 'var(--accent-primary)' }}>
+          + {t('workbench.adminAccounts.newCustomer')}
+        </button>
       </div>
-
-      {okMsg && (
-        <div className="mb-3 text-xs px-3 py-2 rounded-md"
-             style={{ background: 'rgba(16,185,129,0.10)', color: '#10b981', border: '1px solid rgba(16,185,129,0.30)' }}>
-          {okMsg}
-        </div>
-      )}
-
-      {formOpen && (
-        <div className="mb-4 rounded-lg p-4"
-             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <h2 className="text-sm font-semibold text-primary mb-3">
-            {t('workbench.adminAccounts.createForm.title')}
-          </h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="text-xs text-secondary">
-              <span className="block mb-1">{t('workbench.adminAccounts.createForm.emailLabel')} *</span>
-              <input type="email" autoComplete="off" value={email}
-                     onChange={e => setEmail(e.target.value)}
-                     placeholder={t('workbench.adminAccounts.createForm.emailPlaceholder')}
-                     className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                     style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
-            </label>
-            <label className="text-xs text-secondary">
-              <span className="block mb-1">{t('workbench.adminAccounts.createForm.passwordLabel')} *</span>
-              <input type="text" autoComplete="off" value={password}
-                     onChange={e => setPassword(e.target.value)}
-                     placeholder={t('workbench.adminAccounts.createForm.passwordPlaceholder')}
-                     className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                     style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
-            </label>
-            <label className="text-xs text-secondary">
-              <span className="block mb-1">{t('workbench.adminAccounts.createForm.nameLabel')}</span>
-              <input type="text" autoComplete="off" value={name}
-                     onChange={e => setName(e.target.value)}
-                     placeholder={t('workbench.adminAccounts.createForm.namePlaceholder')}
-                     className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                     style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
-            </label>
-          </div>
-          {formErr && (
-            <div className="mt-3 text-xs text-red-500">{formErr}</div>
-          )}
-          <div className="mt-3 flex items-center gap-2">
-            <button type="button" disabled={submitting} onClick={handleCreate}
-                    className="text-xs px-3 py-1.5 rounded-md text-white"
-                    style={{ background: 'var(--accent-primary)', opacity: submitting ? 0.5 : 1 }}>
-              {submitting
-                ? t('workbench.adminAccounts.createForm.submitting')
-                : t('workbench.adminAccounts.createForm.submit')}
-            </button>
-            <button type="button" disabled={submitting}
-                    onClick={() => { setFormOpen(false); resetForm(); }}
-                    className="text-xs px-3 py-1.5 rounded-md"
-                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-              {t('workbench.adminAccounts.createForm.cancel')}
-            </button>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="text-xs text-muted text-center py-10">
@@ -180,6 +134,78 @@ export function AdminAccounts() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── 注册新客户弹窗 ── */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+             onClick={closeModal}>
+          <div className="w-full max-w-md rounded-xl p-5 shadow-2xl"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-base font-semibold text-primary">
+                {t('workbench.adminAccounts.createForm.title')}
+              </h2>
+              <button type="button" onClick={closeModal} disabled={submitting}
+                      className="text-muted hover:text-primary text-lg leading-none"
+                      aria-label="close">×</button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.emailLabel')} *
+                </span>
+                <input type="email" autoFocus autoComplete="off" value={email}
+                       onChange={e => setEmail(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.emailPlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.passwordLabel')} *
+                </span>
+                <input type="text" autoComplete="off" value={password}
+                       onChange={e => setPassword(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.passwordPlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.nameLabel')}
+                </span>
+                <input type="text" autoComplete="off" value={name}
+                       onChange={e => setName(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.namePlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+            </div>
+            {formErr && (
+              <div className="mt-3 text-xs text-red-500">{formErr}</div>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" disabled={submitting} onClick={closeModal}
+                      className="text-xs px-3 py-1.5 rounded-md"
+                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                {t('workbench.adminAccounts.createForm.cancel')}
+              </button>
+              <button type="button" disabled={submitting} onClick={handleCreate}
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
+                      style={{ background: 'var(--accent-primary)', opacity: submitting ? 0.5 : 1 }}>
+                {submitting
+                  ? t('workbench.adminAccounts.createForm.submitting')
+                  : t('workbench.adminAccounts.createForm.submit')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

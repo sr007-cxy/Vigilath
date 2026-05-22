@@ -1,17 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
 
 export function AdminAccountTopics() {
   const { userId } = useParams<{ userId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = localStorage.getItem('token') || '';
   const { t } = useTranslation();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   // undefined = 列表;null = 新建;Topic = 编辑(admin 也用同一个 editor)
-  const [editing, setEditing] = useState<Topic | null | undefined>(undefined);
+  // URL 带 ?new=1 时(从「客户中心」注册后跳过来)直接进入新建编辑器
+  const [editing, setEditing] = useState<Topic | null | undefined>(
+    searchParams.get('new') === '1' ? null : undefined,
+  );
+
+  // 进入新建模式后清掉 URL 参数,避免刷新页面又被自动打开
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const reload = () => {
     if (!userId) return;
