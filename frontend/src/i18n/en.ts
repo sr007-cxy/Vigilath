@@ -3204,7 +3204,23 @@ const en = {
               "colName": "Name",
               "colTopicCount": "Topics",
               "adminBadge": "admin",
-              "configureTopics": "Configure topics"
+              "configureTopics": "Configure topics",
+              "newCustomer": "New customer",
+              "createForm": {
+                "title": "Register new customer account",
+                "emailLabel": "Email",
+                "emailPlaceholder": "customer@example.com",
+                "passwordLabel": "Initial password",
+                "passwordPlaceholder": "At least 6 chars — ask customer to change on first login",
+                "nameLabel": "Name (optional)",
+                "namePlaceholder": "Company or contact",
+                "submit": "Create account",
+                "submitting": "Creating…",
+                "cancel": "Cancel",
+                "successHint": "Account #{{id}} created — you can now configure topics for them",
+                "passwordTooShort": "Password must be at least 6 chars",
+                "emailRequired": "Email is required"
+              }
             },
             "adminAccountTopics": {
               "title": "User #{{userId}} topics",

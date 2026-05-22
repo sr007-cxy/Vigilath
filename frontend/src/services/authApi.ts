@@ -56,11 +56,11 @@ class AuthApi {
     return response.json();
   }
 
-  async register(email: string, password: string): Promise<RegisterResponse> {
+  async register(email: string, password: string, name?: string): Promise<RegisterResponse> {
     const response = await fetch(`${this.baseUrl}/register`, {
       method: 'POST',
       headers: localizedHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(name ? { email, password, name } : { email, password }),
     });
 
     if (!response.ok) {

@@ -3210,7 +3210,23 @@ const zh = {
               "colName": "名称",
               "colTopicCount": "主题数",
               "adminBadge": "admin",
-              "configureTopics": "配置主题"
+              "configureTopics": "配置主题",
+              "newCustomer": "新建客户",
+              "createForm": {
+                "title": "注册新客户账号",
+                "emailLabel": "邮箱",
+                "emailPlaceholder": "customer@example.com",
+                "passwordLabel": "初始密码",
+                "passwordPlaceholder": "至少 6 位 — 通知客户首次登录后改",
+                "nameLabel": "名称(可选)",
+                "namePlaceholder": "公司或联系人",
+                "submit": "创建账号",
+                "submitting": "创建中…",
+                "cancel": "取消",
+                "successHint": "已创建账号 #{{id}},现在可以替 ta 「配置主题」",
+                "passwordTooShort": "密码至少 6 位",
+                "emailRequired": "请填写邮箱"
+              }
             },
             "adminAccountTopics": {
               "title": "用户 #{{userId}} 的主题",
