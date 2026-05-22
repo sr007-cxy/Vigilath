@@ -205,10 +205,14 @@ const renderHeaderFooterImages = async (
   const widthPx = CONTENT_W_PX;
 
   // Header is the same for every page — render once.
+  // html2canvas 1.4.1 下 `display:flex;justify-content:space-between` 会把右侧文字往下挤几 px,
+  // 改用 table 两列 + text-align,文本基线对齐稳定。
   const headerHtml =
-    `<div style="font-family:${FONT_STACK};width:${widthPx}px;display:flex;align-items:center;justify-content:space-between;padding:6px 0 8px 0;border-bottom:1px solid #e2e8f0;">` +
-    `<span style="font-size:11px;color:#78788c;font-weight:600;">GApex</span>` +
-    `<span style="font-size:11px;color:#78788c;max-width:${widthPx - 120}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rightHeaderText)}</span>` +
+    `<div style="font-family:${FONT_STACK};width:${widthPx}px;padding:6px 0 8px 0;border-bottom:1px solid #e2e8f0;">` +
+    `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>` +
+    `<td style="text-align:left;font-size:11px;color:#78788c;font-weight:600;vertical-align:middle;width:80px;">GApex</td>` +
+    `<td style="text-align:right;font-size:11px;color:#78788c;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rightHeaderText)}</td>` +
+    `</tr></table>` +
     `</div>`;
   const headerImg = await captureHtmlToImage(headerHtml, widthPx);
   const headerDataUrl = headerImg.dataUrl;
@@ -218,9 +222,11 @@ const renderHeaderFooterImages = async (
   for (let p = 1; p <= totalPages; p++) {
     const pageText = t('result.pdfReport.pageOf', { current: p, total: totalPages });
     const footerHtml =
-      `<div style="font-family:${FONT_STACK};width:${widthPx}px;display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px 0;border-top:1px solid #e2e8f0;">` +
-      `<span style="font-size:10px;color:#94a3b8;">GApex · © ${year}</span>` +
-      `<span style="font-size:10px;color:#94a3b8;">${escapeHtml(pageText)}</span>` +
+      `<div style="font-family:${FONT_STACK};width:${widthPx}px;padding:8px 0 4px 0;border-top:1px solid #e2e8f0;">` +
+      `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>` +
+      `<td style="text-align:left;font-size:10px;color:#94a3b8;vertical-align:middle;">GApex · © ${year}</td>` +
+      `<td style="text-align:right;font-size:10px;color:#94a3b8;vertical-align:middle;">${escapeHtml(pageText)}</td>` +
+      `</tr></table>` +
       `</div>`;
     const footerImg = await captureHtmlToImage(footerHtml, widthPx);
     footers.push(footerImg.dataUrl);

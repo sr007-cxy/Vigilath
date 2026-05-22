@@ -111,25 +111,47 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
     `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${ringColor}" stroke-width="${stroke}" ` +
     `stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" ` +
     `transform="rotate(-90 60 60)"/></svg>`;
+
+  // 注意:html2canvas 1.4.1 渲染 flex 的 `gap` / `flex-wrap` / `align-items:center` 都会偏移,
+  // 这里改用 table-cell + vertical-align:middle 做布局,文字与背景对齐才稳定。
+  const ringOverlay =
+    `<div style="position:absolute;top:0;left:0;width:120px;height:120px;">` +
+    `<div style="display:table;width:120px;height:120px;">` +
+    `<div style="display:table-cell;vertical-align:middle;text-align:center;">` +
+    `<div style="font-size:34px;font-weight:800;line-height:1;color:#fff;">${d.score}</div>` +
+    `<div style="font-size:10px;color:#a5b4fc;margin-top:3px;line-height:1;">/ 100</div>` +
+    `</div></div></div>`;
+
+  const scorePanel =
+    `<div style="width:170px;background:#1e1b4b;background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;border-radius:12px;padding:18px 14px;text-align:center;box-sizing:border-box;">` +
+    `<div style="font-size:10px;letter-spacing:0.16em;color:#a5b4fc;text-transform:uppercase;margin-bottom:10px;">${escapeHtml(t('admin.solution.scoreLabel'))}</div>` +
+    `<div style="position:relative;width:120px;height:120px;margin:0 auto;">${ringHtml}${ringOverlay}</div>` +
+    `<div style="margin-top:10px;font-size:14px;font-weight:700;color:#a5b4fc;">${escapeHtml(d.grade || '')}</div>` +
+    `</div>`;
+
+  const tile = (bg: string, fg: string, value: number, label: string): string =>
+    `<td style="width:25%;padding:0 4px;vertical-align:top;box-sizing:border-box;">` +
+    `<div style="background:${bg};border-radius:8px;padding:10px 6px;text-align:center;">` +
+    `<div style="font-size:20px;font-weight:800;color:${fg};line-height:1.2;">${value}</div>` +
+    `<div style="font-size:10px;color:${fg};font-weight:600;margin-top:3px;line-height:1.2;">${escapeHtml(label)}</div>` +
+    `</div></td>`;
+
+  const countsTable =
+    `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;">` +
+    `<tr>` +
+    tile('#dcfce7', '#166534', d.pass_count, t('admin.solution.passLabel') as string) +
+    tile('#fef3c7', '#92400e', d.warn_count, t('admin.solution.warnLabel') as string) +
+    tile('#fee2e2', '#991b1b', d.fail_count, t('admin.solution.failLabel') as string) +
+    tile('#dbeafe', '#1e40af', d.info_count, t('admin.solution.infoLabel') as string) +
+    `</tr></table>`;
+
   return (
     blockWrapOpen('padding:6px 0 8px 0;') +
-    `<div style="display:flex;gap:14px;align-items:stretch;">` +
-    `<div style="flex-shrink:0;width:170px;background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;border-radius:12px;padding:16px 14px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
-    `<div style="font-size:10px;letter-spacing:0.16em;color:#a5b4fc;text-transform:uppercase;margin-bottom:8px;">${escapeHtml(t('admin.solution.scoreLabel'))}</div>` +
-    `<div style="position:relative;width:120px;height:120px;">${ringHtml}` +
-    `<div style="position:absolute;top:0;left:0;width:120px;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;">` +
-    `<div style="font-size:34px;font-weight:800;line-height:1;color:#fff;position:relative;top:-3px;">${d.score}</div>` +
-    `<div style="font-size:10px;color:#a5b4fc;">/ 100</div>` +
-    `</div></div>` +
-    `<div style="margin-top:8px;font-size:14px;font-weight:700;color:#a5b4fc;">${escapeHtml(d.grade || '')}</div>` +
-    `</div>` +
-    `<div style="flex:1;display:flex;gap:8px;flex-wrap:wrap;">` +
-    `<div style="flex:1;min-width:96px;background:#dcfce7;border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:#166534;">${d.pass_count}</div><div style="font-size:10px;color:#166534;font-weight:600;margin-top:2px;">${escapeHtml(t('admin.solution.passLabel'))}</div></div>` +
-    `<div style="flex:1;min-width:96px;background:#fef3c7;border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:#92400e;">${d.warn_count}</div><div style="font-size:10px;color:#92400e;font-weight:600;margin-top:2px;">${escapeHtml(t('admin.solution.warnLabel'))}</div></div>` +
-    `<div style="flex:1;min-width:96px;background:#fee2e2;border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:#991b1b;">${d.fail_count}</div><div style="font-size:10px;color:#991b1b;font-weight:600;margin-top:2px;">${escapeHtml(t('admin.solution.failLabel'))}</div></div>` +
-    `<div style="flex:1;min-width:96px;background:#dbeafe;border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:#1e40af;">${d.info_count}</div><div style="font-size:10px;color:#1e40af;font-weight:600;margin-top:2px;">${escapeHtml(t('admin.solution.infoLabel'))}</div></div>` +
-    `</div>` +
-    `</div>` +
+    `<table style="width:100%;border-collapse:separate;border-spacing:0;">` +
+    `<tr>` +
+    `<td style="width:170px;padding:0 14px 0 0;vertical-align:top;">${scorePanel}</td>` +
+    `<td style="vertical-align:middle;">${countsTable}</td>` +
+    `</tr></table>` +
     blockWrapClose
   );
 };
@@ -139,13 +161,17 @@ const buildClusterBlock = (c: SolutionDiagnosisCluster, language: string): strin
   const bullets = (c.bullets || []).slice(0, 6).map(b =>
     `<li style="font-size:11.5px;color:#475569;line-height:1.7;margin-bottom:2px;">${escapeHtml(b)}</li>`,
   ).join('');
+  // 标题 + 严重度 badge:html2canvas 1.4.1 在 flex 容器下 `align-items:center` 会让文字与 badge
+  // 错半行,这里用 inline-block + vertical-align:middle,稳定不抖。
+  const header =
+    `<div style="margin-bottom:6px;line-height:1.4;">` +
+    `<span style="display:inline-block;vertical-align:middle;font-size:13.5px;font-weight:700;color:#0f172a;margin-right:8px;">${escapeHtml(c.title_zh)}</span>` +
+    `<span style="display:inline-block;vertical-align:middle;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:${sty.bg};color:${sty.c};">${escapeHtml(sty.label)}</span>` +
+    `</div>`;
   return (
     blockWrapOpen('padding:3px 0;') +
     `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;">` +
-    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">` +
-    `<div style="font-size:13.5px;font-weight:700;color:#0f172a;">${escapeHtml(c.title_zh)}</div>` +
-    `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:${sty.bg};color:${sty.c};">${escapeHtml(sty.label)}</span>` +
-    `</div>` +
+    header +
     (c.summary
       ? `<div style="font-size:12px;color:#334155;line-height:1.75;margin-bottom:6px;">${escapeHtml(c.summary)}</div>`
       : '') +
@@ -158,22 +184,35 @@ const buildClusterBlock = (c: SolutionDiagnosisCluster, language: string): strin
 const buildExecutionLayersBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
   const layers = sol.diagnosis?.execution_layers || [];
   if (layers.length === 0) return '';
-  const cells = layers.map((l) => {
+  // 用 2 列 table 网格代替 `display:flex;gap;flex-wrap`,html2canvas 1.4.1 下 gap 会被吃掉、
+  // flex-wrap 后续行 baseline 也会漂移。table-layout:fixed + width:50% 出来的 PDF 是稳的。
+  const cellInner = (l: typeof layers[number]): string => {
     const clustersHtml = (l.clusters || []).map(c =>
       `<div style="font-size:11px;color:#475569;line-height:1.6;margin-top:3px;">· ${escapeHtml(c)}</div>`,
     ).join('');
     return (
-      `<div style="flex:1;min-width:170px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;box-sizing:border-box;">` +
+      `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">` +
       `<div style="font-size:13px;font-weight:700;color:#312e81;margin-bottom:4px;">${escapeHtml(l.title_zh)}</div>` +
       `<div style="font-size:11px;color:#64748b;line-height:1.7;margin-bottom:6px;">${escapeHtml(l.hint || '')}</div>` +
       clustersHtml +
       `</div>`
     );
-  }).join('');
+  };
+  const rows: string[] = [];
+  for (let i = 0; i < layers.length; i += 2) {
+    const left = layers[i];
+    const right = layers[i + 1];
+    rows.push(
+      `<tr>` +
+      `<td style="width:50%;padding:5px 5px 5px 0;vertical-align:top;box-sizing:border-box;">${cellInner(left)}</td>` +
+      `<td style="width:50%;padding:5px 0 5px 5px;vertical-align:top;box-sizing:border-box;">${right ? cellInner(right) : ''}</td>` +
+      `</tr>`,
+    );
+  }
   return (
     blockWrapOpen('padding:2px 0 4px 0;') +
     `<div style="font-size:11.5px;color:#475569;margin-bottom:8px;">${escapeHtml(t('admin.solution.executionLayersHint'))}</div>` +
-    `<div style="display:flex;gap:10px;flex-wrap:wrap;">${cells}</div>` +
+    `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;">${rows.join('')}</table>` +
     blockWrapClose
   );
 };
