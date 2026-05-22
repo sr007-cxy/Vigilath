@@ -2,7 +2,7 @@
 // 非 admin 用户进入这里会被预检踢回 /dashboard.
 //
 // sidebar 按"admin 角色任务"组织,而非按 pipeline stage 一步步点:
-//   操盘台 / 客户中心 / 待审批 / 监测报告 / 跑批结果
+//   操盘台 / 画像 / 待审批 / 监测报告 / 跑批结果
 // pipeline 自动跑,admin 在操盘台一屏看全管线,只在「待审批」介入。
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +37,7 @@ function SidebarIcon({ name }: { name: string }) {
       </svg>
     );
   }
-  // 客户中心:用户组
+  // 画像:用户组
   if (name === 'accounts') {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -89,7 +89,7 @@ const zh = {
             "signedInAs": "已登录为",
             "dashboard": "品牌增长",
             "adminCockpit": "操盘台",
-            "adminAccounts": "客户中心",
+            "adminAccounts": "画像",
             "adminApprovals": "待审批",
             "adminInsights": "监测报告",
             "adminRuns": "跑批结果",
@@ -3179,7 +3179,7 @@ const zh = {
                 "blocked": "异常",
                 "idle": "未启动"
               },
-              "empty": "暂无主题 — 去「客户中心」加客户 + 主题"
+              "empty": "暂无主题 — 去「画像」加客户 + 主题"
             },
             "adminApprovals": {
               "title": "待审批",
@@ -3202,8 +3202,8 @@ const zh = {
               "empty": "暂无可监测的主题"
             },
             "adminAccounts": {
-              "title": "客户中心",
-              "heading": "客户中心",
+              "title": "画像",
+              "heading": "画像",
               "subtitle": "替每个客户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
               "colId": "ID",
               "colEmail": "邮箱",
