@@ -83,10 +83,12 @@ const buildBrandBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
   const html =
     visible.map(([k, v]) => {
       const text = Array.isArray(v) ? v.join('、') : String(v || '');
+      // 单元格用 vertical-align:middle:value 多行时,label 与 value 视觉中线对齐,
+      // 不会出现 label 飘在顶上、value 长成 3 行的不对齐感。
       return (
         `<tr>` +
-        `<td style="padding:6px 12px 6px 0;color:#94a3b8;width:130px;vertical-align:top;font-size:11.5px;">${escapeHtml(k)}</td>` +
-        `<td style="padding:6px 0;color:#0f172a;line-height:1.7;font-size:12px;">${escapeHtml(text)}</td>` +
+        `<td style="padding:6px 12px 6px 0;color:#94a3b8;width:130px;vertical-align:middle;font-size:11.5px;">${escapeHtml(k)}</td>` +
+        `<td style="padding:6px 0;color:#0f172a;line-height:1.7;font-size:12px;vertical-align:middle;">${escapeHtml(text)}</td>` +
         `</tr>`
       );
     }).join('');
@@ -227,14 +229,17 @@ const buildExecutionLayersBlock = (sol: TopicStrategicSolution, t: TFunction): s
 
 const buildSevenStepsBlock = (steps: SolutionSevenStep[], t: TFunction): string => {
   if (steps.length === 0) return '';
+  // 全列 vertical-align:middle:5 列中关键动作 / 产出价值 经常多行,如果用 top,
+  // 阶段号 / 名称会飘在顶上、长描述占满整行,视觉错位。middle 让短内容居于行中线,
+  // 长描述自然居中,整张表读起来清爽。
   const rows = steps.map((s) => {
     return (
       `<tr>` +
-      `<td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#312e81;text-align:center;font-size:13px;vertical-align:top;">${s.step}</td>` +
-      `<td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#0f172a;font-size:12px;vertical-align:top;">${escapeHtml(s.name)}</td>` +
-      `<td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;color:#475569;font-size:11.5px;line-height:1.7;vertical-align:top;">${escapeHtml(s.core_goal)}</td>` +
-      `<td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;color:#0f172a;font-size:11.5px;line-height:1.7;vertical-align:top;">${escapeHtml(s.core_action)}</td>` +
-      `<td style="padding:8px 8px;border-bottom:1px solid #e5e7eb;color:#475569;font-size:11.5px;line-height:1.7;vertical-align:top;">${escapeHtml(s.output_value)}</td>` +
+      `<td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#312e81;text-align:center;font-size:13px;vertical-align:middle;">${s.step}</td>` +
+      `<td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#0f172a;font-size:12px;vertical-align:middle;">${escapeHtml(s.name)}</td>` +
+      `<td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#475569;font-size:11.5px;line-height:1.7;vertical-align:middle;">${escapeHtml(s.core_goal)}</td>` +
+      `<td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#0f172a;font-size:11.5px;line-height:1.7;vertical-align:middle;">${escapeHtml(s.core_action)}</td>` +
+      `<td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#475569;font-size:11.5px;line-height:1.7;vertical-align:middle;">${escapeHtml(s.output_value)}</td>` +
       `</tr>`
     );
   }).join('');
@@ -284,15 +289,16 @@ const buildVisionBlock = (items: SolutionVisionItem[]): string => {
 
 const buildDetailsTableBlock = (checks: SolutionDiagnosisCheck[]): string => {
   if (checks.length === 0) return '';
+  // category / status 都是单行短文本,message 可能多行 — 全行 middle 居中,统一视觉.
   const rows = checks.map((c) => (
     `<tr>` +
-    `<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#334155;vertical-align:top;">${escapeHtml(c.category)}</td>` +
-    `<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;vertical-align:top;font-weight:700;color:${
+    `<td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#334155;vertical-align:middle;">${escapeHtml(c.category)}</td>` +
+    `<td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;vertical-align:middle;font-weight:700;color:${
       c.status === 'PASS' ? '#166534' :
       c.status === 'WARN' ? '#92400e' :
       c.status === 'FAIL' ? '#991b1b' : '#1e40af'
     };">${escapeHtml(c.status)}</td>` +
-    `<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#0f172a;line-height:1.6;vertical-align:top;">${escapeHtml(c.message)}</td>` +
+    `<td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#0f172a;line-height:1.6;vertical-align:middle;">${escapeHtml(c.message)}</td>` +
     `</tr>`
   )).join('');
   return (
