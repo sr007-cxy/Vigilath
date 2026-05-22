@@ -1,7 +1,7 @@
 """v3.3 — GEO 品牌增长战略方案表
 
 Revision ID: c0d3e2a9b471
-Revises: f2d8c3a91e44
+Revises: a3d7c1f8e2b5
 Create Date: 2026-05-21 10:00:00.000000
 
 新表 ai_telemetry_topic_solutions:
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'c0d3e2a9b471'
-down_revision: Union[str, None] = 'f2d8c3a91e44'
+down_revision: Union[str, None] = 'a3d7c1f8e2b5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
