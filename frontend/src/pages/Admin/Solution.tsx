@@ -15,6 +15,7 @@ import {
   type SolutionVisionItem,
 } from '../../services/adminReviewApi';
 import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
+import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
 
 const SEVERITY_STYLE: Record<string, { c: string; bg: string }> = {
   high: { c: '#ef4444', bg: 'rgba(239,68,68,0.10)' },
@@ -121,6 +122,18 @@ export function AdminSolution() {
     }
   };
 
+  const handleExportDocx = async () => {
+    if (!sol || sol.status !== 'ready' || exporting) return;
+    setExporting(true);
+    try {
+      await exportSolutionDocx(sol, t, i18n.language || 'zh');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const isReady = sol?.status === 'ready';
   const isGenerating = sol?.status === 'generating';
   const isFailed = sol?.status === 'failed';
@@ -141,6 +154,11 @@ export function AdminSolution() {
                       className="text-xs px-3 py-1.5 rounded-md text-white"
                       style={{ background: 'var(--accent-primary)', opacity: exporting ? 0.5 : 1 }}>
                 {exporting ? t('admin.solution.exporting') : t('admin.solution.export')}
+              </button>
+              <button type="button" disabled={exporting} onClick={handleExportDocx}
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
+                      style={{ background: '#2563eb', opacity: exporting ? 0.5 : 1 }}>
+                {exporting ? t('admin.solution.exporting') : t('admin.solution.exportDocx')}
               </button>
               <button type="button" disabled={busy} onClick={handleGenerate}
                       className="text-xs px-3 py-1.5 rounded-md"

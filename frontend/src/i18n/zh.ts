@@ -2910,6 +2910,7 @@ const zh = {
               "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的体检报告",
               "backToReview": "返回审核",
               "export": "导出 PDF",
+              "exportDocx": "导出 Word",
               "exporting": "导出中…",
               "regenerate": "重新生成",
               "generate": "生成体检报告",

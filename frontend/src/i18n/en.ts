@@ -2904,6 +2904,7 @@ const en = {
               "subtitle": "Generate a deliverable health report from site diagnostics + brand profile",
               "backToReview": "Back to review",
               "export": "Export PDF",
+              "exportDocx": "Export Word",
               "exporting": "Exporting…",
               "regenerate": "Regenerate",
               "generate": "Generate report",
