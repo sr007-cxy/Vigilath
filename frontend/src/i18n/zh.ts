@@ -3248,6 +3248,7 @@ const zh = {
                 "queriesValue": "{{selected}} / {{total}} 条",
                 "colWebsite": "品牌官网",
                 "generateReport": "生成 GEO 体检报告",
+                "generating": "提交中…",
                 "later": "稍后再说",
                 "nextHint": "下一步:报告生成后,可在体检报告页继续生成「执行计划书」。"
               }

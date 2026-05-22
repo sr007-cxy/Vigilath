@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
+import { adminReviewApi } from '../../services/adminReviewApi';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
 
 export function AdminAccountTopics() {
@@ -19,6 +20,27 @@ export function AdminAccountTopics() {
   );
   // 保存成功后弹「审批报告」模态;关闭或点跳生成才消失
   const [savedTopic, setSavedTopic] = useState<Topic | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genErr, setGenErr] = useState<string | null>(null);
+
+  // 模态内一键触发体检报告生成 — 直接调 API,然后跳到 solution 页,
+  // 不让 admin 再在 solution 页重填 URL 点第二次。
+  // website 取主题资料里填的(选填,留空时后端走 4 块降级)。
+  const handleGenerateFromModal = async () => {
+    if (!savedTopic || genBusy) return;
+    setGenBusy(true); setGenErr(null);
+    try {
+      const website = (savedTopic.profile?.website || '').trim();
+      await adminReviewApi.generateStrategicSolution(savedTopic.id, website, token);
+      const id = savedTopic.id;
+      setSavedTopic(null);
+      navigate(`/workbench/topics/${id}/solution`);
+    } catch (e) {
+      setGenErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenBusy(false);
+    }
+  };
 
   // 进入新建模式后清掉 URL 参数,避免刷新页面又被自动打开
   useEffect(() => {
@@ -206,21 +228,24 @@ export function AdminAccountTopics() {
               </div>
             </dl>
 
+            {genErr && (
+              <div className="mb-3 text-xs text-red-500">{genErr}</div>
+            )}
+
             <div className="flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setSavedTopic(null)}
+              <button type="button" disabled={genBusy}
+                      onClick={() => setSavedTopic(null)}
                       className="text-xs px-3 py-1.5 rounded-md"
                       style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                 {t('workbench.adminAccountTopics.savedModal.later')}
               </button>
-              <button type="button"
-                      onClick={() => {
-                        const id = savedTopic.id;
-                        setSavedTopic(null);
-                        navigate(`/workbench/topics/${id}/solution`);
-                      }}
+              <button type="button" disabled={genBusy}
+                      onClick={handleGenerateFromModal}
                       className="text-xs px-3 py-1.5 rounded-md text-white"
-                      style={{ background: 'var(--accent-primary)' }}>
-                {t('workbench.adminAccountTopics.savedModal.generateReport')} →
+                      style={{ background: 'var(--accent-primary)', opacity: genBusy ? 0.5 : 1 }}>
+                {genBusy
+                  ? t('workbench.adminAccountTopics.savedModal.generating')
+                  : `${t('workbench.adminAccountTopics.savedModal.generateReport')} →`}
               </button>
             </div>
 

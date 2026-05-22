@@ -3242,6 +3242,7 @@ const en = {
                 "queriesValue": "{{selected}} / {{total}}",
                 "colWebsite": "Website",
                 "generateReport": "Generate GEO health report",
+                "generating": "Starting…",
                 "later": "Later",
                 "nextHint": "Next step: once the report is ready, you can generate the Execution Plan from there."
               }
