@@ -4,7 +4,7 @@
 
 import type { TFunction } from 'i18next';
 import {
-  blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml,
+  blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml, FONT_STACK,
 } from './pdfPrimitives';
 import type {
   TopicStrategicSolution, SolutionDiagnosisCluster,
@@ -105,28 +105,25 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - d.score / 100);
   const ringColor = scoreRingColor(d.score);
+  // 关键:把分数文字直接写进 SVG <text>,而不是用 HTML 覆盖层。
+  // html2canvas 把 SVG 当矢量图栅格化,SVG 内的 text 坐标是绝对的,
+  // 不受 flex / table-cell / line-height 任何"近似"逻辑影响 — 真正像素级居中。
+  // - text x=60 y=68:baseline 在 y=68,34px 字号的视觉中心约 y=56(略偏上,看着平衡)
+  // - "/100" 当 caption,baseline y=88
   const ringHtml =
     `<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">` +
     `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="#e2e8f0" stroke-width="${stroke}"/>` +
     `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${ringColor}" stroke-width="${stroke}" ` +
     `stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" ` +
-    `transform="rotate(-90 60 60)"/></svg>`;
-
-  // 注意:html2canvas 1.4.1 渲染 flex 的 `gap` / `flex-wrap` / `align-items:center` 都会偏移;
-  // 即使换成 table-cell vertical-align:middle,html2canvas 也会把"38 + /100"两行整体的几何中心
-  // 当作居中点,导致大数字往下挤(测试过仍偏下约 8-10px)。最稳的方式是绝对定位 + 像素坐标:
-  // - 数字 "38" 视觉中心放在 y=60(120px 圆环正中),字号 32px 时基线居中需 top=44(经验值)
-  // - "/100" 当作 caption,放在数字下方 y=80
-  const ringOverlay =
-    `<div style="position:absolute;top:0;left:0;width:120px;height:120px;">` +
-    `<div style="position:absolute;top:44px;left:0;width:120px;text-align:center;font-size:32px;font-weight:800;line-height:1;color:#fff;">${d.score}</div>` +
-    `<div style="position:absolute;top:80px;left:0;width:120px;text-align:center;font-size:10px;line-height:1;color:#a5b4fc;">/ 100</div>` +
-    `</div>`;
+    `transform="rotate(-90 60 60)"/>` +
+    `<text x="60" y="68" text-anchor="middle" fill="#ffffff" font-family="${FONT_STACK}" font-size="34" font-weight="800">${d.score}</text>` +
+    `<text x="60" y="88" text-anchor="middle" fill="#a5b4fc" font-family="${FONT_STACK}" font-size="10">/ 100</text>` +
+    `</svg>`;
 
   const scorePanel =
     `<div style="width:170px;background:#1e1b4b;background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;border-radius:12px;padding:18px 14px;text-align:center;box-sizing:border-box;">` +
     `<div style="font-size:10px;letter-spacing:0.16em;color:#a5b4fc;text-transform:uppercase;margin-bottom:10px;">${escapeHtml(t('admin.solution.scoreLabel'))}</div>` +
-    `<div style="position:relative;width:120px;height:120px;margin:0 auto;">${ringHtml}${ringOverlay}</div>` +
+    `<div style="width:120px;height:120px;margin:0 auto;">${ringHtml}</div>` +
     `<div style="margin-top:10px;font-size:14px;font-weight:700;color:#a5b4fc;">${escapeHtml(d.grade || '')}</div>` +
     `</div>`;
 
@@ -155,7 +152,7 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
     `<table style="width:100%;border-collapse:separate;border-spacing:0;">` +
     `<tr>` +
     `<td style="width:170px;padding:0 14px 0 0;vertical-align:top;">${scorePanel}</td>` +
-    `<td style="vertical-align:top;padding-top:8px;">${countsTable}</td>` +
+    `<td style="vertical-align:middle;">${countsTable}</td>` +
     `</tr></table>` +
     blockWrapClose
   );
