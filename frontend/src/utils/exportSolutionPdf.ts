@@ -66,9 +66,10 @@ const buildCoverBlock = (sol: TopicStrategicSolution, t: TFunction, language: st
   );
 };
 
+// 章节标题:去掉左侧紫色 border 装饰条(用户反馈视觉上偏移),只留纯标题文字。
 const buildSectionHeading = (text: string): string =>
-  blockWrapOpen('padding:14px 0 6px 0;') +
-  `<div style="font-size:17px;font-weight:800;color:#0f172a;border-left:4px solid #6366f1;padding-left:10px;">${escapeHtml(text)}</div>` +
+  blockWrapOpen('padding:16px 0 6px 0;') +
+  `<div style="font-size:17px;font-weight:800;color:#0f172a;">${escapeHtml(text)}</div>` +
   blockWrapClose;
 
 const buildBrandBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
@@ -176,15 +177,15 @@ const buildClusterBlock = (c: SolutionDiagnosisCluster, language: string): strin
     `<span style="font-weight:700;color:#0f172a;">${escapeHtml(c.title_zh)}</span>` +
     `<span style="font-weight:700;color:${sty.c};margin-left:10px;font-size:11px;">${escapeHtml(sty.label)}</span>` +
     `</div>`;
+  // 去掉外卡片的 border + 白底 — html2canvas 下卡片边距和文本基线对不齐,
+  // 用户指令"对不齐就去背景"。改用上下 padding 做卡间距,纯文本展示。
   return (
-    blockWrapOpen('padding:3px 0;') +
-    `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;">` +
+    blockWrapOpen('padding:8px 0;') +
     header +
     (c.summary
       ? `<div style="font-size:12px;color:#334155;line-height:1.75;margin-bottom:6px;">${escapeHtml(c.summary)}</div>`
       : '') +
     (bullets ? `<ul style="margin:4px 0 0 18px;padding:0;list-style:disc;">${bullets}</ul>` : '') +
-    `</div>` +
     blockWrapClose
   );
 };
@@ -194,12 +195,13 @@ const buildExecutionLayersBlock = (sol: TopicStrategicSolution, t: TFunction): s
   if (layers.length === 0) return '';
   // 用 2 列 table 网格代替 `display:flex;gap;flex-wrap`,html2canvas 1.4.1 下 gap 会被吃掉、
   // flex-wrap 后续行 baseline 也会漂移。table-layout:fixed + width:50% 出来的 PDF 是稳的。
+  // 执行层卡片:去掉灰底 + 边框,纯文字 + 标题色区分。
   const cellInner = (l: typeof layers[number]): string => {
     const clustersHtml = (l.clusters || []).map(c =>
       `<div style="font-size:11px;color:#475569;line-height:1.6;margin-top:3px;">· ${escapeHtml(c)}</div>`,
     ).join('');
     return (
-      `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">` +
+      `<div style="padding:4px 0;">` +
       `<div style="font-size:13px;font-weight:700;color:#312e81;margin-bottom:4px;">${escapeHtml(l.title_zh)}</div>` +
       `<div style="font-size:11px;color:#64748b;line-height:1.7;margin-bottom:6px;">${escapeHtml(l.hint || '')}</div>` +
       clustersHtml +
@@ -256,26 +258,27 @@ const buildSevenStepsBlock = (steps: SolutionSevenStep[], t: TFunction): string 
 };
 
 const buildKeywordTierBlock = (tier: SolutionKeywordTier): string => {
+  // 关键词组:去掉外卡的 border + 白底,chip 自身的浅紫底色保留 — chip 是自包含的小框,
+  // 文字+chip 背景在同一个 span 内,不存在跨元素对齐问题。
   const chips = tier.keywords.map(k =>
     `<span style="display:inline-block;background:#eef2ff;color:#312e81;border-radius:6px;padding:3px 8px;margin:0 4px 4px 0;font-size:11px;">${escapeHtml(k)}</span>`,
   ).join('');
   return (
-    blockWrapOpen('padding:3px 0;') +
-    `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;">` +
+    blockWrapOpen('padding:8px 0;') +
     `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">${escapeHtml(tier.title_zh)}</div>` +
     (tier.description
       ? `<div style="font-size:11.5px;color:#64748b;line-height:1.7;margin-bottom:8px;">${escapeHtml(tier.description)}</div>`
       : '') +
     (chips || `<div style="font-size:11px;color:#94a3b8;">—</div>`) +
-    `</div>` +
     blockWrapClose
   );
 };
 
 const buildVisionBlock = (items: SolutionVisionItem[]): string => {
   if (items.length === 0) return '';
+  // 愿景:去外卡 border + 灰底,纯标题(深紫加粗)+ 正文(深灰)。
   const html = items.map((v) => (
-    `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#f8fafc;margin-bottom:6px;">` +
+    `<div style="padding:6px 0 10px 0;">` +
     `<div style="font-size:13px;font-weight:700;color:#312e81;margin-bottom:6px;">${escapeHtml(v.title)}</div>` +
     `<div style="font-size:12px;color:#334155;line-height:1.85;">${escapeHtml(v.body)}</div>` +
     `</div>`
