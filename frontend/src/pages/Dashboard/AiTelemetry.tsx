@@ -2223,7 +2223,7 @@ export function TopicEditor({
       if (saved?.id && !adminMode) {
         await topicProfileApi.submitForReview(saved.id, token);
       }
-      onSaveDone(saved);
+      onSaveDone(saved ?? undefined);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSubmitErr(msg);
