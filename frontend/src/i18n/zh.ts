@@ -2827,7 +2827,7 @@ const zh = {
               "byUser": "提交人:"
             },
             "executionPlan": {
-              "title": "执行计划书",
+              "title": "执行策略与规划(执行计划书)",
               "subtitle": "项目总体状况 / 主题日志 / 泛化日志 / 运行进度",
               "backToReview": "返回审核",
               "rerun": "重新触发跑批",
@@ -2863,7 +2863,7 @@ const zh = {
               }
             },
             "contentReview": {
-              "title": "内容审核",
+              "title": "内容发布与审核",
               "subtitle": "选账号 + 主题查看 LLM 生成的文案稿;先审核内容,再为通过稿件选发布平台和媒体",
               "refresh": "刷新",
               "empty": "该筛选条件下没有文档",
@@ -2906,7 +2906,7 @@ const zh = {
               }
             },
             "solution": {
-              "title": "GEO 体检报告",
+              "title": "健康度诊断报告(GEO 体检报告)",
               "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的体检报告",
               "backToReview": "返回审核",
               "export": "导出 PDF",
@@ -3165,13 +3165,12 @@ const zh = {
               "colTopic": "主题",
               "colCustomer": "客户",
               "stage": {
-                "submit": "录入",
-                "review": "审批",
-                "diagnose": "体检",
-                "plan": "计划",
-                "content": "内容",
-                "crawl": "抓取",
-                "insight": "监测"
+                "submit": "品牌与主题创建",
+                "review": "诊断与方案预评估",
+                "diagnose": "健康度诊断报告",
+                "plan": "执行策略与规划",
+                "content": "内容发布与审核",
+                "insight": "效果查验与更新"
               },
               "stageStatus": {
                 "done": "完成",
@@ -3186,9 +3185,9 @@ const zh = {
               "title": "待审批",
               "heading": "待审批",
               "subtitle": "需要 admin 介入的全部审批集中入口。",
-              "topicReview": "主题审批",
-              "topicReviewHint": "审核新提交的主题资料 / 种子词 / 监测查询",
-              "contentReview": "内容审核",
+              "topicReview": "诊断与方案预评估",
+              "topicReviewHint": "审核新提交的主题资料 / 种子词 / 监测查询,完成方案预评估",
+              "contentReview": "内容发布与审核",
               "contentReviewHint": "审核每日生成的初稿,选平台 / 媒介后发布",
               "pendingBadge": "{{n}} 待审",
               "goReview": "去审 →",
@@ -3197,7 +3196,7 @@ const zh = {
             "adminInsights": {
               "title": "监测报告",
               "heading": "监测报告",
-              "subtitle": "Stage 8 反哺信号 — 命中率 / 排名 / 立场,异常时回到主题审批调种子。",
+              "subtitle": "效果查验与更新 — 命中率 / 排名 / 立场反哺信号,异常时回到「诊断与方案预评估」调种子。",
               "pickTopic": "选一个主题查看反哺数据",
               "view": "查看 →",
               "empty": "暂无可监测的主题"

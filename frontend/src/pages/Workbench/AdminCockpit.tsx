@@ -9,10 +9,10 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { adminReviewApi, type TopicReviewListItem } from '../../services/adminReviewApi';
 
-type StageKey = 'submit' | 'review' | 'diagnose' | 'plan' | 'content' | 'crawl' | 'insight';
+type StageKey = 'submit' | 'review' | 'diagnose' | 'plan' | 'content' | 'insight';
 type StageState = 'done' | 'running' | 'pending' | 'blocked' | 'idle';
 
-const STAGE_ORDER: StageKey[] = ['submit', 'review', 'diagnose', 'plan', 'content', 'crawl', 'insight'];
+const STAGE_ORDER: StageKey[] = ['submit', 'review', 'diagnose', 'plan', 'content', 'insight'];
 
 const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }> = {
   done:    { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)' },
@@ -25,17 +25,17 @@ const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }>
 function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageState; to: string }> {
   const tid = t.topic_id;
   const sub = t.submission_status;
-  // submit = 录入完成(只要有 topic 就算 done)
+  // submit = 品牌与主题创建(只要有 topic 就算 done)
   const submit: StageState = 'done';
-  // review = 审批,pending/rejected/approved
+  // review = 诊断与方案预评估,pending/rejected/approved
   const review: StageState =
     sub === 'approved' ? 'done' :
     sub === 'rejected' ? 'blocked' :
     sub === 'pending'  ? 'pending' : 'idle';
   // 审批没过就不进入后续 stage
   const approved = sub === 'approved';
-  // 体检报告 / 计划 / 内容 / 抓取 / 监测:批准后才"可启动",这里没拉详细状态,
-  // 全部标 idle(可点入查看),后续如果后端给字段再升级
+  // 健康度诊断报告 / 执行策略与规划 / 内容发布与审核 / 效果查验与更新:批准后才"可启动",
+  // 这里没拉详细状态,全部标 idle(可点入查看),后续如果后端给字段再升级
   const after: StageState = approved ? 'idle' : 'idle';
   return {
     submit:   { state: submit,  to: `/workbench/accounts/${t.user_id}/topics` },
@@ -43,7 +43,8 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
     diagnose: { state: after,   to: `/workbench/topics/${tid}/solution` },
     plan:     { state: after,   to: `/workbench/topics/${tid}/execution-plan` },
     content:  { state: after,   to: `/workbench/content-review?topic=${tid}` },
-    crawl:    { state: after,   to: `/workbench/runs` },
+    // 效果查验与更新 = 原 crawl(运行结果)+ insight(反哺监测)合并;入口走监测看板,
+    // 跑批结果可从 sidebar「跑批结果」单独进入
     insight:  { state: after,   to: `/workbench/insights` },
   };
 }

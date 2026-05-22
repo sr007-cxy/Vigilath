@@ -2821,7 +2821,7 @@ const en = {
               "byUser": "Submitted by:"
             },
             "executionPlan": {
-              "title": "Execution Plan",
+              "title": "Strategy & Plan (Execution Plan)",
               "subtitle": "Overview / Topic changelog / Expansion log / Run progress",
               "backToReview": "Back to review",
               "rerun": "Re-trigger run",
@@ -2857,7 +2857,7 @@ const en = {
               }
             },
             "contentReview": {
-              "title": "Content Review",
+              "title": "Content Publish & Review",
               "subtitle": "Pick an account + topic to review generated drafts; approve first, then mark publish platforms and media",
               "refresh": "Refresh",
               "empty": "No documents match this filter",
@@ -2900,7 +2900,7 @@ const en = {
               }
             },
             "solution": {
-              "title": "GEO Health Report",
+              "title": "Health Report (GEO Health Report)",
               "subtitle": "Generate a deliverable health report from site diagnostics + brand profile",
               "backToReview": "Back to review",
               "export": "Export PDF",
@@ -3159,13 +3159,12 @@ const en = {
               "colTopic": "Topic",
               "colCustomer": "Customer",
               "stage": {
-                "submit": "Submit",
-                "review": "Review",
-                "diagnose": "Health",
-                "plan": "Plan",
+                "submit": "Brand & Topic",
+                "review": "Pre-review",
+                "diagnose": "Health Report",
+                "plan": "Strategy",
                 "content": "Content",
-                "crawl": "Crawl",
-                "insight": "Insights"
+                "insight": "Outcome"
               },
               "stageStatus": {
                 "done": "done",
@@ -3180,9 +3179,9 @@ const en = {
               "title": "Approvals",
               "heading": "Approvals",
               "subtitle": "Central hub for everything that needs admin sign-off.",
-              "topicReview": "Topic review",
-              "topicReviewHint": "Review newly submitted topic profile / seeds / monitored queries",
-              "contentReview": "Content review",
+              "topicReview": "Diagnose & pre-review",
+              "topicReviewHint": "Review newly submitted topic profile / seeds / monitored queries; finalize the pre-evaluation",
+              "contentReview": "Content publish & review",
               "contentReviewHint": "Approve daily-generated drafts and pick distribution platform / media",
               "pendingBadge": "{{n}} pending",
               "goReview": "Review →",
@@ -3191,7 +3190,7 @@ const en = {
             "adminInsights": {
               "title": "Insights",
               "heading": "Insights",
-              "subtitle": "Stage 8 feedback signals — hit rate, ranking, stance. Loops back to topic review when anomalies appear.",
+              "subtitle": "Outcome verification & iteration — hit rate, ranking, stance feedback signals. Loops back to diagnose & pre-review when anomalies appear.",
               "pickTopic": "Pick a topic to inspect feedback data",
               "view": "View →",
               "empty": "No monitored topics yet"
