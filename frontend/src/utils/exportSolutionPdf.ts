@@ -12,16 +12,20 @@ import type {
   SolutionDiagnosisCheck,
 } from '../services/adminReviewApi';
 
+// 严重度标签:去掉 pill 背景,只用纯文字 + 颜色。
+// 原因:html2canvas 下"title + 带背景的小 badge"在同一行很难真居中(标题字号 13.5,
+// badge 字号 10.5 + padding,line-box 算出来基线差几 px,反复调整都对不齐)。
+// 用户指令:对不齐就别用背景,改纯文字。
 const SEVERITY_STYLE = {
-  high: { c: '#991b1b', bg: '#fee2e2', label: '重点突破' },
-  med:  { c: '#92400e', bg: '#fef3c7', label: '建议补强' },
-  low:  { c: '#166534', bg: '#dcfce7', label: '已达标' },
+  high: { c: '#991b1b', label: '重点突破' },
+  med:  { c: '#92400e', label: '建议补强' },
+  low:  { c: '#166534', label: '已达标' },
 } as const;
 
 const SEVERITY_STYLE_EN = {
-  high: { c: '#991b1b', bg: '#fee2e2', label: 'Priority gap' },
-  med:  { c: '#92400e', bg: '#fef3c7', label: 'Reinforce' },
-  low:  { c: '#166534', bg: '#dcfce7', label: 'On par' },
+  high: { c: '#991b1b', label: 'Priority gap' },
+  med:  { c: '#92400e', label: 'Reinforce' },
+  low:  { c: '#166534', label: 'On par' },
 } as const;
 
 const scoreRingColor = (s: number): string => {
@@ -165,19 +169,13 @@ const buildClusterBlock = (c: SolutionDiagnosisCluster, language: string): strin
   const bullets = (c.bullets || []).slice(0, 6).map(b =>
     `<li style="font-size:11.5px;color:#475569;line-height:1.7;margin-bottom:2px;">${escapeHtml(b)}</li>`,
   ).join('');
-  // 标题 + 严重度 badge:html2canvas 1.4.1 下 inline-block + vertical-align:middle 也会因
-  // 两个 span 字号差 + padding 导致 badge 中线偏离 title 中线(image 5 看得到)。
-  // 改成 2 列 table:table-cell vertical-align:middle 在 html2canvas 下渲染最稳。
+  // 标题 + 严重度标签:都是纯文字、同 baseline、同 line-height,
+  // html2canvas 下天然对齐,无背景就无法错位。
   const header =
-    `<table style="border-collapse:separate;border-spacing:0;margin-bottom:6px;">` +
-    `<tr>` +
-    `<td style="vertical-align:middle;padding:0 10px 0 0;">` +
-    `<span style="font-size:13.5px;font-weight:700;color:#0f172a;">${escapeHtml(c.title_zh)}</span>` +
-    `</td>` +
-    `<td style="vertical-align:middle;">` +
-    `<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:${sty.bg};color:${sty.c};line-height:1.3;">${escapeHtml(sty.label)}</span>` +
-    `</td>` +
-    `</tr></table>`;
+    `<div style="margin-bottom:6px;font-size:13.5px;line-height:1.4;">` +
+    `<span style="font-weight:700;color:#0f172a;">${escapeHtml(c.title_zh)}</span>` +
+    `<span style="font-weight:700;color:${sty.c};margin-left:10px;font-size:11px;">${escapeHtml(sty.label)}</span>` +
+    `</div>`;
   return (
     blockWrapOpen('padding:3px 0;') +
     `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;">` +

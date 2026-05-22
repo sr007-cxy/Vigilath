@@ -196,6 +196,11 @@ const captureHtmlToImage = async (
 };
 
 // Pre-render all per-page header/footer images so CJK text works.
+//
+// IMPORTANT:页眉页脚的左右文字必须同 baseline。HTML 里 Latin-only "GApex"
+// 跟 CJK-mixed 右文(包含中文)在 html2canvas 下会被算成两套 line-box,基线差几 px,
+// 哪怕都用 vertical-align:middle 也对不齐。唯一可靠做法:整条做成单个 SVG,
+// 两个 <text> 节点 y 坐标完全一致(SVG 的 y 就是 baseline,deterministic)。
 const renderHeaderFooterImages = async (
   opts: StandardHeaderFooterOptions,
   totalPages: number,
@@ -204,30 +209,28 @@ const renderHeaderFooterImages = async (
   const year = new Date().getFullYear();
   const widthPx = CONTENT_W_PX;
 
-  // Header is the same for every page — render once.
-  // html2canvas 1.4.1 下 `display:flex;justify-content:space-between` 会把右侧文字往下挤几 px,
-  // 改用 table 两列 + text-align,文本基线对齐稳定。
+  // SVG headers/footers — Latin+CJK text 同 baseline,无需理会 line-box 偏移
+  const HDR_FONT = `'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif`;
   const headerHtml =
-    `<div style="font-family:${FONT_STACK};width:${widthPx}px;padding:6px 0 8px 0;border-bottom:1px solid #e2e8f0;">` +
-    `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>` +
-    `<td style="text-align:left;font-size:11px;color:#78788c;font-weight:600;vertical-align:middle;width:80px;">GApex</td>` +
-    `<td style="text-align:right;font-size:11px;color:#78788c;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rightHeaderText)}</td>` +
-    `</tr></table>` +
-    `</div>`;
+    `<div style="width:${widthPx}px;background:#fff;">` +
+    `<svg width="${widthPx}" height="22" xmlns="http://www.w3.org/2000/svg" font-family="${HDR_FONT}">` +
+    `<text x="0" y="14" font-size="11" font-weight="600" fill="#78788c">GApex</text>` +
+    `<text x="${widthPx}" y="14" text-anchor="end" font-size="11" fill="#78788c">${escapeHtml(rightHeaderText)}</text>` +
+    `<line x1="0" y1="21" x2="${widthPx}" y2="21" stroke="#e2e8f0" stroke-width="1"/>` +
+    `</svg></div>`;
   const headerImg = await captureHtmlToImage(headerHtml, widthPx);
   const headerDataUrl = headerImg.dataUrl;
 
-  // Footer varies per page (page number), render each.
   const footers: string[] = [];
   for (let p = 1; p <= totalPages; p++) {
     const pageText = t('result.pdfReport.pageOf', { current: p, total: totalPages });
     const footerHtml =
-      `<div style="font-family:${FONT_STACK};width:${widthPx}px;padding:8px 0 4px 0;border-top:1px solid #e2e8f0;">` +
-      `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>` +
-      `<td style="text-align:left;font-size:10px;color:#94a3b8;vertical-align:middle;">GApex · © ${year}</td>` +
-      `<td style="text-align:right;font-size:10px;color:#94a3b8;vertical-align:middle;">${escapeHtml(pageText)}</td>` +
-      `</tr></table>` +
-      `</div>`;
+      `<div style="width:${widthPx}px;background:#fff;">` +
+      `<svg width="${widthPx}" height="22" xmlns="http://www.w3.org/2000/svg" font-family="${HDR_FONT}">` +
+      `<line x1="0" y1="1" x2="${widthPx}" y2="1" stroke="#e2e8f0" stroke-width="1"/>` +
+      `<text x="0" y="15" font-size="10" fill="#94a3b8">GApex · © ${year}</text>` +
+      `<text x="${widthPx}" y="15" text-anchor="end" font-size="10" fill="#94a3b8">${escapeHtml(pageText)}</text>` +
+      `</svg></div>`;
     const footerImg = await captureHtmlToImage(footerHtml, widthPx);
     footers.push(footerImg.dataUrl);
   }
