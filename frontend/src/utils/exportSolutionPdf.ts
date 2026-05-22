@@ -4,7 +4,7 @@
 
 import type { TFunction } from 'i18next';
 import {
-  blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml, FONT_STACK,
+  blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml,
 } from './pdfPrimitives';
 import type {
   TopicStrategicSolution, SolutionDiagnosisCluster,
@@ -107,60 +107,26 @@ const buildBrandBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
 const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
   const d = sol.diagnosis;
   if (!d) return '';
-  const radius = 50;
-  const stroke = 8;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - d.score / 100);
   const ringColor = scoreRingColor(d.score);
-  // 关键:把分数文字直接写进 SVG <text>,而不是用 HTML 覆盖层。
-  // html2canvas 把 SVG 当矢量图栅格化,SVG 内的 text 坐标是绝对的,
-  // 不受 flex / table-cell / line-height 任何"近似"逻辑影响 — 真正像素级居中。
-  // - text x=60 y=68:baseline 在 y=68,34px 字号的视觉中心约 y=56(略偏上,看着平衡)
-  // - "/100" 当 caption,baseline y=88
-  const ringHtml =
-    `<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">` +
-    `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="#e2e8f0" stroke-width="${stroke}"/>` +
-    `<circle cx="60" cy="60" r="${radius}" fill="none" stroke="${ringColor}" stroke-width="${stroke}" ` +
-    `stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" ` +
-    `transform="rotate(-90 60 60)"/>` +
-    `<text x="60" y="68" text-anchor="middle" fill="#ffffff" font-family="${FONT_STACK}" font-size="34" font-weight="800">${d.score}</text>` +
-    `<text x="60" y="88" text-anchor="middle" fill="#a5b4fc" font-family="${FONT_STACK}" font-size="10">/ 100</text>` +
-    `</svg>`;
-
-  const scorePanel =
-    `<div style="width:170px;background:#1e1b4b;background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;border-radius:12px;padding:18px 14px;text-align:center;box-sizing:border-box;">` +
-    `<div style="font-size:10px;letter-spacing:0.16em;color:#a5b4fc;text-transform:uppercase;margin-bottom:10px;">${escapeHtml(t('admin.solution.scoreLabel'))}</div>` +
-    `<div style="width:120px;height:120px;margin:0 auto;">${ringHtml}</div>` +
-    `<div style="margin-top:10px;font-size:14px;font-weight:700;color:#a5b4fc;">${escapeHtml(d.grade || '')}</div>` +
-    `</div>`;
-
-  // tile 用固定高度 + table-cell 居中,数字和标签在彩色背景里真居中
-  // (不写高度时,html2canvas 把内容贴顶,会有空白漂在底部)
-  const TILE_H = 76;
-  const tile = (bg: string, fg: string, value: number, label: string): string =>
-    `<td style="width:25%;padding:0 4px;vertical-align:top;box-sizing:border-box;">` +
-    `<div style="background:${bg};border-radius:8px;height:${TILE_H}px;display:table;width:100%;">` +
-    `<div style="display:table-cell;vertical-align:middle;text-align:center;padding:0 6px;">` +
-    `<div style="font-size:22px;font-weight:800;color:${fg};line-height:1;">${value}</div>` +
-    `<div style="font-size:10px;color:${fg};font-weight:600;margin-top:5px;line-height:1;">${escapeHtml(label)}</div>` +
-    `</div></div></td>`;
-
-  const countsTable =
-    `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;">` +
-    `<tr>` +
-    tile('#dcfce7', '#166534', d.pass_count, t('admin.solution.passLabel') as string) +
-    tile('#fef3c7', '#92400e', d.warn_count, t('admin.solution.warnLabel') as string) +
-    tile('#fee2e2', '#991b1b', d.fail_count, t('admin.solution.failLabel') as string) +
-    tile('#dbeafe', '#1e40af', d.info_count, t('admin.solution.infoLabel') as string) +
-    `</tr></table>`;
-
+  // 评分:删掉深色面板背景 + 圆环图 + 4 个彩色 tile,改成纯文字行
+  // (用户:不要文字背景)。分数用大字号 + 评分色,4 项计数用「· 」分隔。
   return (
-    blockWrapOpen('padding:6px 0 8px 0;') +
-    `<table style="width:100%;border-collapse:separate;border-spacing:0;">` +
-    `<tr>` +
-    `<td style="width:170px;padding:0 14px 0 0;vertical-align:top;">${scorePanel}</td>` +
-    `<td style="vertical-align:middle;">${countsTable}</td>` +
-    `</tr></table>` +
+    blockWrapOpen('padding:8px 0;') +
+    `<div style="margin-bottom:8px;">` +
+    `<span style="font-size:11px;color:#94a3b8;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;margin-right:10px;">${escapeHtml(t('admin.solution.scoreLabel'))}</span>` +
+    `<span style="font-size:32px;font-weight:800;color:${ringColor};vertical-align:middle;">${d.score}</span>` +
+    `<span style="font-size:14px;color:#94a3b8;margin-left:4px;vertical-align:middle;">/ 100</span>` +
+    `<span style="font-size:16px;font-weight:700;color:${ringColor};margin-left:16px;vertical-align:middle;">${escapeHtml(d.grade || '')}</span>` +
+    `</div>` +
+    `<div style="font-size:12px;line-height:1.7;color:#334155;">` +
+    `<span style="color:#166534;font-weight:700;">${escapeHtml(t('admin.solution.passLabel'))} ${d.pass_count}</span>` +
+    `<span style="color:#cbd5e1;margin:0 8px;">·</span>` +
+    `<span style="color:#92400e;font-weight:700;">${escapeHtml(t('admin.solution.warnLabel'))} ${d.warn_count}</span>` +
+    `<span style="color:#cbd5e1;margin:0 8px;">·</span>` +
+    `<span style="color:#991b1b;font-weight:700;">${escapeHtml(t('admin.solution.failLabel'))} ${d.fail_count}</span>` +
+    `<span style="color:#cbd5e1;margin:0 8px;">·</span>` +
+    `<span style="color:#1e40af;font-weight:700;">${escapeHtml(t('admin.solution.infoLabel'))} ${d.info_count}</span>` +
+    `</div>` +
     blockWrapClose
   );
 };
@@ -229,9 +195,8 @@ const buildExecutionLayersBlock = (sol: TopicStrategicSolution, t: TFunction): s
 
 const buildSevenStepsBlock = (steps: SolutionSevenStep[], t: TFunction): string => {
   if (steps.length === 0) return '';
-  // 全列 vertical-align:middle:5 列中关键动作 / 产出价值 经常多行,如果用 top,
-  // 阶段号 / 名称会飘在顶上、长描述占满整行,视觉错位。middle 让短内容居于行中线,
-  // 长描述自然居中,整张表读起来清爽。
+  // 七步法:去掉表格外框 + 表头底色,改成无背景的表格,只用下边线分隔行。
+  // 表头去掉淡紫色底色,只用加粗 + 深紫色文字。
   const rows = steps.map((s) => {
     return (
       `<tr>` +
@@ -245,31 +210,31 @@ const buildSevenStepsBlock = (steps: SolutionSevenStep[], t: TFunction): string 
   }).join('');
   return (
     blockWrapOpen('padding:4px 0;') +
-    `<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:11.5px;">` +
-    `<thead><tr style="background:#eef2ff;">` +
-    `<th style="padding:8px 8px;text-align:center;font-size:10.5px;color:#312e81;font-weight:700;width:40px;">${escapeHtml(t('admin.solution.stepCol.step'))}</th>` +
-    `<th style="padding:8px 8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:110px;">${escapeHtml(t('admin.solution.stepCol.name'))}</th>` +
-    `<th style="padding:8px 8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:140px;">${escapeHtml(t('admin.solution.stepCol.core_goal'))}</th>` +
-    `<th style="padding:8px 8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;">${escapeHtml(t('admin.solution.stepCol.core_action'))}</th>` +
-    `<th style="padding:8px 8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:140px;">${escapeHtml(t('admin.solution.stepCol.output_value'))}</th>` +
+    `<table style="width:100%;border-collapse:collapse;font-size:11.5px;">` +
+    `<thead><tr>` +
+    `<th style="padding:8px;text-align:center;font-size:10.5px;color:#312e81;font-weight:700;width:40px;border-bottom:2px solid #cbd5e1;">${escapeHtml(t('admin.solution.stepCol.step'))}</th>` +
+    `<th style="padding:8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:110px;border-bottom:2px solid #cbd5e1;">${escapeHtml(t('admin.solution.stepCol.name'))}</th>` +
+    `<th style="padding:8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:140px;border-bottom:2px solid #cbd5e1;">${escapeHtml(t('admin.solution.stepCol.core_goal'))}</th>` +
+    `<th style="padding:8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;border-bottom:2px solid #cbd5e1;">${escapeHtml(t('admin.solution.stepCol.core_action'))}</th>` +
+    `<th style="padding:8px;text-align:left;font-size:10.5px;color:#312e81;font-weight:700;width:140px;border-bottom:2px solid #cbd5e1;">${escapeHtml(t('admin.solution.stepCol.output_value'))}</th>` +
     `</tr></thead><tbody>${rows}</tbody></table>` +
     blockWrapClose
   );
 };
 
 const buildKeywordTierBlock = (tier: SolutionKeywordTier): string => {
-  // 关键词组:去掉外卡的 border + 白底,chip 自身的浅紫底色保留 — chip 是自包含的小框,
-  // 文字+chip 背景在同一个 span 内,不存在跨元素对齐问题。
-  const chips = tier.keywords.map(k =>
-    `<span style="display:inline-block;background:#eef2ff;color:#312e81;border-radius:6px;padding:3px 8px;margin:0 4px 4px 0;font-size:11px;">${escapeHtml(k)}</span>`,
-  ).join('');
+  // 关键词组:chip 的浅紫底色也去掉(用户:不要文字背景),
+  // 关键词用纯深紫色文字 + 「 · 」分隔,跟一般书面正文一致。
+  const keywordText = tier.keywords.length > 0
+    ? tier.keywords.map(escapeHtml).join('  ·  ')
+    : '—';
   return (
     blockWrapOpen('padding:8px 0;') +
     `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">${escapeHtml(tier.title_zh)}</div>` +
     (tier.description
-      ? `<div style="font-size:11.5px;color:#64748b;line-height:1.7;margin-bottom:8px;">${escapeHtml(tier.description)}</div>`
+      ? `<div style="font-size:11.5px;color:#64748b;line-height:1.7;margin-bottom:6px;">${escapeHtml(tier.description)}</div>`
       : '') +
-    (chips || `<div style="font-size:11px;color:#94a3b8;">—</div>`) +
+    `<div style="font-size:11.5px;color:#312e81;line-height:1.85;">${keywordText}</div>` +
     blockWrapClose
   );
 };
@@ -304,7 +269,7 @@ const buildDetailsTableBlock = (checks: SolutionDiagnosisCheck[]): string => {
   )).join('');
   return (
     blockWrapOpen('padding:4px 0;') +
-    `<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">` +
+    `<table style="width:100%;border-collapse:collapse;">` +
     `<tbody>${rows}</tbody></table>` +
     blockWrapClose
   );
