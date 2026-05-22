@@ -112,15 +112,16 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
     `stroke-linecap="round" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}" ` +
     `transform="rotate(-90 60 60)"/></svg>`;
 
-  // 注意:html2canvas 1.4.1 渲染 flex 的 `gap` / `flex-wrap` / `align-items:center` 都会偏移,
-  // 这里改用 table-cell + vertical-align:middle 做布局,文字与背景对齐才稳定。
+  // 注意:html2canvas 1.4.1 渲染 flex 的 `gap` / `flex-wrap` / `align-items:center` 都会偏移;
+  // 即使换成 table-cell vertical-align:middle,html2canvas 也会把"38 + /100"两行整体的几何中心
+  // 当作居中点,导致大数字往下挤(测试过仍偏下约 8-10px)。最稳的方式是绝对定位 + 像素坐标:
+  // - 数字 "38" 视觉中心放在 y=60(120px 圆环正中),字号 32px 时基线居中需 top=44(经验值)
+  // - "/100" 当作 caption,放在数字下方 y=80
   const ringOverlay =
     `<div style="position:absolute;top:0;left:0;width:120px;height:120px;">` +
-    `<div style="display:table;width:120px;height:120px;">` +
-    `<div style="display:table-cell;vertical-align:middle;text-align:center;">` +
-    `<div style="font-size:34px;font-weight:800;line-height:1;color:#fff;">${d.score}</div>` +
-    `<div style="font-size:10px;color:#a5b4fc;margin-top:3px;line-height:1;">/ 100</div>` +
-    `</div></div></div>`;
+    `<div style="position:absolute;top:44px;left:0;width:120px;text-align:center;font-size:32px;font-weight:800;line-height:1;color:#fff;">${d.score}</div>` +
+    `<div style="position:absolute;top:80px;left:0;width:120px;text-align:center;font-size:10px;line-height:1;color:#a5b4fc;">/ 100</div>` +
+    `</div>`;
 
   const scorePanel =
     `<div style="width:170px;background:#1e1b4b;background:linear-gradient(135deg,#0f172a,#312e81);color:#fff;border-radius:12px;padding:18px 14px;text-align:center;box-sizing:border-box;">` +
@@ -129,12 +130,16 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
     `<div style="margin-top:10px;font-size:14px;font-weight:700;color:#a5b4fc;">${escapeHtml(d.grade || '')}</div>` +
     `</div>`;
 
+  // tile 用固定高度 + table-cell 居中,数字和标签在彩色背景里真居中
+  // (不写高度时,html2canvas 把内容贴顶,会有空白漂在底部)
+  const TILE_H = 76;
   const tile = (bg: string, fg: string, value: number, label: string): string =>
     `<td style="width:25%;padding:0 4px;vertical-align:top;box-sizing:border-box;">` +
-    `<div style="background:${bg};border-radius:8px;padding:10px 6px;text-align:center;">` +
-    `<div style="font-size:20px;font-weight:800;color:${fg};line-height:1.2;">${value}</div>` +
-    `<div style="font-size:10px;color:${fg};font-weight:600;margin-top:3px;line-height:1.2;">${escapeHtml(label)}</div>` +
-    `</div></td>`;
+    `<div style="background:${bg};border-radius:8px;height:${TILE_H}px;display:table;width:100%;">` +
+    `<div style="display:table-cell;vertical-align:middle;text-align:center;padding:0 6px;">` +
+    `<div style="font-size:22px;font-weight:800;color:${fg};line-height:1;">${value}</div>` +
+    `<div style="font-size:10px;color:${fg};font-weight:600;margin-top:5px;line-height:1;">${escapeHtml(label)}</div>` +
+    `</div></div></td>`;
 
   const countsTable =
     `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;">` +
@@ -150,7 +155,7 @@ const buildScoreBlock = (sol: TopicStrategicSolution, t: TFunction): string => {
     `<table style="width:100%;border-collapse:separate;border-spacing:0;">` +
     `<tr>` +
     `<td style="width:170px;padding:0 14px 0 0;vertical-align:top;">${scorePanel}</td>` +
-    `<td style="vertical-align:middle;">${countsTable}</td>` +
+    `<td style="vertical-align:top;padding-top:8px;">${countsTable}</td>` +
     `</tr></table>` +
     blockWrapClose
   );

@@ -22,17 +22,34 @@ export function AdminAccountTopics() {
   const [savedTopic, setSavedTopic] = useState<Topic | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genErr, setGenErr] = useState<string | null>(null);
+  // 模态打开后预查现有方案状态:有 ready 报告时按钮文案改成「查看」而不是「生成」,
+  // 避免误导用户以为非要重新跑一次。
+  const [hasExistingReport, setHasExistingReport] = useState(false);
 
-  // 模态内一键触发体检报告生成 — 直接调 API,然后跳到 solution 页,
-  // 不让 admin 再在 solution 页重填 URL 点第二次。
+  useEffect(() => {
+    if (!savedTopic) { setHasExistingReport(false); return; }
+    let cancelled = false;
+    adminReviewApi.getStrategicSolution(savedTopic.id, token)
+      .then(s => { if (!cancelled) setHasExistingReport(s.status === 'ready' || s.status === 'generating'); })
+      .catch(() => { if (!cancelled) setHasExistingReport(false); });
+    return () => { cancelled = true; };
+  }, [savedTopic, token]);
+
+  // 模态内一键进入体检报告 — 先查现存方案的 status:
+  //   - ready / generating:复用,不再调 generate(不然会把已有报告冲掉成 generating)
+  //   - idle / failed:才触发生成
   // website 取主题资料里填的(选填,留空时后端走 4 块降级)。
   const handleGenerateFromModal = async () => {
     if (!savedTopic || genBusy) return;
     setGenBusy(true); setGenErr(null);
     try {
-      const website = (savedTopic.profile?.website || '').trim();
-      await adminReviewApi.generateStrategicSolution(savedTopic.id, website, token);
       const id = savedTopic.id;
+      const existing = await adminReviewApi.getStrategicSolution(id, token);
+      const reuseStatuses: Array<typeof existing.status> = ['ready', 'generating'];
+      if (!reuseStatuses.includes(existing.status)) {
+        const website = (savedTopic.profile?.website || '').trim();
+        await adminReviewApi.generateStrategicSolution(id, website, token);
+      }
       setSavedTopic(null);
       navigate(`/workbench/topics/${id}/solution`);
     } catch (e) {
@@ -245,7 +262,9 @@ export function AdminAccountTopics() {
                       style={{ background: 'var(--accent-primary)', opacity: genBusy ? 0.5 : 1 }}>
                 {genBusy
                   ? t('workbench.adminAccountTopics.savedModal.generating')
-                  : `${t('workbench.adminAccountTopics.savedModal.generateReport')} →`}
+                  : `${t(hasExistingReport
+                      ? 'workbench.adminAccountTopics.savedModal.viewReport'
+                      : 'workbench.adminAccountTopics.savedModal.generateReport')} →`}
               </button>
             </div>
 
