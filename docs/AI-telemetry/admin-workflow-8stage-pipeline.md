@@ -1,6 +1,10 @@
 # Admin 工作流 ↔ 8-Stage GEO Automation Pipeline
 
 > 文档目的:把当前 admin 后台串起来的页面 / 操作,逐一对应到 8-stage GEO automation pipeline 上,标清楚每一步走哪个文件、调哪个接口、对应 pipeline 的哪个环节,以及哪些环节当前没有 UI、由后台服务接管。
+>
+> **侧栏设计原则(2026-05-22 更新)**:不让 admin 一步步点 7 个 stage,而是按"角色任务"组织 sidebar(5 项):**操盘台 / 客户中心 / 待审批 / 监测报告 / 跑批结果**。pipeline 自动跑,admin 在「操盘台」一屏看完所有主题的全管线进度,只在「待审批」介入。
+>
+> **重要改名**:`战略方案 / 初稿发难 → GEO 体检报告`;`账户管理 → 客户中心`。
 
 ---
 
@@ -114,10 +118,10 @@ Reinforcement Loop  ←  Telemetry Collection  ←  AI Crawling/Retrieval  ←  
 
 | # | Admin 步骤 | 路由 / 文件 | 主要接口 | 对应 Pipeline Stage |
 |---|---|---|---|---|
-| ① | 账户管理 | `/workbench/accounts` · `AdminAccounts.tsx` | `GET /api/ai-telemetry/accounts` | Pre — 租户准备 |
+| ① | 客户中心 | `/workbench/accounts` · `AdminAccounts.tsx` | `GET /api/ai-telemetry/accounts` | Pre — 租户准备 |
 | ② | 新增主题 | `/workbench/accounts/:userId/topics` · `AdminAccountTopics.tsx` | `POST /api/ai-telemetry/topics/admin` | **1. Seed Prompt** |
-| ③ | 审核通过 | `/workbench/review` · `Review.tsx` | `listTopicReviews` / `patchTopic` / `approveTopic` | **2. Intent Expansion** |
-| ④ | 初稿发难(原"战略方案") | `/workbench/topics/:topicId/solution` · `Solution.tsx` | `POST .../solution/generate` | **3. Prompt Clustering** |
+| ③ | 主题审核 | `/workbench/review` · `Review.tsx` | `listTopicReviews` / `patchTopic` / `approveTopic` | **2. Intent Expansion** |
+| ④ | GEO 体检报告 | `/workbench/topics/:topicId/solution` · `Solution.tsx` | `POST .../solution/generate` | **3. Prompt Clustering** |
 | ⑤ | 执行计划书 | `/workbench/topics/:topicId/execution-plan` · `ExecutionPlan.tsx` | `GET .../execution-plan` | **4. Content Generation** |
 | ⑥ | 内容审核 / 发布 | `/workbench/content-review?topic=:topicId` · `ContentReview.tsx` | `selectForReview` / `approveDoc` / `publishDoc` | **5. Media Distribution** |
 | ⑦ | 引擎抓取 | `services/browser-service/*_browser.py` | 内部调度 | **6. AI Crawling / Retrieval** |
@@ -126,11 +130,39 @@ Reinforcement Loop  ←  Telemetry Collection  ←  AI Crawling/Retrieval  ←  
 
 ---
 
+## 2.5 新版工作台侧栏(实际入口)
+
+```
+🛡 工作台
+
+  🎯 操盘台      /workbench/cockpit       ← 默认页 · 一屏看所有主题的 7 阶段进度
+  🏢 客户中心    /workbench/accounts      ← Stage 1 录入(开客户 + 加主题)
+  ✅ 待审批      /workbench/approvals     ← 主题审批 + 内容审批 集中入口
+  📊 监测报告    /workbench/insights      ← Stage 8 反哺看板
+  ⚙️ 跑批结果    /workbench/runs          ← Stage 6-7 后台运维查看
+```
+
+| 旧 sidebar 项 | 新位置 |
+|---|---|
+| 审核 | 进入「待审批 → 主题审批」 |
+| 内容审核 | 进入「待审批 → 内容审批」 |
+| 内容管理 | 操盘台行内 / 内容审核页 tab |
+| 账户管理 | 改名 **客户中心**,仍在侧栏 |
+| 跑批结果 | 保留 |
+| (新)操盘台 | 默认主入口 |
+| (新)待审批 | 集中两类审批 |
+| (新)监测报告 | 反哺信号汇总 |
+
+`/workbench/topics/:topicId/solution`、`.../execution-plan` 等详情页**不进 sidebar**,从操盘台行点 chip 跳入。
+
+---
+
 ## 3. 术语对齐
 
-- **战略方案 → 初稿发难**:本次重命名,指 Solution.tsx 输出的"诊断报告 + 关键词体系 + 七步模型"文档,定位为整个 pipeline 的"起手稿"
+- **GEO 体检报告**(原"战略方案"/"初稿发难"):Solution.tsx 输出的"诊断分 + 严重度分层 + 关键词体系 + 七步模型 + 愿景",定位为"对客户呈现的第一份正式文档",和后续「执行计划书」形成 *体检 → 处方* 的叙事链
 - **执行计划书**:Stage 4 的发文排期表(25+ 篇 / 30 天),含 query coverage %、priority、建议平台
 - **初稿(draft docs)**:每个监控查询自动生成的单篇内容,生命周期 `draft → pending_review → approved → published`
+- **客户中心**(原"账户管理"):admin 管理对外服务的客户(每客户对应一个/多个主题)
 
 ---
 

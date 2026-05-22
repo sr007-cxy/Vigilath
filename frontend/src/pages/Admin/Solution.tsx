@@ -1,4 +1,4 @@
-// Admin GEO 品牌增长战略方案 — 基于官网技术诊断 + 品牌资料生成方案,可导出 PDF.
+// Admin GEO 体检报告 — 基于官网技术诊断 + 品牌资料生成报告,可导出 PDF.
 // 路由:/workbench/topics/:topicId/solution
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -113,7 +113,7 @@ export function AdminSolution() {
 
   return (
     <div className="space-y-4">
-      <PageHead titleKey="admin.solution.title" titleFallback="GEO 品牌增长战略方案" />
+      <PageHead titleKey="admin.solution.title" titleFallback="GEO 体检报告" />
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-primary">{t('admin.solution.title')}</h1>

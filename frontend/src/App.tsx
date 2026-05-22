@@ -57,6 +57,9 @@ const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
 const AdminAllRuns = lazy(() => import('./pages/Workbench/AdminAllRuns').then(m => ({ default: m.AdminAllRuns })));
 const AdminRunDetail = lazy(() => import('./pages/Workbench/AdminRunDetail').then(m => ({ default: m.AdminRunDetail })));
+const AdminCockpit = lazy(() => import('./pages/Workbench/AdminCockpit').then(m => ({ default: m.AdminCockpit })));
+const AdminApprovals = lazy(() => import('./pages/Workbench/AdminApprovals').then(m => ({ default: m.AdminApprovals })));
+const AdminInsights = lazy(() => import('./pages/Workbench/AdminInsights').then(m => ({ default: m.AdminInsights })));
 const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
@@ -145,14 +148,18 @@ function App() {
               </Route>
               {/* 工作台 — admin 专属,独立 sidebar 不混 AEO 菜单 */}
               <Route path="/workbench" element={<WorkbenchLayout />}>
-                <Route index element={<Navigate to="review" replace />} />
+                <Route index element={<Navigate to="cockpit" replace />} />
+                <Route path="cockpit" element={<AdminCockpit />} />
+                <Route path="accounts" element={<AdminAccounts />} />
+                <Route path="accounts/:userId/topics" element={<AdminAccountTopics />} />
+                <Route path="approvals" element={<AdminApprovals />} />
+                <Route path="insights" element={<AdminInsights />} />
+                <Route path="runs" element={<AdminAllRuns />} />
+                <Route path="runs/:runId" element={<AdminRunDetail />} />
+                {/* 详情页 / 非 sidebar 直达 */}
                 <Route path="review" element={<AdminReview />} />
                 <Route path="content-review" element={<AdminContentReview />} />
                 <Route path="content-management" element={<Content />} />
-                <Route path="accounts" element={<AdminAccounts />} />
-                <Route path="accounts/:userId/topics" element={<AdminAccountTopics />} />
-                <Route path="runs" element={<AdminAllRuns />} />
-                <Route path="runs/:runId" element={<AdminRunDetail />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
                 <Route path="topics/:topicId/solution" element={<AdminSolution />} />
               </Route>

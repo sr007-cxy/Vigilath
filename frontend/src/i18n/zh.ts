@@ -88,11 +88,14 @@ const zh = {
             "register": "注册",
             "signedInAs": "已登录为",
             "dashboard": "品牌增长",
-            "adminReview": "审核",
-            "adminContentReview": "内容审核",
-            "adminContentManagement": "内容管理",
-            "adminAccounts": "账户管理",
+            "adminCockpit": "操盘台",
+            "adminAccounts": "客户中心",
+            "adminApprovals": "待审批",
+            "adminInsights": "监测报告",
             "adminRuns": "跑批结果",
+            "adminReview": "主题审核",
+            "adminContentReview": "内容审核",
+            "adminContentManagement": "内容库",
             "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
             "account": "账户中心",
@@ -2903,20 +2906,20 @@ const zh = {
               }
             },
             "solution": {
-              "title": "GEO 品牌增长战略方案",
-              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的战略方案",
+              "title": "GEO 体检报告",
+              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的体检报告",
               "backToReview": "返回审核",
               "export": "导出 PDF",
               "exporting": "导出中…",
               "regenerate": "重新生成",
-              "generate": "生成战略方案",
+              "generate": "生成体检报告",
               "generating": "生成中,首次需 1-3 分钟,会自动刷新…",
               "generatingHint": "已开始生成 — 后台正在扫描官网 + 调用大模型,本页 3 秒刷新一次",
               "failed": "生成失败",
               "retry": "重试",
               "websiteLabel": "品牌官网网址",
               "websitePlaceholder": "https://example.com",
-              "websiteHint": "战略方案会基于这个网址跑站内技术诊断;请填可访问的根域名",
+              "websiteHint": "体检报告会基于这个网址跑站内技术诊断;请填可访问的根域名",
               "lastGeneratedAt": "上次生成时间",
               "llmModel": "模型",
               "scoreLabel": "AI 可见度评分",
@@ -2959,8 +2962,8 @@ const zh = {
               },
               "noKeywords": "暂无关键词",
               "emptyState": {
-                "title": "尚未生成战略方案",
-                "body": "填入品牌官网,点击下方按钮启动诊断 + 文案生成。"
+                "title": "尚未生成体检报告",
+                "body": "填入品牌官网,点击下方按钮启动诊断 + 报告生成。"
               }
             }
           },
@@ -3154,10 +3157,54 @@ const zh = {
             }
           },
           "workbench": {
+            "adminCockpit": {
+              "title": "操盘台",
+              "heading": "操盘台",
+              "subtitle": "一屏看完每个主题在 GEO 管线上的进度;无需逐步点击 sidebar。",
+              "colTopic": "主题",
+              "colCustomer": "客户",
+              "stage": {
+                "submit": "录入",
+                "review": "审批",
+                "diagnose": "体检",
+                "plan": "计划",
+                "content": "内容",
+                "crawl": "抓取",
+                "insight": "监测"
+              },
+              "stageStatus": {
+                "done": "完成",
+                "running": "进行中",
+                "pending": "待处理",
+                "blocked": "异常",
+                "idle": "未启动"
+              },
+              "empty": "暂无主题 — 去「客户中心」加客户 + 主题"
+            },
+            "adminApprovals": {
+              "title": "待审批",
+              "heading": "待审批",
+              "subtitle": "需要 admin 介入的全部审批集中入口。",
+              "topicReview": "主题审批",
+              "topicReviewHint": "审核新提交的主题资料 / 种子词 / 监测查询",
+              "contentReview": "内容审核",
+              "contentReviewHint": "审核每日生成的初稿,选平台 / 媒介后发布",
+              "pendingBadge": "{{n}} 待审",
+              "goReview": "去审 →",
+              "allClear": "暂无待审"
+            },
+            "adminInsights": {
+              "title": "监测报告",
+              "heading": "监测报告",
+              "subtitle": "Stage 8 反哺信号 — 命中率 / 排名 / 立场,异常时回到主题审批调种子。",
+              "pickTopic": "选一个主题查看反哺数据",
+              "view": "查看 →",
+              "empty": "暂无可监测的主题"
+            },
             "adminAccounts": {
-              "title": "账户管理",
-              "heading": "账户管理",
-              "subtitle": "替每个账户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
+              "title": "客户中心",
+              "heading": "客户中心",
+              "subtitle": "替每个客户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
               "colId": "ID",
               "colEmail": "邮箱",
               "colName": "名称",

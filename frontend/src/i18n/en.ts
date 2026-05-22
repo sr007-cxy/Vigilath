@@ -88,11 +88,14 @@ const en = {
             "register": "Sign up",
             "signedInAs": "Signed in as",
             "dashboard": "AEO",
-            "adminReview": "Review",
-            "adminContentReview": "Content Review",
-            "adminContentManagement": "Content",
-            "adminAccounts": "Accounts",
+            "adminCockpit": "Cockpit",
+            "adminAccounts": "Customers",
+            "adminApprovals": "Approvals",
+            "adminInsights": "Insights",
             "adminRuns": "Runs",
+            "adminReview": "Topic Review",
+            "adminContentReview": "Content Review",
+            "adminContentManagement": "Content Library",
             "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",
             "account": "Account",
@@ -2897,13 +2900,13 @@ const en = {
               }
             },
             "solution": {
-              "title": "GEO Brand Growth Strategy",
-              "subtitle": "Generate a deliverable strategy deck from site diagnostics + brand profile",
+              "title": "GEO Health Report",
+              "subtitle": "Generate a deliverable health report from site diagnostics + brand profile",
               "backToReview": "Back to review",
               "export": "Export PDF",
               "exporting": "Exporting…",
               "regenerate": "Regenerate",
-              "generate": "Generate strategy",
+              "generate": "Generate report",
               "generating": "Generating — first run takes 1-3 minutes, this page auto-refreshes…",
               "generatingHint": "Scanning site + calling LLM in background; auto-refreshing every 3s",
               "failed": "Generation failed",
@@ -2953,8 +2956,8 @@ const en = {
               },
               "noKeywords": "No keywords",
               "emptyState": {
-                "title": "No strategy generated yet",
-                "body": "Fill in the brand website below and click the button to start diagnosis + LLM drafting."
+                "title": "No report generated yet",
+                "body": "Fill in the brand website below and click the button to start diagnosis + report generation."
               }
             }
           },
@@ -3148,10 +3151,54 @@ const en = {
             }
           },
           "workbench": {
+            "adminCockpit": {
+              "title": "Cockpit",
+              "heading": "Cockpit",
+              "subtitle": "See every topic's full GEO-pipeline progress on a single screen — no step-by-step sidebar clicks.",
+              "colTopic": "Topic",
+              "colCustomer": "Customer",
+              "stage": {
+                "submit": "Submit",
+                "review": "Review",
+                "diagnose": "Health",
+                "plan": "Plan",
+                "content": "Content",
+                "crawl": "Crawl",
+                "insight": "Insights"
+              },
+              "stageStatus": {
+                "done": "done",
+                "running": "running",
+                "pending": "pending",
+                "blocked": "blocked",
+                "idle": "idle"
+              },
+              "empty": "No topics yet — head to Customers to add one."
+            },
+            "adminApprovals": {
+              "title": "Approvals",
+              "heading": "Approvals",
+              "subtitle": "Central hub for everything that needs admin sign-off.",
+              "topicReview": "Topic review",
+              "topicReviewHint": "Review newly submitted topic profile / seeds / monitored queries",
+              "contentReview": "Content review",
+              "contentReviewHint": "Approve daily-generated drafts and pick distribution platform / media",
+              "pendingBadge": "{{n}} pending",
+              "goReview": "Review →",
+              "allClear": "All clear"
+            },
+            "adminInsights": {
+              "title": "Insights",
+              "heading": "Insights",
+              "subtitle": "Stage 8 feedback signals — hit rate, ranking, stance. Loops back to topic review when anomalies appear.",
+              "pickTopic": "Pick a topic to inspect feedback data",
+              "view": "View →",
+              "empty": "No monitored topics yet"
+            },
             "adminAccounts": {
-              "title": "Accounts",
-              "heading": "Account Management",
-              "subtitle": "Configure monitoring topics for each account (profile / seeds / tracking queries). Admin-created topics go live immediately — no review step.",
+              "title": "Customers",
+              "heading": "Customer Center",
+              "subtitle": "Configure monitoring topics for each customer (profile / seeds / tracking queries). Admin-created topics go live immediately — no review step.",
               "colId": "ID",
               "colEmail": "Email",
               "colName": "Name",

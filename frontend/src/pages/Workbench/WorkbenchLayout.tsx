@@ -1,10 +1,9 @@
-// 工作台(admin 专属)— 独立 sidebar,内只含「审核」.
+// 工作台(admin 专属)— 独立 sidebar.
 // 非 admin 用户进入这里会被预检踢回 /dashboard.
 //
-// 结构跟 DashboardLayout 同源,但:
-// - tenant 标题用 dashboard.nav.adminWorkbench(「工作台」)
-// - 不显示 email
-// - sidebar 只一项「审核」
+// sidebar 按"admin 角色任务"组织,而非按 pipeline stage 一步步点:
+//   操盘台 / 客户中心 / 待审批 / 监测报告 / 跑批结果
+// pipeline 自动跑,admin 在操盘台一屏看全管线,只在「待审批」介入。
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
@@ -21,26 +20,57 @@ interface StoredUser {
 }
 
 const sidebarItems = [
-  { to: '/workbench/review', end: false, icon: 'review', labelKey: 'nav.adminReview' },
-  { to: '/workbench/content-review', end: false, icon: 'content', labelKey: 'nav.adminContentReview' },
-  { to: '/workbench/content-management', end: false, icon: 'content', labelKey: 'nav.adminContentManagement' },
-  { to: '/workbench/accounts', end: false, icon: 'review', labelKey: 'nav.adminAccounts' },
-  { to: '/workbench/runs', end: false, icon: 'review', labelKey: 'nav.adminRuns' },
+  { to: '/workbench/cockpit', end: false, icon: 'cockpit', labelKey: 'nav.adminCockpit' },
+  { to: '/workbench/accounts', end: false, icon: 'accounts', labelKey: 'nav.adminAccounts' },
+  { to: '/workbench/approvals', end: false, icon: 'approvals', labelKey: 'nav.adminApprovals' },
+  { to: '/workbench/insights', end: false, icon: 'insights', labelKey: 'nav.adminInsights' },
+  { to: '/workbench/runs', end: false, icon: 'runs', labelKey: 'nav.adminRuns' },
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {
-  if (name === 'review') {
-    return (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    );
-  }
-  if (name === 'content') {
+  // 操盘台:仪表盘
+  if (name === 'cockpit') {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    );
+  }
+  // 客户中心:用户组
+  if (name === 'accounts') {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    );
+  }
+  // 待审批:对勾
+  if (name === 'approvals') {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    );
+  }
+  // 监测报告:折线图
+  if (name === 'insights') {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+      </svg>
+    );
+  }
+  // 跑批结果:齿轮
+  if (name === 'runs') {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     );
   }
