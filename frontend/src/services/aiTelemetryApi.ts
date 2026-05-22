@@ -72,6 +72,7 @@ export interface BrandProfile {
   industry: string;
   core_business_lines: string[];
   service_geo: string;
+  website: string;
   // 二、内容创作方向
   creation_directions: string[];
   copywriting_types: string[];
@@ -103,7 +104,7 @@ export interface BrandProfile {
 
 export const EMPTY_BRAND_PROFILE: BrandProfile = {
   profile_name: '', company_full_name: '', company_short_name: '',
-  industry: '', core_business_lines: [], service_geo: '',
+  industry: '', core_business_lines: [], service_geo: '', website: '',
   creation_directions: [], copywriting_types: [], target_platforms: [],
   content_tones: [], content_redlines: [],
   team_size: '', founded_year: '', core_credentials: [], brand_diff_tags: [],

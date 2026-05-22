@@ -426,6 +426,7 @@ class BrandProfile(BaseModel):
     industry: str = Field("", max_length=128)                   # 所属行业 / 赛道
     core_business_lines: list[str] = Field(default_factory=list, max_length=20)  # 核心业务线(多选)
     service_geo: str = Field("", max_length=256)                # 服务地域
+    website: str = Field("", max_length=512)                    # 品牌官网(选填,填了体检报告直接复用,不填则跳过站内技术诊断)
 
     # 二、内容创作方向(都是多选)
     creation_directions: list[str] = Field(default_factory=list, max_length=20)  # 创作方向
@@ -1280,5 +1281,9 @@ class TopicSolutionOut(BaseModel):
 
 
 class GenerateSolutionPayload(BaseModel):
-    """POST /topic/{id}/solution/generate — admin 触发生成."""
-    website_url: str = Field(..., min_length=4, max_length=512)
+    """POST /topic/{id}/solution/generate — admin 触发生成.
+
+    website_url 选填:不填则跳过 25 类站内技术诊断,只生成 4 块
+    (品牌定位 / 七步模型 / 关键词 / 愿景).
+    """
+    website_url: str = Field("", max_length=512)

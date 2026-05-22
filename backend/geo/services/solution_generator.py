@@ -172,8 +172,9 @@ def _run(topic_id: int, website_url: str, admin_id: int) -> None:
         except Exception:  # noqa: BLE001
             profile = BrandProfile()
 
-        # 2) 跑 geo_checker — 硬数据
-        diagnosis = _run_diagnosis(website_url)
+        # 2) 跑 geo_checker — 硬数据(website 选填:空时跳过技术诊断,只生成基于品牌资料的 4 块)
+        url = (website_url or "").strip()
+        diagnosis = _run_diagnosis(url) if url else _empty_diagnosis()
 
         # 3) 调 LLM — 拼方案文案
         narrative, keywords, llm_model = _call_llm(profile, diagnosis, website_url)
@@ -222,6 +223,23 @@ def _mark_failed(topic_id: int, error: str) -> None:
 
 
 # ─────────────── 硬数据:geo_checker 扫描 ───────────────
+
+
+def _empty_diagnosis() -> dict[str, Any]:
+    """website_url 为空时的占位 — 让 _call_llm 跳过技术诊断相关 prompt 段,
+    报告页前端也按 score=0 + 空 clusters 判断不渲染诊断 / 执行流程两节."""
+    return {
+        "url": "",
+        "score": 0,
+        "grade": "",
+        "pass_count": 0,
+        "warn_count": 0,
+        "fail_count": 0,
+        "info_count": 0,
+        "clusters": [],
+        "execution_layers": [],
+        "all_checks": [],
+    }
 
 
 def _run_diagnosis(url: str) -> dict[str, Any]:
@@ -374,13 +392,21 @@ def _call_llm(
 
 
 def _build_system_prompt(profile: BrandProfile, diagnosis: dict, website_url: str) -> str:
+    has_diag = bool((diagnosis or {}).get("clusters")) or bool((website_url or "").strip())
+    if has_diag:
+        intro = "你的任务:基于「品牌资料 + 站内技术诊断」,产出一份可交付的「GEO 品牌增长战略方案」JSON。"
+    else:
+        intro = ("你的任务:基于「品牌资料」(此次未提供官网,跳过站内技术诊断),"
+                 "产出一份可交付的「GEO 品牌增长战略方案」JSON;只输出品牌定位 / 七步 / 关键词 / 愿景,"
+                 "不要编造诊断分数。")
     parts = [
         "你是 GEO(Generative Engine Optimization)品牌增长战略顾问。",
-        "你的任务:基于「品牌资料 + 站内技术诊断」,产出一份可交付的「GEO 品牌增长战略方案」JSON。",
+        intro,
         "",
         "## 品牌资料",
-        f"- 官网:{website_url}",
     ]
+    if website_url:
+        parts.append(f"- 官网:{website_url}")
     if profile.company_full_name:
         parts.append(f"- 品牌全称:{profile.company_full_name}")
     if profile.company_short_name:
@@ -402,15 +428,16 @@ def _build_system_prompt(profile: BrandProfile, diagnosis: dict, website_url: st
     if profile.core_message:
         parts.append(f"- 核心信息:{profile.core_message}")
 
-    parts.append("")
-    parts.append("## 站内技术诊断概览")
-    parts.append(f"- AI 可见度评分:{diagnosis.get('score', 0)}/100 ({diagnosis.get('grade', '')})")
-    parts.append(f"- 通过:{diagnosis.get('pass_count', 0)} · 警告:{diagnosis.get('warn_count', 0)} · 失败:{diagnosis.get('fail_count', 0)}")
-    parts.append("")
-    parts.append("## 5 大短板簇(已聚类)")
-    for c in diagnosis.get("clusters", []):
-        bullets = "; ".join(c.get("bullets", []) or [])
-        parts.append(f"- 【{c['title_zh']}】(严重度 {c['severity']}):{bullets or '无明显短板'}")
+    if diagnosis.get("clusters"):
+        parts.append("")
+        parts.append("## 站内技术诊断概览")
+        parts.append(f"- AI 可见度评分:{diagnosis.get('score', 0)}/100 ({diagnosis.get('grade', '')})")
+        parts.append(f"- 通过:{diagnosis.get('pass_count', 0)} · 警告:{diagnosis.get('warn_count', 0)} · 失败:{diagnosis.get('fail_count', 0)}")
+        parts.append("")
+        parts.append("## 5 大短板簇(已聚类)")
+        for c in diagnosis.get("clusters", []):
+            bullets = "; ".join(c.get("bullets", []) or [])
+            parts.append(f"- 【{c['title_zh']}】(严重度 {c['severity']}):{bullets or '无明显短板'}")
 
     parts.append("")
     parts.append("## 写作要求(严格遵守)")

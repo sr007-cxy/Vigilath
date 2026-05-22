@@ -107,7 +107,8 @@ export function BrandProfileForm({
               <Pair>
                 <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
                          value={profile.service_geo} onChange={v => setField('service_geo', v)} />
-                <span />
+                <TextRow label="品牌官网(选填)" required={false} readOnly={readOnly}
+                         value={profile.website || ''} onChange={v => setField('website', v)} />
               </Pair>
               <TagsRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
                        value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />

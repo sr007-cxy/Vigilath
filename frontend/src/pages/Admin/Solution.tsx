@@ -34,6 +34,7 @@ export function AdminSolution() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [profileWebsite, setProfileWebsite] = useState<string>('');
   const pollRef = useRef<number | null>(null);
 
   const stopPoll = useCallback(() => {
@@ -74,14 +75,28 @@ export function AdminSolution() {
     else stopPoll();
   }, [sol?.status, ensurePolling, stopPoll]);
 
-  // 当 sol 有 website_url 时初始化输入框
+  // 当 sol 有 website_url 时初始化输入框(已生成过一次的复用)
   useEffect(() => {
     if (sol?.website_url && !websiteUrl) setWebsiteUrl(sol.website_url);
   }, [sol?.website_url, websiteUrl]);
 
+  // 首次进入页面 — 从主题资料里读 website,自动填充输入框,admin 不用手填
+  useEffect(() => {
+    adminReviewApi.getTopicReview(tid, token)
+      .then(d => {
+        const w = (d.profile?.website || '').trim();
+        if (w) setProfileWebsite(w);
+      })
+      .catch(() => {});
+  }, [tid, token]);
+
+  useEffect(() => {
+    if (profileWebsite && !websiteUrl) setWebsiteUrl(profileWebsite);
+  }, [profileWebsite, websiteUrl]);
+
   const handleGenerate = async () => {
+    if (busy) return;
     const url = websiteUrl.trim();
-    if (!url || busy) return;
     setBusy(true); setErr(null);
     try {
       const s = await adminReviewApi.generateStrategicSolution(tid, url, token);
@@ -182,7 +197,7 @@ export function AdminSolution() {
           {sol.brand_snapshot && (
             <BrandSection sol={sol} />
           )}
-          {sol.diagnosis && (
+          {sol.diagnosis && sol.diagnosis.clusters.length > 0 && (
             <>
               <DiagnosisSection sol={sol} />
               <ExecutionLayersSection layers={sol.diagnosis.execution_layers} />
@@ -240,10 +255,9 @@ function GenerateForm({
              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
                       border: '1px solid var(--border-color)' }} />
       <p className="text-[11px] text-muted mt-1">{t('admin.solution.websiteHint')}</p>
-      <button type="button" disabled={busy || !websiteUrl.trim()} onClick={onSubmit}
+      <button type="button" disabled={busy} onClick={onSubmit}
               className="mt-3 text-xs px-4 py-2 rounded-md text-white"
-              style={{ background: 'var(--accent-primary)',
-                       opacity: (busy || !websiteUrl.trim()) ? 0.5 : 1 }}>
+              style={{ background: 'var(--accent-primary)', opacity: busy ? 0.5 : 1 }}>
         {isFailed ? t('admin.solution.retry') : t('admin.solution.generate')}
       </button>
     </section>
