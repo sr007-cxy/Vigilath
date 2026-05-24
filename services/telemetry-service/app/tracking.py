@@ -16,28 +16,44 @@ from .storage import QueryHitORM, ResponseORM, TopicORM, parse_topic, query_crea
 
 
 def detect_hit(answer: str, target: str, aliases: Iterable[str]) -> tuple[bool, str | None]:
-    """简单字符串匹配 — lowercase + NFC,target / aliases 任一命中即算.
+    """字符串匹配 — lowercase,组间 OR,组内 AND.
 
-    Returns (hit, excerpt). excerpt = 命中位置前后各 100 字符,前后省略号.
-    多别名命中只取第一个,避免重复.
+    每个 target / alias 条目用 `&` 分隔成多个子串,**组内必须全部出现**才算
+    该条命中(AND);任意一条命中即返回 True(OR)。无 `&` 的条目就是单子串.
+
+    示例 aliases=["程晓峰", "竞天程晓峰", "竞天公诚 & 程晓峰"]:
+      - answer 含 "程晓峰" → 第 1 条命中
+      - answer 仅含 "竞天公诚" → 不算(第 3 条要求同时含"程晓峰")
+      - answer 同时含 "竞天公诚" + "程晓峰" → 第 1 条命中(也满足第 3 条)
+
+    Returns (hit, excerpt). excerpt = 首条命中的首个子串位置前后各 100 字符.
     """
     if not answer:
         return False, None
-    needles: list[str] = []
+    raw: list[str] = []
     if target:
-        needles.append(target)
-    needles.extend(aliases or [])
-    needles = [n.strip().lower() for n in needles if n and n.strip()]
-    if not needles:
+        raw.append(target)
+    raw.extend(aliases or [])
+    # 每条 → AND-组(list[str]),去掉空段
+    groups: list[list[str]] = []
+    for entry in raw:
+        if not entry:
+            continue
+        parts = [p.strip().lower() for p in entry.split("&") if p.strip()]
+        if parts:
+            groups.append(parts)
+    if not groups:
         return False, None
 
     hay = answer.lower()
-    for n in needles:
-        i = hay.find(n)
-        if i < 0:
+    for grp in groups:
+        if not all(sub in hay for sub in grp):
             continue
+        # excerpt:用组内第一个子串的首次出现位置
+        first = grp[0]
+        i = hay.find(first)
         start = max(0, i - 100)
-        end = min(len(answer), i + len(n) + 100)
+        end = min(len(answer), i + len(first) + 100)
         prefix = "…" if start > 0 else ""
         suffix = "…" if end < len(answer) else ""
         return True, f"{prefix}{answer[start:end]}{suffix}"
