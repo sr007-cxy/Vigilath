@@ -13,7 +13,7 @@ import {
 import type {
   TopicStrategicSolution, SolutionDiagnosisCluster,
   SolutionSevenStep, SolutionKeywordTier, SolutionVisionItem,
-  SolutionDiagnosisCheck,
+  SolutionDiagnosisCheck, SolutionQueriesSnapshot,
 } from '../services/adminReviewApi';
 
 const COLOR = {
@@ -306,6 +306,47 @@ const buildKeywordTierParagraphs = (tier: SolutionKeywordTier): Paragraph[] => {
   return out;
 };
 
+const buildQueriesParagraphs = (snapshot: SolutionQueriesSnapshot, t: TFunction): Paragraph[] => {
+  if (!snapshot.queries.length) return [];
+  const labelMap = new Map<number, string>();
+  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
+  const grouped = new Map<number, string[]>();
+  const order: number[] = [];
+  for (const q of snapshot.queries) {
+    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
+    if (!grouped.has(cid)) {
+      grouped.set(cid, []);
+      order.push(cid);
+    }
+    grouped.get(cid)!.push(q.text);
+  }
+  const unclusteredLabel = String(t('admin.solution.queries.unclustered'));
+  const out: Paragraph[] = [
+    bodyParagraph(
+      `${String(t('admin.solution.queries.hint'))}  ·  ${String(t('admin.solution.queries.totalChip', { n: snapshot.queries.length }))}`,
+      { color: COLOR.secondary, size: 21 },
+    ),
+  ];
+  for (const cid of order) {
+    const items = grouped.get(cid) || [];
+    const label = labelMap.get(cid) || unclusteredLabel;
+    out.push(new Paragraph({
+      spacing: { before: 200, after: 80 },
+      children: [
+        new TextRun({ text: label, bold: true, size: 24, color: COLOR.primary }),
+        new TextRun({ text: `  (${items.length})`, size: 20, color: COLOR.muted }),
+      ],
+    }));
+    out.push(new Paragraph({
+      spacing: { before: 0, after: 80 },
+      children: [new TextRun({
+        text: items.join('  ·  '), size: 21, color: COLOR.indigo,
+      })],
+    }));
+  }
+  return out;
+};
+
 const buildVisionParagraphs = (items: SolutionVisionItem[]): Paragraph[] => {
   const out: Paragraph[] = [];
   for (const v of items) {
@@ -395,6 +436,11 @@ export async function exportSolutionDocx(
     for (const tier of sol.keyword_tiers) {
       children.push(...buildKeywordTierParagraphs(tier));
     }
+  }
+
+  if (sol.queries_snapshot && sol.queries_snapshot.queries.length > 0) {
+    children.push(sectionHeading(String(t('admin.solution.section.queries'))));
+    children.push(...buildQueriesParagraphs(sol.queries_snapshot, t));
   }
 
   if (sol.vision.length > 0) {

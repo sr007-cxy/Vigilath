@@ -179,6 +179,10 @@ def _run(topic_id: int, website_url: str, admin_id: int) -> None:
         # 3) 调 LLM — 拼方案文案
         narrative, keywords, llm_model = _call_llm(profile, diagnosis, website_url)
 
+        # 3.5) 快照监测 Query — 直接取 topic.queries_json 里 selected=True 的项
+        #      + topic.clusters_json 的簇标签,不走 LLM.报告里"监测 Query 清单"节用.
+        queries_snapshot = _snapshot_selected_queries(t)
+
         # 4) 落库 — upsert
         sol = (
             db.query(AiTelemetryTopicSolutionORM)
@@ -194,6 +198,7 @@ def _run(topic_id: int, website_url: str, admin_id: int) -> None:
         sol.narrative_json = json.dumps(narrative, ensure_ascii=False)
         sol.keywords_json = json.dumps(keywords, ensure_ascii=False)
         sol.brand_snapshot_json = json.dumps(profile.model_dump(), ensure_ascii=False)
+        sol.queries_snapshot_json = json.dumps(queries_snapshot, ensure_ascii=False)
         sol.llm_model = llm_model
         sol.error = None
         sol.generated_by_admin_id = admin_id
@@ -220,6 +225,69 @@ def _mark_failed(topic_id: int, error: str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+# ─────────────── 硬数据:topic 已选 Query 快照 ───────────────
+
+
+def _snapshot_selected_queries(topic: AiTelemetryTopicORM) -> dict[str, Any]:
+    """从 topic.queries_json 提取 selected=True 的项 + clusters_json 簇标签,落成快照.
+
+    queries_json 兼容多形态(参 ai_telemetry.AiTelemetryTopicORM 注释):
+      - list[str](legacy):全部视为 selected=True,cluster_id=-1,seed=""
+      - list[dict]:取 selected(默认 True)/ text / cluster_id / seed
+    clusters_json 形态:list[{cluster_id, label, size}].
+
+    返回 dict 与 SolutionQueriesSnapshot 同构,落 queries_snapshot_json 用.
+    """
+    queries_out: list[dict[str, Any]] = []
+    try:
+        raw = json.loads(topic.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        raw = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    queries_out.append({"text": text, "cluster_id": -1, "seed": ""})
+                continue
+            if not isinstance(item, dict):
+                continue
+            # legacy 无 selected 字段时默认 True(老话题的 query 默认都参与监测)
+            if not bool(item.get("selected", True)):
+                continue
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            cid = item.get("cluster_id")
+            cluster_id = int(cid) if isinstance(cid, int) else -1
+            seed = str(item.get("seed") or "")
+            queries_out.append({"text": text, "cluster_id": cluster_id, "seed": seed})
+
+    clusters_out: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    try:
+        cluster_raw = json.loads(topic.clusters_json or "[]")
+    except Exception:  # noqa: BLE001
+        cluster_raw = []
+    if isinstance(cluster_raw, list):
+        for c in cluster_raw:
+            if not isinstance(c, dict):
+                continue
+            try:
+                cid = int(c.get("cluster_id"))
+            except (TypeError, ValueError):
+                continue
+            label = str(c.get("label") or "").strip()
+            if not label:
+                continue
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
+            clusters_out.append({"cluster_id": cid, "label": label})
+
+    return {"clusters": clusters_out, "queries": queries_out}
 
 
 # ─────────────── 硬数据:geo_checker 扫描 ───────────────

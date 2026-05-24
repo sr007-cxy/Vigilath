@@ -2929,8 +2929,14 @@ const en = {
                 "executionLayers": "3. GEO execution layers",
                 "sevenSteps": "4. Seven-step growth model",
                 "keywords": "5. Keyword system",
-                "vision": "6. Expected outcomes",
+                "queries": "6. Monitored queries",
+                "vision": "7. Expected outcomes",
                 "details": "Detailed findings (25 categories)"
+              },
+              "queries": {
+                "hint": "Queries the user already picked (≤200) in the topic profile, grouped by intent cluster — the set we will track against AI engines.",
+                "totalChip": "Total {{n}}",
+                "unclustered": "Unclustered"
               },
               "brandFields": {
                 "industry": "Industry",

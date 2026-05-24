@@ -2935,8 +2935,14 @@ const zh = {
                 "executionLayers": "三、GEO 执行流程",
                 "sevenSteps": "四、七步生态增长模型",
                 "keywords": "五、关键词体系",
-                "vision": "六、预期愿景",
+                "queries": "六、监测 Query 清单",
+                "vision": "七、预期愿景",
                 "details": "诊断明细(25 类)"
+              },
+              "queries": {
+                "hint": "由「主题资料 → 监测问题」环节用户已勾选的 Query 清单(≤200),按聚类分组,作为后续 AI 引擎实测与跑批的监测对象",
+                "totalChip": "共 {{n}} 条",
+                "unclustered": "未分组"
               },
               "brandFields": {
                 "industry": "行业",

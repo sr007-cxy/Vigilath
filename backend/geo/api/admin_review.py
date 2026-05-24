@@ -29,7 +29,8 @@ from geo.models.ai_telemetry import (
     AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicSolutionORM,
     BrandProfile, GenerateSolutionPayload, MAX_SELECTED_QUERIES,
     PublishPlanItem, SolutionDiagnosis, SolutionDiagnosisCheck,
-    SolutionDiagnosisCluster, SolutionKeywordTier, SolutionSevenStepItem,
+    SolutionDiagnosisCluster, SolutionKeywordTier, SolutionQueriesSnapshot,
+    SolutionQueryCluster, SolutionQueryItem, SolutionSevenStepItem,
     SolutionVisionItem, TopicChangelogEntry, TopicExecutionPlanOut,
     TopicGeneratedDocORM, TopicProgressCell, TopicSolutionOut,
     ExpansionLogEntry, TopicOut,
@@ -938,6 +939,7 @@ def _solution_to_out(sol: AiTelemetryTopicSolutionORM) -> TopicSolutionOut:
     keyword_tiers: list[SolutionKeywordTier] = []
     vision: list[SolutionVisionItem] = []
     brand_snapshot: BrandProfile | None = None
+    queries_snapshot: SolutionQueriesSnapshot | None = None
 
     if sol.status == "ready":
         try:
@@ -1044,6 +1046,46 @@ def _solution_to_out(sol: AiTelemetryTopicSolutionORM) -> TopicSolutionOut:
                     keywords=[str(x) for x in (tt.get("keywords") or []) if str(x).strip()],
                 ))
 
+        try:
+            q = json.loads(sol.queries_snapshot_json or "{}")
+        except Exception:  # noqa: BLE001
+            q = {}
+        if isinstance(q, dict) and (q.get("queries") or q.get("clusters")):
+            query_items: list[SolutionQueryItem] = []
+            for item in (q.get("queries") or []):
+                if not isinstance(item, dict):
+                    continue
+                text = str(item.get("text") or "").strip()
+                if not text:
+                    continue
+                try:
+                    cid = int(item.get("cluster_id", -1))
+                except (TypeError, ValueError):
+                    cid = -1
+                query_items.append(SolutionQueryItem(
+                    text=text, cluster_id=cid,
+                    seed=str(item.get("seed") or ""),
+                ))
+            cluster_items: list[SolutionQueryCluster] = []
+            for c in (q.get("clusters") or []):
+                if not isinstance(c, dict):
+                    continue
+                try:
+                    cid = int(c.get("cluster_id"))
+                except (TypeError, ValueError):
+                    continue
+                label = str(c.get("label") or "").strip()
+                if not label:
+                    continue
+                cluster_items.append(SolutionQueryCluster(cluster_id=cid, label=label))
+            queries_snapshot = SolutionQueriesSnapshot(
+                clusters=cluster_items, queries=query_items,
+            )
+        else:
+            queries_snapshot = None
+    else:
+        queries_snapshot = None
+
     return TopicSolutionOut(
         id=sol.id, topic_id=sol.topic_id, status=sol.status or "idle",
         website_url=sol.website_url or "",
@@ -1052,6 +1094,7 @@ def _solution_to_out(sol: AiTelemetryTopicSolutionORM) -> TopicSolutionOut:
         created_at=sol.created_at, updated_at=sol.updated_at,
         brand_snapshot=brand_snapshot, diagnosis=diagnosis,
         seven_steps=seven_steps, keyword_tiers=keyword_tiers, vision=vision,
+        queries_snapshot=queries_snapshot,
     )
 
 
@@ -1076,6 +1119,7 @@ def get_strategic_solution(
             created_at=None, updated_at=None,
             brand_snapshot=None, diagnosis=None,
             seven_steps=[], keyword_tiers=[], vision=[],
+            queries_snapshot=None,
         )
     return _solution_to_out(sol)
 

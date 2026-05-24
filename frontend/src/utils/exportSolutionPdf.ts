@@ -9,7 +9,7 @@ import {
 import type {
   TopicStrategicSolution, SolutionDiagnosisCluster,
   SolutionSevenStep, SolutionKeywordTier, SolutionVisionItem,
-  SolutionDiagnosisCheck,
+  SolutionDiagnosisCheck, SolutionQueriesSnapshot,
 } from '../services/adminReviewApi';
 
 // 严重度标签:去掉 pill 背景,只用纯文字 + 颜色。
@@ -239,6 +239,48 @@ const buildKeywordTierBlock = (tier: SolutionKeywordTier): string => {
   );
 };
 
+const buildQueriesBlock = (snapshot: SolutionQueriesSnapshot, t: TFunction): string => {
+  if (!snapshot.queries.length) return '';
+  const labelMap = new Map<number, string>();
+  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
+  const grouped = new Map<number, string[]>();
+  const order: number[] = [];
+  for (const q of snapshot.queries) {
+    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
+    if (!grouped.has(cid)) {
+      grouped.set(cid, []);
+      order.push(cid);
+    }
+    grouped.get(cid)!.push(q.text);
+  }
+  const unclusteredLabel = String(t('admin.solution.queries.unclustered'));
+  // chips:跟关键词节一样,纯文字 + 「 · 」分隔,避免 flex / chip 背景对齐问题(memory: feedback_pdf_no_flex).
+  const groupHtml = order.map((cid) => {
+    const items = grouped.get(cid) || [];
+    const label = labelMap.get(cid) || unclusteredLabel;
+    const text = items.map(escapeHtml).join('  ·  ');
+    return (
+      `<div style="padding:8px 0;">` +
+      `<div style="font-size:12.5px;font-weight:700;color:#0f172a;margin-bottom:4px;">` +
+      `${escapeHtml(label)}` +
+      `<span style="font-size:10.5px;color:#94a3b8;font-weight:500;margin-left:8px;">(${items.length})</span>` +
+      `</div>` +
+      `<div style="font-size:11.5px;color:#312e81;line-height:1.85;">${text}</div>` +
+      `</div>`
+    );
+  }).join('');
+  return (
+    blockWrapOpen('padding:4px 0;') +
+    `<div style="font-size:11.5px;color:#475569;margin-bottom:8px;line-height:1.7;">` +
+    `${escapeHtml(String(t('admin.solution.queries.hint')))}` +
+    `<span style="color:#94a3b8;margin:0 8px;">·</span>` +
+    `${escapeHtml(String(t('admin.solution.queries.totalChip', { n: snapshot.queries.length })))}` +
+    `</div>` +
+    groupHtml +
+    blockWrapClose
+  );
+};
+
 const buildVisionBlock = (items: SolutionVisionItem[]): string => {
   if (items.length === 0) return '';
   // 愿景:去外卡 border + 灰底,纯标题(深紫加粗)+ 正文(深灰)。
@@ -310,6 +352,11 @@ export async function exportSolutionPdf(
     for (const tier of sol.keyword_tiers) {
       blocks.push(buildKeywordTierBlock(tier));
     }
+  }
+
+  if (sol.queries_snapshot && sol.queries_snapshot.queries.length > 0) {
+    blocks.push(buildSectionHeading(t('admin.solution.section.queries')));
+    blocks.push(buildQueriesBlock(sol.queries_snapshot, t));
   }
 
   if (sol.vision.length > 0) {

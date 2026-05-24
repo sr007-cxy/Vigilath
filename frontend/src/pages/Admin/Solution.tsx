@@ -13,6 +13,7 @@ import {
   type SolutionSevenStep,
   type SolutionKeywordTier,
   type SolutionVisionItem,
+  type SolutionQueriesSnapshot,
 } from '../../services/adminReviewApi';
 import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
 import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
@@ -226,6 +227,9 @@ export function AdminSolution() {
           )}
           {sol.keyword_tiers.length > 0 && (
             <KeywordsSection tiers={sol.keyword_tiers} />
+          )}
+          {sol.queries_snapshot && sol.queries_snapshot.queries.length > 0 && (
+            <QueriesSection snapshot={sol.queries_snapshot} />
           )}
           {sol.vision.length > 0 && (
             <VisionSection items={sol.vision} />
@@ -515,6 +519,59 @@ function KeywordsSection({ tiers }: { tiers: SolutionKeywordTier[] }) {
             </div>
           </div>
         ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+function QueriesSection({ snapshot }: { snapshot: SolutionQueriesSnapshot }) {
+  const { t } = useTranslation();
+  const labelMap = new Map<number, string>();
+  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
+  const grouped = new Map<number, string[]>();
+  const order: number[] = [];
+  for (const q of snapshot.queries) {
+    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
+    if (!grouped.has(cid)) {
+      grouped.set(cid, []);
+      order.push(cid);
+    }
+    grouped.get(cid)!.push(q.text);
+  }
+  const total = snapshot.queries.length;
+  return (
+    <SectionCard
+      title={t('admin.solution.section.queries')}
+      action={
+        <span className="text-[11px] px-2 py-0.5 rounded-md"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--accent-primary)' }}>
+          {t('admin.solution.queries.totalChip', { n: total })}
+        </span>
+      }>
+      <p className="text-xs text-secondary mb-3">{t('admin.solution.queries.hint')}</p>
+      <div className="space-y-3">
+        {order.map((cid) => {
+          const items = grouped.get(cid) || [];
+          const label = labelMap.get(cid) || t('admin.solution.queries.unclustered');
+          return (
+            <div key={cid} className="rounded-md p-3"
+                 style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <div className="font-semibold text-primary">{label}</div>
+                <span className="text-[10px] text-muted">{items.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {items.map((q, i) => (
+                  <span key={i} className="text-xs px-2 py-0.5 rounded-md"
+                        style={{ background: 'var(--bg-card)', color: 'var(--accent-primary)',
+                                 border: '1px solid var(--border-color)' }}>
+                    {q}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </SectionCard>
   );

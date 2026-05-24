@@ -290,6 +290,9 @@ class AiTelemetryTopicSolutionORM(Base):
     keywords_json = Column(Text, nullable=False, default="{}")
     # 生成时 BrandProfile 快照
     brand_snapshot_json = Column(Text, nullable=False, default="{}")
+    # 生成时监测 Query 快照 — {"queries":[{text,cluster_id,seed}], "clusters":[{cluster_id,label}]}
+    # 直接源于 topic.queries_json (selected=True) + topic.clusters_json,不走 LLM
+    queries_snapshot_json = Column(Text, nullable=False, default="{}")
     llm_model = Column(String(length=64), nullable=False, default="")
     error = Column(Text, nullable=True)
     generated_by_admin_id = Column(Integer, nullable=True)
@@ -1261,6 +1264,28 @@ class SolutionVisionItem(BaseModel):
     body: str               # 一段话(60-180 字)
 
 
+class SolutionQueryItem(BaseModel):
+    """监测 Query 快照单条 — 直接从 topic.queries_json 提取 selected=True 的项."""
+    text: str
+    cluster_id: int = -1    # -1 表示未分组
+    seed: str = ""          # 这条 Query 当时是从哪个种子提示词扩展出来的(空串=legacy)
+
+
+class SolutionQueryCluster(BaseModel):
+    """监测 Query 簇标签 — 直接来自 topic.clusters_json,前端按 cluster_id 分组用."""
+    cluster_id: int
+    label: str
+
+
+class SolutionQueriesSnapshot(BaseModel):
+    """监测 Query 清单快照 — 报告生成时把用户已勾选(selected=True)的 Query 锁定下来.
+
+    不走 LLM:数据来源是用户在「监测问题」环节自己勾选 + K-Means 聚类的结果.
+    """
+    clusters: list[SolutionQueryCluster] = Field(default_factory=list)
+    queries: list[SolutionQueryItem] = Field(default_factory=list)
+
+
 class TopicSolutionOut(BaseModel):
     """完整战略方案 — GET /topic/{id}/solution 的响应。"""
     id: int
@@ -1278,6 +1303,7 @@ class TopicSolutionOut(BaseModel):
     seven_steps: list[SolutionSevenStepItem] = Field(default_factory=list)
     keyword_tiers: list[SolutionKeywordTier] = Field(default_factory=list)
     vision: list[SolutionVisionItem] = Field(default_factory=list)
+    queries_snapshot: Optional[SolutionQueriesSnapshot] = None
 
 
 class GenerateSolutionPayload(BaseModel):

@@ -205,6 +205,22 @@ export interface SolutionVisionItem {
   body: string;
 }
 
+export interface SolutionQueryItem {
+  text: string;
+  cluster_id: number;       // -1 表示未分组
+  seed: string;             // 这条 Query 当时是从哪个种子提示词扩展出来的(legacy 为空串)
+}
+
+export interface SolutionQueryCluster {
+  cluster_id: number;
+  label: string;
+}
+
+export interface SolutionQueriesSnapshot {
+  clusters: SolutionQueryCluster[];
+  queries: SolutionQueryItem[];
+}
+
 export interface TopicStrategicSolution {
   id: number;
   topic_id: number;
@@ -220,6 +236,7 @@ export interface TopicStrategicSolution {
   seven_steps: SolutionSevenStep[];
   keyword_tiers: SolutionKeywordTier[];
   vision: SolutionVisionItem[];
+  queries_snapshot?: SolutionQueriesSnapshot | null;
 }
 
 export const adminReviewApi = {
