@@ -1,4 +1,4 @@
-// 操盘台 — admin 主入口,一屏看完每个主题在 GEO 管线上的进度.
+// 项目进度 — admin 主入口,一屏看完每个主题在 GEO 管线上的进度.
 // 路由:/workbench/cockpit (workbench 默认页)
 // 不按 pipeline stage 让 admin 一步步点 sidebar,而是把所有主题铺开 + 每个 stage 用 chip
 // 显示状态(完成 / 进行中 / 待处理 / 异常 / 未启动),admin 直接点 chip 跳详情页.
@@ -7,10 +7,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
-import { adminReviewApi, type TopicReviewListItem } from '../../services/adminReviewApi';
+import { adminReviewApi, type StageState, type TopicReviewListItem } from '../../services/adminReviewApi';
 
 type StageKey = 'submit' | 'review' | 'diagnose' | 'plan' | 'content' | 'insight';
-type StageState = 'done' | 'running' | 'pending' | 'blocked' | 'idle';
 
 const STAGE_ORDER: StageKey[] = ['submit', 'review', 'diagnose', 'plan', 'content', 'insight'];
 
@@ -25,27 +24,48 @@ const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }>
 function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageState; to: string }> {
   const tid = t.topic_id;
   const sub = t.submission_status;
-  // submit = 品牌与主题创建(只要有 topic 就算 done)
-  const submit: StageState = 'done';
-  // review = 诊断与方案预评估,pending/rejected/approved
-  const review: StageState =
+  // stage 1 submit:有 topic 就算 done.
+  // stage 2 review:由 submission_status 推.
+  // stage 3-6:后端 admin_review.py 已经按各自表的状态算好(idle/running/done/blocked/pending),
+  //           前端直接读字段;后端缺字段时 Pydantic 会回退到 'idle'.
+  const reviewRaw: StageState =
     sub === 'approved' ? 'done' :
     sub === 'rejected' ? 'blocked' :
     sub === 'pending'  ? 'pending' : 'idle';
-  // 审批没过就不进入后续 stage
-  const approved = sub === 'approved';
-  // 健康度诊断报告 / 执行策略与规划 / 内容发布与审核 / 效果查验与更新:批准后才"可启动",
-  // 这里没拉详细状态,全部标 idle(可点入查看),后续如果后端给字段再升级
-  const after: StageState = approved ? 'idle' : 'idle';
+
+  // 这是工作流式管线 — 顺序门禁:上游不为 done 时,下游一律 idle(忽略后端真实数据).
+  // 后端的 plan/content/insight 是 approve 时并行起的,backend 不串行;
+  // 但 admin 视图按 1→6 工作流看,不允许出现「上一步未完成、下一步已完成」的视觉错位.
+  const rawByKey: Record<StageKey, StageState> = {
+    submit:   'done',
+    review:   reviewRaw,
+    diagnose: t.diagnose_status,
+    plan:     t.plan_status,
+    content:  t.content_status,
+    insight:  t.insight_status,
+  };
+  const effective: Record<StageKey, StageState> = { ...rawByKey };
+  let gated = false;
+  for (const key of STAGE_ORDER) {
+    if (gated) effective[key] = 'idle';
+    else if (rawByKey[key] !== 'done') gated = true;
+  }
+  // 用户偏好:项目进度看板不展示「异常」(red),blocked 一律按「进行中」(blue)呈现.
+  // 真实失败状态查 stage 详情页(执行计划 / 审核 / 监测各页都会还原 raw status).
+  // 注意:必须放在门禁循环之后 — 否则 blocked → running 会让门禁少触发一次.
+  for (const key of STAGE_ORDER) {
+    if (effective[key] === 'blocked') effective[key] = 'running';
+  }
+
   return {
-    submit:   { state: submit,  to: `/workbench/accounts/${t.user_id}/topics` },
-    review:   { state: review,  to: `/workbench/review` },
-    diagnose: { state: after,   to: `/workbench/topics/${tid}/solution` },
-    plan:     { state: after,   to: `/workbench/topics/${tid}/execution-plan` },
-    content:  { state: after,   to: `/workbench/content-review?topic=${tid}` },
+    submit:   { state: effective.submit,   to: `/workbench/accounts/${t.user_id}/topics` },
+    review:   { state: effective.review,   to: `/workbench/review` },
+    diagnose: { state: effective.diagnose, to: `/workbench/topics/${tid}/solution` },
+    plan:     { state: effective.plan,     to: `/workbench/topics/${tid}/execution-plan` },
+    content:  { state: effective.content,  to: `/workbench/content-review?topic=${tid}` },
     // 效果查验与更新 = 原 crawl(运行结果)+ insight(反哺监测)合并;入口走监测看板,
     // 跑批结果可从 sidebar「跑批结果」单独进入
-    insight:  { state: after,   to: `/workbench/insights` },
+    insight:  { state: effective.insight,  to: `/workbench/insights` },
   };
 }
 
@@ -70,7 +90,7 @@ export function AdminCockpit() {
 
   return (
     <div className="space-y-4">
-      <PageHead titleKey="workbench.adminCockpit.title" titleFallback="操盘台" />
+      <PageHead titleKey="workbench.adminCockpit.title" titleFallback="项目进度" />
       <header>
         <h1 className="text-xl font-semibold text-primary">
           {t('workbench.adminCockpit.heading')}

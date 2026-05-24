@@ -56,6 +56,9 @@ async function request<T>(
 
 // ── Phase D — 整张申请审核 ───────────────────────────
 
+// 项目进度 stage chip 的 5 态,值域与后端 admin_review.py::StageState 对齐.
+export type StageState = 'done' | 'running' | 'pending' | 'blocked' | 'idle';
+
 export interface TopicReviewListItem {
   topic_id: number;
   topic_name: string;
@@ -71,6 +74,11 @@ export interface TopicReviewListItem {
   seed_count: number;
   selected_query_count: number;
   version?: number;
+  // 项目进度 stage 3-6 状态;未升级的后端会全是 'idle'(Pydantic 默认值),不影响兼容
+  diagnose_status: StageState;
+  plan_status: StageState;
+  content_status: StageState;
+  insight_status: StageState;
 }
 
 export interface TopicChangelogEntry {

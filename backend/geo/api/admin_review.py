@@ -227,6 +227,58 @@ def reject_queries(
 # ═════════════════ Phase D — 整张申请审核 ═════════════════
 
 
+# 项目进度 stage 状态值域 — 与前端 AdminCockpit.tsx 的 StageState 保持一致.
+# done / running / pending / blocked / idle 共 5 态.
+StageState = str
+
+# 审核未通过 → 后续 stage 一律 idle(还没批准就不能开工).这条规则是闸门,
+# 避免每个映射函数都重复写,统一在调用点判断后再传 approved=True 进来.
+
+def _diagnose_state(approved: bool, sol: Optional[AiTelemetryTopicSolutionORM]) -> StageState:
+    """健康度诊断报告 — TopicSolution 表(每 topic 唯一)."""
+    if not approved or sol is None:
+        return "idle"
+    s = (sol.status or "").lower()
+    return {"ready": "done", "generating": "running", "failed": "blocked"}.get(s, "idle")
+
+
+def _plan_state(approved: bool, plan: Optional[AiTelemetryTopicExecutionPlanORM]) -> StageState:
+    """执行策略与规划 — TopicExecutionPlan(取最新一条).审批通过时自动生成."""
+    if not approved or plan is None:
+        return "idle"
+    s = (plan.status or "").lower()
+    return {"ready": "done", "generating": "running", "failed": "blocked"}.get(s, "idle")
+
+
+def _content_state(approved: bool, agg: dict[str, int]) -> StageState:
+    """内容发布与审核 — TopicGeneratedDoc 按 status 聚合.
+
+    agg = {"draft": n, "pending_review": n, "approved": n, "rejected": n, "published": n}.
+    优先级:已发布 > 待 admin 操作(待审 / 已批准未标发布) > 仅 draft(LLM 出稿中)
+    > 全部 rejected > 无文稿.
+    """
+    if not approved:
+        return "idle"
+    total = sum(agg.values())
+    if total == 0:
+        return "idle"
+    if agg.get("published", 0) > 0:
+        return "done"
+    if agg.get("pending_review", 0) > 0 or agg.get("approved", 0) > 0:
+        return "pending"  # 等 admin 审 / 等 admin 标记发布
+    if agg.get("draft", 0) > 0:
+        return "running"  # LLM 还在出稿
+    return "blocked"      # 剩下只能是 rejected 全部死光
+
+
+def _insight_state(approved: bool, last_status: Optional[str], last_at) -> StageState:
+    """效果查验与更新 — 直接读 topic 表的 last_run_status / last_run_at,免 N+1."""
+    if not approved or last_at is None:
+        return "idle"
+    s = (last_status or "").lower()
+    return {"success": "done", "running": "running", "failed": "blocked"}.get(s, "idle")
+
+
 class TopicReviewListItem(BaseModel):
     topic_id: int
     topic_name: str
@@ -242,6 +294,11 @@ class TopicReviewListItem(BaseModel):
     seed_count: int
     selected_query_count: int
     version: int = 1                          # 修订号,跟 TopicOut.version 对齐
+    # 项目进度 stage 3-6 状态(stage 1 永远 done、stage 2 由 submission_status 推).
+    diagnose_status: StageState = "idle"
+    plan_status: StageState = "idle"
+    content_status: StageState = "idle"
+    insight_status: StageState = "idle"
 
 
 class TopicReviewDetailOut(TopicOut):
@@ -277,6 +334,29 @@ def list_topic_reviews(
     if user_ids:
         for u in db.query(UserORM).filter(UserORM.id.in_(user_ids)).all():
             email_by_uid[u.id] = u.email
+
+    # 项目进度 stage 3-6 的批量预取(全部按 topic_id IN (...) 一次拿).
+    topic_ids = [r.id for r in rows]
+    sol_by_tid: dict[int, AiTelemetryTopicSolutionORM] = {}
+    plan_by_tid: dict[int, AiTelemetryTopicExecutionPlanORM] = {}
+    doc_agg_by_tid: dict[int, dict[str, int]] = {}
+    if topic_ids:
+        for s in db.query(AiTelemetryTopicSolutionORM).filter(
+            AiTelemetryTopicSolutionORM.topic_id.in_(topic_ids)
+        ).all():
+            sol_by_tid[s.topic_id] = s   # unique 约束保证每 topic 至多一条
+        # 执行计划可能多条(重新批准会再生成),按 id desc 取最新一条
+        for p in db.query(AiTelemetryTopicExecutionPlanORM).filter(
+            AiTelemetryTopicExecutionPlanORM.topic_id.in_(topic_ids)
+        ).order_by(AiTelemetryTopicExecutionPlanORM.id.desc()).all():
+            plan_by_tid.setdefault(p.topic_id, p)
+        # 文稿按 (topic_id, status) 聚合,只拉两列避免拖出 body_markdown 巨量文本
+        for tid, st in db.query(
+            TopicGeneratedDocORM.topic_id, TopicGeneratedDocORM.status
+        ).filter(TopicGeneratedDocORM.topic_id.in_(topic_ids)).all():
+            doc_agg_by_tid.setdefault(tid, {}).setdefault(st or "", 0)
+            doc_agg_by_tid[tid][st or ""] += 1
+
     out: list[TopicReviewListItem] = []
     for r in rows:
         try:
@@ -298,6 +378,7 @@ def list_topic_reviews(
             1 for q in qarr
             if isinstance(q, dict) and q.get("text") and q.get("selected", True)
         )
+        approved = (r.submission_status == "approved")
         out.append(TopicReviewListItem(
             topic_id=r.id, topic_name=r.name,
             user_id=r.user_id, user_email=email_by_uid.get(r.user_id, ""),
@@ -310,6 +391,10 @@ def list_topic_reviews(
             seed_count=seed_count,
             selected_query_count=sel_n,
             version=int(getattr(r, "version", 1) or 1),
+            diagnose_status=_diagnose_state(approved, sol_by_tid.get(r.id)),
+            plan_status=_plan_state(approved, plan_by_tid.get(r.id)),
+            content_status=_content_state(approved, doc_agg_by_tid.get(r.id, {})),
+            insight_status=_insight_state(approved, r.last_run_status, r.last_run_at),
         ))
     out.sort(key=lambda x: (x.submitted_at or datetime.min, x.topic_id), reverse=True)
     return out

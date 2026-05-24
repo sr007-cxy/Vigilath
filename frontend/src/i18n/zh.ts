@@ -88,7 +88,7 @@ const zh = {
             "register": "注册",
             "signedInAs": "已登录为",
             "dashboard": "品牌增长",
-            "adminCockpit": "操盘台",
+            "adminCockpit": "项目进度",
             "adminAccounts": "画像",
             "adminApprovals": "待审批",
             "adminInsights": "监测报告",
@@ -3165,8 +3165,8 @@ const zh = {
           },
           "workbench": {
             "adminCockpit": {
-              "title": "操盘台",
-              "heading": "操盘台",
+              "title": "项目进度",
+              "heading": "项目进度",
               "subtitle": "一屏看完每个主题在 GEO 管线上的进度;无需逐步点击 sidebar。",
               "colTopic": "主题",
               "colCustomer": "客户",
