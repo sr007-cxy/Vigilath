@@ -143,12 +143,10 @@ function RadarBlock({ pb, selectedEngines }: {
   if (!pb) {
     return <CardShell title={L.blockRadar} hint={L.hintRadar}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
-  const dims: { key: 'top1_pct' | 'top3_pct' | 'top5_pct' | 'visible_pct' | 'source_pct'; label: string; layer: string }[] = [
-    { key: 'top1_pct', label: L.metricTop1, layer: 'top1' },
+  const dims: { key: 'top5_pct' | 'visible_pct' | 'source_pct'; label: string; layer: string }[] = [
     { key: 'visible_pct', label: L.metricVisible, layer: 'visible' },
     { key: 'source_pct', label: L.metricSource, layer: 'source' },
     { key: 'top5_pct', label: L.metricTop5, layer: 'top5' },
-    { key: 'top3_pct', label: L.metricTop3, layer: 'top3' },
   ];
   const active = pickBreakdown(pb, selectedEngines);
   const isFiltered = selectedEngines.length === 1;
