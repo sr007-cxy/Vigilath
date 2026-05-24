@@ -27,7 +27,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
   const [forgotMessage, setForgotMessage] = useState('');
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { setToken } = useAuth();
+  const { setToken, setUser } = useAuth();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,14 +56,15 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     };
   }, [isOpen]);
 
-  // 登录成功后回填 localStorage.user。Header 从这里读 is_admin 决定
-  // 「工作台」入口是否渲染,光写 email 会让 admin 看不到入口。
+  // 登录成功后回填 user profile 进 AuthContext(同步 localStorage)。
+  // Header 从 context 读 is_admin 决定「工作台」入口是否渲染,光写 email
+  // 会让 admin 看不到入口;故先尝试 /me,失败再兜底只写 email。
   const persistUser = async (accessToken: string, fallbackEmail: string) => {
     try {
       const me = await authApi.getCurrentUser(accessToken);
-      localStorage.setItem('user', JSON.stringify(me));
+      setUser(me);
     } catch {
-      localStorage.setItem('user', JSON.stringify({ email: fallbackEmail }));
+      setUser({ email: fallbackEmail });
     }
   };
 

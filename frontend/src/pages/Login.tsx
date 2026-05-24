@@ -14,7 +14,7 @@ export function Login() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { setToken } = useAuth();
+  const { setToken, setUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +23,12 @@ export function Login() {
 
     try {
       const response = await authApi.login(email, password);
-      localStorage.setItem('user', JSON.stringify({ email }));
+      try {
+        const me = await authApi.getCurrentUser(response.access_token);
+        setUser(me);
+      } catch {
+        setUser({ email });
+      }
       setToken(response.access_token);  // 通过 AuthContext 同步所有消费者
       // SPA 跳转首页;AuthProvider 已经广播 token 更新,无需 window.location
       // 的整页刷新(老版靠整页刷新绕过 state 不同步问题)
@@ -35,8 +40,13 @@ export function Login() {
     }
   };
 
-  const handleGoogleSuccess = (accessToken: string, profile: { email: string }) => {
-    localStorage.setItem('user', JSON.stringify({ email: profile.email }));
+  const handleGoogleSuccess = async (accessToken: string, profile: { email: string }) => {
+    try {
+      const me = await authApi.getCurrentUser(accessToken);
+      setUser(me);
+    } catch {
+      setUser({ email: profile.email });
+    }
     setToken(accessToken);
     navigate('/');
   };

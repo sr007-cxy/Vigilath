@@ -23,31 +23,8 @@ export function Header() {
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
-  const [user, setUser] = useState<string | null>(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      console.log('Header initial user:', storedUser);
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        console.log('Header initial parsedUser:', parsedUser);
-        return parsedUser.email;
-      }
-    } catch (error) {
-      console.error('Error parsing user from localStorage:', error);
-      localStorage.removeItem('user');
-    }
-    return null;
-  });
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('user');
-      return stored ? !!JSON.parse(stored).is_admin : false;
-    } catch {
-      return false;
-    }
-  });
-
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user, isAdmin, setUser, clearAuth } = useAuth();
+  const userEmail = user?.email ?? null;
   const { openAuthModal } = useAuthModal();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -62,31 +39,8 @@ export function Header() {
     switchLanguage(newLang);
   };
 
-  const loadUserFromLocalStorage = () => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser.email);
-        setIsAdmin(!!parsedUser.is_admin);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-      }
-    } catch (error) {
-      console.error('Error parsing user from localStorage:', error);
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      setUser(null);
-      setIsAdmin(false);
-    }
-  };
-
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    setUser(null);
-    setIsAdmin(false);
+    clearAuth();
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
     navigate('/');
@@ -130,40 +84,20 @@ export function Header() {
     };
   }, [isDropdownOpen]);
 
-  useEffect(() => {
-    loadUserFromLocalStorage();
-
-    const handleStorage = () => loadUserFromLocalStorage();
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
-
-  // 自愈:老版本登录写入的 localStorage.user 只有 email,没有 is_admin。
-  // 检测到这种残缺记录就用 token 调一次 /me 把完整 profile 补回去,
+  // 自愈:老版本登录或 persistUser 兜底只写了 email,没有 is_admin。
+  // 登录态成立但 user.is_admin 未定义时,用 token 调一次 /me 补全 profile,
   // 避免要求 admin 重新登录才能看到工作台入口。
   useEffect(() => {
     if (!isLoggedIn) return;
-    try {
-      const stored = localStorage.getItem('user');
-      const parsed = stored ? JSON.parse(stored) : null;
-      if (parsed && typeof parsed.is_admin === 'undefined') {
-        const token = localStorage.getItem('token');
-        if (token) {
-          authApi.getCurrentUser(token).then((me) => {
-            localStorage.setItem('user', JSON.stringify(me));
-            loadUserFromLocalStorage();
-          }).catch(() => {});
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [isLoggedIn]);
-
-  // Reactive: when login state changes (same tab), refresh user display immediately
-  useEffect(() => {
-    loadUserFromLocalStorage();
-  }, [isLoggedIn]);
+    if (!user) return;
+    if (typeof user.is_admin !== 'undefined') return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    authApi
+      .getCurrentUser(token)
+      .then((me) => setUser(me))
+      .catch(() => {});
+  }, [isLoggedIn, user, setUser]);
 
   return (
     <header
@@ -215,7 +149,7 @@ export function Header() {
             <span style={{ color: i18n.language === 'zh' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>中文</span>
           </button>
 
-          {user ? (
+          {isLoggedIn ? (
             <div
               className="relative"
               ref={dropdownRef}
@@ -225,7 +159,7 @@ export function Header() {
               <button
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors duration-200 bg-surface border-soft border-soft-hover"
               >
-                <span className="text-sm font-medium max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>{user}</span>
+                <span className="text-sm font-medium max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>{userEmail ?? ''}</span>
                 <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-secondary)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -236,7 +170,7 @@ export function Header() {
                   <div className="rounded-xl shadow-xl overflow-hidden animate-fade-in border bg-surface border-soft">
                     <div className="px-4 py-3 border-b border-soft">
                       <p className="text-sm text-muted">{t('nav.signedInAs')}</p>
-                      <p className="text-sm font-medium truncate text-primary">{user}</p>
+                      <p className="text-sm font-medium truncate text-primary">{userEmail ?? ''}</p>
                     </div>
                     <div className="py-2">
                       {isAdmin && (
@@ -385,11 +319,11 @@ export function Header() {
             </nav>
 
             <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
-              {user ? (
+              {isLoggedIn ? (
                 <div className="flex flex-col gap-1">
                   <div className="px-3 py-2">
                     <p className="text-xs text-muted">{t('nav.signedInAs')}</p>
-                    <p className="text-sm font-medium truncate text-primary">{user}</p>
+                    <p className="text-sm font-medium truncate text-primary">{userEmail ?? ''}</p>
                   </div>
                   {isAdmin && (
                     <Link

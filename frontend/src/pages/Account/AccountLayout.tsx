@@ -3,19 +3,13 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/authApi';
 import { useAuthModal } from '../../contexts/AuthModalContext';
-
-interface StoredUser {
-  id: number;
-  email: string;
-  name?: string | null;
-  is_active: boolean;
-}
+import { useAuth } from '../../contexts/AuthContext';
 
 export function AccountLayout() {
   const navigate = useNavigate();
   const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const { user, setUser, clearAuth } = useAuth();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,11 +25,9 @@ export function AccountLayout() {
       .then((u) => {
         if (cancelled) return;
         setUser(u);
-        localStorage.setItem('user', JSON.stringify(u));
       })
       .catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearAuth();
         openAuthModal('login');
         navigate('/', { replace: true });
       })
@@ -43,11 +35,10 @@ export function AccountLayout() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, openAuthModal]);
+  }, [navigate, openAuthModal, setUser, clearAuth]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearAuth();
     navigate('/');
   };
 

@@ -19,7 +19,7 @@ export function Register() {
   const [paymentToken, setPaymentToken] = useState<string | null>(null);
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { setToken } = useAuth();
+  const { setToken, setUser } = useAuth();
 
   // 加载 Google SDK
   useEffect(() => {
@@ -57,7 +57,12 @@ export function Register() {
       const googleUser = await auth2.signIn();
       const idToken = googleUser.getAuthResponse().id_token;
       const response = await oauthApi.googleLogin(idToken);
-      localStorage.setItem('user', JSON.stringify({ email: googleUser.getBasicProfile().getEmail() }));
+      try {
+        const me = await authApi.getCurrentUser(response.access_token);
+        setUser(me);
+      } catch {
+        setUser({ email: googleUser.getBasicProfile().getEmail() });
+      }
       setToken(response.access_token);  // 走 AuthContext,所有监听组件同步
       navigate('/');
     } catch (err) {

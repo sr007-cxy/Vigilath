@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { ScrollToTop } from './components/ScrollToTop';
 import { ContactModalProvider } from './components/ContactModalContext';
 import { ContactModal } from './components/ContactModal';
 import { TierModalProvider } from './components/TierModalContext';
@@ -104,6 +105,7 @@ function App() {
             inner route Suspense would cause the whole tree to unmount
             (white screen) when suspension bubbles past the Router. */}
         <Suspense fallback={<PageLoader />}>
+        <ScrollToTop />
         <Header />
         <ContactModal />
         <TierModal />

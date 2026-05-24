@@ -2,22 +2,15 @@
 // 非 admin 用户进入这里会被预检踢回 /dashboard.
 //
 // sidebar 按"admin 角色任务"组织,而非按 pipeline stage 一步步点:
-//   操盘台 / 画像 / 待审批 / 监测报告 / 跑批结果
-// pipeline 自动跑,admin 在操盘台一屏看全管线,只在「待审批」介入。
+//   项目进度 / 画像 / 待审批 / 监测报告 / 跑批结果
+// pipeline 自动跑,admin 在项目进度页一屏看全管线,只在「待审批」介入。
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { authApi } from '../../services/authApi';
 import { useAuthModal } from '../../contexts/AuthModalContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { PageHead } from '../../components/PageHead';
-
-interface StoredUser {
-  id: number;
-  email: string;
-  name?: string | null;
-  is_active: boolean;
-  is_admin?: boolean;
-}
 
 const sidebarItems = [
   { to: '/workbench/cockpit', end: false, icon: 'cockpit', labelKey: 'nav.adminCockpit' },
@@ -28,7 +21,7 @@ const sidebarItems = [
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {
-  // 操盘台:仪表盘
+  // 项目进度:仪表盘
   if (name === 'cockpit') {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,7 +74,7 @@ export function WorkbenchLayout() {
   const navigate = useNavigate();
   const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const { user, setUser, clearAuth } = useAuth();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -102,11 +95,9 @@ export function WorkbenchLayout() {
           return;
         }
         setUser(u);
-        localStorage.setItem('user', JSON.stringify(u));
       })
       .catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearAuth();
         openAuthModal('login');
         navigate('/', { replace: true });
       })
@@ -114,7 +105,7 @@ export function WorkbenchLayout() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, openAuthModal]);
+  }, [navigate, openAuthModal, setUser, clearAuth]);
 
   if (loading) {
     return (
