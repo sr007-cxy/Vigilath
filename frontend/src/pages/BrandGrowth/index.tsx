@@ -196,9 +196,6 @@ function RadarBlock({ pb, selectedEngines }: {
           ))}
         </svg>
       </div>
-      {!baseline && !isFiltered && (
-        <div className="text-[10px] text-muted text-center mt-2">{L.industryBaselineMissing}</div>
-      )}
     </CardShell>
   );
 }
@@ -433,9 +430,9 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
               <div className="text-2xl font-bold tabular-nums mt-auto" style={{ color: m.tint.fg }}>
                 {v.toFixed(2)}%
               </div>
-              {!isFiltered && (
+              {!isFiltered && bv !== null && (
                 <div className="text-[10px] text-muted">
-                  {bv !== null ? `${L.industryLabel} ${bv.toFixed(2)}%` : L.industryBaselineMissing}
+                  {`${L.industryLabel} ${bv.toFixed(2)}%`}
                 </div>
               )}
             </button>

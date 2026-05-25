@@ -126,11 +126,6 @@ function OverviewSection({ plan }: { plan: ExecutionPlan }) {
           </div>
         ))}
       </dl>
-      {plan.error && (
-        <div className="mt-2 text-xs" style={{ color: '#ef4444' }}>
-          {t('admin.executionPlan.errorPrefix')}: {plan.error}
-        </div>
-      )}
     </SectionCard>
   );
 }

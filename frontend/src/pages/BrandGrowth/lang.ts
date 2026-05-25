@@ -13,7 +13,6 @@ interface Dict {
   back: string;
   viewAll: string;
   clearFilter: string;
-  industryBaselineMissing: string;
   // 主页
   pageTitle: string;
   metricCitations: string;
@@ -216,7 +215,6 @@ const ZH: Dict = {
   back: '返回',
   viewAll: '查看全部 →',
   clearFilter: '清除筛选',
-  industryBaselineMissing: '行业基准样本不足',
   pageTitle: '品牌增长',
   metricCitations: '推荐词总数',
   metricPublishedTotal: '媒体投放',
@@ -410,7 +408,6 @@ const EN: Dict = {
   back: 'Back',
   viewAll: 'View all →',
   clearFilter: 'Clear filter',
-  industryBaselineMissing: 'Industry baseline: not enough samples',
   pageTitle: 'Brand Growth',
   metricCitations: 'Total Recommendations',
   metricPublishedTotal: 'Published',

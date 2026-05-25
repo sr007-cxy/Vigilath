@@ -14,11 +14,11 @@ type StageKey = 'submit' | 'review' | 'diagnose' | 'plan' | 'content' | 'insight
 const STAGE_ORDER: StageKey[] = ['submit', 'review', 'diagnose', 'plan', 'content', 'insight'];
 
 const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }> = {
-  done:    { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)' },
+  done: { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)' },
   running: { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.35)' },
-  pending: { c: '#eab308', bg: 'rgba(234,179,8,0.12)',  border: 'rgba(234,179,8,0.35)'  },
-  blocked: { c: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.35)'  },
-  idle:    { c: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.30)' },
+  pending: { c: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)' },
+  blocked: { c: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.35)' },
+  idle: { c: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.30)' },
 };
 
 function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageState; to: string }> {
@@ -30,19 +30,19 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
   //           前端直接读字段;后端缺字段时 Pydantic 会回退到 'idle'.
   const reviewRaw: StageState =
     sub === 'approved' ? 'done' :
-    sub === 'rejected' ? 'blocked' :
-    sub === 'pending'  ? 'pending' : 'idle';
+      sub === 'rejected' ? 'blocked' :
+        sub === 'pending' ? 'pending' : 'idle';
 
   // 这是工作流式管线 — 顺序门禁:上游不为 done 时,下游一律 idle(忽略后端真实数据).
   // 后端的 plan/content/insight 是 approve 时并行起的,backend 不串行;
   // 但 admin 视图按 1→6 工作流看,不允许出现「上一步未完成、下一步已完成」的视觉错位.
   const rawByKey: Record<StageKey, StageState> = {
-    submit:   'done',
-    review:   reviewRaw,
+    submit: 'done',
+    review: reviewRaw,
     diagnose: t.diagnose_status,
-    plan:     t.plan_status,
-    content:  t.content_status,
-    insight:  t.insight_status,
+    plan: t.plan_status,
+    content: t.content_status,
+    insight: t.insight_status,
   };
   const effective: Record<StageKey, StageState> = { ...rawByKey };
   let gated = false;
@@ -58,14 +58,14 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
   }
 
   return {
-    submit:   { state: effective.submit,   to: `/workbench/accounts/${t.user_id}/topics` },
-    review:   { state: effective.review,   to: `/workbench/review` },
+    submit: { state: effective.submit, to: `/workbench/accounts/${t.user_id}/topics` },
+    review: { state: effective.review, to: `/workbench/review` },
     diagnose: { state: effective.diagnose, to: `/workbench/topics/${tid}/solution` },
-    plan:     { state: effective.plan,     to: `/workbench/topics/${tid}/execution-plan` },
-    content:  { state: effective.content,  to: `/workbench/content-review?topic=${tid}` },
+    plan: { state: effective.plan, to: `/workbench/topics/${tid}/execution-plan` },
+    content: { state: effective.content, to: `/workbench/content-review?topic=${tid}` },
     // 效果查验与更新 = 原 crawl(运行结果)+ insight(反哺监测)合并;入口走监测看板,
     // 跑批结果可从 sidebar「跑批结果」单独进入
-    insight:  { state: effective.insight,  to: `/workbench/insights` },
+    insight: { state: effective.insight, to: `/workbench/insights` },
   };
 }
 
@@ -110,7 +110,7 @@ export function AdminCockpit() {
         </div>
       ) : (
         <div className="rounded-lg overflow-hidden"
-             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
           <table className="w-full text-xs">
             <thead>
               <tr className="text-muted">
@@ -127,7 +127,7 @@ export function AdminCockpit() {
             <tbody>
               {rows.map(({ topic, stages }) => (
                 <tr key={topic.topic_id} className="border-t"
-                    style={{ borderColor: 'var(--border-color)' }}>
+                  style={{ borderColor: 'var(--border-color)' }}>
                   <td className="px-3 py-2 text-primary">
                     {topic.profile_name || topic.topic_name}
                     <div className="text-[10px] text-muted">#{topic.topic_id}</div>
@@ -141,8 +141,8 @@ export function AdminCockpit() {
                     return (
                       <td key={key} className="px-2 py-2 text-center">
                         <Link to={to}
-                              className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors"
-                              style={{ color: c.c, background: c.bg, borderColor: c.border }}>
+                          className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors"
+                          style={{ color: c.c, background: c.bg, borderColor: c.border }}>
                           {t(`workbench.adminCockpit.stageStatus.${state}`)}
                         </Link>
                       </td>
