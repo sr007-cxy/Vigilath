@@ -110,8 +110,8 @@ export function BrandProfileForm({
                 <TextRow label="品牌官网(选填)" required={false} readOnly={readOnly}
                          value={profile.website || ''} onChange={v => setField('website', v)} />
               </Pair>
-              <TagsRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
-                       value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
+              <ParagraphRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
+                            value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
               {showAliases && (
                 <div>
                   <Label text={aliasesLabel || '别名 / 简称(逗号分隔,最多 10 个)'} required={false} />
@@ -143,8 +143,8 @@ export function BrandProfileForm({
                 <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
                          value={profile.founded_year} onChange={v => setField('founded_year', v)} />
               </Pair>
-              <TagsRow label="核心荣誉 / 背书资质" required={req.has('core_credentials')} readOnly={readOnly}
-                       value={profile.core_credentials} onChange={v => setField('core_credentials', v)} />
+              <ParagraphRow label="核心荣誉 / 背书资质" required={req.has('core_credentials')} readOnly={readOnly}
+                            value={profile.core_credentials} onChange={v => setField('core_credentials', v)} />
               <TagsRow label="品牌差异化标签(3-5 个)" required={req.has('brand_diff_tags')} readOnly={readOnly}
                        value={profile.brand_diff_tags} onChange={v => setField('brand_diff_tags', v)} />
             </>
@@ -154,12 +154,12 @@ export function BrandProfileForm({
             <>
               <TextAreaRow label="核心服务概述" required={req.has('core_service_overview')} readOnly={readOnly}
                            value={profile.core_service_overview} onChange={v => setField('core_service_overview', v)} />
-              <TagsRow label="服务核心特点(分点)" required={req.has('service_features')} readOnly={readOnly}
-                       value={profile.service_features} onChange={v => setField('service_features', v)} />
-              <TagsRow label="服务关键流程 / 环节" required={req.has('service_process')} readOnly={readOnly}
-                       value={profile.service_process} onChange={v => setField('service_process', v)} />
-              <TagsRow label="服务覆盖场景 / 客户类型" required={req.has('target_scenarios')} readOnly={readOnly}
-                       value={profile.target_scenarios} onChange={v => setField('target_scenarios', v)} />
+              <ParagraphRow label="服务核心特点" required={req.has('service_features')} readOnly={readOnly}
+                            value={profile.service_features} onChange={v => setField('service_features', v)} />
+              <ParagraphRow label="服务关键流程 / 环节" required={req.has('service_process')} readOnly={readOnly}
+                            value={profile.service_process} onChange={v => setField('service_process', v)} />
+              <ParagraphRow label="服务覆盖场景 / 客户类型" required={req.has('target_scenarios')} readOnly={readOnly}
+                            value={profile.target_scenarios} onChange={v => setField('target_scenarios', v)} />
               <TagsRow label="服务交付保障(选填)" required={false} readOnly={readOnly}
                        value={profile.service_guarantees} onChange={v => setField('service_guarantees', v)} />
             </>
@@ -171,8 +171,8 @@ export function BrandProfileForm({
                            value={profile.brand_story} onChange={v => setField('brand_story', v)} />
               <TextAreaRow label="核心人物故事(选填)" required={false} readOnly={readOnly}
                            value={profile.key_person_story} onChange={v => setField('key_person_story', v)} />
-              <TagsRow label="典型案例 / 客户故事(脱敏)(选填)" required={false} readOnly={readOnly}
-                       value={profile.case_stories} onChange={v => setField('case_stories', v)} />
+              <ParagraphRow label="典型案例 / 客户故事(脱敏)(选填)" required={false} readOnly={readOnly}
+                            value={profile.case_stories} onChange={v => setField('case_stories', v)} />
               <TextAreaRow label="品牌价值观 / 服务理念" required={req.has('brand_values')} readOnly={readOnly}
                            value={profile.brand_values} onChange={v => setField('brand_values', v)} />
             </>
@@ -248,6 +248,38 @@ function TextAreaRow({ label, required, readOnly, value, onChange }: TextProps) 
                 }}
                 value={value}
                 onChange={e => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+// 整段文本编辑,底层仍存 string[](保持 schema 兼容).
+// 加载:多 item 数组用换行连起来展示;
+// 保存:整段文本 trim 后作为 string[] 的唯一元素回写,空则存 [].
+// 这样下游 LLM prompt 拼装(把数组按行拼)行为不变,只是把"用户手动维护多条"
+// 改成了"整段文本"输入体验.
+interface ParagraphProps {
+  label: string; required: boolean; readOnly: boolean;
+  value: string[]; onChange: (v: string[]) => void; rows?: number;
+}
+
+function ParagraphRow({ label, required, readOnly, value, onChange, rows = 4 }: ParagraphProps) {
+  const text = value.join('\n');
+  return (
+    <div>
+      <Label text={label} required={required} />
+      <textarea disabled={readOnly}
+                rows={rows}
+                className="w-full text-sm px-3 py-2 rounded-md"
+                style={{
+                  background: 'var(--bg-input)', color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                  opacity: readOnly ? 0.6 : 1,
+                }}
+                value={text}
+                onChange={e => {
+                  const v = e.target.value;
+                  onChange(v.trim() ? [v] : []);
+                }} />
     </div>
   );
 }
