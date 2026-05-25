@@ -15,6 +15,8 @@ import { ProfileImporter } from '../../components/ProfileImporter';
 import { topicProfileApi } from '../../services/topicProfileApi';
 import { adminReviewApi, type TopicStrategicSolution } from '../../services/adminReviewApi';
 import { SolutionView } from '../Admin/Solution';
+import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
+import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
 import {
   aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
   type BrandProfile,
@@ -3677,11 +3679,28 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
   initialWebsite: string;
   token: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [sol, setSol] = useState<TopicStrategicSolution | null>(null);
   const [website, setWebsite] = useState(initialWebsite);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const handleExportPdf = async () => {
+    if (!sol || sol.status !== 'ready' || exporting) return;
+    setExporting(true); setErr(null);
+    try { await exportSolutionPdf(sol, t, i18n.language || 'zh'); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setExporting(false); }
+  };
+
+  const handleExportDocx = async () => {
+    if (!sol || sol.status !== 'ready' || exporting) return;
+    setExporting(true); setErr(null);
+    try { await exportSolutionDocx(sol, t, i18n.language || 'zh'); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setExporting(false); }
+  };
 
   useEffect(() => {
     if (!topicId) return;
@@ -3778,8 +3797,8 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
 
       {status === 'ready' && sol && (
         <div className="space-y-4">
-          {/* 顶栏:状态条 + 重新生成,完整内容直接在下方铺开 */}
-          <div className="rounded-md p-3 flex items-center justify-between gap-3"
+          {/* 顶栏:状态条 + 导出 PDF / Word + 重新生成,完整内容直接在下方铺开 */}
+          <div className="rounded-md p-3 flex items-center justify-between gap-3 flex-wrap"
                style={{ background: 'rgba(16,185,129,0.08)',
                         border: '1px solid rgba(16,185,129,0.30)' }}>
             <div className="text-sm text-primary">
@@ -3787,11 +3806,23 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
                 at: sol.updated_at ? new Date(sol.updated_at).toLocaleString() : '',
               })}
             </div>
-            <button type="button" disabled={busy} onClick={handleGenerate}
-                    className="text-xs px-3 py-1.5 rounded-md whitespace-nowrap"
-                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-              {t('dashboard.aiTelemetry.form.step4Regen')}
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={exporting} onClick={handleExportPdf}
+                      className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap disabled:opacity-50"
+                      style={{ background: 'var(--accent-primary)' }}>
+                {exporting ? t('admin.solution.exporting') : t('admin.solution.export')}
+              </button>
+              <button type="button" disabled={exporting} onClick={handleExportDocx}
+                      className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap disabled:opacity-50"
+                      style={{ background: '#2563eb' }}>
+                {exporting ? t('admin.solution.exporting') : t('admin.solution.exportDocx')}
+              </button>
+              <button type="button" disabled={busy} onClick={handleGenerate}
+                      className="text-xs px-3 py-1.5 rounded-md whitespace-nowrap"
+                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                {t('dashboard.aiTelemetry.form.step4Regen')}
+              </button>
+            </div>
           </div>
           <SolutionView sol={sol} />
         </div>
