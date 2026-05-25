@@ -2906,7 +2906,7 @@ const zh = {
               }
             },
             "solution": {
-              "title": "健康度诊断报告(GEO 体检报告)",
+              "title": "健康度诊断报告",
               "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的体检报告",
               "backToReview": "返回审核",
               "export": "导出 PDF",

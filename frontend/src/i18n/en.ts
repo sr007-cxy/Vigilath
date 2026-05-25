@@ -2900,7 +2900,7 @@ const en = {
               }
             },
             "solution": {
-              "title": "Health Report (GEO Health Report)",
+              "title": "Health Report",
               "subtitle": "Generate a deliverable health report from site diagnostics + brand profile",
               "backToReview": "Back to review",
               "export": "Export PDF",
