@@ -66,6 +66,27 @@ const advancedCards: { key: CardKey; icon: ReactNode; isNew?: boolean }[] = [
   },
 ];
 
+// Pipeline step icons (Heroicons outline style, single path each).
+// Indexed by step position 0–7, ordered to match home.pipeline.steps i18n.
+const pipelineIconPaths: string[] = [
+  // 01 种子提示 — sparkles
+  'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+  // 02 意图扩展 — share / branching nodes
+  'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z',
+  // 03 提示聚类 — users group
+  'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
+  // 04 内容生成 — pencil + paper
+  'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+  // 05 媒介分发 — wifi broadcast arc
+  'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c6.05-6.05 15.858-6.05 21.908 0',
+  // 06 引擎抓取 — magnifier search
+  'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  // 07 遥测采集 — chart bars
+  'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  // 08 强化闭环 — refresh / cyclic
+  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+];
+
 export function Home() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -276,7 +297,7 @@ export function Home() {
                           }}
                         >
                           <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: phaseVar }} />
-                          {p.id} · {p.label}
+                          {p.label}
                         </div>
                       );
                     },
@@ -291,8 +312,9 @@ export function Home() {
                     title: string;
                     desc: string;
                     output: string;
-                  }[]).map((step) => {
+                  }[]).map((step, idx) => {
                     const phaseVar = `var(--phase-${step.phase.toLowerCase()})`;
+                    const iconPath = pipelineIconPaths[idx];
                     return (
                       <div
                         key={step.id}
@@ -321,6 +343,26 @@ export function Home() {
                             style={{ background: phaseVar, boxShadow: `0 0 8px ${phaseVar}` }}
                             aria-label={step.phase}
                           />
+                        </div>
+
+                        {/* Phase-colored icon tile */}
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-colors"
+                          style={{
+                            background: `color-mix(in srgb, ${phaseVar} 14%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${phaseVar} 28%, transparent)`,
+                          }}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke={phaseVar}
+                            strokeWidth={1.8}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+                          </svg>
                         </div>
 
                         {/* Title */}

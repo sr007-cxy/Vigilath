@@ -403,7 +403,7 @@ const zh = {
               "comment": "// pipeline.v1",
               "badge": "8 步工作流",
               "title": "8 步 GEO 自动化流水线",
-              "subtitle": "Seed in → loop out。每天闭环自校准,品牌资料一次填好,后续全自动。",
+              "subtitle": "种子进，闭环出。每天自校准，品牌资料一次填好，后续全程自动。",
               "phases": [
                 { "id": "INGEST", "label": "采集" },
                 { "id": "PRODUCE", "label": "生产" },
@@ -414,71 +414,71 @@ const zh = {
                 {
                   "id": "01",
                   "phase": "INGEST",
-                  "title": "Seed Prompt",
-                  "desc": "品牌资料 + 种子问题",
-                  "output": "output: 5–10 seed queries"
+                  "title": "种子提示",
+                  "desc": "品牌资料加种子问题，自助填写一次到位",
+                  "output": "输出：5 到 10 条种子问题"
                 },
                 {
                   "id": "02",
                   "phase": "INGEST",
-                  "title": "Intent Expansion",
-                  "desc": "LLM 扩展候选意图",
-                  "output": "output: 200+ intents"
+                  "title": "意图扩展",
+                  "desc": "大模型扩展候选意图，挖掘长尾覆盖面",
+                  "output": "输出：200 条以上候选意图"
                 },
                 {
                   "id": "03",
                   "phase": "INGEST",
-                  "title": "Prompt Clustering",
-                  "desc": "聚类去重监测问题",
-                  "output": "output: ~200 monitored Q's"
+                  "title": "提示聚类",
+                  "desc": "聚类去重得到核心监测问题集合",
+                  "output": "输出：约 200 条监测问题"
                 },
                 {
                   "id": "04",
                   "phase": "PRODUCE",
-                  "title": "Content Generation",
-                  "desc": "LLM 按品牌资料起稿",
-                  "output": "output: ~50 drafts"
+                  "title": "内容生成",
+                  "desc": "大模型按品牌资料批量起草内容稿件",
+                  "output": "输出：约 50 篇文案"
                 },
                 {
                   "id": "05",
                   "phase": "PRODUCE",
-                  "title": "Media Distribution",
-                  "desc": "投放知乎 / Reddit / 博客",
-                  "output": "output: multi-platform publish"
+                  "title": "媒介分发",
+                  "desc": "知乎、雷迪特、博客、行业论坛多平台同步投放",
+                  "output": "输出：多平台同步发布"
                 },
                 {
                   "id": "06",
                   "phase": "OBSERVE",
-                  "title": "AI Crawling",
-                  "desc": "ChatGPT / Perplexity 索引",
-                  "output": "output: indexed by 5+ engines"
+                  "title": "引擎抓取",
+                  "desc": "等待主流大模型抓取并完成内容索引",
+                  "output": "输出：被 5 个以上引擎索引"
                 },
                 {
                   "id": "07",
                   "phase": "OBSERVE",
-                  "title": "Telemetry",
-                  "desc": "每日采集引用、提及、排名",
-                  "output": "output: daily citation feed"
+                  "title": "遥测采集",
+                  "desc": "每日采集品牌引用、提及、排名变化",
+                  "output": "输出：每日引用数据流"
                 },
                 {
                   "id": "08",
                   "phase": "ADAPT",
-                  "title": "Reinforcement Loop",
-                  "desc": "信号回流,精炼种子重扩展",
-                  "output": "feedback → [01]"
+                  "title": "强化闭环",
+                  "desc": "信号回流，精炼种子，重新进入扩展流程",
+                  "output": "回流到第一步"
                 }
               ],
-              "loopLabel": "feedback signals",
-              "mobileLoopHint": "↺ feeds back to [01]"
+              "loopLabel": "反馈信号回流",
+              "mobileLoopHint": "↺ 回流到第一步"
             },
             "faq": {
               "badge": "常见问题",
-              "title": "常见问题",
-              "subtitle": "签约前你最常问的几件事,先一次性回答清楚。",
+              "title": "签约前你最常问的几件事",
+              "subtitle": "一次说清楚，省去你来回追问。",
               "items": [
                 {
-                  "q": "GEO 和 SEO 有什么区别?",
-                  "a": "GEO(Generative Engine Optimization)关注让品牌被 ChatGPT / Gemini / Perplexity 等 AI 助手主动推荐,SEO 关注搜索引擎结果页排名。GEO 是为 AI 搜索新时代设计的,SEO 仍服务传统搜索场景 — 两者互补,不替代。"
+                  "q": "GEO 和 SEO 有什么区别？",
+                  "a": "GEO 关注让品牌被生成式 AI 助手主动推荐，SEO 关注搜索引擎结果页排名。GEO 面向 AI 搜索新时代设计，SEO 仍服务传统搜索场景——两者互补，不替代。"
                 },
                 {
                   "q": "多久能看到效果?",
@@ -489,8 +489,8 @@ const zh = {
                   "a": "覆盖主流海外引擎(ChatGPT / Gemini / Perplexity / Claude / DeepSeek)与国内引擎(百度 AI / 文心 / 通义 / 豆包 / 元宝)。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
                 },
                 {
-                  "q": "8 步流水线和传统 SEO agency 有什么不同?",
-                  "a": "传统 SEO 是「关键词→内容→外链→等排名」的手工活,周期长、依赖个人经验。我们的 8 步流水线全自动闭环:从种子问题扩展、聚类、生稿、投放,到 AI 索引验证、引用监测,再反馈精炼。每天自我校准,无需人工干预 — 1 个客户经理可同时跑 50 个品牌项目。"
+                  "q": "8 步流水线和传统 SEO 服务商有什么不同？",
+                  "a": "传统 SEO 是「关键词到内容到外链到等排名」的手工活，周期长、依赖个人经验。我们的 8 步流水线全自动闭环：从种子问题扩展、聚类、起稿、投放，到引擎索引验证、引用监测，再反馈精炼。每天自我校准，无需人工干预——一名客户经理可同时跑 50 个品牌项目。"
                 },
                 {
                   "q": "舆情监测是实时的吗?",

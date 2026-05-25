@@ -405,10 +405,10 @@ const en = {
               "title": "8-stage GEO automation pipeline",
               "subtitle": "Seed in → loop out. Daily self-calibration. Fill brand profile once; the rest runs unattended.",
               "phases": [
-                { "id": "INGEST", "label": "Ingest" },
-                { "id": "PRODUCE", "label": "Produce" },
-                { "id": "OBSERVE", "label": "Observe" },
-                { "id": "ADAPT", "label": "Adapt" }
+                { "id": "INGEST", "label": "INGEST" },
+                { "id": "PRODUCE", "label": "PRODUCE" },
+                { "id": "OBSERVE", "label": "OBSERVE" },
+                { "id": "ADAPT", "label": "ADAPT" }
               ],
               "steps": [
                 {
