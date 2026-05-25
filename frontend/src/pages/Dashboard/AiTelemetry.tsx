@@ -14,6 +14,7 @@ import { BrandProfileForm } from '../../components/BrandProfileForm';
 import { ProfileImporter } from '../../components/ProfileImporter';
 import { topicProfileApi } from '../../services/topicProfileApi';
 import { adminReviewApi, type TopicStrategicSolution } from '../../services/adminReviewApi';
+import { SolutionView } from '../Admin/Solution';
 import {
   aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
   type BrandProfile,
@@ -3775,27 +3776,24 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
         </div>
       )}
 
-      {status === 'ready' && (
-        <div className="rounded-md p-4 space-y-3"
-             style={{ background: 'rgba(16,185,129,0.08)',
-                      border: '1px solid rgba(16,185,129,0.30)' }}>
-          <div className="text-sm text-primary">
-            ✓ {t('dashboard.aiTelemetry.form.step4Ready', {
-              at: sol?.updated_at ? new Date(sol.updated_at).toLocaleString() : '',
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <a href={`/workbench/topics/${topicId}/solution`}
-               className="text-xs px-3 py-1.5 rounded-md text-white inline-block"
-               style={{ background: 'var(--accent-primary)' }}>
-              {t('dashboard.aiTelemetry.form.step4OpenFull')}
-            </a>
+      {status === 'ready' && sol && (
+        <div className="space-y-4">
+          {/* 顶栏:状态条 + 重新生成,完整内容直接在下方铺开 */}
+          <div className="rounded-md p-3 flex items-center justify-between gap-3"
+               style={{ background: 'rgba(16,185,129,0.08)',
+                        border: '1px solid rgba(16,185,129,0.30)' }}>
+            <div className="text-sm text-primary">
+              ✓ {t('dashboard.aiTelemetry.form.step4Ready', {
+                at: sol.updated_at ? new Date(sol.updated_at).toLocaleString() : '',
+              })}
+            </div>
             <button type="button" disabled={busy} onClick={handleGenerate}
-                    className="text-xs px-3 py-1.5 rounded-md"
+                    className="text-xs px-3 py-1.5 rounded-md whitespace-nowrap"
                     style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
               {t('dashboard.aiTelemetry.form.step4Regen')}
             </button>
           </div>
+          <SolutionView sol={sol} />
         </div>
       )}
 

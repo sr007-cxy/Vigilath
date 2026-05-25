@@ -244,33 +244,49 @@ export function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {(t('home.partners.items', { returnObjects: true }) as {
-                brand: string;
+                name: string;
+                sub: string;
                 logo: string;
-                quote: string;
-                author: string;
+                tagline: string;
               }[]).map((item, idx) => (
-                <div key={idx} className="card p-6 flex flex-col">
-                  <div className="h-10 mb-5 flex items-center">
+                <div key={idx} className="card overflow-hidden flex flex-col">
+                  {/* Logo zone — uniform white background so logos with white / colored / transparent bg all align */}
+                  <div
+                    className="flex items-center justify-center px-5"
+                    style={{ background: '#ffffff', height: '120px' }}
+                  >
                     {item.logo ? (
                       <img
                         src={item.logo}
-                        alt={item.brand}
-                        className="max-h-10 w-auto select-none"
+                        alt={`${item.name} · ${item.sub}`}
+                        loading="lazy"
                         draggable={false}
+                        className="max-h-16 max-w-full w-auto object-contain select-none"
                       />
                     ) : (
-                      <span className="text-lg font-bold tracking-tight text-primary">
-                        {item.brand}
-                      </span>
+                      <div className="text-center select-none">
+                        {item.tagline && (
+                          <div
+                            className="text-base sm:text-lg font-bold italic tracking-tight"
+                            style={{ color: '#141418' }}
+                          >
+                            {item.tagline}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <blockquote className="text-sm sm:text-base text-secondary leading-relaxed flex-1 m-0">
-                    “{item.quote}”
-                  </blockquote>
-                  <div className="mt-4 pt-4 border-t border-soft text-xs sm:text-sm text-muted">
-                    {item.author}
+                  {/* Name zone — themed bg, separates by border */}
+                  <div
+                    className="px-4 py-3 text-center border-t flex-1 flex flex-col justify-center"
+                    style={{ borderColor: 'var(--border-color)' }}
+                  >
+                    <div className="text-sm font-semibold text-primary leading-tight">
+                      {item.name}
+                    </div>
+                    <div className="text-xs text-muted mt-1">{item.sub}</div>
                   </div>
                 </div>
               ))}

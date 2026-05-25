@@ -207,33 +207,39 @@ export function AdminSolution() {
         </div>
       )}
 
-      {isReady && sol && (
-        <div className="space-y-4">
-          {sol.brand_snapshot && (
-            <BrandSection sol={sol} />
-          )}
-          {sol.diagnosis && sol.diagnosis.clusters.length > 0 && (
-            <>
-              <DiagnosisSection sol={sol} />
-              <ExecutionLayersSection layers={sol.diagnosis.execution_layers} />
-            </>
-          )}
-          {sol.seven_steps.length > 0 && (
-            <SevenStepsSection steps={sol.seven_steps} />
-          )}
-          {sol.keyword_tiers.length > 0 && (
-            <KeywordsSection tiers={sol.keyword_tiers} />
-          )}
-          {sol.queries_snapshot && sol.queries_snapshot.queries.length > 0 && (
-            <QueriesSection snapshot={sol.queries_snapshot} />
-          )}
-          {sol.vision.length > 0 && (
-            <VisionSection items={sol.vision} />
-          )}
-          {sol.diagnosis && sol.diagnosis.all_checks.length > 0 && (
-            <DetailsSection checks={sol.diagnosis.all_checks} />
-          )}
-        </div>
+      {isReady && sol && <SolutionView sol={sol} />}
+    </div>
+  );
+}
+
+// 「健康诊断报告」完整内容渲染.AdminSolution 页 + TopicEditor step 4 内嵌共用,
+// 保证两个入口看到的内容/排版一致.
+export function SolutionView({ sol }: { sol: TopicStrategicSolution }) {
+  return (
+    <div className="space-y-4">
+      {sol.brand_snapshot && (
+        <BrandSection sol={sol} />
+      )}
+      {sol.diagnosis && sol.diagnosis.clusters.length > 0 && (
+        <>
+          <DiagnosisSection sol={sol} />
+          <ExecutionLayersSection layers={sol.diagnosis.execution_layers} />
+        </>
+      )}
+      {sol.seven_steps.length > 0 && (
+        <SevenStepsSection steps={sol.seven_steps} />
+      )}
+      {sol.keyword_tiers.length > 0 && (
+        <KeywordsSection tiers={sol.keyword_tiers} />
+      )}
+      {sol.queries_snapshot && sol.queries_snapshot.queries.length > 0 && (
+        <QueriesSection snapshot={sol.queries_snapshot} />
+      )}
+      {sol.vision.length > 0 && (
+        <VisionSection items={sol.vision} />
+      )}
+      {sol.diagnosis && sol.diagnosis.all_checks.length > 0 && (
+        <DetailsSection checks={sol.diagnosis.all_checks} />
       )}
     </div>
   );
