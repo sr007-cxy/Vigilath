@@ -3246,7 +3246,7 @@ const zh = {
               "solution": "健康诊断报告"
             },
             "adminAccountTopics": {
-              "title": "用户 #{{userId}} 的主题",
+              "title": "{{name}} 的主题",
               "heading": "主题配置",
               "newTopic": "新增主题",
               "editTopic": "编辑主题",

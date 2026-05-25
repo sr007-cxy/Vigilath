@@ -88,6 +88,11 @@ export function AdminAccountTopics() {
     }
   }, [searchParams, setSearchParams]);
 
+  // 客户名称:优先取首个 topic 的 target(= ai_telemetry_topics.target,客户填的品牌名),
+  // 没有时 fallback 到「用户 #id」.AdminAccount 接口的 brand_target 走同一来源,这里不
+  // 额外拉账号列表以节约请求.
+  const customerName = topics[0]?.target || `用户 #${userId}`;
+
   const reload = () => {
     if (!userId) return;
     setLoading(true);
@@ -128,7 +133,7 @@ export function AdminAccountTopics() {
           {' / '}
           <Link to={`/workbench/accounts/${userId}/topics`} className="hover:underline"
             onClick={(e) => { e.preventDefault(); setEditing(undefined); }}>
-            {t('workbench.adminAccountTopics.title', { userId })}
+            {t('workbench.adminAccountTopics.title', { name: customerName })}
           </Link>
           {' / '}
           {editing ? t('workbench.adminAccountTopics.editTopic') : t('workbench.adminAccountTopics.newTopic')}
@@ -160,7 +165,7 @@ export function AdminAccountTopics() {
           {t('workbench.adminAccounts.title')}
         </Link>
         {' / '}
-        {t('workbench.adminAccountTopics.title', { userId })}
+        {t('workbench.adminAccountTopics.title', { name: customerName })}
       </div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-primary">

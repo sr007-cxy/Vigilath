@@ -3240,7 +3240,7 @@ const en = {
               "solution": "Health report"
             },
             "adminAccountTopics": {
-              "title": "User #{{userId}} topics",
+              "title": "{{name}} — topics",
               "heading": "Topic configuration",
               "newTopic": "New topic",
               "editTopic": "Edit topic",

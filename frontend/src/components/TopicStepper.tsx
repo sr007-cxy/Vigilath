@@ -97,7 +97,7 @@ export function TopicStepper({ topicId, active }: Props) {
               <button type="button"
                       onClick={() => navigate(`/workbench/accounts/${topic.user_id}/topics`)}
                       className="hover:underline">
-                ← {topic.user_email || `用户 #${topic.user_id}`}
+                ← {topic.target || topic.user_email || `用户 #${topic.user_id}`}
               </button>
               <span className="mx-1">/</span>
               <span className="text-primary font-medium">{topic.name}</span>
