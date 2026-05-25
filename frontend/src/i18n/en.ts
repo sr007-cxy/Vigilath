@@ -387,7 +387,7 @@ const en = {
                 {
                   "name": "WM Therapeutics",
                   "sub": "未名脑脑",
-                  "logo": "",
+                  "logo": "/image/86-wm-therapeutics.svg",
                   "tagline": "Technology with love, AI with light"
                 },
                 {

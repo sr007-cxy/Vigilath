@@ -387,7 +387,7 @@ const zh = {
                 {
                   "name": "未名脑脑",
                   "sub": "WM Therapeutics",
-                  "logo": "",
+                  "logo": "/image/86-wm-therapeutics.svg",
                   "tagline": "技术有爱，AI 有光"
                 },
                 {
