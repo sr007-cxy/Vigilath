@@ -287,7 +287,9 @@ def admin_list_accounts(
 ):
     _require_admin(current_user)
     from geo.models.user import UserORM
-    users = db.query(UserORM).order_by(UserORM.id.asc()).all()
+    # 按 id desc 排:UserORM 没有 created_at 字段,id 自增,作为「创建时间」的代理.
+    # admin 画像列表希望最新注册的客户排在最前面.
+    users = db.query(UserORM).order_by(UserORM.id.desc()).all()
     out: list[AdminAccountSummary] = []
     for u in users:
         topics = (

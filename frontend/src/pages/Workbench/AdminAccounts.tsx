@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type AdminAccount } from '../../services/aiTelemetryApi';
 import { authApi } from '../../services/authApi';
+
+// 客户端分页:后端按 id desc 一次返回全量,前端在内存里切片.
+// 现在量级在几十到几百,纯前端分页足够;过千再做后端 limit/offset.
+const PAGE_SIZE = 20;
 
 export function AdminAccounts() {
   const token = localStorage.getItem('token') || '';
@@ -11,6 +15,7 @@ export function AdminAccounts() {
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   // ── 新建客户弹窗 state ──
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,6 +34,16 @@ export function AdminAccounts() {
   }, [token]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // 后端已经按 id desc 返回;前端 paginate.account 总数变化时回第一页.
+  const totalPages = Math.max(1, Math.ceil(accounts.length / PAGE_SIZE));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedAccounts = useMemo(
+    () => accounts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [accounts, page],
+  );
 
   // 弹窗打开时锁滚 + Esc 关
   useEffect(() => {
@@ -112,7 +127,7 @@ export function AdminAccounts() {
               </tr>
             </thead>
             <tbody>
-              {accounts.map(a => (
+              {pagedAccounts.map(a => (
                 <tr key={a.id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                   <td className="px-3 py-2 text-muted tabular-nums">{a.id}</td>
                   <td className="px-3 py-2 text-primary">
@@ -134,6 +149,38 @@ export function AdminAccounts() {
               ))}
             </tbody>
           </table>
+          {accounts.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2 border-t text-xs text-secondary"
+                 style={{ borderColor: 'var(--border-color)' }}>
+              <span className="tabular-nums">
+                {t('workbench.adminAccounts.pagination.range', {
+                  defaultValue: '{{from}}-{{to}} / {{total}}',
+                  from: (page - 1) * PAGE_SIZE + 1,
+                  to: Math.min(page * PAGE_SIZE, accounts.length),
+                  total: accounts.length,
+                })}
+              </span>
+              <div className="flex items-center gap-2">
+                <button type="button"
+                        disabled={page <= 1}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminAccounts.pagination.prev', { defaultValue: '上一页' })}
+                </button>
+                <span className="tabular-nums">
+                  {page} / {totalPages}
+                </span>
+                <button type="button"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminAccounts.pagination.next', { defaultValue: '下一页' })}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
