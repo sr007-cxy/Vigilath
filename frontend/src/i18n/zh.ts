@@ -2099,18 +2099,18 @@ const zh = {
                 "step1": "设置",
                 "step2": "种子提示词",
                 "step3": "提示词扩展",
-                "step4": "健康诊断报告",
+                "step4": "GEO策略优化方案",
                 "step1Hint": "先填品牌资料(6 大模块) — 名称 / 简称 / 行业 同时作为主题的基础设置",
                 "profileHint": "资料里的「名称」「公司简称」「行业」会作为本主题的名称 / 检测词 / 行业;素材、用户痛点、Slogan 等会用于后续文案生成",
                 "aliasesSectionTitle": "别名(资料之外补充)",
                 "step2Hint": "甲方手填多条种子提示词。保存后进入审核队列,已生效的种子只能新增,不能修改",
                 "step3Hint": "基于步骤 2 的种子扇出约 200 条/种子的候选问题,勾选并选择 AI 引擎。Query 一经生效只能新增,不能修改",
-                "step4Hint": "项目已配置完成 — 在此查看 / 生成健康诊断报告(基于品牌资料 + AI 引擎答复诊断)",
-                "step4NoTopic": "请先在前 3 步保存项目,然后回到此步查看健康报告",
-                "step4Idle": "项目还没生成过健康诊断报告,点下方按钮触发(基于本项目的资料 + 官网)",
-                "step4Generate": "生成健康诊断报告",
+                "step4Hint": "项目已配置完成 — 在此查看 / 生成 GEO策略优化方案(基于品牌资料 + AI 引擎答复诊断)",
+                "step4NoTopic": "请先在前 3 步保存项目,然后回到此步查看 GEO策略优化方案",
+                "step4Idle": "项目还没生成过 GEO策略优化方案,点下方按钮触发(基于本项目的资料 + 官网)",
+                "step4Generate": "生成 GEO策略优化方案",
                 "step4Generating": "正在生成… 大约 1-2 分钟",
-                "step4Ready": "健康诊断报告已就绪(更新于 {{at}})",
+                "step4Ready": "GEO策略优化方案已就绪(更新于 {{at}})",
                 "step4Failed": "上次生成失败:{{err}}",
                 "step4OpenFull": "查看完整报告 →",
                 "step4Regen": "重新生成",
@@ -2950,14 +2950,14 @@ const zh = {
               }
             },
             "solution": {
-              "title": "健康度诊断报告",
-              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的健康度诊断报告",
+              "title": "GEO策略优化方案",
+              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的 GEO策略优化方案",
               "backToReview": "返回审核",
               "export": "导出 PDF",
               "exportDocx": "导出 Word",
               "exporting": "导出中…",
               "regenerate": "重新生成",
-              "generate": "生成健康度诊断报告",
+              "generate": "生成 GEO策略优化方案",
               "generating": "生成中,首次需 1-3 分钟,会自动刷新…",
               "generatingHint": "已开始生成 — 后台正在扫描官网 + 调用大模型,本页 3 秒刷新一次",
               "failed": "生成失败",
@@ -3013,7 +3013,7 @@ const zh = {
               },
               "noKeywords": "暂无关键词",
               "emptyState": {
-                "title": "尚未生成健康度诊断报告",
+                "title": "尚未生成 GEO策略优化方案",
                 "body": "填入品牌官网,点击下方按钮启动诊断 + 报告生成。"
               }
             }
@@ -3222,7 +3222,7 @@ const zh = {
               "stage": {
                 "submit": "品牌与主题创建",
                 "review": "诊断与方案预评估",
-                "diagnose": "健康度诊断报告",
+                "diagnose": "GEO策略优化方案",
                 "plan": "执行策略与规划",
                 "content": "内容发布与审核",
                 "insight": "效果查验与更新"
@@ -3287,7 +3287,7 @@ const zh = {
               "profile": "画像",
               "plan": "计划书",
               "docs": "文案",
-              "solution": "健康诊断报告"
+              "solution": "GEO策略优化方案"
             },
             "adminAccountTopics": {
               "title": "{{name}} 的主题",
@@ -3302,7 +3302,7 @@ const zh = {
               "edit": "编辑",
               "startProject": "⚡ 启动项目",
               "viewPlan": "查看计划书",
-              "viewSolution": "健康度诊断报告",
+              "viewSolution": "GEO策略优化方案",
               "reviewDocs": "复审文案",
               "pipeline": {
                 "profile": "画像",
@@ -3313,17 +3313,17 @@ const zh = {
               },
               "savedModal": {
                 "title": "审批报告",
-                "body": "主题资料已落库,可直接生成健康度诊断报告。",
+                "body": "主题资料已落库,可直接生成 GEO策略优化方案。",
                 "colName": "主题名",
                 "colIndustry": "行业",
                 "colQueries": "监测问题",
                 "queriesValue": "{{selected}} / {{total}} 条",
                 "colWebsite": "品牌官网",
-                "generateReport": "生成健康度诊断报告",
-                "viewReport": "查看健康度诊断报告",
+                "generateReport": "生成 GEO策略优化方案",
+                "viewReport": "查看 GEO策略优化方案",
                 "generating": "提交中…",
                 "later": "稍后再说",
-                "nextHint": "下一步:报告生成后,可在健康度诊断报告页继续生成「执行计划书」。"
+                "nextHint": "下一步:方案生成后,可在 GEO策略优化方案页继续生成「执行计划书」。"
               }
             }
           }
