@@ -389,7 +389,7 @@ const en = {
                   "sub": "未名脑脑",
                   "logo": "/image/86-wm-therapeutics.svg",
                   "tagline": "Technology with love, AI with light",
-                  "scale": 1.45
+                  "scale": 1.85
                 },
                 {
                   "name": "SimpleWare",

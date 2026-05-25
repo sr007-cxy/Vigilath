@@ -389,7 +389,7 @@ const zh = {
                   "sub": "WM Therapeutics",
                   "logo": "/image/86-wm-therapeutics.svg",
                   "tagline": "技术有爱，AI 有光",
-                  "scale": 1.45
+                  "scale": 1.85
                 },
                 {
                   "name": "西普科技",
