@@ -390,6 +390,8 @@ export function Home() {
               sub: string;
               logo: string;
               tagline: string;
+              // 可选缩放(原始 logo 留白多时调大,默认 1).只影响视觉,不改容器尺寸
+              scale?: number;
             }[]).map((item, idx) => (
               <div
                 key={idx}
@@ -407,6 +409,9 @@ export function Home() {
                     loading="lazy"
                     draggable={false}
                     className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
+                    style={item.scale && item.scale !== 1
+                      ? { transform: `scale(${item.scale})`, transformOrigin: 'center' }
+                      : undefined}
                   />
                 ) : (
                   <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>

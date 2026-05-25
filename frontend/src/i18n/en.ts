@@ -388,7 +388,8 @@ const en = {
                   "name": "WM Therapeutics",
                   "sub": "未名脑脑",
                   "logo": "/image/86-wm-therapeutics.svg",
-                  "tagline": "Technology with love, AI with light"
+                  "tagline": "Technology with love, AI with light",
+                  "scale": 1.45
                 },
                 {
                   "name": "SimpleWare",
