@@ -127,104 +127,8 @@ def _load_topic_or_404(db: Session, topic_id: int) -> AiTelemetryTopicORM:
     return t
 
 
-def _update_seed_status(t: AiTelemetryTopicORM, idx: int, new_status: str, reviewer_id: int) -> None:
-    try:
-        seeds = json.loads(t.seed_prompts_json or "[]")
-    except Exception:  # noqa: BLE001
-        seeds = []
-    if not isinstance(seeds, list) or idx < 0 or idx >= len(seeds):
-        raise HTTPException(404, "seed prompt index not found")
-    item = seeds[idx]
-    if not isinstance(item, dict):
-        raise HTTPException(400, "malformed seed prompt entry")
-    if item.get("status") != "pending":
-        raise HTTPException(409, f"seed prompt is already {item.get('status')}")
-    item["status"] = new_status
-    now = datetime.utcnow().isoformat()
-    if new_status == "approved":
-        item["approved_at"] = now
-    else:
-        item["rejected_at"] = now
-    item["reviewer_id"] = reviewer_id
-    seeds[idx] = item
-    t.seed_prompts_json = json.dumps(seeds, ensure_ascii=False)
-
-
-@router.post("/seed/{topic_id}/{idx}/approve", status_code=204)
-def approve_seed(
-    topic_id: int, idx: int,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    t = _load_topic_or_404(db, topic_id)
-    _update_seed_status(t, idx, "approved", admin.id)
-    db.commit()
-
-
-@router.post("/seed/{topic_id}/{idx}/reject", status_code=204)
-def reject_seed(
-    topic_id: int, idx: int,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    t = _load_topic_or_404(db, topic_id)
-    _update_seed_status(t, idx, "rejected", admin.id)
-    db.commit()
-
-
-class QueriesBatchPayload(BaseModel):
-    indices: list[int] = Field(..., min_length=1, max_length=50)
-
-
-def _update_queries_status(t: AiTelemetryTopicORM, indices: list[int],
-                           new_status: str, reviewer_id: int) -> None:
-    try:
-        q_list = json.loads(t.queries_json or "[]")
-    except Exception:  # noqa: BLE001
-        q_list = []
-    if not isinstance(q_list, list):
-        raise HTTPException(400, "malformed queries_json")
-    now = datetime.utcnow().isoformat()
-    for idx in indices:
-        if idx < 0 or idx >= len(q_list):
-            raise HTTPException(404, f"query index {idx} out of range")
-        item = q_list[idx]
-        if not isinstance(item, dict):
-            raise HTTPException(400, f"query[{idx}] not a dict")
-        if item.get("status") != "pending":
-            raise HTTPException(409, f"query[{idx}] is already {item.get('status')}")
-        item["status"] = new_status
-        if new_status == "approved":
-            item["approved_at"] = now
-        else:
-            item["rejected_at"] = now
-        item["reviewer_id"] = reviewer_id
-        q_list[idx] = item
-    t.queries_json = json.dumps(q_list, ensure_ascii=False)
-
-
-@router.post("/queries/{topic_id}/approve", status_code=204)
-def approve_queries(
-    topic_id: int,
-    payload: QueriesBatchPayload,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    t = _load_topic_or_404(db, topic_id)
-    _update_queries_status(t, payload.indices, "approved", admin.id)
-    db.commit()
-
-
-@router.post("/queries/{topic_id}/reject", status_code=204)
-def reject_queries(
-    topic_id: int,
-    payload: QueriesBatchPayload,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    t = _load_topic_or_404(db, topic_id)
-    _update_queries_status(t, payload.indices, "rejected", admin.id)
-    db.commit()
+# Phase C 子项审核端点(approve/reject seed + queries)在去审核流里退役了.
+# admin 直建项目就落 approved,不再需要逐条审批通道.helpers 保留供 PATCH 用.
 
 
 # ═════════════════ Phase D — 整张申请审核 ═════════════════
@@ -305,6 +209,7 @@ class TopicReviewListItem(BaseModel):
 
 
 class TopicReviewDetailOut(TopicOut):
+    user_id: int = 0
     user_email: str = ""
     topic_changelog: list[TopicChangelogEntry] = Field(default_factory=list)
     expansion_log: list[ExpansionLogEntry] = Field(default_factory=list)
@@ -414,6 +319,7 @@ def get_topic_review_detail(
     user = db.get(UserORM, t.user_id)
     out = TopicReviewDetailOut(
         **base.model_dump(),
+        user_id=t.user_id,
         user_email=(user.email if user else ""),
         topic_changelog=[
             TopicChangelogEntry(**e) for e in _parse_log_list(t.topic_changelog_json)
@@ -558,6 +464,7 @@ def admin_patch_topic(
     base = TopicOut.from_orm_row(t)
     return TopicReviewDetailOut(
         **base.model_dump(),
+        user_id=t.user_id,
         user_email=(user.email if user else ""),
         topic_changelog=[
             TopicChangelogEntry(**e) for e in _parse_log_list(t.topic_changelog_json) if "at" in e
@@ -698,111 +605,8 @@ def _post_approval_pipeline(
     return plan
 
 
-@router.post("/topic/{topic_id}/approve", response_model=TopicExecutionPlanOut)
-def approve_topic(
-    topic_id: int,
-    background: BackgroundTasks,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    """通过整张申请.副作用:
-
-    1. submission_status=approved + approved_at + reviewer_id
-    2. 所有 selected query 同步 status=approved(approved_at / reviewer_id 也填)
-    3-6. 走 _post_approval_pipeline:跑分 / 落 ExecutionPlan / 异步文案 / 异步邮件
-    """
-    t = _load_topic_or_404(db, topic_id)
-    if t.submission_status == "approved":
-        raise HTTPException(409, {"code": "ALREADY_APPROVED", "message": "已通过审核"})
-
-    now = datetime.utcnow()
-    # 步骤 1: 状态机
-    prev_status = t.submission_status
-    t.submission_status = "approved"
-    t.approved_at = now
-    t.rejected_at = None
-    t.reviewer_id = admin.id
-
-    # 步骤 2: 同步收尾子项状态 —— topic 已通过意味着 admin 接纳了整张申请,
-    # 候选池里所有还在 pending 的子项视为同步通过。selected 是独立的「是否纳入
-    # 监测」开关,跟审核状态解耦。不动 rejected(admin 已明确拒过的)和 approved。
-    #
-    # 历史 bug:这里只翻 `selected=True && status!=approved`,导致 unselected 候选
-    # 和 seed_prompts 永远卡 pending,前端「外面已通过、里面待审」的状态裂开。
-    now_iso = now.isoformat()
-    try:
-        qarr = json.loads(t.queries_json or "[]")
-    except Exception:  # noqa: BLE001
-        qarr = []
-    q_promoted = 0
-    for q in qarr:
-        if not isinstance(q, dict) or not q.get("text"):
-            continue
-        if q.get("status") == "pending":
-            q["status"] = "approved"
-            q["approved_at"] = now_iso
-            q["reviewer_id"] = admin.id
-            q_promoted += 1
-    t.queries_json = json.dumps(qarr, ensure_ascii=False)
-
-    try:
-        sarr = json.loads(t.seed_prompts_json or "[]")
-    except Exception:  # noqa: BLE001
-        sarr = []
-    s_promoted = 0
-    for s in sarr:
-        if not isinstance(s, dict) or not s.get("text"):
-            continue
-        if s.get("status") == "pending":
-            s["status"] = "approved"
-            s["approved_at"] = now_iso
-            s["reviewer_id"] = admin.id
-            s_promoted += 1
-    t.seed_prompts_json = json.dumps(sarr, ensure_ascii=False)
-
-    _append_changelog(t, actor_id=admin.id, actor_role="admin",
-                      field="submission_status", before=prev_status, after="approved",
-                      note=f"queries_pending→approved={q_promoted}, seeds_pending→approved={s_promoted}")
-
-    # 提前 commit:必须在 HTTP 调 telemetry-service /run-topic 之前释放 SQLite 写锁,
-    # 否则 telemetry 进程写 ai_telemetry_runs 会撞 `database is locked` 死等到 5s
-    # busy_timeout 超时返回 500(就是「telemetry-service /run-topic failed」的根因)。
-    db.commit()
-    db.refresh(t)
-
-    plan = _post_approval_pipeline(db, t, admin.id, background)
-    return _to_plan_out(db, plan)
-
-
-class RejectTopicPayload(BaseModel):
-    reason: str = Field("", max_length=500)
-
-
-@router.post("/topic/{topic_id}/reject", status_code=204)
-def reject_topic(
-    topic_id: int,
-    payload: RejectTopicPayload,
-    background: BackgroundTasks,
-    admin = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    t = _load_topic_or_404(db, topic_id)
-    if t.submission_status == "approved":
-        raise HTTPException(409, {"code": "ALREADY_APPROVED",
-                                  "message": "已通过审核,不可拒绝"})
-    prev_status = t.submission_status
-    t.submission_status = "rejected"
-    t.rejected_at = datetime.utcnow()
-    t.reviewer_id = admin.id
-    _append_changelog(t, actor_id=admin.id, actor_role="admin",
-                      field="submission_status", before=prev_status, after="rejected",
-                      note=payload.reason or None)
-    db.commit()
-    user = db.get(UserORM, t.user_id)
-    if user and user.email:
-        background.add_task(_send_review_email_safe,
-                            to=user.email, topic_name=t.name,
-                            decision="rejected", reject_reason=payload.reason or None)
+# approve_topic / reject_topic 在去审核流里退役了.功能改由 POST /admin/topics/{id}/start
+# 承担(见本文件 start_topic 端点).rerun_topic 与 _post_approval_pipeline 仍在,给重启复用.
 
 
 # ───────────── 执行计划书 — 拉取 + 运行进度 ─────────────

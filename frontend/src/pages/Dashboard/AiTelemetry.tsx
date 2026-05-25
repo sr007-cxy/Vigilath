@@ -2209,20 +2209,14 @@ export function TopicEditor({
   // 「保存」按钮已合并到「提交」(handleSubmitForReview),用户保存即触发审核。
   // 如未来要恢复"草稿保存"功能,可重新加 const handleSave = ... 包 persistTopic。
 
-  // 「提交」— save → submit-for-review → 关闭。
-  // 后端 422 = 资料或种子或 selected 不达标,把后端 detail 暴露给用户。
-  // admin 模式:不走 submit-for-review。
-  //   - 新建走 adminCreateTopicForUser,落库即 approved
-  //   - 编辑直接复用 updateTopic;approved 主题再调 submit-for-review 会 422
+  // 「保存」— 去审核流后不再「提交审核」,统一只 save.admin 模式走 adminCreateTopicForUser,
+  // 普通用户走 updateTopic.随后 onSaveDone 把保存好的 topic 传出去(供模态/外层用).
   const adminMode = typeof adminTargetUserId === 'number';
   const handleSubmitForReview = async () => {
     if (!valid || saving) return;
     setSaving(true); setSubmitErr(null);
     try {
       const saved = await persistTopic();
-      if (saved?.id && !adminMode) {
-        await topicProfileApi.submitForReview(saved.id, token);
-      }
       onSaveDone(saved ?? undefined);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

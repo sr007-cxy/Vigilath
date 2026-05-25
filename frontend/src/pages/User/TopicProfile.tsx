@@ -86,21 +86,6 @@ export function TopicProfile() {
     [topic],
   );
 
-  const handleSubmit = async () => {
-    if (busy) return;
-    setBusy(true); setErr(null); setOkMsg(null);
-    try {
-      const updated = await topicProfileApi.submitForReview(tid, token);
-      setTopic(updated);
-      setOkMsg(t('topic.profile.submitted'));
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErr(msg);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
@@ -202,17 +187,7 @@ export function TopicProfile() {
               {busy ? t('topic.profile.saving') : t('topic.profile.save')}
             </button>
           )}
-          {isEditable && (
-            <button type="button" disabled={busy || missingFields.length > 0 || selectedCount < 1}
-                    onClick={handleSubmit}
-                    className="text-sm px-4 py-2 rounded-md text-white"
-                    style={{
-                      background: '#10b981',
-                      opacity: (busy || missingFields.length > 0 || selectedCount < 1) ? 0.4 : 1,
-                    }}>
-              {busy ? t('topic.profile.submitting') : t('topic.profile.submitForReview')}
-            </button>
-          )}
+          {/* 去审核流:客户不再「提交审核」.改由 admin 在工作台「启动项目」. */}
         </div>
       </div>
     </div>

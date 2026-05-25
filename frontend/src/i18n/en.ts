@@ -3228,6 +3228,16 @@ const en = {
                 "emailRequired": "Email is required"
               }
             },
+            "topicStepper": {
+              "profile": "Profile",
+              "queries": "Queries",
+              "plan": "Plan",
+              "docs": "Docs",
+              "publish": "Publish",
+              "aux": {
+                "healthReport": "Health report"
+              }
+            },
             "adminAccountTopics": {
               "title": "User #{{userId}} topics",
               "heading": "Topic configuration",

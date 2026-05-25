@@ -6,34 +6,6 @@ import type { BrandProfile, SubmissionStatus, Topic } from './aiTelemetryApi';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
-export interface PendingSeedItem {
-  topic_id: number;
-  topic_name: string;
-  target: string;
-  user_id: number;
-  user_email: string;
-  idx: number;
-  text: string;
-  submitted_at?: string | null;
-}
-
-export interface PendingQueryItem {
-  topic_id: number;
-  topic_name: string;
-  target: string;
-  user_id: number;
-  user_email: string;
-  idx: number;
-  text: string;
-  cluster_id?: number | null;
-  submitted_at?: string | null;
-}
-
-export interface PendingReview {
-  seed_prompts: PendingSeedItem[];
-  queries: PendingQueryItem[];
-}
-
 async function request<T>(
   method: string, path: string, token: string, body?: unknown,
   base: string = '/admin/review',
@@ -102,6 +74,7 @@ export interface ExpansionLogEntry {
 }
 
 export interface TopicReviewDetail extends Topic {
+  user_id: number;
   user_email: string;
   topic_changelog: TopicChangelogEntry[];
   expansion_log: ExpansionLogEntry[];
@@ -249,24 +222,7 @@ export interface TopicStrategicSolution {
 }
 
 export const adminReviewApi = {
-  // Phase C 兼容入口
-  async listPending(token: string): Promise<PendingReview> {
-    return request<PendingReview>('GET', '/pending', token);
-  },
-  async approveSeed(topicId: number, idx: number, token: string): Promise<void> {
-    return request<void>('POST', `/seed/${topicId}/${idx}/approve`, token);
-  },
-  async rejectSeed(topicId: number, idx: number, token: string): Promise<void> {
-    return request<void>('POST', `/seed/${topicId}/${idx}/reject`, token);
-  },
-  async approveQueries(topicId: number, indices: number[], token: string): Promise<void> {
-    return request<void>('POST', `/queries/${topicId}/approve`, token, { indices });
-  },
-  async rejectQueries(topicId: number, indices: number[], token: string): Promise<void> {
-    return request<void>('POST', `/queries/${topicId}/reject`, token, { indices });
-  },
-
-  // Phase D — 整张申请
+  // 项目列表 / 详情 / 编辑(admin 视角)
   async listTopicReviews(token: string, status?: SubmissionStatus): Promise<TopicReviewListItem[]> {
     const qs = status ? `?status=${status}` : '';
     return request<TopicReviewListItem[]>('GET', `/topics${qs}`, token);
@@ -276,12 +232,6 @@ export const adminReviewApi = {
   },
   async patchTopic(topicId: number, payload: AdminPatchTopicPayload, token: string): Promise<TopicReviewDetail> {
     return request<TopicReviewDetail>('PATCH', `/topic/${topicId}`, token, payload);
-  },
-  async approveTopic(topicId: number, token: string): Promise<ExecutionPlan> {
-    return request<ExecutionPlan>('POST', `/topic/${topicId}/approve`, token);
-  },
-  async rejectTopic(topicId: number, reason: string, token: string): Promise<void> {
-    return request<void>('POST', `/topic/${topicId}/reject`, token, { reason });
   },
   async rerunTopic(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('POST', `/topic/${topicId}/rerun`, token);

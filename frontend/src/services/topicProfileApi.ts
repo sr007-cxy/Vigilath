@@ -77,9 +77,6 @@ export const topicProfileApi = {
       'POST', `/topics/${topicId}/selected-queries`, token, { items },
     );
   },
-  async submitForReview(topicId: number, token: string): Promise<Topic> {
-    return request<Topic>('POST', `/topics/${topicId}/submit-for-review`, token);
-  },
   async extractProfile(text: string, token: string): Promise<ExtractProfileResp> {
     return request<ExtractProfileResp>('POST', '/profile/extract', token, { text });
   },

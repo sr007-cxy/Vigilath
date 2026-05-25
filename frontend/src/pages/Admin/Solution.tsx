@@ -2,9 +2,10 @@
 // 路由:/workbench/topics/:topicId/solution
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
+import { TopicStepper } from '../../components/TopicStepper';
 import {
   adminReviewApi,
   type TopicStrategicSolution,
@@ -27,7 +28,6 @@ const SEVERITY_STYLE: Record<string, { c: string; bg: string }> = {
 export function AdminSolution() {
   const { t, i18n } = useTranslation();
   const { topicId } = useParams();
-  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const tid = Number(topicId);
 
@@ -143,6 +143,7 @@ export function AdminSolution() {
   return (
     <div className="space-y-4">
       <PageHead titleKey="admin.solution.title" titleFallback="GEO 体检报告" />
+      <TopicStepper topicId={tid} active="plan" />
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-primary">{t('admin.solution.title')}</h1>
@@ -169,11 +170,6 @@ export function AdminSolution() {
               </button>
             </>
           )}
-          <button type="button" onClick={() => navigate('/workbench/review')}
-                  className="text-xs px-3 py-1.5 rounded-md"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-            ← {t('admin.solution.backToReview')}
-          </button>
         </div>
       </header>
 

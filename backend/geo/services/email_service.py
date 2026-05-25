@@ -228,74 +228,51 @@ class EmailService:
         *,
         to: str,
         topic_name: str,
-        decision: str,                                  # "approved" | "rejected"
-        reject_reason: Optional[str] = None,
+        decision: str,                                  # 仅 "approved" — rejected 在去审核流里退役
+        reject_reason: Optional[str] = None,            # 兼容签名,不再使用
         execution_plan_url: Optional[str] = None,
     ) -> bool:
-        """Phase D — 整张申请审核结果通知用户(approved / rejected)."""
-        if decision == "approved":
-            subject = f"【GEO】审核通过:{topic_name}"
-            cta_block = ""
-            if execution_plan_url:
-                cta_block = f"""
-            <p>
-              <a href="{execution_plan_url}"
-                 style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                查看执行计划书
-              </a>
-            </p>
-            <p style="word-break: break-all; color: #4b5563;">{execution_plan_url}</p>
-            """
-            html = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-                <h2 style="color: #111827;">你的资料申请已通过审核</h2>
-                <p>主题:<strong>{topic_name}</strong></p>
-                <p>我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
-                {cta_block}
-                <p>内容文案稿正在异步生成,生成完成后会在「内容审核」环节再次通知你。</p>
-                <p>— GEO 团队</p>
-              </body>
-            </html>
-            """
-            text_lines = [
-                f"你的资料申请已通过审核",
-                f"主题:{topic_name}",
-                "",
-                "我们已经为你的监测问题触发了一次正式跑批,并生成了执行计划书。",
-            ]
-            if execution_plan_url:
-                text_lines.append(f"查看执行计划书:{execution_plan_url}")
-            text_lines += ["", "— GEO 团队"]
-            return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
+        """去审核流 — 项目启动后给客户发通知(原审核通过邮件,改文案).
 
-        # rejected
-        subject = f"【GEO】审核未通过:{topic_name}"
-        reason_block = (
-            f'<p><strong>未通过原因:</strong></p>'
-            f'<blockquote style="margin:0;padding:12px 16px;background:#f3f4f6;border-left:4px solid #ef4444;">{reject_reason}</blockquote>'
-            if reject_reason else ""
-        )
+        decision != "approved" 直接 no-op(rejected 分支已退役).
+        """
+        del reject_reason  # 兼容旧调用方签名,不再使用
+        if decision != "approved":
+            return True
+
+        subject = f"【GEO】您的 GEO 监测项目已启动:{topic_name}"
+        cta_block = ""
+        if execution_plan_url:
+            cta_block = f"""
+        <p>
+          <a href="{execution_plan_url}"
+             style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+            查看执行计划书
+          </a>
+        </p>
+        <p style="word-break: break-all; color: #4b5563;">{execution_plan_url}</p>
+        """
         html = f"""
         <html>
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-            <h2 style="color: #111827;">你的资料申请未通过审核</h2>
+            <h2 style="color: #111827;">您的 GEO 监测项目已启动</h2>
             <p>主题:<strong>{topic_name}</strong></p>
-            {reason_block}
-            <p>请按反馈调整资料 / 种子 / 监测问题后,重新提交审核。</p>
+            <p>我们已经为您的监测问题触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
+            {cta_block}
+            <p>内容文案稿正在异步生成,生成完成后会在「文案复审」环节再次通知您。</p>
             <p>— GEO 团队</p>
           </body>
         </html>
         """
         text_lines = [
-            "你的资料申请未通过审核",
+            "您的 GEO 监测项目已启动",
             f"主题:{topic_name}",
             "",
+            "我们已经为您的监测问题触发了一次正式跑批,并生成了执行计划书。",
         ]
-        if reject_reason:
-            text_lines.append(f"未通过原因:{reject_reason}")
-            text_lines.append("")
-        text_lines += ["请按反馈调整资料后重新提交审核。", "", "— GEO 团队"]
+        if execution_plan_url:
+            text_lines.append(f"查看执行计划书:{execution_plan_url}")
+        text_lines += ["", "— GEO 团队"]
         return self._send(to=to, subject=subject, html=html, text="\n".join(text_lines))
 
     def send_content_review_result_email(

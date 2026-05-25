@@ -3234,6 +3234,16 @@ const zh = {
                 "emailRequired": "请填写邮箱"
               }
             },
+            "topicStepper": {
+              "profile": "画像",
+              "queries": "监测问题",
+              "plan": "计划书",
+              "docs": "文案",
+              "publish": "投放",
+              "aux": {
+                "healthReport": "健康诊断报告"
+              }
+            },
             "adminAccountTopics": {
               "title": "用户 #{{userId}} 的主题",
               "heading": "主题配置",

@@ -5,12 +5,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
+import { TopicStepper } from '../../components/TopicStepper';
 import { adminReviewApi, type ExecutionPlan } from '../../services/adminReviewApi';
 
 export function AdminExecutionPlan() {
   const { t } = useTranslation();
   const { topicId } = useParams();
-  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const tid = Number(topicId);
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
@@ -43,41 +43,31 @@ export function AdminExecutionPlan() {
   return (
     <div className="space-y-4">
       <PageHead titleKey="admin.executionPlan.title" titleFallback="执行计划书" />
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">{t('admin.executionPlan.title')}</h1>
-          <p className="text-xs text-secondary mt-0.5">{t('admin.executionPlan.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {plan && (plan.status === 'failed' || !plan.run_id) && (
-            <button type="button" disabled={rerunBusy}
-                    onClick={async () => {
-                      if (rerunBusy) return;
-                      setRerunBusy(true); setErr(null);
-                      try {
-                        const p = await adminReviewApi.rerunTopic(tid, token);
-                        setPlan(p);
-                        if (!pollRef.current) {
-                          pollRef.current = window.setInterval(fetchOnce, 3000);
-                        }
-                      } catch (e: unknown) {
-                        setErr(e instanceof Error ? e.message : String(e));
-                      } finally {
-                        setRerunBusy(false);
+      <TopicStepper topicId={tid} active="plan" />
+      {plan && (plan.status === 'failed' || !plan.run_id) && (
+        <div className="flex justify-end">
+          <button type="button" disabled={rerunBusy}
+                  onClick={async () => {
+                    if (rerunBusy) return;
+                    setRerunBusy(true); setErr(null);
+                    try {
+                      const p = await adminReviewApi.rerunTopic(tid, token);
+                      setPlan(p);
+                      if (!pollRef.current) {
+                        pollRef.current = window.setInterval(fetchOnce, 3000);
                       }
-                    }}
-                    className="text-xs px-3 py-1.5 rounded-md text-white"
-                    style={{ background: 'var(--accent-primary)', opacity: rerunBusy ? 0.5 : 1 }}>
-              {rerunBusy ? '…' : t('admin.executionPlan.rerun')}
-            </button>
-          )}
-          <button type="button" onClick={() => navigate('/workbench/review')}
-                  className="text-xs px-3 py-1.5 rounded-md"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-            ← {t('admin.executionPlan.backToReview')}
+                    } catch (e: unknown) {
+                      setErr(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setRerunBusy(false);
+                    }
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)', opacity: rerunBusy ? 0.5 : 1 }}>
+            {rerunBusy ? '…' : t('admin.executionPlan.rerun')}
           </button>
         </div>
-      </header>
+      )}
 
       {err && (
         <div className="rounded-md p-3 text-sm"
