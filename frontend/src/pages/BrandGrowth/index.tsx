@@ -173,7 +173,7 @@ function RadarBlock({ pb, selectedEngines }: {
   return (
     <CardShell title={L.blockRadar} hint={L.hintRadar}>
       <div className="flex-1 flex items-center justify-center">
-        <svg viewBox="0 0 260 260" className="w-full max-w-[260px]">
+        <svg viewBox="-30 -30 320 320" className="w-full max-w-[260px]">
           {[0.25, 0.5, 0.75, 1].map(s => (
             <polygon
               key={s} fill="none" stroke="var(--border-color)" strokeWidth="0.5"
