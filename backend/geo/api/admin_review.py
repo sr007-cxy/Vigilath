@@ -28,18 +28,21 @@ from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryRunORM, AiTelemetryTopicORM,
     AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicSolutionORM,
     BrandProfile, GenerateSolutionPayload, MAX_SELECTED_QUERIES,
-    PublishPlanItem, SolutionDiagnosis, SolutionDiagnosisCheck,
-    SolutionDiagnosisCluster, SolutionKeywordTier, SolutionQueriesSnapshot,
-    SolutionQueryCluster, SolutionQueryItem, SolutionSevenStepItem,
-    SolutionVisionItem, TopicChangelogEntry, TopicExecutionPlanOut,
-    TopicGeneratedDocORM, TopicProgressCell, TopicSolutionOut,
-    ExpansionLogEntry, TopicOut,
+    PROFILE_REQUIRED_FIELDS, PublishPlanItem, SolutionDiagnosis,
+    SolutionDiagnosisCheck, SolutionDiagnosisCluster, SolutionKeywordTier,
+    SolutionQueriesSnapshot, SolutionQueryCluster, SolutionQueryItem,
+    SolutionSevenStepItem, SolutionVisionItem, TopicChangelogEntry,
+    TopicExecutionPlanOut, TopicGeneratedDocORM, TopicProgressCell,
+    TopicSolutionOut, ExpansionLogEntry, TopicOut,
 )
 from geo.models.user import UserORM
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/review")
+# 去审核新通道:admin 直接「启动」项目,不再走 pending → approved 那一步.
+# 旧 router 在 PR 2 退役;本 router 是长期入口.
+topics_router = APIRouter(prefix="/admin/topics")
 
 TELEMETRY_SERVICE_URL = os.environ.get("TELEMETRY_SERVICE_URL", "http://localhost:8095")
 
@@ -648,6 +651,53 @@ def _schedule_content_generation(topic_id: int, plan_id: int) -> None:
         log.warning("schedule content generation failed: %s", e)
 
 
+def _post_approval_pipeline(
+    db: Session,
+    t: AiTelemetryTopicORM,
+    actor_id: int,
+    background: BackgroundTasks,
+) -> AiTelemetryTopicExecutionPlanORM:
+    """启动项目的副作用串:跑分 + 落 ExecutionPlan + 异步生成文案 + 异步发邮件.
+
+    被 approve_topic(旧审核流)和 start_topic(去审核流)共用.
+    调用前提:t 的状态变更必须已经 db.commit() —— 否则 SQLite 写锁会阻塞 telemetry-service
+    那一侧的 ai_telemetry_runs 写入(就是原 approve_topic 注释里写的「database is locked」根因).
+    """
+    topic_id = t.id
+    run_id = _trigger_run_topic_sync(topic_id)
+    snapshot = _build_execution_plan_snapshot(t, run_id)
+    plan = AiTelemetryTopicExecutionPlanORM(
+        topic_id=topic_id,
+        generated_by_reviewer_id=actor_id,
+        overview_json=json.dumps(snapshot["overview"], ensure_ascii=False),
+        topic_changelog_snapshot_json=json.dumps(snapshot["changelog"], ensure_ascii=False),
+        expansion_log_snapshot_json=json.dumps(snapshot["expansion_log"], ensure_ascii=False),
+        monitored_queries_snapshot_json=json.dumps(snapshot["monitored_queries"], ensure_ascii=False),
+        run_id=run_id,
+        status="ready" if run_id is not None else "failed",
+        error=None if run_id is not None else "telemetry-service /run-topic failed",
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+
+    user = db.get(UserORM, t.user_id)
+    plan_url = None
+    try:
+        from geo.database import settings as _s
+        plan_url = f"{(_s.FRONTEND_URL or '').rstrip('/')}/workbench/topics/{topic_id}/execution-plan"
+    except Exception:  # noqa: BLE001
+        pass
+
+    if user and user.email:
+        background.add_task(_send_review_email_safe,
+                            to=user.email, topic_name=t.name,
+                            decision="approved", execution_plan_url=plan_url)
+    background.add_task(_schedule_content_generation,
+                        topic_id=topic_id, plan_id=plan.id)
+    return plan
+
+
 @router.post("/topic/{topic_id}/approve", response_model=TopicExecutionPlanOut)
 def approve_topic(
     topic_id: int,
@@ -659,10 +709,7 @@ def approve_topic(
 
     1. submission_status=approved + approved_at + reviewer_id
     2. 所有 selected query 同步 status=approved(approved_at / reviewer_id 也填)
-    3. 触发 telemetry-service /run-topic 跑一次 → 拿 run_id
-    4. 创建 ExecutionPlan 行(snapshot + run_id),返回给前端
-    5. 异步:基于资料 + 监测问题生成内容文案稿
-    6. 异步:发邮件通知用户
+    3-6. 走 _post_approval_pipeline:跑分 / 落 ExecutionPlan / 异步文案 / 异步邮件
     """
     t = _load_topic_or_404(db, topic_id)
     if t.submission_status == "approved":
@@ -723,42 +770,7 @@ def approve_topic(
     db.commit()
     db.refresh(t)
 
-    # 步骤 3: 触发跑一次
-    run_id = _trigger_run_topic_sync(topic_id)
-
-    # 步骤 4: 创建 ExecutionPlan
-    snapshot = _build_execution_plan_snapshot(t, run_id)
-    plan = AiTelemetryTopicExecutionPlanORM(
-        topic_id=topic_id,
-        generated_by_reviewer_id=admin.id,
-        overview_json=json.dumps(snapshot["overview"], ensure_ascii=False),
-        topic_changelog_snapshot_json=json.dumps(snapshot["changelog"], ensure_ascii=False),
-        expansion_log_snapshot_json=json.dumps(snapshot["expansion_log"], ensure_ascii=False),
-        monitored_queries_snapshot_json=json.dumps(snapshot["monitored_queries"], ensure_ascii=False),
-        run_id=run_id,
-        status="ready" if run_id is not None else "failed",
-        error=None if run_id is not None else "telemetry-service /run-topic failed",
-    )
-    db.add(plan)
-    db.commit()
-    db.refresh(plan)
-
-    # 步骤 5/6: 异步任务
-    user = db.get(UserORM, t.user_id)
-    plan_url = None
-    try:
-        from geo.database import settings as _s
-        plan_url = f"{(_s.FRONTEND_URL or '').rstrip('/')}/workbench/topics/{topic_id}/execution-plan"
-    except Exception:  # noqa: BLE001
-        pass
-
-    if user and user.email:
-        background.add_task(_send_review_email_safe,
-                            to=user.email, topic_name=t.name,
-                            decision="approved", execution_plan_url=plan_url)
-    background.add_task(_schedule_content_generation,
-                        topic_id=topic_id, plan_id=plan.id)
-
+    plan = _post_approval_pipeline(db, t, admin.id, background)
     return _to_plan_out(db, plan)
 
 
@@ -1272,3 +1284,106 @@ def generate_strategic_solution(
                       note="admin 触发战略方案生成")
     db.commit()
     return _solution_to_out(sol)
+
+
+# ════════════ 去审核新通道:POST /admin/topics/{id}/start ════════════
+# 替代 approve_topic 在新流程里的位置.状态翻转那一段(approve_topic 步骤 1/2)
+# 不再需要,因为 admin 直建主题已经落 submission_status=approved.start 只负责
+# 触发后续 5 个副作用(跑分 / plan / 文案 / 邮件).
+#
+# 幂等规则:同 topic 已有 ready/generating 的 plan 时,GET 行为(返回最新一条);
+# 只有显式 ?force=true 才重新触发.前端「重新启动」按钮带 force=true.
+
+
+def _validate_topic_runnable(t: AiTelemetryTopicORM) -> None:
+    """启动前校验:画像必填齐 + ≥1 个 selected query + ≥1 engine.沿用 submit 那套逻辑."""
+    try:
+        profile_raw = json.loads(t.profile_json or "{}")
+    except Exception:  # noqa: BLE001
+        profile_raw = {}
+    if not isinstance(profile_raw, dict):
+        profile_raw = {}
+    missing: list[str] = []
+    for f in PROFILE_REQUIRED_FIELDS:
+        v = profile_raw.get(f)
+        if v is None or v == "" or v == [] or v == {}:
+            missing.append(f)
+    if missing:
+        raise HTTPException(422, {
+            "code": "PROFILE_INCOMPLETE", "field": "profile",
+            "message": "资料必填项缺失", "missing": missing,
+        })
+
+    try:
+        qarr = json.loads(t.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        qarr = []
+    selected_n = sum(
+        1 for q in qarr
+        if isinstance(q, dict) and q.get("text") and q.get("selected", True)
+    )
+    if selected_n < 1:
+        raise HTTPException(422, {
+            "code": "NO_SELECTED", "field": "queries",
+            "message": "请至少勾选 1 个监测问题",
+        })
+    if selected_n > MAX_SELECTED_QUERIES:
+        raise HTTPException(422, {
+            "code": "TOO_MANY_SELECTED", "field": "queries",
+            "message": f"最多 {MAX_SELECTED_QUERIES} 个监测问题,当前 {selected_n}",
+        })
+
+    try:
+        engines = json.loads(t.engines_json or "[]")
+    except Exception:  # noqa: BLE001
+        engines = []
+    if not isinstance(engines, list) or len(engines) < 1:
+        raise HTTPException(422, {
+            "code": "NO_ENGINE", "field": "engines",
+            "message": "请至少选择 1 个引擎",
+        })
+
+
+@topics_router.post("/{topic_id}/start", response_model=TopicExecutionPlanOut)
+def start_topic(
+    topic_id: int,
+    background: BackgroundTasks,
+    force: bool = False,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """启动项目(去审核流).
+
+    - 默认幂等:同 topic 已有 ready/generating 的 plan → 直接返回最新一条
+    - ?force=true → 跳过幂等,强制再触发一次(对应「重新启动」按钮)
+    - 校验:画像必填齐 + ≥1 selected query + ≥1 engine
+    """
+    t = _load_topic_or_404(db, topic_id)
+    _validate_topic_runnable(t)
+
+    if not force:
+        existing = (
+            db.query(AiTelemetryTopicExecutionPlanORM)
+              .filter(AiTelemetryTopicExecutionPlanORM.topic_id == topic_id)
+              .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+              .first()
+        )
+        if existing and existing.status in ("ready", "generating"):
+            return _to_plan_out(db, existing)
+
+    # 若 topic 还在 draft(用户自建未提交),启动顺便翻成 approved.
+    # admin 直建本来就是 approved,此处幂等.
+    if t.submission_status != "approved":
+        prev = t.submission_status
+        t.submission_status = "approved"
+        t.approved_at = datetime.utcnow()
+        t.rejected_at = None
+        t.reviewer_id = admin.id
+        _append_changelog(t, actor_id=admin.id, actor_role="admin",
+                          field="submission_status", before=prev, after="approved",
+                          note="start_topic")
+    db.commit()
+    db.refresh(t)
+
+    plan = _post_approval_pipeline(db, t, admin.id, background)
+    return _to_plan_out(db, plan)

@@ -25,6 +25,27 @@ export function AdminAccountTopics() {
   // 模态打开后预查现有方案状态:有 ready 报告时按钮文案改成「查看」而不是「生成」,
   // 避免误导用户以为非要重新跑一次。
   const [hasExistingReport, setHasExistingReport] = useState(false);
+  // 启动按钮的 per-topic busy / error state
+  const [startBusyId, setStartBusyId] = useState<number | null>(null);
+  const [startErrByTopic, setStartErrByTopic] = useState<Record<number, string>>({});
+
+  // 启动项目(首次)或重新启动 — 走新的 /admin/topics/{id}/start.
+  // force=true 时让后端跳幂等,对应「重新启动」按钮.
+  const handleStart = async (tp: Topic, force: boolean) => {
+    if (startBusyId !== null) return;
+    if (force && !window.confirm(t('workbench.adminAccountTopics.rerunConfirm'))) return;
+    setStartBusyId(tp.id);
+    setStartErrByTopic((prev) => { const n = { ...prev }; delete n[tp.id]; return n; });
+    try {
+      await adminReviewApi.startTopic(tp.id, token, force);
+      navigate(`/workbench/topics/${tp.id}/execution-plan`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setStartErrByTopic((prev) => ({ ...prev, [tp.id]: msg }));
+    } finally {
+      setStartBusyId(null);
+    }
+  };
 
   useEffect(() => {
     if (!savedTopic) { setHasExistingReport(false); return; }
@@ -166,36 +187,122 @@ export function AdminAccountTopics() {
         </div>
       ) : (
         <ul className="grid gap-3">
-          {topics.map(tp => (
-            <li key={tp.id} className="p-4 rounded-lg"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium text-primary">{tp.name}</span>
-                <span className="text-xs text-muted">
-                  {t('workbench.adminAccountTopics.metaSummary', {
-                    target: tp.target,
-                    queries: tp.queries.length,
-                    engines: tp.engines.length,
-                  })}
-                </span>
-              </div>
-              <div className="text-xs text-secondary mb-2">
-                {t('workbench.adminAccountTopics.industryLabel')}: {tp.industry || '—'}
-                {' · '}
-                {t('workbench.adminAccountTopics.statusLabel')}: {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
-              </div>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => setEditing(tp)}
-                  className="text-xs px-3 py-1 rounded"
-                  style={{ background: 'var(--accent-primary)', color: 'white' }}
-                >
-                  {t('workbench.adminAccountTopics.edit')}
-                </button>
-              </div>
-            </li>
-          ))}
+          {topics.map(tp => {
+            // 「是否启动过」用 last_run_at 推断:approve_topic / start_topic / rerun 都会拿
+            // run_id,有 last_run_at 说明至少触发过一次跑批.老 approved 主题(admin 直建,
+            // 未跑过)走 last_run_at == null 分支,显示「启动项目」首发按钮.
+            const hasRun = !!tp.last_run_at;
+            const isStartBusy = startBusyId === tp.id;
+            const startErr = startErrByTopic[tp.id];
+            // 管线 chip:5 步骤,各自从 topic 字段推断.run/docs/publish 后期可以
+            // 升级到从后端聚合接口拿真实进度;PR 1 只展示能确定的部分.
+            const profileOk = !!(tp.profile && tp.profile.company_short_name);
+            const seedsOk = (tp.queries?.length ?? 0) > 0;
+            const runChip: PipelineChipState =
+              tp.last_run_status === 'success' ? 'done'
+              : tp.last_run_status === 'running' ? 'running'
+              : tp.last_run_status === 'failed' ? 'failed'
+              : 'idle';
+            return (
+              <li key={tp.id} className="p-4 rounded-lg"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium text-primary">{tp.name}</span>
+                  <span className="text-xs text-muted">
+                    {t('workbench.adminAccountTopics.metaSummary', {
+                      target: tp.target,
+                      queries: tp.queries.length,
+                      engines: tp.engines.length,
+                    })}
+                  </span>
+                </div>
+                <div className="text-xs text-secondary mb-2">
+                  {t('workbench.adminAccountTopics.industryLabel')}: {tp.industry || '—'}
+                  {' · '}
+                  {t('workbench.adminAccountTopics.statusLabel')}: {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
+                </div>
+
+                {/* 管线 chip 行 — 被动状态指示,不可点 */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] mt-2 mb-3">
+                  <PipelineChip
+                    label={t('workbench.adminAccountTopics.pipeline.profile')}
+                    state={profileOk ? 'done' : 'idle'} />
+                  <PipelineChip
+                    label={t('workbench.adminAccountTopics.pipeline.seeds')}
+                    state={seedsOk ? 'done' : 'idle'} />
+                  <PipelineChip
+                    label={t('workbench.adminAccountTopics.pipeline.run')}
+                    state={runChip} />
+                  <PipelineChip
+                    label={t('workbench.adminAccountTopics.pipeline.docs')}
+                    state="idle" />
+                  <PipelineChip
+                    label={t('workbench.adminAccountTopics.pipeline.publish')}
+                    state="idle" />
+                </div>
+
+                {startErr && (
+                  <div className="mb-2 text-[11px] text-red-500 break-words">
+                    {startErr}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(tp)}
+                    className="text-xs px-3 py-1 rounded"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                  >
+                    {t('workbench.adminAccountTopics.edit')}
+                  </button>
+
+                  {!hasRun && (
+                    <button
+                      type="button"
+                      disabled={isStartBusy}
+                      onClick={() => handleStart(tp, false)}
+                      className="text-xs px-3 py-1 rounded text-white"
+                      style={{ background: 'var(--accent-primary)', opacity: isStartBusy ? 0.5 : 1 }}
+                    >
+                      {isStartBusy ? '…' : t('workbench.adminAccountTopics.startProject')}
+                    </button>
+                  )}
+
+                  {hasRun && (
+                    <>
+                      <button type="button"
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/execution-plan`)}
+                        className="text-xs px-3 py-1 rounded"
+                        style={{ background: 'var(--accent-primary)', color: 'white' }}>
+                        {t('workbench.adminAccountTopics.viewPlan')}
+                      </button>
+                      <button type="button"
+                        onClick={() => navigate(`/workbench/content-review?topic=${tp.id}`)}
+                        className="text-xs px-3 py-1 rounded"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        {t('workbench.adminAccountTopics.reviewDocs')}
+                      </button>
+                      <button type="button"
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/solution`)}
+                        className="text-xs px-3 py-1 rounded"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        {t('workbench.adminAccountTopics.viewSolution')}
+                      </button>
+                      <button type="button"
+                        disabled={isStartBusy}
+                        onClick={() => handleStart(tp, true)}
+                        className="text-xs px-3 py-1 rounded"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                                 opacity: isStartBusy ? 0.5 : 1 }}>
+                        {isStartBusy ? '…' : t('workbench.adminAccountTopics.rerunProject')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -275,5 +382,26 @@ export function AdminAccountTopics() {
         </div>
       )}
     </div>
+  );
+}
+
+// 管线状态 chip — 5 步骤共用,被动展示.
+// idle = 未开始(灰)、running = 进行中(黄)、done = 完成(绿)、failed = 失败(红).
+type PipelineChipState = 'idle' | 'running' | 'done' | 'failed';
+
+function PipelineChip({ label, state }: { label: string; state: PipelineChipState }) {
+  const palette: Record<PipelineChipState, { fg: string; bg: string; mark: string }> = {
+    done:    { fg: '#10b981', bg: 'rgba(16,185,129,0.10)', mark: '✓' },
+    running: { fg: '#eab308', bg: 'rgba(234,179,8,0.10)',  mark: '⋯' },
+    failed:  { fg: '#ef4444', bg: 'rgba(239,68,68,0.10)',  mark: '✗' },
+    idle:    { fg: 'var(--text-muted)', bg: 'var(--bg-tertiary)', mark: '─' },
+  };
+  const p = palette[state];
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full"
+          style={{ background: p.bg, color: p.fg }}>
+      <span className="font-semibold">{p.mark}</span>
+      <span>{label}</span>
+    </span>
   );
 }

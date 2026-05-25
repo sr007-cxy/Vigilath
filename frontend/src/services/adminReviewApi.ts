@@ -36,6 +36,7 @@ export interface PendingReview {
 
 async function request<T>(
   method: string, path: string, token: string, body?: unknown,
+  base: string = '/admin/review',
 ): Promise<T> {
   const init: RequestInit = {
     method,
@@ -45,7 +46,7 @@ async function request<T>(
     }),
   };
   if (body !== undefined) init.body = JSON.stringify(body);
-  const resp = await fetch(`${API_BASE}/admin/review${path}`, init);
+  const resp = await fetch(`${API_BASE}${base}${path}`, init);
   if (!resp.ok) {
     const msg = await readApiError(resp, `Request ${method} ${path} failed`);
     throw new Error(msg);
@@ -284,6 +285,14 @@ export const adminReviewApi = {
   },
   async rerunTopic(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('POST', `/topic/${topicId}/rerun`, token);
+  },
+  // 去审核新通道:启动项目 / 重新启动.
+  // 默认幂等(同 topic 已有 ready/generating plan 直接返回);force=true 才强制重跑.
+  async startTopic(topicId: number, token: string, force = false): Promise<ExecutionPlan> {
+    const qs = force ? '?force=true' : '';
+    return request<ExecutionPlan>(
+      'POST', `/${topicId}/start${qs}`, token, undefined, '/admin/topics',
+    );
   },
   async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);

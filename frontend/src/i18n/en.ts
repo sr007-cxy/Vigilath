@@ -3239,6 +3239,19 @@ const en = {
               "statusLabel": "Status",
               "neverRun": "Never run",
               "edit": "Edit",
+              "startProject": "⚡ Start project",
+              "rerunProject": "Restart",
+              "rerunConfirm": "Restart this project? This will trigger a fresh run and regenerate content drafts.",
+              "viewPlan": "View plan",
+              "viewSolution": "Strategy",
+              "reviewDocs": "Review docs",
+              "pipeline": {
+                "profile": "Profile",
+                "seeds": "Queries",
+                "run": "Run",
+                "docs": "Docs",
+                "publish": "Publish"
+              },
               "savedModal": {
                 "title": "Approval Snapshot",
                 "body": "Topic saved. You can now generate the GEO health report.",
