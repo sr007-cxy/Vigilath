@@ -367,6 +367,31 @@ const en = {
                 }
               }
             },
+            "partners": {
+              "badge": "Customers & Partners",
+              "title": "They're already growing with GApex",
+              "subtitle": "From cross-border payments to SaaS tools, our partners are winning growth with AI visibility.",
+              "items": [
+                {
+                  "brand": "Example Brand A",
+                  "logo": "",
+                  "quote": "GApex took our brand from invisible to the first cited source on ChatGPT and Perplexity.",
+                  "author": "Li · Head of Marketing"
+                },
+                {
+                  "brand": "Example Brand B",
+                  "logo": "",
+                  "quote": "End-to-end visibility diagnostics to content production — AI mentions doubled in 3 months.",
+                  "author": "Wang · Growth Director"
+                },
+                {
+                  "brand": "Example Brand C",
+                  "logo": "",
+                  "quote": "Sentiment monitoring + citation tracking shows us how AI tells our story every day.",
+                  "author": "Chen · Brand Manager"
+                }
+              ]
+            },
             "advanced": {
               "badge": "Members Only",
               "title": "Advanced Detection",
@@ -2062,11 +2087,23 @@ const en = {
                 "step1": "Setup",
                 "step2": "Seed prompts",
                 "step3": "Prompt expansion",
+                "step4": "Health Report",
                 "step1Hint": "Fill the brand profile (7 modules) first — profile name / short name / industry double as the topic's basics.",
                 "profileHint": "Profile name, short name and industry are stored as the topic name / target / industry; materials, pain points and slogan feed downstream content generation.",
                 "aliasesSectionTitle": "Aliases (extra)",
                 "step2Hint": "Tenant types one or more seed prompts. On save they go into the review queue; locked seeds are append-only.",
                 "step3Hint": "Fan out ~200 queries per seed (from step 2), pick what to monitor, choose engines. Locked queries are append-only.",
+                "step4Hint": "Project configured — view / generate the health report (diagnoses brand profile + AI engine responses).",
+                "step4NoTopic": "Save the project in the first 3 steps, then come back here to view the health report.",
+                "step4Idle": "No health report yet — click below to trigger one (uses brand profile + website).",
+                "step4Generate": "Generate health report",
+                "step4Generating": "Generating… takes 1-2 minutes",
+                "step4Ready": "Health report ready (updated {{at}})",
+                "step4Failed": "Last generation failed: {{err}}",
+                "step4OpenFull": "View full report →",
+                "step4Regen": "Regenerate",
+                "step4WebsiteLabel": "Project website",
+                "step4WebsitePlaceholder": "https://example.com",
                 "seedPromptsLabel": "Seed prompts (this submission)",
                 "seedPromptsPlaceholder": "Type a seed, press Enter to add (e.g. cloud data center / law firm services / cross-border e-commerce)",
                 "seedPromptsListHint": "{{count}} new seed(s) — submitted for review on save; step 3 fans out ~200 queries per seed",
@@ -2088,6 +2125,7 @@ const en = {
                 "queryLockedHint": "This query is locked after approval and cannot be unchecked",
                 "prev": "Back",
                 "next": "Next",
+                "done": "Done",
                 "name": "Topic",
                 "namePlaceholder": "e.g. VNET brand probe",
                 "target": "Target (the brand / entity being tracked)",

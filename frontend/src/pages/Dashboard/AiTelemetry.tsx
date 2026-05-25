@@ -13,6 +13,7 @@ import { TagInput } from './sentiment/components/TagInput';
 import { BrandProfileForm } from '../../components/BrandProfileForm';
 import { ProfileImporter } from '../../components/ProfileImporter';
 import { topicProfileApi } from '../../services/topicProfileApi';
+import { adminReviewApi, type TopicStrategicSolution } from '../../services/adminReviewApi';
 import {
   aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
   type BrandProfile,
@@ -2037,7 +2038,7 @@ export function TopicEditor({
     [initial?.engines],
   );
   const enabled = true;
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [saving, setSaving] = useState(false);
 
   // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
@@ -2217,7 +2218,9 @@ export function TopicEditor({
     setSaving(true); setSubmitErr(null);
     try {
       const saved = await persistTopic();
+      // 通知父组件(刷新数据等),不再关闭编辑器 — 顺势进 step 4 看健康报告
       onSaveDone(saved ?? undefined);
+      setStep(4);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSubmitErr(msg);
@@ -2347,9 +2350,11 @@ export function TopicEditor({
   const goNext = () => {
     if (step === 1 && step1Valid) setStep(2);
     else if (step === 2 && step2Valid) setStep(3);
+    else if (step === 3 && valid) setStep(4);
   };
   const goPrev = () => {
-    if (step === 3) setStep(2);
+    if (step === 4) setStep(3);
+    else if (step === 3) setStep(2);
     else if (step === 2) setStep(1);
   };
 
@@ -2364,11 +2369,13 @@ export function TopicEditor({
           if (s === 1) setStep(1);
           else if (s === 2 && step1Valid) setStep(2);
           else if (s === 3 && step1Valid && step2Valid) setStep(3);
+          else if (s === 4 && step1Valid && step2Valid) setStep(4);
         }}
         labels={[
           t('dashboard.aiTelemetry.form.step1'),
           t('dashboard.aiTelemetry.form.step2'),
           t('dashboard.aiTelemetry.form.step3'),
+          t('dashboard.aiTelemetry.form.step4'),
         ]}
       />
 
@@ -2376,6 +2383,7 @@ export function TopicEditor({
         {step === 1 && t('dashboard.aiTelemetry.form.step1Hint')}
         {step === 2 && t('dashboard.aiTelemetry.form.step2Hint')}
         {step === 3 && t('dashboard.aiTelemetry.form.step3Hint')}
+        {step === 4 && t('dashboard.aiTelemetry.form.step4Hint')}
       </div>
 
       <div className="px-5 py-5">
@@ -2762,6 +2770,11 @@ export function TopicEditor({
             </p>
           </div>
         )}
+        {step === 4 && (
+          <HealthReportStep topicId={initial?.id ?? null}
+                            initialWebsite={profile.website || ''}
+                            token={token} />
+        )}
         </fieldset>
       </div>
 
@@ -2805,6 +2818,15 @@ export function TopicEditor({
                     ? 'dashboard.aiTelemetry.form.adminCreate'
                     : 'dashboard.aiTelemetry.form.submit',
                 )}
+            </button>
+          )}
+          {step === 4 && (
+            <button
+              type="button" onClick={onCancel}
+              className="px-3 py-1.5 text-sm rounded-md text-white"
+              style={{ background: 'var(--accent-primary)' }}
+            >
+              {t('dashboard.aiTelemetry.form.done')}
             </button>
           )}
         </div>
@@ -2917,9 +2939,9 @@ function ManualQueryAdder({
 function StepHeader({
   step, labels, onJump,
 }: {
-  step: 1 | 2 | 3;
-  labels: [string, string, string];
-  onJump: (s: 1 | 2 | 3) => void;
+  step: number;
+  labels: string[];
+  onJump: (s: number) => void;
 }) {
   return (
     <div
@@ -2927,7 +2949,7 @@ function StepHeader({
       style={{ borderBottom: '1px solid var(--border-color)' }}
     >
       {labels.map((label, i) => {
-        const idx = (i + 1) as 1 | 2 | 3;
+        const idx = i + 1;
         const isActive = idx === step;
         const isDone = idx < step;
         const dotBg = isActive
@@ -3639,5 +3661,154 @@ function BriefingView({ briefing, token }: { briefing: Briefing; token: string }
         ))}
       </div>
     </article>
+  );
+}
+
+// TopicEditor step 4 — 内嵌健康诊断报告.idle 时显示生成按钮,generating 时轮询,ready 时
+// 显示状态 + 跳转到完整报告页.不重复实现 AdminSolution 的全部 UI(那个 ~600 行),只做摘要 +
+// 入口,真要看细节 admin 点「查看完整报告」跳走.
+function HealthReportStep({ topicId, initialWebsite, token }: {
+  topicId: number | null;
+  initialWebsite: string;
+  token: string;
+}) {
+  const { t } = useTranslation();
+  const [sol, setSol] = useState<TopicStrategicSolution | null>(null);
+  const [website, setWebsite] = useState(initialWebsite);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!topicId) return;
+    let cancelled = false;
+    let pollHandle: number | null = null;
+    const tick = async () => {
+      try {
+        const s = await adminReviewApi.getStrategicSolution(topicId, token);
+        if (cancelled) return;
+        setSol(s);
+        if (s.status !== 'generating' && pollHandle) {
+          window.clearInterval(pollHandle);
+          pollHandle = null;
+        }
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      }
+    };
+    tick();
+    pollHandle = window.setInterval(tick, 3000);
+    return () => {
+      cancelled = true;
+      if (pollHandle) window.clearInterval(pollHandle);
+    };
+  }, [topicId, token]);
+
+  const handleGenerate = async () => {
+    if (!topicId || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const s = await adminReviewApi.generateStrategicSolution(topicId, website.trim(), token);
+      setSol(s);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!topicId) {
+    return (
+      <div className="rounded-md p-4 text-sm text-muted text-center"
+           style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border-color)' }}>
+        {t('dashboard.aiTelemetry.form.step4NoTopic')}
+      </div>
+    );
+  }
+
+  const status = sol?.status || 'idle';
+  return (
+    <div className="space-y-3">
+      {err && (
+        <div className="rounded-md p-3 text-xs"
+             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.3)' }}>
+          {err}
+        </div>
+      )}
+
+      {status === 'idle' && (
+        <div className="rounded-md p-4 space-y-3"
+             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+          <div className="text-sm text-secondary">
+            {t('dashboard.aiTelemetry.form.step4Idle')}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted">
+              {t('dashboard.aiTelemetry.form.step4WebsiteLabel')}
+            </label>
+            <input type="url" value={website} onChange={e => setWebsite(e.target.value)}
+                   placeholder={t('dashboard.aiTelemetry.form.step4WebsitePlaceholder')}
+                   className="text-sm px-3 py-1.5 rounded-md"
+                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                            border: '1px solid var(--border-color)' }} />
+          </div>
+          <button type="button" disabled={busy || !website.trim()}
+                  onClick={handleGenerate}
+                  className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+                  style={{ background: 'var(--accent-primary)' }}>
+            {busy ? '…' : t('dashboard.aiTelemetry.form.step4Generate')}
+          </button>
+        </div>
+      )}
+
+      {status === 'generating' && (
+        <div className="rounded-md p-4 flex items-center gap-3"
+             style={{ background: 'rgba(99,102,241,0.10)', color: 'var(--accent-primary)',
+                      border: '1px solid rgba(99,102,241,0.30)' }}>
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent"
+               style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
+          <div className="text-sm">{t('dashboard.aiTelemetry.form.step4Generating')}</div>
+        </div>
+      )}
+
+      {status === 'ready' && (
+        <div className="rounded-md p-4 space-y-3"
+             style={{ background: 'rgba(16,185,129,0.08)',
+                      border: '1px solid rgba(16,185,129,0.30)' }}>
+          <div className="text-sm text-primary">
+            ✓ {t('dashboard.aiTelemetry.form.step4Ready', {
+              at: sol?.updated_at ? new Date(sol.updated_at).toLocaleString() : '',
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <a href={`/workbench/topics/${topicId}/solution`}
+               className="text-xs px-3 py-1.5 rounded-md text-white inline-block"
+               style={{ background: 'var(--accent-primary)' }}>
+              {t('dashboard.aiTelemetry.form.step4OpenFull')}
+            </a>
+            <button type="button" disabled={busy} onClick={handleGenerate}
+                    className="text-xs px-3 py-1.5 rounded-md"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+              {t('dashboard.aiTelemetry.form.step4Regen')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === 'failed' && (
+        <div className="rounded-md p-4 space-y-3"
+             style={{ background: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.30)' }}>
+          <div className="text-sm" style={{ color: '#ef4444' }}>
+            {t('dashboard.aiTelemetry.form.step4Failed', { err: sol?.error || '—' })}
+          </div>
+          <button type="button" disabled={busy} onClick={handleGenerate}
+                  className="px-3 py-1.5 text-sm rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)' }}>
+            {t('dashboard.aiTelemetry.form.step4Regen')}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

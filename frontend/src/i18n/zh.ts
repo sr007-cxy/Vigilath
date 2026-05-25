@@ -367,6 +367,31 @@ const zh = {
                 }
               }
             },
+            "partners": {
+              "badge": "客户与合作伙伴",
+              "title": "他们已经在用 GApex",
+              "subtitle": "从跨境支付到 SaaS 工具,合作品牌正在用 AI 可见性赢得增长。",
+              "items": [
+                {
+                  "brand": "示例品牌 A",
+                  "logo": "",
+                  "quote": "GApex 帮我们把品牌从 AI 引擎的盲区,推到了 ChatGPT 与 Perplexity 的首条引用。",
+                  "author": "李 · 市场负责人"
+                },
+                {
+                  "brand": "示例品牌 B",
+                  "logo": "",
+                  "quote": "从可见性诊断到内容生产闭环,3 个月内 AI 提及率翻了一倍。",
+                  "author": "王 · 增长总监"
+                },
+                {
+                  "brand": "示例品牌 C",
+                  "logo": "",
+                  "quote": "舆情监测 + 引用追踪让我们每天都知道 AI 在怎么讲我们的故事。",
+                  "author": "陈 · 品牌经理"
+                }
+              ]
+            },
             "advanced": {
               "badge": "会员专享",
               "title": "高级检测能力",
@@ -2068,11 +2093,23 @@ const zh = {
                 "step1": "设置",
                 "step2": "种子提示词",
                 "step3": "提示词扩展",
+                "step4": "健康诊断报告",
                 "step1Hint": "先填品牌资料(6 大模块) — 名称 / 简称 / 行业 同时作为主题的基础设置",
                 "profileHint": "资料里的「名称」「公司简称」「行业」会作为本主题的名称 / 检测词 / 行业;素材、用户痛点、Slogan 等会用于后续文案生成",
                 "aliasesSectionTitle": "别名(资料之外补充)",
                 "step2Hint": "甲方手填多条种子提示词。保存后进入审核队列,已生效的种子只能新增,不能修改",
                 "step3Hint": "基于步骤 2 的种子扇出约 200 条/种子的候选问题,勾选并选择 AI 引擎。Query 一经生效只能新增,不能修改",
+                "step4Hint": "项目已配置完成 — 在此查看 / 生成健康诊断报告(基于品牌资料 + AI 引擎答复诊断)",
+                "step4NoTopic": "请先在前 3 步保存项目,然后回到此步查看健康报告",
+                "step4Idle": "项目还没生成过健康诊断报告,点下方按钮触发(基于本项目的资料 + 官网)",
+                "step4Generate": "生成健康诊断报告",
+                "step4Generating": "正在生成… 大约 1-2 分钟",
+                "step4Ready": "健康诊断报告已就绪(更新于 {{at}})",
+                "step4Failed": "上次生成失败:{{err}}",
+                "step4OpenFull": "查看完整报告 →",
+                "step4Regen": "重新生成",
+                "step4WebsiteLabel": "项目官网",
+                "step4WebsitePlaceholder": "https://example.com",
                 "seedPromptsLabel": "种子提示词(本次提交)",
                 "seedPromptsPlaceholder": "输入一条种子,回车添加(例如:云数据中心 / 律所服务 / 跨境电商)",
                 "seedPromptsListHint": "本次新增 {{count}} 条 — 保存时会一并提交审核;第三步会基于全部种子各扇出约 200 条候选",
@@ -2094,6 +2131,7 @@ const zh = {
                 "queryLockedHint": "该 Query 已审核生效,不可取消勾选",
                 "prev": "上一步",
                 "next": "下一步",
+                "done": "完成",
                 "name": "主题",
                 "namePlaceholder": "例如:VNET 品牌问询",
                 "target": "检索词(被检测的品牌 / 实体)",

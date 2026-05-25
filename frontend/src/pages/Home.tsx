@@ -214,6 +214,69 @@ export function Home() {
             </div>
           </section>
 
+          {/* Partners / Customer testimonials Section */}
+          <section className="mt-10 sm:mt-30">
+            <div className="text-center mb-6 sm:mb-10">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3.5 w-3.5 text-secondary"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+                <span className="text-xs font-semibold text-secondary">
+                  {t('home.partners.badge')}
+                </span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                <span className="gradient-text">{t('home.partners.title')}</span>
+              </h2>
+              <p className="text-secondary text-sm sm:text-base max-w-2xl mx-auto">
+                {t('home.partners.subtitle')}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {(t('home.partners.items', { returnObjects: true }) as {
+                brand: string;
+                logo: string;
+                quote: string;
+                author: string;
+              }[]).map((item, idx) => (
+                <div key={idx} className="card p-6 flex flex-col">
+                  <div className="h-10 mb-5 flex items-center">
+                    {item.logo ? (
+                      <img
+                        src={item.logo}
+                        alt={item.brand}
+                        className="max-h-10 w-auto select-none"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="text-lg font-bold tracking-tight text-primary">
+                        {item.brand}
+                      </span>
+                    )}
+                  </div>
+                  <blockquote className="text-sm sm:text-base text-secondary leading-relaxed flex-1 m-0">
+                    “{item.quote}”
+                  </blockquote>
+                  <div className="mt-4 pt-4 border-t border-soft text-xs sm:text-sm text-muted">
+                    {item.author}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           {/* Advanced Detection Section */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
