@@ -274,6 +274,10 @@ class AdminAccountSummary(BaseModel):
     id: int
     email: str
     name: Optional[str] = None
+    # 客户在 ai_telemetry_topics.target 里填的品牌名(例:"洁卫森").
+    # admin 画像列表优先显示这个 — 比 users.name(admin 内部备注)
+    # 更能代表客户身份.取最早建的 topic.target,客户的"主品牌".
+    brand_target: Optional[str] = None
     is_active: bool = True
     is_admin: bool = False
     topic_count: int
@@ -295,13 +299,19 @@ def admin_list_accounts(
         topics = (
             db.query(AiTelemetryTopicORM)
               .filter(AiTelemetryTopicORM.user_id == u.id)
+              .order_by(AiTelemetryTopicORM.id.asc())
               .all()
         )
         has_ext = any((t.prompt_extension or "").strip() for t in topics)
+        first_target = next(
+            ((t.target or "").strip() for t in topics if (t.target or "").strip()),
+            None,
+        )
         out.append(AdminAccountSummary(
             id=u.id,
             email=u.email or "",
             name=getattr(u, "name", None),
+            brand_target=first_target,
             is_active=getattr(u, "is_active", True),
             is_admin=bool(getattr(u, "is_admin", False)),
             topic_count=len(topics),

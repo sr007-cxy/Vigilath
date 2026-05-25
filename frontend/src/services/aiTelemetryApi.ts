@@ -455,6 +455,9 @@ export interface AdminAccount {
   id: number;
   email: string;
   name?: string | null;
+  // 客户填的品牌名(ai_telemetry_topics.target).admin 画像列表优先展示
+  // 这个,代表客户在系统里的身份;users.name 是 admin 内部备注,作为兜底.
+  brand_target?: string | null;
   is_active: boolean;
   is_admin: boolean;
   topic_count: number;

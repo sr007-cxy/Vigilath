@@ -138,7 +138,7 @@ export function AdminAccounts() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-secondary">{a.name || '—'}</td>
+                  <td className="px-3 py-2 text-secondary">{a.brand_target || a.name || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{a.topic_count}</td>
                   <td className="px-3 py-2">
                     <Link to={`/workbench/accounts/${a.id}/topics`} className="text-accent hover:underline">
