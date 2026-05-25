@@ -94,7 +94,7 @@ const en = {
             "adminInsights": "Insights",
             "adminRuns": "Runs",
             "adminReview": "Topic Review",
-            "adminContentReview": "Content Review",
+            "adminContentReview": "Doc Review",
             "adminContentManagement": "Content Library",
             "adminWorkbench": "Workbench",
             "sentiment": "Sentinel",

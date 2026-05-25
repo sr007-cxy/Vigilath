@@ -50,7 +50,6 @@ const BrandGrowthInsights = lazy(() => import('./pages/BrandGrowth/Insights').th
 const BrandGrowthQueries = lazy(() => import('./pages/BrandGrowth/Queries').then(m => ({ default: m.Queries })));
 const BrandGrowthResponses = lazy(() => import('./pages/BrandGrowth/Responses').then(m => ({ default: m.Responses })));
 const BrandGrowthPublished = lazy(() => import('./pages/BrandGrowth/Published').then(m => ({ default: m.Published })));
-const AdminReview = lazy(() => import('./pages/Admin/Review').then(m => ({ default: m.AdminReview })));
 const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
 const AdminSolution = lazy(() => import('./pages/Admin/Solution').then(m => ({ default: m.AdminSolution })));
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
@@ -59,7 +58,6 @@ const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopi
 const AdminAllRuns = lazy(() => import('./pages/Workbench/AdminAllRuns').then(m => ({ default: m.AdminAllRuns })));
 const AdminRunDetail = lazy(() => import('./pages/Workbench/AdminRunDetail').then(m => ({ default: m.AdminRunDetail })));
 const AdminCockpit = lazy(() => import('./pages/Workbench/AdminCockpit').then(m => ({ default: m.AdminCockpit })));
-const AdminApprovals = lazy(() => import('./pages/Workbench/AdminApprovals').then(m => ({ default: m.AdminApprovals })));
 const AdminInsights = lazy(() => import('./pages/Workbench/AdminInsights').then(m => ({ default: m.AdminInsights })));
 const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
@@ -154,12 +152,13 @@ function App() {
                 <Route path="cockpit" element={<AdminCockpit />} />
                 <Route path="accounts" element={<AdminAccounts />} />
                 <Route path="accounts/:userId/topics" element={<AdminAccountTopics />} />
-                <Route path="approvals" element={<AdminApprovals />} />
+                {/* 旧审批入口退役 → 客户账号(防旧书签 404)*/}
+                <Route path="approvals" element={<Navigate to="/workbench/accounts" replace />} />
+                <Route path="review" element={<Navigate to="/workbench/accounts" replace />} />
                 <Route path="insights" element={<AdminInsights />} />
                 <Route path="runs" element={<AdminAllRuns />} />
                 <Route path="runs/:runId" element={<AdminRunDetail />} />
                 {/* 详情页 / 非 sidebar 直达 */}
-                <Route path="review" element={<AdminReview />} />
                 <Route path="content-review" element={<AdminContentReview />} />
                 <Route path="content-management" element={<Content />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
