@@ -3213,7 +3213,7 @@ const zh = {
               "subtitle": "替每个客户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
               "colId": "ID",
               "colEmail": "邮箱",
-              "colName": "名称",
+              "colName": "客户名称",
               "colTopicCount": "主题数",
               "adminBadge": "admin",
               "configureTopics": "配置主题",

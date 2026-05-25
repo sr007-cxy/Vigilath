@@ -17,11 +17,13 @@ class UserService:
             # Hash the password
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
-            # Create ORM instance. Name is optional at the API boundary;
-            # fall back to the email so the non-null DB column stays satisfied.
+            # Name 在 API 入口可选,users.name 列也是 nullable.
+            # 不要 fallback 到 email — 那样 admin 画像列表里"没填名称"
+            # 的客户会展示成邮箱,看起来像数据重复.让 NULL 保持 NULL,
+            # 前端 `a.name || '—'` 会渲染成占位符.
             db_user = UserORM(
                 email=user.email,
-                name=user.name or user.email,
+                name=(user.name.strip() if user.name and user.name.strip() else None),
                 password_hash=password_hash
             )
             

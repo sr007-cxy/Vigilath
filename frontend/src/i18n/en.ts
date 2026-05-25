@@ -3207,7 +3207,7 @@ const en = {
               "subtitle": "Configure monitoring topics for each customer (profile / seeds / tracking queries). Admin-created topics go live immediately — no review step.",
               "colId": "ID",
               "colEmail": "Email",
-              "colName": "Name",
+              "colName": "Customer name",
               "colTopicCount": "Topics",
               "adminBadge": "admin",
               "configureTopics": "Configure topics",
