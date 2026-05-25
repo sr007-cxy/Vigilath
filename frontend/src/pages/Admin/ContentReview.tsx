@@ -23,21 +23,27 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all',            label: 'all' },
 ];
 
-export function AdminContentReview() {
+interface AdminContentReviewProps {
+  // 锁定到指定 topic;给则隐藏 topic 选择器(用于项目详情页 stepper 内嵌)
+  lockedTopicId?: number;
+}
+
+export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = {}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
 
   // 深链:?topic=X 跳到指定项目,?status=Y 跳到指定状态(stepper / cockpit 待办卡用)
+  // 若 lockedTopicId 给了,优先用它,完全忽略 URL.
   const initialUrlParams = useMemo(() => {
     const sp = new URLSearchParams(window.location.search);
     const topicParam = sp.get('topic');
     const statusParam = sp.get('status');
     return {
-      topic: topicParam ? Number(topicParam) : null,
+      topic: lockedTopicId ?? (topicParam ? Number(topicParam) : null),
       status: (statusParam as StatusFilter) || 'to_review',
     };
-  }, []);
+  }, [lockedTopicId]);
 
   const [topics, setTopics] = useState<TopicWithDocs[]>([]);
   const [topicId, setTopicId] = useState<number | null>(initialUrlParams.topic);
@@ -60,13 +66,14 @@ export function AdminContentReview() {
     try {
       const rs = await adminContentReviewApi.listTopics(token);
       setTopics(rs);
-      if (rs.length > 0 && topicId === null) {
+      // lockedTopicId 模式不自动覆盖,锁定不变
+      if (lockedTopicId === undefined && rs.length > 0 && topicId === null) {
         setTopicId(rs[0].topic_id);
       }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     }
-  }, [token, topicId]);
+  }, [token, topicId, lockedTopicId]);
 
   const refreshDocs = useCallback(async () => {
     if (topicId === null) return;
@@ -116,35 +123,43 @@ export function AdminContentReview() {
 
   return (
     <div className="space-y-4">
-      <PageHead titleKey="admin.contentReview.title" titleFallback="内容审核" />
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">{t('admin.contentReview.title')}</h1>
-          <p className="text-xs text-secondary mt-0.5">{t('admin.contentReview.subtitle')}</p>
-        </div>
-        <button type="button" onClick={() => { refreshTopics(); refreshDocs(); }}
-                className="text-xs px-3 py-1.5 rounded-md"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--accent-primary)' }}>
-          ⟳ {t('admin.contentReview.refresh')}
-        </button>
-      </header>
+      {/* 锁定模式由父页负责标题(stepper 已经接管上下文),不重复渲染 */}
+      {lockedTopicId === undefined && (
+        <>
+          <PageHead titleKey="admin.contentReview.title" titleFallback="内容审核" />
+          <header className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-xl font-semibold text-primary">{t('admin.contentReview.title')}</h1>
+              <p className="text-xs text-secondary mt-0.5">{t('admin.contentReview.subtitle')}</p>
+            </div>
+            <button type="button" onClick={() => { refreshTopics(); refreshDocs(); }}
+                    className="text-xs px-3 py-1.5 rounded-md"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--accent-primary)' }}>
+              ⟳ {t('admin.contentReview.refresh')}
+            </button>
+          </header>
+        </>
+      )}
 
       <div className="rounded-md p-3 flex flex-wrap gap-3 items-end"
            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">{t('admin.contentReview.topicLabel')}</label>
-          <select value={topicId ?? ''}
-                  onChange={e => { setTopicId(Number(e.target.value)); setPicked(new Set()); }}
-                  className="text-sm px-3 py-1.5 rounded-md min-w-[260px]"
-                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                           border: '1px solid var(--border-color)' }}>
-            {topics.map(tp => (
-              <option key={tp.topic_id} value={tp.topic_id}>
-                {tp.topic_name} · {tp.user_email} · ({tp.draft_count}/{tp.doc_count})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* 锁定模式不显示 topic 选择器(stepper 上下文已锁定项目) */}
+        {lockedTopicId === undefined && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted">{t('admin.contentReview.topicLabel')}</label>
+            <select value={topicId ?? ''}
+                    onChange={e => { setTopicId(Number(e.target.value)); setPicked(new Set()); }}
+                    className="text-sm px-3 py-1.5 rounded-md min-w-[260px]"
+                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                             border: '1px solid var(--border-color)' }}>
+              {topics.map(tp => (
+                <option key={tp.topic_id} value={tp.topic_id}>
+                  {tp.topic_name} · {tp.user_email} · ({tp.draft_count}/{tp.doc_count})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">{t('admin.contentReview.statusLabel')}</label>
           <div className="flex gap-1">

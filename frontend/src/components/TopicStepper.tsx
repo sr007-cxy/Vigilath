@@ -66,7 +66,7 @@ export function TopicStepper({ topicId, active }: Props) {
       key: 'profile', label: t('workbench.topicStepper.profile'),
       status: profileOk ? 'done' : 'idle',
       hint: profileOk ? String(topic?.selected_query_count ?? 0) + ' Q' : undefined,
-      onClick: () => topic && navigate(`/workbench/accounts/${topic.user_id}/topics?edit=${topicId}`),
+      onClick: () => navigate(`/workbench/topics/${topicId}/edit`),
     },
     {
       key: 'plan', label: t('workbench.topicStepper.plan'),
@@ -76,7 +76,7 @@ export function TopicStepper({ topicId, active }: Props) {
     {
       key: 'docs', label: t('workbench.topicStepper.docs'),
       status: 'idle',
-      onClick: () => navigate(`/workbench/content-review?topic=${topicId}`),
+      onClick: () => navigate(`/workbench/topics/${topicId}/docs`),
     },
     {
       key: 'solution', label: t('workbench.topicStepper.solution'),

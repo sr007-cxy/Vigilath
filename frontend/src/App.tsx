@@ -55,6 +55,8 @@ const AdminSolution = lazy(() => import('./pages/Admin/Solution').then(m => ({ d
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
 const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
+const AdminTopicEdit = lazy(() => import('./pages/Workbench/AdminTopicEdit').then(m => ({ default: m.AdminTopicEdit })));
+const AdminTopicDocs = lazy(() => import('./pages/Workbench/AdminTopicDocs').then(m => ({ default: m.AdminTopicDocs })));
 const AdminAllRuns = lazy(() => import('./pages/Workbench/AdminAllRuns').then(m => ({ default: m.AdminAllRuns })));
 const AdminRunDetail = lazy(() => import('./pages/Workbench/AdminRunDetail').then(m => ({ default: m.AdminRunDetail })));
 const AdminCockpit = lazy(() => import('./pages/Workbench/AdminCockpit').then(m => ({ default: m.AdminCockpit })));
@@ -161,7 +163,9 @@ function App() {
                 {/* 详情页 / 非 sidebar 直达 */}
                 <Route path="content-review" element={<AdminContentReview />} />
                 <Route path="content-management" element={<Content />} />
+                <Route path="topics/:topicId/edit" element={<AdminTopicEdit />} />
                 <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
+                <Route path="topics/:topicId/docs" element={<AdminTopicDocs />} />
                 <Route path="topics/:topicId/solution" element={<AdminSolution />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
