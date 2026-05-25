@@ -399,6 +399,117 @@ const en = {
                 }
               ]
             },
+            "pipeline": {
+              "comment": "// pipeline.v1",
+              "badge": "8-stage workflow",
+              "title": "8-stage GEO automation pipeline",
+              "subtitle": "Seed in → loop out. Daily self-calibration. Fill brand profile once; the rest runs unattended.",
+              "phases": [
+                { "id": "INGEST", "label": "Ingest" },
+                { "id": "PRODUCE", "label": "Produce" },
+                { "id": "OBSERVE", "label": "Observe" },
+                { "id": "ADAPT", "label": "Adapt" }
+              ],
+              "steps": [
+                {
+                  "id": "01",
+                  "phase": "INGEST",
+                  "title": "Seed Prompt",
+                  "desc": "Brand profile + seed questions",
+                  "output": "output: 5–10 seed queries"
+                },
+                {
+                  "id": "02",
+                  "phase": "INGEST",
+                  "title": "Intent Expansion",
+                  "desc": "LLM expands candidate intents",
+                  "output": "output: 200+ intents"
+                },
+                {
+                  "id": "03",
+                  "phase": "INGEST",
+                  "title": "Prompt Clustering",
+                  "desc": "Cluster + dedupe monitored Q's",
+                  "output": "output: ~200 monitored Q's"
+                },
+                {
+                  "id": "04",
+                  "phase": "PRODUCE",
+                  "title": "Content Generation",
+                  "desc": "LLM drafts against brand profile",
+                  "output": "output: ~50 drafts"
+                },
+                {
+                  "id": "05",
+                  "phase": "PRODUCE",
+                  "title": "Media Distribution",
+                  "desc": "Publish to Zhihu / Reddit / blogs",
+                  "output": "output: multi-platform publish"
+                },
+                {
+                  "id": "06",
+                  "phase": "OBSERVE",
+                  "title": "AI Crawling",
+                  "desc": "ChatGPT / Perplexity index",
+                  "output": "output: indexed by 5+ engines"
+                },
+                {
+                  "id": "07",
+                  "phase": "OBSERVE",
+                  "title": "Telemetry",
+                  "desc": "Daily citations, mentions, rank",
+                  "output": "output: daily citation feed"
+                },
+                {
+                  "id": "08",
+                  "phase": "ADAPT",
+                  "title": "Reinforcement Loop",
+                  "desc": "Signals refine seeds, re-expand",
+                  "output": "feedback → [01]"
+                }
+              ],
+              "loopLabel": "feedback signals",
+              "mobileLoopHint": "↺ feeds back to [01]"
+            },
+            "faq": {
+              "badge": "FAQ",
+              "title": "Frequently Asked Questions",
+              "subtitle": "The questions buyers ask most — answered up front.",
+              "items": [
+                {
+                  "q": "How is GEO different from SEO?",
+                  "a": "GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO is designed for the AI-search era and complements — not replaces — SEO."
+                },
+                {
+                  "q": "How long until I see results?",
+                  "a": "Depending on your industry and competition, clients usually see AI mention rate and citation lift improving in 1–3 months and reach full optimization in 3–6 months. Our cockpit produces a visibility curve daily so you can track quantitatively."
+                },
+                {
+                  "q": "Which AI engines do you cover?",
+                  "a": "All major Western engines (ChatGPT / Gemini / Perplexity / Claude / DeepSeek) and CN engines (Baidu AI / Wenxin / Qwen / Doubao / Yuanbao). New engines are onboarded within 2 weeks if they expose an API or can be crawled."
+                },
+                {
+                  "q": "How is the 8-step pipeline different from a traditional SEO agency?",
+                  "a": "Traditional SEO is manual: keyword → content → backlinks → wait for ranking. The 8-step pipeline closes the loop automatically — from seed expansion, clustering, drafting, distribution, to AI indexing verification, citation monitoring, and feedback refinement. Self-calibrates daily without manual intervention — one account manager can run 50 brand projects in parallel."
+                },
+                {
+                  "q": "Is sentiment monitoring real-time?",
+                  "a": "Currently daily batch collection + instant alerts. We scan 42 CN/global trending sources (Weibo, Zhihu, Douyin, Toutiao, Reddit, HN, etc.). When negative coverage or keyword hits are detected, alerts go out within 15 minutes via email + in-app notification, with three tiers of response drafts auto-generated."
+                },
+                {
+                  "q": "Can I self-serve, or do I need to talk to sales?",
+                  "a": "The free tier self-serves a 25-category GEO audit and crawler accessibility test. Membership unlocks all advanced checks (visibility / citation / entity / sentiment). The 8-step pipeline + content distribution is a growth service requiring a sales engagement, because we need to onboard brand assets and authorize platform accounts."
+                },
+                {
+                  "q": "What does it cost?",
+                  "a": "GEO self-serve membership starts at $40 / month. The 8-step growth service is priced per project, typically $2,000–$12,000 / month depending on industry, target engines, and content output. Contact sales for a custom quote."
+                },
+                {
+                  "q": "Do you offer ongoing maintenance?",
+                  "a": "Yes — required, because AI engines' algorithms, crawl preferences, and ranking rules change continuously. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense. Comes with the pipeline service by default plus a quarterly review report."
+                }
+              ]
+            },
             "advanced": {
               "badge": "Members Only",
               "title": "Advanced Detection",

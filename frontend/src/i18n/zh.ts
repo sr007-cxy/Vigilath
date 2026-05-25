@@ -399,6 +399,117 @@ const zh = {
                 }
               ]
             },
+            "pipeline": {
+              "comment": "// pipeline.v1",
+              "badge": "8 步工作流",
+              "title": "8 步 GEO 自动化流水线",
+              "subtitle": "Seed in → loop out。每天闭环自校准,品牌资料一次填好,后续全自动。",
+              "phases": [
+                { "id": "INGEST", "label": "采集" },
+                { "id": "PRODUCE", "label": "生产" },
+                { "id": "OBSERVE", "label": "观测" },
+                { "id": "ADAPT", "label": "自适应" }
+              ],
+              "steps": [
+                {
+                  "id": "01",
+                  "phase": "INGEST",
+                  "title": "Seed Prompt",
+                  "desc": "品牌资料 + 种子问题",
+                  "output": "output: 5–10 seed queries"
+                },
+                {
+                  "id": "02",
+                  "phase": "INGEST",
+                  "title": "Intent Expansion",
+                  "desc": "LLM 扩展候选意图",
+                  "output": "output: 200+ intents"
+                },
+                {
+                  "id": "03",
+                  "phase": "INGEST",
+                  "title": "Prompt Clustering",
+                  "desc": "聚类去重监测问题",
+                  "output": "output: ~200 monitored Q's"
+                },
+                {
+                  "id": "04",
+                  "phase": "PRODUCE",
+                  "title": "Content Generation",
+                  "desc": "LLM 按品牌资料起稿",
+                  "output": "output: ~50 drafts"
+                },
+                {
+                  "id": "05",
+                  "phase": "PRODUCE",
+                  "title": "Media Distribution",
+                  "desc": "投放知乎 / Reddit / 博客",
+                  "output": "output: multi-platform publish"
+                },
+                {
+                  "id": "06",
+                  "phase": "OBSERVE",
+                  "title": "AI Crawling",
+                  "desc": "ChatGPT / Perplexity 索引",
+                  "output": "output: indexed by 5+ engines"
+                },
+                {
+                  "id": "07",
+                  "phase": "OBSERVE",
+                  "title": "Telemetry",
+                  "desc": "每日采集引用、提及、排名",
+                  "output": "output: daily citation feed"
+                },
+                {
+                  "id": "08",
+                  "phase": "ADAPT",
+                  "title": "Reinforcement Loop",
+                  "desc": "信号回流,精炼种子重扩展",
+                  "output": "feedback → [01]"
+                }
+              ],
+              "loopLabel": "feedback signals",
+              "mobileLoopHint": "↺ feeds back to [01]"
+            },
+            "faq": {
+              "badge": "常见问题",
+              "title": "常见问题",
+              "subtitle": "签约前你最常问的几件事,先一次性回答清楚。",
+              "items": [
+                {
+                  "q": "GEO 和 SEO 有什么区别?",
+                  "a": "GEO(Generative Engine Optimization)关注让品牌被 ChatGPT / Gemini / Perplexity 等 AI 助手主动推荐,SEO 关注搜索引擎结果页排名。GEO 是为 AI 搜索新时代设计的,SEO 仍服务传统搜索场景 — 两者互补,不替代。"
+                },
+                {
+                  "q": "多久能看到效果?",
+                  "a": "视行业与竞争激烈程度,客户通常 1–3 个月开始观察到 AI 提及率与引用位的改善,3–6 个月达成完整优化效果。我们驾驶舱每日产出可见性曲线,效果可量化跟踪。"
+                },
+                {
+                  "q": "你们支持哪些 AI 引擎?",
+                  "a": "覆盖主流海外引擎(ChatGPT / Gemini / Perplexity / Claude / DeepSeek)与国内引擎(百度 AI / 文心 / 通义 / 豆包 / 元宝)。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
+                },
+                {
+                  "q": "8 步流水线和传统 SEO agency 有什么不同?",
+                  "a": "传统 SEO 是「关键词→内容→外链→等排名」的手工活,周期长、依赖个人经验。我们的 8 步流水线全自动闭环:从种子问题扩展、聚类、生稿、投放,到 AI 索引验证、引用监测,再反馈精炼。每天自我校准,无需人工干预 — 1 个客户经理可同时跑 50 个品牌项目。"
+                },
+                {
+                  "q": "舆情监测是实时的吗?",
+                  "a": "目前是每日批量采集 + 即时告警双轨。我们每天扫描 42 个国内外热榜源(微博 / 知乎 / 抖音 / 头条 / Reddit / HN 等),发现品牌负面或关键词命中后,15 分钟内通过邮件 + 站内通知告警,并自动生成三档回应草稿。"
+                },
+                {
+                  "q": "我可以自助跑,还是必须联系销售?",
+                  "a": "免费档可自助跑 25 项 GEO 体检和爬虫可达性测试。会员档自助解锁所有高级检测能力(可见性 / 引用 / 实体 / 舆情)。8 步流水线 + 内容投放属于增长服务,需要联系销售签约,因为涉及到品牌资料对接与平台账号授权。"
+                },
+                {
+                  "q": "价格大概是多少?",
+                  "a": "GEO 自助检测会员从 ¥299 / 月起。8 步增长服务按项目报价,典型区间 $2,000–$12,000 / 月,具体取决于品牌赛道、目标引擎数量与内容产能。联系销售可拿定制方案。"
+                },
+                {
+                  "q": "需要长期运维吗?",
+                  "a": "需要 — 因为 AI 引擎的算法、抓取偏好、排名规则在持续变化。我们提供月度运维:模型升级跟踪、监测问题刷新、内容策略调整、引用位防御。运维档默认包含原合作流水线 + 季度复盘报告。"
+                }
+              ]
+            },
             "advanced": {
               "badge": "会员专享",
               "title": "高级检测能力",

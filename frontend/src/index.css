@@ -36,6 +36,12 @@
     --hero-mask: radial-gradient(ellipse at center, black 30%, transparent 80%);
     --success: #10b981;
     --warning: #f59e0b;
+
+    /* Pipeline phase colors — fixed across themes, section uses dark blueprint bg */
+    --phase-ingest: #5eead4;
+    --phase-produce: #a78bfa;
+    --phase-observe: #fbbf24;
+    --phase-adapt: #fb7185;
   }
 
   /* === Theme: classic light (blue/purple gradient) === */
@@ -335,6 +341,16 @@
 }
 
 @layer components {
+  .blueprint-grid {
+    background-color: #0a0a14;
+    background-image: radial-gradient(
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+
   .card {
     border-radius: 16px;
     transition: all 0.3s ease;
