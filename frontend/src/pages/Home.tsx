@@ -214,85 +214,6 @@ export function Home() {
             </div>
           </section>
 
-          {/* Partners / Customer testimonials Section */}
-          <section className="mt-10 sm:mt-30">
-            <div className="text-center mb-6 sm:mb-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-3.5 w-3.5 text-secondary"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                <span className="text-xs font-semibold text-secondary">
-                  {t('home.partners.badge')}
-                </span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
-                <span className="gradient-text">{t('home.partners.title')}</span>
-              </h2>
-              <p className="text-secondary text-sm sm:text-base max-w-2xl mx-auto">
-                {t('home.partners.subtitle')}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {(t('home.partners.items', { returnObjects: true }) as {
-                name: string;
-                sub: string;
-                logo: string;
-                tagline: string;
-              }[]).map((item, idx) => (
-                <div key={idx} className="card overflow-hidden flex flex-col">
-                  {/* Logo zone — uniform white background so logos with white / colored / transparent bg all align */}
-                  <div
-                    className="flex items-center justify-center px-5"
-                    style={{ background: '#ffffff', height: '120px' }}
-                  >
-                    {item.logo ? (
-                      <img
-                        src={item.logo}
-                        alt={`${item.name} · ${item.sub}`}
-                        loading="lazy"
-                        draggable={false}
-                        className="max-h-16 max-w-full w-auto object-contain select-none"
-                      />
-                    ) : (
-                      <div className="text-center select-none">
-                        {item.tagline && (
-                          <div
-                            className="text-base sm:text-lg font-bold italic tracking-tight"
-                            style={{ color: '#141418' }}
-                          >
-                            {item.tagline}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {/* Name zone — themed bg, separates by border */}
-                  <div
-                    className="px-4 py-3 text-center border-t flex-1 flex flex-col justify-center"
-                    style={{ borderColor: 'var(--border-color)' }}
-                  >
-                    <div className="text-sm font-semibold text-primary leading-tight">
-                      {item.name}
-                    </div>
-                    <div className="text-xs text-muted mt-1">{item.sub}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
           {/* Advanced Detection Section */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
@@ -510,6 +431,58 @@ export function Home() {
               </svg>
               {t('home.slogan.contactSales')}
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Partners — trust strip, sits between slogan banner and footer */}
+      <section
+        className="relative z-10 px-4 py-12 sm:py-16"
+        style={{ background: 'var(--bg-tertiary)' }}
+      >
+        <div className="w-full max-w-5xl mx-auto">
+          <p
+            className="text-center text-xs sm:text-sm font-medium uppercase tracking-[0.2em] mb-8 sm:mb-10"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {t('home.partners.badge')}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {(t('home.partners.items', { returnObjects: true }) as {
+              name: string;
+              sub: string;
+              logo: string;
+              tagline: string;
+            }[]).map((item, idx) => (
+              <div
+                key={idx}
+                className="rounded-xl flex items-center justify-center px-4 transition-transform duration-200 hover:-translate-y-0.5"
+                style={{
+                  background: '#ffffff',
+                  height: '88px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                {item.logo ? (
+                  <img
+                    src={item.logo}
+                    alt={`${item.name} · ${item.sub}`}
+                    loading="lazy"
+                    draggable={false}
+                    className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
+                  />
+                ) : (
+                  <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>
+                    <span className="text-base sm:text-lg font-bold tracking-tight">
+                      {item.name}
+                    </span>
+                    <span className="hidden sm:inline text-xs ml-2 tracking-wide" style={{ color: '#666' }}>
+                      {item.sub}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>

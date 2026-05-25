@@ -3681,7 +3681,7 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
 }) {
   const { t, i18n } = useTranslation();
   const [sol, setSol] = useState<TopicStrategicSolution | null>(null);
-  const [website, setWebsite] = useState(initialWebsite);
+  const [loaded, setLoaded] = useState(false);   // 首次拉完才能决定 UI,避免 idle 占位闪一下
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -3703,7 +3703,7 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
   };
 
   useEffect(() => {
-    if (!topicId) return;
+    if (!topicId) { setLoaded(true); return; }
     let cancelled = false;
     let pollHandle: number | null = null;
     const tick = async () => {
@@ -3711,12 +3711,16 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
         const s = await adminReviewApi.getStrategicSolution(topicId, token);
         if (cancelled) return;
         setSol(s);
+        setLoaded(true);
         if (s.status !== 'generating' && pollHandle) {
           window.clearInterval(pollHandle);
           pollHandle = null;
         }
       } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : String(e));
+          setLoaded(true);
+        }
       }
     };
     tick();
@@ -3727,11 +3731,13 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
     };
   }, [topicId, token]);
 
+  // 自动生成 — 不再让用户输入 website,直接用 topic 资料里填的(initialWebsite).
+  // 空串也允许传:后端 generate 会走 4 块降级.
   const handleGenerate = async () => {
     if (!topicId || busy) return;
     setBusy(true); setErr(null);
     try {
-      const s = await adminReviewApi.generateStrategicSolution(topicId, website.trim(), token);
+      const s = await adminReviewApi.generateStrategicSolution(topicId, (initialWebsite || '').trim(), token);
       setSol(s);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -3745,6 +3751,17 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
       <div className="rounded-md p-4 text-sm text-muted text-center"
            style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border-color)' }}>
         {t('dashboard.aiTelemetry.form.step4NoTopic')}
+      </div>
+    );
+  }
+
+  // 首次拉完前显示 loading,避免 idle 占位先闪一下再被 ready 替换.
+  if (!loaded) {
+    return (
+      <div className="py-12 flex flex-col items-center gap-3 text-sm text-muted">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-t-transparent"
+             style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
+        <div>{t('common.loading')}</div>
       </div>
     );
   }
@@ -3766,17 +3783,7 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
           <div className="text-sm text-secondary">
             {t('dashboard.aiTelemetry.form.step4Idle')}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted">
-              {t('dashboard.aiTelemetry.form.step4WebsiteLabel')}
-            </label>
-            <input type="url" value={website} onChange={e => setWebsite(e.target.value)}
-                   placeholder={t('dashboard.aiTelemetry.form.step4WebsitePlaceholder')}
-                   className="text-sm px-3 py-1.5 rounded-md"
-                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)' }} />
-          </div>
-          <button type="button" disabled={busy || !website.trim()}
+          <button type="button" disabled={busy}
                   onClick={handleGenerate}
                   className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
                   style={{ background: 'var(--accent-primary)' }}>
