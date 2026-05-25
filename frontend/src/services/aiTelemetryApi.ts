@@ -401,11 +401,11 @@ export interface IntentBreakdown {
 
 // ── 品牌增长页 — 雷达 5 维 + 行业基准 + 竞品替代证据 ───────
 export interface PositionBreakdown {
-  top1_pct: number;
   top3_pct: number;
   top5_pct: number;
   visible_pct: number;
   source_pct: number;
+  seed_coverage_pct: number;
 }
 
 export interface EngineSlice {

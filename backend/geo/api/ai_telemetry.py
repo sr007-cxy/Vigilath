@@ -2075,12 +2075,13 @@ def _aggregate_position_breakdown(
     allowed_queries: Optional[set[str]] = None,
     allowed_engines: Optional[set[str]] = None,
     owned_urls: Optional[set[str]] = None,
+    query_to_seed: Optional[dict[str, str]] = None,
+    approved_seeds: Optional[set[str]] = None,
 ) -> PositionBreakdown:
     """口径:cell × lifetime 维度。
 
-    Top1/3/5 + 可见占比 — 同前(基于 brand_rank,分母 N×M):
+    Top3/5 + 可见占比 — 基于 brand_rank,分母 N×M:
       - visible_pct = COUNT(cell with any hit) / (N×M)
-      - top1_pct    = COUNT(cell with MIN(brand_rank)=1) / (N×M)
       - top3_pct    = COUNT(cell with MIN(brand_rank)≤3) / (N×M)
       - top5_pct    = COUNT(cell with MIN(brand_rank)≤5) / (N×M)
 
@@ -2090,12 +2091,20 @@ def _aggregate_position_breakdown(
               包括 hit=False 但引了自有 URL 的响应)
       - owned_urls=None 或为空 → source_pct=0
       - 因分母去重 / 分子计次,该值可能 > 100%
+
+    seed_coverage_pct(种子覆盖率)— 至少 1 条扩展 query 有 hit 的 approved 种子占比:
+      - 分母 = approved_seeds 数(从 topic.seed_prompts_json 取 status=approved 的种子)
+      - 分子 = 在 approved_seeds 集合内、有任一扩展 query 在本切片里 hit=True 的种子数
+      - query_to_seed:query 文本 → 种子文本(从 topic.queries_json 的 seed 字段建)
+      - approved_seeds=None / 空 → seed_coverage_pct=0
     """
     # (query, engine) → {hit: bool, min_rank: int|None}
     cells: dict[tuple[str, str], dict] = {}
     denom_urls: set[str] = set()       # 命中响应的引用 URL 去重(信源占比分母)
     owned_cit_count = 0                # 全部响应里 owned URL 出现条目数(信源占比分子,不去重)
     has_owned = bool(owned_urls)
+    seeds_with_hit: set[str] = set()   # 本切片内已命中过的种子
+    has_seed_index = bool(approved_seeds and query_to_seed)
     for r in rows:
         if r.error:
             continue
@@ -2105,6 +2114,10 @@ def _aggregate_position_breakdown(
             continue
         key = (r.query, r.engine)
         c = cells.setdefault(key, {"hit": False, "min_rank": None})
+        if has_seed_index and r.hit:
+            seed = (query_to_seed or {}).get(r.query)
+            if seed and seed in (approved_seeds or set()):
+                seeds_with_hit.add(seed)
         # 解析 citations(信源占比要用 — 即便不 hit 也要扫 owned)
         try:
             cits = json.loads(r.citations_json or "[]")
@@ -2135,17 +2148,20 @@ def _aggregate_position_breakdown(
     if total_cells == 0:
         return PositionBreakdown()
 
-    top1 = sum(1 for c in cells.values() if c["min_rank"] == 1)
     top3 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 3)
     top5 = sum(1 for c in cells.values() if c["min_rank"] is not None and c["min_rank"] <= 5)
     visible = sum(1 for c in cells.values() if c["hit"])
     source_pct = (owned_cit_count / len(denom_urls) * 100) if denom_urls else 0.0
+    seed_coverage_pct = (
+        len(seeds_with_hit) / len(approved_seeds) * 100
+        if approved_seeds else 0.0
+    )
     return PositionBreakdown(
-        top1_pct=round(top1 / total_cells * 100, 2),
         top3_pct=round(top3 / total_cells * 100, 2),
         top5_pct=round(top5 / total_cells * 100, 2),
         visible_pct=round(visible / total_cells * 100, 2),
         source_pct=round(source_pct, 2),
+        seed_coverage_pct=round(seed_coverage_pct, 2),
     )
 
 
@@ -2174,11 +2190,15 @@ def get_position_breakdown(
     except Exception:  # noqa: BLE001
         queries_raw = []
     total_queries = 0
+    query_to_seed: dict[str, str] = {}
     for q in queries_raw:
         if isinstance(q, str) and q.strip():
             total_queries += 1
         elif isinstance(q, dict) and (q.get("text") or "").strip():
             total_queries += 1
+            seed_txt = (q.get("seed") or "").strip()
+            if seed_txt:
+                query_to_seed[q["text"].strip()] = seed_txt
     try:
         engines_raw = json.loads(topic.engines_json or "[]")
     except Exception:  # noqa: BLE001
@@ -2187,15 +2207,26 @@ def get_position_breakdown(
     total_engines = len(engines_list)
 
     owned_urls = _load_owned_urls(db, topic_id)
+    approved_seeds: set[str] = set()
+    try:
+        for s in json.loads(topic.seed_prompts_json or "[]"):
+            if isinstance(s, dict) and s.get("status") == "approved":
+                txt = (s.get("text") or "").strip()
+                if txt:
+                    approved_seeds.add(txt)
+    except Exception:  # noqa: BLE001
+        pass
 
     # 全 Query 组 + 各 engine 切片(用于模型多选对比)
     query_overall = _aggregate_position_breakdown(
         rows, total_queries, total_engines, owned_urls=owned_urls,
+        query_to_seed=query_to_seed, approved_seeds=approved_seeds,
     )
     query_by_engine: list[EngineSlice] = []
     for eng in engines_list:
         eng_breakdown = _aggregate_position_breakdown(
             rows, total_queries, 1, allowed_engines={eng}, owned_urls=owned_urls,
+            query_to_seed=query_to_seed, approved_seeds=approved_seeds,
         )
         query_by_engine.append(EngineSlice(
             engine=eng, breakdown=eng_breakdown, total_queries=total_queries,
@@ -2258,11 +2289,16 @@ def _compute_industry_baseline(
             queries_raw = json.loads(t.queries_json or "[]")
         except Exception:  # noqa: BLE001
             queries_raw = []
-        tq = sum(
-            1 for q in queries_raw
-            if (isinstance(q, str) and q.strip())
-            or (isinstance(q, dict) and (q.get("text") or "").strip())
-        )
+        tq = 0
+        q2s: dict[str, str] = {}
+        for q in queries_raw:
+            if isinstance(q, str) and q.strip():
+                tq += 1
+            elif isinstance(q, dict) and (q.get("text") or "").strip():
+                tq += 1
+                seed_txt = (q.get("seed") or "").strip()
+                if seed_txt:
+                    q2s[q["text"].strip()] = seed_txt
         try:
             engines_raw = json.loads(t.engines_json or "[]")
         except Exception:  # noqa: BLE001
@@ -2271,7 +2307,19 @@ def _compute_industry_baseline(
         if tq == 0 or te == 0:
             continue
         owned_t = _load_owned_urls(db, t.id)
-        per_topic.append(_aggregate_position_breakdown(rows, tq, te, owned_urls=owned_t))
+        approved_t: set[str] = set()
+        try:
+            for s in json.loads(t.seed_prompts_json or "[]"):
+                if isinstance(s, dict) and s.get("status") == "approved":
+                    txt = (s.get("text") or "").strip()
+                    if txt:
+                        approved_t.add(txt)
+        except Exception:  # noqa: BLE001
+            pass
+        per_topic.append(_aggregate_position_breakdown(
+            rows, tq, te, owned_urls=owned_t,
+            query_to_seed=q2s, approved_seeds=approved_t,
+        ))
 
     if len(per_topic) < MIN_INDUSTRY_BASELINE_SAMPLES:
         return None
@@ -2286,11 +2334,11 @@ def _compute_industry_baseline(
         return round((s[n // 2 - 1] + s[n // 2]) / 2, 2)
 
     return PositionBreakdown(
-        top1_pct=_p50([b.top1_pct for b in per_topic]),
         top3_pct=_p50([b.top3_pct for b in per_topic]),
         top5_pct=_p50([b.top5_pct for b in per_topic]),
         visible_pct=_p50([b.visible_pct for b in per_topic]),
         source_pct=_p50([b.source_pct for b in per_topic]),
+        seed_coverage_pct=_p50([b.seed_coverage_pct for b in per_topic]),
     )
 
 

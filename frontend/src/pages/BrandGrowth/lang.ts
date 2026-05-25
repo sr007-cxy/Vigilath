@@ -39,7 +39,7 @@ interface Dict {
   entryQueriesSub: string;
   entrySourcesEmpty: string;
   // 核心指标
-  metricTop1: string;
+  metricSeedCoverage: string;
   metricTop3: string;
   metricTop5: string;
   metricVisible: string;
@@ -179,7 +179,7 @@ interface Dict {
   hintRadar: string;
   hintEntries: string;
   hintCoreMetrics: string;
-  hintMetricTop1: string;
+  hintMetricSeedCoverage: string;
   hintMetricTop5: string;
   hintMetricVisible: string;
   hintMetricSource: string;
@@ -219,7 +219,7 @@ const ZH: Dict = {
   metricCitations: '推荐词总数',
   metricPublishedTotal: '媒体投放',
   metricCitedTotal: '引用总数',
-  blockRadar: '趋势分图(3 维占比)',
+  blockRadar: '趋势分图',
   blockEntries: '功能入口',
   blockCoreMetrics: '核心指标表现',
   blockBriefings: '报告明细',
@@ -238,7 +238,7 @@ const ZH: Dict = {
   entryInsightsSub: '周报 + 优化建议',
   entryQueriesSub: '监测问题命中明细 · 只读',
   entrySourcesEmpty: '暂无信源数据',
-  metricTop1: 'Top1 占比',
+  metricSeedCoverage: '种子提示词覆盖率',
   metricTop3: 'Top3 占比',
   metricTop5: 'Top5 占比',
   metricVisible: '可见占比',
@@ -369,10 +369,10 @@ const ZH: Dict = {
   hintTopMetrics: '不重复的、至少被任意 1 个 AI 引擎引用过的监测问题数(分子);斜杠后的数字是当前 topic 监测问题总数(分母)。跟「引用总数」(URL 累计)不同',
   hintPublishedTotal: '当前主题下所有 status=published 的稿件数。不区分平台,审核通过并标记发布即计入',
   hintCitedTotal: '本期 AI 答复里**所有** citation URL 总和(URL 维度,SUM 答复里 citations 数组长度)。包括引到第三方 / 媒体 / 自有所有域名',
-  hintRadar: '3 个维度叠在一张图上看品牌健康度:可见 = 任意提到;Top5 = 品牌排进前 5 位的提及占比;信源占比 = 自有文章被 AI 引用的密度(分子为不去重的 owned-URL 引用条目,分母为命中响应去重 URL 数)',
+  hintRadar: '4 个维度叠在一张图上看品牌健康度:可见 = 任意提到;Top5 = 品牌排进前 5 位的提及占比;信源占比 = 自有文章被 AI 引用的密度;种子提示词覆盖率 = 至少有一条扩展提示词被命中的种子占比',
   hintEntries: '点任意卡片进对应子页查看明细',
   hintCoreMetrics: '基于 LLM 抽取的 brand_rank(品牌在答复里第几个被提到)算占比。行业 P50 来自同行业 ≥3 个租户的中位数,样本不足时不展示',
-  hintMetricTop1: '品牌在答复里排第 1 位被提到的格子占比。一个「格子」= 一个(监测问题 × 模型)组合。\n· 分子:品牌排第 1 位的格子数\n· 分母:监测问题数 × 模型数\n同一格子跑多次只算一次',
+  hintMetricSeedCoverage: '至少有一条扩展提示词被任意 AI 引擎命中过的种子提示词占比。\n· 分子:扩展出的监测问题中,有任一条在任意引擎命中过的种子提示词数\n· 分母:已批准的种子提示词总数\n衡量种子提示词组合的「覆盖广度」 — 比单看 query 命中率更能反映种子策略是否全面奏效',
   hintMetricTop5: '品牌排前 5 位提到的格子占比。\n· 分子:品牌排名 ≤ 5 的格子数\n· 分母:监测问题数 × 模型数',
   hintMetricVisible: '品牌被任意提到过的格子占比(不看排名)。\n· 分子:答复里提到过品牌的格子数\n· 分母:监测问题数 × 模型数\n比 Top1 / Top5 更宽松',
   hintMetricSource: '自有文章被 AI 引用的密度。\n· 分子:所有响应里 citation 落在「已发布自有文章 URL」集合内的条目数(不去重,未命中响应里引了自有 URL 也算)\n· 分母:命中响应的 citation URL 归一化去重数\n比例可能 > 100%(分母去重 / 分子计次)。自有 URL = topic 下 status=published 的稿件 publish_targets 里的 url',
@@ -412,7 +412,7 @@ const EN: Dict = {
   metricCitations: 'Total Recommendations',
   metricPublishedTotal: 'Published',
   metricCitedTotal: 'Cited by AI',
-  blockRadar: 'Trend (3-dim breakdown)',
+  blockRadar: 'Trend',
   blockEntries: 'Modules',
   blockCoreMetrics: 'Core Metrics',
   blockBriefings: 'Briefings',
@@ -431,7 +431,7 @@ const EN: Dict = {
   entryInsightsSub: 'briefings + recommendations',
   entryQueriesSub: 'per-query hit detail · read-only',
   entrySourcesEmpty: 'no source data yet',
-  metricTop1: 'Top-1 share',
+  metricSeedCoverage: 'Seed coverage',
   metricTop3: 'Top-3 share',
   metricTop5: 'Top-5 share',
   metricVisible: 'Visibility',
@@ -562,10 +562,10 @@ const EN: Dict = {
   hintTopMetrics: 'Number of distinct tracked queries where at least one AI engine has mentioned the brand (numerator). Denominator is total tracked queries for this topic. Different from "Total Citations" (URL accumulation)',
   hintPublishedTotal: 'Count of docs with status=published under the current topic. Platform-agnostic; counts every approved + published doc',
   hintCitedTotal: 'Total citation URLs across all AI responses this period (URL-level, SUM of citations[]). Includes citations to third-party / media / owned domains alike',
-  hintRadar: '3 dimensions in one view. Visible = any mention; Top-5 = brand ranked in the top 5 mentions; Source share = density of AI citations landing on your published articles (occurrence count over deduplicated hit-citation URLs)',
+  hintRadar: '4 dimensions in one view. Visible = any mention; Top-5 = brand ranked in the top 5 mentions; Source share = density of AI citations landing on your published articles; Seed coverage = share of approved seed prompts with at least one expanded query hit',
   hintEntries: 'Click any card to drill into the sub-page',
   hintCoreMetrics: 'Based on LLM-extracted brand_rank. Industry P50 = median across ≥3 same-industry tenants; hidden when sample too small',
-  hintMetricTop1: 'Share of cells where the brand is the 1st-mentioned. A "cell" = one (query × model) combination.\n· Numerator: cells where brand ranks #1\n· Denominator: #queries × #models\nOne cell counts at most once across reruns',
+  hintMetricSeedCoverage: 'Share of approved seed prompts that produced at least one expanded query hit on any AI engine.\n· Numerator: seed prompts with ≥1 expanded query that has been hit\n· Denominator: total approved seed prompts\nMeasures how broadly your seed strategy lands — wider than per-query hit rate',
   hintMetricTop5: 'Share of cells where the brand ranks in the top 5.\n· Numerator: cells with brand rank ≤ 5\n· Denominator: #queries × #models',
   hintMetricVisible: 'Share of cells where the brand was ever mentioned (any rank).\n· Numerator: cells that mentioned the brand at least once\n· Denominator: #queries × #models\nLooser than Top1 / Top5',
   hintMetricSource: 'How densely AI citations land on the brand\'s own published articles.\n· Numerator: citation entries whose URL falls in the "published owned-articles" set, across ALL responses (not deduped; includes hit=False responses that cited an owned URL)\n· Denominator: deduplicated citation URLs from hit responses\nCan exceed 100% (denominator dedupes, numerator counts occurrences). Owned URLs = publish_targets[].url of docs with status=published',

@@ -143,10 +143,11 @@ function RadarBlock({ pb, selectedEngines }: {
   if (!pb) {
     return <CardShell title={L.blockRadar} hint={L.hintRadar}><div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div></CardShell>;
   }
-  const dims: { key: 'top5_pct' | 'visible_pct' | 'source_pct'; label: string; layer: string }[] = [
+  const dims: { key: 'top5_pct' | 'visible_pct' | 'source_pct' | 'seed_coverage_pct'; label: string; layer: string }[] = [
     { key: 'visible_pct', label: L.metricVisible, layer: 'visible' },
     { key: 'source_pct', label: L.metricSource, layer: 'source' },
     { key: 'top5_pct', label: L.metricTop5, layer: 'top5' },
+    { key: 'seed_coverage_pct', label: L.metricSeedCoverage, layer: 'seed' },
   ];
   const active = pickBreakdown(pb, selectedEngines);
   const isFiltered = selectedEngines.length === 1;
@@ -189,7 +190,11 @@ function RadarBlock({ pb, selectedEngines }: {
               fontSize="9" textAnchor="middle" dominantBaseline="middle"
               fill="var(--text-secondary)"
               style={{ cursor: 'pointer' }}
-              onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${l.layer}`)}
+              onClick={() => navigate(
+                l.layer === 'seed'
+                  ? `/brand-growth/queries?topic=${pb.topic_id}`
+                  : `/brand-growth/matrix?topic=${pb.topic_id}&layer=${l.layer}`,
+              )}
             >
               {l.label}
             </text>
@@ -359,15 +364,15 @@ function MetricIcon({ kind }: { kind: MetricIconKind }) {
 }
 
 interface MetricCard {
-  key: 'top1_pct' | 'top3_pct' | 'top5_pct' | 'visible_pct' | 'source_pct';
+  key: 'seed_coverage_pct' | 'top3_pct' | 'top5_pct' | 'visible_pct' | 'source_pct';
   label: string;
-  layer: string;
+  layer: string;     // 'seed' → /brand-growth/queries;其余 → /brand-growth/matrix?layer=*
   icon: MetricIconKind;
   tint: { bg: string; fg: string };
 }
 
 const METRIC_CARDS: MetricCard[] = [
-  { key: 'top1_pct', label: '', layer: 'top1', icon: 'medal',
+  { key: 'seed_coverage_pct', label: '', layer: 'seed', icon: 'medal',
     tint: { bg: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.22))', fg: '#10b981' } },
   { key: 'visible_pct', label: '', layer: 'visible', icon: 'eye',
     tint: { bg: 'linear-gradient(135deg, rgba(244,63,94,0.12), rgba(244,63,94,0.22))', fg: '#e11d48' } },
@@ -390,13 +395,14 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
   const isFiltered = selectedEngines.length === 1;
   const baseline = isFiltered ? null : pb.industry_baseline;
   const labelOf = (key: MetricCard['key']) => {
-    if (key === 'top1_pct') return L.metricTop1;
+    if (key === 'seed_coverage_pct') return L.metricSeedCoverage;
     if (key === 'visible_pct') return L.metricVisible;
     if (key === 'top5_pct') return L.metricTop5;
+    if (key === 'top3_pct') return L.metricTop3;
     return L.metricSource;
   };
   const hintOf = (key: MetricCard['key']) => {
-    if (key === 'top1_pct') return L.hintMetricTop1;
+    if (key === 'seed_coverage_pct') return L.hintMetricSeedCoverage;
     if (key === 'visible_pct') return L.hintMetricVisible;
     if (key === 'top5_pct') return L.hintMetricTop5;
     return L.hintMetricSource;
@@ -411,7 +417,11 @@ function CoreMetricsPanel({ pb, selectedEngines }: {
             <button
               key={m.key}
               type="button"
-              onClick={() => navigate(`/brand-growth/matrix?topic=${pb.topic_id}&layer=${m.layer}`)}
+              onClick={() => navigate(
+                m.layer === 'seed'
+                  ? `/brand-growth/queries?topic=${pb.topic_id}`
+                  : `/brand-growth/matrix?topic=${pb.topic_id}&layer=${m.layer}`,
+              )}
               className="p-3 rounded-lg text-left hover:scale-[1.03] transition flex flex-col gap-2 h-full"
               style={{ background: m.tint.bg, border: '1px solid var(--border-color)' }}
             >
