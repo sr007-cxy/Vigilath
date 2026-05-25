@@ -1712,7 +1712,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
       </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 8, right: 16, left: -8, bottom: 4 }}>
+          <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
             <defs>
               {data.engines.map(e => (
                 <linearGradient key={e} id={`g-${e}`} x1="0" y1="0" x2="0" y2="1">
@@ -1735,7 +1735,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
-              width={32}
+              width={40}
             />
             <RTooltip
               contentStyle={{
