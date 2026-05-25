@@ -3243,7 +3243,7 @@ const en = {
               "rerunProject": "Restart",
               "rerunConfirm": "Restart this project? This will trigger a fresh run and regenerate content drafts.",
               "viewPlan": "View plan",
-              "viewSolution": "Strategy",
+              "viewSolution": "Health report",
               "reviewDocs": "Review docs",
               "pipeline": {
                 "profile": "Profile",

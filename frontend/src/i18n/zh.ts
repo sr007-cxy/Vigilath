@@ -3249,7 +3249,7 @@ const zh = {
               "rerunProject": "重新启动",
               "rerunConfirm": "确认要重新启动?会触发一次新的跑批 + 重新生成文案稿。",
               "viewPlan": "查看计划书",
-              "viewSolution": "战略方案",
+              "viewSolution": "健康诊断报告",
               "reviewDocs": "复审文案",
               "pipeline": {
                 "profile": "画像",

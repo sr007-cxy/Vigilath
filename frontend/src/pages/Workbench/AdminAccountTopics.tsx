@@ -272,9 +272,15 @@ export function AdminAccountTopics() {
                   {hasRun && (
                     <>
                       <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/execution-plan`)}
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/solution`)}
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--accent-primary)', color: 'white' }}>
+                        {t('workbench.adminAccountTopics.viewSolution')}
+                      </button>
+                      <button type="button"
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/execution-plan`)}
+                        className="text-xs px-3 py-1 rounded"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                         {t('workbench.adminAccountTopics.viewPlan')}
                       </button>
                       <button type="button"
@@ -282,12 +288,6 @@ export function AdminAccountTopics() {
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                         {t('workbench.adminAccountTopics.reviewDocs')}
-                      </button>
-                      <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/solution`)}
-                        className="text-xs px-3 py-1 rounded"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                        {t('workbench.adminAccountTopics.viewSolution')}
                       </button>
                       <button type="button"
                         disabled={isStartBusy}
