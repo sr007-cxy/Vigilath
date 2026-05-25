@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import requests
@@ -34,6 +34,10 @@ from geo.models.ai_telemetry import (
 )
 
 log = logging.getLogger(__name__)
+
+# 超过这个时间未更新的 generating 行视为僵尸 — 后台 thread 是 daemon,backend
+# restart 时会被 SIGTERM 杀死,DB 里 status 会卡在 generating,前端轮询永远等不到结果。
+STALE_GENERATING_THRESHOLD = timedelta(minutes=10)
 
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
@@ -142,6 +146,32 @@ def schedule_solution_generation(
         daemon=True,
     )
     thread.start()
+
+
+def reset_stale_generating() -> int:
+    """启动时调用 — 把超过 STALE_GENERATING_THRESHOLD 没更新的 generating 行
+    标成 failed。daemon thread 在 backend restart 时会被杀,这里兜底防止 UI 一直转圈。
+    返回被重置的行数。"""
+    cutoff = datetime.utcnow() - STALE_GENERATING_THRESHOLD
+    db = SessionLocal()
+    try:
+        stale = (
+            db.query(AiTelemetryTopicSolutionORM)
+              .filter(AiTelemetryTopicSolutionORM.status == "generating",
+                      AiTelemetryTopicSolutionORM.updated_at < cutoff)
+              .all()
+        )
+        for row in stale:
+            row.status = "failed"
+            row.error = "后端在生成途中重启,后台任务被中断。请点重试重新生成。"
+            row.updated_at = datetime.utcnow()
+        if stale:
+            db.commit()
+            log.warning("reset %d stale generating solution rows: %s",
+                        len(stale), [r.id for r in stale])
+        return len(stale)
+    finally:
+        db.close()
 
 
 def _run_safe(topic_id: int, website_url: str, admin_id: int) -> None:

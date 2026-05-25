@@ -1206,6 +1206,16 @@ def get_strategic_solution(
             seven_steps=[], keyword_tiers=[], vision=[],
             queries_snapshot=None,
         )
+    # 双保险:startup 兜底之外,读路径再检一次。daemon thread 死掉时 updated_at
+    # 不会再涨,超过阈值即视为僵尸 — 翻成 failed 让前端能拿到重试入口。
+    if sol.status == "generating":
+        from geo.services.solution_generator import STALE_GENERATING_THRESHOLD
+        if sol.updated_at and datetime.utcnow() - sol.updated_at > STALE_GENERATING_THRESHOLD:
+            sol.status = "failed"
+            sol.error = "后端在生成途中重启,后台任务被中断。请点重试重新生成。"
+            sol.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(sol)
     return _solution_to_out(sol)
 
 

@@ -105,6 +105,18 @@ def _stop_sentiment_scheduler() -> None:
         pass
 
 
+# 启动时清理上次进程中断留下的僵尸 generating 行 — solution_generator 跑在
+# daemon thread,backend restart 时会被杀,DB status 会卡在 generating,前端轮询
+# 永远等不到结果。10 分钟阈值见 STALE_GENERATING_THRESHOLD。
+@app.on_event("startup")
+def _reset_stale_solution_generating() -> None:
+    try:
+        from geo.services.solution_generator import reset_stale_generating
+        reset_stale_generating()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("reset stale solution rows failed: %s", e)
+
+
 # Phase D.1 — 内容自动生成 cron(独立 leader env,跟 sentiment 解耦)
 @app.on_event("startup")
 def _start_content_scheduler() -> None:
