@@ -3235,13 +3235,9 @@ const en = {
             },
             "topicStepper": {
               "profile": "Profile",
-              "queries": "Queries",
               "plan": "Plan",
               "docs": "Docs",
-              "publish": "Publish",
-              "aux": {
-                "healthReport": "Health report"
-              }
+              "solution": "Health report"
             },
             "adminAccountTopics": {
               "title": "User #{{userId}} topics",

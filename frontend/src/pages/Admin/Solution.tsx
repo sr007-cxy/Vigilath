@@ -143,7 +143,7 @@ export function AdminSolution() {
   return (
     <div className="space-y-4">
       <PageHead titleKey="admin.solution.title" titleFallback="健康度诊断报告" />
-      <TopicStepper topicId={tid} active="plan" />
+      <TopicStepper topicId={tid} active="solution" />
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-primary">{t('admin.solution.title')}</h1>

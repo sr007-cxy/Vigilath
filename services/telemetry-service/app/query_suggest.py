@@ -744,6 +744,10 @@ def _dedup_template_glut(scored: list[dict], prefix_len: int = 6,
     - jaccard 抓中间词模板(「[城市] 做跨境并购的律师有擅长 [行业] 的吗」这种)
 
     任何一层触发上限就丢。jaccard 是 O(n^2) 但 n <= 几百 ok。
+
+    `sources == ["template:intent"]` 的纯模板候选直通且不进 accepted 累计 —
+    模板按设计就是同前缀枚举,这层去重的初衷是挡 LLM 灌水,把模板顺手砍了
+    会让保底候选全军覆没。
     """
     def _norm(s: str) -> str:
         return "".join(ch for ch in s if ch not in " ,.!?!?\t\n").lower()
@@ -754,6 +758,9 @@ def _dedup_template_glut(scored: list[dict], prefix_len: int = 6,
     accepted_tokens: list[set[str]] = []
     out: list[dict] = []
     for c in items:
+        if c.get("sources") == ["template:intent"]:
+            out.append(c)
+            continue
         norm = _norm(c["text"])
         tokens = set(_tokenize(c["text"]))
         # jaccard 去重:与已 accepted 比,>= threshold 算"同模板"计票
@@ -881,6 +888,67 @@ def _score_candidate(text: str, seed_terms: list[str],
     return int(round(base))
 
 
+# ─── 纯模板扩展(seed + 商业意图后缀)───────────────
+#
+# 参考外部 GEO 工具(如智效)的做法:seed 原样保留,后缀来自固定的商业意图
+# 词库,不走 LLM —— 0 漂移、0 幻觉。覆盖「哪家好 / 排名 / 推荐 / 联系方式」
+# 这类高商业意图的稳定底盘,LLM 那一路则负责场景化 / 案例追溯型长尾。
+
+_INTENT_SUFFIXES_ZH: tuple[str, ...] = (
+    # 评价 / 口碑型
+    "哪家好", "哪家强", "哪家专业", "哪家靠谱", "哪家口碑好", "哪个好",
+    "口碑怎么样", "比较好的",
+    # 排名 / 列表型
+    "排名", "有哪些", "推荐哪些",
+    # 推荐型
+    "推荐", "推荐几家", "求推荐", "帮我推荐几家",
+    # 选 / 找型
+    "找哪些", "找哪家", "怎么找", "选哪家", "选哪家好", "选择哪家好",
+    "在哪里找", "去哪里找",
+    # 联系 / 转化型
+    "怎么联系", "联系方式",
+    # 报价型
+    "收费标准", "费用怎么算",
+)
+
+
+def _template_expand_zh(seed: str) -> list[str]:
+    """中文 seed 的纯模板扩展。seed 原样保留 + 商业意图后缀枚举。
+
+    产出三段:
+      1. seed 本身
+      2. [seed] + [后缀]
+      3. [seed]服务 + [后缀](seed 未以「服务」结尾时)
+    总量 ≈ 1 + 28 + 28 = 57 条;已含「服务」时 ≈ 29 条。内部按 lowercase 去重保序。
+    """
+    seed = (seed or "").strip()
+    if not seed:
+        return []
+    out: list[str] = [seed]
+    for suf in _INTENT_SUFFIXES_ZH:
+        out.append(seed + suf)
+    if not seed.endswith("服务"):
+        seed_svc = seed + "服务"
+        for suf in _INTENT_SUFFIXES_ZH:
+            out.append(seed_svc + suf)
+    seen: set[str] = set()
+    dedup: list[str] = []
+    for t in out:
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(t)
+    return dedup
+
+
+# 纯模板固定分。70 让模板在最终 list 里占住中位:
+# - LLM 高质量场景 (>= 80) 仍排前
+# - 模板「seed + 商业意图后缀」(=70) 居中,做保底底盘
+# - LLM 弱质量 / 模板尾巴 / autocomplete (< 70) 排后
+_TEMPLATE_FIXED_SCORE = 70
+
+
 # ─── Public entry ─────────────────────────────────
 
 
@@ -953,6 +1021,19 @@ async def suggest_queries(
         if source not in merged[key]["sources"]:
             merged[key]["sources"].append(source)
 
+    # 模板扩展:仅 CJK seed。seed 100% 原样保留 + 商业意图后缀枚举,
+    # 不走 LLM —— 0 漂移、0 幻觉,做高商业意图的保底底盘。
+    # 若 LLM 也撞出同一条 text,在这里多打一个 source,排序 / 评分
+    # 走 LLM 那一档(因为 sources != ["template:intent"])。
+    if _has_cjk(seed):
+        for text in _template_expand_zh(seed):
+            key = text.strip().lower()
+            if not key:
+                continue
+            merged.setdefault(key, {"text": text.strip(), "sources": []})
+            if "template:intent" not in merged[key]["sources"]:
+                merged[key]["sources"].append("template:intent")
+
     # target 过滤(LLM + suggest 统一过)
     if target:
         pairs = [(m["text"], "_") for m in merged.values()]
@@ -970,13 +1051,24 @@ async def suggest_queries(
     if not merged:
         raise DeepSeekError("empty", "候选全被过滤或 LLM 返回为空,换个 seed 重试")
 
-    # 评分(uniqueness 依赖输入顺序,按 sources 优先级排:先 LLM 后 suggest)
+    # 评分(uniqueness 依赖输入顺序,按 sources 优先级排:先 LLM,然后混合,
+    # 最后纯模板)。纯模板候选不走 _score_candidate,固定 70 分,也不进
+    # accepted —— 因为模板按设计高度相似,放进 accepted 会污染 LLM uniqueness。
     seed_terms = _seed_core_terms(seed)
     items = list(merged.values())
-    items.sort(key=lambda m: (0 if "llm:deepseek" in m["sources"] else 1, m["text"]))
+    items.sort(key=lambda m: (
+        0 if "llm:deepseek" in m["sources"] else (
+            2 if m["sources"] == ["template:intent"] else 1
+        ),
+        m["text"],
+    ))
     accepted: list[set[str]] = []
     scored: list[dict] = []
     for m in items:
+        if m["sources"] == ["template:intent"]:
+            scored.append({"text": m["text"], "score": _TEMPLATE_FIXED_SCORE,
+                           "sources": m["sources"]})
+            continue
         score = _score_candidate(m["text"], seed_terms, accepted)
         scored.append({"text": m["text"], "score": score, "sources": m["sources"]})
         accepted.append(set(_tokenize(m["text"])))

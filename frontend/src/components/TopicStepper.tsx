@@ -1,6 +1,6 @@
-// TopicStepper — 项目详情页共享的「5 步管线」导航条.
-// 用法:任何 /workbench/topics/:topicId/* 的页面在顶部 render 一个 <TopicStepper topicId={tid} active="plan" />
-// 5 步:① 画像 ② 监测问题 ③ 计划书 ④ 文案 ⑤ 投放
+// TopicStepper — 项目详情页共享的「4 步管线」导航条.
+// 用法:任何 /workbench/topics/:topicId/* 的页面顶部 render 一个 <TopicStepper topicId={tid} active="plan" />
+// 4 步:① 画像(含监测问题) ② 计划书 ③ 文案(含投放) ④ 健康诊断报告
 // 状态符号:✓ done / ⋯ running / ─ idle / ✗ failed
 //
 // 设计文档:docs/no-audit-flow-design.md §4.4
@@ -8,9 +8,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { adminReviewApi, type TopicReviewDetail } from '../services/adminReviewApi';
+import { adminReviewApi, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
-export type StepKey = 'profile' | 'queries' | 'plan' | 'docs' | 'publish';
+export type StepKey = 'profile' | 'plan' | 'docs' | 'solution';
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed';
 
 interface Props {
@@ -31,6 +31,7 @@ export function TopicStepper({ topicId, active }: Props) {
   const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const [topic, setTopic] = useState<TopicReviewDetail | null>(null);
+  const [solution, setSolution] = useState<TopicStrategicSolution | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,29 +40,32 @@ export function TopicStepper({ topicId, active }: Props) {
     adminReviewApi.getTopicReview(topicId, token)
       .then((d) => { if (!cancelled) setTopic(d); })
       .catch((e) => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); });
+    // 健康诊断报告状态用 getStrategicSolution 拿,失败不显示错误(stepper 上只用状态)
+    adminReviewApi.getStrategicSolution(topicId, token)
+      .then((s) => { if (!cancelled) setSolution(s); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [topicId, token]);
 
-  // 各步状态推断 — 文案 / 投放 的精确数字需要 ContentReview API 聚合,首期先用粗略态.
-  const profileOk = !!(topic?.profile?.company_short_name);
-  const queriesOk = (topic?.queries?.length ?? 0) > 0
+  // 各步状态推断.画像 = profile 必填齐 + 至少 1 个 selected query(合并 4 步设计里的画像和监测问题).
+  // 文案 / 投放合并为「文案」.健康诊断报告从 solution.status 推 ready=done / generating=running / failed=failed.
+  const profileOk = !!(topic?.profile?.company_short_name)
                     && ((topic?.selected_query_count ?? 0) > 0
                         || (topic?.query_selected?.some(Boolean) ?? false));
   const runChip: StepStatus = topic?.last_run_status === 'success' ? 'done'
                             : topic?.last_run_status === 'running' ? 'running'
                             : topic?.last_run_status === 'failed' ? 'failed'
                             : 'idle';
+  const solChip: StepStatus = solution?.status === 'ready' ? 'done'
+                            : solution?.status === 'generating' ? 'running'
+                            : solution?.status === 'failed' ? 'failed'
+                            : 'idle';
 
   const steps: StepDef[] = [
     {
       key: 'profile', label: t('workbench.topicStepper.profile'),
       status: profileOk ? 'done' : 'idle',
-      onClick: () => topic && navigate(`/workbench/accounts/${topic.user_id}/topics?edit=${topicId}`),
-    },
-    {
-      key: 'queries', label: t('workbench.topicStepper.queries'),
-      status: queriesOk ? 'done' : 'idle',
-      hint: queriesOk ? String(topic?.selected_query_count ?? 0) : undefined,
+      hint: profileOk ? String(topic?.selected_query_count ?? 0) + ' Q' : undefined,
       onClick: () => topic && navigate(`/workbench/accounts/${topic.user_id}/topics?edit=${topicId}`),
     },
     {
@@ -75,9 +79,9 @@ export function TopicStepper({ topicId, active }: Props) {
       onClick: () => navigate(`/workbench/content-review?topic=${topicId}`),
     },
     {
-      key: 'publish', label: t('workbench.topicStepper.publish'),
-      status: 'idle',
-      onClick: () => navigate(`/workbench/content-review?topic=${topicId}&status=published`),
+      key: 'solution', label: t('workbench.topicStepper.solution'),
+      status: solChip,
+      onClick: () => navigate(`/workbench/topics/${topicId}/solution`),
     },
   ];
 
@@ -85,7 +89,7 @@ export function TopicStepper({ topicId, active }: Props) {
     <div className="rounded-md p-4 mb-4" style={{
       background: 'var(--bg-card)', border: '1px solid var(--border-color)',
     }}>
-      {/* 头部:面包屑 + 辅助按钮 */}
+      {/* 头部:面包屑(辅助按钮已合并进 step 4 健康诊断报告) */}
       <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div className="text-xs">
           {topic && (
@@ -100,14 +104,6 @@ export function TopicStepper({ topicId, active }: Props) {
             </span>
           )}
           {err && <span className="text-red-500">{err}</span>}
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button"
-                  onClick={() => navigate(`/workbench/topics/${topicId}/solution`)}
-                  className="text-xs px-2.5 py-1 rounded"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-            🩺 {t('workbench.topicStepper.aux.healthReport')}
-          </button>
         </div>
       </div>
 
