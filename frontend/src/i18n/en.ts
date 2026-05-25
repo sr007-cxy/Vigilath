@@ -2934,9 +2934,9 @@ const en = {
                 "details": "Detailed findings (25 categories)"
               },
               "queries": {
-                "hint": "Queries the user already picked (≤200) in the topic profile, grouped by intent cluster — the set we will track against AI engines.",
+                "hint": "Queries the user already picked (≤200) in the topic profile, grouped by seed prompt — each group shows the monitored questions expanded from one seed. This is the set we will track against AI engines.",
                 "totalChip": "Total {{n}}",
-                "unclustered": "Unclustered"
+                "unseeded": "Others (no seed prompt)"
               },
               "brandFields": {
                 "industry": "Industry",

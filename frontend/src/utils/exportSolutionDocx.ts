@@ -308,28 +308,28 @@ const buildKeywordTierParagraphs = (tier: SolutionKeywordTier): Paragraph[] => {
 
 const buildQueriesParagraphs = (snapshot: SolutionQueriesSnapshot, t: TFunction): Paragraph[] => {
   if (!snapshot.queries.length) return [];
-  const labelMap = new Map<number, string>();
-  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
-  const grouped = new Map<number, string[]>();
-  const order: number[] = [];
+  // 按种子提示词 (seed) 分组,与页面 QueriesSection 保持一致 — 见 Solution.tsx:527.
+  const grouped = new Map<string, string[]>();
+  const order: string[] = [];
+  const unseededKey = '__no_seed__';
   for (const q of snapshot.queries) {
-    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
-    if (!grouped.has(cid)) {
-      grouped.set(cid, []);
-      order.push(cid);
+    const key = (q.seed || '').trim() || unseededKey;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      order.push(key);
     }
-    grouped.get(cid)!.push(q.text);
+    grouped.get(key)!.push(q.text);
   }
-  const unclusteredLabel = String(t('admin.solution.queries.unclustered'));
+  const unseededLabel = String(t('admin.solution.queries.unseeded'));
   const out: Paragraph[] = [
     bodyParagraph(
       `${String(t('admin.solution.queries.hint'))}  ·  ${String(t('admin.solution.queries.totalChip', { n: snapshot.queries.length }))}`,
       { color: COLOR.secondary, size: 21 },
     ),
   ];
-  for (const cid of order) {
-    const items = grouped.get(cid) || [];
-    const label = labelMap.get(cid) || unclusteredLabel;
+  for (const key of order) {
+    const items = grouped.get(key) || [];
+    const label = key === unseededKey ? unseededLabel : key;
     out.push(new Paragraph({
       spacing: { before: 200, after: 80 },
       children: [

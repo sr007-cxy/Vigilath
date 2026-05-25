@@ -241,23 +241,23 @@ const buildKeywordTierBlock = (tier: SolutionKeywordTier): string => {
 
 const buildQueriesBlock = (snapshot: SolutionQueriesSnapshot, t: TFunction): string => {
   if (!snapshot.queries.length) return '';
-  const labelMap = new Map<number, string>();
-  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
-  const grouped = new Map<number, string[]>();
-  const order: number[] = [];
+  // 按种子提示词 (seed) 分组,与页面 QueriesSection 保持一致 — 见 Solution.tsx:527.
+  const grouped = new Map<string, string[]>();
+  const order: string[] = [];
+  const unseededKey = '__no_seed__';
   for (const q of snapshot.queries) {
-    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
-    if (!grouped.has(cid)) {
-      grouped.set(cid, []);
-      order.push(cid);
+    const key = (q.seed || '').trim() || unseededKey;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      order.push(key);
     }
-    grouped.get(cid)!.push(q.text);
+    grouped.get(key)!.push(q.text);
   }
-  const unclusteredLabel = String(t('admin.solution.queries.unclustered'));
+  const unseededLabel = String(t('admin.solution.queries.unseeded'));
   // chips:跟关键词节一样,纯文字 + 「 · 」分隔,避免 flex / chip 背景对齐问题(memory: feedback_pdf_no_flex).
-  const groupHtml = order.map((cid) => {
-    const items = grouped.get(cid) || [];
-    const label = labelMap.get(cid) || unclusteredLabel;
+  const groupHtml = order.map((key) => {
+    const items = grouped.get(key) || [];
+    const label = key === unseededKey ? unseededLabel : key;
     const text = items.map(escapeHtml).join('  ·  ');
     return (
       `<div style="padding:8px 0;">` +

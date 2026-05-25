@@ -526,17 +526,18 @@ function KeywordsSection({ tiers }: { tiers: SolutionKeywordTier[] }) {
 
 function QueriesSection({ snapshot }: { snapshot: SolutionQueriesSnapshot }) {
   const { t } = useTranslation();
-  const labelMap = new Map<number, string>();
-  for (const c of snapshot.clusters) labelMap.set(c.cluster_id, c.label);
-  const grouped = new Map<number, string[]>();
-  const order: number[] = [];
+  // 按种子提示词 (seed) 分组 — 与「七步模型」第 1-2 步语义对齐:种子词 → 扩展 query。
+  // 空 seed(legacy 数据 / 非种子路径补录)归入"其它"桶,按 seed 首次出现顺序排列。
+  const grouped = new Map<string, string[]>();
+  const order: string[] = [];
+  const unseededKey = '__no_seed__';
   for (const q of snapshot.queries) {
-    const cid = typeof q.cluster_id === 'number' ? q.cluster_id : -1;
-    if (!grouped.has(cid)) {
-      grouped.set(cid, []);
-      order.push(cid);
+    const key = (q.seed || '').trim() || unseededKey;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
+      order.push(key);
     }
-    grouped.get(cid)!.push(q.text);
+    grouped.get(key)!.push(q.text);
   }
   const total = snapshot.queries.length;
   return (
@@ -550,11 +551,13 @@ function QueriesSection({ snapshot }: { snapshot: SolutionQueriesSnapshot }) {
       }>
       <p className="text-xs text-secondary mb-3">{t('admin.solution.queries.hint')}</p>
       <div className="space-y-3">
-        {order.map((cid) => {
-          const items = grouped.get(cid) || [];
-          const label = labelMap.get(cid) || t('admin.solution.queries.unclustered');
+        {order.map((key) => {
+          const items = grouped.get(key) || [];
+          const label = key === unseededKey
+            ? t('admin.solution.queries.unseeded')
+            : key;
           return (
-            <div key={cid} className="rounded-md p-3"
+            <div key={key} className="rounded-md p-3"
                  style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
               <div className="flex items-center justify-between mb-2 gap-2">
                 <div className="font-semibold text-primary">{label}</div>
