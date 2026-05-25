@@ -368,27 +368,33 @@ const zh = {
               }
             },
             "partners": {
-              "badge": "客户与合作伙伴",
-              "title": "他们已经在用 GApex",
-              "subtitle": "从跨境支付到 SaaS 工具,合作品牌正在用 AI 可见性赢得增长。",
+              "badge": "合作伙伴",
+              "title": "与我们同行的品牌",
+              "subtitle": "来自律所、医疗、清洁科技与 AI 工具行业 — 共同探索 AI 时代的品牌增长。",
               "items": [
                 {
-                  "brand": "示例品牌 A",
-                  "logo": "",
-                  "quote": "GApex 帮我们把品牌从 AI 引擎的盲区,推到了 ChatGPT 与 Perplexity 的首条引用。",
-                  "author": "李 · 市场负责人"
+                  "name": "洁卫森",
+                  "sub": "JWVS",
+                  "logo": "/image/jwvs.jpg",
+                  "tagline": ""
                 },
                 {
-                  "brand": "示例品牌 B",
-                  "logo": "",
-                  "quote": "从可见性诊断到内容生产闭环,3 个月内 AI 提及率翻了一倍。",
-                  "author": "王 · 增长总监"
+                  "name": "竞天公诚",
+                  "sub": "Jingtian & Gongcheng",
+                  "logo": "/image/jingtian.png",
+                  "tagline": ""
                 },
                 {
-                  "brand": "示例品牌 C",
+                  "name": "未名脑脑",
+                  "sub": "WM Therapeutics",
                   "logo": "",
-                  "quote": "舆情监测 + 引用追踪让我们每天都知道 AI 在怎么讲我们的故事。",
-                  "author": "陈 · 品牌经理"
+                  "tagline": "技术有爱，AI 有光"
+                },
+                {
+                  "name": "西普科技",
+                  "sub": "SimpleWare",
+                  "logo": "/image/xipu.png",
+                  "tagline": ""
                 }
               ]
             },

@@ -18,13 +18,6 @@ export function AdminAccountTopics() {
   const [editing, setEditing] = useState<Topic | null | undefined>(
     searchParams.get('new') === '1' ? null : undefined,
   );
-  // 保存成功后弹「审批报告」模态;关闭或点跳生成才消失
-  const [savedTopic, setSavedTopic] = useState<Topic | null>(null);
-  const [genBusy, setGenBusy] = useState(false);
-  const [genErr, setGenErr] = useState<string | null>(null);
-  // 模态打开后预查现有方案状态:有 ready 报告时按钮文案改成「查看」而不是「生成」,
-  // 避免误导用户以为非要重新跑一次。
-  const [hasExistingReport, setHasExistingReport] = useState(false);
   // 启动按钮的 per-topic busy / error state
   const [startBusyId, setStartBusyId] = useState<number | null>(null);
   const [startErrByTopic, setStartErrByTopic] = useState<Record<number, string>>({});
@@ -43,39 +36,6 @@ export function AdminAccountTopics() {
       setStartErrByTopic((prev) => ({ ...prev, [tp.id]: msg }));
     } finally {
       setStartBusyId(null);
-    }
-  };
-
-  useEffect(() => {
-    if (!savedTopic) { setHasExistingReport(false); return; }
-    let cancelled = false;
-    adminReviewApi.getStrategicSolution(savedTopic.id, token)
-      .then(s => { if (!cancelled) setHasExistingReport(s.status === 'ready' || s.status === 'generating'); })
-      .catch(() => { if (!cancelled) setHasExistingReport(false); });
-    return () => { cancelled = true; };
-  }, [savedTopic, token]);
-
-  // 模态内一键进入体检报告 — 先查现存方案的 status:
-  //   - ready / generating:复用,不再调 generate(不然会把已有报告冲掉成 generating)
-  //   - idle / failed:才触发生成
-  // website 取主题资料里填的(选填,留空时后端走 4 块降级)。
-  const handleGenerateFromModal = async () => {
-    if (!savedTopic || genBusy) return;
-    setGenBusy(true); setGenErr(null);
-    try {
-      const id = savedTopic.id;
-      const existing = await adminReviewApi.getStrategicSolution(id, token);
-      const reuseStatuses: Array<typeof existing.status> = ['ready', 'generating'];
-      if (!reuseStatuses.includes(existing.status)) {
-        const website = (savedTopic.profile?.website || '').trim();
-        await adminReviewApi.generateStrategicSolution(id, website, token);
-      }
-      setSavedTopic(null);
-      navigate(`/workbench/topics/${id}/solution`);
-    } catch (e) {
-      setGenErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setGenBusy(false);
     }
   };
 
@@ -149,9 +109,11 @@ export function AdminAccountTopics() {
           onCancel={() => setEditing(undefined)}
           onSave={handleSave}
           onSaveDone={(saved) => {
-            setEditing(undefined);
+            // 不再关闭编辑器、不弹「审批报告」模态:TopicEditor 已自动进 step 4 内嵌健康报告,
+            // 同步效果在 step 4「查看完整报告」/「重新生成」里;关闭由 step 4 的「完成」按钮触发.
             reload();
-            if (saved?.id) setSavedTopic(saved);
+            // 让 editing 跟着 saved 同步,确保后续动作(再次编辑等)拿到新 id
+            if (saved) setEditing(saved);
           }}
         />
       </div>
@@ -302,81 +264,6 @@ export function AdminAccountTopics() {
         </ul>
       )}
 
-      {/* ── 审批报告弹窗:保存后展示,只放一个「生成 GEO 体检报告」按钮 ── */}
-      {savedTopic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
-             onClick={() => setSavedTopic(null)}>
-          <div className="w-full max-w-md rounded-xl p-5 shadow-2xl"
-               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-               onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <h2 className="text-base font-semibold text-primary">
-                {t('workbench.adminAccountTopics.savedModal.title')}
-              </h2>
-              <button type="button" onClick={() => setSavedTopic(null)}
-                      className="text-muted hover:text-primary text-lg leading-none"
-                      aria-label="close">×</button>
-            </div>
-
-            <p className="text-xs text-secondary mb-3">
-              {t('workbench.adminAccountTopics.savedModal.body')}
-            </p>
-
-            <dl className="text-xs space-y-1.5 mb-5 pl-2"
-                style={{ borderLeft: '2px solid var(--accent-primary)' }}>
-              <div className="flex gap-2 pl-2">
-                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colName')}</dt>
-                <dd className="text-primary">{savedTopic.name || '—'}</dd>
-              </div>
-              <div className="flex gap-2 pl-2">
-                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colIndustry')}</dt>
-                <dd className="text-secondary">{savedTopic.industry || '—'}</dd>
-              </div>
-              <div className="flex gap-2 pl-2">
-                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colQueries')}</dt>
-                <dd className="text-secondary tabular-nums">
-                  {t('workbench.adminAccountTopics.savedModal.queriesValue', {
-                    selected: savedTopic.selected_query_count ?? savedTopic.queries.length,
-                    total: savedTopic.queries.length,
-                  })}
-                </dd>
-              </div>
-              <div className="flex gap-2 pl-2">
-                <dt className="text-muted shrink-0 w-20">{t('workbench.adminAccountTopics.savedModal.colWebsite')}</dt>
-                <dd className="text-secondary truncate">{savedTopic.profile?.website || '—'}</dd>
-              </div>
-            </dl>
-
-            {genErr && (
-              <div className="mb-3 text-xs text-red-500">{genErr}</div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
-              <button type="button" disabled={genBusy}
-                      onClick={() => setSavedTopic(null)}
-                      className="text-xs px-3 py-1.5 rounded-md"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                {t('workbench.adminAccountTopics.savedModal.later')}
-              </button>
-              <button type="button" disabled={genBusy}
-                      onClick={handleGenerateFromModal}
-                      className="text-xs px-3 py-1.5 rounded-md text-white"
-                      style={{ background: 'var(--accent-primary)', opacity: genBusy ? 0.5 : 1 }}>
-                {genBusy
-                  ? t('workbench.adminAccountTopics.savedModal.generating')
-                  : `${t(hasExistingReport
-                      ? 'workbench.adminAccountTopics.savedModal.viewReport'
-                      : 'workbench.adminAccountTopics.savedModal.generateReport')} →`}
-              </button>
-            </div>
-
-            <p className="text-[11px] text-muted mt-4 leading-relaxed">
-              {t('workbench.adminAccountTopics.savedModal.nextHint')}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

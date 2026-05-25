@@ -368,27 +368,33 @@ const en = {
               }
             },
             "partners": {
-              "badge": "Customers & Partners",
-              "title": "They're already growing with GApex",
-              "subtitle": "From cross-border payments to SaaS tools, our partners are winning growth with AI visibility.",
+              "badge": "Partners",
+              "title": "Brands building with us",
+              "subtitle": "From law firms to healthcare AI to clean-tech — partners exploring brand growth in the AI era.",
               "items": [
                 {
-                  "brand": "Example Brand A",
-                  "logo": "",
-                  "quote": "GApex took our brand from invisible to the first cited source on ChatGPT and Perplexity.",
-                  "author": "Li · Head of Marketing"
+                  "name": "JWVS",
+                  "sub": "洁卫森",
+                  "logo": "/image/jwvs.jpg",
+                  "tagline": ""
                 },
                 {
-                  "brand": "Example Brand B",
-                  "logo": "",
-                  "quote": "End-to-end visibility diagnostics to content production — AI mentions doubled in 3 months.",
-                  "author": "Wang · Growth Director"
+                  "name": "Jingtian & Gongcheng",
+                  "sub": "竞天公诚",
+                  "logo": "/image/jingtian.png",
+                  "tagline": ""
                 },
                 {
-                  "brand": "Example Brand C",
+                  "name": "WM Therapeutics",
+                  "sub": "未名脑脑",
                   "logo": "",
-                  "quote": "Sentiment monitoring + citation tracking shows us how AI tells our story every day.",
-                  "author": "Chen · Brand Manager"
+                  "tagline": "Technology with love, AI with light"
+                },
+                {
+                  "name": "SimpleWare",
+                  "sub": "西普科技",
+                  "logo": "/image/xipu.png",
+                  "tagline": ""
                 }
               ]
             },

@@ -2039,6 +2039,8 @@ export function TopicEditor({
   );
   const enabled = true;
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
+  const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);
 
   // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
@@ -2218,9 +2220,11 @@ export function TopicEditor({
     setSaving(true); setSubmitErr(null);
     try {
       const saved = await persistTopic();
-      // 通知父组件(刷新数据等),不再关闭编辑器 — 顺势进 step 4 看健康报告
-      onSaveDone(saved ?? undefined);
+      if (saved?.id) setSavedTopicId(saved.id);
+      // 顺序很关键:先 setStep(4) 再 onSaveDone,避免父组件关闭编辑器时 setStep 失效.
+      // 父组件 onSaveDone 实现应不再 unmount 编辑器(由 step 4 的「完成」按钮负责关闭).
       setStep(4);
+      onSaveDone(saved ?? undefined);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setSubmitErr(msg);
@@ -2771,7 +2775,7 @@ export function TopicEditor({
           </div>
         )}
         {step === 4 && (
-          <HealthReportStep topicId={initial?.id ?? null}
+          <HealthReportStep topicId={savedTopicId}
                             initialWebsite={profile.website || ''}
                             token={token} />
         )}
