@@ -3240,8 +3240,6 @@ const en = {
               "neverRun": "Never run",
               "edit": "Edit",
               "startProject": "⚡ Start project",
-              "rerunProject": "Restart",
-              "rerunConfirm": "Restart this project? This will trigger a fresh run and regenerate content drafts.",
               "viewPlan": "View plan",
               "viewSolution": "Health report",
               "reviewDocs": "Review docs",

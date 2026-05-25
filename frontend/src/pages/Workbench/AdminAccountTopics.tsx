@@ -29,15 +29,14 @@ export function AdminAccountTopics() {
   const [startBusyId, setStartBusyId] = useState<number | null>(null);
   const [startErrByTopic, setStartErrByTopic] = useState<Record<number, string>>({});
 
-  // 启动项目(首次)或重新启动 — 走新的 /admin/topics/{id}/start.
-  // force=true 时让后端跳幂等,对应「重新启动」按钮.
-  const handleStart = async (tp: Topic, force: boolean) => {
+  // 启动项目(首次) — 走新的 /admin/topics/{id}/start.
+  // 「重启」入口在执行计划书页里(走 /start?force=true),不在卡片上.
+  const handleStart = async (tp: Topic) => {
     if (startBusyId !== null) return;
-    if (force && !window.confirm(t('workbench.adminAccountTopics.rerunConfirm'))) return;
     setStartBusyId(tp.id);
     setStartErrByTopic((prev) => { const n = { ...prev }; delete n[tp.id]; return n; });
     try {
-      await adminReviewApi.startTopic(tp.id, token, force);
+      await adminReviewApi.startTopic(tp.id, token);
       navigate(`/workbench/topics/${tp.id}/execution-plan`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -261,7 +260,7 @@ export function AdminAccountTopics() {
                     <button
                       type="button"
                       disabled={isStartBusy}
-                      onClick={() => handleStart(tp, false)}
+                      onClick={() => handleStart(tp)}
                       className="text-xs px-3 py-1 rounded text-white"
                       style={{ background: 'var(--accent-primary)', opacity: isStartBusy ? 0.5 : 1 }}
                     >
@@ -288,14 +287,6 @@ export function AdminAccountTopics() {
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                         {t('workbench.adminAccountTopics.reviewDocs')}
-                      </button>
-                      <button type="button"
-                        disabled={isStartBusy}
-                        onClick={() => handleStart(tp, true)}
-                        className="text-xs px-3 py-1 rounded"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                                 opacity: isStartBusy ? 0.5 : 1 }}>
-                        {isStartBusy ? '…' : t('workbench.adminAccountTopics.rerunProject')}
                       </button>
                     </>
                   )}
