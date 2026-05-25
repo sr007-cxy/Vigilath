@@ -372,6 +372,58 @@ export function Home() {
         </div>
       </main>
 
+      {/* Partners — trust strip, sits between main content and slogan banner */}
+      <section
+        className="relative z-10 px-4 py-12 sm:py-16"
+        style={{ background: 'var(--bg-tertiary)' }}
+      >
+        <div className="w-full max-w-5xl mx-auto">
+          <p
+            className="text-center text-xs sm:text-sm font-medium uppercase tracking-[0.2em] mb-8 sm:mb-10"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {t('home.partners.badge')}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {(t('home.partners.items', { returnObjects: true }) as {
+              name: string;
+              sub: string;
+              logo: string;
+              tagline: string;
+            }[]).map((item, idx) => (
+              <div
+                key={idx}
+                className="rounded-xl flex items-center justify-center px-4 transition-transform duration-200 hover:-translate-y-0.5"
+                style={{
+                  background: '#ffffff',
+                  height: '88px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                {item.logo ? (
+                  <img
+                    src={item.logo}
+                    alt={`${item.name} · ${item.sub}`}
+                    loading="lazy"
+                    draggable={false}
+                    className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
+                  />
+                ) : (
+                  <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>
+                    <span className="text-base sm:text-lg font-bold tracking-tight">
+                      {item.name}
+                    </span>
+                    <span className="hidden sm:inline text-xs ml-2 tracking-wide" style={{ color: '#666' }}>
+                      {item.sub}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Slogan Banner */}
       <section
         className="relative z-10 px-4 py-16 sm:py-24"
@@ -431,58 +483,6 @@ export function Home() {
               </svg>
               {t('home.slogan.contactSales')}
             </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Partners — trust strip, sits between slogan banner and footer */}
-      <section
-        className="relative z-10 px-4 py-12 sm:py-16"
-        style={{ background: 'var(--bg-tertiary)' }}
-      >
-        <div className="w-full max-w-5xl mx-auto">
-          <p
-            className="text-center text-xs sm:text-sm font-medium uppercase tracking-[0.2em] mb-8 sm:mb-10"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {t('home.partners.badge')}
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {(t('home.partners.items', { returnObjects: true }) as {
-              name: string;
-              sub: string;
-              logo: string;
-              tagline: string;
-            }[]).map((item, idx) => (
-              <div
-                key={idx}
-                className="rounded-xl flex items-center justify-center px-4 transition-transform duration-200 hover:-translate-y-0.5"
-                style={{
-                  background: '#ffffff',
-                  height: '88px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                {item.logo ? (
-                  <img
-                    src={item.logo}
-                    alt={`${item.name} · ${item.sub}`}
-                    loading="lazy"
-                    draggable={false}
-                    className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
-                  />
-                ) : (
-                  <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>
-                    <span className="text-base sm:text-lg font-bold tracking-tight">
-                      {item.name}
-                    </span>
-                    <span className="hidden sm:inline text-xs ml-2 tracking-wide" style={{ color: '#666' }}>
-                      {item.sub}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
       </section>
