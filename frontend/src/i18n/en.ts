@@ -2901,7 +2901,7 @@ const en = {
             },
             "solution": {
               "title": "Health Report",
-              "subtitle": "Generate a deliverable health report from site diagnostics + brand profile",
+              "subtitle": "Generate a deliverable Health Report from site diagnostics + brand profile",
               "backToReview": "Back to review",
               "export": "Export PDF",
               "exportDocx": "Export Word",
@@ -3162,6 +3162,11 @@ const en = {
               "title": "Cockpit",
               "heading": "Cockpit",
               "subtitle": "See every topic's full GEO-pipeline progress on a single screen — no step-by-step sidebar clicks.",
+              "todo": {
+                "notStarted": "Not started",
+                "runStuck": "Run pending",
+                "docPending": "Docs to review"
+              },
               "colTopic": "Topic",
               "colCustomer": "Customer",
               "stage": {
@@ -3262,14 +3267,14 @@ const en = {
               },
               "savedModal": {
                 "title": "Approval Snapshot",
-                "body": "Topic saved. You can now generate the GEO health report.",
+                "body": "Topic saved. You can now generate the Health Report.",
                 "colName": "Topic",
                 "colIndustry": "Industry",
                 "colQueries": "Queries",
                 "queriesValue": "{{selected}} / {{total}}",
                 "colWebsite": "Website",
-                "generateReport": "Generate GEO health report",
-                "viewReport": "View GEO health report",
+                "generateReport": "Generate Health Report",
+                "viewReport": "View Health Report",
                 "generating": "Starting…",
                 "later": "Later",
                 "nextHint": "Next step: once the report is ready, you can generate the Execution Plan from there."

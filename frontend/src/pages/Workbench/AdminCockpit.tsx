@@ -95,6 +95,20 @@ export function AdminCockpit() {
     [topics],
   );
 
+  // 待办计数(去审核流):
+  //   - 未启动 = approved 但 plan 为 idle(admin 直建后未点「启动」)
+  //   - 跑批待处理 = plan_status === 'blocked' (run failed) 或 'pending'
+  //   - 待复审文案 = content_status === 'pending'
+  const todoCounts = useMemo(() => {
+    let notStarted = 0, runStuck = 0, docPending = 0;
+    for (const tp of topics) {
+      if (tp.submission_status === 'approved' && tp.plan_status === 'idle') notStarted++;
+      if (tp.plan_status === 'blocked' || tp.plan_status === 'pending') runStuck++;
+      if (tp.content_status === 'pending') docPending++;
+    }
+    return { notStarted, runStuck, docPending };
+  }, [topics]);
+
   return (
     <div className="space-y-4">
       <PageHead titleKey="workbench.adminCockpit.title" titleFallback="项目进度" />
@@ -106,6 +120,24 @@ export function AdminCockpit() {
           {t('workbench.adminCockpit.subtitle')}
         </p>
       </header>
+
+      {/* 待办区:3 张计数卡 — 点击跳到对应列表(带过滤) */}
+      {!loading && !err && topics.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <TodoCard count={todoCounts.notStarted}
+                    label={t('workbench.adminCockpit.todo.notStarted')}
+                    color="#3b82f6"
+                    to="/workbench/accounts" />
+          <TodoCard count={todoCounts.runStuck}
+                    label={t('workbench.adminCockpit.todo.runStuck')}
+                    color="#eab308"
+                    to="/workbench/accounts" />
+          <TodoCard count={todoCounts.docPending}
+                    label={t('workbench.adminCockpit.todo.docPending')}
+                    color="#10b981"
+                    to="/workbench/content-review?status=pending_review" />
+        </div>
+      )}
 
       {loading ? (
         <div className="text-xs text-muted text-center py-10">{t('common.loading')}</div>
@@ -162,5 +194,28 @@ export function AdminCockpit() {
         </div>
       )}
     </div>
+  );
+}
+
+function TodoCard({ count, label, color, to }: {
+  count: number; label: string; color: string; to: string;
+}) {
+  const isEmpty = count === 0;
+  return (
+    <Link to={to}
+          className="rounded-lg p-3 flex items-center justify-between transition-colors"
+          style={{
+            background: isEmpty ? 'var(--bg-card)' : `${color}15`,
+            border: `1px solid ${isEmpty ? 'var(--border-color)' : `${color}40`}`,
+            opacity: isEmpty ? 0.55 : 1,
+          }}>
+      <div>
+        <div className="text-xs text-muted">{label}</div>
+        <div className="text-2xl font-semibold tabular-nums" style={{ color: isEmpty ? 'var(--text-muted)' : color }}>
+          {count}
+        </div>
+      </div>
+      <div className="text-xs" style={{ color: isEmpty ? 'var(--text-muted)' : color }}>→</div>
+    </Link>
   );
 }

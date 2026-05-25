@@ -28,10 +28,21 @@ export function AdminContentReview() {
   const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
 
+  // 深链:?topic=X 跳到指定项目,?status=Y 跳到指定状态(stepper / cockpit 待办卡用)
+  const initialUrlParams = useMemo(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const topicParam = sp.get('topic');
+    const statusParam = sp.get('status');
+    return {
+      topic: topicParam ? Number(topicParam) : null,
+      status: (statusParam as StatusFilter) || 'to_review',
+    };
+  }, []);
+
   const [topics, setTopics] = useState<TopicWithDocs[]>([]);
-  const [topicId, setTopicId] = useState<number | null>(null);
+  const [topicId, setTopicId] = useState<number | null>(initialUrlParams.topic);
   const [docs, setDocs] = useState<GeneratedDoc[]>([]);
-  const [status, setStatus] = useState<StatusFilter>('to_review');
+  const [status, setStatus] = useState<StatusFilter>(initialUrlParams.status);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);

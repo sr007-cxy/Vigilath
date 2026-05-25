@@ -2907,13 +2907,13 @@ const zh = {
             },
             "solution": {
               "title": "健康度诊断报告",
-              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的体检报告",
+              "subtitle": "基于官网技术诊断与品牌资料,一键生成可交付的健康度诊断报告",
               "backToReview": "返回审核",
               "export": "导出 PDF",
               "exportDocx": "导出 Word",
               "exporting": "导出中…",
               "regenerate": "重新生成",
-              "generate": "生成体检报告",
+              "generate": "生成健康度诊断报告",
               "generating": "生成中,首次需 1-3 分钟,会自动刷新…",
               "generatingHint": "已开始生成 — 后台正在扫描官网 + 调用大模型,本页 3 秒刷新一次",
               "failed": "生成失败",
@@ -2969,7 +2969,7 @@ const zh = {
               },
               "noKeywords": "暂无关键词",
               "emptyState": {
-                "title": "尚未生成体检报告",
+                "title": "尚未生成健康度诊断报告",
                 "body": "填入品牌官网,点击下方按钮启动诊断 + 报告生成。"
               }
             }
@@ -3168,6 +3168,11 @@ const zh = {
               "title": "项目进度",
               "heading": "项目进度",
               "subtitle": "一屏看完每个主题在 GEO 管线上的进度;无需逐步点击 sidebar。",
+              "todo": {
+                "notStarted": "未启动项目",
+                "runStuck": "跑批待处理",
+                "docPending": "待复审文案"
+              },
               "colTopic": "主题",
               "colCustomer": "客户",
               "stage": {
@@ -3257,7 +3262,7 @@ const zh = {
               "edit": "编辑",
               "startProject": "⚡ 启动项目",
               "viewPlan": "查看计划书",
-              "viewSolution": "健康诊断报告",
+              "viewSolution": "健康度诊断报告",
               "reviewDocs": "复审文案",
               "pipeline": {
                 "profile": "画像",
@@ -3268,17 +3273,17 @@ const zh = {
               },
               "savedModal": {
                 "title": "审批报告",
-                "body": "主题资料已落库,可直接生成 GEO 体检报告。",
+                "body": "主题资料已落库,可直接生成健康度诊断报告。",
                 "colName": "主题名",
                 "colIndustry": "行业",
                 "colQueries": "监测问题",
                 "queriesValue": "{{selected}} / {{total}} 条",
                 "colWebsite": "品牌官网",
-                "generateReport": "生成 GEO 体检报告",
-                "viewReport": "查看 GEO 体检报告",
+                "generateReport": "生成健康度诊断报告",
+                "viewReport": "查看健康度诊断报告",
                 "generating": "提交中…",
                 "later": "稍后再说",
-                "nextHint": "下一步:报告生成后,可在体检报告页继续生成「执行计划书」。"
+                "nextHint": "下一步:报告生成后,可在健康度诊断报告页继续生成「执行计划书」。"
               }
             }
           }
