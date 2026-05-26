@@ -166,6 +166,22 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
         log.warning("topic %d empty, skip", topic_id)
         return
 
+    # 跨 run 去重:同 topic 在 SKIP_RECENT_HOURS 小时内已经有成功 response 的
+    # (engine, query) 组合本次跳过,避免重跑(2026-05-26 run 69 部分跑完后 abort
+    # 重启 run 70 时,deepseek 已经写库的 15 条不应该再跑)。设 0 关闭去重。
+    skip_hours = int(os.environ.get("TELEMETRY_SKIP_RECENT_HOURS", "24"))
+    done_set: set[tuple[str, str]] = set()
+    if skip_hours > 0:
+        with db_session() as s:
+            rows = s.execute(text(
+                "SELECT DISTINCT engine, query FROM ai_telemetry_responses "
+                "WHERE topic_id = :tid AND (error IS NULL OR error = '') "
+                "  AND created_at >= NOW() - (:hrs || ' hours')::interval"
+            ), {"tid": topic_id, "hrs": str(skip_hours)}).all()
+            done_set = {(r.engine, r.query) for r in rows}
+        if done_set:
+            log.info("topic %d skip-recent: %d (engine, query) 对在过去 %dh 已有成功 response", topic_id, len(done_set), skip_hours)
+
     with db_session() as s:
         if existing_run_id is not None:
             run_id = existing_run_id
@@ -225,10 +241,12 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
         # 自然让 Sem 槽位均匀分摊到各引擎(每引擎单 hot context 内部串行,
         # 跨引擎才能真并行)。engine-major 会让一个引擎独占 Sem,其他全排队 —
         # 实测 2026-05-26 run 69 翻船过。
-        tasks = [_one(e, q) for q in queries for e in engines]
+        tasks = [_one(e, q) for q in queries for e in engines if (e, q) not in done_set]
+        log.info("topic %d run %d: launching %d tasks (skipped %d already-done)",
+                 topic_id, run_id, len(tasks), len(engines) * len(queries) - len(tasks))
         await asyncio.gather(*tasks)
 
-    total = len(engines) * len(queries)
+    total = len(engines) * len(queries) - len(done_set)
     status = "success" if failures < total else "failed"
     with db_session() as s:
         finish_run(s, run_id, status, error=None if failures == 0 else f"{failures}/{total} failed")
