@@ -143,6 +143,7 @@ interface Dict {
   queriesFilterHitTermLabel: string;
   queriesFilterAllHitTerms: string;
   queriesFilterHitTermHint: string;
+  queriesFilterHitTermAnd: string;
   queriesSeedOriginalBadge: string;
   queriesSeedOriginalBadgeHint: string;
   queriesFilterEngineBadge: (engine: string) => string;
@@ -345,7 +346,8 @@ const ZH: Dict = {
   queriesFilterSeedKindLabel: '扩展类型',
   queriesFilterHitTermLabel: '命中词',
   queriesFilterAllHitTerms: '全部命中词',
-  queriesFilterHitTermHint: '按 AI 答复中命中的品牌名 / 别名筛选 — 选「程晓峰」则只看 AI 提到这个词的 query',
+  queriesFilterHitTermHint: '按 AI 答复中命中的品牌名 / 别名筛选 — 多选 = 全部满足(AND)。例:同时勾「程晓峰」+「竞天公诚」→ 只看答复里两个都提到的 query',
+  queriesFilterHitTermAnd: '全部满足',
   queriesSeedOriginalBadge: '种子',
   queriesSeedOriginalBadgeHint: '种子原文 query — 由已批准的种子提示词直接派生,默认参与监测,不可取消',
   queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
@@ -549,7 +551,8 @@ const EN: Dict = {
   queriesFilterSeedKindLabel: 'Type',
   queriesFilterHitTermLabel: 'Hit term',
   queriesFilterAllHitTerms: 'All hit terms',
-  queriesFilterHitTermHint: 'Filter by which brand name / alias appears in the AI answer',
+  queriesFilterHitTermHint: 'Filter by which brand name / alias appears in the AI answer — multi-select = ALL must match (AND)',
+  queriesFilterHitTermAnd: 'All must match',
   queriesSeedOriginalBadge: 'Seed',
   queriesSeedOriginalBadgeHint: 'Seed-prompt query — directly derived from an approved seed prompt, always monitored, cannot be unchecked',
   queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,

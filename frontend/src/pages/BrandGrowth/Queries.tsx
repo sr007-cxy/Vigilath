@@ -41,7 +41,11 @@ function Body({ state }: { state: ShellState }) {
   const [seedFilter, setSeedFilter] = useState<string[]>([]);
   const [hitFilter, setHitFilter] = useState<HitFilter>('');    // 命中筛选,scope 由 soleEngine 决定
   const [seedKindFilter, setSeedKindFilter] = useState<SeedKindFilter>('');  // '' = 全部 / 种子原文 / 扩展
-  const [hitTermFilter, setHitTermFilter] = useState<string>('');  // '' = 全部 / 选中 = 只看命中此 term 的 query
+  // 2026-05-26 — 命中词改多选 + AND 语义:勾上「竞天公诚」和「程晓峰」→ 只看两个都命中的 query
+  const [hitTermFilter, setHitTermFilter] = useState<string[]>([]);
+  const toggleHitTerm = (t: string) => {
+    setHitTermFilter(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  };
 
   const soleEngine: EngineId | null =
     selectedEngines.length === 1 ? (selectedEngines[0] as EngineId) : null;
@@ -144,7 +148,9 @@ function Body({ state }: { state: ShellState }) {
       if (seedFilter.length > 0 && !seedFilter.includes(r.seed)) return false;
       if (seedKindFilter === 'seed_only' && !r.isSeed) return false;
       if (seedKindFilter === 'expanded_only' && r.isSeed) return false;
-      if (hitTermFilter && !r.aliasesHit.includes(hitTermFilter)) return false;
+      // AND 语义:每个勾选的 term 都必须在 aliasesHit 里
+      if (hitTermFilter.length > 0 &&
+          !hitTermFilter.every(t => r.aliasesHit.includes(t))) return false;
       if (hitFilter) {
         const hit = isHitInScope(r);
         if (hitFilter === 'hit' && !hit) return false;
@@ -280,29 +286,7 @@ function Body({ state }: { state: ShellState }) {
             <option value="hit">{L.queriesFilterOnlyHit}</option>
             <option value="miss">{L.queriesFilterOnlyMiss}</option>
           </select>
-          {/* 2026-05-26 — 命中词 select(target + aliases) */}
-          {hitTermOptions.length > 0 && (
-            <>
-              <span className="text-[11px] uppercase tracking-wide flex-shrink-0 ml-2"
-                    style={{ color: 'var(--text-muted)' }}>
-                {L.queriesFilterHitTermLabel}
-              </span>
-              <select
-                value={hitTermFilter}
-                onChange={e => setHitTermFilter(e.target.value)}
-                className="px-2 py-1 rounded-md text-[11px]"
-                style={{ ...inputStyle, minWidth: 130 }}
-                title={L.queriesFilterHitTermHint}
-              >
-                <option value="">{L.queriesFilterAllHitTerms}</option>
-                {hitTermOptions.map(o => (
-                  <option key={o.term} value={o.term}>
-                    {o.term} ({o.count})
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          {/* 计数 — 移到这行末尾 */}
           {soleEngine && (
             <span
               className="px-2 py-0.5 rounded-md text-[11px]"
@@ -316,6 +300,71 @@ function Body({ state }: { state: ShellState }) {
             {' '}/ {queryRows.length}
           </span>
         </div>
+
+        {/* 第 3 行:命中词 chip 多选(AND 语义)*/}
+        {hitTermOptions.length > 0 && (
+          <div className="flex items-baseline gap-2 flex-wrap"
+               style={{
+                 paddingTop: '8px',
+                 borderTop: '1px dashed var(--border-color)',
+               }}>
+            <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
+                  style={{ color: 'var(--text-muted)' }}
+                  title={L.queriesFilterHitTermHint}>
+              {L.queriesFilterHitTermLabel}
+              {hitTermFilter.length > 1 && (
+                <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
+                  ({L.queriesFilterHitTermAnd})
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setHitTermFilter([])}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
+              style={hitTermFilter.length === 0 ? {
+                background: 'var(--accent-primary)',
+                color: 'var(--solid-btn-text)',
+                border: '1px solid var(--accent-primary)',
+              } : {
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border-color)',
+              }}
+            >
+              <span>{L.queriesFilterAllHitTerms}</span>
+            </button>
+            {hitTermOptions.map(o => {
+              const selected = hitTermFilter.includes(o.term);
+              return (
+                <button
+                  key={o.term}
+                  type="button"
+                  onClick={() => toggleHitTerm(o.term)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all max-w-[260px]"
+                  style={selected ? {
+                    background: 'var(--accent-primary)',
+                    color: 'var(--solid-btn-text)',
+                    border: '1px solid var(--accent-primary)',
+                  } : {
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                  title={o.term}
+                >
+                  {selected && (
+                    <span aria-hidden style={{ flexShrink: 0, fontSize: 10 }}>✓</span>
+                  )}
+                  <span className="truncate">{o.term}</span>
+                  <span className="text-[10px] opacity-70 tabular-nums flex-shrink-0">
+                    {o.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div
