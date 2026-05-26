@@ -1,6 +1,6 @@
-// TopicStepper — 项目详情页共享的「4 步管线」导航条.
+// TopicStepper — 项目详情页共享的「5 步管线」导航条.
 // 用法:任何 /workbench/topics/:topicId/* 的页面顶部 render 一个 <TopicStepper topicId={tid} active="plan" />
-// 4 步:① 画像(含监测问题) ② 计划书 ③ 文案(含投放) ④ 健康诊断报告
+// 5 步:① 画像(含监测问题) ② 计划书 ③ 文案(含投放) ④ 健康诊断报告 ⑤ 效果查验与更新
 // 状态符号:✓ done / ⋯ running / ─ idle / ✗ failed
 //
 // 设计文档:docs/no-audit-flow-design.md §4.4
@@ -8,9 +8,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { adminReviewApi, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
+import { adminReviewApi, type StageState, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
-export type StepKey = 'profile' | 'plan' | 'docs' | 'solution';
+export type StepKey = 'profile' | 'plan' | 'docs' | 'solution' | 'insight';
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed';
 
 interface Props {
@@ -60,6 +60,14 @@ export function TopicStepper({ topicId, active }: Props) {
                             : solution?.status === 'generating' ? 'running'
                             : solution?.status === 'failed' ? 'failed'
                             : 'idle';
+  // 效果查验与更新:取 cockpit 同源的 insight_status(StageState).
+  // pending 在 stepper 视觉上没有独立态,合并到 running.
+  const stageStateToStep = (s: StageState | undefined): StepStatus =>
+    s === 'done' ? 'done'
+    : s === 'running' || s === 'pending' ? 'running'
+    : s === 'blocked' ? 'failed'
+    : 'idle';
+  const insChip: StepStatus = stageStateToStep(topic?.insight_status);
 
   const steps: StepDef[] = [
     {
@@ -82,6 +90,11 @@ export function TopicStepper({ topicId, active }: Props) {
       key: 'solution', label: t('workbench.topicStepper.solution'),
       status: solChip,
       onClick: () => navigate(`/workbench/topics/${topicId}/solution`),
+    },
+    {
+      key: 'insight', label: t('workbench.topicStepper.insight'),
+      status: insChip,
+      onClick: () => navigate(`/brand-growth/insights?topicId=${topicId}`),
     },
   ];
 

@@ -3390,7 +3390,8 @@ const en = {
               "profile": "Profile",
               "plan": "Plan",
               "docs": "Docs",
-              "solution": "GEO Strategy Plan"
+              "solution": "GEO Strategy Plan",
+              "insight": "Outcome"
             },
             "adminAccountTopics": {
               "title": "{{name}} — topics",
