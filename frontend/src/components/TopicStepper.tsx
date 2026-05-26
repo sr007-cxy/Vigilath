@@ -1,6 +1,6 @@
-// TopicStepper — 项目详情页共享的「5 步管线」导航条.
+// TopicStepper — 项目详情页共享的「6 步管线」导航条,与项目进度看板对齐.
 // 用法:任何 /workbench/topics/:topicId/* 的页面顶部 render 一个 <TopicStepper topicId={tid} active="plan" />
-// 5 步:① 画像(含监测问题) ② 计划书 ③ 文案(含投放) ④ 健康诊断报告 ⑤ 效果查验与更新
+// 6 步:① 画像 ② 诊断与方案预评估 ③ GEO策略优化方案 ④ 计划书 ⑤ 文案 ⑥ 效果查验与更新
 // 状态符号:✓ done / ⋯ running / ─ idle / ✗ failed
 //
 // 设计文档:docs/no-audit-flow-design.md §4.4
@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { adminReviewApi, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
-export type StepKey = 'profile' | 'plan' | 'docs' | 'solution' | 'insight';
+export type StepKey = 'profile' | 'review' | 'solution' | 'plan' | 'docs' | 'insight';
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed';
 
 interface Props {
@@ -47,11 +47,19 @@ export function TopicStepper({ topicId, active }: Props) {
     return () => { cancelled = true; };
   }, [topicId, token]);
 
-  // 各步状态推断.画像 = profile 必填齐 + 至少 1 个 selected query(合并 4 步设计里的画像和监测问题).
+  // 各步状态推断.画像 = profile 必填齐 + 至少 1 个 selected query(合并设计里的画像和监测问题).
   // 文案 / 投放合并为「文案」.健康诊断报告从 solution.status 推 ready=done / generating=running / failed=failed.
   const profileOk = !!(topic?.profile?.company_short_name)
                     && ((topic?.selected_query_count ?? 0) > 0
                         || (topic?.query_selected?.some(Boolean) ?? false));
+  // 诊断与方案预评估:由 submission_status 推.复刻 cockpit deriveStages 的 reviewRaw.
+  // pending 在 stepper 视觉上没有独立态,合并到 running;rejected 走 failed.
+  const sub = topic?.submission_status;
+  const reviewChip: StepStatus =
+    sub === 'approved' ? 'done'
+    : sub === 'rejected' ? 'failed'
+    : sub === 'pending' ? 'running'
+    : 'idle';
   const runChip: StepStatus = topic?.last_run_status === 'success' ? 'done'
                             : topic?.last_run_status === 'running' ? 'running'
                             : topic?.last_run_status === 'failed' ? 'failed'
@@ -71,12 +79,23 @@ export function TopicStepper({ topicId, active }: Props) {
       : 'idle';
   })();
 
+  // 与项目进度看板对齐:profile → review → solution → plan → docs → insight.
   const steps: StepDef[] = [
     {
       key: 'profile', label: t('workbench.topicStepper.profile'),
       status: profileOk ? 'done' : 'idle',
       hint: profileOk ? String(topic?.selected_query_count ?? 0) + ' Q' : undefined,
       onClick: () => navigate(`/workbench/topics/${topicId}/edit`),
+    },
+    {
+      key: 'review', label: t('workbench.topicStepper.review'),
+      status: reviewChip,
+      onClick: () => navigate(`/workbench/review`),
+    },
+    {
+      key: 'solution', label: t('workbench.topicStepper.solution'),
+      status: solChip,
+      onClick: () => navigate(`/workbench/topics/${topicId}/solution`),
     },
     {
       key: 'plan', label: t('workbench.topicStepper.plan'),
@@ -87,11 +106,6 @@ export function TopicStepper({ topicId, active }: Props) {
       key: 'docs', label: t('workbench.topicStepper.docs'),
       status: 'idle',
       onClick: () => navigate(`/workbench/topics/${topicId}/docs`),
-    },
-    {
-      key: 'solution', label: t('workbench.topicStepper.solution'),
-      status: solChip,
-      onClick: () => navigate(`/workbench/topics/${topicId}/solution`),
     },
     {
       key: 'insight', label: t('workbench.topicStepper.insight'),

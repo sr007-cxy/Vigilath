@@ -3394,9 +3394,10 @@ const zh = {
             },
             "topicStepper": {
               "profile": "画像",
+              "review": "诊断与方案预评估",
+              "solution": "GEO策略优化方案",
               "plan": "计划书",
               "docs": "文案",
-              "solution": "GEO策略优化方案",
               "insight": "效果查验与更新"
             },
             "adminAccountTopics": {

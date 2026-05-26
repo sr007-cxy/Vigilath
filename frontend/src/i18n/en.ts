@@ -3388,9 +3388,10 @@ const en = {
             },
             "topicStepper": {
               "profile": "Profile",
+              "review": "Pre-review",
+              "solution": "GEO Strategy Plan",
               "plan": "Plan",
               "docs": "Docs",
-              "solution": "GEO Strategy Plan",
               "insight": "Outcome"
             },
             "adminAccountTopics": {
