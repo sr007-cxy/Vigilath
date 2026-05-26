@@ -185,20 +185,11 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4">
-      <div className="text-xs text-muted flex items-center gap-1.5">
-        {L.queriesSummary(matrix.queries.length, matrix.engines.length)}
-        <InfoHint text={L.hintQueries} />
-      </div>
-
-      {/* 筛选区:3 行
-            1. 种子提示词 多选下拉 + 已选 chip
-            2. 命中词 多选下拉 + 已选 chip
-            3. 扩展类型 + 命中状态 */}
+      {/* 种子提示词 — 顶部独立显示(2026-05-26),比其它筛选更突出 */}
       <div
-        className="rounded-lg p-3 space-y-2.5"
+        className="rounded-lg p-3"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
       >
-        {/* 第 1 行:种子提示词 多选下拉 */}
         <FilterRow
           label={L.queriesFilterSeedsLabel}
           placeholder={L.queriesFilterAllSeeds}
@@ -207,40 +198,46 @@ function Body({ state }: { state: ShellState }) {
           onClear={() => setSeedFilter([])}
           onToggle={toggleSeed}
         />
+      </div>
 
-        {/* 第 2 行:命中词 多选下拉(AND 语义)*/}
+      <div className="text-xs text-muted flex items-center gap-1.5">
+        {L.queriesSummary(matrix.queries.length, matrix.engines.length)}
+        <InfoHint text={L.hintQueries} />
+      </div>
+
+      {/* 其它筛选:命中词 + 扩展类型 + 命中状态 */}
+      <div
+        className="rounded-lg p-3 space-y-2.5"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      >
+        {/* 命中词 多选下拉(AND 语义)*/}
         {hitTermOptions.length > 0 && (
-          <div style={{
-            paddingTop: '8px',
-            borderTop: '1px dashed var(--border-color)',
-          }}>
-            <FilterRow
-              label={
-                <>
-                  {L.queriesFilterHitTermLabel}
-                  {hitTermFilter.length > 1 && (
-                    <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
-                      ({L.queriesFilterHitTermAnd})
-                    </span>
-                  )}
-                </>
-              }
-              placeholder={L.queriesFilterAllHitTerms}
-              options={hitTermOptions.map(o => ({ value: o.term, label: o.term, count: o.count }))}
-              selected={hitTermFilter}
-              onClear={() => setHitTermFilter([])}
-              onToggle={toggleHitTerm}
-              title={L.queriesFilterHitTermHint}
-            />
-          </div>
+          <FilterRow
+            label={
+              <>
+                {L.queriesFilterHitTermLabel}
+                {hitTermFilter.length > 1 && (
+                  <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
+                    ({L.queriesFilterHitTermAnd})
+                  </span>
+                )}
+              </>
+            }
+            placeholder={L.queriesFilterAllHitTerms}
+            options={hitTermOptions.map(o => ({ value: o.term, label: o.term, count: o.count }))}
+            selected={hitTermFilter}
+            onClear={() => setHitTermFilter([])}
+            onToggle={toggleHitTerm}
+            title={L.queriesFilterHitTermHint}
+          />
         )}
 
-        {/* 第 3 行:扩展类型 + 命中状态 select (排末尾)*/}
+        {/* 扩展类型 + 命中状态 select (排末尾)*/}
         <div className="flex items-center gap-2 text-xs flex-wrap"
-             style={{
+             style={hitTermOptions.length > 0 ? {
                paddingTop: '8px',
                borderTop: '1px dashed var(--border-color)',
-             }}>
+             } : undefined}>
           <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
                 style={{ color: 'var(--text-muted)' }}>
             {L.queriesFilterSeedKindLabel}
