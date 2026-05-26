@@ -46,9 +46,62 @@ EXTRACT_AFTER_RUN = os.environ.get("TELEMETRY_EXTRACT_AFTER_RUN", "1") == "1"
 
 CN_ENGINES = {"deepseek", "doubao", "qwen", "wenxin", "yuanbao"}
 
+ARK_BOT_URL = "https://ark.cn-beijing.volces.com/api/v3/bots/chat/completions"
+
 
 def _browser_url(engine: str) -> str:
     return BROWSER_SERVICE_CN if engine in CN_ENGINES else BROWSER_SERVICE_GLOBAL
+
+
+async def _call_doubao_api(client: httpx.AsyncClient, query: str) -> dict[str, Any]:
+    """走 ARK Bot API(绑定 Doubao-1.5-pro-32k + 联网搜索)替代浏览器抓取。
+    凭据缺失时返回 error 让上层 fallback 到 browser-service。
+    """
+    key = os.environ.get("ARK_API_KEY", "").strip()
+    bot_id = os.environ.get("DOUBAO_BOT_ID", "").strip()
+    if not key or not bot_id:
+        return {"engine": "doubao", "query": query, "answer": "", "citations": [],
+                "video_url": None, "source_url": None,
+                "error": "ARK_API_KEY / DOUBAO_BOT_ID not set"}
+    payload = {"model": bot_id, "messages": [{"role": "user", "content": query}]}
+    try:
+        r = await client.post(
+            ARK_BOT_URL, json=payload,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            timeout=PER_QUERY_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return {"engine": "doubao", "query": query, "answer": "", "citations": [],
+                    "video_url": None, "source_url": None,
+                    "error": f"http_{r.status_code}: {r.text[:200]}"}
+        data = r.json()
+        if "error" in data:
+            return {"engine": "doubao", "query": query, "answer": "", "citations": [],
+                    "video_url": None, "source_url": None,
+                    "error": f"ark_error: {data['error']}"}
+        msg = (data.get("choices") or [{}])[0].get("message", {}) or {}
+        answer = msg.get("content", "") or ""
+        refs = data.get("references") or msg.get("references") or []
+        citations: list[dict] = []
+        for i, ref in enumerate(refs):
+            if not isinstance(ref, dict):
+                continue
+            url = ref.get("url") or ""
+            if not url:
+                continue
+            citations.append({
+                "url": url,
+                "title": (ref.get("title") or "").strip(),
+                "snippet": (ref.get("summary") or ref.get("snippet") or "").strip()[:500],
+                "position": i + 1,
+            })
+        return {"engine": "doubao", "query": query, "answer": answer,
+                "citations": citations, "video_url": None, "source_url": None,
+                "error": None}
+    except Exception as e:  # noqa: BLE001
+        return {"engine": "doubao", "query": query, "answer": "", "citations": [],
+                "video_url": None, "source_url": None,
+                "error": f"exception: {e}"}
 
 
 async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> dict[str, Any]:
@@ -57,10 +110,15 @@ async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> d
     D4(2026-05-18)起:CN 引擎优先 /search-hot(hot browser 复用,30% 加速).
     若 worker 返 501(engine 还没适配 hot protocol),自动降级到 /search.
 
+    豆包(2026-05-26)若 ARK_API_KEY + DOUBAO_BOT_ID 都配置,走 ARK Bot API
+    替代浏览器爬取;凭据缺失则继续走原浏览器路径(fallback 不破坏行为)。
+
     返回 shape:{engine, query, answer, citations, video_url, source_url, error}
     """
     if is_openrouter_engine(engine):
         return await call_openrouter(client, engine, query, timeout=PER_QUERY_TIMEOUT)
+    if engine == "doubao" and os.environ.get("ARK_API_KEY") and os.environ.get("DOUBAO_BOT_ID"):
+        return await _call_doubao_api(client, query)
     base = _browser_url(engine)
     body = {"engine": engine, "query": query}
 
