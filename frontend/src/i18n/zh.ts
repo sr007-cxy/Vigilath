@@ -466,9 +466,7 @@ const zh = {
                   "desc": "信号回流，精炼种子，重新进入扩展流程",
                   "output": "回流到第一步"
                 }
-              ],
-              "loopLabel": "反馈信号回流",
-              "mobileLoopHint": "↺ 回流到第一步"
+              ]
             },
             "faq": {
               "badge": "常见问题",

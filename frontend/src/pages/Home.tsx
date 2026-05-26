@@ -355,42 +355,6 @@ export function Home() {
               })}
             </div>
 
-            {/* Closing loop — SVG curve from [08] back to [01], visible desktop only */}
-            <div className="mt-6 sm:mt-8 relative hidden lg:block">
-              <svg viewBox="0 0 100 18" className="w-full h-14" preserveAspectRatio="none"
-                   aria-label="reinforcement feedback loop">
-                <defs>
-                  <marker id="loop-arrow"
-                          viewBox="0 0 10 10" refX="8" refY="5"
-                          markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                    <path d="M 0,2 L 8,5 L 0,8 z" fill="var(--phase-adapt)" />
-                  </marker>
-                  <path id="loop-feedback-path" d="M 97,1 C 97,16 3,16 3,1" fill="none" />
-                </defs>
-                <path d="M 97,1 C 97,16 3,16 3,1"
-                      fill="none"
-                      stroke="var(--phase-adapt)"
-                      strokeWidth="0.3"
-                      strokeDasharray="1.2 0.8"
-                      markerEnd="url(#loop-arrow)"
-                      opacity="0.85" />
-                <circle r="0.6" fill="var(--phase-adapt)">
-                  <animateMotion dur="5s" repeatCount="indefinite">
-                    <mpath href="#loop-feedback-path" />
-                  </animateMotion>
-                </circle>
-                <text x="50" y="13" textAnchor="middle"
-                      fontSize="2.2"
-                      fill="var(--phase-adapt)" opacity="0.85">
-                  {t('home.pipeline.loopLabel')}
-                </text>
-              </svg>
-            </div>
-
-            <p className="mt-6 text-center text-xs font-medium lg:hidden"
-               style={{ color: 'var(--phase-adapt)' }}>
-              {t('home.pipeline.mobileLoopHint')}
-            </p>
           </section>
 
           {/* Advanced Detection Section */}

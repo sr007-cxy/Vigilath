@@ -466,9 +466,7 @@ const en = {
                   "desc": "Signals refine seeds, re-expand",
                   "output": "feedback → [01]"
                 }
-              ],
-              "loopLabel": "feedback signals",
-              "mobileLoopHint": "↺ feeds back to [01]"
+              ]
             },
             "faq": {
               "badge": "FAQ",
