@@ -9,18 +9,31 @@ import { TopicStepper } from '../../components/TopicStepper';
 import { adminReviewApi, type ExecutionPlan } from '../../services/adminReviewApi';
 
 export function AdminExecutionPlan() {
-  const { t } = useTranslation();
   const { topicId } = useParams();
-  const token = localStorage.getItem('token') || '';
   const tid = Number(topicId);
+  return (
+    <div className="space-y-4">
+      <PageHead titleKey="admin.executionPlan.title" titleFallback="执行计划书" />
+      <TopicStepper topicId={tid} active="plan" />
+      <ExecutionPlanView topicId={tid} />
+    </div>
+  );
+}
+
+// 嵌入版:无 PageHead / TopicStepper,只渲染计划书主体内容.
+// 用于 TopicEditor 7 步 wizard 的第 5 步内联展示.
+export function ExecutionPlanView({ topicId }: { topicId: number }) {
+  const { t } = useTranslation();
+  const token = localStorage.getItem('token') || '';
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [rerunBusy, setRerunBusy] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const fetchOnce = useCallback(async () => {
+    if (!topicId) return;
     try {
-      const p = await adminReviewApi.getExecutionPlan(tid, token);
+      const p = await adminReviewApi.getExecutionPlan(topicId, token);
       setPlan(p);
       // run 完成或 plan 失败 → 停止轮询
       if (p.status !== 'generating' && p.run_status !== 'running') {
@@ -30,7 +43,7 @@ export function AdminExecutionPlan() {
       setErr(e instanceof Error ? e.message : String(e));
       if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     }
-  }, [tid, token]);
+  }, [topicId, token]);
 
   useEffect(() => {
     fetchOnce();
@@ -42,8 +55,6 @@ export function AdminExecutionPlan() {
 
   return (
     <div className="space-y-4">
-      <PageHead titleKey="admin.executionPlan.title" titleFallback="执行计划书" />
-      <TopicStepper topicId={tid} active="plan" />
       {plan && (plan.status === 'failed' || !plan.run_id) && (
         <div className="flex justify-end">
           <button type="button" disabled={rerunBusy}
@@ -51,7 +62,7 @@ export function AdminExecutionPlan() {
                     if (rerunBusy) return;
                     setRerunBusy(true); setErr(null);
                     try {
-                      const p = await adminReviewApi.rerunTopic(tid, token);
+                      const p = await adminReviewApi.rerunTopic(topicId, token);
                       setPlan(p);
                       if (!pollRef.current) {
                         pollRef.current = window.setInterval(fetchOnce, 3000);

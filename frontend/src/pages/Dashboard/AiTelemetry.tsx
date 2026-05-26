@@ -7,7 +7,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
@@ -16,6 +15,8 @@ import { ProfileImporter } from '../../components/ProfileImporter';
 import { topicProfileApi } from '../../services/topicProfileApi';
 import { adminReviewApi, type TopicStrategicSolution } from '../../services/adminReviewApi';
 import { SolutionView } from '../Admin/Solution';
+import { ExecutionPlanView } from '../Admin/ExecutionPlan';
+import { AdminContentReview } from '../Admin/ContentReview';
 import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
 import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
 import {
@@ -2042,8 +2043,8 @@ export function TopicEditor({
     [initial?.engines],
   );
   const enabled = true;
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const navigate = useNavigate();
+  // 1-4 是编辑器 wizard 表单步;5-7 是项目进度下游(计划书 / 内容与投放 / 效果检查),内联展示.
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
   // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
   const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);
@@ -2360,9 +2361,15 @@ export function TopicEditor({
     if (step === 1 && step1Valid) setStep(2);
     else if (step === 2 && step2Valid) setStep(3);
     else if (step === 3 && valid) setStep(4);
+    else if (step === 4 && savedTopicId) setStep(5);
+    else if (step === 5 && savedTopicId) setStep(6);
+    else if (step === 6 && savedTopicId) setStep(7);
   };
   const goPrev = () => {
-    if (step === 4) setStep(3);
+    if (step === 7) setStep(6);
+    else if (step === 6) setStep(5);
+    else if (step === 5) setStep(4);
+    else if (step === 4) setStep(3);
     else if (step === 3) setStep(2);
     else if (step === 2) setStep(1);
   };
@@ -2375,16 +2382,14 @@ export function TopicEditor({
       <StepHeader
         step={step}
         onJump={(s) => {
-          // 1-4 是内部 wizard 步骤,setStep 切换表单
+          // 1-4:wizard 表单步,setStep 切表单
           if (s === 1) setStep(1);
           else if (s === 2 && step1Valid) setStep(2);
           else if (s === 3 && step1Valid && step2Valid) setStep(3);
           else if (s === 4 && step1Valid && step2Valid) setStep(4);
-          // 5-7 是项目进度下游阶段,跳到对应详情页(没有 topic_id 时跳新建后才行)
+          // 5-7:项目进度下游阶段,内联展示;需要已保存的 topic_id
           else if (s >= 5 && savedTopicId) {
-            if (s === 5) navigate(`/workbench/topics/${savedTopicId}/execution-plan`);
-            else if (s === 6) navigate(`/workbench/topics/${savedTopicId}/docs`);
-            else if (s === 7) navigate(`/brand-growth/insights?topicId=${savedTopicId}`);
+            setStep(s as 5 | 6 | 7);
           }
         }}
         labels={[
@@ -2794,6 +2799,20 @@ export function TopicEditor({
                             initialWebsite={profile.website || ''}
                             token={token} />
         )}
+        {step === 5 && savedTopicId && (
+          <ExecutionPlanView topicId={savedTopicId} />
+        )}
+        {step === 6 && savedTopicId && (
+          <AdminContentReview lockedTopicId={savedTopicId} />
+        )}
+        {step === 7 && savedTopicId && (
+          <TopicBriefingsEmbed topicId={savedTopicId} token={token} />
+        )}
+        {step >= 5 && !savedTopicId && (
+          <div className="py-12 text-center text-sm text-muted">
+            {t('dashboard.aiTelemetry.form.step4NoTopic')}
+          </div>
+        )}
         </fieldset>
       </div>
 
@@ -2814,7 +2833,7 @@ export function TopicEditor({
               ← {t('dashboard.aiTelemetry.form.prev')}
             </button>
           )}
-          {step < 3 && (
+          {(step < 3 || (step >= 4 && step < 7 && !!savedTopicId)) && (
             <button
               type="button" onClick={goNext}
               disabled={(step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
@@ -2839,7 +2858,7 @@ export function TopicEditor({
                 )}
             </button>
           )}
-          {step === 4 && (
+          {step >= 4 && (
             <button
               type="button" onClick={onCancel}
               className="px-3 py-1.5 text-sm rounded-md text-white"
@@ -3606,6 +3625,73 @@ function BriefingsTab({ topics, token }: { topics: Topic[]; token: string }) {
         )}
         <button type="button" onClick={handleGenerate} disabled={generating || topicId == null}
           className="text-xs px-3 py-1.5 rounded-md text-white"
+          style={{ background: 'var(--accent-primary)' }}>
+          {generating ? '…' : `📧 ${t('dashboard.aiTelemetry.briefings.regenerate')}`}
+        </button>
+      </div>
+
+      {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
+      {!loading && briefings.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted">
+          {t('dashboard.aiTelemetry.briefings.empty')}
+        </div>
+      )}
+      {!loading && selected && <BriefingView briefing={selected} token={token} />}
+    </div>
+  );
+}
+
+// 嵌入版:固定 topicId,无 topic 选择器.用于 TopicEditor 7 步 wizard 的第 7 步.
+function TopicBriefingsEmbed({ topicId, token }: { topicId: number; token: string }) {
+  const { t } = useTranslation();
+  const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    aiTelemetryApi.listBriefings(topicId, token)
+      .then(list => {
+        setBriefings(list);
+        setSelectedId(list[0]?.id ?? null);
+      })
+      .finally(() => setLoading(false));
+  }, [topicId, token]);
+
+  const selected = useMemo(
+    () => briefings.find(b => b.id === selectedId) ?? null,
+    [briefings, selectedId],
+  );
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const fresh = await aiTelemetryApi.triggerBriefing(topicId, token);
+      const list = await aiTelemetryApi.listBriefings(topicId, token);
+      setBriefings(list);
+      setSelectedId(fresh.id);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        {briefings.length > 0 && (
+          <select value={selectedId ?? ''} onChange={e => setSelectedId(Number(e.target.value))}
+            className="px-3 py-1.5 rounded-md text-sm"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+            {briefings.map(b => (
+              <option key={b.id} value={b.id}>
+                {new Date(b.period_start).toLocaleDateString()} ~ {new Date(b.period_end).toLocaleDateString()}
+              </option>
+            ))}
+          </select>
+        )}
+        <button type="button" onClick={handleGenerate} disabled={generating}
+          className="text-xs px-3 py-1.5 rounded-md text-white disabled:opacity-50"
           style={{ background: 'var(--accent-primary)' }}>
           {generating ? '…' : `📧 ${t('dashboard.aiTelemetry.briefings.regenerate')}`}
         </button>
