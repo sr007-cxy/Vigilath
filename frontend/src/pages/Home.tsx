@@ -303,7 +303,7 @@ export function Home() {
                   return (
                     <div
                       key={step.id}
-                      className="card p-5 sm:p-6 hover:-translate-y-0.5 transition-all duration-200"
+                      className="card p-5 sm:p-6 hover:-translate-y-0.5 transition-all duration-200 flex flex-col h-full"
                     >
                       <div className="flex items-center justify-between mb-4">
                         <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center">
@@ -323,12 +323,14 @@ export function Home() {
                         </span>
                       </div>
 
-                      <h3 className="text-sm sm:text-base font-bold text-primary leading-tight mb-1.5">
-                        {step.title}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-secondary leading-relaxed m-0">
-                        {step.desc}
-                      </p>
+                      <div className="flex-1">
+                        <h3 className="text-sm sm:text-base font-bold text-primary leading-tight mb-1.5">
+                          {step.title}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-secondary leading-relaxed m-0">
+                          {step.desc}
+                        </p>
+                      </div>
 
                       <div
                         className="mt-3 sm:mt-4 pt-3 border-t text-[11px] leading-relaxed text-muted"
