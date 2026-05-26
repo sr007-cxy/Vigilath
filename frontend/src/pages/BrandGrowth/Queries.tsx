@@ -150,25 +150,33 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选条:种子提示词(多选 chip) + 命中状态 + query 类型 */}
-      <div className="space-y-2">
-        {/* 种子提示词多选 chip 行 */}
-        <div className="flex items-start gap-2 text-xs flex-wrap">
-          <span className="text-muted mt-1 flex-shrink-0">
-            🌱 {L.queriesFilterSeedsLabel}:
+      {/* 筛选区:种子提示词多选 chip + 类型 / 命中下拉 + 计数 */}
+      <div
+        className="rounded-lg p-3 space-y-2.5"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      >
+        {/* 第 1 行:种子提示词 chip 多选 */}
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
+                style={{ color: 'var(--text-muted)' }}>
+            {L.queriesFilterSeedsLabel}
           </span>
           <button
             type="button"
             onClick={() => setSeedFilter([])}
-            className="px-2 py-1 rounded-full text-[11px] transition-colors"
-            style={{
-              background: seedFilter.length === 0 ? 'var(--accent-primary)' : 'var(--bg-input)',
-              color: seedFilter.length === 0 ? 'var(--solid-btn-text)' : 'var(--text-secondary)',
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
+            style={seedFilter.length === 0 ? {
+              background: 'var(--accent-primary)',
+              color: 'var(--solid-btn-text)',
+              border: '1px solid var(--accent-primary)',
+            } : {
+              background: 'transparent',
+              color: 'var(--text-secondary)',
               border: '1px solid var(--border-color)',
             }}
           >
-            {L.queriesFilterAllSeeds}{' '}
-            <span className="text-[10px] opacity-70">({queryRows.length})</span>
+            <span>{L.queriesFilterAllSeeds}</span>
+            <span className="text-[10px] opacity-70 tabular-nums">{queryRows.length}</span>
           </button>
           {seedOptions.map(s => {
             const selected = seedFilter.includes(s);
@@ -177,30 +185,45 @@ function Body({ state }: { state: ShellState }) {
                 key={s}
                 type="button"
                 onClick={() => toggleSeed(s)}
-                className="px-2 py-1 rounded-full text-[11px] inline-flex items-center gap-1 transition-colors max-w-[280px]"
-                style={{
-                  background: selected ? 'var(--accent-primary)' : 'var(--bg-input)',
-                  color: selected ? 'var(--solid-btn-text)' : 'var(--text-primary)',
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all max-w-[260px]"
+                style={selected ? {
+                  background: 'var(--accent-primary)',
+                  color: 'var(--solid-btn-text)',
+                  border: '1px solid var(--accent-primary)',
+                } : {
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
                   border: '1px solid var(--border-color)',
                 }}
                 title={s}
               >
-                <span aria-hidden>{selected ? '✓' : '🌱'}</span>
+                {selected && (
+                  <span aria-hidden style={{ flexShrink: 0, fontSize: 10 }}>✓</span>
+                )}
                 <span className="truncate">{s}</span>
-                <span className="text-[10px] opacity-70 flex-shrink-0">
-                  ({seedCounts.get(s) || 0})
+                <span className="text-[10px] opacity-70 tabular-nums flex-shrink-0">
+                  {seedCounts.get(s) || 0}
                 </span>
               </button>
             );
           })}
         </div>
-        {/* 第二行:其它筛选 + 计数 */}
-        <div className="flex items-center gap-2 text-xs">
+
+        {/* 第 2 行:类型 / 命中下拉 + 计数 */}
+        <div className="flex items-center gap-2 text-xs flex-wrap"
+             style={{
+               paddingTop: '8px',
+               borderTop: '1px dashed var(--border-color)',
+             }}>
+          <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
+                style={{ color: 'var(--text-muted)' }}>
+            筛选
+          </span>
           <select
             value={seedKindFilter}
             onChange={e => setSeedKindFilter(e.target.value as SeedKindFilter)}
-            className="px-2 py-1 rounded-md"
-            style={{ ...inputStyle, minWidth: 140 }}
+            className="px-2 py-1 rounded-md text-[11px]"
+            style={{ ...inputStyle, minWidth: 130 }}
             title={L.queriesFilterSeedKindHint}
           >
             <option value="">{L.queriesFilterAllSeedKind}</option>
@@ -210,8 +233,8 @@ function Body({ state }: { state: ShellState }) {
           <select
             value={hitFilter}
             onChange={e => setHitFilter(e.target.value as HitFilter)}
-            className="px-2 py-1 rounded-md"
-            style={{ ...inputStyle, minWidth: 140 }}
+            className="px-2 py-1 rounded-md text-[11px]"
+            style={{ ...inputStyle, minWidth: 130 }}
           >
             <option value="">{L.queriesFilterAllHit}</option>
             <option value="hit">{L.queriesFilterOnlyHit}</option>
@@ -225,8 +248,9 @@ function Body({ state }: { state: ShellState }) {
               {L.queriesFilterEngineBadge(engineLabel(soleEngine))}
             </span>
           )}
-          <span className="text-muted ml-1">
-            {filteredRows.length} / {queryRows.length}
+          <span className="ml-auto text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>{filteredRows.length}</strong>
+            {' '}/ {queryRows.length}
           </span>
         </div>
       </div>
