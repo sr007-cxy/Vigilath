@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
   aiTelemetryApi, type TrackingMatrix,
@@ -190,72 +190,57 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选区:种子提示词多选 chip + 类型 / 命中下拉 + 计数 */}
+      {/* 筛选区:3 行
+            1. 种子提示词 多选下拉 + 已选 chip
+            2. 命中词 多选下拉 + 已选 chip
+            3. 扩展类型 + 命中状态 */}
       <div
         className="rounded-lg p-3 space-y-2.5"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
       >
-        {/* 第 1 行:种子提示词 chip 多选 */}
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
-                style={{ color: 'var(--text-muted)' }}>
-            {L.queriesFilterSeedsLabel}
-          </span>
-          <button
-            type="button"
-            onClick={() => setSeedFilter([])}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
-            style={seedFilter.length === 0 ? {
-              background: 'var(--accent-primary)',
-              color: 'var(--solid-btn-text)',
-              border: '1px solid var(--accent-primary)',
-            } : {
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-            <span>{L.queriesFilterAllSeeds}</span>
-            <span className="text-[10px] opacity-70 tabular-nums">{queryRows.length}</span>
-          </button>
-          {seedOptions.map(s => {
-            const selected = seedFilter.includes(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => toggleSeed(s)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all max-w-[260px]"
-                style={selected ? {
-                  background: 'var(--accent-primary)',
-                  color: 'var(--solid-btn-text)',
-                  border: '1px solid var(--accent-primary)',
-                } : {
-                  background: 'transparent',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border-color)',
-                }}
-                title={s}
-              >
-                {selected && (
-                  <span aria-hidden style={{ flexShrink: 0, fontSize: 10 }}>✓</span>
-                )}
-                <span className="truncate">{s}</span>
-                <span className="text-[10px] opacity-70 tabular-nums flex-shrink-0">
-                  {seedCounts.get(s) || 0}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* 第 1 行:种子提示词 多选下拉 */}
+        <FilterRow
+          label={L.queriesFilterSeedsLabel}
+          placeholder={L.queriesFilterAllSeeds}
+          options={seedOptions.map(s => ({ value: s, label: s, count: seedCounts.get(s) || 0 }))}
+          selected={seedFilter}
+          onClear={() => setSeedFilter([])}
+          onToggle={toggleSeed}
+        />
 
-        {/* 第 2 行:类型 / 命中下拉 + 计数 */}
+        {/* 第 2 行:命中词 多选下拉(AND 语义)*/}
+        {hitTermOptions.length > 0 && (
+          <div style={{
+            paddingTop: '8px',
+            borderTop: '1px dashed var(--border-color)',
+          }}>
+            <FilterRow
+              label={
+                <>
+                  {L.queriesFilterHitTermLabel}
+                  {hitTermFilter.length > 1 && (
+                    <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
+                      ({L.queriesFilterHitTermAnd})
+                    </span>
+                  )}
+                </>
+              }
+              placeholder={L.queriesFilterAllHitTerms}
+              options={hitTermOptions.map(o => ({ value: o.term, label: o.term, count: o.count }))}
+              selected={hitTermFilter}
+              onClear={() => setHitTermFilter([])}
+              onToggle={toggleHitTerm}
+              title={L.queriesFilterHitTermHint}
+            />
+          </div>
+        )}
+
+        {/* 第 3 行:扩展类型 + 命中状态 select (排末尾)*/}
         <div className="flex items-center gap-2 text-xs flex-wrap"
              style={{
                paddingTop: '8px',
                borderTop: '1px dashed var(--border-color)',
              }}>
-          {/* 类型 select(扩展词 vs 种子提示词)*/}
           <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
                 style={{ color: 'var(--text-muted)' }}>
             {L.queriesFilterSeedKindLabel}
@@ -271,7 +256,6 @@ function Body({ state }: { state: ShellState }) {
             <option value="seed_only">{L.queriesFilterOnlySeed}</option>
             <option value="expanded_only">{L.queriesFilterOnlyExpanded}</option>
           </select>
-          {/* 命中状态 select */}
           <span className="text-[11px] uppercase tracking-wide flex-shrink-0 ml-2"
                 style={{ color: 'var(--text-muted)' }}>
             命中
@@ -286,7 +270,6 @@ function Body({ state }: { state: ShellState }) {
             <option value="hit">{L.queriesFilterOnlyHit}</option>
             <option value="miss">{L.queriesFilterOnlyMiss}</option>
           </select>
-          {/* 计数 — 移到这行末尾 */}
           {soleEngine && (
             <span
               className="px-2 py-0.5 rounded-md text-[11px]"
@@ -295,76 +278,7 @@ function Body({ state }: { state: ShellState }) {
               {L.queriesFilterEngineBadge(engineLabel(soleEngine))}
             </span>
           )}
-          <span className="ml-auto text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>{filteredRows.length}</strong>
-            {' '}/ {queryRows.length}
-          </span>
         </div>
-
-        {/* 第 3 行:命中词 chip 多选(AND 语义)*/}
-        {hitTermOptions.length > 0 && (
-          <div className="flex items-baseline gap-2 flex-wrap"
-               style={{
-                 paddingTop: '8px',
-                 borderTop: '1px dashed var(--border-color)',
-               }}>
-            <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
-                  style={{ color: 'var(--text-muted)' }}
-                  title={L.queriesFilterHitTermHint}>
-              {L.queriesFilterHitTermLabel}
-              {hitTermFilter.length > 1 && (
-                <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
-                  ({L.queriesFilterHitTermAnd})
-                </span>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => setHitTermFilter([])}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
-              style={hitTermFilter.length === 0 ? {
-                background: 'var(--accent-primary)',
-                color: 'var(--solid-btn-text)',
-                border: '1px solid var(--accent-primary)',
-              } : {
-                background: 'transparent',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border-color)',
-              }}
-            >
-              <span>{L.queriesFilterAllHitTerms}</span>
-            </button>
-            {hitTermOptions.map(o => {
-              const selected = hitTermFilter.includes(o.term);
-              return (
-                <button
-                  key={o.term}
-                  type="button"
-                  onClick={() => toggleHitTerm(o.term)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all max-w-[260px]"
-                  style={selected ? {
-                    background: 'var(--accent-primary)',
-                    color: 'var(--solid-btn-text)',
-                    border: '1px solid var(--accent-primary)',
-                  } : {
-                    background: 'transparent',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border-color)',
-                  }}
-                  title={o.term}
-                >
-                  {selected && (
-                    <span aria-hidden style={{ flexShrink: 0, fontSize: 10 }}>✓</span>
-                  )}
-                  <span className="truncate">{o.term}</span>
-                  <span className="text-[10px] opacity-70 tabular-nums flex-shrink-0">
-                    {o.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div
@@ -494,6 +408,163 @@ function Body({ state }: { state: ShellState }) {
     </div>
   );
 }
+
+// ── FilterRow — 通用多选下拉,带已选 chip 显示在右侧 ────
+interface FilterOption {
+  value: string;
+  label: string;
+  count: number;
+}
+
+function FilterRow({
+  label, placeholder, options, selected, onClear, onToggle, title,
+}: {
+  label: React.ReactNode;
+  placeholder: string;
+  options: FilterOption[];
+  selected: string[];
+  onClear: () => void;
+  onToggle: (v: string) => void;
+  title?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // 点外面关闭
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  const totalCount = options.reduce((s, o) => s + o.count, 0);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
+            style={{ color: 'var(--text-muted)' }}
+            title={title}>
+        {label}
+      </span>
+      {/* 下拉触发按钮 */}
+      <div ref={wrapperRef} className="relative" style={{ minWidth: 140 }}>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="w-full inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium"
+          style={{
+            background: 'var(--bg-input)',
+            color: selected.length > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <span>
+            {selected.length === 0
+              ? placeholder
+              : `已选 ${selected.length} 项`}
+          </span>
+          <span style={{ opacity: 0.6, fontSize: 9 }}>▾</span>
+        </button>
+        {open && (
+          <div
+            className="absolute z-30 mt-1 rounded-md shadow-lg overflow-hidden"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              minWidth: 240,
+              maxHeight: 320,
+              overflowY: 'auto',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => { onClear(); setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between hover:opacity-80"
+              style={{
+                background: selected.length === 0 ? 'var(--bg-tertiary)' : 'transparent',
+                color: 'var(--text-primary)',
+                borderBottom: '1px solid var(--border-color)',
+              }}
+            >
+              <span className="font-medium">{placeholder}</span>
+              <span className="text-[10px] tabular-nums opacity-60">{totalCount}</span>
+            </button>
+            {options.map(o => {
+              const isSel = selected.includes(o.value);
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => onToggle(o.value)}
+                  className="w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2 hover:opacity-80"
+                  style={{
+                    background: isSel ? 'rgba(99,102,241,0.10)' : 'transparent',
+                    color: 'var(--text-primary)',
+                  }}
+                  title={o.label}
+                >
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 14, height: 14,
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 3,
+                    background: isSel ? 'var(--accent-primary)' : 'transparent',
+                    color: 'var(--solid-btn-text)',
+                    fontSize: 10,
+                    flexShrink: 0,
+                  }}>
+                    {isSel && '✓'}
+                  </span>
+                  <span className="flex-1 truncate">{o.label}</span>
+                  <span className="text-[10px] tabular-nums opacity-60 flex-shrink-0">{o.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {/* 已选 chip — 显示在右侧 */}
+      {selected.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {selected.map(v => {
+            const opt = options.find(o => o.value === v);
+            const label = opt?.label || v;
+            return (
+              <span
+                key={v}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] max-w-[260px]"
+                style={{
+                  background: 'var(--accent-primary)',
+                  color: 'var(--solid-btn-text)',
+                }}
+                title={label}
+              >
+                <span className="truncate">{label}</span>
+                <button
+                  type="button"
+                  onClick={() => onToggle(v)}
+                  className="hover:opacity-80 flex-shrink-0"
+                  style={{ fontSize: 11, lineHeight: 1 }}
+                  aria-label={`移除 ${label}`}
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ── 命中详情弹窗 ───────────────────────────────────────
 function QueryDetailModal({ row, topicId, token, brandKeywords, engineFilter, onClose }: {
