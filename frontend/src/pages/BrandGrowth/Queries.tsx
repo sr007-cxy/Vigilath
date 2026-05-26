@@ -243,7 +243,9 @@ function Body({ state }: { state: ShellState }) {
           <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-card)' }}>
             <tr className="text-muted" style={{ boxShadow: 'inset 0 -1px 0 var(--border-color)' }}>
               <th className="text-right px-2 py-2 w-12">{L.queriesColIndex}</th>
-              <th className="text-left px-2 py-2">{L.queriesColSeed}</th>
+              {/* 2026-05-26 — 种子提示词列暂时隐藏,seed 已由上方 chip 多选承载;
+                  恢复时取消下行 + 表 body 里对应 td 的注释 */}
+              {/* <th className="text-left px-2 py-2">{L.queriesColSeed}</th> */}
               <th className="text-left px-2 py-2">{L.queriesColExpansion}</th>
               <th className="text-center px-2 py-2 w-20">
                 <span className="inline-flex items-center gap-1 justify-center">
@@ -257,13 +259,14 @@ function Body({ state }: { state: ShellState }) {
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                <td colSpan={5} className="px-3 py-10 text-center text-muted">
                   {L.queriesEmptyAfterFilter}
                 </td>
               </tr>
             ) : filteredRows.map((r, i) => (
               <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
+                {/* 种子提示词列暂隐藏(2026-05-26)
                 <td className="px-2 py-2 text-primary truncate max-w-[200px]"
                     style={!r.seed ? { color: 'var(--text-muted)' } : undefined}
                     title={r.seed || undefined}>
@@ -274,6 +277,7 @@ function Body({ state }: { state: ShellState }) {
                     </span>
                   ) : L.queriesNoSeed}
                 </td>
+                */}
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>
                   {r.isSeed && (
                     <span
