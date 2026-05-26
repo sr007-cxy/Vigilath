@@ -3415,13 +3415,6 @@ const zh = {
               "viewPlan": "查看计划书",
               "viewSolution": "GEO策略优化方案",
               "reviewDocs": "复审文案",
-              "pipeline": {
-                "profile": "画像",
-                "seeds": "监测问题",
-                "run": "跑批",
-                "docs": "文案",
-                "publish": "投放"
-              },
               "savedModal": {
                 "title": "审批报告",
                 "body": "主题资料已落库,可直接生成 GEO策略优化方案。",

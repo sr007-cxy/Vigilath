@@ -2,8 +2,46 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
-import { adminReviewApi } from '../../services/adminReviewApi';
+import { adminReviewApi, type StageState, type TopicReviewListItem } from '../../services/adminReviewApi';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
+
+// 项目进度 6 段顺序,与 cockpit `AdminCockpit.tsx` 对齐.
+type StageKey = 'submit' | 'review' | 'solution' | 'plan' | 'content' | 'insight';
+const STAGE_ORDER: StageKey[] = ['submit', 'review', 'solution', 'plan', 'content', 'insight'];
+
+// 把 cockpit 的 StageState 折算到本卡片 chip 调色板(无 pending,合并到 running).
+function stageToChip(s: StageState): PipelineChipState {
+  return s === 'done' ? 'done'
+    : s === 'running' || s === 'pending' ? 'running'
+    : s === 'blocked' ? 'failed'
+    : 'idle';
+}
+
+// 复刻 cockpit 的 backward-infer:下游已 progress 时,上游 idle 推为 done.
+function deriveStages(item: TopicReviewListItem | undefined): Record<StageKey, StageState> {
+  const sub = item?.submission_status;
+  const reviewRaw: StageState =
+    sub === 'approved' ? 'done'
+    : sub === 'rejected' ? 'blocked'
+    : sub === 'pending' ? 'pending'
+    : 'idle';
+  const raw: Record<StageKey, StageState> = {
+    submit: 'done',
+    review: reviewRaw,
+    solution: item?.diagnose_status ?? 'idle',
+    plan: item?.plan_status ?? 'idle',
+    content: item?.content_status ?? 'idle',
+    insight: item?.insight_status ?? 'idle',
+  };
+  const eff = { ...raw };
+  let progressed = false;
+  for (let i = STAGE_ORDER.length - 1; i >= 0; i--) {
+    const k = STAGE_ORDER[i];
+    if (progressed && eff[k] === 'idle') eff[k] = 'done';
+    if (eff[k] !== 'idle') progressed = true;
+  }
+  return eff;
+}
 
 export function AdminAccountTopics() {
   const { userId } = useParams<{ userId: string }>();
@@ -13,6 +51,8 @@ export function AdminAccountTopics() {
   const { t } = useTranslation();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
+  // 项目进度 6 段状态,从 admin 列表接口拿,按 user_id 过滤 + topic_id 索引.
+  const [stagesByTid, setStagesByTid] = useState<Record<number, TopicReviewListItem>>({});
   // undefined = 列表;null = 新建;Topic = 编辑(admin 也用同一个 editor)
   // URL 带 ?new=1 时(从「画像」注册后跳过来)直接进入新建编辑器
   const [editing, setEditing] = useState<Topic | null | undefined>(
@@ -68,6 +108,18 @@ export function AdminAccountTopics() {
       .then(r => { if (!cancelled) setTopics(r); })
       .catch(() => { if (!cancelled) setTopics([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    // 项目进度 6 段状态拉一次,filter 本用户的,按 topic_id 索引;失败不影响主列表(chip 显示 idle).
+    adminReviewApi.listTopicReviews(token)
+      .then(items => {
+        if (cancelled) return;
+        const m: Record<number, TopicReviewListItem> = {};
+        const uid = Number(userId);
+        for (const it of items) {
+          if (it.user_id === uid) m[it.topic_id] = it;
+        }
+        setStagesByTid(m);
+      })
+      .catch(() => { if (!cancelled) setStagesByTid({}); });
     return () => { cancelled = true; };
   }, [userId, token]);
 
@@ -160,15 +212,8 @@ export function AdminAccountTopics() {
             const hasRun = !!tp.last_run_at;
             const isStartBusy = startBusyId === tp.id;
             const startErr = startErrByTopic[tp.id];
-            // 管线 chip:5 步骤,各自从 topic 字段推断.run/docs/publish 后期可以
-            // 升级到从后端聚合接口拿真实进度;PR 1 只展示能确定的部分.
-            const profileOk = !!(tp.profile && tp.profile.company_short_name);
-            const seedsOk = (tp.queries?.length ?? 0) > 0;
-            const runChip: PipelineChipState =
-              tp.last_run_status === 'success' ? 'done'
-              : tp.last_run_status === 'running' ? 'running'
-              : tp.last_run_status === 'failed' ? 'failed'
-              : 'idle';
+            // 项目进度 6 段:走 cockpit 同源 deriveStages,缺数据时退到 idle.
+            const stages = deriveStages(stagesByTid[tp.id]);
             return (
               <li key={tp.id} className="p-4 rounded-lg"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -188,23 +233,13 @@ export function AdminAccountTopics() {
                   {t('workbench.adminAccountTopics.statusLabel')}: {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
                 </div>
 
-                {/* 管线 chip 行 — 被动状态指示,不可点 */}
+                {/* 项目进度 6 段 chip — 标签 / 顺序 / 状态与 cockpit 同源 */}
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] mt-2 mb-3">
-                  <PipelineChip
-                    label={t('workbench.adminAccountTopics.pipeline.profile')}
-                    state={profileOk ? 'done' : 'idle'} />
-                  <PipelineChip
-                    label={t('workbench.adminAccountTopics.pipeline.seeds')}
-                    state={seedsOk ? 'done' : 'idle'} />
-                  <PipelineChip
-                    label={t('workbench.adminAccountTopics.pipeline.run')}
-                    state={runChip} />
-                  <PipelineChip
-                    label={t('workbench.adminAccountTopics.pipeline.docs')}
-                    state="idle" />
-                  <PipelineChip
-                    label={t('workbench.adminAccountTopics.pipeline.publish')}
-                    state="idle" />
+                  {STAGE_ORDER.map(k => (
+                    <PipelineChip key={k}
+                      label={t(`workbench.adminCockpit.stage.${k}`)}
+                      state={stageToChip(stages[k])} />
+                  ))}
                 </div>
 
                 {startErr && (
@@ -216,7 +251,7 @@ export function AdminAccountTopics() {
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <button
                     type="button"
-                    onClick={() => setEditing(tp)}
+                    onClick={() => navigate(`/workbench/topics/${tp.id}/edit`)}
                     className="text-xs px-3 py-1 rounded"
                     style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
                   >
