@@ -33,14 +33,13 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
       sub === 'rejected' ? 'blocked' :
         sub === 'pending' ? 'pending' : 'idle';
 
-  // 工作流式管线 — backward infer:任意 stage 状态非 idle(done / running /
-  // pending / blocked),意味着上游早已发生过,即便上游 DB 行缺失.把上游的
-  // idle 推升为 done,避免「下游已完成、上游仍未启动」的错位.
-  //
-  // 这条规则替代了原来的「forward 门禁」(上游非 done → 下游强制 idle).
-  // forward 门禁在老数据/缺失行场景下会把真实完成的下游硬塞成 idle —
-  // 例如 程晓峰 topic_id=2:plan 行未生成、但 content 70 篇已 published、
-  // telemetry success,plan 的「样本缺失」不应该把 content 拖成未启动.
+  // 工作流式管线 — backward infer(单调):
+  //   (a) 后面有真 `done` → 前面所有非 `done`(含 idle / pending / running / blocked)
+  //       一律推升为 `done`,避免出现「中间 pending、后面已 done」的视觉错位
+  //   (b) 后面没 `done` 但有 `running`/`pending` → 前面 `idle` 推升为 `done`,
+  //       覆盖「下游已在跑、上游 DB 行缺失」的老数据 / 缺失行场景
+  // 该 backward 规则替代了 forward 门禁(上游非 done → 下游强制 idle),
+  // 后者会把真实完成的下游硬塞成 idle(例如 plan 行缺失但 content 已 published).
   const rawByKey: Record<StageKey, StageState> = {
     submit: 'done',
     review: reviewRaw,
@@ -50,13 +49,17 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
     insight: t.insight_status,
   };
   const effective: Record<StageKey, StageState> = { ...rawByKey };
-  let downstreamProgressed = false;
+  let seenDone = false;
+  let seenProgress = false;
   for (let i = STAGE_ORDER.length - 1; i >= 0; i--) {
     const key = STAGE_ORDER[i];
-    if (downstreamProgressed && effective[key] === 'idle') {
+    if (seenDone && effective[key] !== 'done') {
+      effective[key] = 'done';
+    } else if (seenProgress && effective[key] === 'idle') {
       effective[key] = 'done';
     }
-    if (effective[key] !== 'idle') downstreamProgressed = true;
+    if (effective[key] === 'done') seenDone = true;
+    if (effective[key] !== 'idle') seenProgress = true;
   }
   // 用户偏好:项目进度看板不展示「异常」(red),blocked 一律按「进行中」(blue)呈现.
   // 真实失败状态查 stage 详情页(执行计划 / 审核 / 监测各页都会还原 raw status).
