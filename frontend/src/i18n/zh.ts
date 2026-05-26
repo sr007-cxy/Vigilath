@@ -3336,14 +3336,6 @@ const zh = {
                 "content": "内容发布与审核",
                 "insight": "效果查验与更新"
               },
-              "stageDesc": {
-                "submit": "创建优化主题和关键词",
-                "review": "GEO / AEO 表现检测",
-                "diagnose": "生成诊断报告与修复包",
-                "plan": "提示词泛化与投放配置",
-                "content": "文章审核与管理",
-                "insight": "命中率评估与效果报告"
-              },
               "stageStatus": {
                 "done": "完成",
                 "running": "进行中",

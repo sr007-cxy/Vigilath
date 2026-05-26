@@ -3330,14 +3330,6 @@ const en = {
                 "content": "Content",
                 "insight": "Outcome"
               },
-              "stageDesc": {
-                "submit": "Create topic & keywords",
-                "review": "GEO / AEO performance probe",
-                "diagnose": "Diagnosis report & fix pack",
-                "plan": "Prompt expansion & rollout",
-                "content": "Draft review & publish",
-                "insight": "Hit-rate eval & outcome report"
-              },
               "stageStatus": {
                 "done": "done",
                 "running": "running",

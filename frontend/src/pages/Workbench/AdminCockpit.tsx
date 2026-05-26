@@ -1,7 +1,7 @@
 // 项目进度 — admin 主入口,一屏看完每个主题在 GEO 管线上的进度.
 // 路由:/workbench/cockpit (workbench 默认页)
-// 形态:一行一个主题卡片,内嵌横向 6 节点 stepper(圆点 + 连线 + stage 名 + 描述),
-//       节点按状态着色(完成 / 进行中 / 待处理 / 未启动),点节点跳对应详情页.
+// 不按 pipeline stage 让 admin 一步步点 sidebar,而是把所有主题铺开 + 每个 stage 用 chip
+// 显示状态(完成 / 进行中 / 待处理 / 异常 / 未启动),admin 直接点 chip 跳详情页.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -148,128 +148,51 @@ export function AdminCockpit() {
           {t('workbench.adminCockpit.empty')}
         </div>
       ) : (
-        <div className="space-y-3">
-          {rows.map(({ topic, stages }) => (
-            <PipelineCard key={topic.topic_id} topic={topic} stages={stages} />
-          ))}
+        <div className="rounded-lg overflow-hidden"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted">
+                <th className="text-left px-3 py-2 whitespace-nowrap">{t('workbench.adminCockpit.colTopic')}</th>
+                <th className="text-left px-3 py-2 whitespace-nowrap">{t('workbench.adminCockpit.colCustomer')}</th>
+                {STAGE_ORDER.map((s, i) => (
+                  <th key={s} className="px-2 py-2 text-center whitespace-nowrap">
+                    <span className="text-muted">{i + 1}.</span>{' '}
+                    {t(`workbench.adminCockpit.stage.${s}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ topic, stages }) => (
+                <tr key={topic.topic_id} className="border-t"
+                  style={{ borderColor: 'var(--border-color)' }}>
+                  <td className="px-3 py-2 text-primary">
+                    {topic.profile_name || topic.topic_name}
+                    <div className="text-[10px] text-muted">#{topic.topic_id}</div>
+                  </td>
+                  <td className="px-3 py-2 text-secondary">
+                    {topic.user_email}
+                  </td>
+                  {STAGE_ORDER.map(key => {
+                    const { state, to } = stages[key];
+                    const c = STATE_COLOR[state];
+                    return (
+                      <td key={key} className="px-2 py-2 text-center">
+                        <Link to={to}
+                          className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors"
+                          style={{ color: c.c, background: c.bg, borderColor: c.border }}>
+                          {t(`workbench.adminCockpit.stageStatus.${state}`)}
+                        </Link>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </div>
-  );
-}
-
-function PipelineCard({
-  topic,
-  stages,
-}: {
-  topic: TopicReviewListItem;
-  stages: Record<StageKey, { state: StageState; to: string }>;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="rounded-lg p-4"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      {/* header */}
-      <div className="flex items-baseline justify-between mb-4">
-        <div className="text-sm font-medium text-primary">
-          {topic.profile_name || topic.topic_name}
-          <span className="text-[10px] text-muted ml-2">#{topic.topic_id}</span>
-        </div>
-        <div className="text-xs text-secondary">{topic.user_email}</div>
-      </div>
-      {/* stepper */}
-      <div className="flex items-start">
-        {STAGE_ORDER.map((key, i) => {
-          const { state, to } = stages[key];
-          const prev = i > 0 ? stages[STAGE_ORDER[i - 1]].state : null;
-          const next = i < STAGE_ORDER.length - 1 ? stages[STAGE_ORDER[i + 1]].state : null;
-          return (
-            <PipelineNode
-              key={key}
-              stageKey={key}
-              state={state}
-              to={to}
-              prevState={prev}
-              nextState={next}
-              isFirst={i === 0}
-              isLast={i === STAGE_ORDER.length - 1}
-              label={t(`workbench.adminCockpit.stage.${key}`)}
-              desc={t(`workbench.adminCockpit.stageDesc.${key}`)}
-              status={t(`workbench.adminCockpit.stageStatus.${state}`)}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// 连线颜色:两端都 done → 实绿;否则灰.
-function connectorColor(left: StageState | null, right: StageState | null): string {
-  if (left === 'done' && right === 'done') return STATE_COLOR.done.c;
-  return 'var(--border-color)';
-}
-
-function PipelineNode({
-  stageKey,
-  state,
-  to,
-  prevState,
-  nextState,
-  isFirst,
-  isLast,
-  label,
-  desc,
-  status,
-}: {
-  stageKey: StageKey;
-  state: StageState;
-  to: string;
-  prevState: StageState | null;
-  nextState: StageState | null;
-  isFirst: boolean;
-  isLast: boolean;
-  label: string;
-  desc: string;
-  status: string;
-}) {
-  const c = STATE_COLOR[state];
-  const isDone = state === 'done';
-  const isIdle = state === 'idle';
-  const leftLine = isFirst ? 'transparent' : connectorColor(prevState, state);
-  const rightLine = isLast ? 'transparent' : connectorColor(state, nextState);
-  return (
-    <div className="flex-1 flex flex-col items-center min-w-0">
-      <div className="w-full flex items-center">
-        <div className="flex-1 h-0.5" style={{ background: leftLine }} />
-        <Link to={to}
-          title={status}
-          className="flex items-center justify-center rounded-full border-2 transition-transform hover:scale-105"
-          style={{
-            width: 32,
-            height: 32,
-            color: c.c,
-            background: isDone ? c.c : c.bg,
-            borderColor: c.border,
-          }}>
-          {isDone ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white"
-              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : (
-            <span className="text-[11px] font-semibold tabular-nums"
-              style={{ color: isIdle ? 'var(--text-muted)' : c.c }}>
-              {STAGE_ORDER.indexOf(stageKey) + 1}
-            </span>
-          )}
-        </Link>
-        <div className="flex-1 h-0.5" style={{ background: rightLine }} />
-      </div>
-      <div className="mt-2 text-center px-1">
-        <div className="text-[12px] font-medium text-primary leading-tight">{label}</div>
-        <div className="text-[10px] text-muted mt-0.5 leading-tight">{desc}</div>
-      </div>
     </div>
   );
 }
