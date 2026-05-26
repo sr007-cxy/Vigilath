@@ -395,6 +395,45 @@ def admin_patch_topic(
                           field="seed_prompts",
                           after=f"count={len(new_list)}")
 
+        # 2026-05-26 — 每条 approved seed 自动派生一条同名 query(is_seed=True, locked=True)。
+        # 已存在的同名 query → 升级标记;不存在 → 新增。这样:
+        #   - seed 提示词在监测列表里有独立一行,可单独筛选
+        #   - locked=True 让前端 picker 不可取消勾选,保证 seed 必跑监测
+        #   - 跟扩展出来的 query 共享同一份 ai_telemetry_responses,无需 re-run
+        approved_texts = [s["text"] for s in new_list
+                          if isinstance(s, dict) and s.get("status") == "approved" and s.get("text")]
+        if approved_texts:
+            try:
+                qarr = json.loads(t.queries_json or "[]")
+            except Exception:  # noqa: BLE001
+                qarr = []
+            q_by_text = {q.get("text"): q for q in qarr if isinstance(q, dict)}
+            seed_added = 0
+            seed_marked = 0
+            for txt in approved_texts:
+                if txt in q_by_text:
+                    q = q_by_text[txt]
+                    if not q.get("is_seed"):
+                        q["is_seed"] = True
+                        q["locked"] = True
+                        q["selected"] = True
+                        q["seed"] = txt
+                        seed_marked += 1
+                else:
+                    qarr.append({
+                        "text": txt, "status": "approved",
+                        "submitted_at": now_iso, "approved_at": now_iso,
+                        "reviewer_id": actor_id,
+                        "seed": txt, "is_seed": True, "locked": True,
+                        "selected": True, "cluster_id": -1,
+                    })
+                    seed_added += 1
+            if seed_added or seed_marked:
+                t.queries_json = json.dumps(qarr, ensure_ascii=False)
+                _append_changelog(t, actor_id=actor_id, actor_role="admin",
+                                  field="queries.is_seed",
+                                  after=f"seed_added={seed_added}, seed_marked={seed_marked}")
+
     if payload.add_queries:
         try:
             qarr = json.loads(t.queries_json or "[]")

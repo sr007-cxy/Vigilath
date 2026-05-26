@@ -18,12 +18,43 @@ React Ant Design 类型的 chat 应用通用模式:
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 import sys
 from typing import List
 
-from ..browser import create_stealth_page, human_delay, save_page_session
+from ..browser import (
+    create_stealth_page,
+    create_headed_page,
+    human_delay,
+    human_click,
+    simulate_browsing,
+    save_page_session,
+)
+from ..anti_detect import _pick_profile
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+
+
+async def _close_headed(ctx, browser=None, pw=None) -> None:
+    """Close headed browser context, browser, and playwright instance.
+
+    CloakBrowser 路径下 browser / pw 都是 None,只 close ctx;patchright
+    fallback 路径下要按顺序 close ctx → browser → pw.stop()。
+    """
+    try:
+        await ctx.close()
+    except Exception:
+        pass
+    if browser:
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    if pw:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
 
 
 _QWEN_BLOCK_HOSTS = (
@@ -132,6 +163,28 @@ class QwenBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # 2026-05-26:迁到 CloakBrowser(github.com/CloakHQ/CloakBrowser)。
+    # 阿里 chat 端跟其它中文厂一样有指纹/CDP 检测,统一栈方便日后排障。
+    async def _create_hot_page(self):
+        """通义专用:Xvfb + headed + cloakbrowser。"""
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        page, ctx = await create_headed_page(
+            "qwen",
+            profile=profile,
+            record_video=self._record_video,
+        )
+        return page, ctx
+
+    async def _close_hot_page(self, page, ctx) -> None:
+        """通义专用:cloakbrowser 的 ctx + patchright fallback 的 browser/pw 都 close."""
+        headed_browser = getattr(page, "_headed_browser", None)
+        headed_pw = getattr(page, "_pw_ref", None)
+        await _close_headed(ctx, headed_browser, headed_pw)
+
     # D4d(2026-05-18):hot browser protocol —— EngineSession 用 _prepare_page +
     # _query_with_page 复用 page,跟 search() 共享 helper.
     async def _prepare_page(self, page, ctx) -> None:
@@ -149,32 +202,35 @@ class QwenBrowserAdapter(EngineAdapter):
             raise RuntimeError("input not visible after prepare — session likely expired")
 
     async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
-        """Hot query:reset → input → submit → wait → extract."""
+        """Hot query:reset → warm-up → input → submit → wait → extract.
+
+        2026-05-26:CloakBrowser 路径加 simulate_browsing 暖身 + human_click 聚焦 +
+        逐字 keyboard.type(60-180ms 抖动)— 阿里风控看时序,fill / insert_text
+        一次性灌全文都是 bot signature。
+        """
         await self._start_new_chat(page)
+
+        try:
+            await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+        except Exception as e:
+            _log(f"simulate warning: {e}")
+
         # _find_input 每次重做(reset 后 DOM 可能短暂消失)
         input_el = await self._find_input(page, timeout=8000)
         if input_el is None:
             return EngineResult(engine=self.name, query=query, error="input not visible (tongyi DOM)")
         try:
+            box = await input_el.bounding_box()
+            if box:
+                await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            else:
+                await input_el.click()
+        except Exception:
             await input_el.click()
-            await human_delay(0.2, 0.5)
-        except Exception:
-            pass
-        filled = False
-        try:
-            await input_el.fill(query)
-            filled = True
-        except Exception:
-            pass
-        if not filled:
-            try:
-                await page.keyboard.insert_text(query)
-                filled = True
-            except Exception:
-                pass
-        if not filled:
-            await input_el.type(query, delay=20)
-        await human_delay(0.5, 1.0)
+        await human_delay(0.8, 1.6)
+        for ch in query:
+            await page.keyboard.type(ch, delay=random.randint(60, 180))
+        await human_delay(0.5, 1.2)
         await page.keyboard.press("Enter")
 
         await human_delay(2, 3)
@@ -192,9 +248,26 @@ class QwenBrowserAdapter(EngineAdapter):
         """One-shot:launch → _prepare_page → _query_with_page → save + close.
 
         共用 hot 协议方法,行为零回归.
+        2026-05-26:one-shot 也走 CloakBrowser,跟 hot 路径完全一致。
         """
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        ctx = None
+        page = None
+        headed_browser = None
+        headed_pw = None
         try:
-            page, ctx = await create_stealth_page("qwen", record_video=self._record_video)
+            page, ctx = await create_headed_page(
+                "qwen",
+                profile=profile,
+                record_video=self._record_video,
+            )
+            headed_browser = getattr(page, "_headed_browser", None)
+            headed_pw = getattr(page, "_pw_ref", None)
+
             await self._prepare_page(page, ctx)
             result = await self._query_with_page(page, ctx, query)
 
@@ -207,10 +280,15 @@ class QwenBrowserAdapter(EngineAdapter):
                 except Exception:
                     pass
 
-            await ctx.close()
+            await _close_headed(ctx, headed_browser, headed_pw)
             return result
         except Exception as e:
             _log(f"search crashed: {type(e).__name__}: {e}")
+            if ctx is not None:
+                try:
+                    await _close_headed(ctx, headed_browser, headed_pw)
+                except Exception:
+                    pass
             return EngineResult(engine=self.name, query=query, error=str(e))
 
     async def _find_input(self, page, timeout: float = 10000):

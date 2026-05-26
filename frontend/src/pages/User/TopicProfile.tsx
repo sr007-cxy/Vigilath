@@ -324,6 +324,15 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     return m;
   }, [topic, candidates]);
 
+  // 2026-05-26 — locked query(种子原文派生)map:UI 不可取消勾选
+  const lockedSet = useMemo(() => {
+    const s = new Set<string>();
+    (topic.queries || []).forEach((q, i) => {
+      if ((topic.query_locked || [])[i]) s.add(q);
+    });
+    return s;
+  }, [topic]);
+
   const totalSelected = useMemo(
     () => Array.from(existing.values()).filter(Boolean).length,
     [existing],
@@ -331,6 +340,8 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
 
   const togglePick = (text: string) => {
     if (readOnly) return;
+    // 2026-05-26 — locked query(种子原文)永远 selected,不允许取消
+    if (lockedSet.has(text)) return;
     const cur = existing.get(text) ?? false;
     if (!cur && totalSelected >= MAX_SELECTED_QUERIES) {
       setErr(t('topic.profile.monitor.cap', { max: MAX_SELECTED_QUERIES }));
@@ -426,11 +437,22 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
                    opacity: busy ? 0.6 : 1,
                  }}>
             <input type="checkbox" checked={sel}
-                   disabled={readOnly || busy}
+                   disabled={readOnly || busy || lockedSet.has(text)}
                    onChange={() => togglePick(text)}
                    className="mt-0.5"
                    style={{ accentColor: 'var(--accent-primary)' }} />
-            <span className="text-sm text-primary flex-1">{text}</span>
+            <span className="text-sm text-primary flex-1">
+              {lockedSet.has(text) && (
+                <span
+                  className="inline-flex items-center mr-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle"
+                  style={{ background: 'rgba(99,102,241,0.18)', color: '#6366f1' }}
+                  title={t('topic.profile.monitor.seedLockedHint') || '种子原文 query,默认监测不可取消'}
+                >
+                  {t('topic.profile.monitor.seedBadge') || '种子'}
+                </span>
+              )}
+              {text}
+            </span>
           </label>
         ))}
         {existing.size === 0 && (

@@ -21,12 +21,43 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import re
 import sys
 from typing import List
 
-from ..browser import create_stealth_page, human_delay, save_page_session
+from ..browser import (
+    create_stealth_page,
+    create_headed_page,
+    human_delay,
+    human_click,
+    simulate_browsing,
+    save_page_session,
+)
+from ..anti_detect import _pick_profile
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+
+
+async def _close_headed(ctx, browser=None, pw=None) -> None:
+    """Close headed browser context, browser, and playwright instance.
+
+    CloakBrowser 路径下 browser / pw 都是 None,只 close ctx;patchright
+    fallback 路径下要按顺序 close ctx → browser → pw.stop()。
+    """
+    try:
+        await ctx.close()
+    except Exception:
+        pass
+    if browser:
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    if pw:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
 
 
 # CP1252(Windows-1252)在 0x80-0x9F 区把若干字节映射到了 latin-1 不在的字符
@@ -120,6 +151,30 @@ class YuanbaoBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # 2026-05-26:迁到 CloakBrowser(github.com/CloakHQ/CloakBrowser)。
+    # CloakBrowser 在编译层 patch chromium(49+ 源码级 patch),比 playwright
+    # 的 runtime CDP patch 干净,navigator/webgl/permissions 都没有自动化痕迹。
+    # _create_hot_page → EngineSession.init() 第一次调一次,长生 ctx 复用。
+    async def _create_hot_page(self):
+        """元宝专用:Xvfb + headed + cloakbrowser。"""
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        page, ctx = await create_headed_page(
+            "yuanbao",
+            profile=profile,
+            record_video=self._record_video,
+        )
+        return page, ctx
+
+    async def _close_hot_page(self, page, ctx) -> None:
+        """元宝专用:cloakbrowser 的 ctx + patchright fallback 的 browser/pw 都 close."""
+        headed_browser = getattr(page, "_headed_browser", None)
+        headed_pw = getattr(page, "_pw_ref", None)
+        await _close_headed(ctx, headed_browser, headed_pw)
+
     # D4d(2026-05-18):hot browser protocol — _prepare_page + _query_with_page
     # 共享 search() 的 helpers,search() 本身**不动**,one-shot 零回归.
     async def _prepare_page(self, page, ctx) -> None:
@@ -152,16 +207,34 @@ class YuanbaoBrowserAdapter(EngineAdapter):
         await self._dismiss_popups(page)
 
     async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
-        """Hot query:reset → input → submit → wait → extract."""
+        """Hot query:reset → warm-up → input → submit → wait → extract.
+
+        2026-05-26:配合 CloakBrowser 用满它的鼠标轨迹模拟 — _start_new_chat 之后
+        simulate_browsing 暖身 + human_click 聚焦输入框 + 逐字 keyboard.type 抖动延时,
+        让时序信号也像真人(光改指纹不改时序,腾讯还能识别)。
+        """
         self._captured_bodies = []  # 清上一轮
         await self._start_new_chat(page)
         await self._enable_web_search(page)
+
+        # 暖身:让鼠标在页面上随机游走 + 微 scroll,跟"真人发问前先看一眼页面"一致。
+        try:
+            await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+        except Exception as e:
+            sys.__stdout__.write(f"[Yuanbao-hot] simulate warning: {e}\n")
+            sys.__stdout__.flush()
 
         input_el = await self._find_input(page)
         if input_el is None:
             return EngineResult(engine=self.name, query=query, error="input not found")
         try:
-            placeholder = await input_el.get_attribute("data-placeholder") or ""
+            # placeholder 兼容两种 attr — yuanbao 站点 2026-05 起改用 `placeholder` 而非 `data-placeholder`,
+            # 旧代码只读 data-placeholder 会让登录失效的会话静默继续,最终返回空 answer 没 error。
+            placeholder = (
+                await input_el.get_attribute("data-placeholder")
+                or await input_el.get_attribute("placeholder")
+                or ""
+            )
             if "登录" in placeholder:
                 return EngineResult(
                     engine=self.name, query=query,
@@ -169,12 +242,23 @@ class YuanbaoBrowserAdapter(EngineAdapter):
                 )
         except Exception:
             pass
-        await input_el.click()
+
+        # 人类样式点击 — 鼠标先飘到输入框中心,再 click。
         try:
-            await input_el.fill(query)
+            box = await input_el.bounding_box()
+            if box:
+                await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            else:
+                await input_el.click()
         except Exception:
-            await input_el.type(query, delay=80)
-        await human_delay(0.5, 1.0)
+            await input_el.click()
+        await human_delay(0.8, 1.6)
+
+        # 逐字 keyboard.type 抖动 60-180ms — 真人中文输入法节奏,
+        # fill() 一次性灌全文是最强 bot signature。
+        for ch in query:
+            await page.keyboard.type(ch, delay=random.randint(60, 180))
+        await human_delay(0.5, 1.2)
         await page.keyboard.press("Enter")
         await human_delay(3, 5)
         await self._wait_for_stable_answer(page, max_wait=60, stable_secs=2.5)
@@ -185,8 +269,26 @@ class YuanbaoBrowserAdapter(EngineAdapter):
         return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
 
     async def search(self, query: str) -> EngineResult:
+        import os
+        # 2026-05-26:one-shot 也走 CloakBrowser,跟 hot 路径完全一致,debug 看到的
+        # 行为就是 production 跑的行为。Xvfb 在生产环境上常驻;本地没 DISPLAY 时
+        # 自动起一个。
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        ctx = None
+        page = None
+        headed_browser = None
+        headed_pw = None
         try:
-            page, ctx = await create_stealth_page("yuanbao", record_video=self._record_video)
+            page, ctx = await create_headed_page(
+                "yuanbao",
+                profile=profile,
+                record_video=self._record_video,
+            )
+            headed_browser = getattr(page, "_headed_browser", None)
+            headed_pw = getattr(page, "_pw_ref", None)
 
             # Network capture: intercept chat API responses for citation URLs
             captured_bodies: List[str] = []
@@ -229,10 +331,17 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             # Enable "联网搜索" (web search) toggle
             await self._enable_web_search(page)
 
+            # 暖身 — CloakBrowser 自带指纹/CDP 干净,但 timing chain 还是要做到位。
+            try:
+                await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+            except Exception as e:
+                sys.__stdout__.write(f"[Yuanbao-search] simulate warning: {e}\n")
+                sys.__stdout__.flush()
+
             # Find and fill the input
             input_el = await self._find_input(page)
             if input_el is None:
-                await ctx.close()
+                await _close_headed(ctx, headed_browser, headed_pw)
                 return EngineResult(
                     engine=self.name, query=query, error="input not found"
                 )
@@ -241,7 +350,7 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             try:
                 placeholder = await input_el.get_attribute("data-placeholder") or ""
                 if "登录" in placeholder:
-                    await ctx.close()
+                    await _close_headed(ctx, headed_browser, headed_pw)
                     return EngineResult(
                         engine=self.name, query=query,
                         error=f"login required (placeholder: {placeholder})"
@@ -249,12 +358,19 @@ class YuanbaoBrowserAdapter(EngineAdapter):
             except Exception:
                 pass
 
-            await input_el.click()
+            # 人类样式点击 + 逐字输入(同 _query_with_page 那段)
             try:
-                await input_el.fill(query)
+                box = await input_el.bounding_box()
+                if box:
+                    await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                else:
+                    await input_el.click()
             except Exception:
-                await input_el.type(query, delay=80)
-            await human_delay(0.5, 1.0)
+                await input_el.click()
+            await human_delay(0.8, 1.6)
+            for ch in query:
+                await page.keyboard.type(ch, delay=random.randint(60, 180))
+            await human_delay(0.5, 1.2)
 
             # Submit with Enter
             await page.keyboard.press("Enter")
@@ -281,7 +397,7 @@ class YuanbaoBrowserAdapter(EngineAdapter):
                 except Exception:
                     pass
 
-            await ctx.close()
+            await _close_headed(ctx, headed_browser, headed_pw)
 
             return EngineResult(
                 engine=self.name,
@@ -291,6 +407,12 @@ class YuanbaoBrowserAdapter(EngineAdapter):
                 video_path=video_path,
             )
         except Exception as e:
+            # CloakBrowser 异常时也要把 ctx/browser/pw 都收掉,避免 Xvfb 上残留进程。
+            if ctx is not None:
+                try:
+                    await _close_headed(ctx, headed_browser, headed_pw)
+                except Exception:
+                    pass
             return EngineResult(engine=self.name, query=query, error=str(e))
 
     # ── Popup dismissal ────────────────────────────────────────

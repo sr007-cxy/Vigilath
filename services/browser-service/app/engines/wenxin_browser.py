@@ -7,12 +7,43 @@ chat.baidu.com 是百度 AI 搜索,带 web 引用的版本。匿名也可用,回
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 import sys
 from typing import List
 
-from ..browser import create_stealth_page, human_delay, save_page_session
+from ..browser import (
+    create_stealth_page,
+    create_headed_page,
+    human_delay,
+    human_click,
+    simulate_browsing,
+    save_page_session,
+)
+from ..anti_detect import _pick_profile
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+
+
+async def _close_headed(ctx, browser=None, pw=None) -> None:
+    """Close headed browser context, browser, and playwright instance.
+
+    CloakBrowser 路径下 browser / pw 都是 None,只 close ctx;patchright
+    fallback 路径下要按顺序 close ctx → browser → pw.stop()。
+    """
+    try:
+        await ctx.close()
+    except Exception:
+        pass
+    if browser:
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    if pw:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
 
 
 class WenxinBrowserAdapter(EngineAdapter):
@@ -65,6 +96,29 @@ class WenxinBrowserAdapter(EngineAdapter):
         except Exception:
             return False
 
+    # 2026-05-26:迁到 CloakBrowser(github.com/CloakHQ/CloakBrowser)。
+    # 百度风控跟 doubao 字节级,playwright 的 navigator/webgl/permissions 痕迹
+    # 被 chat.baidu.com 揍过几次;CloakBrowser 编译层 patch 干净 + 鼠标轨迹一并加固。
+    async def _create_hot_page(self):
+        """文心专用:Xvfb + headed + cloakbrowser。"""
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        page, ctx = await create_headed_page(
+            "wenxin",
+            profile=profile,
+            record_video=self._record_video,
+        )
+        return page, ctx
+
+    async def _close_hot_page(self, page, ctx) -> None:
+        """文心专用:cloakbrowser 的 ctx + patchright fallback 的 browser/pw 都 close."""
+        headed_browser = getattr(page, "_headed_browser", None)
+        headed_pw = getattr(page, "_pw_ref", None)
+        await _close_headed(ctx, headed_browser, headed_pw)
+
     # D4d(2026-05-18):hot browser protocol — _prepare_page + _query_with_page
     # 共享 search() 的 helpers,search() 本身**不动**,one-shot 零回归.
     async def _prepare_page(self, page, ctx) -> None:
@@ -82,24 +136,38 @@ class WenxinBrowserAdapter(EngineAdapter):
             raise RuntimeError("input not visible after prepare — session likely expired")
 
     async def _query_with_page(self, page, ctx, query: str) -> EngineResult:
-        """Hot query:reset → input → submit → wait → extract.
+        """Hot query:reset → warm-up → input → submit → wait → extract.
 
         共用 search() 的 _wait_text_stable / _expand_references / _extract_citations.
+        2026-05-26:CloakBrowser 路径加 simulate_browsing 暖身 + human_click 聚焦 +
+        逐字 keyboard.type — 百度风控看时序,fill() 一次性灌全文是最强 bot signature。
         """
         await self._start_new_chat(page)
         await human_delay(0.5, 1.0)
+
+        try:
+            await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+        except Exception as e:
+            sys.__stdout__.write(f"[Wenxin-hot] simulate warning: {e}\n")
+            sys.__stdout__.flush()
 
         input_el = page.locator("textarea, [contenteditable='true']").first
         try:
             await input_el.wait_for(state="visible", timeout=10000)
         except Exception:
             return EngineResult(engine=self.name, query=query, error="input not visible")
-        await input_el.click()
         try:
-            await input_el.fill(query)
+            box = await input_el.bounding_box()
+            if box:
+                await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            else:
+                await input_el.click()
         except Exception:
-            await input_el.type(query)
-        await human_delay(0.5, 1.0)
+            await input_el.click()
+        await human_delay(0.8, 1.6)
+        for ch in query:
+            await page.keyboard.type(ch, delay=random.randint(60, 180))
+        await human_delay(0.5, 1.2)
         await page.keyboard.press("Enter")
 
         await human_delay(3, 5)
@@ -135,8 +203,24 @@ class WenxinBrowserAdapter(EngineAdapter):
         return EngineResult(engine=self.name, query=query, answer=answer, citations=citations)
 
     async def search(self, query: str) -> EngineResult:
+        import os
+        # 2026-05-26:one-shot 也走 CloakBrowser,跟 hot 路径完全一致。
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        ctx = None
+        page = None
+        headed_browser = None
+        headed_pw = None
         try:
-            page, ctx = await create_stealth_page("wenxin", record_video=self._record_video)
+            page, ctx = await create_headed_page(
+                "wenxin",
+                profile=profile,
+                record_video=self._record_video,
+            )
+            headed_browser = getattr(page, "_headed_browser", None)
+            headed_pw = getattr(page, "_pw_ref", None)
             # chat.baidu.com 起一个 302 → 主站,domcontentloaded 触发慢(尤其 vm03 网络抖),
             # 30s 经常 timeout。拉到 60s + 失败 fallback 用 load(更早触发)。
             try:
@@ -145,25 +229,37 @@ class WenxinBrowserAdapter(EngineAdapter):
                 try:
                     await page.goto(self.CHAT_URL, wait_until="load", timeout=60000)
                 except Exception as e:
-                    await ctx.close()
+                    await _close_headed(ctx, headed_browser, headed_pw)
                     return EngineResult(engine=self.name, query=query, error=f"goto failed: {e}")
             await human_delay(2, 3)
 
             await self._dismiss_popups(page)
 
+            try:
+                await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+            except Exception as e:
+                sys.__stdout__.write(f"[Wenxin-search] simulate warning: {e}\n")
+                sys.__stdout__.flush()
+
             input_el = page.locator("textarea, [contenteditable='true']").first
             try:
                 await input_el.wait_for(state="visible", timeout=10000)
             except Exception:
-                await ctx.close()
+                await _close_headed(ctx, headed_browser, headed_pw)
                 return EngineResult(engine=self.name, query=query, error="input not visible")
 
-            await input_el.click()
             try:
-                await input_el.fill(query)
+                box = await input_el.bounding_box()
+                if box:
+                    await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                else:
+                    await input_el.click()
             except Exception:
-                await input_el.type(query)
-            await human_delay(0.5, 1.0)
+                await input_el.click()
+            await human_delay(0.8, 1.6)
+            for ch in query:
+                await page.keyboard.type(ch, delay=random.randint(60, 180))
+            await human_delay(0.5, 1.2)
 
             await page.keyboard.press("Enter")
 
@@ -277,7 +373,7 @@ class WenxinBrowserAdapter(EngineAdapter):
                 except Exception:
                     pass
 
-            await ctx.close()
+            await _close_headed(ctx, headed_browser, headed_pw)
 
             return EngineResult(
                 engine=self.name,
@@ -287,6 +383,11 @@ class WenxinBrowserAdapter(EngineAdapter):
                 video_path=video_path,
             )
         except Exception as e:
+            if ctx is not None:
+                try:
+                    await _close_headed(ctx, headed_browser, headed_pw)
+                except Exception:
+                    pass
             return EngineResult(engine=self.name, query=query, error=str(e))
 
     async def _wait_streaming_done(self, page, max_wait: float = 30.0) -> None:

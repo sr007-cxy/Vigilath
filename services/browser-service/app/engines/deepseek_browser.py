@@ -13,11 +13,42 @@ Requires: a valid DeepSeek session (run scripts/deepseek_login.py first).
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 from typing import List
 
-from ..browser import create_stealth_page, human_delay, save_page_session
+from ..browser import (
+    create_stealth_page,
+    create_headed_page,
+    human_delay,
+    human_click,
+    simulate_browsing,
+    save_page_session,
+)
+from ..anti_detect import _pick_profile
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+
+
+async def _close_headed(ctx, browser=None, pw=None) -> None:
+    """Close headed browser context, browser, and playwright instance.
+
+    CloakBrowser 路径下 browser / pw 都是 None,只 close ctx;patchright
+    fallback 路径下要按顺序 close ctx → browser → pw.stop()。
+    """
+    try:
+        await ctx.close()
+    except Exception:
+        pass
+    if browser:
+        try:
+            await browser.close()
+        except Exception:
+            pass
+    if pw:
+        try:
+            await pw.stop()
+        except Exception:
+            pass
 
 
 class DeepSeekBrowserAdapter(EngineAdapter):
@@ -39,6 +70,30 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             return logged_in
         except Exception:
             return False
+
+    # 2026-05-26:迁到 CloakBrowser(github.com/CloakHQ/CloakBrowser)。
+    # CloakBrowser 在编译层 patch chromium(49+ 源码级 patch),比 playwright
+    # 的 runtime CDP patch 干净;一并启用 human_click + simulate_browsing 的
+    # 鼠标轨迹模拟,跟时序信号一起加固。
+    async def _create_hot_page(self):
+        """DeepSeek 专用:Xvfb + headed + cloakbrowser。"""
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        page, ctx = await create_headed_page(
+            "deepseek",
+            profile=profile,
+            record_video=self._record_video,
+        )
+        return page, ctx
+
+    async def _close_hot_page(self, page, ctx) -> None:
+        """DeepSeek 专用:cloakbrowser 的 ctx + patchright fallback 的 browser/pw 都 close."""
+        headed_browser = getattr(page, "_headed_browser", None)
+        headed_pw = getattr(page, "_pw_ref", None)
+        await _close_headed(ctx, headed_browser, headed_pw)
 
     # D3(2026-05-18):提取出 method 供 hot browser EngineSession 在每次 query
     # 前调用,重置 conversation 防止上下文串扰。one-shot search() 走 inline 那段
@@ -111,7 +166,14 @@ class DeepSeekBrowserAdapter(EngineAdapter):
         import sys
         # 1) 重置 chat(EngineSession 已经调过 _start_new_chat 也无所谓 — idempotent)
         await self._start_new_chat(page)
-        # 2) 找 textarea
+        # 2) 暖身 — CloakBrowser 治指纹/CDP,治不了时序;simulate_browsing 让鼠标在
+        #    页面上随机游走 + 微 scroll,跟"真人发问前先看一眼页面"一致。
+        try:
+            await simulate_browsing(page, duration=random.uniform(2.0, 4.0))
+        except Exception as e:
+            sys.__stdout__.write(f"[DS-hot] simulate warning: {e}\n")
+            sys.__stdout__.flush()
+        # 3) 找 textarea
         try:
             textarea = page.locator("textarea").first
             await textarea.wait_for(state="visible", timeout=10000)
@@ -120,9 +182,20 @@ class DeepSeekBrowserAdapter(EngineAdapter):
                 engine=self.name, query=query,
                 error="DeepSeek textarea not visible — login may have expired",
             )
-        await textarea.click()
-        await textarea.fill(query)
-        await human_delay(0.5, 1.0)
+        # 4) 人类样式点击 + 逐字 keyboard.type 抖动 60-180ms(替代 fill,fill 是
+        #    一次性灌全文,反检测系统单看这一项就足以认定脚本)。
+        try:
+            box = await textarea.bounding_box()
+            if box:
+                await human_click(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            else:
+                await textarea.click()
+        except Exception:
+            await textarea.click()
+        await human_delay(0.8, 1.6)
+        for ch in query:
+            await page.keyboard.type(ch, delay=random.randint(60, 180))
+        await human_delay(0.5, 1.2)
         await page.keyboard.press("Enter")
 
         # 3) 轮询稳定答案(原 search() 同款 150 × 1s)
@@ -167,9 +240,28 @@ class DeepSeekBrowserAdapter(EngineAdapter):
 
         EngineSession 走 hot 路径不调本方法.两条路径共用 _prepare_page +
         _query_with_page,行为一致.
+
+        2026-05-26:one-shot 也走 CloakBrowser,跟 hot 路径完全一致,debug 看到的
+        行为就是 production 跑的行为。
         """
+        import os
+        if not os.environ.get("DISPLAY"):
+            from ..xvfb import start_xvfb
+            start_xvfb()
+        profile = _pick_profile(platform_filter="Linux x86_64")
+        ctx = None
+        page = None
+        headed_browser = None
+        headed_pw = None
         try:
-            page, ctx = await create_stealth_page("deepseek", record_video=self._record_video)
+            page, ctx = await create_headed_page(
+                "deepseek",
+                profile=profile,
+                record_video=self._record_video,
+            )
+            headed_browser = getattr(page, "_headed_browser", None)
+            headed_pw = getattr(page, "_pw_ref", None)
+
             await self._prepare_page(page, ctx)
             result = await self._query_with_page(page, ctx, query)
 
@@ -181,12 +273,17 @@ class DeepSeekBrowserAdapter(EngineAdapter):
                     video_path = await get_video_path(page)
                 except Exception:
                     pass
-            await ctx.close()
+            await _close_headed(ctx, headed_browser, headed_pw)
             # video_path 仅 one-shot 模式带,EngineResult 上没有 video_path 字段单独传
             if video_path is not None:
                 result.video_path = video_path
             return result
         except Exception as e:
+            if ctx is not None:
+                try:
+                    await _close_headed(ctx, headed_browser, headed_pw)
+                except Exception:
+                    pass
             return EngineResult(engine=self.name, query=query, error=str(e))
 
     async def _read_answer_text(self, page) -> tuple[str, str | None]:

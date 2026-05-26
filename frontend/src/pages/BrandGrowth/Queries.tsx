@@ -10,11 +10,15 @@ import { InfoHint } from './charts';
 interface Row {
   query: string;
   seed: string;
+  isSeed: boolean;            // 2026-05-26 — 是否种子原文 query
+  locked: boolean;            // 2026-05-26 — UI 不可取消勾选
   totalRuns: number;
   totalHits: number;
   rate: number;
   hitEngines: string[];
 }
+
+type SeedKindFilter = '' | 'seed_only' | 'expanded_only';  // '' = 全部
 
 export function Queries() {
   const L = useBgLang();
@@ -32,8 +36,10 @@ function Body({ state }: { state: ShellState }) {
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [active, setActive] = useState<Row | null>(null);
-  const [seedFilter, setSeedFilter] = useState<string>('');     // '' = 全部
+  // 2026-05-26 — seedFilter 从 string(单选)改 string[](多选,空数组 = 全部)
+  const [seedFilter, setSeedFilter] = useState<string[]>([]);
   const [hitFilter, setHitFilter] = useState<HitFilter>('');    // 命中筛选,scope 由 soleEngine 决定
+  const [seedKindFilter, setSeedKindFilter] = useState<SeedKindFilter>('');  // '' = 全部 / 种子原文 / 扩展
 
   const soleEngine: EngineId | null =
     selectedEngines.length === 1 ? (selectedEngines[0] as EngineId) : null;
@@ -48,16 +54,28 @@ function Body({ state }: { state: ShellState }) {
   }, [token, topic?.id]);
 
   // text → seed 映射:从 topic.queries / topic.query_seeds 同长数组建出
-  const seedByQuery = useMemo<Map<string, string>>(() => {
-    const m = new Map<string, string>();
-    if (!topic) return m;
+  // 同时建 text → is_seed / locked 标记表(2026-05-26)
+  const queryMeta = useMemo<{
+    seedByQuery: Map<string, string>;
+    isSeedByQuery: Map<string, boolean>;
+    lockedByQuery: Map<string, boolean>;
+  }>(() => {
+    const seedByQuery = new Map<string, string>();
+    const isSeedByQuery = new Map<string, boolean>();
+    const lockedByQuery = new Map<string, boolean>();
+    if (!topic) return { seedByQuery, isSeedByQuery, lockedByQuery };
     const qs = topic.queries || [];
     const seeds = topic.query_seeds || [];
+    const isSeed = topic.query_is_seed || [];
+    const locked = topic.query_locked || [];
     for (let i = 0; i < qs.length; i++) {
-      m.set(qs[i], seeds[i] || '');
+      seedByQuery.set(qs[i], seeds[i] || '');
+      isSeedByQuery.set(qs[i], !!isSeed[i]);
+      lockedByQuery.set(qs[i], !!locked[i]);
     }
-    return m;
+    return { seedByQuery, isSeedByQuery, lockedByQuery };
   }, [topic]);
+  const { seedByQuery, isSeedByQuery, lockedByQuery } = queryMeta;
 
   const queryRows: Row[] = useMemo(() => {
     if (!matrix) return [];
@@ -71,12 +89,14 @@ function Body({ state }: { state: ShellState }) {
       return {
         query: q,
         seed: seedByQuery.get(q) || '',
+        isSeed: isSeedByQuery.get(q) || false,
+        locked: lockedByQuery.get(q) || false,
         totalRuns, totalHits,
         rate: totalRuns ? totalHits / totalRuns : 0,
         hitEngines,
       };
     });
-  }, [matrix, seedByQuery]);
+  }, [matrix, seedByQuery, isSeedByQuery, lockedByQuery]);
 
   // 用于筛选下拉的可选值
   const seedOptions = useMemo(() => {
@@ -87,7 +107,10 @@ function Body({ state }: { state: ShellState }) {
 
   const filteredRows = useMemo(() => {
     return queryRows.filter(r => {
-      if (seedFilter && r.seed !== seedFilter) return false;
+      // 空数组 = 不过滤(显示全部);非空 = 只显示选中的种子
+      if (seedFilter.length > 0 && !seedFilter.includes(r.seed)) return false;
+      if (seedKindFilter === 'seed_only' && !r.isSeed) return false;
+      if (seedKindFilter === 'expanded_only' && r.isSeed) return false;
       if (hitFilter) {
         const hit = isHitInScope(r);
         if (hitFilter === 'hit' && !hit) return false;
@@ -96,7 +119,20 @@ function Body({ state }: { state: ShellState }) {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryRows, seedFilter, hitFilter, soleEngine]);
+  }, [queryRows, seedFilter, seedKindFilter, hitFilter, soleEngine]);
+
+  // 计算每条 seed 下匹配 row 的数量,chip 上显示
+  const seedCounts = useMemo<Map<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const r of queryRows) {
+      if (r.seed) m.set(r.seed, (m.get(r.seed) || 0) + 1);
+    }
+    return m;
+  }, [queryRows]);
+
+  const toggleSeed = (s: string) => {
+    setSeedFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  };
 
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
@@ -114,38 +150,85 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选条:种子提示词 + 命中状态(模型筛选改用顶部 chip,避免双控件) */}
-      <div className="flex items-center gap-2 text-xs">
-        <select
-          value={seedFilter}
-          onChange={e => setSeedFilter(e.target.value)}
-          className="px-2 py-1 rounded-md"
-          style={{ ...inputStyle, minWidth: 140 }}
-        >
-          <option value="">{L.queriesFilterAllSeeds}</option>
-          {seedOptions.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select
-          value={hitFilter}
-          onChange={e => setHitFilter(e.target.value as HitFilter)}
-          className="px-2 py-1 rounded-md"
-          style={{ ...inputStyle, minWidth: 140 }}
-        >
-          <option value="">{L.queriesFilterAllHit}</option>
-          <option value="hit">{L.queriesFilterOnlyHit}</option>
-          <option value="miss">{L.queriesFilterOnlyMiss}</option>
-        </select>
-        {soleEngine && (
-          <span
-            className="px-2 py-0.5 rounded-md text-[11px]"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
-          >
-            {L.queriesFilterEngineBadge(engineLabel(soleEngine))}
+      {/* 筛选条:种子提示词(多选 chip) + 命中状态 + query 类型 */}
+      <div className="space-y-2">
+        {/* 种子提示词多选 chip 行 */}
+        <div className="flex items-start gap-2 text-xs flex-wrap">
+          <span className="text-muted mt-1 flex-shrink-0">
+            🌱 {L.queriesFilterSeedsLabel}:
           </span>
-        )}
-        <span className="text-muted ml-1">
-          {filteredRows.length} / {queryRows.length}
-        </span>
+          <button
+            type="button"
+            onClick={() => setSeedFilter([])}
+            className="px-2 py-1 rounded-full text-[11px] transition-colors"
+            style={{
+              background: seedFilter.length === 0 ? 'var(--accent-primary)' : 'var(--bg-input)',
+              color: seedFilter.length === 0 ? 'var(--solid-btn-text)' : 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            {L.queriesFilterAllSeeds}{' '}
+            <span className="text-[10px] opacity-70">({queryRows.length})</span>
+          </button>
+          {seedOptions.map(s => {
+            const selected = seedFilter.includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggleSeed(s)}
+                className="px-2 py-1 rounded-full text-[11px] inline-flex items-center gap-1 transition-colors max-w-[280px]"
+                style={{
+                  background: selected ? 'var(--accent-primary)' : 'var(--bg-input)',
+                  color: selected ? 'var(--solid-btn-text)' : 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                }}
+                title={s}
+              >
+                <span aria-hidden>{selected ? '✓' : '🌱'}</span>
+                <span className="truncate">{s}</span>
+                <span className="text-[10px] opacity-70 flex-shrink-0">
+                  ({seedCounts.get(s) || 0})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* 第二行:其它筛选 + 计数 */}
+        <div className="flex items-center gap-2 text-xs">
+          <select
+            value={seedKindFilter}
+            onChange={e => setSeedKindFilter(e.target.value as SeedKindFilter)}
+            className="px-2 py-1 rounded-md"
+            style={{ ...inputStyle, minWidth: 140 }}
+            title={L.queriesFilterSeedKindHint}
+          >
+            <option value="">{L.queriesFilterAllSeedKind}</option>
+            <option value="seed_only">{L.queriesFilterOnlySeed}</option>
+            <option value="expanded_only">{L.queriesFilterOnlyExpanded}</option>
+          </select>
+          <select
+            value={hitFilter}
+            onChange={e => setHitFilter(e.target.value as HitFilter)}
+            className="px-2 py-1 rounded-md"
+            style={{ ...inputStyle, minWidth: 140 }}
+          >
+            <option value="">{L.queriesFilterAllHit}</option>
+            <option value="hit">{L.queriesFilterOnlyHit}</option>
+            <option value="miss">{L.queriesFilterOnlyMiss}</option>
+          </select>
+          {soleEngine && (
+            <span
+              className="px-2 py-0.5 rounded-md text-[11px]"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+            >
+              {L.queriesFilterEngineBadge(engineLabel(soleEngine))}
+            </span>
+          )}
+          <span className="text-muted ml-1">
+            {filteredRows.length} / {queryRows.length}
+          </span>
+        </div>
       </div>
 
       <div
@@ -181,12 +264,28 @@ function Body({ state }: { state: ShellState }) {
             ) : filteredRows.map((r, i) => (
               <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
-                <td className="px-2 py-2 text-primary truncate max-w-[160px]"
+                <td className="px-2 py-2 text-primary truncate max-w-[200px]"
                     style={!r.seed ? { color: 'var(--text-muted)' } : undefined}
                     title={r.seed || undefined}>
-                  {r.seed || L.queriesNoSeed}
+                  {r.seed ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span aria-hidden style={{ flexShrink: 0 }}>🌱</span>
+                      <span className="truncate">{r.seed}</span>
+                    </span>
+                  ) : L.queriesNoSeed}
                 </td>
-                <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>{r.query}</td>
+                <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>
+                  {r.isSeed && (
+                    <span
+                      className="inline-flex items-center mr-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium"
+                      style={{ background: 'rgba(99,102,241,0.18)', color: '#6366f1' }}
+                      title={L.queriesSeedOriginalBadgeHint}
+                    >
+                      {L.queriesSeedOriginalBadge}
+                    </span>
+                  )}
+                  {r.query}
+                </td>
                 <td className="px-2 py-2 text-center">
                   {isHitInScope(r) ? (
                     <span

@@ -123,219 +123,217 @@ def _tokenize(text: str) -> list[str]:
 # ─── LLM prompt 构造(GEO-aware / generic 两套)────────────
 
 
+def _user_msg_zh_geo_dirty(seed: str, count: int, dirty_markers: list[str],
+                           avoid_clause: str) -> str:
+    """脏 seed 专用 prompt — seed 本身已是 query,不能再叠意图后缀 / 前缀。
+
+    只允许:
+      - 内部语序调整(把「不要 X」挪到前面 / 把意图词移到不同位置)
+      - 同义虚词替换(推荐↔求推荐;不要↔非/不;有没有↔哪里有)
+    禁止:
+      - 拼新意图后缀(X 推荐 → X 推荐推荐 / X 推荐哪家好)
+      - 改变 seed 实质内容
+    """
+    markers_str = "、".join(f"「{m}」" for m in dirty_markers[:5])
+    return (
+        f"任务:把下面这条**已是完整 query 的种子**改写成 {count} 条同义 query。\n"
+        f"\n"
+        f"━━━ 种子(已是完整 query)━━━\n"
+        f"「{seed}」\n"
+        f"\n"
+        f"━━━ ⚠️ 关键约束(种子里已含意图词 {markers_str})━━━\n"
+        f"这条种子**本身已经是一句完整 query**,不是名词短语 — 它已经表达了「求推荐 / 找 / 哪家好」这层意思。\n"
+        f"你**不能**再拼新的意图后缀 / 前缀(否则会变成「X推荐推荐」「X哪家好哪家好」这种病句)。\n"
+        f"\n"
+        f"━━━ 唯一允许的改写方式 ━━━\n"
+        f"1. **内部语序调整** — 把 seed 里的「业务 / 地点 / 意图 / 约束」名词块前后挪。\n"
+        f"   例:「清洁机器人推荐,不要家用」可改成:\n"
+        f"     - 「推荐清洁机器人,不要家用」(意图前置)\n"
+        f"     - 「不要家用的清洁机器人推荐」(约束前置)\n"
+        f"     - 「非家用的清洁机器人推荐」(同义词替换 + 约束前置)\n"
+        f"\n"
+        f"2. **同义虚词替换**(不增加新意图,只换说法):\n"
+        f"   • 推荐 ↔ 求推荐 ↔ 想找 ↔ 有没有(任选其一替换,不要叠加)\n"
+        f"   • 不要 ↔ 非 ↔ 不要 …… 之外的 ↔ 排除\n"
+        f"   • 哪家好 ↔ 哪家靠谱 ↔ 哪家专业(如 seed 已有「哪家好」,可换说法,但不能再加一个「哪家好」)\n"
+        f"\n"
+        f"3. **加产品 / 实体量词**(如果 seed 没有,可加):\n"
+        f"   例:「清洁机器人推荐」可加成「清洁机器人**哪款**推荐」/「清洁机器人**哪个**推荐」\n"
+        f"   注意:这不是加意图词,是把已有的意图说得更具体。\n"
+        f"\n"
+        f"━━━ 严格禁止 ━━━\n"
+        f"✗ **再加意图后缀**(seed 已有「推荐」就不能再加「推荐 / 哪家好 / 求推荐 / 怎么找 / 有推荐吗」)\n"
+        f"✗ **再加意图前缀**(seed 已有意图就不能再加「适合 / 推荐 / 求推荐 / 想找 / 帮忙推荐」)\n"
+        f"✗ **替换 seed 里的业务词 / 地点词 / 实体词**(逐字保留)\n"
+        f"✗ **砍掉 seed 里的字段**(包括约束句如「不要家用」「,2024年款」)\n"
+        f"✗ **加 seed 里没有的实质内容**(新城市 / 新公司 / 新场景)\n"
+        f"\n"
+        f"━━━ 示例(种子 = 「清洁机器人推荐,不要家用」,合格改写应该长这样)━━━\n"
+        f"  • 推荐清洁机器人,不要家用\n"
+        f"  • 不要家用的清洁机器人推荐\n"
+        f"  • 非家用的清洁机器人推荐\n"
+        f"  • 清洁机器人哪款推荐,不要家用\n"
+        f"  • 清洁机器人哪个推荐,不要家用\n"
+        f"  • 求推荐清洁机器人,不要家用\n"
+        f"  • 想找清洁机器人,不要家用\n"
+        f"  • 非家用清洁机器人,有推荐吗\n"
+        f"  • 清洁机器人,不要家用的有推荐吗\n"
+        f"  • 哪款清洁机器人推荐,不家用\n"
+        f"\n"
+        f"━━━ 数量与格式 ━━━\n"
+        f"产出 {count} 条改写,每行一条,纯中文,不要编号,不要项目符号,不要解释。\n"
+        f"{count} 条**不是硬指标** — 写不出就停,**绝对不许灌水或叠加意图词**。\n"
+        f"{avoid_clause}"
+        f"\n"
+        f"现在围绕「{seed}」开始改写,记住:**只调顺序 + 同义虚词替换,不许新增意图词**。"
+    )
+
+
 def _user_msg_zh_geo(seed: str, count: int, target: str, aliases: list[str], industry: str,
                      service_geo: str = "", profile_cases: list[str] | None = None) -> str:
+    """中文 GEO-aware prompt — 2026-05-26 改版:整句 prompt 同义改写,不再做主题词扩展。
+
+    设计意图(用户口述):种子提示词应该是「跨境并购的北京律师」这种**完整 query**,
+    扩展出的应是「适合跨境并购的北京律师推荐」这种**同义改写** —— 同一个用户意图换说法,
+    而不是分支到不同案件 / 不同城市 / 不同子业务。
+
+    service_geo / profile_cases 仍保留参数(向后兼容 caller),但不再写进 prompt:
+    地点信息以 seed 本身为准,案例追溯型已废弃。industry / target / aliases 仍用于
+    避免点名 + 上下文锚定。
+    """
+    _ = service_geo, profile_cases, industry  # 保留 caller 兼容
     alias_part = "、".join(f"「{a}」" for a in aliases) if aliases else ""
-    avoid = f"「{target}」" + (f"及其别名 {alias_part}" if alias_part else "")
-    ind = f"(行业:{industry})" if industry else ""
-    # 真实案例清单 —— 取用户 case_stories + core_credentials,LLM 必须优先用这些生成案例追溯型
-    cases_block = ""
-    real_cases = [c for c in (profile_cases or []) if c and c.strip()]
-    if real_cases:
-        bullets = "\n".join(f"  - {c.strip()}" for c in real_cases[:40])
-        cases_block = (
-            f"\n━━━ ⭐ 用户提供的真实经办案例 / 荣誉(案例追溯型 query 必须优先用这些)━━━\n"
-            f"以下是品牌「{target}」**自己披露过经办**的真实案件 / 荣誉 / 案例:\n"
-            f"{bullets}\n"
-            f"\n"
-            f"**这些都是品牌确认无误的真实事件 —— 不用怀疑真实性,放心生成 query**。\n"
-            f"在下方「真实事件追溯型」专节里,**至少 5 条**(尽量 8-12 条)直接基于上面这份清单生成,"
-            f"句式举例:「[清单里的某个案件/事件] 的律师团队是哪家」、「参与 [清单里的某个交易] 的"
-            f"律师是谁」、「[清单里的项目] 由哪家律所担任顾问」等。\n"
-            f"**注意**:不要在 query 里塞太多清单原文细节(如金额 / 年份 / 完整公司名),"
-            f"保留事件名 + 交易对手主体即可,真实用户问 AI 时也不会带这么多细节。\n"
+    avoid_clause = ""
+    if target.strip():
+        avoid_clause = (
+            f"\n━━━ 禁名规则 ━━━\n"
+            f"不要出现「{target}」"
+            + (f" 或别名 {alias_part}" if alias_part else "")
+            + "(测的是 AI 主动推荐,不是点名查)。\n"
         )
-    geo_lock = ""
-    if service_geo.strip():
-        sg = service_geo.strip()
-        geo_lock = (
-            f"\n━━━ ⚠️ 地点硬约束(读这条优先于下方所有「地点维度允许扩展」的说法)━━━\n"
-            f"用户已经把服务地域明确锁定为「{sg}」。**所有 query 里的地点维度只允许出现以下取值**:\n"
-            f"  - 「{sg}」本身(及其下辖区/常见简称,例:北京 → 中关村 / 朝阳 / 海淀;上海 → 浦东 / 陆家嘴;"
-            f"广州 → 天河 / 珠江新城;深圳 → 南山 / 福田)\n"
-            f"  - 「全国」/「国内」/「跨地区」/「异地」/「外地」这种**不指明具体城市**的泛指词\n"
-            f"  - **不带地点的 query**(身份 / 处境 / 场景驱动,不出现地名)\n"
-            f"**严禁**出现「{sg}」以外的任何具体城市 / 省份 / 国家 / 海外地名:\n"
-            f"  ❌ 不要写 上海 / 深圳 / 杭州 / 香港 / 新加坡 / 纽约 / 伦敦 / 东京 / 苏黎世 / 迪拜 / 法兰克福 / "
-            f"悉尼 / 多伦多 / 首尔 / 哈尔滨 / 乌鲁木齐 / 成都 / 武汉 …… 之类任何非「{sg}」的地名\n"
-            f"  ❌ 不要写「跨境到 [国家]」「在 [城市] 做 X」凡是带「{sg}」以外的具体地名的句子\n"
-            f"违反这条约束的 query 一律作废,不要产出。\n"
-            f"\n"
-            f"配比建议:**带「{sg}」地名 ≈ 40-55% / 全国或不带地名 ≈ 45-60%**。"
-            f"不要 100% 都写「{sg}」 — 真实用户也会问不带城市限定的 query。\n"
-            f"\n"
-            f"参考好示例(seed 换成实际 seed):\n"
-            f"- 推荐一位 {sg} 做 [业务] 的 X\n"
-            f"- {sg} 哪家律所擅长 [业务]\n"
-            f"- 适合做 [业务] 的 X 推荐(不指明地点)\n"
-            f"- [身份] 第一次 [动作],该怎么找 X(不指明地点)\n"
-            f"- 跨地区做 [业务] 找 X,有靠谱推荐吗\n"
+    # 脏 seed 走完全不同的 prompt 路径 — seed 本身已是 query,不能再叠意图词
+    is_dirty, dirty_markers = _seed_is_dirty(seed)
+    if is_dirty:
+        return _user_msg_zh_geo_dirty(seed, count, dirty_markers, avoid_clause)
+    # 从种子末尾推断实体词 → 注入针对该实体的禁词清单
+    entity_blacklist = _seed_entity_blacklist(seed)
+    entity_lock_clause = ""
+    if entity_blacklist:
+        # 找出实际命中的 entity_word(可能是 2-5 字),用于自然措辞
+        cleaned = "".join(c for c in seed if not c.isspace())
+        entity_word = ""
+        for ent in sorted(_ENTITY_BLACKLIST.keys(), key=len, reverse=True):
+            if cleaned.endswith(ent):
+                entity_word = ent
+                break
+        # 实体类型决定 narrative 措辞 + 量词黑名单
+        kind = _detect_seed_entity_kind(seed)
+        descriptor = {
+            "person":      "一个**具体的人**",
+            "institution": "一个**机构 / 团队 / 公司**",
+            "product":     "一个**具体的产品 / 物品 / 工具**",
+        }.get(kind, "**这个实体**")
+        good_quantifiers = {
+            "person":      "哪位 / 一位 / 哪个 / 几位",
+            "institution": "哪家 / 一家 / 几家 / 哪个",
+            "product":     "哪款 / 一款 / 几款 / 哪个",
+        }.get(kind, "")
+        bad_quantifiers = _QUANTIFIER_BLACKLIST.get(kind, ())
+        bad_list = "、".join(f"「{w}」" for w in entity_blacklist)
+        quantifier_clause = ""
+        if bad_quantifiers and good_quantifiers:
+            bad_q_str = "、".join(f"「{w}」" for w in bad_quantifiers)
+            quantifier_clause = (
+                f"   量词必须跟实体匹配 — 「{entity_word}」是「{descriptor.strip('*')}」,"
+                f"只能用 {good_quantifiers};**绝对不许**出现 {bad_q_str} 这些跟实体不匹配的量词。\n"
+            )
+        entity_lock_clause = (
+            f"\n━━━ 实体词硬锁(再强调一次)━━━\n"
+            f"种子里的身份是「{entity_word}」(指代{descriptor}),\n"
+            f"   ① **对立实体词**:你产出的每一条 query 里**绝对不许出现** {bad_list} 这些词,"
+            f"哪怕只在 query 中间出现一次(如「在 XX{entity_blacklist[0]}的{entity_word}」)整条作废。\n"
+            f"   ② **身份末尾**:query 末尾的身份词只能是「{entity_word}」,逐字一致。\n"
+            f"{quantifier_clause}"
         )
+    # 脏 seed 已在函数开头早退到 _user_msg_zh_geo_dirty,这里走干净 seed 路径
     return (
-        f"你在帮品牌「{target}」{ind} 做 GEO / AEO 监测。"
-        f"我们要测:**当真实用户拿这类问题去问 AI 助手(ChatGPT / DeepSeek / 豆包 / 文心 / Kimi 等),"
-        f"AI 会不会主动推荐到我们**。请围绕主题「{seed}」产出 {count} 条候选 query,每行一条,纯中文。\n"
-        f"{cases_block}"
-        f"{geo_lock}"
+        f"任务:把下面这条**种子提示词**改写成 {count} 条**结构上各异、语义相近**的搜索 query。\n"
         f"\n"
-        f"━━━ 关于数量(读这条优先于一切)━━━\n"
-        f"我要 {count} 条**不是硬指标**。如果你只能写出 25-30 条句式各异、每条出自不同人不同处境的真实 query,"
-        f"就**停在那里**,把剩余的 quota 放弃,**不要为了凑到 {count} 条而开启「同句式 + 换变量」的模板灌水**。\n"
-        f"灌水的征兆:连续 3+ 条句式骨架相同(如「做 X 的律师 [地名] 推荐」反复套地名,或「收购 [国家] [行业]"
-        f"公司找哪家律师」反复套国家+行业)。一旦你写到第 20-25 条左右发现自己**只剩下「换变量」才能继续写**,"
-        f"那就立刻停笔 —— 30 条好的远好过 50 条中 20 条模板灌水。\n"
+        f"━━━ 种子 ━━━\n"
+        f"「{seed}」\n"
         f"\n"
-        f"━━━ 主体词锁定 vs. 修饰词替换(关键区分)━━━\n"
-        f"seed「{seed}」末尾的**实体身份词**(律师/医生/顾问/教练/品牌……即"
-        f"指代「这个人/这个东西」的那个词),在每条 query 里**必须原样出现**,"
-        f"不许换成上位词(律师→律所)、下位词(律师→合伙人)、近义词(顾问→咨询师)。\n"
+        f"━━━ 设计意图(重要!读懂再写)━━━\n"
+        f"我要的是 {count} 条**句式骨架不同**的同义改写,**不是 {count} 条换 1 个虚词的近义复制**。\n"
+        f"如果你写出:`{seed}推荐` / `适合{seed}` / `求推荐{seed}` / `推荐一位{seed}` ……\n"
+        f"这种**只有前后缀差异**的输出,我就只要 3-5 条,**其余作废**。\n"
+        f"每条改写都要在**句式结构**上跟其它条**显著不同**(不只是换 1 个意图虚词)。\n"
         f"\n"
-        f"但 seed 前面的**修饰词**(「跨境并购」「海外」等业务/场景前缀)**不要每条都直接复读**,"
-        f"鼓励替换为同义 / 下位 / 具体场景词:\n"
-        f"  - 「跨境并购律师」→ 可以写成「美股 SPAC 律师」「红筹搭建律师」「VIE 拆除律师」"
-        f"「欧盟反垄断律师」「东南亚收购律师」「海外并购方向的律师」「做跨境收购的律师」等,"
-        f"或者干脆**只在 query 中描述具体处境**而不显式说「跨境并购」(只要语义对上即可)。\n"
-        f"  - 错例:连续多条都直接以「{seed}」开头当 hashtag — 这是模型偷懒。\n"
+        f"━━━ 5 大允许的变化维度(每条改写至少动 2 个)━━━\n"
         f"\n"
-        f"━━━ 角色锚定(写之前先在脑里跑一遍)━━━\n"
-        f"你不是在写「关于 {seed} 这个行业的 N 个研究问题」,你是在扮演 N 个**正在准备做这件事的真实人**"
-        f"——创业者、CFO、家族企业老板、上市公司董秘、海外业务负责人、并购顾问、个人客户……"
-        f"——他们**这一刻打开 AI 助手想找帮手**时,会脱口而出的话。\n"
+        f"**(A) 调内部顺序** — 种子里「业务 / 地点 / 身份」名词块前后挪\n"
+        f"  • 「业务 的 地点 身份」→「地点 业务 身份」/「业务 身份 在 地点」/「地点 + 身份 + 做 业务 的」\n"
         f"\n"
-        f"**每条 query 都要能反推出一个具体场景**(一个具体的人 + 一个具体的处境)。\n"
-        f"反推不出来 → 那条就是废 query,不要写。\n"
+        f"**(B) 句式骨架变化** — 同义内容用完全不同句式表达\n"
+        f"  • 陈述请求:「{seed}推荐」\n"
+        f"  • 直接寻问:「{seed}哪位比较靠谱」\n"
+        f"  • 处境式:「想找{seed},有谁推荐」\n"
+        f"  • 询问式:「{seed} — 谁比较好」\n"
+        f"  • 双句式:「{seed},朋友圈有靠谱推荐吗」(克制,占比 < 20%)\n"
+        f"  • 短词式:「{seed}」(原样,占比 < 5%)\n"
+        f"  • 强调式:「{seed},找哪位最专业」\n"
+        f"  • 反问式:「{seed}哪位是真的靠谱」\n"
         f"\n"
-        f"━━━ 死规则:这些句式绝对不能出现 ━━━\n"
-        f"❌ **不要写带占位词 / 元维度的 query** —— 即把「地区/场景/类型/规模/阶段/需求/项目/预算/行业/公司/客户/方向」"
-        f"这种**维度名本身**当成问题的句子。这类句子用户根本不会说,信号为零。\n"
-        f"   反例(都是垃圾,不要产出):\n"
-        f"     「做 X 的律师适合什么地区」「做 X 的律师适合什么场景」「做 X 的律师适合什么类型」\n"
-        f"     「做 X 的律师适合什么行业」「做 X 的律师适合什么规模」「做 X 的律师适合什么需求」\n"
-        f"     「做 X 的律师适合什么公司」「做 X 的律师适合什么预算」「X 律师适合哪类客户」\n"
-        f"❌ **不要做 cartesian product 模板填空** —— 同一句式套不同维度名枚举出来的清单一律作废。\n"
-        f"❌ **不要把 seed 词当 hashtag 前缀** —— 即「{seed},X 推荐」「{seed},做 X 的推荐」"
-        f"「{seed},擅长 X 的」这种把 seed 整体提到句首再加补语的句式。真人开口不会先报 seed 再说事,"
-        f"这是 LLM 凑数典型征兆,整条作废。\n"
-        f"❌ **禁止连续多条只换 1 个词的枚举 / 字典遍历** —— "
-        f"地点维度允许扩展,可以用国内一线 / 新一线 / 强二线城市(北京 / 上海 / 深圳 / 广州 / 杭州 / 成都 / 苏州 / "
-        f"南京 / 武汉 / 天津 / 重庆 / 西安 / 青岛 / 厦门 等),也可以用海外主流商业 / 金融中心 "
-        f"(香港 / 新加坡 / 纽约 / 伦敦 / 东京 / 迪拜 / 法兰克福 / 苏黎世 / 悉尼 / 多伦多 / 首尔)。\n"
-        f"   但**严格禁止**把地点扩到偏门小国 / 避税群岛 / 微国家做字典遍历凑数:"
-        f"梵蒂冈 / 瑙鲁 / 图瓦卢 / 圣马力诺 / 安道尔 / 列支敦士登 / 摩纳哥 / 帕劳 / 汤加 / 基里巴斯 / "
-        f"密克罗尼西亚 / 马绍尔群岛 / 所罗门群岛 / 瓦努阿图 / 萨摩亚 / 多米尼克 / 圣卢西亚 / 安提瓜 / "
-        f"格林纳达 / 巴巴多斯 / 巴哈马 / 牙买加 / 不丹 / 老挝 / 柬埔寨(除非用户身份真和这些地方相关)/ "
-        f"特克斯和凯科斯 / 开曼群岛 / 英属维尔京 / 百慕大 / 泽西岛 / 根西岛 / 马恩岛 / 直布罗陀 / "
-        f"格陵兰 / 法罗群岛 / 冰岛 …… 这些没人会在 AI 助手里搜「跨境并购律师」时想到的地方。\n"
-        f"   每个独立 query 必须在「身份 / 处境 / 句式」三者中至少 2 个上有真实差异,不要靠换地名凑数。\n"
-        f"❌ **不要纯关键词堆砌**(「最佳/北京/海外并购/律师/推荐/2024」这种)。\n"
-        f"❌ **元问题严打** —— 不带具体处境的元问题(「X 的费用是多少」「X 的收费高吗」「X 的收费合理吗」"
-        f"「X 怎么收费」「X 一般多少钱」「X 哪家便宜」)占比**不超过 5%**,且必须带具体场景或身份限定才允许写。\n"
-        f"❌ **不要写 autocomplete / 网页标题式句式** —— 「能否 X」「是否 X」「X 有哪些」"
-        f"「X 是什么」「X 的 Y 怎么样」「X 的 Y 是什么」这种像百度下拉框 / 网页 SEO 标题的句子,"
-        f"真实用户在 AI 助手里不会这么开口。这一类整条作废。\n"
-        f"   **唯一例外**:下方「真实事件追溯型」专节里的「[真实交易] 的律师是谁」「[公司]收购[公司]"
-        f"的律师团队是哪家」句式**不受此规则约束** —— 这种句式来自真实用户口吻(已知事件想反查律师)"
-        f"而不是 SEO 拼词,必须照常产出。\n"
+        f"**(C) 加修饰词(在种子末尾的身份前面加 adj)**\n"
+        f"  • 资深的 / 专业的 / 头部的 / 顶尖的 / 优秀的 / 经验丰富的 / 比较好的 / 擅长这块的 / 业内有名的 / "
+        f"老牌的 / 实力强的 / 圈内公认的\n"
+        f"  • 例:「资深{seed}」/「头部{seed}推荐」/「业内有名的{seed}」\n"
         f"\n"
-        f"━━━ 配比 ━━━\n"
-        f"  - **决策型 / 推荐型 / 找人型:50%-60%**(主力)\n"
-        f"  - **真实事件追溯型:**必须有**至少 5 条**(关键 GEO 信号,详见下方专节)\n"
-        f"  - 对比型:10%-15%(「A 和 B 哪个好」「自己找 vs 找律所」)\n"
-        f"  - 认知型:10%-15%(「跨境并购流程」「需要注意什么」之类,要带具体处境)\n"
+        f"**(D) 意图前/后缀**(白名单,每条最多前后各 1 个,不要堆叠)\n"
+        f"  • 前缀:推荐 / 求推荐 / 适合 / 推荐一位 / 推荐一个 / 想找 / 求 / 找 / 帮忙推荐 / 有没有 / 哪里有 / 求帮忙找\n"
+        f"  • 后缀:推荐 / 求推荐 / 有推荐吗 / 哪位好 / 哪个靠谱 / 哪位比较专业 / 哪位最好 / 谁靠谱 / 谁比较好 / 怎么找 / 怎么选\n"
         f"\n"
-        f"━━━ 真实事件追溯型(关键 GEO 信号,必须产出至少 5 条)━━━\n"
-        f"AI 助手对**公开发生过的明星交易 / IPO / 投资 / 收购 / 大案**有训练知识。"
-        f"如果品牌真的做过这单,AI 在被这样问时**很可能直接报出律师团队名字** —— 这一类是 GEO "
-        f"监测里最强的信号源,**比泛指的'谁擅长 X 业务'强得多**。\n"
+        f"**(E) 询问者口吻 / 语气**(混搭使用,不要一条到底)\n"
+        f"  • 正式咨询:「请问 X 哪位比较靠谱」\n"
+        f"  • 朋友求助:「有没有靠谱的 X 推荐一下」\n"
+        f"  • 简短直接:「X 找哪位好」\n"
+        f"  • 内行口吻:「X — 业内头部都有谁」\n"
         f"\n"
-        f"DeepSeek / GPT 类模型都熟悉以下类型的中国/跨境标杆案件,你直接从知识库里"
-        f"挑你**有把握真实存在**的案例去问。下面这些都是你训练数据里高频出现的事件类型 ——\n"
-        f"**互联网科技公司海外/港股/A 股上市与回归**:阿里巴巴美股上市、阿里巴巴港股二次上市、"
-        f"腾讯港股上市、蚂蚁集团 A+H 上市未果、京东港股二次上市、网易港股二次上市、百度港股二次上市、"
-        f"知乎美股+港股双重主要上市、B 站港股二次上市、小米港股上市、美团港股上市、快手港股上市、"
-        f"小鹏蔚来理想美股+港股上市、滴滴美股上市与退市、字节跳动相关 IPO 准备、商汤港股上市等。\n"
-        f"**跨境并购 / 大额收购**:美的收购库卡、吉利收购沃尔沃、复星收购地中海俱乐部、"
-        f"中海油收购尼克森、安邦收购华尔道夫、海航收购希尔顿、字节跳动收购 Musical.ly、"
-        f"腾讯收购 Supercell、阿里收购优酷、滴滴收购优步中国、美团收购摩拜、紫光收购展讯、"
-        f"中化与中国化工合并、宝武钢铁合并等。\n"
-        f"**知名一级市场投资轮**:软银/红杉/高瓴/泛大西洋/老虎基金 等对今日头条、滴滴、美团、"
-        f"小米、京东、拼多多、字节跳动、Shein 的投资轮。\n"
-        f"**A 股标杆并购重组**:银泰资源海外金矿注入、爱尔眼科系列并购、海尔智家 D 股转 A 股、"
-        f"BOE 并购、紫光系重组、万达商业 A 股/港股相关重组等。\n"
+        f"━━━ 严格禁止(违反一条整条作废)━━━\n"
+        f"✗ **不许替换种子里任何字**。逐字保留:\n"
+        f"  • 业务词原样:种子是「跨境并购」就写「跨境并购」,**不许**换「跨境收购 / 海外并购 / 跨境业务 / 并购 / 跨境投融资」等任何变体。\n"
+        f"  • 身份词原样:种子是「律师」就写「律师」,**不许**换「律所 / 合伙人 / 法务 / 顾问 / 团队 / 专家」等。\n"
+        f"  • 地点原样:种子是「北京」就写「北京」,**不许**换「京 / 帝都 / 在京 / 北京市 / 中关村 / 朝阳 / 海淀」等。\n"
+        f"✗ **不许砍掉种子里任何字段**。如种子有「企业跨境/TMT投资、海外并购」,改写里**这一整串**都得在,包括「/」和「、」和每个字符。\n"
+        f"✗ **不许加种子里没有的实质内容**(具体公司名 / 具体案件 / 具体子领域 / 其它城市 / 其它国家 / 具体年份)。\n"
+        f"✗ **不许改成认知 / 对比 / 元 / SEO 句式**(「什么是 X」「X 流程」「X 费用是多少」「A vs B」「X 有哪些类型」)。\n"
+        f"✗ **不许灌水**:连续 3 条只换 1 个虚词(推荐/求推荐 互换,的/吗 互换)= 灌水征兆,立刻停笔。\n"
         f"\n"
-        f"句式骨架(把上面任一真实事件填进 [...] 里):\n"
-        f"✅ 「参与 [真实交易/事件] 的律师是谁」\n"
-        f"✅ 「完成 [真实交易/事件] 的律师团队是谁」\n"
-        f"✅ 「[真实交易/事件] 由哪家律所担任顾问」\n"
-        f"✅ 「[公司A] 收购/投资 [公司B] 的律师团队是哪家」\n"
-        f"✅ 「[公司] 港股/美股/A 股上市的律师顾问是谁」\n"
+        f"━━━ 多样性自检(写完每条问自己)━━━\n"
+        f"• 这条和上一条相比,**句式骨架**是否真的不同?(不只是换了个意图前后缀)\n"
+        f"• 这条用的「变化维度」(A-E)中,至少动了 2 个?\n"
+        f"• 5 条以内出现 2 条结构相同 → 第 2 条作废。\n"
         f"\n"
-        f"必出的好示例(seed = 跨境并购的北京律师,以下质量为目标线,你至少写 5 条同质量的):\n"
-        f"- 参与知乎美股、港股双重主要上市的律师是谁\n"
-        f"- 完成泛大西洋对今日头条投资的律师团队是谁\n"
-        f"- 银泰资源收购埃尔拉多中国金矿项目并注入上市公司的律师团队是谁\n"
-        f"- 美的收购库卡的中方律师顾问是哪家\n"
-        f"- 吉利收购沃尔沃的律师团队是哪家\n"
-        f"- 字节跳动收购 Musical.ly 的律师团队是哪家\n"
-        f"- 中海油收购尼克森的律师是谁\n"
-        f"- 滴滴收购优步中国的律师团队是哪家\n"
-        f"- 阿里巴巴港股二次上市的律师顾问是哪家\n"
+        f"━━━ 用「{seed}」直接套出来的好例子(结构骨架要这么变)━━━\n"
+        f"  • {seed}推荐(直接陈述)\n"
+        f"  • 资深{seed}有哪些(加修饰 + 询问)\n"
+        f"  • 想找{seed},有谁比较靠谱(处境 + 反问)\n"
+        f"  • 头部{seed}都是谁(修饰 + 直接寻问)\n"
+        f"  • {seed} — 业内最专业的是哪位(强调式 + 内行口吻)\n"
+        f"  • 求推荐一位{seed},朋友圈有合适的吗(双句 + 朋友求助)\n"
+        f"  • 请问{seed}哪位比较有经验(正式口吻 + 修饰)\n"
+        f"  • {seed},找谁最靠谱(反问 + 强调)\n"
+        f"  • 经验丰富的{seed},怎么找(修饰 + 询问方式)\n"
+        f"  • {seed}哪位口碑最好(询问 + 强调)\n"
+        f"  • {seed}怎么找\n"
+        f"  • 帮忙推荐一位{seed}\n"
         f"\n"
-        f"约束:\n"
-        f"1. 上面列出的事件你都可以放心用 —— 都是公开报道过、训练数据里高频出现的明星案件。\n"
-        f"2. 也可以用上面没列但你**确信**真实存在的同类明星案件。不确定的就从上面挑,**不要因为"
-        f"求新意而虚构** —— 但不要因此就一条都不写,**必须产出至少 5 条**。\n"
-        f"3. **句末主体词必须严格沿用 seed 末尾 2 字**(seed = ...律师 → 用「律师」/「律师团队」;"
-        f"seed = ...律所 → 用「律所」;seed = ...顾问 → 用「顾问」),不要漂移。\n"
-        f"4. **匹配 seed 业务方向**:seed 是「跨境并购律师」就用海外并购案 + 港股美股上市;"
-        f"seed 是「证券诉讼律师」就用证券虚假陈述大案 / 集体诉讼;seed 是「IPO 律师」就用知名 IPO。\n"
-        f"5. 写完后**自查 query 块开头 5-10 行里至少有 3 条真实事件追溯型**(让它们分布在产出前列,"
-        f"不要全堆在最后,避免被 count 截断丢掉)。\n"
+        f"━━━ 数量与格式 ━━━\n"
+        f"产出 {count} 条改写,每行一条,纯中文,不要编号,不要项目符号,不要解释。\n"
+        f"{count} 条**不是硬指标** — 写不出 {count} 条不重复的就停下,**绝对不许灌水**。\n"
+        f"{avoid_clause}"
+        f"{entity_lock_clause}"
         f"\n"
-        f"━━━ 推荐型 / 找人型句式(每条都要把占位符替换成具体值)━━━\n"
-        f"✅ 「推荐一个在 [真实地名] 做 [真实业务场景] 的 X」\n"
-        f"✅ 「[真实地名] 哪家 [行业/律所/公司] 擅长 [真实业务场景]」\n"
-        f"✅ 「[真实身份/情境] 想 [具体动作],找哪家 X 靠谱」\n"
-        f"✅ 「适合做 [真实业务场景] 的 X 推荐」(**「适合做 + 具体业务」可以;「适合什么 + 维度名」不行**)\n"
-        f"✅ 「[真实身份] 第一次 [具体动作],该怎么找 X」\n"
-        f"✅ 「在 [真实地名] 找 X,有靠谱推荐吗」\n"
-        f"\n"
-        f"━━━ 可填的真实值(从 seed 推断,这里给海外并购领域示例,其它领域类比)━━━\n"
-        f"- 真实地名:北京 / 上海 / 深圳 / 广州 / 杭州 / 香港 / 新加坡 / 纽约 / 伦敦 / 东京 / 跨境 / 全国\n"
-        f"- 真实业务场景(海外并购领域示例):跨境并购 / 美股 SPAC / 红筹架构 / VIE 拆除 / "
-        f"欧盟反垄断审查 / 东南亚收购 / 中概股回归 / 跨境换股 / 港股私有化 / 美国 CFIUS 审查\n"
-        f"- 真实身份 / 情境:A 股上市公司想收购 / 创业公司被美股 SPAC 收购 / 家族企业想出海 / "
-        f"PE 基金做跨境投资 / 中概股要回港上市 / 跨境电商被美国客户起诉 / 民营企业第一次做海外收购\n"
-        f"\n"
-        f"**关键**:这些只是「海外并购律师」这个 seed 下的示例。换 seed 你要自己从行业里提炼对应的"
-        f"**真实地名、真实业务场景、真实身份处境**。直接抄上面这些词换到其它 seed 上就是错的。\n"
-        f"\n"
-        f"━━━ 好示例(seed = 海外并购律师,你可以模仿格式,但要换具体值)━━━\n"
-        f"- 推荐海外并购的北京律师\n"
-        f"- 适合做美股 SPAC 并购的律师推荐\n"
-        f"- 上海哪家律所擅长跨境并购\n"
-        f"- 上市公司收购东南亚工厂找哪家律师靠谱\n"
-        f"- 中概股回港上市找哪家律师好\n"
-        f"- 民营企业第一次做海外收购该怎么找律师\n"
-        f"- 香港做跨境并购的资深律师推荐\n"
-        f"- 准备被 SPAC 收购的创业公司找哪家律师\n"
-        f"- 创业公司被美国基金收购求推荐律师\n"
-        f"- 红筹架构搭建找深圳哪家律所\n"
-        f"\n"
-        f"━━━ 坏示例(产出了就当作没产出,不要写这种)━━━\n"
-        f"- 做跨境并购的律师适合什么地区(占位词)\n"
-        f"- 做跨境并购的律师适合什么场景(占位词)\n"
-        f"- 做跨境并购的律师适合什么类型/规模/需求/项目/预算/公司(占位词 cartesian product)\n"
-        f"- 跨境并购的律师费用是多少(meta 元问题,无具体处境)\n"
-        f"- 跨境并购的律师收费高吗 / 收费合理吗(meta 元问题,无具体处境)\n"
-        f"- 北京哪家律所擅长跨境并购(seed 是「律师」却写成了「律所」,主体词漂移)\n"
-        f"- 上海哪家律所擅长 SPAC 并购(同上,主体词漂移)\n"
-        f"- 海外并购律师哪家强(太宽泛,无修饰,且像 SEO 词条)\n"
-        f"- 能否跨境并购的律师有哪些(autocomplete 网页片段式语病句,真人不会这么问)\n"
-        f"- 跨境并购的律师是什么(meta + 网页标题式,无具体处境)\n"
-        f"\n"
-        f"现在围绕「{seed}」产出 {count} 条 query,每条都要通过「能否反推出一个具体场景」这条自检。"
-        f"每行一条,纯中文,不要编号,不要项目符号,不要任何解释。"
+        f"现在围绕种子「{seed}」开始改写,记住:**只调顺序 + 加白名单意图词,一字不许换**。"
     )
 
 
@@ -405,11 +403,45 @@ def _user_msg_en_geo(seed: str, count: int, target: str, aliases: list[str], ind
 
 
 def _user_msg_zh_generic(seed: str, count: int) -> str:
+    """中文 generic prompt(无 target 上下文)— 跟 zh_geo 同样要求「结构多样」。"""
     return (
-        f"请围绕主题「{seed}」生成 {count} 条用户可能向 AI 助手提问的中文搜索 prompt。"
-        f"要求:语义相关但表达各异;混合问句形式(什么/如何/为什么/最好的/对比/替代方案)、"
-        f"意图类型(信息型、对比型、交易型)和措辞风格;每条 6-30 个汉字;"
-        f"全部用中文输出,不要混入英文;不要编号,不要项目符号,每行一条。"
+        f"任务:把下面这条**种子提示词**改写成 {count} 条**结构上各异、语义相近**的搜索 query。\n"
+        f"\n"
+        f"━━━ 种子 ━━━\n"
+        f"「{seed}」\n"
+        f"\n"
+        f"━━━ 设计意图 ━━━\n"
+        f"我要 {count} 条**句式骨架不同**的同义改写,**不要换 1 个虚词的近义克隆**。\n"
+        f"\n"
+        f"━━━ 5 大变化维度(每条至少动 2 个)━━━\n"
+        f"(A) **调内部顺序**:业务 / 地点 / 身份名词块前后挪\n"
+        f"(B) **句式骨架变化**:陈述请求 / 直接寻问 / 处境式 / 询问式 / 双句式 / 反问式 / 强调式\n"
+        f"(C) **加修饰词**(身份前面加 adj):资深 / 专业 / 头部 / 顶尖 / 优秀 / 经验丰富 / 业内有名 / 老牌 / 实力强\n"
+        f"(D) **意图前/后缀**:推荐 / 求推荐 / 想找 / 哪位好 / 哪个靠谱 / 怎么找 / 谁靠谱 等(每条最多前后各 1 个)\n"
+        f"(E) **口吻**:正式咨询 / 朋友求助 / 简短直接 / 内行口吻 / 强调式 — 混搭\n"
+        f"\n"
+        f"━━━ 严格禁止 ━━━\n"
+        f"✗ **不许替换种子里任何字** — 业务 / 身份 / 地点词逐字保留(含「/」「、」)\n"
+        f"✗ **不许砍掉种子里任何字段**\n"
+        f"✗ **不许加种子里没有的实质内容**(公司名 / 案件 / 子领域 / 其它城市 / 国家)\n"
+        f"✗ **不许改成认知 / 对比 / 元 / SEO 句式**\n"
+        f"✗ **不许灌水** — 连续 3 条只换 1 个虚词立刻停笔\n"
+        f"\n"
+        f"━━━ 用「{seed}」直接套出来的好例子(结构骨架要这么变)━━━\n"
+        f"  • {seed}推荐\n"
+        f"  • 资深{seed}有哪些\n"
+        f"  • 想找{seed},有谁比较靠谱\n"
+        f"  • 头部{seed}都是谁\n"
+        f"  • {seed} — 业内最专业的是哪位\n"
+        f"  • 求推荐一位{seed}\n"
+        f"  • 请问{seed}哪位比较有经验\n"
+        f"  • 经验丰富的{seed},怎么找\n"
+        f"\n"
+        f"━━━ 数量与格式 ━━━\n"
+        f"产出 {count} 条,每行一条,纯中文,不要编号 / 项目符号 / 解释。\n"
+        f"{count} 条**不是硬指标** — 写不出结构上真有差异的就停下,**绝对不许灌水**。\n"
+        f"\n"
+        f"现在围绕「{seed}」开始改写:**每条要在句式结构上真有差异,不只是换虚词**。"
     )
 
 
@@ -458,12 +490,22 @@ class DeepSeekError(Exception):
 
 async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
                     industry: str, service_geo: str = "",
-                    profile_cases: list[str] | None = None) -> list[str]:
-    """调 DeepSeek 拿候选;失败抛 DeepSeekError(LLM 是主力,这一路挂了整个 endpoint 应该 5xx)."""
+                    profile_cases: list[str] | None = None,
+                    max_attempts: int = 3) -> list[str]:
+    """调 DeepSeek 拿候选;失败抛 DeepSeekError。
+
+    2026-05-26 — 加 retry:
+      - HTTP 429 / 5xx / 网络瞬态错误 → 退避重试(指数 0.5s, 1.5s, 3.5s)
+      - HTTP 4xx 非 429(配置 / auth 错)→ 立刻抛,不重试
+    max_tokens 上限砍到 4000(原 16000 过大,导致 LLM 生成慢,反而容易超时)。
+    每条 query 大概 30-50 token,4000 tokens 够 80-130 条候选,远超实际 raw_count。
+    """
+    import asyncio
     api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
     if not api_key:
         raise DeepSeekError("no_key", "DEEPSEEK_API_KEY 未配置")
 
+    # max_tokens:每条 query 30-50 token,留 buffer 拿 60 token/条
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": [
@@ -471,26 +513,39 @@ async def _fetch_llm(seed: str, raw_count: int, target: str, aliases: list[str],
             {"role": "user", "content": _user_msg(seed, raw_count, target, aliases, industry, service_geo, profile_cases)},
         ],
         "temperature": 0.7,
-        "max_tokens": min(16000, raw_count * 35),
+        "max_tokens": min(4000, max(800, raw_count * 60)),
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     url = f"{DEEPSEEK_BASE_URL}/chat/completions"
-    try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            r = await client.post(url, json=payload, headers=headers)
-    except httpx.HTTPError as e:
-        raise DeepSeekError("network", str(e)) from e
-    if r.status_code != 200:
-        raise DeepSeekError(f"http_{r.status_code}", r.text[:200])
-    try:
-        data = r.json()
-        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
-    except (ValueError, IndexError, KeyError) as e:
-        raise DeepSeekError("parse", str(e)) from e
-    return _parse_lines(text)
+
+    last_err: DeepSeekError | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                r = await client.post(url, json=payload, headers=headers)
+        except httpx.HTTPError as e:
+            last_err = DeepSeekError("network", f"attempt {attempt}: {e}")
+        else:
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                    text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+                except (ValueError, IndexError, KeyError) as e:
+                    raise DeepSeekError("parse", str(e)) from e
+                return _parse_lines(text)
+            # 4xx(429 除外)= 配置 / payload 错,不要重试
+            if 400 <= r.status_code < 500 and r.status_code != 429:
+                raise DeepSeekError(f"http_{r.status_code}", r.text[:200])
+            last_err = DeepSeekError(f"http_{r.status_code}", f"attempt {attempt}: {r.text[:200]}")
+        # 退避后重试
+        if attempt < max_attempts:
+            await asyncio.sleep(0.5 * (2 ** (attempt - 1)))  # 0.5s, 1.0s, 2.0s, ...
+
+    assert last_err is not None  # noqa: S101
+    raise last_err
 
 
 # ─── 簇主题摘要(LLM 二次打标)─────────────────────
@@ -731,19 +786,222 @@ def _drop_anchor_drift(items: list[tuple[str, str]], anchor: str) -> list[tuple[
     return kept
 
 
+# 字符级 paraphrase 严格过滤:候选必须把 seed 的所有实质字符都包含进去。
+# 忽略「可选虚词」(的 / 了 / 等)和「业务列表分隔符」(/ 、 , ,),其它
+# 任何字符缺失整条作废 —— 这是 paraphrase 模式下「不许换字 / 不许漏字段」的
+# 硬性保证,把 LLM 的偷懒(简化业务、主体词漂移、加新场景)挡在 score 之前。
+_PARAPHRASE_OPTIONAL_CHARS = set("的了等啊呀呢吗")
+_PARAPHRASE_SEPARATOR_CHARS = set("/、,, ./.\t ")
+
+
+# 实体对立词表:seed 末尾若是 key,候选里出现 value 列表里任一词都作废。
+# 挡 LLM「在候选里同时塞进种子实体词 + 对立实体词」的偷懒,例如:
+#   seed = ...律师 → 候选「在北京律所做跨境并购的律师推荐」(同时有律师 + 律所)
+# 字符过滤要求「律 + 师」都在,这种候选两个都满足,会漏过去。
+# 加这层 substring 黑名单兜底。
+_ENTITY_BLACKLIST: dict[str, tuple[str, ...]] = {
+    # 人
+    "律师":   ("律所", "事务所", "法务", "合伙人"),
+    "医生":   ("医院", "诊所", "科室"),
+    "顾问":   ("咨询师", "专家"),
+    "教练":   ("老师", "师傅"),
+    "老师":   ("教练",),
+    # 机构
+    "律所":   ("律师",),
+    "事务所": ("律师",),
+    "医院":   ("医生", "诊所"),
+    "诊所":   ("医生", "医院"),
+    # 产品 — 不许出现「人」「机构」类词(产品就是物品本身,不是公司不是人)
+    "机器人": ("律师", "顾问", "公司", "团队", "工程师"),
+    "软件":   ("律师", "顾问", "公司", "团队", "工程师"),
+    "设备":   ("律师", "顾问", "公司", "团队", "工程师"),
+    "系统":   ("律师", "顾问", "公司", "团队", "工程师"),
+    "工具":   ("律师", "顾问", "公司", "团队"),
+    "服务":   ("律师", "顾问"),  # 服务模糊,放宽
+    "应用":   ("律师", "顾问", "公司"),
+    "App":    ("律师", "顾问", "公司"),
+    "app":    ("律师", "顾问", "公司"),
+}
+
+
+# 2026-05-26 — 量词跟实体类型不匹配的禁用词。
+# 例:seed=「律师」(人)→ 候选不许出现「哪家」「几家」(机构量词)。
+# 这是 "量词错配" 而非 "实体词漂移"(后者由 _ENTITY_BLACKLIST 挡),独立一层。
+_QUANTIFIER_BLACKLIST: dict[str, tuple[str, ...]] = {
+    # 人 — 禁机构量词 + 产品量词
+    "person":      ("哪家", "几家", "哪款", "几款", "一款"),
+    # 机构 — 禁人量词 + 产品量词
+    "institution": ("哪位", "一位", "几位", "推荐一位", "推荐几位",
+                    "哪款", "几款", "一款"),
+    # 产品 — 禁人量词 + 机构量词
+    "product":     ("哪位", "一位", "几位", "推荐一位", "推荐几位",
+                    "哪家", "几家", "推荐几家"),
+    # generic 不限
+    "generic":     (),
+}
+
+
+def _seed_entity_blacklist(seed: str) -> tuple[str, ...]:
+    """seed 末尾命中 _ENTITY_BLACKLIST 中任一 key,返回对立实体词列表。
+
+    长串优先匹配避免误判:
+      - 「机器人」(3字)能正确匹中,不会被「器人」(2字)截断
+      - 「扫地机器人」会命中「机器人」而不是「扫地机」
+
+    例:
+      - seed='...北京律师' → ('律所','事务所','法务','合伙人')
+      - seed='清洁机器人' → ('律师','顾问','公司','团队','工程师')
+      - seed='北京律师事务所' → ('律师',)
+    """
+    if not seed:
+        return ()
+    cleaned = "".join(c for c in seed if not c.isspace())
+    if not cleaned:
+        return ()
+    for ent in sorted(_ENTITY_BLACKLIST.keys(), key=len, reverse=True):
+        if cleaned.endswith(ent):
+            return _ENTITY_BLACKLIST[ent]
+    return ()
+
+
+def _drop_seed_underspec(items: list[tuple[str, str]],
+                         seed: str) -> list[tuple[str, str]]:
+    """Paraphrase 模式硬过滤 — 三条规则:
+       (a) 候选必须包含 seed 的所有实质字符(忽略虚词 + 业务分隔符)
+       (b) 候选不能出现 seed 实体词的对立词(律师↛律所,医生↛医院,等)
+       (c) 候选量词必须跟实体类型匹配(律师↛哪家;律所↛哪位;机器人↛哪位/哪家)
+
+    挡 LLM:
+    - 砍业务字段:「跨境并购」→「并购」(漏「跨」「境」字符 — 规则 a)
+    - 换更窄子集:「跨境并购」→「美股 SPAC」(漏所有原字符 — 规则 a)
+    - 主体词漂移:「律师」→「律所」(漏「师」字符 — 规则 a)
+    - 双塞实体词:「北京律所的律师推荐」(规则 a 漏过,规则 b 拦截 — '律所' 命中黑名单)
+    - 加种子里没有的城市:种子「北京」却写「香港」(规则 a 拦)
+    - 量词错配:种子「律师」却写「律师哪家好」(规则 c 拦 — '哪家' 是机构量词)
+
+    保护:过滤掉 > 70% 候选时(< 30% 留存)且样本 ≥ 5,回滚不过滤,避免 seed 含
+    罕见字符 / 标点导致全军覆没 → empty → 502。
+    """
+    if not items or not seed.strip():
+        return items
+    required = set(seed) - _PARAPHRASE_OPTIONAL_CHARS - _PARAPHRASE_SEPARATOR_CHARS
+    required_lower = {c.lower() for c in required}
+    if not required_lower:
+        return items
+    blacklist = _seed_entity_blacklist(seed)
+    # 规则 (c) 量词黑名单 — 按实体类型决定
+    entity_kind = _detect_seed_entity_kind(seed)
+    quantifier_blacklist = _QUANTIFIER_BLACKLIST.get(entity_kind, ())
+    kept: list[tuple[str, str]] = []
+    for text, source in items:
+        c_lower = {c.lower() for c in text}
+        if not required_lower.issubset(c_lower):
+            continue
+        # 实体对立词:命中即作废
+        if blacklist and any(bad in text for bad in blacklist):
+            continue
+        # 量词错配:命中即作废
+        if quantifier_blacklist and any(q in text for q in quantifier_blacklist):
+            continue
+        kept.append((text, source))
+    # 保护性回滚:LLM 几乎全错时,可能 seed 含罕见字 / 标点导致误杀,回滚
+    if len(items) >= 5 and len(kept) / len(items) < 0.30:
+        return items
+    return kept
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """字符级 Levenshtein 距离(标准 DP 实现,O(m*n) 时间 / O(min(m,n)) 空间)。"""
+    if a == b:
+        return 0
+    if len(a) < len(b):
+        a, b = b, a
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+        prev = cur
+    return prev[-1]
+
+
+def _drop_near_clones(items: list[tuple[str, str]],
+                      seed: str,
+                      tail_jaccard_threshold: float = 0.60,
+                      max_per_family: int = 10) -> list[tuple[str, str]]:
+    """挡「只差一个意图虚词」的近义克隆。
+
+    度量:**非种子字符** jaccard。对每条候选,提取「字符集 - 种子字符集」= tail_chars,
+    跟已 kept 的 tail_chars 比 jaccard。如果 ≥ threshold,就是同一个「意图家族」的克隆。
+
+    场景:seed = 「私募股权的北京律师」
+      • 「私募股权的北京律师推荐」     → tail = {推, 荐}
+      • 「私募股权的北京律师求推荐」   → tail = {求, 推, 荐}    jaccard with 推荐 = 0.67 → 砍
+      • 「私募股权的北京律师哪位好」   → tail = {哪, 位, 好}    jaccard with 推荐 = 0   → 留(真的不同)
+      • 「私募股权的北京律师哪位靠谱」 → tail = {哪, 位, 靠, 谱} jaccard with 哪位好 = 0.4  → 砍
+
+    `max_per_family=1` 即每个意图家族(=有共同非种子字符的)只留 1 条最高分。
+    template:intent 源直通(模板按设计是近义,这层放过它们)。
+    保护性回滚:留存率 < 30% 且样本 ≥ 5 时回滚。
+    """
+    if not items:
+        return items
+    seed_chars = {c.lower() for c in seed}
+    kept: list[tuple[str, str]] = []
+    kept_tails: list[set[str]] = []
+    for text, source in items:
+        if source == "template:intent":
+            kept.append((text, source))
+            continue
+        t_low = text.lower().strip()
+        if not t_low:
+            continue
+        tail = {c for c in t_low if c not in seed_chars}
+        # tail 太短(< 2)或者完全等同于种子时,直接保留(已 kept 集合里也按内容去重)
+        if len(tail) < 2:
+            if t_low not in {t.lower() for t, _ in kept}:
+                kept.append((text, source))
+                kept_tails.append(tail)
+            continue
+        clone_count = 0
+        for prev_tail in kept_tails:
+            if not prev_tail:
+                continue
+            union = tail | prev_tail
+            if not union:
+                continue
+            j = len(tail & prev_tail) / len(union)
+            if j >= tail_jaccard_threshold:
+                clone_count += 1
+                if clone_count >= max_per_family:
+                    break
+        if clone_count >= max_per_family:
+            continue
+        kept.append((text, source))
+        kept_tails.append(tail)
+    # 保护性回滚
+    if len(items) >= 5 and len(kept) / len(items) < 0.30:
+        return items
+    return kept
+
+
 def _dedup_template_glut(scored: list[dict], prefix_len: int = 6,
                          suffix_len: int = 6,
-                         max_per_template: int = 5,
-                         jaccard_threshold: float = 0.7,
-                         max_per_jaccard_group: int = 4) -> list[dict]:
+                         max_per_template: int = 4,
+                         jaccard_threshold: float = 0.78,
+                         max_per_jaccard_group: int = 3) -> list[dict]:
     """三层模板去重 — 前缀 / 后缀 / token-bag jaccard。score 高的优先保留。
 
-    挡 LLM 在 count 较大时进入「同句式 + 字典遍历」模式产出灌水:
-    - prefix 抓「做跨境并购」「跨境并购律」这类句首模板
-    - suffix 抓「找哪家律师」「找哪个律师」「的推荐」这类句尾模板
-    - jaccard 抓中间词模板(「[城市] 做跨境并购的律师有擅长 [行业] 的吗」这种)
-
-    任何一层触发上限就丢。jaccard 是 O(n^2) 但 n <= 几百 ok。
+    2026-05-26 第二轮调整:用户反馈 LLM 输出仍是「换一个虚词」的近义复制,
+    阈值再收紧:
+      - max_per_template 80→4:同前缀 / 同后缀的最多保留 4 条
+      - jaccard_threshold 0.92→0.78:更激进地识别近义重复
+      - max_per_jaccard_group 80→3:同模板簇最多 3 条
+    配合 prompt 里「结构多样性」约束,LLM 输出的近义克隆会被挡掉,
+    最终落到候选池里的都是**句式结构上真有差异**的同义改写。
 
     `sources == ["template:intent"]` 的纯模板候选直通且不进 accepted 累计 —
     模板按设计就是同前缀枚举,这层去重的初衷是挡 LLM 灌水,把模板顺手砍了
@@ -888,49 +1146,169 @@ def _score_candidate(text: str, seed_terms: list[str],
     return int(round(base))
 
 
-# ─── 纯模板扩展(seed + 商业意图后缀)───────────────
+# ─── 纯模板扩展(seed + 同义意图前/后缀)───────────────
 #
-# 参考外部 GEO 工具(如智效)的做法:seed 原样保留,后缀来自固定的商业意图
-# 词库,不走 LLM —— 0 漂移、0 幻觉。覆盖「哪家好 / 排名 / 推荐 / 联系方式」
-# 这类高商业意图的稳定底盘,LLM 那一路则负责场景化 / 案例追溯型长尾。
+# 0 漂移、0 幻觉的保底底盘。seed 原样保留,只拼前缀 / 后缀。
+# 2026-05-26 升级:按 seed 末尾实体词自动选「人」/「机构」两套量词:
+#   - seed 是律师 / 医生 / 顾问 这类「人」 → 用「哪位 / 哪个 / 推荐一位」
+#   - seed 是律所 / 事务所 / 公司 这类「机构」 → 用「哪家 / 推荐几家」
+#   - 检测不到 → fallback 机构套(向后兼容)
+# 词表跟 prompt 白名单基本一致,确保 LLM 和模板产出风格一致。
 
-_INTENT_SUFFIXES_ZH: tuple[str, ...] = (
-    # 评价 / 口碑型
-    "哪家好", "哪家强", "哪家专业", "哪家靠谱", "哪家口碑好", "哪个好",
-    "口碑怎么样", "比较好的",
-    # 排名 / 列表型
-    "排名", "有哪些", "推荐哪些",
-    # 推荐型
-    "推荐", "推荐几家", "求推荐", "帮我推荐几家",
-    # 选 / 找型
-    "找哪些", "找哪家", "怎么找", "选哪家", "选哪家好", "选择哪家好",
+# seed 末尾命中下面任一,判定为「人」
+_PERSON_ENTITIES: tuple[str, ...] = (
+    "律师", "医生", "顾问", "教练", "老师", "师傅",
+    "设计师", "工程师", "咨询师", "培训师", "经纪人",
+    "专家", "合伙人", "投顾", "主播", "摄影师", "写手", "翻译",
+)
+# seed 末尾命中下面任一,判定为「机构」(优先长串匹配:律师事务所 > 事务所)
+_INSTITUTION_ENTITIES: tuple[str, ...] = (
+    "律师事务所", "事务所", "律所", "医院", "诊所", "公司",
+    "工作室", "机构", "学校", "培训机构", "团队",
+)
+# seed 末尾命中下面任一,判定为「产品」(物品 / 工具 / 软件 / 服务)
+_PRODUCT_ENTITIES: tuple[str, ...] = (
+    "机器人", "扫地机", "扫地机器人", "吸尘器", "洗碗机", "净水器", "空气净化器",
+    "软件", "工具", "设备", "系统", "平台", "应用", "服务", "套件", "方案",
+    "产品", "App", "app", "SaaS", "saas", "插件", "模板",
+)
+
+# 通用前缀(人/机构/产品都能用)
+_INTENT_PREFIXES: tuple[str, ...] = (
+    "推荐", "求推荐", "适合", "推荐一个",
+    "想找", "求", "找", "帮忙推荐",
+    "有没有", "有没有靠谱的", "哪里有", "哪里能找到",
+)
+
+# 「人」专用后缀(用哪位 / 哪个 / 推荐一位)
+_PERSON_INTENT_SUFFIXES: tuple[str, ...] = (
+    "哪位好", "哪位靠谱", "哪位专业", "哪位口碑好", "哪位资深",
+    "哪个好", "哪个靠谱", "哪个专业",
+    "推荐", "推荐一位", "推荐一个", "推荐几位",
+    "求推荐", "求推荐一位",
+    "找哪位", "找哪个", "怎么找",
+    "有推荐吗", "有靠谱的吗", "找谁靠谱", "找谁好",
+)
+_PERSON_EXTRA_PREFIXES: tuple[str, ...] = (
+    "推荐一位", "推荐几位", "帮忙推荐一位", "帮忙推荐一个",
+)
+
+# 「机构」专用后缀(用哪家)
+_INSTITUTION_INTENT_SUFFIXES: tuple[str, ...] = (
+    "哪家好", "哪家强", "哪家专业", "哪家靠谱", "哪家口碑好",
+    "哪个好", "哪个靠谱",
+    "推荐", "推荐哪家", "推荐几家", "求推荐",
+    "找哪家", "怎么找", "选哪家", "选哪家好",
+    "排名", "有哪些",
     "在哪里找", "去哪里找",
-    # 联系 / 转化型
-    "怎么联系", "联系方式",
-    # 报价型
-    "收费标准", "费用怎么算",
+)
+_INSTITUTION_EXTRA_PREFIXES: tuple[str, ...] = (
+    "推荐几家", "帮忙推荐几家",
+)
+
+# 「产品」专用后缀(用哪款 / 哪个 / 推荐一款)
+_PRODUCT_INTENT_SUFFIXES: tuple[str, ...] = (
+    "哪款好", "哪款靠谱", "哪款值得买", "哪款性价比高",
+    "哪个好", "哪个值得买", "哪个推荐", "哪个靠谱", "哪个性价比高",
+    "推荐", "推荐一款", "推荐一个", "推荐几款",
+    "求推荐", "求推荐一款", "求选购建议",
+    "选哪个", "选哪款", "怎么选",
+    "有推荐吗", "有什么好的",
+)
+_PRODUCT_EXTRA_PREFIXES: tuple[str, ...] = (
+    "推荐一款", "推荐几款", "选购", "想买",
 )
 
 
-def _template_expand_zh(seed: str) -> list[str]:
-    """中文 seed 的纯模板扩展。seed 原样保留 + 商业意图后缀枚举。
+def _detect_seed_entity_kind(seed: str) -> str:
+    """返回 'person' / 'institution' / 'product' / 'generic'。
 
-    产出三段:
-      1. seed 本身
-      2. [seed] + [后缀]
-      3. [seed]服务 + [后缀](seed 未以「服务」结尾时)
-    总量 ≈ 1 + 28 + 28 = 57 条;已含「服务」时 ≈ 29 条。内部按 lowercase 去重保序。
+    匹配优先级:机构 > 产品 > 人 — 长串先匹避免误判:
+      - 「律师事务所」不被「律师」误判成 person
+      - 「扫地机器人」不被「扫地机」误判过早,而是先匹「机器人」结尾后判 product
+    """
+    seed = (seed or "").strip()
+    if not seed:
+        return "generic"
+    # 移除空白但保留中文 / 英文 / 标点(实体词可能含 App / SaaS 这种英文)
+    cleaned = "".join(c for c in seed if not c.isspace())
+    if not cleaned:
+        return "generic"
+    for ent in sorted(_INSTITUTION_ENTITIES, key=len, reverse=True):
+        if cleaned.endswith(ent):
+            return "institution"
+    for ent in sorted(_PRODUCT_ENTITIES, key=len, reverse=True):
+        if cleaned.endswith(ent):
+            return "product"
+    for ent in sorted(_PERSON_ENTITIES, key=len, reverse=True):
+        if cleaned.endswith(ent):
+            return "person"
+    return "generic"
+
+
+# 「脏 seed」标志词 — seed 里出现这些就说明 seed 已经是 query 不是名词短语,
+# 拼意图后缀会产出「X推荐推荐」「X，不要 Y 哪家好」这种重复 / 病句。
+# 检测到就跳过 template:intent 这一路,让 LLM 直接 paraphrase。
+_DIRTY_SEED_INTENT_MARKERS: tuple[str, ...] = (
+    "推荐", "求推荐", "哪家好", "哪个好", "哪位好", "哪款好",
+    "哪家靠谱", "哪个靠谱", "哪位靠谱", "哪款靠谱",
+    "哪家专业", "哪家强", "怎么找", "怎么选",
+    "有推荐吗", "有靠谱的吗", "有没有靠谱的",
+    "哪里有", "哪里能找到", "选哪家", "选哪个", "选哪款",
+    "找哪家", "找哪个", "找哪位", "找谁靠谱", "找谁好",
+    "排名", "有哪些",
+)
+
+
+def _seed_is_dirty(seed: str) -> tuple[bool, list[str]]:
+    """检测 seed 是否已含意图词。返回 (is_dirty, markers_found)。"""
+    if not seed:
+        return False, []
+    hits = [m for m in _DIRTY_SEED_INTENT_MARKERS if m in seed]
+    return bool(hits), hits
+
+
+def _template_expand_zh(seed: str) -> list[str]:
+    """中文 seed 的纯模板扩展 — 按实体类型(人 / 机构)选意图词。
+
+    产出:
+      1. seed 原样
+      2. [seed] + [实体匹配的意图后缀]
+      3. [通用前缀 + 实体专用前缀] + [seed]
+    内部按 lowercase 去重保序。
+
+    数量级:人 ≈ 38 条,机构 ≈ 30 条,generic ≈ 30 条。
     """
     seed = (seed or "").strip()
     if not seed:
         return []
+    # 脏 seed(已含意图词)— 跳过 template:intent,只返回 seed 本身。
+    # 不再拼后缀避免「X推荐推荐」「X，不要 Y 哪家好」之类的重复 / 病句。
+    is_dirty, _ = _seed_is_dirty(seed)
+    if is_dirty:
+        return [seed]
+
+    kind = _detect_seed_entity_kind(seed)
+    if kind == "person":
+        suffixes = _PERSON_INTENT_SUFFIXES
+        prefixes = _INTENT_PREFIXES + _PERSON_EXTRA_PREFIXES
+    elif kind == "institution":
+        suffixes = _INSTITUTION_INTENT_SUFFIXES
+        prefixes = _INTENT_PREFIXES + _INSTITUTION_EXTRA_PREFIXES
+    elif kind == "product":
+        suffixes = _PRODUCT_INTENT_SUFFIXES
+        prefixes = _INTENT_PREFIXES + _PRODUCT_EXTRA_PREFIXES
+    else:
+        # generic / 旧行为兜底
+        suffixes = _INSTITUTION_INTENT_SUFFIXES
+        prefixes = _INTENT_PREFIXES
+
     out: list[str] = [seed]
-    for suf in _INTENT_SUFFIXES_ZH:
+    for suf in suffixes:
         out.append(seed + suf)
-    if not seed.endswith("服务"):
-        seed_svc = seed + "服务"
-        for suf in _INTENT_SUFFIXES_ZH:
-            out.append(seed_svc + suf)
+    for pre in prefixes:
+        out.append(pre + seed)
+
     seen: set[str] = set()
     dedup: list[str] = []
     for t in out:
@@ -984,11 +1362,12 @@ async def suggest_queries(
     service_geo = (service_geo or "").strip()
     profile_cases = [c.strip() for c in (profile_cases or []) if c and c.strip()][:40]
 
-    # raw_count 上限 200 — 2026-05-20 起,prompt 已加严反灌水死规则 + 用户真实案例清单,
-    # 单次 LLM 调用产出 150-200 条仍可维持质量。dedup 后约 100-180 个候选。
-    raw_count = min(200, int(count * 1.3)) if target else min(200, count)
+    # raw_count 上限 80 — 2026-05-26 砍下来(原 200 太大,LLM 生成慢易超时,
+    # 且 paraphrase 模式下 80 条已远超合理多样性上限)。
+    raw_count = min(80, max(20, int(count * 1.3))) if target else min(80, max(20, count))
 
-    # 两路并行:LLM 必须成功(主力),autocomplete 失败吞掉
+    # 两路并行:autocomplete 失败吞掉。LLM 失败 2026-05-26 起也吞掉,
+    # 退到 template:intent 那一路兜底(CJK seed 永远有 ~30 条模板候选)。
     llm_task = _fetch_llm(seed, raw_count, target, aliases, industry, service_geo, profile_cases)
     if include_autocomplete:
         results = await asyncio.gather(
@@ -996,13 +1375,26 @@ async def suggest_queries(
         )
         llm_res, sug_res = results[0], results[1]
     else:
-        llm_res = await llm_task
+        try:
+            llm_res = await llm_task
+        except DeepSeekError as e:
+            # no_key / invalid_seed 是配置错,得让 caller 知道
+            if e.code in ("no_key", "invalid_seed"):
+                raise
+            # 其它(network / http_429 / http_5xx / parse)→ 软失败,走模板兜底
+            import logging
+            logging.getLogger(__name__).warning(
+                "LLM failed (%s: %s), falling back to template-only", e.code, e.message,
+            )
+            llm_res = e
         sug_res = []
 
-    # LLM 出错直接抛(主力);autocomplete 出错只 log 不影响
+    # LLM 出错 → 取空列表,后面 template:intent 路径兜底
+    llm_lines: list[str]
     if isinstance(llm_res, Exception):
-        raise llm_res
-    llm_lines: list[str] = llm_res
+        llm_lines = []
+    else:
+        llm_lines = llm_res
     sug_pairs: list[tuple[str, str]] = sug_res if isinstance(sug_res, list) else []
 
     # 合并 + 去重(归一化小写),记录每条 text 来自哪几个 source
@@ -1047,6 +1439,32 @@ async def suggest_queries(
         pairs = [(m["text"], "_") for m in merged.values()]
         kept_texts = {t.lower() for t, _ in _drop_anchor_drift(pairs, anchor)}
         merged = {k: v for k, v in merged.items() if v["text"].lower() in kept_texts}
+
+    # Paraphrase 字符级硬过滤 — 候选必须包含 seed 的所有实质字符(忽略虚词 + 业务分隔符)。
+    # 比 anchor_drift 严得多:anchor 只检查主体词末 2 字,这层覆盖整个 seed,
+    # 把「砍业务字段 / 换更窄子集 / 漏字段」全堵掉。模板源(template:intent)直通,
+    # 因为模板按设计是 seed 原样拼后缀,字符完整保留。
+    pairs = [(m["text"], "_") for m in merged.values()
+             if "template:intent" not in m["sources"]]
+    if pairs:
+        kept_texts = {t for t, _ in _drop_seed_underspec(pairs, seed)}
+        merged = {
+            k: v for k, v in merged.items()
+            if v["text"] in kept_texts or "template:intent" in v["sources"]
+        }
+
+    # 2026-05-26 — 近义克隆过滤(`{seed}推荐` / `{seed}求推荐` / `{seed}哪位好` …
+    # 这种「只差 1 个意图虚词」的候选)。按 score 从高到低顺序遍历,跟已 kept 比
+    # 字符编辑距离 / 长度。token jaccard 在 CJK 短句上分不开近义克隆 vs 真结构差异,
+    # 编辑距离能。
+    pairs2 = [(m["text"], "llm" if "llm:deepseek" in m["sources"] else "_")
+              for m in merged.values() if "template:intent" not in m["sources"]]
+    if pairs2:
+        kept_texts2 = {t for t, _ in _drop_near_clones(pairs2, seed)}
+        merged = {
+            k: v for k, v in merged.items()
+            if v["text"] in kept_texts2 or "template:intent" in v["sources"]
+        }
 
     if not merged:
         raise DeepSeekError("empty", "候选全被过滤或 LLM 返回为空,换个 seed 重试")

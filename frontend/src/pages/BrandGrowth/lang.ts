@@ -130,9 +130,17 @@ interface Dict {
   queriesColAction: string;
   queriesNoSeed: string;
   queriesFilterAllSeeds: string;
+  queriesFilterSeedsLabel: string;
   queriesFilterAllHit: string;
   queriesFilterOnlyHit: string;
   queriesFilterOnlyMiss: string;
+  // 2026-05-26 — 种子原文 vs 扩展 query 筛选 + badge
+  queriesFilterAllSeedKind: string;
+  queriesFilterOnlySeed: string;
+  queriesFilterOnlyExpanded: string;
+  queriesFilterSeedKindHint: string;
+  queriesSeedOriginalBadge: string;
+  queriesSeedOriginalBadgeHint: string;
   queriesFilterEngineBadge: (engine: string) => string;
   queriesEmptyAfterFilter: string;
   queriesViewMatrix: string;
@@ -321,10 +329,17 @@ const ZH: Dict = {
   queriesColModel: '模型',
   queriesColAction: '查看',
   queriesNoSeed: '—',
-  queriesFilterAllSeeds: '全部种子',
+  queriesFilterAllSeeds: '全部',
+  queriesFilterSeedsLabel: '种子提示词',
   queriesFilterAllHit: '全部命中状态',
   queriesFilterOnlyHit: '仅看已命中',
   queriesFilterOnlyMiss: '仅看未命中',
+  queriesFilterAllSeedKind: '全部 query 类型',
+  queriesFilterOnlySeed: '仅种子原文',
+  queriesFilterOnlyExpanded: '仅扩展 query',
+  queriesFilterSeedKindHint: '种子原文 = 种子提示词本身,默认监测,不可取消;扩展 query = 由种子扩展出的同义改写',
+  queriesSeedOriginalBadge: '种子',
+  queriesSeedOriginalBadgeHint: '种子原文 query — 由已批准的种子提示词直接派生,默认参与监测,不可取消',
   queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
   queriesEmptyAfterFilter: '当前筛选无匹配问题',
   queriesViewMatrix: '查矩阵 →',
@@ -514,10 +529,17 @@ const EN: Dict = {
   queriesColModel: 'Model',
   queriesColAction: 'View',
   queriesNoSeed: '—',
-  queriesFilterAllSeeds: 'All seeds',
+  queriesFilterAllSeeds: 'All',
+  queriesFilterSeedsLabel: 'Seed prompts',
   queriesFilterAllHit: 'Any hit status',
   queriesFilterOnlyHit: 'Hit only',
   queriesFilterOnlyMiss: 'Miss only',
+  queriesFilterAllSeedKind: 'All query kinds',
+  queriesFilterOnlySeed: 'Seed prompts only',
+  queriesFilterOnlyExpanded: 'Expanded only',
+  queriesFilterSeedKindHint: 'Seed prompt = seed text itself, monitored by default and cannot be unchecked; Expanded = paraphrases derived from a seed',
+  queriesSeedOriginalBadge: 'Seed',
+  queriesSeedOriginalBadgeHint: 'Seed-prompt query — directly derived from an approved seed prompt, always monitored, cannot be unchecked',
   queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,
   queriesEmptyAfterFilter: 'No queries match the current filter',
   queriesViewMatrix: 'See matrix →',

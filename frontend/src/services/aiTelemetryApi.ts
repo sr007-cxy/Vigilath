@@ -34,6 +34,8 @@ export interface Topic {
   query_statuses?: ReviewStatus[];   // Phase C — 与 queries 同长,legacy 默认 approved
   query_selected?: boolean[];        // Phase D — 与 queries 同长,标记是否选为监测问题
   query_seeds?: string[];            // 2026-05-20 — 与 queries 同长,种子提示词(legacy 为 "")
+  query_is_seed?: boolean[];         // 2026-05-26 — 与 queries 同长,标记该 query 是 seed 原文派生
+  query_locked?: boolean[];          // 2026-05-26 — 与 queries 同长,locked=True 的 query 不可取消勾选(seed 原文)
   clusters?: ClusterMetaPersist[];   // picker 端聚类后的簇元数据
   seed_prompts?: SeedPrompt[];       // Phase C — 已提交的种子词列表
   engines: EngineId[];

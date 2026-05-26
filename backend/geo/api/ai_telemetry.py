@@ -698,6 +698,30 @@ def submit_seed_prompt(
         field="seed_prompts", after=text,
         note="admin submitted new seed (auto-approved)" if is_admin else "user submitted new seed",
     )
+
+    # 2026-05-26 — admin 提交时种子自动 approved → 立刻派生同名 query
+    # (is_seed=True, locked=True, selected=True)。普通用户提交走 pending,等 admin
+    # 审批后由 admin_patch_topic 那一路统一派生,这里跳过。
+    if is_admin:
+        try:
+            qarr = json.loads(t.queries_json or "[]")
+        except Exception:  # noqa: BLE001
+            qarr = []
+        q_by_text = {q.get("text"): q for q in qarr if isinstance(q, dict)}
+        if text in q_by_text:
+            q = q_by_text[text]
+            q.update({"is_seed": True, "locked": True,
+                      "selected": True, "seed": text})
+        else:
+            qarr.append({
+                "text": text, "status": "approved",
+                "submitted_at": now_iso, "approved_at": now_iso,
+                "reviewer_id": current_user.id,
+                "seed": text, "is_seed": True, "locked": True,
+                "selected": True, "cluster_id": -1,
+            })
+        t.queries_json = json.dumps(qarr, ensure_ascii=False)
+
     db.commit()
     db.refresh(t)
     return TopicOut.from_orm_row(t)
@@ -880,10 +904,19 @@ def update_selected_queries(
                 new_q["seed"] = seed
             upgraded.append(new_q)
             by_text[text] = upgraded[-1]
-    # 不在 payload 里的:保留原状态,selected=False
+    # 不在 payload 里的:保留原状态,selected=False — 除非是 locked(种子原文 query)
     for text, q in by_text.items():
         if text not in desired_texts:
-            q["selected"] = False
+            # 2026-05-26 — locked=True 的 query(seed 原文)强制保持 selected=True,
+            # 防止前端误传 / 旧 client 把它们刷下来
+            if q.get("locked"):
+                q["selected"] = True
+            else:
+                q["selected"] = False
+    # 2026-05-26 — locked 的 query 即使在 payload 里被显式 unset 也要保持 selected=True
+    for q in upgraded:
+        if q.get("locked") and not q.get("selected"):
+            q["selected"] = True
     selected_n = sum(1 for q in upgraded if q.get("selected"))
     if selected_n > MAX_SELECTED_QUERIES:
         raise HTTPException(

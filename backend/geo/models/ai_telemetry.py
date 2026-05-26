@@ -743,6 +743,13 @@ class TopicOut(BaseModel):
     query_selected: list[bool]
     # 2026-05-20 — 跟 queries 同长的种子词数组;legacy / 未记录的位为 ""
     query_seeds: list[str] = Field(default_factory=list)
+    # 2026-05-26 — 跟 queries 同长的「种子原文 query」标记。is_seed=True 的 query 是
+    # 由某个已批准的 seed_prompt 直接派生的副本(query.text == seed.text),默认 selected=True
+    # 且 locked=True(UI 不可取消)。前端用来加 badge + filter「仅显示种子原文」。
+    query_is_seed: list[bool] = Field(default_factory=list)
+    # 2026-05-26 — 跟 queries 同长的 locked 标记。locked=True 时前端 picker 不可取消勾选。
+    # 当前唯一锁源:is_seed=True 的 query(种子原文 query 强制入监测)。
+    query_locked: list[bool] = Field(default_factory=list)
     clusters: list[ClusterMeta]
     seed_prompts: list[SeedPromptItem]
     engines: list[str]
@@ -782,6 +789,8 @@ class TopicOut(BaseModel):
         statuses: list[str] = []
         selected: list[bool] = []
         query_seeds: list[str] = []
+        query_is_seed: list[bool] = []
+        query_locked: list[bool] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
@@ -793,12 +802,18 @@ class TopicOut(BaseModel):
                     # legacy 无 selected 字段:默认 True(老话题的 query 默认都参与监测)
                     selected.append(bool(q.get("selected", True)))
                     query_seeds.append(str(q.get("seed") or ""))
+                    query_is_seed.append(bool(q.get("is_seed", False)))
+                    # locked 默认跟 is_seed 走 — 种子原文 query 强制锁定;
+                    # 显式给了 locked 字段就尊重之
+                    query_locked.append(bool(q.get("locked", q.get("is_seed", False))))
             elif isinstance(q, str):
                 queries.append(q)
                 cluster_ids.append(-1)
                 statuses.append("approved")
                 selected.append(True)
                 query_seeds.append("")
+                query_is_seed.append(False)
+                query_locked.append(False)
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         seeds_raw = json.loads(getattr(r, "seed_prompts_json", None) or "[]")
@@ -824,6 +839,8 @@ class TopicOut(BaseModel):
             query_statuses=statuses,
             query_selected=selected,
             query_seeds=query_seeds,
+            query_is_seed=query_is_seed,
+            query_locked=query_locked,
             clusters=clusters,
             seed_prompts=seeds,
             engines=json.loads(r.engines_json or "[]"),
