@@ -307,46 +307,9 @@ function Body({ state }: { state: ShellState }) {
                   {L.queriesEmptyAfterFilter}
                 </td>
               </tr>
-            ) : (() => {
-              // 2026-05-26 — 按种子分组渲染。每个新 seed 出现前插入一个 group header 行。
-              // 空 seed(legacy)归到「未关联种子」组,排在最后。
-              const groupedNodes: React.ReactNode[] = [];
-              const seedGroupCounts = new Map<string, number>();
-              for (const r of filteredRows) {
-                const k = r.seed || '__unseeded__';
-                seedGroupCounts.set(k, (seedGroupCounts.get(k) || 0) + 1);
-              }
-              let lastSeedKey: string | null = null;
-              let runningIdx = 0;
-              for (const r of filteredRows) {
-                const k = r.seed || '__unseeded__';
-                if (k !== lastSeedKey) {
-                  lastSeedKey = k;
-                  groupedNodes.push(
-                    <tr key={`__group_${k}`}
-                        style={{
-                          background: 'var(--bg-tertiary)',
-                          boxShadow: 'inset 0 -1px 0 var(--border-color)',
-                        }}>
-                      <td colSpan={5} className="px-3 py-2">
-                        <span className="inline-flex items-center gap-2">
-                          <span aria-hidden style={{ fontSize: 13 }}>🌱</span>
-                          <span className="font-semibold text-[12px] text-primary">
-                            {r.seed || L.queriesNoSeed}
-                          </span>
-                          <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                            {seedGroupCounts.get(k) || 0} 条
-                          </span>
-                        </span>
-                      </td>
-                    </tr>,
-                  );
-                }
-                runningIdx += 1;
-                const idx = runningIdx;
-                groupedNodes.push(
-                  <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-                    <td className="px-2 py-2 text-right tabular-nums text-muted">{idx}</td>
+            ) : filteredRows.map((r, i) => (
+              <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>
                   {r.isSeed && (
                     <span
@@ -408,11 +371,8 @@ function Body({ state }: { state: ShellState }) {
                     </button>
                   )}
                 </td>
-              </tr>,
-                );
-              }
-              return groupedNodes;
-            })()}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
