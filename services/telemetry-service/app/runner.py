@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from typing import Any
 from urllib.parse import urlparse
 
@@ -43,6 +44,10 @@ BROWSER_SERVICE_GLOBAL = os.environ.get("BROWSER_SERVICE_GLOBAL", "http://localh
 PER_QUERY_TIMEOUT = int(os.environ.get("TELEMETRY_PER_QUERY_TIMEOUT", "180"))
 MAX_CONCURRENT = int(os.environ.get("TELEMETRY_MAX_CONCURRENT", "3"))
 EXTRACT_AFTER_RUN = os.environ.get("TELEMETRY_EXTRACT_AFTER_RUN", "1") == "1"
+# 单 query 完成后在 Semaphore 内 sleep [min,max] 秒,降低对引擎站点的击穿压力。
+# 设 0 关闭。默认 2-5s,跟 MAX_CONCURRENT=5 配合每个引擎天然限流。
+INTER_QUERY_DELAY_MIN = float(os.environ.get("TELEMETRY_INTER_QUERY_DELAY_MIN", "2"))
+INTER_QUERY_DELAY_MAX = float(os.environ.get("TELEMETRY_INTER_QUERY_DELAY_MAX", "5"))
 
 CN_ENGINES = {"deepseek", "doubao", "qwen", "wenxin", "yuanbao"}
 
@@ -184,6 +189,8 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
             effective_query = f"{query}\n\n{prompt_extension}" if prompt_extension else query
             async with sem:
                 result = await _call_browser(client, engine, effective_query)
+                if INTER_QUERY_DELAY_MAX > 0:
+                    await asyncio.sleep(random.uniform(INTER_QUERY_DELAY_MIN, INTER_QUERY_DELAY_MAX))
             answer = result.get("answer", "") or ""
             error = result.get("error")
 
