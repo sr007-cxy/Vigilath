@@ -1824,18 +1824,49 @@ def get_tracking_matrix(
         (c.query, c.engine): c for c in cell_rows
     }
 
+    # 2026-05-26 — 扫 responses 聚合每个 cell 命中过的 target / alias 列表。
+    # 用于前端「按命中词筛选」(命中程晓峰 / 命中竞天 / 命中 KWM 等)。
+    # 候选词:target + target_aliases,按长度倒序(避免「程晓峰」混入「竞天程晓峰」时双计)。
+    hit_terms_pool = sorted(
+        [t for t in [topic.target.strip()] + [a.strip() for a in target_aliases]
+         if t],
+        key=len, reverse=True,
+    )
+    aliases_hit_by_cell: dict[tuple[str, str], set[str]] = {}
+    if hit_terms_pool:
+        hit_resp_rows = (
+            db.query(AiTelemetryResponseORM.query, AiTelemetryResponseORM.engine,
+                     AiTelemetryResponseORM.hit_excerpt, AiTelemetryResponseORM.answer)
+              .filter(AiTelemetryResponseORM.topic_id == topic_id)
+              .filter(AiTelemetryResponseORM.hit.is_(True))  # noqa: E712
+              .all()
+        )
+        for r in hit_resp_rows:
+            key = (r.query, r.engine)
+            bucket = aliases_hit_by_cell.setdefault(key, set())
+            haystack = (r.hit_excerpt or r.answer or "").lower()
+            if not haystack:
+                continue
+            for term in hit_terms_pool:
+                if term.lower() in haystack:
+                    bucket.add(term)
+
     # 填充所有 (query × engine) — 未跑过的 cell 给 pending 占位(不入库,只 in-memory 返回)
     cells: list[QueryHitCell] = []
     for q in queries:
         for e in engines:
             c = by_key.get((q, e))
+            aliases_hit = sorted(aliases_hit_by_cell.get((q, e), set()))
             if c is not None:
-                cells.append(_cell_to_out(c))
+                cell_out = _cell_to_out(c)
+                cell_out.aliases_hit = aliases_hit
+                cells.append(cell_out)
             else:
                 cells.append(QueryHitCell(
                     query=q, engine=e, status="pending",
                     first_hit_at=None, first_hit_response_id=None,
                     last_checked_at=None, total_runs=0, total_hits=0,
+                    aliases_hit=[],
                 ))
 
     # 时间线 — 每个 engine 在所有 query 里最早 first_hit_at

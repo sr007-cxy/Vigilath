@@ -140,6 +140,9 @@ interface Dict {
   queriesFilterOnlyExpanded: string;
   queriesFilterSeedKindHint: string;
   queriesFilterSeedKindLabel: string;
+  queriesFilterHitTermLabel: string;
+  queriesFilterAllHitTerms: string;
+  queriesFilterHitTermHint: string;
   queriesSeedOriginalBadge: string;
   queriesSeedOriginalBadgeHint: string;
   queriesFilterEngineBadge: (engine: string) => string;
@@ -340,6 +343,9 @@ const ZH: Dict = {
   queriesFilterOnlyExpanded: '仅扩展词',
   queriesFilterSeedKindHint: '种子提示词 = 种子本身,默认监测不可取消;扩展词 = 由种子 LLM 扩展出的同义改写',
   queriesFilterSeedKindLabel: '扩展类型',
+  queriesFilterHitTermLabel: '命中词',
+  queriesFilterAllHitTerms: '全部命中词',
+  queriesFilterHitTermHint: '按 AI 答复中命中的品牌名 / 别名筛选 — 选「程晓峰」则只看 AI 提到这个词的 query',
   queriesSeedOriginalBadge: '种子',
   queriesSeedOriginalBadgeHint: '种子原文 query — 由已批准的种子提示词直接派生,默认参与监测,不可取消',
   queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
@@ -541,6 +547,9 @@ const EN: Dict = {
   queriesFilterOnlyExpanded: 'Expansions only',
   queriesFilterSeedKindHint: 'Seed prompt = seed text itself, monitored by default and cannot be unchecked; Expansion = paraphrase derived from a seed',
   queriesFilterSeedKindLabel: 'Type',
+  queriesFilterHitTermLabel: 'Hit term',
+  queriesFilterAllHitTerms: 'All hit terms',
+  queriesFilterHitTermHint: 'Filter by which brand name / alias appears in the AI answer',
   queriesSeedOriginalBadge: 'Seed',
   queriesSeedOriginalBadgeHint: 'Seed-prompt query — directly derived from an approved seed prompt, always monitored, cannot be unchecked',
   queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,

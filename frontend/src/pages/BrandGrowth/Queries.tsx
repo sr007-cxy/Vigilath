@@ -16,6 +16,7 @@ interface Row {
   totalHits: number;
   rate: number;
   hitEngines: string[];
+  aliasesHit: string[];       // 2026-05-26 — 此 query 在任一引擎上命中过的 target / alias 字面词
 }
 
 type SeedKindFilter = '' | 'seed_only' | 'expanded_only';  // '' = 全部
@@ -40,6 +41,7 @@ function Body({ state }: { state: ShellState }) {
   const [seedFilter, setSeedFilter] = useState<string[]>([]);
   const [hitFilter, setHitFilter] = useState<HitFilter>('');    // 命中筛选,scope 由 soleEngine 决定
   const [seedKindFilter, setSeedKindFilter] = useState<SeedKindFilter>('');  // '' = 全部 / 种子原文 / 扩展
+  const [hitTermFilter, setHitTermFilter] = useState<string>('');  // '' = 全部 / 选中 = 只看命中此 term 的 query
 
   const soleEngine: EngineId | null =
     selectedEngines.length === 1 ? (selectedEngines[0] as EngineId) : null;
@@ -86,6 +88,11 @@ function Body({ state }: { state: ShellState }) {
       const hitEngines = sortEngines(
         cells.filter(c => c.total_hits > 0).map(c => c.engine),
       );
+      // 2026-05-26 — 聚合该 query 在所有引擎上命中过的 target / alias 字面词(去重)
+      const aliasesSet = new Set<string>();
+      for (const c of cells) {
+        for (const a of (c.aliases_hit || [])) aliasesSet.add(a);
+      }
       return {
         query: q,
         seed: seedByQuery.get(q) || '',
@@ -94,9 +101,26 @@ function Body({ state }: { state: ShellState }) {
         totalRuns, totalHits,
         rate: totalRuns ? totalHits / totalRuns : 0,
         hitEngines,
+        aliasesHit: Array.from(aliasesSet),
       };
     });
   }, [matrix, seedByQuery, isSeedByQuery, lockedByQuery]);
+
+  // 命中词下拉选项:从 topic.target + aliases 列出,显示 (count) 命中过此词的 query 数
+  const hitTermOptions = useMemo<{ term: string; count: number }[]>(() => {
+    if (!matrix) return [];
+    const allTerms: string[] = [
+      ...(matrix.target ? [matrix.target] : []),
+      ...(matrix.target_aliases || []),
+    ];
+    const counts = new Map<string, number>();
+    for (const r of queryRows) {
+      for (const a of r.aliasesHit) counts.set(a, (counts.get(a) || 0) + 1);
+    }
+    return allTerms
+      .filter(t => t)
+      .map(t => ({ term: t, count: counts.get(t) || 0 }));
+  }, [matrix, queryRows]);
 
   // 用于筛选下拉的可选值
   const seedOptions = useMemo(() => {
@@ -111,6 +135,7 @@ function Body({ state }: { state: ShellState }) {
       if (seedFilter.length > 0 && !seedFilter.includes(r.seed)) return false;
       if (seedKindFilter === 'seed_only' && !r.isSeed) return false;
       if (seedKindFilter === 'expanded_only' && r.isSeed) return false;
+      if (hitTermFilter && !r.aliasesHit.includes(hitTermFilter)) return false;
       if (hitFilter) {
         const hit = isHitInScope(r);
         if (hitFilter === 'hit' && !hit) return false;
@@ -119,7 +144,7 @@ function Body({ state }: { state: ShellState }) {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryRows, seedFilter, seedKindFilter, hitFilter, soleEngine]);
+  }, [queryRows, seedFilter, seedKindFilter, hitTermFilter, hitFilter, soleEngine]);
 
   // 计算每条 seed 下匹配 row 的数量,chip 上显示
   const seedCounts = useMemo<Map<string, number>>(() => {
@@ -231,7 +256,7 @@ function Body({ state }: { state: ShellState }) {
             <option value="seed_only">{L.queriesFilterOnlySeed}</option>
             <option value="expanded_only">{L.queriesFilterOnlyExpanded}</option>
           </select>
-          {/* 命中 select */}
+          {/* 命中状态 select */}
           <span className="text-[11px] uppercase tracking-wide flex-shrink-0 ml-2"
                 style={{ color: 'var(--text-muted)' }}>
             命中
@@ -246,6 +271,29 @@ function Body({ state }: { state: ShellState }) {
             <option value="hit">{L.queriesFilterOnlyHit}</option>
             <option value="miss">{L.queriesFilterOnlyMiss}</option>
           </select>
+          {/* 2026-05-26 — 命中词 select(target + aliases) */}
+          {hitTermOptions.length > 0 && (
+            <>
+              <span className="text-[11px] uppercase tracking-wide flex-shrink-0 ml-2"
+                    style={{ color: 'var(--text-muted)' }}>
+                {L.queriesFilterHitTermLabel}
+              </span>
+              <select
+                value={hitTermFilter}
+                onChange={e => setHitTermFilter(e.target.value)}
+                className="px-2 py-1 rounded-md text-[11px]"
+                style={{ ...inputStyle, minWidth: 130 }}
+                title={L.queriesFilterHitTermHint}
+              >
+                <option value="">{L.queriesFilterAllHitTerms}</option>
+                {hitTermOptions.map(o => (
+                  <option key={o.term} value={o.term}>
+                    {o.term} ({o.count})
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           {soleEngine && (
             <span
               className="px-2 py-0.5 rounded-md text-[11px]"

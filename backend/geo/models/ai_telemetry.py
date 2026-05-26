@@ -1001,6 +1001,9 @@ class QueryHitCell(BaseModel):
     last_checked_at: Optional[datetime]
     total_runs: int
     total_hits: int
+    # 2026-05-26 — 该 (query, engine) cell 命中过的 target / alias 字面词列表
+    # (扫 hit_excerpt 看含哪几个,前端用来支持「按命中词筛选」)
+    aliases_hit: list[str] = Field(default_factory=list)
 
 
 class EngineFirstHit(BaseModel):

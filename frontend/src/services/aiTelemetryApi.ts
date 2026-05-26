@@ -213,6 +213,7 @@ export interface QueryHitCell {
   last_checked_at: string | null;
   total_runs: number;
   total_hits: number;
+  aliases_hit?: string[];  // 2026-05-26 — 该 cell 命中过的 target / alias 字面词,前端按命中词筛选用
 }
 
 export interface EngineFirstHit {
