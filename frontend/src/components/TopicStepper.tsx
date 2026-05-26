@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { adminReviewApi, type StageState, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
+import { adminReviewApi, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
 export type StepKey = 'profile' | 'plan' | 'docs' | 'solution' | 'insight';
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed';
@@ -60,14 +60,16 @@ export function TopicStepper({ topicId, active }: Props) {
                             : solution?.status === 'generating' ? 'running'
                             : solution?.status === 'failed' ? 'failed'
                             : 'idle';
-  // 效果查验与更新:取 cockpit 同源的 insight_status(StageState).
-  // pending 在 stepper 视觉上没有独立态,合并到 running.
-  const stageStateToStep = (s: StageState | undefined): StepStatus =>
-    s === 'done' ? 'done'
-    : s === 'running' || s === 'pending' ? 'running'
-    : s === 'blocked' ? 'failed'
-    : 'idle';
-  const insChip: StepStatus = stageStateToStep(topic?.insight_status);
+  // 效果查验与更新:复刻后端 admin_review._insight_state — approved + 有过运行才算非 idle.
+  // success → done / running → running / failed → failed / 其他 → idle.
+  const insChip: StepStatus = (() => {
+    if (topic?.submission_status !== 'approved' || !topic?.last_run_at) return 'idle';
+    const s = (topic?.last_run_status || '').toLowerCase();
+    return s === 'success' ? 'done'
+      : s === 'running' ? 'running'
+      : s === 'failed' ? 'failed'
+      : 'idle';
+  })();
 
   const steps: StepDef[] = [
     {
