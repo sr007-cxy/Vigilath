@@ -1825,21 +1825,35 @@ def get_tracking_matrix(
     }
 
     # 2026-05-26 — 扫 responses 聚合每个 cell 命中过的 target / alias 列表。
-    # 用于前端「按命中词筛选」(命中程晓峰 / 命中竞天 / 命中 KWM 等)。
+    # 用于前端「按命中词筛选」。
     #
-    # 候选词处理:
-    #   1. target + target_aliases 合并后**按 strip+原文去重**(防 DB 里 target 跟某条
-    #      alias 文本完全一样,如 target='竞天程晓峰' + aliases 含 '竞天程晓峰')
-    #   2. 按长度倒序匹配,长串先匹中后**从 haystack 里抠掉**,避免子串被双计
-    #      (haystack='提到竞天程晓峰' 应只命中「竞天程晓峰」,不再算「程晓峰」)
+    # Compound alias 匹配规则(2026-05-26 v2):
+    #   • 单词 alias(如「程晓峰」):答复含此字面 → 命中
+    #   • Compound alias(含分隔符 & + | ＆ ｜ 和 与 或):拆成多个 part,
+    #     **所有 part 都在答复里出现**(任意位置、任意顺序、任意中间字符)→ 命中
+    #     例:alias「竞天公诚 & 程晓峰」,答复「...竞天公诚｜程晓峰(合伙人)...」
+    #         拆成 ["竞天公诚", "程晓峰"],两 part 都在 answer → 算命中此 compound alias
+    #     这样不论实际答复用什么分隔符,只要两边都提到了就识别为「品牌+人物」复合命中。
+    #
+    # 子串去重:用「长串先匹 + 匹中后替换 haystack」机制,避免「竞天程晓峰」(target)
+    # 出现时把内部「程晓峰」也算上。
+    import re
+    _SEPARATOR_RE = re.compile(r"\s*[&+|＆｜和与或]\s*|\s+")
+
+    def _split_compound(term: str) -> list[str]:
+        """alias 含分隔符就拆 part,否则返回单元素。"""
+        parts = [p.strip() for p in _SEPARATOR_RE.split(term) if p.strip()]
+        return parts if len(parts) >= 2 else [term]
+
     raw_terms = [topic.target.strip()] + [a.strip() for a in target_aliases]
     seen_terms: set[str] = set()
-    hit_terms_pool: list[str] = []
+    hit_terms_pool: list[tuple[str, list[str]]] = []  # (display_term, parts_to_match)
     for t in raw_terms:
         if t and t not in seen_terms:
             seen_terms.add(t)
-            hit_terms_pool.append(t)
-    hit_terms_pool.sort(key=len, reverse=True)
+            hit_terms_pool.append((t, _split_compound(t)))
+    # 排序:compound(part 多)优先,再按字符长度倒序
+    hit_terms_pool.sort(key=lambda x: (len(x[1]), len(x[0])), reverse=True)
 
     aliases_hit_by_cell: dict[tuple[str, str], set[str]] = {}
     if hit_terms_pool:
@@ -1856,12 +1870,13 @@ def get_tracking_matrix(
             haystack = (r.hit_excerpt or r.answer or "").lower()
             if not haystack:
                 continue
-            # 长串先匹,匹中后把 occurrence 替换成空格,后续子串就不会再被算到
-            for term in hit_terms_pool:
-                t_low = term.lower()
-                if t_low in haystack:
+            for term, parts in hit_terms_pool:
+                parts_low = [p.lower() for p in parts]
+                if all(p in haystack for p in parts_low):
                     bucket.add(term)
-                    haystack = haystack.replace(t_low, " ")
+                    # 抠掉 part(避免被更小的子 alias 重复计)
+                    for p in parts_low:
+                        haystack = haystack.replace(p, " ")
 
     # 填充所有 (query × engine) — 未跑过的 cell 给 pending 占位(不入库,只 in-memory 返回)
     cells: list[QueryHitCell] = []
