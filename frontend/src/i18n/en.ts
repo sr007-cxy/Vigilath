@@ -400,7 +400,6 @@ const en = {
               ]
             },
             "pipeline": {
-              "comment": "// pipeline.v1",
               "badge": "8-stage workflow",
               "title": "8-stage GEO automation pipeline",
               "subtitle": "Seed in → loop out. Daily self-calibration. Fill brand profile once; the rest runs unattended.",

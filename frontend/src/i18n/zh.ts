@@ -400,7 +400,6 @@ const zh = {
               ]
             },
             "pipeline": {
-              "comment": "// pipeline.v1",
               "badge": "8 步工作流",
               "title": "8 步 GEO 自动化流水线",
               "subtitle": "种子进，闭环出。每天自校准，品牌资料一次填好，后续全程自动。",

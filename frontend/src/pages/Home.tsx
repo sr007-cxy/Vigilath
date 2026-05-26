@@ -243,197 +243,154 @@ export function Home() {
             </div>
           </section>
 
-          {/* 8-step GEO Automation Pipeline — engineering blueprint section */}
+          {/* 8-step GEO Automation Pipeline — matches page light style */}
           <section className="mt-10 sm:mt-30">
-            <div className="rounded-2xl blueprint-grid overflow-hidden">
-              <div className="px-5 sm:px-10 py-10 sm:py-14">
-                {/* Terminal-style comment */}
-                <div
-                  className="font-mono text-[11px] sm:text-xs mb-4 select-none"
-                  style={{ color: 'rgba(255,255,255,0.35)' }}
-                >
-                  {t('home.pipeline.comment')}
-                </div>
-
-                {/* Badge + title + subtitle */}
-                <div className="mb-8 sm:mb-10">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4"
-                       style={{
-                         background: 'rgba(255,255,255,0.06)',
-                         border: '1px solid rgba(255,255,255,0.12)',
-                       }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                         style={{ color: 'rgba(255,255,255,0.7)' }}>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    <span className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      {t('home.pipeline.badge')}
-                    </span>
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">
-                    {t('home.pipeline.title')}
-                  </h2>
-                  <p className="text-sm sm:text-base max-w-2xl"
-                     style={{ color: 'rgba(255,255,255,0.55)' }}>
-                    {t('home.pipeline.subtitle')}
-                  </p>
-                </div>
-
-                {/* 4-phase legend */}
-                <div className="flex flex-wrap gap-2 mb-8">
-                  {(t('home.pipeline.phases', { returnObjects: true }) as { id: string; label: string }[]).map(
-                    (p) => {
-                      const phaseVar = `var(--phase-${p.id.toLowerCase()})`;
-                      return (
-                        <div
-                          key={p.id}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[10px] sm:text-xs"
-                          style={{
-                            background: 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${phaseVar}`,
-                            color: phaseVar,
-                          }}
-                        >
-                          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: phaseVar }} />
-                          {p.label}
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-
-                {/* 8-step grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {(t('home.pipeline.steps', { returnObjects: true }) as {
-                    id: string;
-                    phase: string;
-                    title: string;
-                    desc: string;
-                    output: string;
-                  }[]).map((step, idx) => {
-                    const phaseVar = `var(--phase-${step.phase.toLowerCase()})`;
-                    const iconPath = pipelineIconPaths[idx];
-                    return (
-                      <div
-                        key={step.id}
-                        className="group relative rounded-xl p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5"
-                        style={{
-                          background: 'rgba(255,255,255,0.03)',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLDivElement).style.borderColor = phaseVar;
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.08)';
-                        }}
-                      >
-                        {/* Header: stage ID + phase dot */}
-                        <div className="flex items-center justify-between mb-3">
-                          <span
-                            className="font-mono text-xs font-semibold tracking-wider"
-                            style={{ color: 'rgba(255,255,255,0.5)' }}
-                          >
-                            [{step.id}]
-                          </span>
-                          <span
-                            className="inline-block w-2 h-2 rounded-full"
-                            style={{ background: phaseVar, boxShadow: `0 0 8px ${phaseVar}` }}
-                            aria-label={step.phase}
-                          />
-                        </div>
-
-                        {/* Phase-colored icon tile */}
-                        <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-colors"
-                          style={{
-                            background: `color-mix(in srgb, ${phaseVar} 14%, transparent)`,
-                            border: `1px solid color-mix(in srgb, ${phaseVar} 28%, transparent)`,
-                          }}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="w-5 h-5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke={phaseVar}
-                            strokeWidth={1.8}
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
-                          </svg>
-                        </div>
-
-                        {/* Title */}
-                        <h3 className="text-sm sm:text-base font-bold text-white leading-tight mb-1.5">
-                          {step.title}
-                        </h3>
-
-                        {/* Description */}
-                        <p className="text-xs sm:text-sm leading-relaxed"
-                           style={{ color: 'rgba(255,255,255,0.55)' }}>
-                          {step.desc}
-                        </p>
-
-                        {/* Divider + output */}
-                        <div
-                          className="mt-3 sm:mt-4 pt-3 border-t font-mono text-[10px] sm:text-[11px] leading-relaxed"
-                          style={{
-                            borderColor: 'rgba(255,255,255,0.06)',
-                            color: 'rgba(255,255,255,0.4)',
-                          }}
-                        >
-                          {step.output}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Closing loop — SVG curve from [08] back to [01], visible desktop only */}
-                <div className="mt-6 sm:mt-8 relative hidden lg:block">
-                  <svg viewBox="0 0 100 18" className="w-full h-14" preserveAspectRatio="none"
-                       aria-label="reinforcement feedback loop">
-                    <defs>
-                      <marker id="loop-arrow"
-                              viewBox="0 0 10 10" refX="8" refY="5"
-                              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                        <path d="M 0,2 L 8,5 L 0,8 z" fill="var(--phase-adapt)" />
-                      </marker>
-                      <path id="loop-feedback-path" d="M 97,1 C 97,16 3,16 3,1" fill="none" />
-                    </defs>
-                    {/* visible curve */}
-                    <path d="M 97,1 C 97,16 3,16 3,1"
-                          fill="none"
-                          stroke="var(--phase-adapt)"
-                          strokeWidth="0.3"
-                          strokeDasharray="1.2 0.8"
-                          markerEnd="url(#loop-arrow)"
-                          opacity="0.8" />
-                    {/* animated glowing particle */}
-                    <circle r="0.6" fill="var(--phase-adapt)"
-                            style={{ filter: 'drop-shadow(0 0 1.5px var(--phase-adapt))' }}>
-                      <animateMotion dur="5s" repeatCount="indefinite">
-                        <mpath href="#loop-feedback-path" />
-                      </animateMotion>
-                    </circle>
-                    {/* label */}
-                    <text x="50" y="13" textAnchor="middle"
-                          fontSize="2.2" fontFamily="monospace"
-                          fill="var(--phase-adapt)" opacity="0.7">
-                      {t('home.pipeline.loopLabel')}
-                    </text>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-secondary"
+                       fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                   </svg>
+                  <span className="text-xs font-semibold text-secondary">
+                    {t('home.pipeline.badge')}
+                  </span>
                 </div>
-
-                {/* Mobile loop hint */}
-                <p className="mt-6 text-center font-mono text-xs lg:hidden"
-                   style={{ color: 'var(--phase-adapt)' }}>
-                  {t('home.pipeline.mobileLoopHint')}
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                  <span className="gradient-text">{t('home.pipeline.title')}</span>
+                </h2>
+                <p className="text-secondary text-sm sm:text-base max-w-2xl">
+                  {t('home.pipeline.subtitle')}
                 </p>
               </div>
             </div>
+
+            {/* 4-phase legend */}
+            <div className="flex flex-wrap gap-2 mb-6 sm:mb-8">
+              {(t('home.pipeline.phases', { returnObjects: true }) as { id: string; label: string }[]).map(
+                (p) => {
+                  const phaseVar = `var(--phase-${p.id.toLowerCase()})`;
+                  return (
+                    <div
+                      key={p.id}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium"
+                      style={{
+                        background: `color-mix(in srgb, ${phaseVar} 10%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${phaseVar} 35%, transparent)`,
+                        color: phaseVar,
+                      }}
+                    >
+                      <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: phaseVar }} />
+                      {p.label}
+                    </div>
+                  );
+                },
+              )}
+            </div>
+
+            {/* 8-step grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {(t('home.pipeline.steps', { returnObjects: true }) as {
+                id: string;
+                phase: string;
+                title: string;
+                desc: string;
+                output: string;
+              }[]).map((step, idx) => {
+                const phaseVar = `var(--phase-${step.phase.toLowerCase()})`;
+                const iconPath = pipelineIconPaths[idx];
+                return (
+                  <div
+                    key={step.id}
+                    className="card p-5 sm:p-6 hover:-translate-y-0.5 transition-all duration-200"
+                  >
+                    {/* Header: stage ID + phase dot */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold tracking-wider text-muted">
+                        [{step.id}]
+                      </span>
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ background: phaseVar }}
+                        aria-label={step.phase}
+                      />
+                    </div>
+
+                    {/* Phase-colored icon tile */}
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
+                      style={{
+                        background: `color-mix(in srgb, ${phaseVar} 12%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${phaseVar} 30%, transparent)`,
+                      }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke={phaseVar}
+                        strokeWidth={1.8}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+                      </svg>
+                    </div>
+
+                    <h3 className="text-sm sm:text-base font-bold text-primary leading-tight mb-1.5">
+                      {step.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-secondary leading-relaxed m-0">
+                      {step.desc}
+                    </p>
+
+                    <div
+                      className="mt-3 sm:mt-4 pt-3 border-t text-[11px] leading-relaxed text-muted"
+                      style={{ borderColor: 'var(--border-color)' }}
+                    >
+                      {step.output}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Closing loop — SVG curve from [08] back to [01], visible desktop only */}
+            <div className="mt-6 sm:mt-8 relative hidden lg:block">
+              <svg viewBox="0 0 100 18" className="w-full h-14" preserveAspectRatio="none"
+                   aria-label="reinforcement feedback loop">
+                <defs>
+                  <marker id="loop-arrow"
+                          viewBox="0 0 10 10" refX="8" refY="5"
+                          markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M 0,2 L 8,5 L 0,8 z" fill="var(--phase-adapt)" />
+                  </marker>
+                  <path id="loop-feedback-path" d="M 97,1 C 97,16 3,16 3,1" fill="none" />
+                </defs>
+                <path d="M 97,1 C 97,16 3,16 3,1"
+                      fill="none"
+                      stroke="var(--phase-adapt)"
+                      strokeWidth="0.3"
+                      strokeDasharray="1.2 0.8"
+                      markerEnd="url(#loop-arrow)"
+                      opacity="0.85" />
+                <circle r="0.6" fill="var(--phase-adapt)">
+                  <animateMotion dur="5s" repeatCount="indefinite">
+                    <mpath href="#loop-feedback-path" />
+                  </animateMotion>
+                </circle>
+                <text x="50" y="13" textAnchor="middle"
+                      fontSize="2.2"
+                      fill="var(--phase-adapt)" opacity="0.85">
+                  {t('home.pipeline.loopLabel')}
+                </text>
+              </svg>
+            </div>
+
+            <p className="mt-6 text-center text-xs font-medium lg:hidden"
+               style={{ color: 'var(--phase-adapt)' }}>
+              {t('home.pipeline.mobileLoopHint')}
+            </p>
           </section>
 
           {/* Advanced Detection Section */}
@@ -595,10 +552,7 @@ export function Home() {
       </main>
 
       {/* Partners — trust strip, sits between main content and slogan banner */}
-      <section
-        className="relative z-10 px-4 py-12 sm:py-16"
-        style={{ background: 'var(--bg-tertiary)' }}
-      >
+      <section className="relative z-10 px-4 py-12 sm:py-16">
         <div className="w-full max-w-5xl mx-auto">
           <div className="text-center mb-8 sm:mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow">
