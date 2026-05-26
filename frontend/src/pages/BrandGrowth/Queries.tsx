@@ -107,19 +107,28 @@ function Body({ state }: { state: ShellState }) {
   }, [matrix, seedByQuery, isSeedByQuery, lockedByQuery]);
 
   // 命中词下拉选项:从 topic.target + aliases 列出,显示 (count) 命中过此词的 query 数
+  // 2026-05-26 — 前端也做 dedup 防御(DB 里 target 跟 alias 可能写重复,如 target='竞天程晓峰'
+  // 且 aliases 含 '竞天程晓峰')
   const hitTermOptions = useMemo<{ term: string; count: number }[]>(() => {
     if (!matrix) return [];
-    const allTerms: string[] = [
+    const raw: string[] = [
       ...(matrix.target ? [matrix.target] : []),
       ...(matrix.target_aliases || []),
     ];
+    const seen = new Set<string>();
+    const uniqueTerms: string[] = [];
+    for (const t of raw) {
+      const tt = (t || '').trim();
+      if (tt && !seen.has(tt)) {
+        seen.add(tt);
+        uniqueTerms.push(tt);
+      }
+    }
     const counts = new Map<string, number>();
     for (const r of queryRows) {
       for (const a of r.aliasesHit) counts.set(a, (counts.get(a) || 0) + 1);
     }
-    return allTerms
-      .filter(t => t)
-      .map(t => ({ term: t, count: counts.get(t) || 0 }));
+    return uniqueTerms.map(t => ({ term: t, count: counts.get(t) || 0 }));
   }, [matrix, queryRows]);
 
   // 用于筛选下拉的可选值

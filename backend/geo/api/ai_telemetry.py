@@ -1826,12 +1826,21 @@ def get_tracking_matrix(
 
     # 2026-05-26 — 扫 responses 聚合每个 cell 命中过的 target / alias 列表。
     # 用于前端「按命中词筛选」(命中程晓峰 / 命中竞天 / 命中 KWM 等)。
-    # 候选词:target + target_aliases,按长度倒序(避免「程晓峰」混入「竞天程晓峰」时双计)。
-    hit_terms_pool = sorted(
-        [t for t in [topic.target.strip()] + [a.strip() for a in target_aliases]
-         if t],
-        key=len, reverse=True,
-    )
+    #
+    # 候选词处理:
+    #   1. target + target_aliases 合并后**按 strip+原文去重**(防 DB 里 target 跟某条
+    #      alias 文本完全一样,如 target='竞天程晓峰' + aliases 含 '竞天程晓峰')
+    #   2. 按长度倒序匹配,长串先匹中后**从 haystack 里抠掉**,避免子串被双计
+    #      (haystack='提到竞天程晓峰' 应只命中「竞天程晓峰」,不再算「程晓峰」)
+    raw_terms = [topic.target.strip()] + [a.strip() for a in target_aliases]
+    seen_terms: set[str] = set()
+    hit_terms_pool: list[str] = []
+    for t in raw_terms:
+        if t and t not in seen_terms:
+            seen_terms.add(t)
+            hit_terms_pool.append(t)
+    hit_terms_pool.sort(key=len, reverse=True)
+
     aliases_hit_by_cell: dict[tuple[str, str], set[str]] = {}
     if hit_terms_pool:
         hit_resp_rows = (
@@ -1847,9 +1856,12 @@ def get_tracking_matrix(
             haystack = (r.hit_excerpt or r.answer or "").lower()
             if not haystack:
                 continue
+            # 长串先匹,匹中后把 occurrence 替换成空格,后续子串就不会再被算到
             for term in hit_terms_pool:
-                if term.lower() in haystack:
+                t_low = term.lower()
+                if t_low in haystack:
                     bucket.add(term)
+                    haystack = haystack.replace(t_low, " ")
 
     # 填充所有 (query × engine) — 未跑过的 cell 给 pending 占位(不入库,只 in-memory 返回)
     cells: list[QueryHitCell] = []
