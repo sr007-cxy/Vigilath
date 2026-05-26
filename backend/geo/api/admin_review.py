@@ -216,11 +216,26 @@ class TopicReviewDetailOut(TopicOut):
 
 
 def _parse_log_list(raw: str | None) -> list[dict]:
+    """解析 topic_changelog / expansion_log 的 JSON 数组,返回 list[dict].
+
+    历史 changelog 在 list 类型 profile 字段(如 core_business_lines)被改写时
+    会把 before/after 存成 list/dict,而 TopicChangelogEntry 模型期望 Optional[str].
+    这里统一把 before/after 的非 str 值序列化成 str,避免下游 Pydantic 500.
+    """
     try:
         arr = json.loads(raw or "[]")
     except Exception:  # noqa: BLE001
         return []
-    return [x for x in arr if isinstance(x, dict)]
+    out: list[dict] = []
+    for x in arr:
+        if not isinstance(x, dict):
+            continue
+        for k in ("before", "after"):
+            v = x.get(k)
+            if v is not None and not isinstance(v, str):
+                x[k] = json.dumps(v, ensure_ascii=False)
+        out.append(x)
+    return out
 
 
 @router.get("/topics", response_model=list[TopicReviewListItem])
