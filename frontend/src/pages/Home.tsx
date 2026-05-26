@@ -243,7 +243,7 @@ export function Home() {
             </div>
           </section>
 
-          {/* 8-step GEO Automation Pipeline — matches page light style */}
+          {/* 8-step GEO Automation Pipeline — monochrome, matches page B&W style */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
               <div>
@@ -266,95 +266,81 @@ export function Home() {
               </div>
             </div>
 
-            {/* 4-phase legend */}
-            <div className="flex flex-wrap gap-2 mb-6 sm:mb-8">
+            {/* Phase breadcrumb — text-only, no color encoding */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-6 sm:mb-8 text-xs sm:text-sm">
               {(t('home.pipeline.phases', { returnObjects: true }) as { id: string; label: string }[]).map(
-                (p) => {
-                  const phaseVar = `var(--phase-${p.id.toLowerCase()})`;
-                  return (
-                    <div
-                      key={p.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium"
-                      style={{
-                        background: `color-mix(in srgb, ${phaseVar} 10%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${phaseVar} 35%, transparent)`,
-                        color: phaseVar,
-                      }}
-                    >
-                      <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: phaseVar }} />
-                      {p.label}
-                    </div>
-                  );
-                },
+                (p, i, arr) => (
+                  <span key={p.id} className="inline-flex items-center gap-2">
+                    <span className="font-semibold tracking-wide text-primary">{p.label}</span>
+                    {i < arr.length - 1 && (
+                      <svg className="w-3.5 h-3.5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </span>
+                ),
               )}
             </div>
 
-            {/* 8-step grid */}
+            {/* 8-step grid — uniform monochrome cards, Advanced-Detection style */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              {(t('home.pipeline.steps', { returnObjects: true }) as {
-                id: string;
-                phase: string;
-                title: string;
-                desc: string;
-                output: string;
-              }[]).map((step, idx) => {
-                const phaseVar = `var(--phase-${step.phase.toLowerCase()})`;
-                const iconPath = pipelineIconPaths[idx];
-                return (
-                  <div
-                    key={step.id}
-                    className="card p-5 sm:p-6 hover:-translate-y-0.5 transition-all duration-200"
-                  >
-                    {/* Header: stage ID + phase dot */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-semibold tracking-wider text-muted">
-                        [{step.id}]
-                      </span>
-                      <span
-                        className="inline-block w-2 h-2 rounded-full"
-                        style={{ background: phaseVar }}
-                        aria-label={step.phase}
-                      />
-                    </div>
-
-                    {/* Phase-colored icon tile */}
+              {(() => {
+                const phases = t('home.pipeline.phases', { returnObjects: true }) as {
+                  id: string;
+                  label: string;
+                }[];
+                const phaseLabel = (id: string) =>
+                  phases.find((p) => p.id === id)?.label ?? id;
+                const steps = t('home.pipeline.steps', { returnObjects: true }) as {
+                  id: string;
+                  phase: string;
+                  title: string;
+                  desc: string;
+                  output: string;
+                }[];
+                return steps.map((step, idx) => {
+                  const iconPath = pipelineIconPaths[idx];
+                  return (
                     <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
-                      style={{
-                        background: `color-mix(in srgb, ${phaseVar} 12%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${phaseVar} 30%, transparent)`,
-                      }}
+                      key={step.id}
+                      className="card p-5 sm:p-6 hover:-translate-y-0.5 transition-all duration-200"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="w-5 h-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke={phaseVar}
-                        strokeWidth={1.8}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={1.8}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+                          </svg>
+                        </div>
+                        <span className="text-xs font-semibold tracking-[0.12em] text-muted">
+                          {step.id} · {phaseLabel(step.phase)}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm sm:text-base font-bold text-primary leading-tight mb-1.5">
+                        {step.title}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-secondary leading-relaxed m-0">
+                        {step.desc}
+                      </p>
+
+                      <div
+                        className="mt-3 sm:mt-4 pt-3 border-t text-[11px] leading-relaxed text-muted"
+                        style={{ borderColor: 'var(--border-color)' }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
-                      </svg>
+                        {step.output}
+                      </div>
                     </div>
-
-                    <h3 className="text-sm sm:text-base font-bold text-primary leading-tight mb-1.5">
-                      {step.title}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-secondary leading-relaxed m-0">
-                      {step.desc}
-                    </p>
-
-                    <div
-                      className="mt-3 sm:mt-4 pt-3 border-t text-[11px] leading-relaxed text-muted"
-                      style={{ borderColor: 'var(--border-color)' }}
-                    >
-                      {step.output}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
-
           </section>
 
           {/* Advanced Detection Section */}
