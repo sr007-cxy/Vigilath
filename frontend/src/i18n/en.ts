@@ -442,7 +442,7 @@ const en = {
                   "id": "05",
                   "phase": "PRODUCE",
                   "title": "Media Distribution",
-                  "desc": "Publish to Zhihu / Reddit / blogs",
+                  "desc": "Sync to mainstream news outlets, Zhihu, and industry publications",
                   "output": "output: multi-platform publish"
                 },
                 {
