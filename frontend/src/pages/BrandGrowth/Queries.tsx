@@ -215,9 +215,10 @@ function Body({ state }: { state: ShellState }) {
                paddingTop: '8px',
                borderTop: '1px dashed var(--border-color)',
              }}>
+          {/* 类型 select(扩展词 vs 种子提示词)*/}
           <span className="text-[11px] uppercase tracking-wide flex-shrink-0"
                 style={{ color: 'var(--text-muted)' }}>
-            筛选
+            {L.queriesFilterSeedKindLabel}
           </span>
           <select
             value={seedKindFilter}
@@ -230,6 +231,11 @@ function Body({ state }: { state: ShellState }) {
             <option value="seed_only">{L.queriesFilterOnlySeed}</option>
             <option value="expanded_only">{L.queriesFilterOnlyExpanded}</option>
           </select>
+          {/* 命中 select */}
+          <span className="text-[11px] uppercase tracking-wide flex-shrink-0 ml-2"
+                style={{ color: 'var(--text-muted)' }}>
+            命中
+          </span>
           <select
             value={hitFilter}
             onChange={e => setHitFilter(e.target.value as HitFilter)}

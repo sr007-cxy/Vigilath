@@ -139,6 +139,7 @@ interface Dict {
   queriesFilterOnlySeed: string;
   queriesFilterOnlyExpanded: string;
   queriesFilterSeedKindHint: string;
+  queriesFilterSeedKindLabel: string;
   queriesSeedOriginalBadge: string;
   queriesSeedOriginalBadgeHint: string;
   queriesFilterEngineBadge: (engine: string) => string;
@@ -334,10 +335,11 @@ const ZH: Dict = {
   queriesFilterAllHit: '全部命中状态',
   queriesFilterOnlyHit: '仅看已命中',
   queriesFilterOnlyMiss: '仅看未命中',
-  queriesFilterAllSeedKind: '全部 query 类型',
-  queriesFilterOnlySeed: '仅种子原文',
-  queriesFilterOnlyExpanded: '仅扩展 query',
-  queriesFilterSeedKindHint: '种子原文 = 种子提示词本身,默认监测,不可取消;扩展 query = 由种子扩展出的同义改写',
+  queriesFilterAllSeedKind: '全部扩展词',
+  queriesFilterOnlySeed: '仅种子提示词',
+  queriesFilterOnlyExpanded: '仅扩展词',
+  queriesFilterSeedKindHint: '种子提示词 = 种子本身,默认监测不可取消;扩展词 = 由种子 LLM 扩展出的同义改写',
+  queriesFilterSeedKindLabel: '扩展类型',
   queriesSeedOriginalBadge: '种子',
   queriesSeedOriginalBadgeHint: '种子原文 query — 由已批准的种子提示词直接派生,默认参与监测,不可取消',
   queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
@@ -534,10 +536,11 @@ const EN: Dict = {
   queriesFilterAllHit: 'Any hit status',
   queriesFilterOnlyHit: 'Hit only',
   queriesFilterOnlyMiss: 'Miss only',
-  queriesFilterAllSeedKind: 'All query kinds',
+  queriesFilterAllSeedKind: 'All expansions',
   queriesFilterOnlySeed: 'Seed prompts only',
-  queriesFilterOnlyExpanded: 'Expanded only',
-  queriesFilterSeedKindHint: 'Seed prompt = seed text itself, monitored by default and cannot be unchecked; Expanded = paraphrases derived from a seed',
+  queriesFilterOnlyExpanded: 'Expansions only',
+  queriesFilterSeedKindHint: 'Seed prompt = seed text itself, monitored by default and cannot be unchecked; Expansion = paraphrase derived from a seed',
+  queriesFilterSeedKindLabel: 'Type',
   queriesSeedOriginalBadge: 'Seed',
   queriesSeedOriginalBadgeHint: 'Seed-prompt query — directly derived from an approved seed prompt, always monitored, cannot be unchecked',
   queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,
