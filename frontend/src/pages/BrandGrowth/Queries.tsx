@@ -185,11 +185,17 @@ function Body({ state }: { state: ShellState }) {
 
   return (
     <div className="grid gap-4">
-      {/* 种子提示词 — 顶部独立显示(2026-05-26),比其它筛选更突出 */}
+      <div className="text-xs text-muted flex items-center gap-1.5">
+        {L.queriesSummary(matrix.queries.length, matrix.engines.length)}
+        <InfoHint text={L.hintQueries} />
+      </div>
+
+      {/* 筛选区:种子提示词 + 命中词 + 扩展类型 + 命中状态 */}
       <div
-        className="rounded-lg p-3"
+        className="rounded-lg p-3 space-y-2.5"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
       >
+        {/* 种子提示词 多选下拉 */}
         <FilterRow
           label={L.queriesFilterSeedsLabel}
           placeholder={L.queriesFilterAllSeeds}
@@ -198,38 +204,29 @@ function Body({ state }: { state: ShellState }) {
           onClear={() => setSeedFilter([])}
           onToggle={toggleSeed}
         />
-      </div>
 
-      <div className="text-xs text-muted flex items-center gap-1.5">
-        {L.queriesSummary(matrix.queries.length, matrix.engines.length)}
-        <InfoHint text={L.hintQueries} />
-      </div>
-
-      {/* 其它筛选:命中词 + 扩展类型 + 命中状态 */}
-      <div
-        className="rounded-lg p-3 space-y-2.5"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-      >
         {/* 命中词 多选下拉(AND 语义)*/}
         {hitTermOptions.length > 0 && (
-          <FilterRow
-            label={
-              <>
-                {L.queriesFilterHitTermLabel}
-                {hitTermFilter.length > 1 && (
-                  <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
-                    ({L.queriesFilterHitTermAnd})
-                  </span>
-                )}
-              </>
-            }
-            placeholder={L.queriesFilterAllHitTerms}
-            options={hitTermOptions.map(o => ({ value: o.term, label: o.term, count: o.count }))}
-            selected={hitTermFilter}
-            onClear={() => setHitTermFilter([])}
-            onToggle={toggleHitTerm}
-            title={L.queriesFilterHitTermHint}
-          />
+          <div style={{ paddingTop: '8px', borderTop: '1px dashed var(--border-color)' }}>
+            <FilterRow
+              label={
+                <>
+                  {L.queriesFilterHitTermLabel}
+                  {hitTermFilter.length > 1 && (
+                    <span className="ml-1 normal-case text-[10px]" style={{ opacity: 0.7 }}>
+                      ({L.queriesFilterHitTermAnd})
+                    </span>
+                  )}
+                </>
+              }
+              placeholder={L.queriesFilterAllHitTerms}
+              options={hitTermOptions.map(o => ({ value: o.term, label: o.term, count: o.count }))}
+              selected={hitTermFilter}
+              onClear={() => setHitTermFilter([])}
+              onToggle={toggleHitTerm}
+              title={L.queriesFilterHitTermHint}
+            />
+          </div>
         )}
 
         {/* 扩展类型 + 命中状态 select (排末尾)*/}
@@ -310,21 +307,46 @@ function Body({ state }: { state: ShellState }) {
                   {L.queriesEmptyAfterFilter}
                 </td>
               </tr>
-            ) : filteredRows.map((r, i) => (
-              <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-                <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
-                {/* 种子提示词列暂隐藏(2026-05-26)
-                <td className="px-2 py-2 text-primary truncate max-w-[200px]"
-                    style={!r.seed ? { color: 'var(--text-muted)' } : undefined}
-                    title={r.seed || undefined}>
-                  {r.seed ? (
-                    <span className="inline-flex items-center gap-1">
-                      <span aria-hidden style={{ flexShrink: 0 }}>🌱</span>
-                      <span className="truncate">{r.seed}</span>
-                    </span>
-                  ) : L.queriesNoSeed}
-                </td>
-                */}
+            ) : (() => {
+              // 2026-05-26 — 按种子分组渲染。每个新 seed 出现前插入一个 group header 行。
+              // 空 seed(legacy)归到「未关联种子」组,排在最后。
+              const groupedNodes: React.ReactNode[] = [];
+              const seedGroupCounts = new Map<string, number>();
+              for (const r of filteredRows) {
+                const k = r.seed || '__unseeded__';
+                seedGroupCounts.set(k, (seedGroupCounts.get(k) || 0) + 1);
+              }
+              let lastSeedKey: string | null = null;
+              let runningIdx = 0;
+              for (const r of filteredRows) {
+                const k = r.seed || '__unseeded__';
+                if (k !== lastSeedKey) {
+                  lastSeedKey = k;
+                  groupedNodes.push(
+                    <tr key={`__group_${k}`}
+                        style={{
+                          background: 'var(--bg-tertiary)',
+                          boxShadow: 'inset 0 -1px 0 var(--border-color)',
+                        }}>
+                      <td colSpan={5} className="px-3 py-2">
+                        <span className="inline-flex items-center gap-2">
+                          <span aria-hidden style={{ fontSize: 13 }}>🌱</span>
+                          <span className="font-semibold text-[12px] text-primary">
+                            {r.seed || L.queriesNoSeed}
+                          </span>
+                          <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                            {seedGroupCounts.get(k) || 0} 条
+                          </span>
+                        </span>
+                      </td>
+                    </tr>,
+                  );
+                }
+                runningIdx += 1;
+                const idx = runningIdx;
+                groupedNodes.push(
+                  <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+                    <td className="px-2 py-2 text-right tabular-nums text-muted">{idx}</td>
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>
                   {r.isSeed && (
                     <span
@@ -386,8 +408,11 @@ function Body({ state }: { state: ShellState }) {
                     </button>
                   )}
                 </td>
-              </tr>
-            ))}
+              </tr>,
+                );
+              }
+              return groupedNodes;
+            })()}
           </tbody>
         </table>
       </div>
