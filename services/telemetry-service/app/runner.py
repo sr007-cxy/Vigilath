@@ -221,7 +221,11 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
             if error:
                 failures += 1
 
-        tasks = [_one(e, q) for e in engines for q in queries]
+        # query-major 顺序:第一波 5 个 task = 第一个 query × 5 个引擎,
+        # 自然让 Sem 槽位均匀分摊到各引擎(每引擎单 hot context 内部串行,
+        # 跨引擎才能真并行)。engine-major 会让一个引擎独占 Sem,其他全排队 —
+        # 实测 2026-05-26 run 69 翻船过。
+        tasks = [_one(e, q) for q in queries for e in engines]
         await asyncio.gather(*tasks)
 
     total = len(engines) * len(queries)
@@ -406,7 +410,11 @@ async def run_preview(queries: list[str], engines: list[str]) -> list[dict[str, 
                 "error": r.get("error"),
             })
 
-        tasks = [_one(e, q) for e in engines for q in queries]
+        # query-major 顺序:第一波 5 个 task = 第一个 query × 5 个引擎,
+        # 自然让 Sem 槽位均匀分摊到各引擎(每引擎单 hot context 内部串行,
+        # 跨引擎才能真并行)。engine-major 会让一个引擎独占 Sem,其他全排队 —
+        # 实测 2026-05-26 run 69 翻船过。
+        tasks = [_one(e, q) for q in queries for e in engines]
         await asyncio.gather(*tasks)
 
     return results
