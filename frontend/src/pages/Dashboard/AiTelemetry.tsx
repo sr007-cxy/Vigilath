@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { PageHead } from '../../components/PageHead';
 import { TagInput } from './sentiment/components/TagInput';
@@ -2042,6 +2043,7 @@ export function TopicEditor({
   );
   const enabled = true;
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const navigate = useNavigate();
   // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
   const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);
@@ -2373,16 +2375,26 @@ export function TopicEditor({
       <StepHeader
         step={step}
         onJump={(s) => {
+          // 1-4 是内部 wizard 步骤,setStep 切换表单
           if (s === 1) setStep(1);
           else if (s === 2 && step1Valid) setStep(2);
           else if (s === 3 && step1Valid && step2Valid) setStep(3);
           else if (s === 4 && step1Valid && step2Valid) setStep(4);
+          // 5-7 是项目进度下游阶段,跳到对应详情页(没有 topic_id 时跳新建后才行)
+          else if (s >= 5 && savedTopicId) {
+            if (s === 5) navigate(`/workbench/topics/${savedTopicId}/execution-plan`);
+            else if (s === 6) navigate(`/workbench/topics/${savedTopicId}/docs`);
+            else if (s === 7) navigate(`/brand-growth/insights?topicId=${savedTopicId}`);
+          }
         }}
         labels={[
           t('dashboard.aiTelemetry.form.step1'),
           t('dashboard.aiTelemetry.form.step2'),
           t('dashboard.aiTelemetry.form.step3'),
           t('dashboard.aiTelemetry.form.step4'),
+          t('dashboard.aiTelemetry.form.step5'),
+          t('dashboard.aiTelemetry.form.step6'),
+          t('dashboard.aiTelemetry.form.step7'),
         ]}
       />
 

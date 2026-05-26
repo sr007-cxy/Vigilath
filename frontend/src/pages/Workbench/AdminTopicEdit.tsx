@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
-import { TopicStepper } from '../../components/TopicStepper';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
 import { adminReviewApi } from '../../services/adminReviewApi';
@@ -44,7 +43,6 @@ export function AdminTopicEdit() {
   return (
     <div className="space-y-4">
       <PageHead titleKey="workbench.topicStepper.profile" titleFallback="画像" />
-      <TopicStepper topicId={tid} active="profile" />
 
       {err && (
         <div className="rounded-md p-3 text-sm"
