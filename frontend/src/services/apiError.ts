@@ -16,7 +16,15 @@
 export function extractBackendMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback;
   const obj = body as Record<string, any>;
-  const fromDetail = typeof obj.detail === 'string' ? obj.detail : null;
+  // FastAPI HTTPException(422, dict) 会把 dict 整个塞进 detail —
+  // 比如 _validate_topic_runnable 抛 {"code": "PROFILE_INCOMPLETE", "message": "资料必填项缺失", "missing": [...]}.
+  // 之前只接收 detail 是字符串的情况,object detail 会 fall through 到 fallback,真错被吞.
+  const fromDetail =
+    typeof obj.detail === 'string'
+      ? obj.detail
+      : obj.detail && typeof obj.detail === 'object' && typeof (obj.detail as any).message === 'string'
+        ? (obj.detail as any).message
+        : null;
   const fromNested =
     obj.error && typeof obj.error === 'object' && typeof obj.error.message === 'string'
       ? obj.error.message
