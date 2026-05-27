@@ -64,15 +64,21 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
     if (effective[key] === 'blocked') effective[key] = 'running';
   }
 
+  // 全部 6 段 chip 都指向「画像」主流程的对应 step,只保留这一个主流程.
+  //   submit (品牌与主题创建)   → step 1 设置 / 资料
+  //   review (诊断与方案预评估) → step 3 监测问题(种子 + queries 全景)
+  //   diagnose (GEO策略优化方案) → step 4 健康诊断报告
+  //   plan (执行策略与规划)     → step 5 计划书(inline)
+  //   content (内容发布与审核)  → step 6 文案复审(inline)
+  //   insight (效果查验与更新)  → step 7 监测反哺(inline)
+  const base = `/workbench/topics/${tid}/edit`;
   return {
-    submit: { state: effective.submit, to: `/workbench/accounts/${t.user_id}/topics` },
-    review: { state: effective.review, to: `/workbench/review` },
-    diagnose: { state: effective.diagnose, to: `/workbench/topics/${tid}/solution` },
-    plan: { state: effective.plan, to: `/workbench/topics/${tid}/execution-plan` },
-    content: { state: effective.content, to: `/workbench/content-review?topic=${tid}` },
-    // 效果查验与更新 = 原 crawl(运行结果)+ insight(反哺监测)合并;入口走监测看板,
-    // 跑批结果可从 sidebar「跑批结果」单独进入
-    insight: { state: effective.insight, to: `/workbench/insights` },
+    submit: { state: effective.submit, to: `${base}?step=1` },
+    review: { state: effective.review, to: `${base}?step=3` },
+    diagnose: { state: effective.diagnose, to: `${base}?step=4` },
+    plan: { state: effective.plan, to: `${base}?step=5` },
+    content: { state: effective.content, to: `${base}?step=6` },
+    insight: { state: effective.insight, to: `${base}?step=7` },
   };
 }
 

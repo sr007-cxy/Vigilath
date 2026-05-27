@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { Header } from './components/Header';
@@ -51,13 +51,10 @@ const BrandGrowthInsights = lazy(() => import('./pages/BrandGrowth/Insights').th
 const BrandGrowthQueries = lazy(() => import('./pages/BrandGrowth/Queries').then(m => ({ default: m.Queries })));
 const BrandGrowthResponses = lazy(() => import('./pages/BrandGrowth/Responses').then(m => ({ default: m.Responses })));
 const BrandGrowthPublished = lazy(() => import('./pages/BrandGrowth/Published').then(m => ({ default: m.Published })));
-const AdminExecutionPlan = lazy(() => import('./pages/Admin/ExecutionPlan').then(m => ({ default: m.AdminExecutionPlan })));
-const AdminSolution = lazy(() => import('./pages/Admin/Solution').then(m => ({ default: m.AdminSolution })));
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
 const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
 const AdminTopicEdit = lazy(() => import('./pages/Workbench/AdminTopicEdit').then(m => ({ default: m.AdminTopicEdit })));
-const AdminTopicDocs = lazy(() => import('./pages/Workbench/AdminTopicDocs').then(m => ({ default: m.AdminTopicDocs })));
 const AdminAllRuns = lazy(() => import('./pages/Workbench/AdminAllRuns').then(m => ({ default: m.AdminAllRuns })));
 const AdminRunDetail = lazy(() => import('./pages/Workbench/AdminRunDetail').then(m => ({ default: m.AdminRunDetail })));
 const AdminCockpit = lazy(() => import('./pages/Workbench/AdminCockpit').then(m => ({ default: m.AdminCockpit })));
@@ -89,6 +86,12 @@ function LoginRedirect({ tab }: { tab: 'login' | 'register' }) {
     openAuthModal(tab);
   }, [tab, openAuthModal]);
   return <Navigate to="/" replace />;
+}
+
+/** 单主题详情老路由(/solution /execution-plan /docs)合并到「画像」主流程,直接重定向到对应 step. */
+function TopicEditRedirect({ step }: { step: number }) {
+  const { topicId } = useParams();
+  return <Navigate to={`/workbench/topics/${topicId}/edit?step=${step}`} replace />;
 }
 
 function App() {
@@ -167,9 +170,10 @@ function App() {
                 <Route path="content-review" element={<AdminContentReview />} />
                 <Route path="content-management" element={<Content />} />
                 <Route path="topics/:topicId/edit" element={<AdminTopicEdit />} />
-                <Route path="topics/:topicId/execution-plan" element={<AdminExecutionPlan />} />
-                <Route path="topics/:topicId/docs" element={<AdminTopicDocs />} />
-                <Route path="topics/:topicId/solution" element={<AdminSolution />} />
+                {/* 老的单主题详情路由全部并入「画像」主流程,只保留这一个 wizard */}
+                <Route path="topics/:topicId/solution" element={<TopicEditRedirect step={4} />} />
+                <Route path="topics/:topicId/execution-plan" element={<TopicEditRedirect step={5} />} />
+                <Route path="topics/:topicId/docs" element={<TopicEditRedirect step={6} />} />
               </Route>
               {/* 舆情监控独立成顶级路由,不再嵌套在 DashboardLayout 下 */}
               <Route path="/sentiment" element={<Sentiment />} />

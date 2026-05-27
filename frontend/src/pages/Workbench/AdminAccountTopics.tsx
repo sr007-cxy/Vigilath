@@ -70,7 +70,8 @@ export function AdminAccountTopics() {
     setStartErrByTopic((prev) => { const n = { ...prev }; delete n[tp.id]; return n; });
     try {
       await adminReviewApi.startTopic(tp.id, token);
-      navigate(`/workbench/topics/${tp.id}/execution-plan`);
+      // 启动后直接进「画像」主流程的「计划书」step,不再跳到独立的 execution-plan 详情页.
+      navigate(`/workbench/topics/${tp.id}/edit?step=5`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setStartErrByTopic((prev) => ({ ...prev, [tp.id]: msg }));
@@ -272,20 +273,21 @@ export function AdminAccountTopics() {
 
                   {hasRun && (
                     <>
+                      {/* 全部走「画像」主流程的对应 step,不再跳独立详情页 */}
                       <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/solution`)}
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=4`)}
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--accent-primary)', color: 'white' }}>
                         {t('workbench.adminAccountTopics.viewSolution')}
                       </button>
                       <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/execution-plan`)}
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=5`)}
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                         {t('workbench.adminAccountTopics.viewPlan')}
                       </button>
                       <button type="button"
-                        onClick={() => navigate(`/workbench/content-review?topic=${tp.id}`)}
+                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=6`)}
                         className="text-xs px-3 py-1 rounded"
                         style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
                         {t('workbench.adminAccountTopics.reviewDocs')}

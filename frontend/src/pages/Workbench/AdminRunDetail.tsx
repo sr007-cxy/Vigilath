@@ -128,7 +128,7 @@ export function AdminRunDetail() {
             <span style={{ color: '#ef4444' }}>错误 {run.error_count}</span>
           )}
           <Link
-            to={`/workbench/topics/${run.topic_id}/execution-plan`}
+            to={`/workbench/topics/${run.topic_id}/edit?step=5`}
             className="ml-auto text-accent hover:underline"
           >
             执行策略与规划 →

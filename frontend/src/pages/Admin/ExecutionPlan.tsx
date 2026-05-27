@@ -378,12 +378,12 @@ function PublishingPlanSection({
                 <tr key={it.id || i}
                     style={{ borderTop: '1px solid var(--border-color)' }}>
                   <td className="py-2 px-2 tabular-nums text-primary whitespace-nowrap cursor-pointer"
-                      onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
+                      onClick={() => navigate(`/workbench/topics/${plan.topic_id}/edit?step=6`)}>
                     {it.publish_date}
                     <span className="text-muted ml-1">(#{it.seq + 1})</span>
                   </td>
                   <td className="py-2 px-2 text-primary max-w-[280px] truncate cursor-pointer" title={it.query}
-                      onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
+                      onClick={() => navigate(`/workbench/topics/${plan.topic_id}/edit?step=6`)}>
                     {it.query}
                   </td>
                   <td className="py-2 px-2 text-center tabular-nums">
@@ -412,7 +412,7 @@ function PublishingPlanSection({
                   <td className="py-2 px-2">
                     {it.doc_id ? (
                       <span className="text-[10px] cursor-pointer"
-                            onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
+                            onClick={() => navigate(`/workbench/topics/${plan.topic_id}/edit?step=6`)}>
                         #{it.doc_id}
                         {it.doc_status && (
                           <span className="ml-1 text-muted">

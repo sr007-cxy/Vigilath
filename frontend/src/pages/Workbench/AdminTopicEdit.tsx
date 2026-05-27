@@ -3,7 +3,7 @@
 // 路由:/workbench/topics/:topicId/edit
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
@@ -16,6 +16,11 @@ export function AdminTopicEdit() {
   const navigate = useNavigate();
   const tid = Number(topicId);
   const token = localStorage.getItem('token') || '';
+  // 项目进度看板把 6 段 chip 都指向 /edit?step=N,这里读出来透传给 TopicEditor.
+  const [searchParams] = useSearchParams();
+  const stepParam = Number(searchParams.get('step'));
+  const initialStep =
+    stepParam >= 1 && stepParam <= 7 ? (stepParam as 1 | 2 | 3 | 4 | 5 | 6 | 7) : undefined;
 
   const [topic, setTopic] = useState<Topic | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
@@ -62,7 +67,8 @@ export function AdminTopicEdit() {
           token={token}
           mode="edit"
           adminTargetUserId={userId}
-          onCancel={() => navigate(`/workbench/topics/${tid}/execution-plan`)}
+          initialStep={initialStep}
+          onCancel={() => navigate('/workbench/cockpit')}
           onSave={handleSave}
           onSaveDone={() => {
             // 保存后留在原页,刷新 topic 数据(让 stepper 更新画像/监测问题状态)

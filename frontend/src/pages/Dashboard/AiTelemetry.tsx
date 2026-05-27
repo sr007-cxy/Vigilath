@@ -2018,10 +2018,13 @@ interface TopicEditorProps {
   // admin 替别人配主题:传 user_id 后,新建走 admin 通道直接 approved,
   // 跳过 submit-for-review;编辑沿用 onSave。
   adminTargetUserId?: number;
+  // 项目进度看板把 6 段 chip 都接入这个 wizard,通过 initialStep 直跳对应步骤:
+  // submit→1 / review→3 / diagnose→4 / plan→5 / content→6 / insight→7
+  initialStep?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
 }
 
 export function TopicEditor({
-  initial, token, mode = 'edit', onCancel, onSave, onSaveDone, adminTargetUserId,
+  initial, token, mode = 'edit', onCancel, onSave, onSaveDone, adminTargetUserId, initialStep,
 }: TopicEditorProps) {
   const readOnly = mode === 'view';
   const { t } = useTranslation();
@@ -2044,7 +2047,12 @@ export function TopicEditor({
   );
   const enabled = true;
   // 1-4 是编辑器 wizard 表单步;5-7 是项目进度下游(计划书 / 内容与投放 / 效果检查),内联展示.
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
+  // initialStep 由 cockpit/项目进度 的 chip 链接 ?step=N 传入;5-7 需要 initial.id 否则退回 1.
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(() => {
+    const s = initialStep ?? 1;
+    if (s >= 5 && !initial?.id) return 1;
+    return s;
+  });
   // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
   const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);

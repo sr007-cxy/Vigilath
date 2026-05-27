@@ -101,39 +101,41 @@ export function TopicStepper({ topicId, active }: Props) {
       : 'idle';
   })();
 
-  // 与项目进度看板对齐:profile → review → solution → plan → docs → insight.
+  // 全部 6 段都跳「画像」主流程的对应 step,不再去单独的 review/solution/plan/docs/insight 详情页.
+  //   profile→step 1  review→step 3  solution→step 4  plan→step 5  docs→step 6  insight→step 7
+  const editBase = `/workbench/topics/${topicId}/edit`;
   const steps: StepDef[] = [
     {
       key: 'profile', label: t('workbench.topicStepper.profile'),
       status: profileOk ? 'done' : 'idle',
       hint: profileOk ? String(topic?.selected_query_count ?? 0) + ' Q' : undefined,
-      onClick: () => navigate(`/workbench/topics/${topicId}/edit`),
+      onClick: () => navigate(`${editBase}?step=1`),
     },
     {
       key: 'review', label: t('workbench.topicStepper.review'),
       status: reviewChip,
-      onClick: () => navigate(`/workbench/review`),
+      onClick: () => navigate(`${editBase}?step=3`),
     },
     {
       key: 'solution', label: t('workbench.topicStepper.solution'),
       status: solChip,
-      onClick: () => navigate(`/workbench/topics/${topicId}/solution`),
+      onClick: () => navigate(`${editBase}?step=4`),
     },
     {
       key: 'plan', label: t('workbench.topicStepper.plan'),
       status: planChip,
       hint: plan && plan.status === 'draft' ? '编辑中' : undefined,
-      onClick: () => navigate(`/workbench/topics/${topicId}/execution-plan`),
+      onClick: () => navigate(`${editBase}?step=5`),
     },
     {
       key: 'docs', label: t('workbench.topicStepper.docs'),
       status: 'idle',
-      onClick: () => navigate(`/workbench/topics/${topicId}/docs`),
+      onClick: () => navigate(`${editBase}?step=6`),
     },
     {
       key: 'insight', label: t('workbench.topicStepper.insight'),
       status: insChip,
-      onClick: () => navigate(`/brand-growth/insights?topicId=${topicId}`),
+      onClick: () => navigate(`${editBase}?step=7`),
     },
   ];
 
