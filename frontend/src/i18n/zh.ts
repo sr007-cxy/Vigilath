@@ -40,6 +40,10 @@ const zh = {
               "title": "联系销售 · GApex",
               "description": "与 GApex 团队洽谈托管 GEO 覆盖、定制审计、企业支持。"
             },
+            "faq": {
+              "title": "常见问题 · GApex",
+              "description": "GEO / AEO 服务、定价、流程、引擎覆盖等常见问题集中解答。"
+            },
             "login": {
               "title": "登录 · GApex",
               "description": "登录你的 GApex 账户。"
@@ -77,6 +81,7 @@ const zh = {
             "home": "首页",
             "geoKnowledge": "资源中心",
             "productsServices": "产品与服务",
+            "faq": "常见问题",
             "aboutUs": "关于我们",
             "about": "关于 GEO",
             "process": "服务流程",

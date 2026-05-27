@@ -40,6 +40,10 @@ const en = {
               "title": "Contact Sales · GApex",
               "description": "Talk to the GApex team about managed GEO coverage, custom audits, and enterprise support."
             },
+            "faq": {
+              "title": "FAQ · GApex",
+              "description": "Answers to common questions on GEO / AEO services, pricing, process, and engine coverage."
+            },
             "login": {
               "title": "Log in · GApex",
               "description": "Log in to your GApex account."
@@ -77,6 +81,7 @@ const en = {
             "home": "Home",
             "geoKnowledge": "Resources Center",
             "productsServices": "Products & Services",
+            "faq": "FAQ",
             "aboutUs": "About Us",
             "about": "About GEO",
             "process": "Process",

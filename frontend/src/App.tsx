@@ -21,7 +21,7 @@ const Result = lazy(() => import('./pages/Result').then(m => ({ default: m.Resul
 const Contact = lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 const GeoKnowledge = lazy(() => import('./pages/GeoKnowledge').then(m => ({ default: m.GeoKnowledge })));
 const GeoKnowledgeMetrics = lazy(() => import('./pages/GeoKnowledgeMetrics').then(m => ({ default: m.GeoKnowledgeMetrics })));
-const GeoKnowledgeFaq = lazy(() => import('./pages/GeoKnowledgeFaq').then(m => ({ default: m.GeoKnowledgeFaq })));
+const Faq = lazy(() => import('./pages/Faq').then(m => ({ default: m.Faq })));
 const ProductsServices = lazy(() => import('./pages/ProductsServices').then(m => ({ default: m.ProductsServices })));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
@@ -117,7 +117,8 @@ function App() {
               <Route path="/checker" element={<Home />} />
               <Route path="/geo-knowledge" element={<GeoKnowledge />} />
               <Route path="/geo-knowledge/metrics" element={<GeoKnowledgeMetrics />} />
-              <Route path="/geo-knowledge/faq" element={<GeoKnowledgeFaq />} />
+              <Route path="/geo-knowledge/faq" element={<Navigate to="/faq" replace />} />
+              <Route path="/faq" element={<Faq />} />
               <Route path="/products-services" element={<ProductsServices />} />
               <Route path="/account" element={<AccountLayout />}>
                 <Route index element={<Navigate to="profile" replace />} />

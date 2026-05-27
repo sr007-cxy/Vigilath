@@ -17,6 +17,7 @@ export function Header() {
     { to: '/', label: t('nav.home') },
     { to: '/geo-knowledge', label: t('nav.geoKnowledge') },
     { to: '/products-services', label: t('nav.productsServices') },
+    { to: '/faq', label: t('nav.faq') },
     { to: '/about', label: t('nav.aboutUs') },
   ];
 
