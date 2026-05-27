@@ -16,11 +16,13 @@ import type { BrandProfile } from '../services/aiTelemetryApi';
 // content_tones / content_redlines)整节移除 — 这些由内容审核 / 投放策略阶段
 // 决定,不在资料表单里强制填。BrandProfile schema 字段保留(老数据不破),
 // content_generator 的 prompt 拼装如果读到空就跳过。
-// 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填,
+// 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填.
+// 2026-05-27:core_business_lines 退出必填 — 实践里很多场景一句话讲清楚业务线
+// 写在 industry 里就够,空着也允许跑通.其余 5 个仍必填.
 // 其他模块都是「素材库」性质,鼓励多填但不卡死;LLM 拿到什么用什么.
 export const PROFILE_REQUIRED_FIELDS: (keyof BrandProfile)[] = [
   'profile_name', 'company_full_name', 'company_short_name',
-  'industry', 'core_business_lines', 'service_geo',
+  'industry', 'service_geo',
 ];
 
 export function isProfileFieldFilled(profile: BrandProfile, key: keyof BrandProfile): boolean {

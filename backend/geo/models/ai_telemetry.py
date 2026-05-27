@@ -515,12 +515,14 @@ class BrandProfile(BaseModel):
 # 「内容创作方向」整节(creation_directions / copywriting_types / target_platforms /
 # content_tones / content_redlines)2026-05-17 起从资料表单移除 — 这部分由
 # 「内容发布策略」阶段决定,不再在资料里强制。schema 字段保留,老数据兼容。
-# 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填,
+# 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填.
+# 2026-05-27:core_business_lines 退出必填 — 实践里很多场景一句话讲清楚业务线
+# 写在 industry 里就够,空着也允许跑通.其余 5 个仍必填.
 # 其他模块(品牌主体 / 产品服务 / 品牌故事 / 补充素材)都改成选填:
 # 用户上传的资料是后续生稿的素材库,鼓励多填但不强迫;LLM 拿到什么用什么.
 PROFILE_REQUIRED_FIELDS: tuple[str, ...] = (
     "profile_name", "company_full_name", "company_short_name",
-    "industry", "core_business_lines", "service_geo",
+    "industry", "service_geo",
 )
 
 
