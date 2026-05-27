@@ -516,7 +516,7 @@ export function Home() {
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
               {(t('home.partners.items', { returnObjects: true }) as {
                 name: string;
                 sub: string;

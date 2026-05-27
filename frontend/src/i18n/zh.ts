@@ -401,6 +401,12 @@ const zh = {
                   "sub": "SimpleWare",
                   "logo": "/image/xipu.png",
                   "tagline": ""
+                },
+                {
+                  "name": "汤恩",
+                  "sub": "Sparkoz",
+                  "logo": "/image/sparkoz.png",
+                  "tagline": ""
                 }
               ]
             },

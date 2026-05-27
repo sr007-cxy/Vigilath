@@ -401,6 +401,12 @@ const en = {
                   "sub": "西普科技",
                   "logo": "/image/xipu.png",
                   "tagline": ""
+                },
+                {
+                  "name": "Sparkoz",
+                  "sub": "汤恩",
+                  "logo": "/image/sparkoz.png",
+                  "tagline": ""
                 }
               ]
             },
