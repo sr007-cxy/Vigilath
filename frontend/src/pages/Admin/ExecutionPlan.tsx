@@ -28,7 +28,11 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
   const token = localStorage.getItem('token') || '';
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // 项目还没启动 = backend 404 "no execution plan generated".用专门的空态展示 + 启动按钮,
+  // 不要把后端英文 raw 错误甩到红 banner 上.
+  const [notStarted, setNotStarted] = useState(false);
   const [rerunBusy, setRerunBusy] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
   const [inlineEdit, setInlineEdit] = useState(false);  // confirmed 态下的「编辑发文表」开关
   const pollRef = useRef<number | null>(null);
 
@@ -49,11 +53,20 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
     try {
       const p = await adminReviewApi.getExecutionPlan(topicId, token);
       setPlan(p);
+      setNotStarted(false);
+      setErr(null);
       if (!needsPolling(p)) {
         if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
       }
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      // 404 / 后端 "no execution plan" → 项目还没启动,不算错误,渲染空态.
+      if (/no execution plan/i.test(msg)) {
+        setNotStarted(true);
+        setErr(null);
+      } else {
+        setErr(msg);
+      }
       if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     }
   }, [topicId, token]);
@@ -65,6 +78,24 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
       if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     };
   }, [fetchOnce]);
+
+  const handleStart = async () => {
+    if (startBusy) return;
+    setStartBusy(true); setErr(null);
+    try {
+      await adminReviewApi.startTopic(topicId, token);
+      // 启动后立刻重拉一次;后端异步生成 plan,polling 接管后续刷新.
+      setNotStarted(false);
+      await fetchOnce();
+      if (!pollRef.current) {
+        pollRef.current = window.setInterval(fetchOnce, 3000);
+      }
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStartBusy(false);
+    }
+  };
 
   const editMode = plan?.status === 'draft' || inlineEdit;
 
@@ -103,7 +134,24 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
         </div>
       )}
 
-      {!plan && !err && <div className="py-12 text-center text-sm text-muted">…</div>}
+      {notStarted && (
+        <div className="rounded-md p-6 text-center space-y-3"
+             style={{ background: 'var(--bg-secondary)',
+                      border: '1px dashed var(--border-color)' }}>
+          <div className="text-sm text-secondary">
+            项目尚未启动 — 启动后会自动生成执行计划书与发文表
+          </div>
+          <button type="button" disabled={startBusy} onClick={handleStart}
+                  className="px-4 py-1.5 text-sm rounded-md text-white disabled:opacity-50"
+                  style={{ background: 'var(--accent-primary)' }}>
+            {startBusy ? '启动中…' : '⚡ 启动项目'}
+          </button>
+        </div>
+      )}
+
+      {!plan && !err && !notStarted && (
+        <div className="py-12 text-center text-sm text-muted">…</div>
+      )}
 
       {plan && (
         <div className="space-y-4">
