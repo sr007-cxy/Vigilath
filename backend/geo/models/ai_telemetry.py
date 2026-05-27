@@ -256,8 +256,49 @@ class AiTelemetryTopicExecutionPlanORM(Base):
     monitored_queries_snapshot_json = Column(Text, nullable=False, default="[]")
 
     run_id = Column(Integer, ForeignKey("ai_telemetry_runs.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, nullable=False, default="generating")   # generating / ready / failed
+    status = Column(String, nullable=False, default="draft")    # draft / confirmed / failed
     error = Column(Text, nullable=True)
+    # 编辑器:发文计划行(列表 of PublishPlanItem 持久化字段子集)
+    publishing_plan_json = Column(Text, nullable=False, default="[]")
+    confirmed_at = Column(DateTime, nullable=True)
+    confirmed_by_id = Column(Integer, nullable=True)
+    last_edited_at = Column(DateTime, nullable=True)
+
+
+class ContentTemplateORM(Base):
+    """内容模板 — 给执行计划里的每一行发文条目挂一个 prompt 模板.
+
+    scope:
+      - system:全局预置,运营都能用;只允许超管编辑
+      - tenant:租户(用户)级模板,该用户可见可改
+      - topic: 主题级模板,挂在某 topic 下,只在该 topic 编辑器里见到
+
+    locked=True 后,prompt_template / kind 字段进入只读态(API 校验 + 前端置灰).
+    模板被锁不影响其被发文计划继续引用,LLM 调用每次按"当前 prompt"渲染.
+    """
+    __tablename__ = "content_templates"
+    __table_args__ = (
+        Index("idx_content_template_scope", "scope"),
+        Index("idx_content_template_tenant", "tenant_id"),
+        Index("idx_content_template_topic", "topic_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    scope = Column(String(length=8), nullable=False, default="tenant")   # system / tenant / topic
+    tenant_id = Column(Integer, nullable=True)
+    topic_id = Column(Integer, nullable=True)
+    name = Column(String(length=64), nullable=False, default="")
+    kind = Column(String(length=16), nullable=False, default="长文")      # 长文/短文/FAQ/案例/测评/对比/教程/问答
+    prompt_template = Column(Text, nullable=False, default="")
+    target_platforms_json = Column(Text, nullable=False, default="[]")
+    length_min = Column(Integer, nullable=False, default=800)
+    length_max = Column(Integer, nullable=False, default=1500)
+    locked = Column(Boolean, nullable=False, default=False)
+    locked_at = Column(DateTime, nullable=True)
+    locked_by_id = Column(Integer, nullable=True)
+    created_by_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AiTelemetryTopicSolutionORM(Base):
@@ -310,11 +351,17 @@ class TopicGeneratedDocORM(Base):
     __table_args__ = (
         Index("idx_tgd_topic", "topic_id"),
         Index("idx_tgd_status", "status"),
+        Index("idx_tgd_plan_item", "plan_item_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id", ondelete="CASCADE"), nullable=False)
     execution_plan_id = Column(Integer, ForeignKey("ai_telemetry_topic_execution_plans.id", ondelete="SET NULL"), nullable=True)
+    # 关联到执行计划编辑器的某一行(publishing_plan_items[].id,uuid 字符串)
+    plan_item_id = Column(String(length=36), nullable=True)
+    # 生成时使用的模板 + 平台(plan_item 当时的快照值)
+    template_id = Column(Integer, ForeignKey("content_templates.id", ondelete="SET NULL"), nullable=True)
+    platform = Column(String(length=16), nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     source_query_text = Column(Text, nullable=False, default="")
@@ -545,21 +592,54 @@ class TopicProgressCell(BaseModel):
 
 
 class PublishPlanItem(BaseModel):
-    """发文计划单行 — 一个监测问题 → 一篇内容 → 一天发一个平台.
+    """发文计划单行(GET 输出形态).
+
+    持久化字段:id / seq / publish_date / query / template_id / platform / note。
+    其余字段是 GET 时实时聚合 / 联表查出来的派生值,不进 publishing_plan_json。
 
     优先级:
       - high: 监测命中率 0%(AI 完全没提及品牌,要补内容)
       - med:  0 < 命中率 < 50%(部分命中,补强)
       - low:  >= 50%(已有覆盖,可不发或低频)
     """
-    day: int                              # 第几天(0=今天)
+    # 持久化字段
+    id: str                               # uuid;前端编辑稳定 id,也用来回写 doc.plan_item_id
+    seq: int = 0                          # 显示顺序
     publish_date: str                     # YYYY-MM-DD
     query: str
-    coverage_pct: float                   # AI 命中率 0-100
-    priority: str                         # high / med / low
-    doc_id: Optional[int] = None          # 关联的内容文档(已生成才有)
-    doc_status: Optional[str] = None      # draft / pending_review / approved / rejected / published
+    template_id: Optional[int] = None     # 旧数据 fallback 时为 None
+    platform: Optional[str] = None
+    note: Optional[str] = None
+    # 兼容字段(老前端读老数据)
+    day: int = 0                          # 第几天(0=今天);新版按 seq 算
+    # GET 时算
+    coverage_pct: float = 0.0
+    priority: str = "low"                 # high / med / low
+    doc_id: Optional[int] = None
+    doc_status: Optional[str] = None
+    # 模板展示用(联表查 ContentTemplateORM)
+    template_name: Optional[str] = None
+    template_kind: Optional[str] = None
+    # 模板默认平台列表(平台下拉用)
     suggested_platforms: list[str] = Field(default_factory=list)
+
+
+class PlanItemDraft(BaseModel):
+    """PUT /execution-plan 时前端送进来的发文行草稿.
+
+    id 可选:为 None 表示新增行,后端补 uuid。其余字段必填(校验在端点里做)。
+    """
+    id: Optional[str] = None
+    seq: int = 0
+    publish_date: str                     # YYYY-MM-DD
+    query: str
+    template_id: int
+    platform: str
+    note: Optional[str] = None
+
+
+class ExecutionPlanUpdatePayload(BaseModel):
+    items: list[PlanItemDraft]
 
 
 class TopicExecutionPlanOut(BaseModel):
@@ -567,7 +647,7 @@ class TopicExecutionPlanOut(BaseModel):
     topic_id: int
     generated_at: datetime
     generated_by_reviewer_id: Optional[int]
-    status: str                          # generating / ready / failed
+    status: str                          # draft / confirmed / failed
     error: Optional[str] = None
     # 项目总体状况
     overview: dict
@@ -583,8 +663,54 @@ class TopicExecutionPlanOut(BaseModel):
     progress: list[TopicProgressCell] = Field(default_factory=list)
     progress_done: int = 0
     progress_total: int = 0
-    # 发文计划 — 按 query 命中情况排优先级,每天 1 篇,关联已生成的内容文档
+    # 发文计划 — 持久化的发文行 + 实时聚合的覆盖率/文章状态
     publishing_plan: list[PublishPlanItem] = Field(default_factory=list)
+    # 编辑器元信息
+    confirmed_at: Optional[datetime] = None
+    confirmed_by_id: Optional[int] = None
+    last_edited_at: Optional[datetime] = None
+
+
+# ────────────── Content Template schemas ──────────────
+
+
+class ContentTemplateOut(BaseModel):
+    id: int
+    scope: str                            # system / tenant / topic
+    tenant_id: Optional[int]
+    topic_id: Optional[int]
+    name: str
+    kind: str
+    prompt_template: str
+    target_platforms: list[str] = Field(default_factory=list)
+    length_min: int
+    length_max: int
+    locked: bool
+    locked_at: Optional[datetime]
+    locked_by_id: Optional[int]
+    created_by_id: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ContentTemplateCreate(BaseModel):
+    scope: Literal["system", "tenant", "topic"] = "tenant"
+    topic_id: Optional[int] = None
+    name: str
+    kind: str = "长文"
+    prompt_template: str
+    target_platforms: list[str] = Field(default_factory=list)
+    length_min: int = 800
+    length_max: int = 1500
+
+
+class ContentTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    prompt_template: Optional[str] = None
+    target_platforms: Optional[list[str]] = None
+    length_min: Optional[int] = None
+    length_max: Optional[int] = None
 
 
 class GeneratedDocOut(BaseModel):

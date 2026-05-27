@@ -1,4 +1,4 @@
-// Admin 执行计划书 — 审核通过后展示项目总体状况 / 主题日志 / 泛化日志 / 运行进度.
+// Admin 执行计划书 — 编辑发文表(draft / 插入式编辑) / 查看(confirmed).
 // 路由:/workbench/topics/:topicId/execution-plan
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { TopicStepper } from '../../components/TopicStepper';
 import { adminReviewApi, type ExecutionPlan } from '../../services/adminReviewApi';
+import { PublishingPlanEditor } from './PublishingPlanEditor';
 
 export function AdminExecutionPlan() {
   const { topicId } = useParams();
@@ -28,15 +29,27 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
   const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [rerunBusy, setRerunBusy] = useState(false);
+  const [inlineEdit, setInlineEdit] = useState(false);  // confirmed 态下的「编辑发文表」开关
   const pollRef = useRef<number | null>(null);
+
+  const needsPolling = (p: ExecutionPlan): boolean => {
+    if (p.run_status === 'running') return true;
+    // confirmed 状态:有文章还没生成完(plan_item 没出稿)就继续轮
+    if (p.status === 'confirmed') {
+      const pending = (p.publishing_plan || []).some(
+        it => !it.doc_id || it.doc_status === 'draft',
+      );
+      if (pending) return true;
+    }
+    return false;
+  };
 
   const fetchOnce = useCallback(async () => {
     if (!topicId) return;
     try {
       const p = await adminReviewApi.getExecutionPlan(topicId, token);
       setPlan(p);
-      // run 完成或 plan 失败 → 停止轮询
-      if (p.status !== 'generating' && p.run_status !== 'running') {
+      if (!needsPolling(p)) {
         if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
       }
     } catch (e: unknown) {
@@ -52,6 +65,8 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
       if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = null; }
     };
   }, [fetchOnce]);
+
+  const editMode = plan?.status === 'draft' || inlineEdit;
 
   return (
     <div className="space-y-4">
@@ -92,9 +107,47 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
 
       {plan && (
         <div className="space-y-4">
-          <OverviewSection plan={plan} />
+          <OverviewSection plan={plan}
+                           inlineEditToggle={
+                             plan.status === 'confirmed' && !inlineEdit
+                               ? () => setInlineEdit(true) : undefined
+                           } />
           <ProgressSection plan={plan} />
-          <PublishingPlanSection plan={plan} />
+          {editMode ? (
+            <SectionCard title={plan.status === 'draft' ? '编辑发文计划(草稿)' : '编辑发文计划'}>
+              <PublishingPlanEditor
+                plan={plan}
+                topicId={topicId}
+                mode={plan.status === 'draft' ? 'draft' : 'inline-edit'}
+                onSaved={(updated) => {
+                  setPlan(updated);
+                  // confirmed 态下保存修改后退出编辑
+                  if (updated.status !== 'draft') setInlineEdit(false);
+                }}
+                onConfirmed={(updated) => {
+                  setPlan(updated);
+                  setInlineEdit(false);
+                  if (!pollRef.current) {
+                    pollRef.current = window.setInterval(fetchOnce, 3000);
+                  }
+                }}
+                onCancel={plan.status !== 'draft' ? () => setInlineEdit(false) : undefined}
+              />
+            </SectionCard>
+          ) : (
+            <PublishingPlanSection plan={plan}
+                                   onRegenerate={async (itemId) => {
+                                     try {
+                                       const p = await adminReviewApi.regeneratePlanItem(topicId, itemId, token);
+                                       setPlan(p);
+                                       if (!pollRef.current) {
+                                         pollRef.current = window.setInterval(fetchOnce, 3000);
+                                       }
+                                     } catch (e: unknown) {
+                                       setErr(e instanceof Error ? e.message : String(e));
+                                     }
+                                   }} />
+          )}
           <ChangelogSection plan={plan} />
           <ExpansionSection plan={plan} />
         </div>
@@ -103,9 +156,25 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
   );
 }
 
-function OverviewSection({ plan }: { plan: ExecutionPlan }) {
+function OverviewSection({
+  plan, inlineEditToggle,
+}: {
+  plan: ExecutionPlan;
+  inlineEditToggle?: () => void;
+}) {
   const { t } = useTranslation();
   const o = plan.overview || {};
+  const planDocs = plan.publishing_plan || [];
+  const docDone = planDocs.filter(it => it.doc_id && it.doc_status && it.doc_status !== 'draft').length;
+  const docTotal = planDocs.length;
+  const planStatusLabel: Record<string, { text: string; color: string }> = {
+    draft:     { text: '草稿(待确认)', color: '#3b82f6' },
+    confirmed: { text: '已确认',         color: '#10b981' },
+    failed:    { text: '失败',           color: '#ef4444' },
+    ready:     { text: '已确认',         color: '#10b981' }, // 兼容旧值
+    generating:{ text: '草稿(待确认)', color: '#3b82f6' },
+  };
+  const ps = planStatusLabel[plan.status] || { text: plan.status, color: '#94a3b8' };
   const rows: [string, unknown][] = [
     ['项目名称', o.topic_name],
     ['品牌简称', o.company_short_name],
@@ -115,10 +184,32 @@ function OverviewSection({ plan }: { plan: ExecutionPlan }) {
     ['引擎', Array.isArray(o.engines) ? (o.engines as string[]).join(', ') : ''],
     ['预估 cell 数', o.estimated_cells],
     ['计划生成时间', plan.generated_at && new Date(plan.generated_at).toLocaleString()],
+    ['确认时间', plan.confirmed_at && new Date(plan.confirmed_at).toLocaleString()],
     ['通过触发的 run_id', plan.run_id || '—'],
   ];
   return (
     <SectionCard title={t('admin.executionPlan.section.overview')}>
+      <div className="flex items-center gap-3 mb-3 text-sm">
+        <span className="text-muted">计划状态:</span>
+        <span className="font-semibold" style={{ color: ps.color }}>{ps.text}</span>
+        {docTotal > 0 && (
+          <>
+            <span className="text-muted">·</span>
+            <span className="text-secondary">
+              文章 {docDone} / {docTotal}
+            </span>
+          </>
+        )}
+        <div className="flex-1" />
+        {inlineEditToggle && (
+          <button type="button" onClick={inlineEditToggle}
+                  className="text-xs px-2.5 py-1 rounded-md"
+                  style={{ background: 'transparent', color: 'var(--text-secondary)',
+                           border: '1px solid var(--border-color)' }}>
+            ✎ 编辑发文表
+          </button>
+        )}
+      </div>
       <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
         {rows.filter(([_, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
           <div key={k} className="flex items-start gap-2">
@@ -237,13 +328,19 @@ function ProgressSection({ plan }: { plan: ExecutionPlan }) {
   );
 }
 
-function PublishingPlanSection({ plan }: { plan: ExecutionPlan }) {
+function PublishingPlanSection({
+  plan, onRegenerate,
+}: {
+  plan: ExecutionPlan;
+  onRegenerate?: (itemId: string) => void | Promise<void>;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const items = plan.publishing_plan || [];
   if (items.length === 0) {
     return null;
   }
+  const canRegenerate = plan.status === 'confirmed' && onRegenerate !== undefined;
   const PRI_STYLE: Record<string, { c: string; bg: string; label: string }> = {
     high: { c: '#ef4444', bg: 'rgba(239,68,68,0.10)', label: t('admin.executionPlan.priority.high') },
     med:  { c: '#eab308', bg: 'rgba(234,179,8,0.10)', label: t('admin.executionPlan.priority.med') },
@@ -269,23 +366,24 @@ function PublishingPlanSection({ plan }: { plan: ExecutionPlan }) {
               <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.query')}</th>
               <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.coverage')}</th>
               <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.priority')}</th>
-              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.platforms')}</th>
+              <th className="py-2 px-2 font-medium">模板/平台</th>
               <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.doc')}</th>
+              {canRegenerate && <th className="py-2 px-2 font-medium text-center">操作</th>}
             </tr>
           </thead>
           <tbody>
             {items.map((it, i) => {
               const pri = PRI_STYLE[it.priority] || PRI_STYLE.med;
               return (
-                <tr key={i}
-                    className="cursor-pointer"
-                    style={{ borderTop: '1px solid var(--border-color)' }}
-                    onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
-                  <td className="py-2 px-2 tabular-nums text-primary whitespace-nowrap">
+                <tr key={it.id || i}
+                    style={{ borderTop: '1px solid var(--border-color)' }}>
+                  <td className="py-2 px-2 tabular-nums text-primary whitespace-nowrap cursor-pointer"
+                      onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
                     {it.publish_date}
-                    <span className="text-muted ml-1">(D+{it.day})</span>
+                    <span className="text-muted ml-1">(#{it.seq + 1})</span>
                   </td>
-                  <td className="py-2 px-2 text-primary max-w-[320px] truncate" title={it.query}>
+                  <td className="py-2 px-2 text-primary max-w-[280px] truncate cursor-pointer" title={it.query}
+                      onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
                     {it.query}
                   </td>
                   <td className="py-2 px-2 text-center tabular-nums">
@@ -300,17 +398,21 @@ function PublishingPlanSection({ plan }: { plan: ExecutionPlan }) {
                       {pri.label}
                     </span>
                   </td>
-                  <td className="py-2 px-2">
-                    {it.suggested_platforms.slice(0, 4).map((p, j) => (
-                      <span key={j} className="inline-block mr-1 px-1.5 py-0.5 rounded-full text-[10px]"
+                  <td className="py-2 px-2 text-[10px]">
+                    {it.template_name && (
+                      <span className="block text-primary">{it.template_name}</span>
+                    )}
+                    {it.platform && (
+                      <span className="inline-block px-1.5 py-0.5 rounded-full"
                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                        {p}
+                        {it.platform}
                       </span>
-                    ))}
+                    )}
                   </td>
                   <td className="py-2 px-2">
                     {it.doc_id ? (
-                      <span className="text-[10px]">
+                      <span className="text-[10px] cursor-pointer"
+                            onClick={() => navigate(`/workbench/content-review?topic=${plan.topic_id}`)}>
                         #{it.doc_id}
                         {it.doc_status && (
                           <span className="ml-1 text-muted">
@@ -324,6 +426,18 @@ function PublishingPlanSection({ plan }: { plan: ExecutionPlan }) {
                       </span>
                     )}
                   </td>
+                  {canRegenerate && (
+                    <td className="py-2 px-2 text-center">
+                      <button type="button"
+                              onClick={() => onRegenerate?.(it.id)}
+                              className="text-[10px] px-2 py-0.5 rounded-md"
+                              style={{ background: 'transparent', color: 'var(--text-secondary)',
+                                       border: '1px solid var(--border-color)' }}
+                              title="重新生成这条">
+                        ↻ 重生
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}

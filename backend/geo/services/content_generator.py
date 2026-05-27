@@ -37,7 +37,8 @@ import requests
 
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
-    AiTelemetryTopicORM, BrandProfile, TopicGeneratedDocORM,
+    AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicORM, BrandProfile,
+    ContentTemplateORM, TopicGeneratedDocORM,
 )
 
 log = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def schedule_generation(
     plan_id: int | None = None,
     max_docs: int | None = None,
     queries_override: list[str] | None = None,
+    plan_item_ids: list[str] | None = None,
     mark_auto_run: bool = False,
 ) -> None:
     """fire-and-forget thread.BackgroundTasks 已是 fire-and-forget,
@@ -62,12 +64,14 @@ def schedule_generation(
 
     参数:
       max_docs            — 限制本次生成的稿件数;不传则按 env / 50 兜底
-      queries_override    — 指定本次要写的 query 列表;不传则从 topic 拉 approved+selected
+      queries_override    — 指定本次要写的 query 列表;不传则按 plan_item_ids /
+                            plan.publishing_plan_json / topic.queries_json 三段择优
+      plan_item_ids       — 指定本次只跑 publishing_plan_items 里的哪几行(单条重生用)
       mark_auto_run       — True 时写 auto_generate_last_run_at(cron / 立即生成入口用)
     """
     thread = threading.Thread(
         target=_run_generation_safe,
-        args=(topic_id, plan_id, max_docs, queries_override, mark_auto_run),
+        args=(topic_id, plan_id, max_docs, queries_override, plan_item_ids, mark_auto_run),
         daemon=True,
     )
     thread.start()
@@ -76,17 +80,33 @@ def schedule_generation(
 def _run_generation_safe(
     topic_id: int, plan_id: int | None,
     max_docs: int | None, queries_override: list[str] | None,
+    plan_item_ids: list[str] | None,
     mark_auto_run: bool,
 ) -> None:
     try:
-        _run_generation(topic_id, plan_id, max_docs, queries_override, mark_auto_run)
+        _run_generation(
+            topic_id, plan_id, max_docs, queries_override,
+            plan_item_ids, mark_auto_run,
+        )
     except Exception as e:  # noqa: BLE001
         log.exception("content generation crashed for topic %d: %s", topic_id, e)
+
+
+def _resolve_provider() -> tuple[str | None, str, str]:
+    """挑 LLM provider + 拿 api key.返回 (provider | None, model_id, api_key)."""
+    ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if ds_key:
+        return "deepseek", DEEPSEEK_MODEL, ds_key
+    if or_key:
+        return "openrouter", OPENROUTER_DEEPSEEK_MODEL, or_key
+    return None, DEEPSEEK_MODEL, ""
 
 
 def _run_generation(
     topic_id: int, plan_id: int | None,
     max_docs_override: int | None, queries_override: list[str] | None,
+    plan_item_ids: list[str] | None,
     mark_auto_run: bool,
 ) -> None:
     db = SessionLocal()
@@ -105,6 +125,29 @@ def _run_generation(
             profile = BrandProfile(**profile_data)
         except Exception:  # noqa: BLE001
             profile = BrandProfile()
+
+        # 新路径优先:plan_id + plan.publishing_plan_json 有内容 → 按 plan item 派工.
+        # 旧路径(queries_override / topic.queries_json) 仅在没 plan 数据时走.
+        plan_items: list[dict] = []
+        if plan_id is not None:
+            plan = db.get(AiTelemetryTopicExecutionPlanORM, plan_id)
+            if plan:
+                try:
+                    raw = json.loads(plan.publishing_plan_json or "[]")
+                except Exception:  # noqa: BLE001
+                    raw = []
+                plan_items = [it for it in raw if isinstance(it, dict)]
+                if plan_item_ids:
+                    wanted = set(plan_item_ids)
+                    plan_items = [it for it in plan_items if it.get("id") in wanted]
+
+        if plan_items:
+            _run_per_item(
+                db, t, profile, topic_id, plan_id, plan_items, mark_auto_run,
+            )
+            return
+
+        # ── 兼容旧路径:按整批 queries 跑 ──────────────────────────────────────────
         if queries_override is not None:
             queries = [q for q in queries_override if isinstance(q, str) and q.strip()]
         else:
@@ -125,20 +168,9 @@ def _run_generation(
         cap = min(cap, env_cap, len(queries))
         queries = queries[:cap]
 
-        ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
-        or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-        # 优先级:DEEPSEEK_API_KEY > OPENROUTER_API_KEY > 都没有则记错
-        if ds_key:
-            provider, model_id = "deepseek", DEEPSEEK_MODEL
-        elif or_key:
-            provider, model_id = "openrouter", OPENROUTER_DEEPSEEK_MODEL
-        else:
-            provider, model_id = None, DEEPSEEK_MODEL
+        provider, model_id, api_key = _resolve_provider()
 
         for q in queries:
-            # 2026-05-18:AI 生稿直接进 admin 审核队列。文章审核走 admin 单审,
-            # 用户侧没有「送审」环节,落 draft 等于卡死。同步把 selected_for_review
-            # 置 True,跟 admin /docs/select 选稿后的状态一致。
             doc = TopicGeneratedDocORM(
                 topic_id=topic_id, execution_plan_id=plan_id,
                 source_query_text=q, status="pending_review",
@@ -151,7 +183,7 @@ def _run_generation(
                 db.add(doc)
                 continue
             try:
-                title, body, summary = _generate_one(profile, q, provider, ds_key or or_key)
+                title, body, summary = _generate_one(profile, q, provider, api_key)
                 doc.title = title
                 doc.body_markdown = body
                 doc.summary = summary
@@ -166,6 +198,196 @@ def _run_generation(
         log.info("content gen done for topic %d: %d docs", topic_id, len(queries))
     finally:
         db.close()
+
+
+def _run_per_item(
+    db, t: AiTelemetryTopicORM, profile: BrandProfile,
+    topic_id: int, plan_id: int | None,
+    plan_items: list[dict], mark_auto_run: bool,
+) -> None:
+    """按 publishing_plan_items 逐条出稿.
+
+    一条 item → 一篇 doc。doc 按 (topic_id, plan_item_id) upsert:
+    - 已有 doc → 覆写 title/body/summary,把 status 回 pending_review
+    - 没有 doc → 新建
+    模板缺失或不存在 → 直接走旧的 _generate_one(画像 prompt 兜底).
+    """
+    provider, model_id, api_key = _resolve_provider()
+
+    # 批量取模板,减少 N 次查询
+    tmpl_ids = {it.get("template_id") for it in plan_items if it.get("template_id")}
+    tmpl_by_id: dict[int, ContentTemplateORM] = {}
+    if tmpl_ids:
+        for tmpl in (
+            db.query(ContentTemplateORM)
+              .filter(ContentTemplateORM.id.in_(list(tmpl_ids)))
+              .all()
+        ):
+            tmpl_by_id[tmpl.id] = tmpl
+
+    # 已有 doc 索引(plan_item_id → doc)
+    existing_by_item: dict[str, TopicGeneratedDocORM] = {}
+    for d in (
+        db.query(TopicGeneratedDocORM)
+          .filter(TopicGeneratedDocORM.topic_id == topic_id)
+          .filter(TopicGeneratedDocORM.plan_item_id.isnot(None))
+          .all()
+    ):
+        if d.plan_item_id:
+            existing_by_item[d.plan_item_id] = d
+
+    n_ok = 0
+    for it in plan_items:
+        item_id = str(it.get("id") or "")
+        q = str(it.get("query") or "").strip()
+        platform = str(it.get("platform") or "") or None
+        tmpl_id = it.get("template_id")
+        tmpl = tmpl_by_id.get(tmpl_id) if tmpl_id else None
+        if not q:
+            continue
+
+        doc = existing_by_item.get(item_id)
+        if doc is None:
+            doc = TopicGeneratedDocORM(
+                topic_id=topic_id, execution_plan_id=plan_id,
+                plan_item_id=item_id or None,
+                template_id=tmpl.id if tmpl else None,
+                platform=platform,
+                source_query_text=q, status="pending_review",
+                selected_for_review=True,
+                llm_model=model_id, source="ai",
+            )
+            db.add(doc)
+        else:
+            # 重生:清错 + 把 status 回 pending_review,等 LLM 跑完覆写正文
+            doc.template_id = tmpl.id if tmpl else None
+            doc.platform = platform
+            doc.source_query_text = q
+            doc.generation_error = None
+            doc.status = "pending_review"
+            doc.selected_for_review = True
+            doc.llm_model = model_id
+            doc.source = "ai"
+
+        if not provider:
+            doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
+            doc.title = f"[未生成] {q}"
+            continue
+        try:
+            if tmpl:
+                title, body, summary = _generate_with_template(
+                    profile, tmpl, q, platform or "", provider, api_key,
+                )
+            else:
+                title, body, summary = _generate_one(profile, q, provider, api_key)
+            doc.title = title
+            doc.body_markdown = body
+            doc.summary = summary
+            n_ok += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("content gen failed for item=%s topic=%d: %s",
+                        item_id, topic_id, e)
+            doc.generation_error = str(e)[:500]
+            doc.title = f"[生成失败] {q}"
+
+    if mark_auto_run:
+        t.auto_generate_last_run_at = datetime.utcnow()
+    db.commit()
+    log.info(
+        "content gen done(per-item) topic %d: ok=%d / total=%d",
+        topic_id, n_ok, len(plan_items),
+    )
+
+
+def _render_template(prompt_template: str, vars: dict[str, object]) -> str:
+    """简易 mustache 替换:{{key}} → str(value).未匹配的占位符保留原样."""
+    s = prompt_template or ""
+    for k, v in vars.items():
+        s = s.replace("{{" + k + "}}", str(v if v is not None else ""))
+    return s
+
+
+def _build_brand_block(profile: BrandProfile) -> str:
+    """画像摘要 — 给模板里 {{brand_block}} 占位用。比 _build_system_prompt 紧凑些."""
+    parts: list[str] = []
+    if profile.brand_diff_tags:
+        parts.append(f"品牌差异化:{', '.join(profile.brand_diff_tags)}")
+    if profile.content_tones:
+        parts.append(f"调性:{', '.join(profile.content_tones)}")
+    if profile.content_redlines:
+        parts.append(f"内容雷区(必须避开):{', '.join(profile.content_redlines)}")
+    if profile.brand_slogan:
+        parts.append(f"Slogan:{profile.brand_slogan}")
+    if profile.core_message:
+        parts.append(f"核心信息:{profile.core_message}")
+    return "\n".join(parts)
+
+
+def _generate_with_template(
+    profile: BrandProfile, tmpl: ContentTemplateORM,
+    query: str, platform: str,
+    provider: str, api_key: str,
+) -> tuple[str, str, str]:
+    """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染."""
+    system_prompt = _build_system_prompt(profile)
+    brand_block = _build_brand_block(profile)
+    user_prompt = _render_template(tmpl.prompt_template, {
+        "query": query,
+        "brand": profile.company_short_name or profile.company_full_name or "",
+        "industry": profile.industry or "",
+        "platform": platform or (profile.target_platforms[0] if profile.target_platforms else ""),
+        "length_min": tmpl.length_min,
+        "length_max": tmpl.length_max,
+        "brand_block": brand_block,
+    })
+    return _call_llm(system_prompt, user_prompt, provider, api_key)
+
+
+def _call_llm(
+    system_prompt: str, user_prompt: str,
+    provider: str, api_key: str,
+) -> tuple[str, str, str]:
+    """OpenAI-兼容 /chat/completions 调用 + JSON 解析 + Markdown 兜底清洗."""
+    if provider == "deepseek":
+        url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        model = DEEPSEEK_MODEL
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+    else:
+        url = OPENROUTER_URL
+        model = OPENROUTER_DEEPSEEK_MODEL
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://www.vigilath.com",
+            "X-Title": "GEO Content Generator",
+        }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.7,
+        "response_format": {"type": "json_object"},
+    }
+    r = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
+    if r.status_code >= 400:
+        raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
+    data = r.json()
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"unexpected {provider} response shape: {e}")
+    parsed = _parse_json_loose(content)
+    title = _strip_md_inline(str(parsed.get("title") or ""))[:200]
+    body = _strip_md_block(str(parsed.get("body") or ""))
+    summary = _strip_md_inline(str(parsed.get("summary") or ""))[:500]
+    if not title or not body:
+        raise RuntimeError("LLM returned empty title/body")
+    return title, body, summary
 
 
 def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str) -> tuple[str, str, str]:

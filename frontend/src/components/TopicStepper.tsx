@@ -8,10 +8,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { adminReviewApi, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
+import { adminReviewApi, type ExecutionPlan, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
 export type StepKey = 'profile' | 'review' | 'solution' | 'plan' | 'docs' | 'insight';
-export type StepStatus = 'idle' | 'running' | 'done' | 'failed';
+// editing 是新加的:plan 步骤在 draft 态下进入「等运营编辑发文表」,蓝调高亮.
+export type StepStatus = 'idle' | 'running' | 'done' | 'failed' | 'editing';
 
 interface Props {
   topicId: number;
@@ -32,6 +33,7 @@ export function TopicStepper({ topicId, active }: Props) {
   const token = localStorage.getItem('token') || '';
   const [topic, setTopic] = useState<TopicReviewDetail | null>(null);
   const [solution, setSolution] = useState<TopicStrategicSolution | null>(null);
+  const [plan, setPlan] = useState<ExecutionPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +46,10 @@ export function TopicStepper({ topicId, active }: Props) {
     adminReviewApi.getStrategicSolution(topicId, token)
       .then((s) => { if (!cancelled) setSolution(s); })
       .catch(() => {});
+    // 执行计划状态:plan.status + 文章生成进度 → plan step chip
+    adminReviewApi.getExecutionPlan(topicId, token)
+      .then((p) => { if (!cancelled) setPlan(p); })
+      .catch(() => {});  // 还没启动项目时 404,不打扰
     return () => { cancelled = true; };
   }, [topicId, token]);
 
@@ -60,10 +66,26 @@ export function TopicStepper({ topicId, active }: Props) {
     : sub === 'rejected' ? 'failed'
     : sub === 'pending' ? 'running'
     : 'idle';
-  const runChip: StepStatus = topic?.last_run_status === 'success' ? 'done'
-                            : topic?.last_run_status === 'running' ? 'running'
-                            : topic?.last_run_status === 'failed' ? 'failed'
-                            : 'idle';
+  // 计划步骤 chip:plan.status 优先;没 plan 时 fallback 到老 last_run_status.
+  // draft → editing(蓝)/ confirmed + 还有 doc 在跑或监控在跑 → running / confirmed + 全好 → done.
+  const planChip: StepStatus = (() => {
+    if (plan) {
+      if (plan.status === 'failed') return 'failed';
+      if (plan.status === 'draft' || plan.status === 'generating') return 'editing';
+      // confirmed / ready 兼容
+      const docsTotal = plan.publishing_plan?.length ?? 0;
+      const docsPending = (plan.publishing_plan || []).some(
+        it => !it.doc_id || it.doc_status === 'draft',
+      );
+      const monRunning = plan.run_status === 'running';
+      if (docsTotal === 0 || docsPending || monRunning) return 'running';
+      return 'done';
+    }
+    return topic?.last_run_status === 'success' ? 'done'
+         : topic?.last_run_status === 'running' ? 'running'
+         : topic?.last_run_status === 'failed' ? 'failed'
+         : 'idle';
+  })();
   const solChip: StepStatus = solution?.status === 'ready' ? 'done'
                             : solution?.status === 'generating' ? 'running'
                             : solution?.status === 'failed' ? 'failed'
@@ -99,7 +121,8 @@ export function TopicStepper({ topicId, active }: Props) {
     },
     {
       key: 'plan', label: t('workbench.topicStepper.plan'),
-      status: runChip,
+      status: planChip,
+      hint: plan && plan.status === 'draft' ? '编辑中' : undefined,
       onClick: () => navigate(`/workbench/topics/${topicId}/execution-plan`),
     },
     {
@@ -153,6 +176,7 @@ const STATUS_PALETTE: Record<StepStatus, { fg: string; bg: string; line: string;
   done:    { fg: '#10b981', bg: 'rgba(16,185,129,0.10)', line: '#10b981', mark: '✓' },
   running: { fg: '#eab308', bg: 'rgba(234,179,8,0.10)',  line: '#eab308', mark: '⋯' },
   failed:  { fg: '#ef4444', bg: 'rgba(239,68,68,0.10)',  line: '#ef4444', mark: '✗' },
+  editing: { fg: '#3b82f6', bg: 'rgba(59,130,246,0.10)', line: '#3b82f6', mark: '✎' },
   idle:    { fg: 'var(--text-muted)', bg: 'var(--bg-tertiary)', line: 'var(--border-color)', mark: '─' },
 };
 

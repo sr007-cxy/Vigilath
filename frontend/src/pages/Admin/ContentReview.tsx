@@ -331,6 +331,10 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showPublish, setShowPublish] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(doc.title);
+  const [editBody, setEditBody] = useState(doc.body_markdown);
+  const [editSummary, setEditSummary] = useState(doc.summary);
 
   const wrap = async (fn: () => Promise<unknown>) => {
     if (busy) return;
@@ -338,6 +342,22 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
     try { await fn(); onAnyChange(); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
+  };
+
+  const handleSaveEdit = async () => {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await adminContentReviewApi.updateDoc(doc.id, {
+        title: editTitle, body_markdown: editBody, summary: editSummary,
+      }, token);
+      setEditing(false);
+      onAnyChange();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -358,6 +378,20 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
               {' · '}{new Date(doc.created_at).toLocaleString()}
             </div>
           </div>
+          {!editing && (
+            <button type="button"
+                    onClick={() => {
+                      setEditTitle(doc.title);
+                      setEditBody(doc.body_markdown);
+                      setEditSummary(doc.summary);
+                      setEditing(true);
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-md"
+                    style={{ background: 'transparent', color: 'var(--text-secondary)',
+                             border: '1px solid var(--border-color)' }}>
+              ✎ 编辑
+            </button>
+          )}
           <button type="button" onClick={onClose} className="text-muted hover:text-primary">✕</button>
         </div>
 
@@ -376,9 +410,48 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
               {t('admin.contentReview.rejectReason')}:{doc.reject_reason}
             </div>
           )}
-          <article className="text-sm text-primary whitespace-pre-wrap leading-relaxed">
-            {doc.body_markdown || <span className="text-muted">{t('admin.contentReview.emptyBody')}</span>}
-          </article>
+          {editing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-muted mb-1">标题</label>
+                <input className="w-full rounded-md px-2 py-1.5 text-sm"
+                       style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                border: '1px solid var(--border-color)' }}
+                       value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs text-muted mb-1">正文</label>
+                <textarea className="w-full rounded-md px-2 py-1.5 text-sm font-mono leading-relaxed"
+                          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                   border: '1px solid var(--border-color)', minHeight: 280 }}
+                          value={editBody} onChange={e => setEditBody(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs text-muted mb-1">摘要</label>
+                <textarea rows={2} className="w-full rounded-md px-2 py-1.5 text-sm"
+                          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                   border: '1px solid var(--border-color)' }}
+                          value={editSummary} onChange={e => setEditSummary(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditing(false)} disabled={busy}
+                        className="text-xs px-3 py-1.5 rounded-md"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)',
+                                 border: '1px solid var(--border-color)' }}>
+                  取消
+                </button>
+                <button type="button" onClick={handleSaveEdit} disabled={busy}
+                        className="text-xs px-3 py-1.5 rounded-md text-white"
+                        style={{ background: 'var(--accent-primary)', opacity: busy ? 0.5 : 1 }}>
+                  {busy ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <article className="text-sm text-primary whitespace-pre-wrap leading-relaxed">
+              {doc.body_markdown || <span className="text-muted">{t('admin.contentReview.emptyBody')}</span>}
+            </article>
+          )}
           {doc.publish_targets.length > 0 && (
             <div>
               <p className="text-xs text-muted mb-1">{t('admin.contentReview.publishedTo')}:</p>

@@ -88,6 +88,14 @@ export const adminContentReviewApi = {
   async getDoc(docId: number, token: string): Promise<GeneratedDoc> {
     return request('GET', `/docs/${docId}`, token);
   },
+  // admin 改 AI / user 稿正文(不限 source / status)
+  async updateDoc(
+    docId: number,
+    payload: { title?: string; body_markdown?: string; summary?: string },
+    token: string,
+  ): Promise<GeneratedDoc> {
+    return request('PATCH', `/docs/${docId}`, token, payload);
+  },
   async selectForReview(docIds: number[], token: string): Promise<void> {
     return request('POST', '/docs/select', token, { doc_ids: docIds });
   },

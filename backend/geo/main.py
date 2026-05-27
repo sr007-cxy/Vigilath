@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions
+from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates
 from geo.utils.error_handler import global_exception_handler, AppException
 from geo.utils.request_log import configure_request_log
 
@@ -82,6 +82,7 @@ app.include_router(ai_telemetry.router, prefix="/api", tags=["ai-telemetry"])
 app.include_router(admin_review.router, prefix="/api", tags=["admin"])
 app.include_router(admin_review.topics_router, prefix="/api", tags=["admin-topics"])
 app.include_router(admin_content_review.router, prefix="/api", tags=["admin-content-review"])
+app.include_router(content_templates.router, prefix="/api", tags=["content-templates"])
 app.include_router(content.router, prefix="/api", tags=["content"])
 app.include_router(engine_sessions.router, prefix="/api", tags=["engine-sessions"])
 

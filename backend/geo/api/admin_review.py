@@ -27,7 +27,8 @@ from geo.api.ai_telemetry import get_db, _append_changelog
 from geo.models.ai_telemetry import (
     AiTelemetryQueryHitORM, AiTelemetryRunORM, AiTelemetryTopicORM,
     AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicSolutionORM,
-    BrandProfile, GenerateSolutionPayload, MAX_SELECTED_QUERIES,
+    BrandProfile, ContentTemplateORM, ExecutionPlanUpdatePayload,
+    GenerateSolutionPayload, MAX_SELECTED_QUERIES, PlanItemDraft,
     PROFILE_REQUIRED_FIELDS, PublishPlanItem, SolutionDiagnosis,
     SolutionDiagnosisCheck, SolutionDiagnosisCluster, SolutionKeywordTier,
     SolutionQueriesSnapshot, SolutionQueryCluster, SolutionQueryItem,
@@ -150,11 +151,17 @@ def _diagnose_state(approved: bool, sol: Optional[AiTelemetryTopicSolutionORM]) 
 
 
 def _plan_state(approved: bool, plan: Optional[AiTelemetryTopicExecutionPlanORM]) -> StageState:
-    """执行策略与规划 — TopicExecutionPlan(取最新一条).审批通过时自动生成."""
+    """执行策略与规划 — TopicExecutionPlan(取最新一条).启动项目时落 draft,
+    运营在编辑器里编辑发文表 + 确认后变 confirmed."""
     if not approved or plan is None:
         return "idle"
     s = (plan.status or "").lower()
-    return {"ready": "done", "generating": "running", "failed": "blocked"}.get(s, "idle")
+    # draft = 编辑中,前端按 pending(等运营操作)展示;confirmed = done.
+    return {
+        "draft": "pending", "confirmed": "done", "failed": "blocked",
+        # 兼容旧值
+        "ready": "done", "generating": "running",
+    }.get(s, "idle")
 
 
 def _content_state(approved: bool, agg: dict[str, int]) -> StageState:
@@ -603,26 +610,31 @@ def _build_execution_plan_snapshot(t: AiTelemetryTopicORM, run_id: int | None) -
     }
 
 
-def _schedule_content_generation(topic_id: int, plan_id: int) -> None:
-    """异步触发内容文案生成(由 Task 4 的 content_generator 真正实现)."""
+def _schedule_content_generation(
+    topic_id: int, plan_id: int,
+    *, plan_item_ids: Optional[list[str]] = None,
+) -> None:
+    """异步触发内容文案生成.支持指定 plan_item_ids 跑单条;为 None 跑全表."""
     try:
         from geo.services.content_generator import schedule_generation
-        schedule_generation(topic_id=topic_id, plan_id=plan_id)
+        schedule_generation(
+            topic_id=topic_id, plan_id=plan_id,
+            plan_item_ids=plan_item_ids,
+        )
     except Exception as e:  # noqa: BLE001
         log.warning("schedule content generation failed: %s", e)
 
 
-def _post_approval_pipeline(
+def _create_draft_plan(
     db: Session,
     t: AiTelemetryTopicORM,
     actor_id: int,
     background: BackgroundTasks,
 ) -> AiTelemetryTopicExecutionPlanORM:
-    """启动项目的副作用串:跑分 + 落 ExecutionPlan + 异步生成文案 + 异步发邮件.
+    """启动项目时的副作用:跑监控 + 落 draft plan + 发邮件.**不**触发文章生成.
 
-    被 approve_topic(旧审核流)和 start_topic(去审核流)共用.
-    调用前提:t 的状态变更必须已经 db.commit() —— 否则 SQLite 写锁会阻塞 telemetry-service
-    那一侧的 ai_telemetry_runs 写入(就是原 approve_topic 注释里写的「database is locked」根因).
+    文章生成移到 _confirm_plan / regenerate-item.
+    调用前提:t 的状态变更已 db.commit()(避免 SQLite 写锁阻塞 telemetry-service).
     """
     topic_id = t.id
     run_id = _trigger_run_topic_sync(topic_id)
@@ -634,8 +646,10 @@ def _post_approval_pipeline(
         topic_changelog_snapshot_json=json.dumps(snapshot["changelog"], ensure_ascii=False),
         expansion_log_snapshot_json=json.dumps(snapshot["expansion_log"], ensure_ascii=False),
         monitored_queries_snapshot_json=json.dumps(snapshot["monitored_queries"], ensure_ascii=False),
+        publishing_plan_json="[]",
         run_id=run_id,
-        status="ready" if run_id is not None else "failed",
+        # 监控触发失败时直接 failed;监控触发成功 → 进入 draft 等运营编辑发文表
+        status="draft" if run_id is not None else "failed",
         error=None if run_id is not None else "telemetry-service /run-topic failed",
     )
     db.add(plan)
@@ -654,9 +668,34 @@ def _post_approval_pipeline(
         background.add_task(_send_review_email_safe,
                             to=user.email, topic_name=t.name,
                             decision="approved", execution_plan_url=plan_url)
-    background.add_task(_schedule_content_generation,
-                        topic_id=topic_id, plan_id=plan.id)
     return plan
+
+
+def _kick_content_generation(
+    plan: AiTelemetryTopicExecutionPlanORM,
+    background: BackgroundTasks,
+    *, plan_item_ids: Optional[list[str]] = None,
+) -> None:
+    """把文章生成派进后台.confirm / regenerate-item 共用."""
+    background.add_task(
+        _schedule_content_generation,
+        topic_id=plan.topic_id, plan_id=plan.id,
+        plan_item_ids=plan_item_ids,
+    )
+
+
+def _post_approval_pipeline(
+    db: Session,
+    t: AiTelemetryTopicORM,
+    actor_id: int,
+    background: BackgroundTasks,
+) -> AiTelemetryTopicExecutionPlanORM:
+    """[已退役入口] 仅为兼容性保留,实际仍只走 _create_draft_plan.
+
+    旧 approve_topic / rerun 的语义里它会立即触发文章生成;新流程改成
+    需要运营 confirm 才生成,所以这里**不再**自动 kick content generator.
+    """
+    return _create_draft_plan(db, t, actor_id, background)
 
 
 # approve_topic / reject_topic 在去审核流里退役了.功能改由 POST /admin/topics/{id}/start
@@ -669,12 +708,27 @@ def _post_approval_pipeline(
 DEFAULT_PUBLISH_PLATFORMS = ["公众号", "小红书", "抖音", "视频号"]
 
 
-def _build_publishing_plan(
-    db: Session, topic_id: int,
-    monitored: list[str], overview: dict,
-) -> list[PublishPlanItem]:
-    """按 query 命中率排优先级,每天 1 篇,关联现有 generated docs."""
-    # 拿所有相关 cell,按 query 聚合
+def _pick_default_template_id(db: Session) -> Optional[int]:
+    """挑一个默认模板给新 draft 的种子行 — 优先 system 范围,最早一条."""
+    t = (
+        db.query(ContentTemplateORM)
+          .filter(ContentTemplateORM.scope == "system")
+          .order_by(ContentTemplateORM.id.asc())
+          .first()
+    )
+    return t.id if t else None
+
+
+def _seed_initial_plan_items(
+    db: Session, topic_id: int, monitored: list[str],
+) -> list[dict]:
+    """draft plan 第一次读时,按 query 命中率排序生成种子发文行.
+
+    返回 publishing_plan_json 内部存储格式(只放持久化字段).
+    """
+    import uuid as _uuid
+
+    # 命中率聚合 — 不要在这里持久化,只用来排序
     cells = (
         db.query(AiTelemetryQueryHitORM)
           .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
@@ -688,66 +742,159 @@ def _build_publishing_plan(
         agg["runs"] += c.total_runs or 0
         agg["hits"] += c.total_hits or 0
 
-    # 拿已生成的内容文档,by source_query_text 对齐
+    def _priority_rank(q: str) -> int:
+        agg = by_query.get(q, {"runs": 0, "hits": 0})
+        if agg["runs"] <= 0:
+            return 0       # 没跑过视为最高优先(很可能命中率 0)
+        cov = agg["hits"] / agg["runs"] * 100
+        if cov == 0: return 0
+        if cov < 50: return 1
+        return 2
+
+    sorted_queries = sorted(monitored, key=lambda q: (_priority_rank(q), q))
+
+    default_tmpl_id = _pick_default_template_id(db)
+    default_tmpl = db.get(ContentTemplateORM, default_tmpl_id) if default_tmpl_id else None
+    default_platform: Optional[str] = None
+    if default_tmpl:
+        try:
+            platforms = json.loads(default_tmpl.target_platforms_json or "[]")
+        except Exception:  # noqa: BLE001
+            platforms = []
+        if isinstance(platforms, list) and platforms:
+            default_platform = str(platforms[0])
+    if not default_platform:
+        default_platform = DEFAULT_PUBLISH_PLATFORMS[0]
+
+    today = datetime.utcnow().date()
+    items: list[dict] = []
+    for idx, q in enumerate(sorted_queries):
+        items.append({
+            "id": str(_uuid.uuid4()),
+            "seq": idx,
+            "publish_date": (today + timedelta(days=idx)).isoformat(),
+            "query": q,
+            "template_id": default_tmpl_id,
+            "platform": default_platform,
+            "note": None,
+        })
+    return items
+
+
+def _enrich_publishing_items(
+    db: Session, plan_id: int, topic_id: int,
+    monitored: list[str], items: list[dict],
+) -> list[PublishPlanItem]:
+    """把持久化的发文行 + 实时聚合(命中率 / doc / template) 拼成 PublishPlanItem 列表."""
+    # 1) 命中率聚合
+    cells = (
+        db.query(AiTelemetryQueryHitORM)
+          .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
+          .all()
+    )
+    by_query: dict[str, dict] = {}
+    for c in cells:
+        agg = by_query.setdefault(c.query, {"runs": 0, "hits": 0})
+        agg["runs"] += c.total_runs or 0
+        agg["hits"] += c.total_hits or 0
+
+    # 2) doc 关联 — 优先 plan_item_id,fallback source_query_text(老数据)
     docs = (
         db.query(TopicGeneratedDocORM)
           .filter(TopicGeneratedDocORM.topic_id == topic_id)
+          .filter(
+              (TopicGeneratedDocORM.execution_plan_id == plan_id) |
+              (TopicGeneratedDocORM.execution_plan_id.is_(None))
+          )
           .all()
     )
+    doc_by_item: dict[str, TopicGeneratedDocORM] = {}
     doc_by_query: dict[str, TopicGeneratedDocORM] = {}
     for d in docs:
+        if d.plan_item_id and d.plan_item_id not in doc_by_item:
+            doc_by_item[d.plan_item_id] = d
         if d.source_query_text and d.source_query_text not in doc_by_query:
             doc_by_query[d.source_query_text] = d
 
-    # 平台:从 overview 里取(plan 生成时画像快照),空则用默认
-    snapshot_profile = overview.get("profile_snapshot") if isinstance(overview, dict) else None
-    platforms: list[str] = []
-    if isinstance(snapshot_profile, dict):
-        raw = snapshot_profile.get("target_platforms") or []
-        if isinstance(raw, list):
-            platforms = [str(p) for p in raw if p]
-    if not platforms:
-        platforms = DEFAULT_PUBLISH_PLATFORMS
+    # 3) 模板批量取
+    tmpl_ids = {it.get("template_id") for it in items if it.get("template_id")}
+    tmpl_by_id: dict[int, ContentTemplateORM] = {}
+    if tmpl_ids:
+        for tmpl in (
+            db.query(ContentTemplateORM)
+              .filter(ContentTemplateORM.id.in_(list(tmpl_ids)))
+              .all()
+        ):
+            tmpl_by_id[tmpl.id] = tmpl
 
-    items_raw: list[dict] = []
-    for q in monitored:
+    out: list[PublishPlanItem] = []
+    for it in sorted(items, key=lambda x: (x.get("seq") or 0, x.get("publish_date") or "")):
+        q = str(it.get("query") or "")
         agg = by_query.get(q, {"runs": 0, "hits": 0})
-        runs = agg["runs"]
-        hits = agg["hits"]
-        coverage = round(hits / runs * 100, 1) if runs > 0 else 0.0
-        if coverage == 0:
+        runs, hits = agg["runs"], agg["hits"]
+        cov = round(hits / runs * 100, 1) if runs > 0 else 0.0
+        if cov == 0:
             priority = "high"
-        elif coverage < 50:
+        elif cov < 50:
             priority = "med"
         else:
             priority = "low"
-        doc = doc_by_query.get(q)
-        items_raw.append({
-            "query": q,
-            "coverage_pct": coverage,
-            "priority": priority,
-            "doc_id": doc.id if doc else None,
-            "doc_status": doc.status if doc else None,
-        })
 
-    # 排序:优先级高 → 低,同级按 query 字典序
-    pri_rank = {"high": 0, "med": 1, "low": 2}
-    items_raw.sort(key=lambda x: (pri_rank.get(x["priority"], 9), x["query"]))
+        item_id = str(it.get("id") or "")
+        d = doc_by_item.get(item_id) or doc_by_query.get(q)
+        tmpl = tmpl_by_id.get(it.get("template_id")) if it.get("template_id") else None
+        suggested: list[str] = []
+        if tmpl:
+            try:
+                raw = json.loads(tmpl.target_platforms_json or "[]")
+                if isinstance(raw, list):
+                    suggested = [str(p) for p in raw if p]
+            except Exception:  # noqa: BLE001
+                suggested = []
+        if not suggested:
+            suggested = list(DEFAULT_PUBLISH_PLATFORMS)
 
-    today = datetime.utcnow().date()
-    out: list[PublishPlanItem] = []
-    for idx, it in enumerate(items_raw):
         out.append(PublishPlanItem(
-            day=idx,
-            publish_date=(today + timedelta(days=idx)).isoformat(),
-            query=it["query"],
-            coverage_pct=it["coverage_pct"],
-            priority=it["priority"],
-            doc_id=it["doc_id"],
-            doc_status=it["doc_status"],
-            suggested_platforms=platforms,
+            id=item_id,
+            seq=int(it.get("seq") or 0),
+            publish_date=str(it.get("publish_date") or ""),
+            query=q,
+            template_id=it.get("template_id"),
+            platform=it.get("platform"),
+            note=it.get("note"),
+            day=int(it.get("seq") or 0),     # 兼容旧字段
+            coverage_pct=cov,
+            priority=priority,
+            doc_id=d.id if d else None,
+            doc_status=d.status if d else None,
+            template_name=tmpl.name if tmpl else None,
+            template_kind=tmpl.kind if tmpl else None,
+            suggested_platforms=suggested,
         ))
     return out
+
+
+def _build_publishing_plan(
+    db: Session, topic_id: int,
+    monitored: list[str], overview: dict,
+) -> list[PublishPlanItem]:
+    """[兼容] 老调用点用 — 直接走"现算"路径,不读 publishing_plan_json.
+
+    新代码改走 _enrich_publishing_items(items_from_json).
+    """
+    items = _seed_initial_plan_items(db, topic_id, monitored)
+    return _enrich_publishing_items(db, 0, topic_id, monitored, items)
+
+
+def _load_publishing_items(plan: AiTelemetryTopicExecutionPlanORM) -> list[dict]:
+    """读出 publishing_plan_json 的存储格式(list[dict]).非法 / 空时返回 []."""
+    try:
+        items = json.loads(plan.publishing_plan_json or "[]")
+    except Exception:  # noqa: BLE001
+        items = []
+    if not isinstance(items, list):
+        return []
+    return [it for it in items if isinstance(it, dict)]
 
 
 def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicExecutionPlanOut:
@@ -794,7 +941,16 @@ def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicEx
             if c.status == "done":
                 done += 1
 
-    publishing_plan = _build_publishing_plan(db, plan.topic_id, monitored, overview)
+    # 发文表:读持久化 items;首次为空 → 用 monitored 种子一份并回写,自迁移老数据.
+    raw_items = _load_publishing_items(plan)
+    if not raw_items and monitored:
+        raw_items = _seed_initial_plan_items(db, plan.topic_id, monitored)
+        plan.publishing_plan_json = json.dumps(raw_items, ensure_ascii=False)
+        db.commit()
+        db.refresh(plan)
+    publishing_plan = _enrich_publishing_items(
+        db, plan.id, plan.topic_id, monitored, raw_items,
+    )
 
     return TopicExecutionPlanOut(
         id=plan.id, topic_id=plan.topic_id,
@@ -810,6 +966,9 @@ def _to_plan_out(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> TopicEx
         progress_done=done,
         progress_total=len(progress_cells),
         publishing_plan=publishing_plan,
+        confirmed_at=plan.confirmed_at,
+        confirmed_by_id=plan.confirmed_by_id,
+        last_edited_at=plan.last_edited_at,
     )
 
 
@@ -828,6 +987,175 @@ def get_execution_plan(
     )
     if not plan:
         raise HTTPException(404, "no execution plan generated")
+    return _to_plan_out(db, plan)
+
+
+def _latest_plan_or_404(db: Session, topic_id: int) -> AiTelemetryTopicExecutionPlanORM:
+    plan = (
+        db.query(AiTelemetryTopicExecutionPlanORM)
+          .filter(AiTelemetryTopicExecutionPlanORM.topic_id == topic_id)
+          .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+          .first()
+    )
+    if not plan:
+        raise HTTPException(404, "no execution plan")
+    return plan
+
+
+def _validate_plan_items(
+    db: Session, monitored: list[str], items: list[PlanItemDraft],
+) -> list[dict]:
+    """PUT /execution-plan 入参校验 + 转存储格式(list[dict]).
+
+    - query 必 ∈ monitored
+    - template_id 必存在
+    - platform 必 ∈ template.target_platforms (空列表则不限制)
+    返回写回 publishing_plan_json 的 list[dict].
+    """
+    import uuid as _uuid
+    monitored_set = set(monitored)
+    out: list[dict] = []
+    for it in items:
+        q = it.query.strip()
+        if q not in monitored_set:
+            raise HTTPException(422, {
+                "code": "INVALID_QUERY", "field": "query",
+                "message": f"query 不在监测列表里:{q}",
+            })
+        tmpl = db.get(ContentTemplateORM, it.template_id)
+        if not tmpl:
+            raise HTTPException(422, {
+                "code": "INVALID_TEMPLATE", "field": "template_id",
+                "message": f"模板不存在:{it.template_id}",
+            })
+        try:
+            allowed = json.loads(tmpl.target_platforms_json or "[]")
+        except Exception:  # noqa: BLE001
+            allowed = []
+        if isinstance(allowed, list) and allowed and it.platform not in allowed:
+            raise HTTPException(422, {
+                "code": "INVALID_PLATFORM", "field": "platform",
+                "message": f"平台 {it.platform} 不在模板「{tmpl.name}」的适用平台里",
+            })
+        out.append({
+            "id": it.id or str(_uuid.uuid4()),
+            "seq": it.seq,
+            "publish_date": it.publish_date,
+            "query": q,
+            "template_id": it.template_id,
+            "platform": it.platform,
+            "note": (it.note or None),
+        })
+    # 归一化 seq:按入参顺序 0..N
+    out.sort(key=lambda x: (x.get("seq", 0)))
+    for idx, row in enumerate(out):
+        row["seq"] = idx
+    return out
+
+
+@router.put("/topic/{topic_id}/execution-plan", response_model=TopicExecutionPlanOut)
+def update_execution_plan(
+    topic_id: int,
+    payload: ExecutionPlanUpdatePayload,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """整段替换发文表(draft / confirmed 都允许).
+
+    confirmed 状态下调用不会退回 draft,也不会清掉已生成的 docs;新增行
+    则在下次 confirm 或被运营点 [↻] 时再生成。
+    """
+    plan = _latest_plan_or_404(db, topic_id)
+    monitored = json.loads(plan.monitored_queries_snapshot_json or "[]") or []
+    monitored = [str(x) for x in monitored if x]
+    new_items = _validate_plan_items(db, monitored, payload.items)
+    plan.publishing_plan_json = json.dumps(new_items, ensure_ascii=False)
+    plan.last_edited_at = datetime.utcnow()
+    db.commit()
+    db.refresh(plan)
+    return _to_plan_out(db, plan)
+
+
+@router.post("/topic/{topic_id}/execution-plan/confirm", response_model=TopicExecutionPlanOut)
+def confirm_execution_plan(
+    topic_id: int,
+    background: BackgroundTasks,
+    force: bool = False,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """确认发文表,触发文章生成.
+
+    - status=draft → 全表生成,落 confirmed
+    - status=confirmed:幂等 — 默认只对**还没出稿的 plan_item** 派单条生成;
+      ?force=true 强制全表重生
+    """
+    plan = _latest_plan_or_404(db, topic_id)
+    items = _load_publishing_items(plan)
+    if not items:
+        raise HTTPException(422, {
+            "code": "EMPTY_PLAN", "message": "发文表为空,请先添加至少一行",
+        })
+
+    if plan.status == "draft":
+        plan.status = "confirmed"
+        plan.confirmed_at = datetime.utcnow()
+        plan.confirmed_by_id = admin.id
+        db.commit()
+        db.refresh(plan)
+        _kick_content_generation(plan, background)
+    else:
+        # confirmed → 默认增量:只对没出稿的 item;force=True 强制全量
+        if force:
+            _kick_content_generation(plan, background)
+        else:
+            done_ids = {
+                d.plan_item_id for d in (
+                    db.query(TopicGeneratedDocORM)
+                      .filter(TopicGeneratedDocORM.topic_id == topic_id)
+                      .filter(TopicGeneratedDocORM.plan_item_id.isnot(None))
+                      .all()
+                ) if d.plan_item_id
+            }
+            todo = [it["id"] for it in items if it.get("id") and it["id"] not in done_ids]
+            if todo:
+                _kick_content_generation(plan, background, plan_item_ids=todo)
+    return _to_plan_out(db, plan)
+
+
+@router.post(
+    "/topic/{topic_id}/execution-plan/items/{item_id}/regenerate",
+    response_model=TopicExecutionPlanOut,
+)
+def regenerate_plan_item(
+    topic_id: int, item_id: str,
+    background: BackgroundTasks,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """单条重生:把对应 doc 置 draft + 清正文 + 派单条生成任务."""
+    plan = _latest_plan_or_404(db, topic_id)
+    items = _load_publishing_items(plan)
+    if not any(it.get("id") == item_id for it in items):
+        raise HTTPException(404, "plan item not found")
+    if plan.status != "confirmed":
+        raise HTTPException(409, {
+            "code": "NOT_CONFIRMED",
+            "message": "请先确认执行计划再重生单条",
+        })
+    d = (
+        db.query(TopicGeneratedDocORM)
+          .filter(TopicGeneratedDocORM.topic_id == topic_id,
+                  TopicGeneratedDocORM.plan_item_id == item_id)
+          .first()
+    )
+    if d:
+        d.status = "draft"
+        d.generation_error = None
+        # 不清 body,避免运营改过的内容被瞬间擦掉;LLM 跑成功会覆写
+        db.commit()
+    _kick_content_generation(plan, background, plan_item_ids=[item_id])
+    db.refresh(plan)
     return _to_plan_out(db, plan)
 
 
@@ -853,7 +1181,7 @@ def rerun_topic(
           .first()
     )
     if plan is None:
-        # 没历史 plan,直接补一条
+        # 没历史 plan,直接补一条 draft
         snapshot = _build_execution_plan_snapshot(t, run_id)
         plan = AiTelemetryTopicExecutionPlanORM(
             topic_id=topic_id,
@@ -862,15 +1190,20 @@ def rerun_topic(
             topic_changelog_snapshot_json=json.dumps(snapshot["changelog"], ensure_ascii=False),
             expansion_log_snapshot_json=json.dumps(snapshot["expansion_log"], ensure_ascii=False),
             monitored_queries_snapshot_json=json.dumps(snapshot["monitored_queries"], ensure_ascii=False),
+            publishing_plan_json="[]",
             run_id=run_id,
-            status="ready" if run_id is not None else "failed",
+            status="draft" if run_id is not None else "failed",
             error=None if run_id is not None else "telemetry-service /run-topic failed",
         )
         db.add(plan)
     else:
+        # 只刷新 run_id,不动 status —— confirmed 计划不能因为重跑监控就退回 draft
         plan.run_id = run_id
-        plan.status = "ready" if run_id is not None else "failed"
-        plan.error = None if run_id is not None else "telemetry-service /run-topic failed"
+        if run_id is None:
+            plan.status = "failed"
+            plan.error = "telemetry-service /run-topic failed"
+        else:
+            plan.error = None
         plan.generated_at = datetime.utcnow()
         plan.generated_by_reviewer_id = admin.id
 
@@ -1212,7 +1545,10 @@ def start_topic(
 ):
     """启动项目(去审核流).
 
-    - 默认幂等:同 topic 已有 ready/generating 的 plan → 直接返回最新一条
+    新流程:
+    - 启动只触发**监控运行 + 落 draft plan**,**不**生成文章
+    - 运营到执行计划页编辑发文表,点确认 → POST /execution-plan/confirm 才出文章
+    - 默认幂等:同 topic 已有 draft/confirmed 的 plan → 直接返回最新一条
     - ?force=true → 跳过幂等,强制再触发一次(对应「重新启动」按钮)
     - 校验:画像必填齐 + ≥1 selected query + ≥1 engine
     """
@@ -1226,7 +1562,8 @@ def start_topic(
               .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
               .first()
         )
-        if existing and existing.status in ("ready", "generating"):
+        # 兼容老 status 值 ready / generating
+        if existing and existing.status in ("draft", "confirmed", "ready", "generating"):
             return _to_plan_out(db, existing)
 
     # 若 topic 还在 draft(用户自建未提交),启动顺便翻成 approved.
@@ -1243,5 +1580,5 @@ def start_topic(
     db.commit()
     db.refresh(t)
 
-    plan = _post_approval_pipeline(db, t, admin.id, background)
+    plan = _create_draft_plan(db, t, admin.id, background)
     return _to_plan_out(db, plan)

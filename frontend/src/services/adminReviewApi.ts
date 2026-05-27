@@ -97,22 +97,45 @@ export interface TopicProgressCell {
 }
 
 export interface PublishPlanItem {
-  day: number;
+  // 持久化字段(PUT 时也送回去)
+  id: string;
+  seq: number;
   publish_date: string;
   query: string;
+  template_id?: number | null;
+  platform?: string | null;
+  note?: string | null;
+  // 后端实时聚合 / 联表算出来的展示字段
+  day: number;                          // 老字段,= seq;留着兼容
   coverage_pct: number;
   priority: 'high' | 'med' | 'low';
   doc_id?: number | null;
   doc_status?: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | null;
+  template_name?: string | null;
+  template_kind?: string | null;
   suggested_platforms: string[];
 }
+
+export interface PlanItemDraft {
+  id?: string | null;                   // 新行可不传 id,后端补
+  seq: number;
+  publish_date: string;
+  query: string;
+  template_id: number;
+  platform: string;
+  note?: string | null;
+}
+
+// 新流程:draft(运营在编辑发文表)/ confirmed(已确认,文章在跑)/ failed
+// 兼容旧值:ready / generating (会被后端逐步替换)
+export type ExecutionPlanStatus = 'draft' | 'confirmed' | 'failed' | 'ready' | 'generating';
 
 export interface ExecutionPlan {
   id: number;
   topic_id: number;
   generated_at: string;
   generated_by_reviewer_id?: number | null;
-  status: 'generating' | 'ready' | 'failed';
+  status: ExecutionPlanStatus;
   error?: string | null;
   overview: Record<string, unknown>;
   topic_changelog: TopicChangelogEntry[];
@@ -124,6 +147,9 @@ export interface ExecutionPlan {
   progress_done: number;
   progress_total: number;
   publishing_plan: PublishPlanItem[];
+  confirmed_at?: string | null;
+  confirmed_by_id?: number | null;
+  last_edited_at?: string | null;
 }
 
 // ── v3.3 战略方案 ───────────────────────────
@@ -246,6 +272,33 @@ export const adminReviewApi = {
   },
   async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);
+  },
+  // 整段替换发文表(draft / confirmed 都允许)
+  async updateExecutionPlan(
+    topicId: number, items: PlanItemDraft[], token: string,
+  ): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>(
+      'PUT', `/topic/${topicId}/execution-plan`, token, { items },
+    );
+  },
+  // 确认 → 触发文章生成(draft → confirmed;confirmed 时为幂等增量,force=true 全量重生)
+  async confirmExecutionPlan(
+    topicId: number, token: string, force = false,
+  ): Promise<ExecutionPlan> {
+    const qs = force ? '?force=true' : '';
+    return request<ExecutionPlan>(
+      'POST', `/topic/${topicId}/execution-plan/confirm${qs}`, token,
+    );
+  },
+  // 单条重生(覆写已有 doc 的正文)
+  async regeneratePlanItem(
+    topicId: number, itemId: string, token: string,
+  ): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>(
+      'POST',
+      `/topic/${topicId}/execution-plan/items/${encodeURIComponent(itemId)}/regenerate`,
+      token,
+    );
   },
 
   // ── v3.3 战略方案 ─────────────────────────

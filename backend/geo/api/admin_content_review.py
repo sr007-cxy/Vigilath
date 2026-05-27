@@ -131,6 +131,34 @@ def get_doc(
     return GeneratedDocOut.from_orm_row(d)
 
 
+class AdminDocUpdatePayload(BaseModel):
+    title: Optional[str] = None
+    body_markdown: Optional[str] = None
+    summary: Optional[str] = None
+
+
+@router.patch("/docs/{doc_id}", response_model=GeneratedDocOut)
+def admin_update_doc(
+    doc_id: int,
+    payload: AdminDocUpdatePayload,
+    _admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """admin 改 AI / user 稿正文.不限 source / status,纯人工修正用."""
+    d = db.get(TopicGeneratedDocORM, doc_id)
+    if not d:
+        raise HTTPException(404, "doc not found")
+    if payload.title is not None:
+        d.title = payload.title.strip()[:200]
+    if payload.body_markdown is not None:
+        d.body_markdown = payload.body_markdown
+    if payload.summary is not None:
+        d.summary = payload.summary[:500]
+    db.commit()
+    db.refresh(d)
+    return GeneratedDocOut.from_orm_row(d)
+
+
 @router.post("/docs/select", status_code=204)
 def select_docs_for_review(
     payload: SelectDocsPayload,
