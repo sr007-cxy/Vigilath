@@ -8,6 +8,7 @@ export function GeoKnowledgeTabs() {
   const tabs = [
     { to: '/geo-knowledge', label: t('geoKnowledge.tabs.overview') },
     { to: '/geo-knowledge/metrics', label: t('geoKnowledge.tabs.metrics') },
+    { to: '/geo-knowledge/faq', label: t('geoKnowledge.tabs.faq') },
   ];
 
   return (

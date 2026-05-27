@@ -39,7 +39,8 @@ const enKnowledge = {
             },
             "tabs": {
               "overview": "Overview",
-              "metrics": "Metrics Glossary"
+              "metrics": "Metrics Glossary",
+              "faq": "FAQ"
             },
             "metrics": {
               "title": "GEO Metrics Glossary",

@@ -39,7 +39,8 @@ const zhKnowledge = {
             },
             "tabs": {
               "overview": "概览",
-              "metrics": "指标词典"
+              "metrics": "指标词典",
+              "faq": "常见问题"
             },
             "metrics": {
               "title": "GEO 检测指标词典",

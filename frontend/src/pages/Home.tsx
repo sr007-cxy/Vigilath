@@ -99,14 +99,6 @@ export function Home() {
   const { openTierModal } = useTierModal();
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
-  const [openFaq, setOpenFaq] = useState<Set<number>>(new Set());
-  const toggleFaq = (idx: number) =>
-    setOpenFaq((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
 
   // Home doesn't call the API itself — it hands the URL off to the Result
   // page and lets that page own the request lifecycle. This avoids the
@@ -500,158 +492,75 @@ export function Home() {
               })()}
             </div>
           </section>
+
+          {/* Partners — 与 8 步工作流同栏宽 (max-w-6xl 继承自 main),按 section 节奏间距 */}
+          <section className="mt-10 sm:mt-30">
+            <div className="text-center mb-8 sm:mb-10">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3.5 w-3.5 text-secondary"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+                <span className="text-xs font-semibold text-secondary">
+                  {t('home.partners.badge')}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {(t('home.partners.items', { returnObjects: true }) as {
+                name: string;
+                sub: string;
+                logo: string;
+                tagline: string;
+                // 可选缩放(原始 logo 留白多时调大,默认 1).只影响视觉,不改容器尺寸
+                scale?: number;
+              }[]).map((item, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl flex items-center justify-center px-4 transition-transform duration-200 hover:-translate-y-0.5"
+                  style={{
+                    background: '#ffffff',
+                    height: '88px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  {item.logo ? (
+                    <img
+                      src={item.logo}
+                      alt={`${item.name} · ${item.sub}`}
+                      loading="lazy"
+                      draggable={false}
+                      className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
+                      style={item.scale && item.scale !== 1
+                        ? { transform: `scale(${item.scale})`, transformOrigin: 'center' }
+                        : undefined}
+                    />
+                  ) : (
+                    <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>
+                      <span className="text-base sm:text-lg font-bold tracking-tight">
+                        {item.name}
+                      </span>
+                      <span className="hidden sm:inline text-xs ml-2 tracking-wide" style={{ color: '#666' }}>
+                        {item.sub}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </main>
-
-      {/* Partners — trust strip, sits between main content and slogan banner */}
-      <section className="relative z-10 px-4 py-12 sm:py-16">
-        <div className="w-full max-w-5xl mx-auto">
-          <div className="text-center mb-8 sm:mb-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-3.5 w-3.5 text-secondary"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              <span className="text-xs font-semibold text-secondary">
-                {t('home.partners.badge')}
-              </span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-            {(t('home.partners.items', { returnObjects: true }) as {
-              name: string;
-              sub: string;
-              logo: string;
-              tagline: string;
-              // 可选缩放(原始 logo 留白多时调大,默认 1).只影响视觉,不改容器尺寸
-              scale?: number;
-            }[]).map((item, idx) => (
-              <div
-                key={idx}
-                className="rounded-xl flex items-center justify-center px-4 transition-transform duration-200 hover:-translate-y-0.5"
-                style={{
-                  background: '#ffffff',
-                  height: '88px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                {item.logo ? (
-                  <img
-                    src={item.logo}
-                    alt={`${item.name} · ${item.sub}`}
-                    loading="lazy"
-                    draggable={false}
-                    className="max-h-12 sm:max-h-14 max-w-full w-auto object-contain select-none"
-                    style={item.scale && item.scale !== 1
-                      ? { transform: `scale(${item.scale})`, transformOrigin: 'center' }
-                      : undefined}
-                  />
-                ) : (
-                  <div className="text-center select-none whitespace-nowrap" style={{ color: '#141418' }}>
-                    <span className="text-base sm:text-lg font-bold tracking-tight">
-                      {item.name}
-                    </span>
-                    <span className="hidden sm:inline text-xs ml-2 tracking-wide" style={{ color: '#666' }}>
-                      {item.sub}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ — accordion, sits between partners and closing slogan banner */}
-      <section
-        className="relative z-10 px-4 py-14 sm:py-20"
-        style={{ background: 'var(--bg-secondary)' }}
-      >
-        <div className="w-full max-w-3xl mx-auto">
-          <div className="text-center mb-8 sm:mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-3.5 w-3.5 text-secondary"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093M12 17h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span className="text-xs font-semibold text-secondary">
-                {t('home.faq.badge')}
-              </span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
-              <span className="gradient-text">{t('home.faq.title')}</span>
-            </h2>
-            <p className="text-secondary text-sm sm:text-base">
-              {t('home.faq.subtitle')}
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {(t('home.faq.items', { returnObjects: true }) as { q: string; a: string }[]).map(
-              (item, idx) => {
-                const isOpen = openFaq.has(idx);
-                return (
-                  <div
-                    key={idx}
-                    className="card overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleFaq(idx)}
-                      aria-expanded={isOpen}
-                      className="w-full flex items-center justify-between gap-4 px-5 sm:px-6 py-4 sm:py-5 text-left transition-colors hover:bg-surface-hover"
-                    >
-                      <span className="text-sm sm:text-base font-semibold text-primary leading-snug">
-                        {item.q}
-                      </span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 flex-shrink-0 transition-transform duration-200 text-secondary"
-                        style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    <div
-                      className="grid transition-[grid-template-rows] duration-300 ease-out"
-                      style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
-                    >
-                      <div className="overflow-hidden">
-                        <p className="px-5 sm:px-6 pb-4 sm:pb-5 text-sm sm:text-base text-secondary leading-relaxed">
-                          {item.a}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              },
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* Slogan Banner */}
       <section
