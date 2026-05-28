@@ -4,14 +4,15 @@
 // 显示状态(完成 / 进行中 / 待处理 / 异常 / 未启动),admin 直接点 chip 跳详情页.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { adminReviewApi, type StageState, type TopicReviewListItem } from '../../services/adminReviewApi';
+import { authApi } from '../../services/authApi';
 
-type StageKey = 'submit' | 'review' | 'diagnose' | 'plan' | 'content' | 'insight';
+type StageKey = 'submit' | 'review' | 'solution' | 'plan' | 'content' | 'insight';
 
-const STAGE_ORDER: StageKey[] = ['submit', 'review', 'diagnose', 'plan', 'content', 'insight'];
+const STAGE_ORDER: StageKey[] = ['submit', 'review', 'solution', 'plan', 'content', 'insight'];
 
 const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }> = {
   done: { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)' },
@@ -44,7 +45,7 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
   const rawByKey: Record<StageKey, StageState> = {
     submit: 'done',
     review: reviewRaw,
-    diagnose: t.diagnose_status,
+    solution: t.diagnose_status,
     plan: t.plan_status,
     content: t.content_status,
     insight: t.insight_status,
@@ -74,7 +75,7 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
   // 全部 6 段 chip 都指向「画像」主流程的对应 step,只保留这一个主流程.
   //   submit (品牌与主题创建)   → step 1 设置 / 资料
   //   review (诊断与方案预评估) → step 3 监测问题(种子 + queries 全景)
-  //   diagnose (GEO策略优化方案) → step 4 健康诊断报告
+  //   solution (GEO策略优化方案) → step 4 健康诊断报告
   //   plan (执行策略与规划)     → step 5 计划书(inline)
   //   content (内容发布与审核)  → step 6 文案复审(inline)
   //   insight (效果查验与更新)  → step 7 监测反哺(inline)
@@ -82,7 +83,7 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
   return {
     submit: { state: effective.submit, to: `${base}?step=1` },
     review: { state: effective.review, to: `${base}?step=3` },
-    diagnose: { state: effective.diagnose, to: `${base}?step=4` },
+    solution: { state: effective.solution, to: `${base}?step=4` },
     plan: { state: effective.plan, to: `${base}?step=5` },
     content: { state: effective.content, to: `${base}?step=6` },
     insight: { state: effective.insight, to: `${base}?step=7` },
@@ -91,10 +92,20 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
 
 export function AdminCockpit() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token') || '';
   const [topics, setTopics] = useState<TopicReviewListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // 「新建项目」入口:与「画像」页 (AdminAccounts.tsx) 同一套创建账号弹窗,成功后
+  // 跳到 /workbench/accounts/{id}/topics?new=1,AdminAccountTopics 会自动打开新建主题编辑器.
+  const [modalOpen, setModalOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formErr, setFormErr] = useState<string | null>(null);
 
   useEffect(() => {
     adminReviewApi.listTopicReviews(token)
@@ -102,6 +113,47 @@ export function AdminCockpit() {
       .catch(e => setErr(e?.message || 'failed'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) setModalOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [modalOpen, submitting]);
+
+  const openModal = () => {
+    setEmail(''); setPassword(''); setName(''); setFormErr(null);
+    setModalOpen(true);
+  };
+  const closeModal = () => {
+    if (submitting) return;
+    setModalOpen(false);
+  };
+  const handleCreate = async () => {
+    setFormErr(null);
+    const e = email.trim().toLowerCase();
+    const p = password;
+    const n = name.trim();
+    if (!e) { setFormErr(t('workbench.adminAccounts.createForm.emailRequired')); return; }
+    if (p.length < 6) { setFormErr(t('workbench.adminAccounts.createForm.passwordTooShort')); return; }
+    setSubmitting(true);
+    try {
+      const u = await authApi.register(e, p, n || undefined);
+      setModalOpen(false);
+      navigate(`/workbench/accounts/${u.id}/topics?new=1`);
+    } catch (ex: unknown) {
+      setFormErr(ex instanceof Error ? ex.message : String(ex));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const rows = useMemo(
     () => topics.map(tp => ({ topic: tp, stages: deriveStages(tp) })),
@@ -125,13 +177,20 @@ export function AdminCockpit() {
   return (
     <div className="space-y-4">
       <PageHead titleKey="workbench.adminCockpit.title" titleFallback="项目进度" />
-      <header>
-        <h1 className="text-xl font-semibold text-primary">
-          {t('workbench.adminCockpit.heading')}
-        </h1>
-        <p className="text-xs text-secondary mt-0.5">
-          {t('workbench.adminCockpit.subtitle')}
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-primary">
+            {t('workbench.adminCockpit.heading')}
+          </h1>
+          <p className="text-xs text-secondary mt-0.5">
+            {t('workbench.adminCockpit.subtitle')}
+          </p>
+        </div>
+        <button type="button" onClick={openModal}
+                className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap"
+                style={{ background: 'var(--accent-primary)' }}>
+          + {t('workbench.adminCockpit.newProject')}
+        </button>
       </header>
 
       {/* 待办区:3 张计数卡 — 点击跳到对应列表(带过滤) */}
@@ -204,6 +263,78 @@ export function AdminCockpit() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 「新建项目」弹窗 — 与「画像」AdminAccounts.tsx 同源,复用同一套 i18n 字典. */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+             onClick={closeModal}>
+          <div className="w-full max-w-md rounded-xl p-5 shadow-2xl"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+               onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h2 className="text-base font-semibold text-primary">
+                {t('workbench.adminAccounts.createForm.title')}
+              </h2>
+              <button type="button" onClick={closeModal} disabled={submitting}
+                      className="text-muted hover:text-primary text-lg leading-none"
+                      aria-label="close">×</button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.emailLabel')} *
+                </span>
+                <input type="email" autoFocus autoComplete="off" value={email}
+                       onChange={e => setEmail(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.emailPlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.passwordLabel')} *
+                </span>
+                <input type="text" autoComplete="off" value={password}
+                       onChange={e => setPassword(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.passwordPlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+              <label className="block text-xs text-secondary">
+                <span className="block mb-1">
+                  {t('workbench.adminAccounts.createForm.nameLabel')}
+                </span>
+                <input type="text" autoComplete="off" value={name}
+                       onChange={e => setName(e.target.value)}
+                       onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                       placeholder={t('workbench.adminAccounts.createForm.namePlaceholder')}
+                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
+                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              </label>
+            </div>
+            {formErr && (
+              <div className="mt-3 text-xs text-red-500">{formErr}</div>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" disabled={submitting} onClick={closeModal}
+                      className="text-xs px-3 py-1.5 rounded-md"
+                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                {t('workbench.adminAccounts.createForm.cancel')}
+              </button>
+              <button type="button" disabled={submitting} onClick={handleCreate}
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
+                      style={{ background: 'var(--accent-primary)', opacity: submitting ? 0.5 : 1 }}>
+                {submitting
+                  ? t('workbench.adminAccounts.createForm.submitting')
+                  : t('workbench.adminAccounts.createForm.submit')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
