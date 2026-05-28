@@ -197,7 +197,7 @@ const captureHtmlToImage = async (
 
 // Pre-render all per-page header/footer images so CJK text works.
 //
-// IMPORTANT:页眉页脚的左右文字必须同 baseline。HTML 里 Latin-only "GApex"
+// IMPORTANT:页眉页脚的左右文字必须同 baseline。HTML 里 Latin-only "Vigilath"
 // 跟 CJK-mixed 右文(包含中文)在 html2canvas 下会被算成两套 line-box,基线差几 px,
 // 哪怕都用 vertical-align:middle 也对不齐。唯一可靠做法:整条做成单个 SVG,
 // 两个 <text> 节点 y 坐标完全一致(SVG 的 y 就是 baseline,deterministic)。
@@ -214,7 +214,7 @@ const renderHeaderFooterImages = async (
   const headerHtml =
     `<div style="width:${widthPx}px;background:#fff;">` +
     `<svg width="${widthPx}" height="22" xmlns="http://www.w3.org/2000/svg" font-family="${HDR_FONT}">` +
-    `<text x="0" y="14" font-size="11" font-weight="600" fill="#78788c">GApex</text>` +
+    `<text x="0" y="14" font-size="11" font-weight="600" fill="#78788c">Vigilath</text>` +
     `<text x="${widthPx}" y="14" text-anchor="end" font-size="11" fill="#78788c">${escapeHtml(rightHeaderText)}</text>` +
     `<line x1="0" y1="21" x2="${widthPx}" y2="21" stroke="#e2e8f0" stroke-width="1"/>` +
     `</svg></div>`;
@@ -228,7 +228,7 @@ const renderHeaderFooterImages = async (
       `<div style="width:${widthPx}px;background:#fff;">` +
       `<svg width="${widthPx}" height="22" xmlns="http://www.w3.org/2000/svg" font-family="${HDR_FONT}">` +
       `<line x1="0" y1="1" x2="${widthPx}" y2="1" stroke="#e2e8f0" stroke-width="1"/>` +
-      `<text x="0" y="15" font-size="10" fill="#94a3b8">GApex · © ${year}</text>` +
+      `<text x="0" y="15" font-size="10" fill="#94a3b8">Vigilath · © ${year}</text>` +
       `<text x="${widthPx}" y="15" text-anchor="end" font-size="10" fill="#94a3b8">${escapeHtml(pageText)}</text>` +
       `</svg></div>`;
     const footerImg = await captureHtmlToImage(footerHtml, widthPx);

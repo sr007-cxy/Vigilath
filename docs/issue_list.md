@@ -223,7 +223,7 @@ baidu 对不存在的路径平均 2 秒返回 404,22 × 2 = 44 s。
 **连带副作用**:SPA 全部路由返回同一份 `index.html`,所以 OG 是全站一套。未来做差异化分享(`/checker`、`/geo-knowledge/xxx`)需要 SSR / prerender 或 `react-helmet-async`,目前用同一张通用图够用。
 
 **处理方向**:
-1. 产出 1200×630 社交卡片图(logo + slogan "GApex — Unified GEO+AEO for Global AI Visibility"),PNG 或 JPG,< 1 MB。
+1. 产出 1200×630 社交卡片图(logo + slogan "Vigilath — Unified GEO+AEO for Global AI Visibility"),PNG 或 JPG,< 1 MB。
 2. 放 `frontend/public/og-image.png`,构建时自动进 webroot。
 3. `index.html` 两处 `og:image` / `twitter:image` → `https://www.vigilath.com/og-image.png`。
 4. 用 Facebook Sharing Debugger、X Card Validator、LinkedIn Post Inspector 分别抓一次确认大图卡片生效。

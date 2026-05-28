@@ -820,7 +820,7 @@ curl -s https://www.vigilath.com/ | grep -c '<div id="root" data-ssr'
 # 应输出 1
 
 curl -s https://www.vigilath.com/geo-knowledge/ | grep '<title>'
-# 应输出 GEO Knowledge Base 的标题，不是默认的 GApex 标题
+# 应输出 GEO Knowledge Base 的标题，不是默认的 Vigilath 标题
 ```
 
 ## 十、回滚方案

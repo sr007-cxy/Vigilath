@@ -1,79 +1,79 @@
 const zh = {
           "pageMeta": {
             "home": {
-              "title": "GApex —— 一体化 GEO+AEO 平台,赋能 AI 可见性",
-              "description": "GApex 是端到端 GEO+AEO 解决方案,帮你审计、修复、增长在 ChatGPT、Perplexity、Claude、Google AI Overviews 的品牌曝光。"
+              "title": "Vigilath —— 一体化 GEO+AEO 平台,赋能 AI 可见性",
+              "description": "Vigilath 是端到端 GEO+AEO 解决方案,帮你审计、修复、增长在 ChatGPT、Perplexity、Claude、Google AI Overviews 的品牌曝光。"
             },
             "checker": {
-              "title": "AI 可见性审计 · GApex",
+              "title": "AI 可见性审计 · Vigilath",
               "description": "免费审计任意网址,获得 0–100 分、25 类别拆解和可执行修复清单。"
             },
             "about": {
-              "title": "关于 GApex —— 你的 GEO+AEO 解决方案伙伴",
-              "description": "了解 GApex:让每个品牌都能被 AI 搜索引擎发现、引用、推荐。"
+              "title": "关于 Vigilath —— 你的 GEO+AEO 解决方案伙伴",
+              "description": "了解 Vigilath:让每个品牌都能被 AI 搜索引擎发现、引用、推荐。"
             },
             "geoKnowledge": {
-              "title": "GEO 知识中心 · GApex",
+              "title": "GEO 知识中心 · Vigilath",
               "description": "读懂生成式引擎优化:25 个类别分别是什么、LLM 如何挑选引用来源、如何在 AI 答案中胜出。"
             },
             "geoKnowledgeMetrics": {
-              "title": "GEO 指标详解 · GApex",
-              "description": "深入理解 GApex 每一项指标 —— 来源、基准、修复方法一次讲清。"
+              "title": "GEO 指标详解 · Vigilath",
+              "description": "深入理解 Vigilath 每一项指标 —— 来源、基准、修复方法一次讲清。"
             },
             "productsServices": {
-              "title": "产品与服务 · GApex",
+              "title": "产品与服务 · Vigilath",
               "description": "托管 GEO 覆盖、AI 引擎收录、文案合规、公关支持 —— 全栈式 AI 可见性方案。"
             },
             "process": {
-              "title": "GApex 服务流程 · 四步落地",
-              "description": "从首次审计到托管增长 —— 了解 GApex 如何分四步交付 AI 可见性成果。"
+              "title": "Vigilath 服务流程 · 四步落地",
+              "description": "从首次审计到托管增长 —— 了解 Vigilath 如何分四步交付 AI 可见性成果。"
             },
             "pricing": {
-              "title": "定价与方案 · GApex",
+              "title": "定价与方案 · Vigilath",
               "description": "免费审计 / Pro ($9.99) / Starter ($999) / Growth ($2,500) / Scale (定制),按你对 AI 可见性的投入选档。"
             },
             "data": {
-              "title": "洞察与数据 · GApex",
-              "description": "来自数千次 GApex 审计的基准与趋势 —— 看清各行业的有效打法。"
+              "title": "洞察与数据 · Vigilath",
+              "description": "来自数千次 Vigilath 审计的基准与趋势 —— 看清各行业的有效打法。"
             },
             "contact": {
-              "title": "预约演示 · GApex",
-              "description": "与 GApex 团队洽谈托管 GEO 覆盖、定制审计、企业支持。"
+              "title": "预约演示 · Vigilath",
+              "description": "与 Vigilath 团队洽谈托管 GEO 覆盖、定制审计、企业支持。"
             },
             "faq": {
-              "title": "常见问题 · GApex",
+              "title": "常见问题 · Vigilath",
               "description": "GEO / AEO 服务、定价、流程、引擎覆盖等常见问题集中解答。"
             },
             "login": {
-              "title": "登录 · GApex",
-              "description": "登录你的 GApex 账户。"
+              "title": "登录 · Vigilath",
+              "description": "登录你的 Vigilath 账户。"
             },
             "register": {
-              "title": "注册 · GApex",
-              "description": "免费注册 GApex 账户,开始你的 AI 可见性审计。"
+              "title": "注册 · Vigilath",
+              "description": "免费注册 Vigilath 账户,开始你的 AI 可见性审计。"
             },
             "forgotPassword": {
-              "title": "重置密码 · GApex",
-              "description": "重置你的 GApex 账户密码。"
+              "title": "重置密码 · Vigilath",
+              "description": "重置你的 Vigilath 账户密码。"
             },
             "privacy": {
-              "title": "隐私政策 · GApex",
-              "description": "GApex 如何收集、使用和保护你的个人信息。"
+              "title": "隐私政策 · Vigilath",
+              "description": "Vigilath 如何收集、使用和保护你的个人信息。"
             },
             "terms": {
-              "title": "服务条款 · GApex",
-              "description": "GApex GEO+AEO 平台的服务条款。"
+              "title": "服务条款 · Vigilath",
+              "description": "Vigilath GEO+AEO 平台的服务条款。"
             },
             "cookie": {
-              "title": "Cookie 政策 · GApex",
-              "description": "GApex 使用 cookie 及类似技术的说明。"
+              "title": "Cookie 政策 · Vigilath",
+              "description": "Vigilath 使用 cookie 及类似技术的说明。"
             },
             "dashboard": {
-              "title": "工作台 · GApex",
+              "title": "工作台 · Vigilath",
               "description": "在一处管理你的多平台内容发布、监控和互动。"
             },
             "sentiment": {
-              "title": "舆情监控 · GApex",
+              "title": "舆情监控 · Vigilath",
               "description": "实时监测品牌舆论动态，及时发现和应对舆情风险。"
             }
           },
@@ -131,9 +131,9 @@ const zh = {
             }
           },
           "hero": {
-            "title": "GApex・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
+            "title": "Vigilath・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
             "subtitle": "GEO + AEO, Unified at Apex",
-            "description": "GApex・Unified GEO+AEO for Global AI Visibility",
+            "description": "Vigilath・Unified GEO+AEO for Global AI Visibility",
             "cta": "了解更多",
             "ctaSecondary": "联系我们"
           },
@@ -340,7 +340,7 @@ const zh = {
             "contactLink": "需要专家优化帮助？",
             "slogan": {
               "title": "让 AI 引擎看见、信任并推荐您的品牌",
-              "sectionTitle": "营销团队为什么喜爱 GApex",
+              "sectionTitle": "营销团队为什么喜爱 Vigilath",
               "points": [
                 "精准洞察 AI 对你的认知 — 获取 0–100 AI 可见性评分 + 优先修复清单",
                 "超越 GEO — 统一 AEO 能力帮你掌控实体识别、作者权威和品牌叙事，覆盖每一次 AI 对话",
@@ -371,6 +371,22 @@ const zh = {
                   "desc": "审核通过后,LLM 按你的品牌资料生成全部稿件,平台审核后可选择平台与媒体发布。"
                 }
               }
+            },
+            "engines": {
+              "badge": "AI 引擎覆盖",
+              "title": "覆盖 9 大主流 AI 平台",
+              "subtitle": "一次审计,横跨所有主流模型 —— 立刻看清你的品牌在每个引擎下的真实表现。",
+              "items": [
+                { "name": "ChatGPT",    "sub": "OpenAI",      "accent": "#10a37f" },
+                { "name": "Gemini",     "sub": "Google",      "accent": "#4285f4" },
+                { "name": "Perplexity", "sub": "Perplexity",  "accent": "#20808d" },
+                { "name": "Claude",     "sub": "Anthropic",   "accent": "#cc785c" },
+                { "name": "通义",       "sub": "Tongyi",      "accent": "#615ced" },
+                { "name": "豆包",       "sub": "Doubao",      "accent": "#5b8def" },
+                { "name": "文心",       "sub": "ERNIE",       "accent": "#3370ff" },
+                { "name": "混元",       "sub": "Hunyuan",     "accent": "#0052d9" },
+                { "name": "DeepSeek",   "sub": "DeepSeek",    "accent": "#4d6bfe" }
+              ]
             },
             "partners": {
               "badge": "合作伙伴",
@@ -1611,8 +1627,8 @@ const zh = {
               "title": "我们的故事",
               "subtitle": "从技术创新到行业领先",
               "paragraph1": "我们是一支真正痴迷于技术的 AI 与搜索引擎专家团队。当生成式 AI 在 2023 年爆发时，我们同时看到了网站优化的新机遇与新挑战。传统 SEO 已不再足够 — 网站需要被 AI 主动推荐。",
-              "paragraph2": "正因如此，我们开始研发 GEO + AEO 技术。经过整整一年的专注研发，我们打造了 GApex：一个将 GEO 与 AEO 融为一体的完整检测与优化系统。",
-              "paragraph3": "如今，GApex 已成为领先的 AI 搜索服务提供商。我们已帮助全球众多企业和网站大幅提升可见度，在 AI 搜索时代赢得优先推荐。"
+              "paragraph2": "正因如此，我们开始研发 GEO + AEO 技术。经过整整一年的专注研发，我们打造了 Vigilath：一个将 GEO 与 AEO 融为一体的完整检测与优化系统。",
+              "paragraph3": "如今，Vigilath 已成为领先的 AI 搜索服务提供商。我们已帮助全球众多企业和网站大幅提升可见度，在 AI 搜索时代赢得优先推荐。"
             },
             "mission": {
               "title": "我们的使命",

@@ -49,8 +49,8 @@
 
 | 文档 | 说明 |
 |---|---|
-| [品牌定位升级方案.md](./品牌定位升级方案.md) | GApex 品牌定位升级 |
-| [商业化增长方案.md](./商业化增长方案.md) | GApex 商业化增长方案 |
+| [品牌定位升级方案.md](./品牌定位升级方案.md) | Vigilath 品牌定位升级 |
+| [商业化增长方案.md](./商业化增长方案.md) | Vigilath 商业化增长方案 |
 | [前端视觉重构方案.md](./前端视觉重构方案.md) | 前端视觉方向 A(深色霓虹赛博) |
 
 ## 分析与杂项
@@ -58,7 +58,7 @@
 | 文档 | 说明 |
 |---|---|
 | [ai-cost-analysis.md](./ai-cost-analysis.md) | AI 调用成本分析 |
-| [self-geo-optimization.md](./self-geo-optimization.md) | GApex 自身 GEO 优化清单 |
+| [self-geo-optimization.md](./self-geo-optimization.md) | Vigilath 自身 GEO 优化清单 |
 | [user-guide.md](./user-guide.md) | 面向用户的使用指南 |
 | [issue_list.md](./issue_list.md) | 问题 / 缺陷清单 |
 

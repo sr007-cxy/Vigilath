@@ -1,4 +1,4 @@
-# GApex 自身 GEO 优化清单
+# Vigilath 自身 GEO 优化清单
 
 > 本文档记录项目自身网站的 GEO 优化配置，方便后续维护和更新。
 
@@ -6,8 +6,8 @@
 
 | 项目 | 统一值 |
 |------|--------|
-| 产品品牌 | **GApex** |
-| 产品口号 | GApex — Unified GEO+AEO for Global AI Visibility |
+| 产品品牌 | **Vigilath** |
+| 产品口号 | Vigilath — Unified GEO+AEO for Global AI Visibility |
 | 域名 | www.vigilath.com |
 | 联系邮箱 | support@zen7.com |
 | 安全邮箱 | security@zen7.com |
@@ -112,5 +112,5 @@ grep -r "23 categor\|23-categor\|23 dimension" frontend/ backend/ docs/ CLAUDE.m
 grep -r "Vigilath" frontend/
 
 # 检查联系邮箱一致性
-grep -r "contact@gapex\|contact@vigilath" frontend/
+grep -r "contact@vigilath\|contact@vigilath" frontend/
 ```

@@ -16,7 +16,7 @@ import { join } from 'path'
 function seoPages(): Plugin {
   const routes: Record<string, { title: string; description: string; h1: string; content: string }> = {
     '/geo-knowledge': {
-      title: 'GEO Knowledge Base — AI Visibility Guides | GApex',
+      title: 'GEO Knowledge Base — AI Visibility Guides | Vigilath',
       description: 'Learn how Generative Engine Optimization works. Explore guides on robots.txt for AI bots, llms.txt, structured data, semantic HTML, and the 25 categories that determine your AI Visibility Score.',
       h1: 'GEO Knowledge Base — AI Visibility Guides',
       content: `
@@ -36,13 +36,13 @@ function seoPages(): Plugin {
         </section>`,
     },
     '/products-services': {
-      title: 'Products & Services — GEO Audit Plans | GApex',
-      description: 'Explore GApex membership plans: Free (3 checks/month), Pro ($9.99/mo, 20 audits), Starter ($999/mo, managed GEO), Growth ($2,500/mo, SEO placements), and Scale (enterprise). Get your AI Visibility Score today.',
-      h1: 'GApex Products &amp; Services',
+      title: 'Products & Services — GEO Audit Plans | Vigilath',
+      description: 'Explore Vigilath membership plans: Free (3 checks/month), Pro ($9.99/mo, 20 audits), Starter ($999/mo, managed GEO), Growth ($2,500/mo, SEO placements), and Scale (enterprise). Get your AI Visibility Score today.',
+      h1: 'Vigilath Products &amp; Services',
       content: `
         <section>
           <h2>Membership Plans</h2>
-          <p>GApex offers five tiers designed for teams of every size — from solo founders to enterprise organizations managing hundreds of domains.</p>
+          <p>Vigilath offers five tiers designed for teams of every size — from solo founders to enterprise organizations managing hundreds of domains.</p>
           <table>
             <thead><tr><th>Plan</th><th>Price</th><th>Checks / month</th><th>Key features</th></tr></thead>
             <tbody>
@@ -54,29 +54,29 @@ function seoPages(): Plugin {
             </tbody>
           </table>
           <h2>Managed GEO Services</h2>
-          <p>For Starter, Growth, and Scale tiers, GApex provides hands-on managed services: we implement the fixes our audit identifies — configuring robots.txt for AI bots, building JSON-LD structured data, creating llms.txt, and ensuring your content is formatted for maximum AI citation potential.</p>
+          <p>For Starter, Growth, and Scale tiers, Vigilath provides hands-on managed services: we implement the fixes our audit identifies — configuring robots.txt for AI bots, building JSON-LD structured data, creating llms.txt, and ensuring your content is formatted for maximum AI citation potential.</p>
         </section>`,
     },
     '/about': {
-      title: 'About GApex — Our Mission & Team',
-      description: 'GApex is the unified GEO+AEO platform helping websites achieve global AI visibility. Learn about our team, mission, and the technology behind the AI Visibility Score.',
-      h1: 'About GApex',
+      title: 'About Vigilath — Our Mission & Team',
+      description: 'Vigilath is the unified GEO+AEO platform helping websites achieve global AI visibility. Learn about our team, mission, and the technology behind the AI Visibility Score.',
+      h1: 'About Vigilath',
       content: `
         <section>
           <h2>Our Mission</h2>
-          <p>GApex was founded to solve a new challenge in digital marketing: making websites visible to AI answer engines. As ChatGPT, Perplexity, Claude, and Google AI Overviews reshape how people find information, we provide the tools and expertise to ensure your brand is cited, quoted, and recommended by these platforms.</p>
+          <p>Vigilath was founded to solve a new challenge in digital marketing: making websites visible to AI answer engines. As ChatGPT, Perplexity, Claude, and Google AI Overviews reshape how people find information, we provide the tools and expertise to ensure your brand is cited, quoted, and recommended by these platforms.</p>
           <h2>What We Do</h2>
-          <p>We built the first unified <abbr title="Generative Engine Optimization">GEO</abbr>+<abbr title="Answer Engine Optimization">AEO</abbr> audit platform. GApex scans any website across 25 categories and 100+ signals, producing a 0–100 AI Visibility Score with a detailed category breakdown and prioritized fix list. Our managed services help teams implement those fixes at scale.</p>
+          <p>We built the first unified <abbr title="Generative Engine Optimization">GEO</abbr>+<abbr title="Answer Engine Optimization">AEO</abbr> audit platform. Vigilath scans any website across 25 categories and 100+ signals, producing a 0–100 AI Visibility Score with a detailed category breakdown and prioritized fix list. Our managed services help teams implement those fixes at scale.</p>
         </section>`,
     },
     '/privacy': {
-      title: 'Privacy Policy | GApex',
-      description: 'GApex Privacy Policy. Learn how we collect, use, and protect your personal information when using the GApex GEO Readiness Checker platform.',
+      title: 'Privacy Policy | Vigilath',
+      description: 'Vigilath Privacy Policy. Learn how we collect, use, and protect your personal information when using the Vigilath GEO Readiness Checker platform.',
       h1: 'Privacy Policy',
       content: `
         <section>
           <h2>1. Overview</h2>
-          <p>GApex (operated by Zen7) values your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use the GApex GEO Readiness Checker (the "Service").</p>
+          <p>Vigilath (operated by Zen7) values your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use the Vigilath GEO Readiness Checker (the "Service").</p>
           <h2>2. Information We Collect</h2>
           <p>We collect information you provide directly (account registration, contact forms) and information collected automatically (usage data, device information, cookies). We do not sell your personal data to third parties.</p>
           <h2>3. How We Use Information</h2>
@@ -86,15 +86,15 @@ function seoPages(): Plugin {
         </section>`,
     },
     '/terms': {
-      title: 'Terms of Service | GApex',
-      description: 'GApex Terms of Service. Read the terms governing your use of the GApex GEO+AEO platform, including membership plans, acceptable use, and intellectual property.',
+      title: 'Terms of Service | Vigilath',
+      description: 'Vigilath Terms of Service. Read the terms governing your use of the Vigilath GEO+AEO platform, including membership plans, acceptable use, and intellectual property.',
       h1: 'Terms of Service',
       content: `
         <section>
           <h2>1. Acceptance of Terms</h2>
-          <p>By accessing or using GApex (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+          <p>By accessing or using Vigilath (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
           <h2>2. Service Description</h2>
-          <p>GApex provides a Generative Engine Optimization (GEO) readiness checking service that audits websites across 25 categories to assess AI visibility. The Service includes free and paid membership tiers.</p>
+          <p>Vigilath provides a Generative Engine Optimization (GEO) readiness checking service that audits websites across 25 categories to assess AI visibility. The Service includes free and paid membership tiers.</p>
           <h2>3. Membership &amp; Billing</h2>
           <p>Paid plans (Pro, Starter, Growth, Scale) are billed on a recurring basis. You may cancel at any time; cancellations take effect at the end of the current billing period.</p>
           <h2>4. Contact</h2>
@@ -102,13 +102,13 @@ function seoPages(): Plugin {
         </section>`,
     },
     '/membership': {
-      title: 'Membership Plans — Free, Pro, Starter, Growth, Scale | GApex',
-      description: 'Compare GApex membership plans. Free plan includes 3 checks/month. Pro offers 20 full audits for $9.99/mo. Starter, Growth, and Scale tiers include managed GEO services and unlimited checks.',
-      h1: 'GApex Membership Plans',
+      title: 'Membership Plans — Free, Pro, Starter, Growth, Scale | Vigilath',
+      description: 'Compare Vigilath membership plans. Free plan includes 3 checks/month. Pro offers 20 full audits for $9.99/mo. Starter, Growth, and Scale tiers include managed GEO services and unlimited checks.',
+      h1: 'Vigilath Membership Plans',
       content: `
         <section>
           <h2>Choose Your AI Visibility Plan</h2>
-          <p>Every plan includes the core GApex 25-category audit. Higher tiers unlock more checks, managed services, and enterprise features.</p>
+          <p>Every plan includes the core Vigilath 25-category audit. Higher tiers unlock more checks, managed services, and enterprise features.</p>
           <table>
             <thead><tr><th>Plan</th><th>Price</th><th>Checks</th><th>Fix list</th><th>History</th><th>Managed GEO</th><th>Dedicated advisor</th></tr></thead>
             <tbody>
@@ -128,9 +128,9 @@ function seoPages(): Plugin {
         </section>`,
     },
     '/contact': {
-      title: 'Contact Us | GApex',
-      description: 'Get in touch with the GApex team for sales inquiries, technical support, or partnership opportunities. We respond within 24 hours.',
-      h1: 'Contact GApex',
+      title: 'Contact Us | Vigilath',
+      description: 'Get in touch with the Vigilath team for sales inquiries, technical support, or partnership opportunities. We respond within 24 hours.',
+      h1: 'Contact Vigilath',
       content: `
         <section>
           <h2>Get in Touch</h2>
@@ -141,7 +141,7 @@ function seoPages(): Plugin {
           </ul>
           <h2>What can we help with?</h2>
           <ul>
-            <li>Technical support for GApex audits and reports</li>
+            <li>Technical support for Vigilath audits and reports</li>
             <li>Sales inquiries for Starter, Growth, and Scale plans</li>
             <li>Partnership and integration opportunities</li>
             <li>Press and media inquiries</li>

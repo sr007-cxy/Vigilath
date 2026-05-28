@@ -7,7 +7,7 @@
 >
 > **核心切面**:
 > 1. **sentinel-service 自治**:自跑 cron + 自管 DAG runner;backend 退化为账号 / FE 网关
-> 2. **MySQL 8.0 一统**:废弃 per-account SQLite + 主库 SQLite/Postgres + sentinel runner.db,**全部进同一 MySQL 库**(`gapex` @ `123.125.194.100:53306`,8.0.35,utf8mb4)
+> 2. **MySQL 8.0 一统**:废弃 per-account SQLite + 主库 SQLite/Postgres + sentinel runner.db,**全部进同一 MySQL 库**(`vigilath` @ `123.125.194.100:53306`,8.0.35,utf8mb4)
 >
 > 预计工作量 12-20 工作日,**分 phase 灰度上线**。
 
@@ -71,7 +71,7 @@ flowchart LR
         SEN_stages["stages/ ★<br/>monitor / crawl_fanout<br/>analyze / brief"]
     end
 
-    subgraph DB[("MySQL 8.0 共享库 (gapex @ 远程)")]
+    subgraph DB[("MySQL 8.0 共享库 (vigilath @ 远程)")]
         direction TB
         T_acc[("sentiment_accounts<br/>sentiment_knowledge")]
         T_run[("pipeline_runs<br/>pipeline_stage_runs")]
@@ -288,7 +288,7 @@ sentinel 端 HTTP API 现在只有 ~3-4 个写端点 + `/health`;**读全部走 
 | `sentiment_scheduler.py` | **整体删除**(187 行) |
 | `sentinel_client.py` | 356 行 → **~50 行**(`trigger_run` / `cancel_run` / `gen_draft` + 健康检查) |
 | `geo/api/sentiment.py` | 484 → ~520(状态读改成本地 SQL,新增 `runs/latest` endpoint) |
-| `geo/database.py` / models | 沿用 SQLAlchemy;迁到共享 MySQL `gapex`;**与 sentinel 共用 schema** |
+| `geo/database.py` / models | 沿用 SQLAlchemy;迁到共享 MySQL `vigilath`;**与 sentinel 共用 schema** |
 
 ### 4.3 Frontend
 
@@ -301,7 +301,7 @@ sentinel 端 HTTP API 现在只有 ~3-4 个写端点 + `/health`;**读全部走 
 
 ## 5. 数据模型
 
-**全部表都在共享 MySQL `gapex` 库,utf8mb4 / utf8mb4_unicode_ci**。
+**全部表都在共享 MySQL `vigilath` 库,utf8mb4 / utf8mb4_unicode_ci**。
 
 ### 5.1 配置表(backend 拥有写权限)
 
@@ -461,7 +461,7 @@ pipeline_stage_runs.status:  pending → running → success / failed (重试) /
 
 ### Phase 0:基础设施(不影响线上)
 
-- 在 `gapex` 库建 v2 全套 schema(配置 / 业务 / 运行时状态),用 alembic 管理
+- 在 `vigilath` 库建 v2 全套 schema(配置 / 业务 / 运行时状态),用 alembic 管理
 - 编写 SQLite → MySQL 数据迁移脚本(per-account SQLite 文件 → MySQL 单库,加 `account_id` 列)
 - sentinel 写 `runner.py` + `pipeline.py` + `stages/` + 单测;数据访问层从 SQLite per-file 改成 MySQL ORM
 - backend `sentinel_client.py` 加新 3 个方法(老 18 个并存)
@@ -530,6 +530,6 @@ pipeline_stage_runs.status:  pending → running → success / failed (重试) /
 | backend 触发 sentinel | `geo/services/sentinel_client.py:trigger_run()` |
 | FE 拉 run 顶层状态 | backend `GET /api/sentiment/{id}/runs/latest`(直查 MySQL,不经 sentinel) |
 | LLM prompt | `services/sentinel-service/analyzer/prompts.py`(不动) |
-| 业务表 schema | MySQL `gapex` 库 `posts` / `analyses` / `briefs` / `drafts` / `query_runs` |
-| MySQL 连接信息 | `.env` 的 `DB_HOST` / `DB_PORT` / `DB_NAME=gapex` 等 |
+| 业务表 schema | MySQL `vigilath` 库 `posts` / `analyses` / `briefs` / `drafts` / `query_runs` |
+| MySQL 连接信息 | `.env` 的 `DB_HOST` / `DB_PORT` / `DB_NAME=vigilath` 等 |
 | schema 迁移 | `backend/migrations/`(alembic) |

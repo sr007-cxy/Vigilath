@@ -22,8 +22,8 @@ export function PrivacyPolicy() {
             </h2>
             <p>
               {isZh
-                ? 'GApex（由 Zen7 运营，以下简称"我们"）重视您的隐私。本隐私政策说明我们在您使用 GApex GEO Readiness Checker（以下简称"服务"）时如何收集、使用和保护您的个人信息。'
-                : 'GApex (operated by Zen7, hereinafter "we", "us", or "our") values your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use the GApex GEO Readiness Checker (the "Service").'}
+                ? 'Vigilath（由 Zen7 运营，以下简称"我们"）重视您的隐私。本隐私政策说明我们在您使用 Vigilath GEO Readiness Checker（以下简称"服务"）时如何收集、使用和保护您的个人信息。'
+                : 'Vigilath (operated by Zen7, hereinafter "we", "us", or "our") values your privacy. This Privacy Policy explains how we collect, use, and protect your personal information when you use the Vigilath GEO Readiness Checker (the "Service").'}
             </p>
           </section>
 

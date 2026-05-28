@@ -344,25 +344,25 @@ class EmailService:
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
             <h2 style="color: #111827;">We received your sales enquiry</h2>
             <p>Hello {name},</p>
-            <p>Thanks for reaching out to GApex sales. We have received your enquiry and a team member will reply within 1 business day.</p>
+            <p>Thanks for reaching out to Vigilath sales. We have received your enquiry and a team member will reply within 1 business day.</p>
             {tier_line}
-            <p>— GApex Sales Team</p>
+            <p>— Vigilath Sales Team</p>
           </body>
         </html>
         """
 
         text = (
             f"Hello {name},\n\n"
-            "Thanks for reaching out to GApex sales. We have received your enquiry "
+            "Thanks for reaching out to Vigilath sales. We have received your enquiry "
             "and a team member will reply within 1 business day.\n"
         )
         if tier_slug:
             text += f"\nPlan of interest: {tier_slug}\n"
-        text += "\n— GApex Sales Team"
+        text += "\n— Vigilath Sales Team"
 
         return self._send(
             to=recipient_email,
-            subject="We received your GApex sales enquiry",
+            subject="We received your Vigilath sales enquiry",
             html=html,
             text=text,
         )

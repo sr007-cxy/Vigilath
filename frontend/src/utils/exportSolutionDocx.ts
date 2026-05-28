@@ -455,7 +455,7 @@ export async function exportSolutionDocx(
   }
 
   const doc = new Document({
-    creator: 'GApex',
+    creator: 'Vigilath',
     title: String(t('admin.solution.title')),
     styles: {
       default: {

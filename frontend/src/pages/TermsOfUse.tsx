@@ -22,8 +22,8 @@ export function TermsOfUse() {
             </h2>
             <p>
               {isZh
-                ? 'GApex GEO Readiness Checker（以下简称"服务"）由 Zen7 运营，提供网站生成式引擎优化（GEO）检测与分析服务。服务包括免费基础检测和付费会员高级功能。'
-                : 'The GApex GEO Readiness Checker (the "Service") is operated by Zen7 and provides Generative Engine Optimization (GEO) detection and analysis for websites. The Service includes free basic checks and paid membership tiers with advanced features.'}
+                ? 'Vigilath GEO Readiness Checker（以下简称"服务"）由 Zen7 运营，提供网站生成式引擎优化（GEO）检测与分析服务。服务包括免费基础检测和付费会员高级功能。'
+                : 'The Vigilath GEO Readiness Checker (the "Service") is operated by Zen7 and provides Generative Engine Optimization (GEO) detection and analysis for websites. The Service includes free basic checks and paid membership tiers with advanced features.'}
             </p>
           </section>
 

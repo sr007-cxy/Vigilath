@@ -1,7 +1,7 @@
 {
   "$schema": "https://moltspay.com/schemas/services.json",
   "provider": {
-    "name": "GApex GEO Readiness Checker",
+    "name": "Vigilath GEO Readiness Checker",
     "description": "GEO detection and optimization platform",
     "wallet": "0xb8d6f2441e8f8dfB6288A74Cf73804cDd0484E0C",
     "chains": ["base"]

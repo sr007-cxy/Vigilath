@@ -85,8 +85,8 @@ async def call_openrouter(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         # OpenRouter 建议设这俩做应用 ranking(可选,不影响调用)
-        "HTTP-Referer": os.environ.get("OPENROUTER_REFERER", "https://gapex.ai"),
-        "X-Title": os.environ.get("OPENROUTER_TITLE", "GApex AI Telemetry"),
+        "HTTP-Referer": os.environ.get("OPENROUTER_REFERER", "https://vigilath.ai"),
+        "X-Title": os.environ.get("OPENROUTER_TITLE", "Vigilath AI Telemetry"),
     }
 
     try:

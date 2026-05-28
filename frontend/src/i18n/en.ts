@@ -1,79 +1,79 @@
 const en = {
           "pageMeta": {
             "home": {
-              "title": "GApex — Unified GEO+AEO Platform for AI Visibility",
-              "description": "GApex is the end-to-end GEO+AEO solution. Audit, fix, and grow your brand's presence across ChatGPT, Perplexity, Claude, and Google AI Overviews."
+              "title": "Vigilath — Unified GEO+AEO Platform for AI Visibility",
+              "description": "Vigilath is the end-to-end GEO+AEO solution. Audit, fix, and grow your brand's presence across ChatGPT, Perplexity, Claude, and Google AI Overviews."
             },
             "checker": {
-              "title": "Run an AI Visibility Audit · GApex",
+              "title": "Run an AI Visibility Audit · Vigilath",
               "description": "Run a free AI visibility audit on any URL. Get a 0–100 score, 25-category breakdown, and an actionable fix list."
             },
             "about": {
-              "title": "About GApex — The GEO+AEO Solution Partner",
-              "description": "Learn about GApex: our mission to make every brand discoverable, quotable, and citable across AI answer engines."
+              "title": "About Vigilath — The GEO+AEO Solution Partner",
+              "description": "Learn about Vigilath: our mission to make every brand discoverable, quotable, and citable across AI answer engines."
             },
             "geoKnowledge": {
-              "title": "GEO Knowledge Base · GApex",
+              "title": "GEO Knowledge Base · Vigilath",
               "description": "Understand Generative Engine Optimization: what the 25 categories mean, how LLMs pick what to cite, and how to rank in AI answers."
             },
             "geoKnowledgeMetrics": {
-              "title": "GEO Metrics Explained · GApex",
-              "description": "A deep dive into every metric GApex measures — with the why, the benchmark, and the fix."
+              "title": "GEO Metrics Explained · Vigilath",
+              "description": "A deep dive into every metric Vigilath measures — with the why, the benchmark, and the fix."
             },
             "productsServices": {
-              "title": "Products & Services · GApex",
+              "title": "Products & Services · Vigilath",
               "description": "Managed GEO coverage, AI engine inclusion, copywriting compliance, PR support — the full-stack AI visibility offering."
             },
             "process": {
-              "title": "How GApex Works · Process",
-              "description": "From first audit to managed growth — see how GApex delivers AI visibility in four steps."
+              "title": "How Vigilath Works · Process",
+              "description": "From first audit to managed growth — see how Vigilath delivers AI visibility in four steps."
             },
             "pricing": {
-              "title": "Pricing & Plans · GApex",
+              "title": "Pricing & Plans · Vigilath",
               "description": "Free audit, Pro ($9.99), Starter ($999), Growth ($2,500), Scale (custom). Pick the tier that matches how you use AI visibility data."
             },
             "data": {
-              "title": "Insights & Data · GApex",
-              "description": "Benchmarks and trends from thousands of GApex audits — what's working across industries."
+              "title": "Insights & Data · Vigilath",
+              "description": "Benchmarks and trends from thousands of Vigilath audits — what's working across industries."
             },
             "contact": {
-              "title": "Book a Demo · GApex",
-              "description": "Talk to the GApex team about managed GEO coverage, custom audits, and enterprise support."
+              "title": "Book a Demo · Vigilath",
+              "description": "Talk to the Vigilath team about managed GEO coverage, custom audits, and enterprise support."
             },
             "faq": {
-              "title": "FAQ · GApex",
+              "title": "FAQ · Vigilath",
               "description": "Answers to common questions on GEO / AEO services, pricing, process, and engine coverage."
             },
             "login": {
-              "title": "Log in · GApex",
-              "description": "Log in to your GApex account."
+              "title": "Log in · Vigilath",
+              "description": "Log in to your Vigilath account."
             },
             "register": {
-              "title": "Sign up · GApex",
-              "description": "Create a free GApex account and start auditing your AI visibility."
+              "title": "Sign up · Vigilath",
+              "description": "Create a free Vigilath account and start auditing your AI visibility."
             },
             "forgotPassword": {
-              "title": "Reset Password · GApex",
-              "description": "Reset your GApex account password."
+              "title": "Reset Password · Vigilath",
+              "description": "Reset your Vigilath account password."
             },
             "privacy": {
-              "title": "Privacy Policy · GApex",
-              "description": "How GApex collects, uses, and protects your personal information."
+              "title": "Privacy Policy · Vigilath",
+              "description": "How Vigilath collects, uses, and protects your personal information."
             },
             "terms": {
-              "title": "Terms of Use · GApex",
-              "description": "GApex terms of service for the GEO+AEO platform."
+              "title": "Terms of Use · Vigilath",
+              "description": "Vigilath terms of service for the GEO+AEO platform."
             },
             "cookie": {
-              "title": "Cookie Policy · GApex",
-              "description": "How GApex uses cookies and similar technologies."
+              "title": "Cookie Policy · Vigilath",
+              "description": "How Vigilath uses cookies and similar technologies."
             },
             "dashboard": {
-              "title": "Dashboard · GApex",
+              "title": "Dashboard · Vigilath",
               "description": "Manage your multi-platform content publishing, monitoring, and engagement from one place."
             },
             "sentiment": {
-              "title": "Sentinel · GApex",
+              "title": "Sentinel · Vigilath",
               "description": "Real-time brand sentiment monitoring — detect and respond to public opinion risks."
             }
           },
@@ -131,9 +131,9 @@ const en = {
             }
           },
           "hero": {
-            "title": "GApex・Unified GEO+AEO for Global AI Visibility",
+            "title": "Vigilath・Unified GEO+AEO for Global AI Visibility",
             "subtitle": "GEO + AEO, Unified at Apex",
-            "description": "GApex・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
+            "description": "Vigilath・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
             "cta": "Learn More",
             "ctaSecondary": "Contact Us"
           },
@@ -340,7 +340,7 @@ const en = {
             "contactLink": "Need expert optimization help?",
             "slogan": {
               "title": "Make AI Engines See, Trust, and Recommend Your Brand",
-              "sectionTitle": "Why Marketing Teams Love GApex",
+              "sectionTitle": "Why Marketing Teams Love Vigilath",
               "points": [
                 "See exactly how AI sees you — Get a clear 0–100 AI Visibility Score + prioritized fix list",
                 "Go beyond GEO — Unified AEO capabilities help you own entity recognition, author authority, and brand narratives across every AI conversation",
@@ -371,6 +371,22 @@ const en = {
                   "desc": "On approval, an LLM drafts every piece against your profile; after review, mark platforms and media to publish."
                 }
               }
+            },
+            "engines": {
+              "badge": "AI Engines Covered",
+              "title": "Tested Across 9 Major AI Platforms",
+              "subtitle": "One audit covers every major model — so you know exactly where your brand stands in each engine.",
+              "items": [
+                { "name": "ChatGPT",    "sub": "OpenAI",     "accent": "#10a37f" },
+                { "name": "Gemini",     "sub": "Google",     "accent": "#4285f4" },
+                { "name": "Perplexity", "sub": "Perplexity", "accent": "#20808d" },
+                { "name": "Claude",     "sub": "Anthropic",  "accent": "#cc785c" },
+                { "name": "Tongyi",     "sub": "Alibaba",    "accent": "#615ced" },
+                { "name": "Doubao",     "sub": "ByteDance",  "accent": "#5b8def" },
+                { "name": "ERNIE",      "sub": "Baidu",      "accent": "#3370ff" },
+                { "name": "Hunyuan",    "sub": "Tencent",    "accent": "#0052d9" },
+                { "name": "DeepSeek",   "sub": "DeepSeek",   "accent": "#4d6bfe" }
+              ]
             },
             "partners": {
               "badge": "Partners",
@@ -1611,8 +1627,8 @@ const en = {
               "title": "Our Story",
               "subtitle": "From Technical Innovation to Industry Leadership",
               "paragraph1": "We are a team of AI and search engine experts who are truly obsessed with the technology. When generative AI exploded in 2023, we saw both the new opportunities and challenges in website optimization. Traditional SEO was no longer enough — websites needed to be actively recommended by AI.",
-              "paragraph2": "That's why we started developing GEO + AEO technology. After a full year of focused research and development, we built GApex: a complete detection and optimization system that combines GEO and AEO into one powerful platform.",
-              "paragraph3": "Today, GApex is the leading AI search service provider. We've already helped businesses and websites worldwide dramatically improve their visibility and earn priority recommendations in the AI search era."
+              "paragraph2": "That's why we started developing GEO + AEO technology. After a full year of focused research and development, we built Vigilath: a complete detection and optimization system that combines GEO and AEO into one powerful platform.",
+              "paragraph3": "Today, Vigilath is the leading AI search service provider. We've already helped businesses and websites worldwide dramatically improve their visibility and earn priority recommendations in the AI search era."
             },
             "mission": {
               "title": "Our Mission",

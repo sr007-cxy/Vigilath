@@ -1,5 +1,5 @@
 /* TEAM */
-GApex — GEO Readiness Checker
+Vigilath — GEO Readiness Checker
 Site: https://www.vigilath.com
 Contact: support [at] zen7.com
 

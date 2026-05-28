@@ -235,6 +235,60 @@ export function Home() {
             </div>
           </section>
 
+          {/* AI Engines Covered — 9 大引擎,无 logo 走单色 monogram 卡片 */}
+          <section className="mt-10 sm:mt-30">
+            <div className="text-center mb-6 sm:mb-8">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     className="h-3.5 w-3.5 text-secondary"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs font-semibold text-secondary">
+                  {t('home.engines.badge')}
+                </span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                <span className="gradient-text">{t('home.engines.title')}</span>
+              </h2>
+              <p className="text-secondary text-sm sm:text-base max-w-2xl mx-auto">
+                {t('home.engines.subtitle')}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto">
+              {(t('home.engines.items', { returnObjects: true }) as {
+                name: string; sub: string; accent: string;
+              }[]).map((eng, idx) => (
+                <div key={idx}
+                     className="rounded-xl flex items-center gap-3 px-4 py-4 sm:py-5 transition-transform duration-200 hover:-translate-y-0.5"
+                     style={{
+                       background: '#ffffff',
+                       boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                       border: '1px solid rgba(0,0,0,0.06)',
+                     }}>
+                  <div className="rounded-lg flex items-center justify-center shrink-0 select-none"
+                       style={{
+                         width: 36, height: 36,
+                         background: `${eng.accent}15`,
+                         color: eng.accent,
+                         fontWeight: 700, fontSize: 14,
+                       }}>
+                    {eng.name.slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
+                      {eng.name}
+                    </div>
+                    <div className="text-[11px] sm:text-xs truncate" style={{ color: '#666' }}>
+                      {eng.sub}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           {/* Advanced Detection Section */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
@@ -573,7 +627,7 @@ export function Home() {
             <source srcSet="/image/logo.webp" type="image/webp" />
             <img
               src="/image/logo.png"
-              alt="GApex"
+              alt="Vigilath"
               className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
               draggable={false}
             />

@@ -1,6 +1,6 @@
 # MoltsPay 支付集成开发计划（Node.js 方案）
 
-> 在 GApex 会员支付中增加 MoltsPay（USDC 加密货币）支付选项，与现有 Stripe（信用卡）并行。
+> 在 Vigilath 会员支付中增加 MoltsPay（USDC 加密货币）支付选项，与现有 Stripe（信用卡）并行。
 
 ## 一、背景
 
@@ -107,13 +107,13 @@
 
 ### 6.1 服务清单 `moltspay.services.json`
 
-将 GApex 会员方案注册为 MoltsPay 服务：
+将 Vigilath 会员方案注册为 MoltsPay 服务：
 
 ```json
 {
   "$schema": "https://moltspay.com/schemas/services.json",
   "provider": {
-    "name": "GApex GEO Readiness Checker",
+    "name": "Vigilath GEO Readiness Checker",
     "description": "GEO detection and optimization platform",
     "wallet": "0xb8d6f2441e8f8dfB6288A74Cf73804cDd0484E0C",
     "chains": ["base"]

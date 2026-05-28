@@ -1,6 +1,6 @@
 openapi: 3.0.1
 info:
-  title: GApex GEO Readiness Checker
+  title: Vigilath GEO Readiness Checker
   description: Audit a URL for Generative Engine Optimization readiness.
   version: "1.0.0"
   contact:
