@@ -40,6 +40,11 @@ function deriveStages(item: TopicReviewListItem | undefined): Record<StageKey, S
     if (progressed && eff[k] === 'idle') eff[k] = 'done';
     if (eff[k] !== 'idle') progressed = true;
   }
+  // Forward gate:效果查验依赖内容已发布 — 跟 cockpit AdminCockpit.tsx 同源.
+  // batch 跑完但文稿还没发布时,insight 不能领先 content 显示 done.
+  if (eff.content !== 'done' && eff.insight === 'done') {
+    eff.insight = 'running';
+  }
   return eff;
 }
 

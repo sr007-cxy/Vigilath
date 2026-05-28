@@ -58,6 +58,13 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
     }
     if (effective[key] !== 'idle') downstreamProgressed = true;
   }
+  // Forward gate:效果查验依赖内容已发布 — 没发布就没效果可查.
+  // 后端 _insight_state 用 last_run_status === 'success' 直接判 done,会让 batch 跑完
+  // 但文稿还在审/没 published 时出现「6 已完成 5 没完成」的视觉错乱.
+  // 这里把 content !== done 时的 insight done 强制降到 running(等内容发布).
+  if (effective.content !== 'done' && effective.insight === 'done') {
+    effective.insight = 'running';
+  }
   // 用户偏好:项目进度看板不展示「异常」(red),blocked 一律按「进行中」(blue)呈现.
   // 真实失败状态查 stage 详情页(执行计划 / 审核 / 监测各页都会还原 raw status).
   for (const key of STAGE_ORDER) {
