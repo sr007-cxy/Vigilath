@@ -256,37 +256,33 @@ export function Home() {
                 {t('home.engines.subtitle')}
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto">
+            {/* 2 行 × 5 列(响应式:mobile 2 列、tablet 3 / 4 列、desktop 5 列).
+                每张卡居中纵向布局:大 logo 在上、引擎名在下;参考截图风格. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 max-w-5xl mx-auto">
               {(t('home.engines.items', { returnObjects: true }) as {
                 name: string; sub: string; slug: string; accent: string;
-                // colored=true 时直接渲染 <img>(多色原 logo,不走 mask 染色);ext 默认 svg.
                 colored?: boolean; ext?: string;
               }[]).map((eng, idx) => {
                 const ext = eng.ext || 'svg';
                 const src = `/image/engines/${eng.slug}.${ext}`;
                 return (
                 <div key={idx}
-                     className="rounded-xl flex items-center gap-3 px-4 py-4 sm:py-5 transition-transform duration-200 hover:-translate-y-0.5"
+                     className="rounded-2xl flex flex-col items-center justify-center text-center gap-3 px-3 py-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                      style={{
                        background: '#ffffff',
                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                       border: '1px solid rgba(0,0,0,0.06)',
+                       border: '1px solid rgba(0,0,0,0.08)',
                      }}>
                   {eng.colored ? (
-                    /* 多色原 logo(e.g. 元宝):直接 <img>,无品牌色 mask,无背景 tint */
-                    <div className="rounded-lg shrink-0 flex items-center justify-center select-none overflow-hidden"
-                         style={{
-                           width: 36, height: 36,
-                           background: '#fff',
-                         }}>
+                    <div className="rounded-xl flex items-center justify-center select-none overflow-hidden shrink-0"
+                         style={{ width: 56, height: 56, background: '#fff' }}>
                       <img src={src} alt="" aria-hidden="true"
                            className="w-full h-full object-contain" draggable={false} />
                     </div>
                   ) : (
-                    /* simple-icons 是 monochrome,用 CSS mask 染成品牌色;SVG 缺失 → 退化为纯色块 */
-                    <div className="rounded-lg shrink-0 select-none"
+                    <div className="shrink-0 select-none"
                          style={{
-                           width: 36, height: 36,
+                           width: 56, height: 56,
                            background: eng.accent,
                            WebkitMaskImage: `url(${src})`,
                            maskImage: `url(${src})`,
@@ -294,15 +290,15 @@ export function Home() {
                            maskRepeat: 'no-repeat',
                            WebkitMaskPosition: 'center',
                            maskPosition: 'center',
-                           WebkitMaskSize: '22px 22px',
-                           maskSize: '22px 22px',
+                           WebkitMaskSize: '40px 40px',
+                           maskSize: '40px 40px',
                          }} />
                   )}
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full">
                     <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
                       {eng.name}
                     </div>
-                    <div className="text-[11px] sm:text-xs truncate" style={{ color: '#666' }}>
+                    <div className="text-[10px] sm:text-[11px] mt-0.5 truncate" style={{ color: '#94939d' }}>
                       {eng.sub}
                     </div>
                   </div>
