@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
@@ -220,32 +220,64 @@ export function AdminAccountTopics() {
             const startErr = startErrByTopic[tp.id];
             // 项目进度 6 段:走 cockpit 同源 deriveStages,缺数据时退到 idle.
             const stages = deriveStages(stagesByTid[tp.id]);
+            // 当前进行到的步骤索引:第一个非 done 的步,用于 stepper 视觉高亮.
+            const currentIdx = (() => {
+              for (let i = 0; i < STAGE_ORDER.length; i++) {
+                const st = stageToChip(stages[STAGE_ORDER[i]]);
+                if (st !== 'done') return i;
+              }
+              return STAGE_ORDER.length - 1;
+            })();
             return (
-              <li key={tp.id} className="p-4 rounded-lg"
+              <li key={tp.id} className="flex flex-col p-5 rounded-xl min-h-[280px]"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm font-medium text-primary">{tp.name}</span>
-                  <span className="text-xs text-muted">
-                    {t('workbench.adminAccountTopics.metaSummary', {
-                      target: tp.target,
-                      queries: tp.queries.length,
-                      engines: tp.engines.length,
-                    })}
-                  </span>
-                </div>
-                <div className="text-xs text-secondary mb-2">
-                  {t('workbench.adminAccountTopics.industryLabel')}: {tp.industry || '—'}
-                  {' · '}
-                  {t('workbench.adminAccountTopics.statusLabel')}: {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
+                {/* 头部:标题 + 客户名 / 行业 */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-semibold text-primary truncate" title={tp.name}>
+                      {tp.name}
+                    </h3>
+                    <p className="text-xs text-muted mt-1 truncate">
+                      {tp.target || '—'}{tp.industry ? ` · ${tp.industry}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0 text-[11px] leading-tight">
+                    <div className="text-secondary">
+                      <span className="tabular-nums text-primary">{tp.queries.length}</span>
+                      <span className="text-muted ml-1">Q</span>
+                      <span className="mx-1 text-muted">/</span>
+                      <span className="tabular-nums text-primary">{tp.engines.length}</span>
+                      <span className="text-muted ml-1">E</span>
+                    </div>
+                    <div className="text-muted mt-1">
+                      {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
+                    </div>
+                  </div>
                 </div>
 
-                {/* 项目进度 6 段 chip — 标签 / 顺序 / 状态与 cockpit 同源 */}
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px] mt-2 mb-3">
-                  {STAGE_ORDER.map(k => (
-                    <PipelineChip key={k}
-                      label={t(`workbench.adminCockpit.stage.${k}`)}
-                      state={stageToChip(stages[k])} />
-                  ))}
+                {/* 项目进度 6 段 stepper — 横向连线 + 步号,当前步高亮 */}
+                <div className="flex items-start mt-1 mb-4">
+                  {STAGE_ORDER.map((k, i) => {
+                    const state = stageToChip(stages[k]);
+                    const isCurrent = i === currentIdx && state !== 'done';
+                    const next = i < STAGE_ORDER.length - 1
+                      ? stageToChip(stages[STAGE_ORDER[i + 1]]) : null;
+                    const connectorDone = state === 'done' && (next === 'done' || next === 'running');
+                    return (
+                      <Fragment key={k}>
+                        <div className="flex flex-col items-center" style={{ width: 36 }}>
+                          <StepCircle state={state} index={i} isCurrent={isCurrent} />
+                          <span className="text-[10px] text-secondary mt-1.5 text-center leading-tight">
+                            {t(`workbench.adminCockpit.stage.${k}`)}
+                          </span>
+                        </div>
+                        {i < STAGE_ORDER.length - 1 && (
+                          <div className="flex-1 mt-[13px] h-[2px] rounded-full"
+                               style={{ background: connectorDone ? '#10b981' : 'var(--border-color)' }} />
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </div>
 
                 {startErr && (
@@ -254,12 +286,13 @@ export function AdminAccountTopics() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-2 mt-3">
+                <div className="flex flex-wrap items-center gap-2 mt-auto pt-2">
                   <button
                     type="button"
                     onClick={() => navigate(`/workbench/topics/${tp.id}/edit`)}
-                    className="text-xs px-3 py-1 rounded"
-                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                    className="text-xs px-3 py-1.5 rounded-md"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                             border: '1px solid var(--border-color)' }}
                   >
                     {t('workbench.adminAccountTopics.edit')}
                   </button>
@@ -269,7 +302,7 @@ export function AdminAccountTopics() {
                       type="button"
                       disabled={isStartBusy}
                       onClick={() => handleStart(tp)}
-                      className="text-xs px-3 py-1 rounded text-white"
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
                       style={{ background: 'var(--accent-primary)', opacity: isStartBusy ? 0.5 : 1 }}
                     >
                       {isStartBusy ? '…' : t('workbench.adminAccountTopics.startProject')}
@@ -281,20 +314,22 @@ export function AdminAccountTopics() {
                       {/* 全部走「画像」主流程的对应 step,不再跳独立详情页 */}
                       <button type="button"
                         onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=4`)}
-                        className="text-xs px-3 py-1 rounded"
-                        style={{ background: 'var(--accent-primary)', color: 'white' }}>
+                        className="text-xs px-3 py-1.5 rounded-md text-white"
+                        style={{ background: 'var(--accent-primary)' }}>
                         {t('workbench.adminAccountTopics.viewSolution')}
                       </button>
                       <button type="button"
                         onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=5`)}
-                        className="text-xs px-3 py-1 rounded"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        className="text-xs px-3 py-1.5 rounded-md"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                                 border: '1px solid var(--border-color)' }}>
                         {t('workbench.adminAccountTopics.viewPlan')}
                       </button>
                       <button type="button"
                         onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=6`)}
-                        className="text-xs px-3 py-1 rounded"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                        className="text-xs px-3 py-1.5 rounded-md"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                                 border: '1px solid var(--border-color)' }}>
                         {t('workbench.adminAccountTopics.reviewDocs')}
                       </button>
                     </>
@@ -310,23 +345,29 @@ export function AdminAccountTopics() {
   );
 }
 
-// 管线状态 chip — 5 步骤共用,被动展示.
-// idle = 未开始(灰)、running = 进行中(黄)、done = 完成(绿)、failed = 失败(红).
+// 6 段 stepper 用的圆 — done 实心绿、running 黄填充 + 黄环、failed 实心红、idle 空心灰.
+// 当前步(isCurrent)再额外加 ring,让用户一眼看到走到哪步.
 type PipelineChipState = 'idle' | 'running' | 'done' | 'failed';
 
-function PipelineChip({ label, state }: { label: string; state: PipelineChipState }) {
-  const palette: Record<PipelineChipState, { fg: string; bg: string; mark: string }> = {
-    done:    { fg: '#10b981', bg: 'rgba(16,185,129,0.10)', mark: '✓' },
-    running: { fg: '#eab308', bg: 'rgba(234,179,8,0.10)',  mark: '⋯' },
-    failed:  { fg: '#ef4444', bg: 'rgba(239,68,68,0.10)',  mark: '✗' },
-    idle:    { fg: 'var(--text-muted)', bg: 'var(--bg-tertiary)', mark: '─' },
+function StepCircle({ state, index, isCurrent }: {
+  state: PipelineChipState; index: number; isCurrent: boolean;
+}) {
+  const palette: Record<PipelineChipState, { bg: string; fg: string; border: string; mark: string }> = {
+    done:    { bg: '#10b981', fg: '#fff',              border: '#10b981',          mark: '✓' },
+    running: { bg: '#eab308', fg: '#fff',              border: '#eab308',          mark: String(index + 1) },
+    failed:  { bg: '#ef4444', fg: '#fff',              border: '#ef4444',          mark: '✕' },
+    idle:    { bg: 'var(--bg-card)', fg: 'var(--text-muted)', border: 'var(--border-color)', mark: String(index + 1) },
   };
   const p = palette[state];
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full"
-          style={{ background: p.bg, color: p.fg }}>
-      <span className="font-semibold">{p.mark}</span>
-      <span>{label}</span>
-    </span>
+    <span
+      className="inline-flex items-center justify-center rounded-full text-[11px] font-semibold tabular-nums"
+      style={{
+        width: 28, height: 28,
+        background: p.bg, color: p.fg,
+        border: `1.5px solid ${p.border}`,
+        boxShadow: isCurrent ? '0 0 0 3px rgba(234,179,8,0.25)' : 'none',
+      }}
+    >{p.mark}</span>
   );
 }
