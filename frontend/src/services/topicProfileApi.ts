@@ -7,7 +7,7 @@
 //  POST /api/ai-telemetry/topics/{id}/submit-for-review
 
 import { localizedHeaders, readApiError } from './apiError';
-import type { BrandProfile, Topic } from './aiTelemetryApi';
+import type { BrandProfile, SceneType, Topic } from './aiTelemetryApi';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
@@ -31,9 +31,19 @@ async function request<T>(
   return resp.json() as Promise<T>;
 }
 
+// 2026-05-28 v2 — 4 维场景扩展返回结构.
+// 老调用方还在用 .queries(平铺数组),这里保留作 fallback 字段.
+export interface SceneExpansionResult {
+  queries: string[];
+  model?: string;
+  error?: string | null;
+}
 export interface ExpandQueriesResp {
   seed: string;
-  queries: string[];
+  total_count?: number;
+  scenes?: Partial<Record<SceneType, SceneExpansionResult>>;
+  /** @deprecated 2026-05-28 — 老 schema 字段,新后端只返 scenes;前端兼容仍读 */
+  queries?: string[];
   model?: string;
 }
 
@@ -42,6 +52,8 @@ export interface SelectedItem {
   selected: boolean;
   /** 2026-05-20 — 这条 query 来自哪个种子词;候选阶段才有,既有 query 不回填。 */
   seed?: string;
+  /** 2026-05-28 — 4 维场景标签;新选的候选必传,老选项可省略后端兜底 search。 */
+  scene_type?: SceneType;
 }
 
 export interface ExtractProfileResp {
@@ -67,9 +79,22 @@ export const topicProfileApi = {
   async updateProfile(topicId: number, profile: BrandProfile, token: string): Promise<Topic> {
     return request<Topic>('PUT', `/topics/${topicId}/profile`, token, profile);
   },
-  async expandQueries(topicId: number, seed: string, count: number, token: string): Promise<ExpandQueriesResp> {
+  /**
+   * 2026-05-28 v2 — 4 维场景扩展.
+   * scenes 不传 → 后端默认 4 维全跑;count_per_scene 不传 → 后端默认每维 50(共 200).
+   * 返回里某 scene 可能带 error 字段(brand 在 target 为空时被自动跳过),前端按 scene 分 tab 展示.
+   */
+  async expandQueries(
+    topicId: number,
+    seed: string,
+    options: { scenes?: SceneType[]; countPerScene?: number } | undefined,
+    token: string,
+  ): Promise<ExpandQueriesResp> {
+    const body: Record<string, unknown> = { seed };
+    if (options?.scenes) body.scenes = options.scenes;
+    if (options?.countPerScene) body.count_per_scene = options.countPerScene;
     return request<ExpandQueriesResp>(
-      'POST', `/topics/${topicId}/expand-queries`, token, { seed, count },
+      'POST', `/topics/${topicId}/expand-queries`, token, body,
     );
   },
   async updateSelectedQueries(topicId: number, items: SelectedItem[], token: string): Promise<Topic> {

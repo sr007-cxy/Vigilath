@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -25,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from geo.api.auth import get_current_user
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
+    ALL_SCENES,
     AiTelemetryResponseORM, AiTelemetryRunORM, AiTelemetryTopicORM,
     AiTelemetryQueryHitORM, AiTelemetryCellInsightORM, AiTelemetryTopicBriefingORM,
     BrandProfile, BriefingAction, BriefingFeedbackPayload, BriefingOut,
@@ -48,6 +50,9 @@ from urllib.parse import urlparse as _urlparse
 from geo.services.profile_extractor import (
     FileParseError, MAX_EXTRACTED_TEXT,
     extract_profile_from_text, file_bytes_to_text,
+)
+from geo.services.query_expander import (
+    DEFAULT_TIMEOUT, expand_one_scene,
 )
 from geo.models.user import User
 from sqlalchemy import func
@@ -766,8 +771,13 @@ def _append_changelog(t: AiTelemetryTopicORM, *, actor_id: int | None, actor_rol
 
 
 def _append_expansion_log(t: AiTelemetryTopicORM, *, seed: str, model: str,
-                           expanded_count: int, raw_excerpt: str) -> None:
-    """expansion_log_json 末尾追加一条"种子词扩展"的调用记录."""
+                           expanded_count: int, raw_excerpt: str,
+                           scene: str = "search") -> None:
+    """expansion_log_json 末尾追加一条"种子词扩展"的调用记录.
+
+    2026-05-28 起加 scene 字段记录这次扩展走的是哪一维(search/qa/intent/brand).
+    legacy log 不带 scene 字段,前端展示时 fallback 到 "search".
+    """
     try:
         log_arr = json.loads(t.expansion_log_json or "[]")
     except Exception:  # noqa: BLE001
@@ -777,6 +787,7 @@ def _append_expansion_log(t: AiTelemetryTopicORM, *, seed: str, model: str,
     log_arr.append({
         "at": datetime.utcnow().isoformat(),
         "seed": seed[:200],
+        "scene": scene,
         "model": model,
         "expanded_count": int(expanded_count),
         "raw_excerpt": (raw_excerpt or "")[:300],
@@ -888,17 +899,26 @@ def update_selected_queries(
             continue
         desired_texts.add(text)
         seed = (getattr(item, "seed", None) or "").strip()[:200]
+        scene_type = getattr(item, "scene_type", None) or "search"
+        if scene_type not in ALL_SCENES:
+            scene_type = "search"
         if text in by_text:
             by_text[text]["selected"] = bool(item.selected)
             # 第一次提交带 seed 时回填;已有非空 seed 不覆盖,避免误改历史归属
             if seed and not by_text[text].get("seed"):
                 by_text[text]["seed"] = seed
+            # 同理,首次带 scene_type 时回填;legacy item 没字段或为 search 时,
+            # 新传的非 search scene 也允许覆盖(legacy 默认 search 不是用户真选的).
+            existing_scene = by_text[text].get("scene_type")
+            if scene_type != "search" and (not existing_scene or existing_scene == "search"):
+                by_text[text]["scene_type"] = scene_type
         else:
             new_q: dict = {
                 "text": text,
                 "status": "pending",
                 "submitted_at": now_iso,
                 "selected": bool(item.selected),
+                "scene_type": scene_type,
             }
             if seed:
                 new_q["seed"] = seed
@@ -1235,26 +1255,58 @@ async def expand_queries_for_topic(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Phase D — 针对单个 topic 跑一次种子扩展,把调用记录写进 expansion_log_json.
+    """Phase D + 2026-05-28 — 4 维场景扩展.
 
-    body: {seed, count?=50} — count 默认 50,上限 MAX_EXPANSION_CANDIDATES=200.
-    resp: {seed, queries: [str, ...]} — 与 /suggest-queries 同 schema.
+    body:
+      seed:              str   种子词(中性,不带场景)
+      scenes:            list  ["search","qa","intent","brand"](默认全 4)
+      count_per_scene:   int   每场景产出 ≤ 50,合计 ≤ MAX_EXPANSION_CANDIDATES
+      count:             int   兼容老入参(被忽略,优先 count_per_scene)
+
+    resp v2:
+      {
+        "seed":  str,
+        "total_count": int,
+        "scenes": {
+          "search": {"queries":[...], "model":"deepseek-chat", "error":null|"..."},
+          "qa":     {...},
+          "intent": {...},
+          "brand":  {...}
+        }
+      }
 
     扩展候选不直接落 queries_json — 前端拿到后让用户勾选,再调 /selected-queries.
-    用户资料里的 case_stories / core_credentials 一并送给 LLM,案例追溯型 query 直接用真实案件名。
+    brand 场景在 target 为空时会自动跳过(返回 error),其他 3 个场景并行不受影响.
     """
     t = _get_topic_or_404(db, topic_id, current_user.id)
     _ensure_editable(t)
     seed = (payload.get("seed") or "").strip()
     if not seed:
         raise HTTPException(400, "seed cannot be empty")
-    try:
-        count = int(payload.get("count", 50))
-    except (TypeError, ValueError):
-        count = 50
-    count = max(5, min(count, MAX_EXPANSION_CANDIDATES))
 
-    target = t.target or ""
+    # scene 子集校验
+    raw_scenes = payload.get("scenes")
+    if raw_scenes is None:
+        scenes: list[str] = list(ALL_SCENES)
+    elif isinstance(raw_scenes, list):
+        scenes = [s for s in raw_scenes if isinstance(s, str)]
+    else:
+        raise HTTPException(400, "scenes must be an array")
+    invalid = [s for s in scenes if s not in ALL_SCENES]
+    if invalid:
+        raise HTTPException(400, f"invalid scenes: {invalid}")
+    if not scenes:
+        raise HTTPException(400, "at least one scene must be selected")
+
+    # 每场景产出数:上限 = MAX_EXPANSION_CANDIDATES / 4 = 50(对齐老上限,每维 50,4 维合 200)
+    cap_per_scene = max(5, MAX_EXPANSION_CANDIDATES // len(ALL_SCENES))
+    try:
+        count_per_scene = int(payload.get("count_per_scene", cap_per_scene))
+    except (TypeError, ValueError):
+        count_per_scene = cap_per_scene
+    count_per_scene = max(5, min(count_per_scene, cap_per_scene))
+
+    target = (t.target or "").strip()
     industry = t.industry or ""
     try:
         aliases = json.loads(t.target_aliases_json or "[]")
@@ -1263,47 +1315,63 @@ async def expand_queries_for_topic(
     # 从 topic profile 自动注入服务地域 + 真实案例清单 —— LLM 案例追溯型 query 用这些
     # 真实案件名(比依赖 LLM 训练数据猜更准),也把地域锁住不再随机扩其它城市/国家.
     service_geo = ""
-    profile_cases: list[str] = []
     try:
         profile_obj = json.loads(t.profile_json or "{}")
         service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
-        for key in ("case_stories", "core_credentials"):
-            for item in (profile_obj.get(key) or []):
-                s = str(item or "").strip()
-                if s:
-                    profile_cases.append(s[:500])
-                if len(profile_cases) >= 40:
-                    break
-            if len(profile_cases) >= 40:
-                break
     except Exception:  # noqa: BLE001
         pass
-    body = {"seed": seed, "count": count, "target": target,
-            "aliases": aliases, "industry": industry,
-            "service_geo": service_geo, "profile_cases": profile_cases}
-    url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
-    try:
-        async with httpx.AsyncClient(timeout=200.0) as client:
-            r = await client.post(url, json=body)
-    except httpx.HTTPError as e:
-        log.warning("telemetry-service suggest-queries failed: %s", e)
-        raise HTTPException(502, f"telemetry-service unavailable: {e}")
-    if r.status_code != 200:
-        try:
-            raise HTTPException(r.status_code, r.json().get("detail") or r.text)
-        except ValueError:
-            raise HTTPException(r.status_code, r.text)
 
-    data = r.json()
-    queries_out = data.get("queries") or []
-    model_name = data.get("model") or "deepseek"
-    raw_excerpt = ", ".join(queries_out[:5])
-    _append_expansion_log(
-        t, seed=seed, model=model_name,
-        expanded_count=len(queries_out), raw_excerpt=raw_excerpt,
-    )
+    # brand 场景在 target 为空时无意义 —— 跳过(返回 error 给前端展示)
+    runnable_scenes: list[str] = []
+    scene_results: dict[str, dict] = {}
+    for s in scenes:
+        if s == "brand" and not target:
+            scene_results[s] = {
+                "queries": [],
+                "error": "brand scene requires a brand name (target field is empty)",
+            }
+        else:
+            runnable_scenes.append(s)
+
+    # 4 路并行 fan-out
+    if runnable_scenes:
+        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+            tasks = [
+                expand_one_scene(
+                    scene=s, seed=seed, count=count_per_scene,
+                    target=target, aliases=aliases,
+                    industry=industry, service_geo=service_geo,
+                    client=client,
+                )
+                for s in runnable_scenes
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        for s, res in zip(runnable_scenes, results):
+            if isinstance(res, Exception):
+                scene_results[s] = {"queries": [], "error": str(res)[:300]}
+            else:
+                scene_results[s] = res
+
+    # 聚合 + 写 expansion_log_json(每场景 1 条 log)
+    total_count = 0
+    for s in scenes:
+        info = scene_results.get(s) or {}
+        qs = info.get("queries") or []
+        total_count += len(qs)
+        excerpt = ", ".join(qs[:3])
+        _append_expansion_log(
+            t, seed=seed,
+            model=info.get("model") or "deepseek",
+            expanded_count=len(qs), raw_excerpt=excerpt,
+            scene=s,
+        )
     db.commit()
-    return data
+
+    return {
+        "seed": seed,
+        "total_count": total_count,
+        "scenes": scene_results,
+    }
 
 
 # ─────────────────────────── Trigger run + result queries ─────

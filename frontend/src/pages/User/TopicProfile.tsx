@@ -11,10 +11,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import {
-  aiTelemetryApi, EMPTY_BRAND_PROFILE, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
-  type BrandProfile, type Topic, type SubmissionStatus,
+  aiTelemetryApi, EMPTY_BRAND_PROFILE, MAX_SELECTED_QUERIES,
+  type BrandProfile, type SceneType, type Topic, type SubmissionStatus,
 } from '../../services/aiTelemetryApi';
 import { topicProfileApi } from '../../services/topicProfileApi';
+import { SceneExpander } from '../../components/SceneExpander';
 import {
   BrandProfileForm, PROFILE_REQUIRED_FIELDS as REQUIRED_FIELDS,
   profileMissingFields,
@@ -307,22 +308,23 @@ interface MonitorViewProps {
 
 function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
   const { t } = useTranslation();
-  const [seed, setSeed] = useState('');
-  const [count, setCount] = useState(30);
-  const [candidates, setCandidates] = useState<string[]>([]);
-  // 候选 → 种子词的归属;同一文本既能是新候选也能是已勾的,seed 只在首次入库时写一次
+  // 2026-05-28 — 4 维场景扩展.候选(尚未持久化的拓词产出)从 SceneExpander 内部维护,
+  // 这里只跟踪「用户从某场景勾选下来的候选 text」对应的种子词 + 场景标签,持久化时一并送给后端.
   const [candidateSeeds, setCandidateSeeds] = useState<Map<string, string>>(new Map());
-  const [expanding, setExpanding] = useState(false);
+  const [candidateScenes, setCandidateScenes] = useState<Map<string, SceneType>>(new Map());
+  // 用户在 SceneExpander tab 里勾过的所有 text(用于回显 + 同步到 existing).
+  // 勾下来后这些 text 也会出现在「已勾选」区,即使最终被 togglePick 取消勾选.
+  const [pickedTexts, setPickedTexts] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 当前已知 query(资料里) + selected map
+  // 当前已知 query(资料里) + selected map.candidate 加进来后也算 existing.
   const existing = useMemo(() => {
     const m = new Map<string, boolean>();
     (topic.queries || []).forEach((q, i) => m.set(q, (topic.query_selected || [])[i] ?? true));
-    candidates.forEach(c => { if (!m.has(c)) m.set(c, false); });
+    pickedTexts.forEach(c => { if (!m.has(c)) m.set(c, false); });
     return m;
-  }, [topic, candidates]);
+  }, [topic, pickedTexts]);
 
   // 2026-05-26 — locked query(种子原文派生)map:UI 不可取消勾选
   const lockedSet = useMemo(() => {
@@ -333,10 +335,38 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     return s;
   }, [topic]);
 
+  // 2026-05-28 — query → 4 维场景标签 map(用于已勾选列表的 badge 展示).
+  // 老 query 没 scene_type 后端兜底成 search,新候选用 candidateScenes,优先级:candidateScenes > topic.query_scene_types
+  const sceneByText = useMemo(() => {
+    const m = new Map<string, SceneType>();
+    (topic.queries || []).forEach((q, i) => {
+      const sc = (topic.query_scene_types || [])[i];
+      if (sc) m.set(q, sc);
+    });
+    candidateScenes.forEach((sc, text) => { if (!m.has(text)) m.set(text, sc); });
+    return m;
+  }, [topic, candidateScenes]);
+
   const totalSelected = useMemo(
     () => Array.from(existing.values()).filter(Boolean).length,
     [existing],
   );
+
+  const buildItems = (overrideText: string | null, overrideSel: boolean): {
+    text: string; selected: boolean; seed?: string; scene_type?: SceneType;
+  }[] => {
+    return Array.from(existing.entries()).map(([k, v]) => {
+      const item: { text: string; selected: boolean; seed?: string; scene_type?: SceneType } = {
+        text: k,
+        selected: k === overrideText ? overrideSel : v,
+      };
+      const candSeed = candidateSeeds.get(k);
+      if (candSeed) item.seed = candSeed;
+      const candScene = candidateScenes.get(k);
+      if (candScene) item.scene_type = candScene;
+      return item;
+    });
+  };
 
   const togglePick = (text: string) => {
     if (readOnly) return;
@@ -347,15 +377,7 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
       setErr(t('topic.profile.monitor.cap', { max: MAX_SELECTED_QUERIES }));
       return;
     }
-    const items = Array.from(existing.entries()).map(([k, v]) => {
-      const item: { text: string; selected: boolean; seed?: string } = {
-        text: k, selected: k === text ? !cur : v,
-      };
-      const candSeed = candidateSeeds.get(k);
-      if (candSeed) item.seed = candSeed;
-      return item;
-    });
-    persistSelection(items);
+    persistSelection(buildItems(text, !cur));
   };
 
   const persistSelection = async (
@@ -372,54 +394,72 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     }
   };
 
-  const expand = async () => {
-    const seedTrim = seed.trim();
-    if (!seedTrim || expanding) return;
-    setExpanding(true); setErr(null);
-    try {
-      const resp = await topicProfileApi.expandQueries(topic.id, seedTrim, count, token);
-      const qs = resp.queries || [];
-      setCandidates(qs);
-      setCandidateSeeds(prev => {
-        const next = new Map(prev);
-        qs.forEach(q => { if (!next.has(q)) next.set(q, seedTrim); });
-        return next;
-      });
-      onChange();
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setExpanding(false);
-    }
+  // 2026-05-28 — SceneExpander 触发拓词;不在这里持久化,产出只是候选,
+  // 用户在 SceneExpander tab 内勾下来后才会经 pickFromScene 走到 persistSelection.
+  const handleExpand = async (seedText: string, scenes: SceneType[], countPerScene: number) => {
+    setErr(null);
+    const resp = await topicProfileApi.expandQueries(
+      topic.id, seedText, { scenes, countPerScene }, token,
+    );
+    // 记下每条候选的 seed/scene 归属,后续 persist 时一并送后端
+    setCandidateSeeds(prev => {
+      const next = new Map(prev);
+      const sceneMap = resp.scenes || {};
+      for (const sc of scenes) {
+        const qs = sceneMap[sc]?.queries || [];
+        qs.forEach(q => { if (!next.has(q)) next.set(q, seedText); });
+      }
+      // 老 schema fallback
+      if (Object.keys(sceneMap).length === 0 && Array.isArray(resp.queries)) {
+        resp.queries.forEach(q => { if (!next.has(q)) next.set(q, seedText); });
+      }
+      return next;
+    });
+    setCandidateScenes(prev => {
+      const next = new Map(prev);
+      const sceneMap = resp.scenes || {};
+      for (const sc of scenes) {
+        const qs = sceneMap[sc]?.queries || [];
+        qs.forEach(q => { if (!next.has(q)) next.set(q, sc); });
+      }
+      return next;
+    });
+    return resp;
   };
+
+  // 用户在某 scene tab 内勾选一个候选 → 加进 existing + 触发持久化(默认 selected=true)
+  const pickFromScene = (text: string, scene: SceneType, seedText: string) => {
+    if (readOnly) return;
+    const currentlySelected = existing.get(text) ?? false;
+    // 容量检查(只有从未勾过的新选项需要检查)
+    if (!currentlySelected && totalSelected >= MAX_SELECTED_QUERIES) {
+      setErr(t('topic.profile.monitor.cap', { max: MAX_SELECTED_QUERIES }));
+      return;
+    }
+    // 把这条 text 写进 picked + 归属表,然后 persist
+    setPickedTexts(prev => prev.has(text) ? prev : new Set(prev).add(text));
+    setCandidateSeeds(prev => prev.has(text) ? prev : new Map(prev).set(text, seedText));
+    setCandidateScenes(prev => prev.has(text) ? prev : new Map(prev).set(text, scene));
+    // 切换选中状态
+    persistSelection(buildItems(text, !currentlySelected));
+  };
+
+  // 已勾选 set,送给 SceneExpander 让它在 candidate 上正确回显勾选状态
+  const selectedSet = useMemo(() => {
+    const s = new Set<string>();
+    existing.forEach((sel, text) => { if (sel) s.add(text); });
+    return s;
+  }, [existing]);
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md p-3"
-           style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <p className="text-sm font-semibold text-primary mb-2">{t('topic.profile.monitor.expandTitle')}</p>
-        <p className="text-xs text-muted mb-2">{t('topic.profile.monitor.expandHint')}</p>
-        {!readOnly && (
-          <div className="flex gap-2 flex-wrap">
-            <input type="text" value={seed} onChange={e => setSeed(e.target.value)}
-                   placeholder={t('topic.profile.monitor.seedPlaceholder')}
-                   className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-md"
-                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)' }} />
-            <input type="number" min={5} max={MAX_EXPANSION_CANDIDATES} value={count}
-                   onChange={e => setCount(Math.min(MAX_EXPANSION_CANDIDATES, Math.max(5, +e.target.value)))}
-                   className="w-20 text-sm px-3 py-2 rounded-md"
-                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)' }} />
-            <button type="button" onClick={expand} disabled={expanding || !seed.trim()}
-                    className="text-sm px-4 py-2 rounded-md text-white"
-                    style={{ background: 'var(--accent-primary)',
-                             opacity: (expanding || !seed.trim()) ? 0.5 : 1 }}>
-              {expanding ? '...' : t('topic.profile.monitor.expand')}
-            </button>
-          </div>
-        )}
-      </div>
+      <SceneExpander
+        brandSceneAvailable={!!(topic.target && topic.target.trim())}
+        onExpand={handleExpand}
+        onPickCandidate={pickFromScene}
+        selectedSet={selectedSet}
+        readOnly={readOnly}
+      />
 
       {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
 
@@ -451,6 +491,23 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
                   {t('topic.profile.monitor.seedBadge') || '种子'}
                 </span>
               )}
+              {(() => {
+                const sc = sceneByText.get(text);
+                if (!sc || sc === 'search') return null;  // search 是默认值,不展示 badge 减少噪音
+                const colorMap: Record<SceneType, string> = {
+                  search: '#6366f1', qa: '#10b981', intent: '#f59e0b', brand: '#ec4899',
+                };
+                const c = colorMap[sc] || '#6366f1';
+                return (
+                  <span
+                    className="inline-flex items-center mr-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle"
+                    style={{ background: `${c}22`, color: c }}
+                    title={t(`topic.profile.monitor.scene.${sc}.label`) as string}
+                  >
+                    {t(`topic.profile.monitor.scene.${sc}.label`)}
+                  </span>
+                );
+              })()}
               {text}
             </span>
           </label>

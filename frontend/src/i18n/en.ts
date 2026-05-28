@@ -3180,7 +3180,36 @@ const en = {
                 "expand": "Expand",
                 "selectedHint": "{{n}}/{{max}} monitored selected",
                 "cap": "At most {{max}} monitored queries",
-                "empty": "No candidates yet — expand above or add queries from the editor"
+                "empty": "No candidates yet — expand above or add queries from the editor",
+                "scene": {
+                  "title": "4-dimension scene expansion",
+                  "hint": "Enter one seed. The system fires 4 LLM templates in parallel and produces 4 pools: search / Q&A / intent / brand. Tick candidates from each tab to add them to your monitored queries.",
+                  "dimensions": "Dimensions:",
+                  "countPerSceneHint": "Candidates per scene (max 50)",
+                  "expand": "Expand",
+                  "expanding": "Expanding…",
+                  "pickAtLeastOne": "Pick at least one dimension",
+                  "resultFor": "Candidates for \"{{seed}}\"",
+                  "notRun": "This scene was not expanded this run",
+                  "empty": "No candidates produced for this scene",
+                  "search": {
+                    "label": "Search",
+                    "desc": "Category/product search keywords like \"XX manufacturer\", \"XX supplier\""
+                  },
+                  "qa": {
+                    "label": "Q&A",
+                    "desc": "Recommendation/comparison questions like \"which XX is best\", \"how to choose XX\""
+                  },
+                  "intent": {
+                    "label": "Intent",
+                    "desc": "How-to / tutorial queries like \"how to choose XX\", \"XX tutorial\""
+                  },
+                  "brand": {
+                    "label": "Brand",
+                    "desc": "Brand-evaluation queries like \"{brand} reviews\", \"{brand} company profile\"",
+                    "disabledHint": "Brand scene requires the brand full name (target). Fill it in the Profile tab to enable."
+                  }
+                }
               }
             }
           },

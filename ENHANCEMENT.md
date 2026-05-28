@@ -27,8 +27,20 @@
 | 20 | API & Data Feed Availability | ✅ DONE |
 | 21 | Entity GEO Audit (`--entity`) | ✅ DONE |
 | 22 | Keyword-Input → Entity Mode Upsell | ⬜ Open |
+| 23 | Seed 4-Scene Expansion (search / qa / intent / brand) | ✅ DONE |
 
 **Remaining open work:** #4 (topical authority / content clusters), #16 (page-level entity density), and #22 (classify brand/product keywords and upsell the Entity GEO mode). #4 and #16 both would need a deeper crawl than the current 5-page `check_multi_page` sample.
+
+## 23. Seed 4-Scene Expansion ✅ DONE (2026-05-28)
+
+Single seed input → server-side fan-out to 4 parallel LLM calls with scene-specific prompts → 4 categorised long-tail pools (search / Q&A / intent / brand). User ticks candidates per scene tab; each pick persists with `scene_type` on `QueryItem`. Reasoning: [`docs/geo-vs-xunling.md`](./docs/geo-vs-xunling.md) §6 #1, design: [`docs/seed-scene-implementation.md`](./docs/seed-scene-implementation.md).
+
+Key files:
+- `backend/geo/services/query_expander.py` — 4 SCENE_PROMPTS templates + `expand_one_scene`
+- `backend/geo/api/ai_telemetry.py` — `expand_queries_for_topic` async fan-out via `asyncio.gather`
+- `backend/geo/models/ai_telemetry.py` — `SceneType` literal, `QueryItem.scene_type`, `MonitoredQueryItem.scene_type`, `TopicOut.query_scene_types`
+- `frontend/src/components/SceneExpander.tsx` — single-input + 4-checkbox + tab-based results UI
+- `frontend/src/pages/User/TopicProfile.tsx` — MonitorView integration + scene badges on existing queries
 
 ## 22. Keyword-Input → Entity Mode Upsell ⬜ Open
 
