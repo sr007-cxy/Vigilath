@@ -292,7 +292,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   );
 }
 
-// ── 主题块(每个 topic 渲染成一个独立的卡块,不再 table 行)────────────────
+// ── 主题卡片网格(每个 topic 渲染成一个独立卡片,响应式 2/3 列)──────────────
 
 function TopicTable({
   topics, loading, onView, onEdit, onToggleEnabled,
@@ -316,7 +316,7 @@ function TopicTable({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {topics.map(tp => (
         <TopicBlock key={tp.id} topic={tp}
                     onView={onView} onEdit={onEdit} onToggleEnabled={onToggleEnabled} />
@@ -337,58 +337,59 @@ function TopicBlock({
   const s = deriveTopicStatus(tp);
   const stat = TOPIC_STATUS_STYLE[s];
   return (
-    <section className="rounded-lg p-4"
+    <section className="rounded-lg p-4 flex flex-col gap-3"
              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-primary truncate">{tp.name}</h3>
-            {typeof tp.version === 'number' && tp.version > 1 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
-                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
-                    title={`第 ${tp.version} 次修订(每次编辑自增)`}>
-                v{tp.version}
-              </span>
-            )}
-            <span className="inline-block px-2 py-0.5 rounded text-xs"
-                  style={{ background: stat.bg, color: stat.fg,
-                           border: '1px solid var(--border-color)' }}>
-              {t(`dashboard.aiTelemetry.statuses.${s}`)}
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-secondary">
-            <span>
-              <span className="text-muted">{t('dashboard.aiTelemetry.col.queries')}:</span>{' '}
-              <span className="text-primary tabular-nums">{tp.queries.length}</span>
-            </span>
-            <span>
-              <span className="text-muted">{t('dashboard.aiTelemetry.col.engines')}:</span>{' '}
-              <span className="text-primary tabular-nums">{tp.engines.length}/10</span>
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button type="button" onClick={() => onView(tp)}
-                  className="text-xs px-3 py-1.5 rounded-md"
-                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                           border: '1px solid var(--border-color)' }}>
-            {t('dashboard.aiTelemetry.actions.view')}
-          </button>
-          <button type="button" onClick={() => onEdit(tp)}
-                  className="text-xs px-3 py-1.5 rounded-md text-white"
-                  style={{ background: 'var(--accent-primary)' }}>
-            {t('dashboard.aiTelemetry.actions.edit')}
-          </button>
-          <button type="button" onClick={() => onToggleEnabled(tp)}
-                  className="text-xs px-3 py-1.5 rounded-md"
-                  style={{ background: 'transparent',
-                           color: tp.enabled ? 'var(--text-muted)' : 'var(--accent-primary)',
-                           border: '1px solid var(--border-color)' }}>
-            {tp.enabled
-              ? t('dashboard.aiTelemetry.actions.disable')
-              : t('dashboard.aiTelemetry.actions.enable')}
-          </button>
-        </div>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-base font-semibold text-primary truncate flex-1 min-w-0" title={tp.name}>
+          {tp.name}
+        </h3>
+        <span className="inline-block px-2 py-0.5 rounded text-xs shrink-0"
+              style={{ background: stat.bg, color: stat.fg,
+                       border: '1px solid var(--border-color)' }}>
+          {t(`dashboard.aiTelemetry.statuses.${s}`)}
+        </span>
+      </div>
+
+      {typeof tp.version === 'number' && tp.version > 1 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full tabular-nums self-start"
+              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+              title={`第 ${tp.version} 次修订(每次编辑自增)`}>
+          v{tp.version}
+        </span>
+      )}
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
+        <span>
+          <span className="text-muted">{t('dashboard.aiTelemetry.col.queries')}:</span>{' '}
+          <span className="text-primary tabular-nums">{tp.queries.length}</span>
+        </span>
+        <span>
+          <span className="text-muted">{t('dashboard.aiTelemetry.col.engines')}:</span>{' '}
+          <span className="text-primary tabular-nums">{tp.engines.length}/10</span>
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 mt-auto pt-1 flex-wrap">
+        <button type="button" onClick={() => onView(tp)}
+                className="text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                         border: '1px solid var(--border-color)' }}>
+          {t('dashboard.aiTelemetry.actions.view')}
+        </button>
+        <button type="button" onClick={() => onEdit(tp)}
+                className="text-xs px-3 py-1.5 rounded-md text-white"
+                style={{ background: 'var(--accent-primary)' }}>
+          {t('dashboard.aiTelemetry.actions.edit')}
+        </button>
+        <button type="button" onClick={() => onToggleEnabled(tp)}
+                className="text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'transparent',
+                         color: tp.enabled ? 'var(--text-muted)' : 'var(--accent-primary)',
+                         border: '1px solid var(--border-color)' }}>
+          {tp.enabled
+            ? t('dashboard.aiTelemetry.actions.disable')
+            : t('dashboard.aiTelemetry.actions.enable')}
+        </button>
       </div>
     </section>
   );
