@@ -235,79 +235,6 @@ export function Home() {
             </div>
           </section>
 
-          {/* AI Engines Covered — 9 大引擎,无 logo 走单色 monogram 卡片 */}
-          <section className="mt-10 sm:mt-30">
-            <div className="text-center mb-6 sm:mb-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     className="h-3.5 w-3.5 text-secondary"
-                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <span className="text-xs font-semibold text-secondary">
-                  {t('home.engines.badge')}
-                </span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
-                <span className="gradient-text">{t('home.engines.title')}</span>
-              </h2>
-              <p className="text-secondary text-sm sm:text-base max-w-2xl mx-auto">
-                {t('home.engines.subtitle')}
-              </p>
-            </div>
-            {/* 2 行 × 5 列(响应式:mobile 2 列、tablet 3 / 4 列、desktop 5 列).
-                每张卡居中纵向布局:大 logo 在上、引擎名在下;参考截图风格. */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 max-w-5xl mx-auto">
-              {(t('home.engines.items', { returnObjects: true }) as {
-                name: string; sub: string; slug: string; accent: string;
-                colored?: boolean; ext?: string;
-              }[]).map((eng, idx) => {
-                const ext = eng.ext || 'svg';
-                const src = `/image/engines/${eng.slug}.${ext}`;
-                return (
-                <div key={idx}
-                     className="rounded-2xl flex flex-col items-center justify-center text-center gap-3 px-3 py-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                     style={{
-                       background: '#ffffff',
-                       boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                       border: '1px solid rgba(0,0,0,0.08)',
-                     }}>
-                  {eng.colored ? (
-                    <div className="rounded-xl flex items-center justify-center select-none overflow-hidden shrink-0"
-                         style={{ width: 56, height: 56, background: '#fff' }}>
-                      <img src={src} alt="" aria-hidden="true"
-                           className="w-full h-full object-contain" draggable={false} />
-                    </div>
-                  ) : (
-                    <div className="shrink-0 select-none"
-                         style={{
-                           width: 56, height: 56,
-                           background: eng.accent,
-                           WebkitMaskImage: `url(${src})`,
-                           maskImage: `url(${src})`,
-                           WebkitMaskRepeat: 'no-repeat',
-                           maskRepeat: 'no-repeat',
-                           WebkitMaskPosition: 'center',
-                           maskPosition: 'center',
-                           WebkitMaskSize: '40px 40px',
-                           maskSize: '40px 40px',
-                         }} />
-                  )}
-                  <div className="min-w-0 w-full">
-                    <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
-                      {eng.name}
-                    </div>
-                    <div className="text-[10px] sm:text-[11px] mt-0.5 truncate" style={{ color: '#94939d' }}>
-                      {eng.sub}
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </section>
-
           {/* Advanced Detection Section */}
           <section className="mt-10 sm:mt-30">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 sm:mb-10">
@@ -563,6 +490,79 @@ export function Home() {
                   );
                 });
               })()}
+            </div>
+          </section>
+
+          {/* AI Engines Covered — 10 大引擎,2×5 网格(放在 8 步工作流下面) */}
+          <section className="mt-10 sm:mt-30">
+            <div className="text-center mb-6 sm:mb-8">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-soft shadow-glow mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     className="h-3.5 w-3.5 text-secondary"
+                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs font-semibold text-secondary">
+                  {t('home.engines.badge')}
+                </span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-tight">
+                <span className="gradient-text">{t('home.engines.title')}</span>
+              </h2>
+              <p className="text-secondary text-sm sm:text-base max-w-2xl mx-auto">
+                {t('home.engines.subtitle')}
+              </p>
+            </div>
+            {/* 2 行 × 5 列(响应式:mobile 2 列、tablet 3 / 4 列、desktop 5 列).
+                每张卡居中纵向布局:大 logo 在上、引擎名在下;参考截图风格. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 max-w-5xl mx-auto">
+              {(t('home.engines.items', { returnObjects: true }) as {
+                name: string; sub: string; slug: string; accent: string;
+                colored?: boolean; ext?: string;
+              }[]).map((eng, idx) => {
+                const ext = eng.ext || 'svg';
+                const src = `/image/engines/${eng.slug}.${ext}`;
+                return (
+                <div key={idx}
+                     className="rounded-2xl flex flex-col items-center justify-center text-center gap-3 px-3 py-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                     style={{
+                       background: '#ffffff',
+                       boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                       border: '1px solid rgba(0,0,0,0.08)',
+                     }}>
+                  {eng.colored ? (
+                    <div className="rounded-xl flex items-center justify-center select-none overflow-hidden shrink-0"
+                         style={{ width: 56, height: 56, background: '#fff' }}>
+                      <img src={src} alt="" aria-hidden="true"
+                           className="w-full h-full object-contain" draggable={false} />
+                    </div>
+                  ) : (
+                    <div className="shrink-0 select-none"
+                         style={{
+                           width: 56, height: 56,
+                           background: eng.accent,
+                           WebkitMaskImage: `url(${src})`,
+                           maskImage: `url(${src})`,
+                           WebkitMaskRepeat: 'no-repeat',
+                           maskRepeat: 'no-repeat',
+                           WebkitMaskPosition: 'center',
+                           maskPosition: 'center',
+                           WebkitMaskSize: '40px 40px',
+                           maskSize: '40px 40px',
+                         }} />
+                  )}
+                  <div className="min-w-0 w-full">
+                    <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
+                      {eng.name}
+                    </div>
+                    <div className="text-[10px] sm:text-[11px] mt-0.5 truncate" style={{ color: '#94939d' }}>
+                      {eng.sub}
+                    </div>
+                  </div>
+                </div>
+                );
+              })}
             </div>
           </section>
 
