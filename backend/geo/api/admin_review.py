@@ -719,11 +719,17 @@ def _pick_default_template_id(db: Session) -> Optional[int]:
     return t.id if t else None
 
 
+# GEO 内容投放主力 kind — 排在 seed × 模板 列表最前,优先生成「行业合辑 · 推荐榜单」.
+# 见 migration c5f4a8b9e3d2_add_industry_listicle_template.py 注入的 system 模板.
+_PRIMARY_TEMPLATE_KIND = "榜单合辑"
+
+
 def _pick_template_kinds_per_seed(db: Session, n: int = 5) -> list[ContentTemplateORM]:
     """挑 N 个 system 范围、kind 互不相同的模板 — seed × 模板 发文表用.
 
-    取前 N 个唯一 kind 的 system 模板,按 id 升序优先.system 模板不够时返回更短列表;
-    全空时返回 [],由调用方 fallback 到 legacy.
+    顺序:_PRIMARY_TEMPLATE_KIND(榜单合辑)优先 → 其余按 id 升序.
+    每个 kind 只取一条(同 kind 的多条 system 模板里按 id 取第一条).
+    system 模板不够 n 种 kind 时返回更短列表;全空时返回 [],由调用方 fallback 到 legacy.
     """
     sys_templates = (
         db.query(ContentTemplateORM)
@@ -731,9 +737,14 @@ def _pick_template_kinds_per_seed(db: Session, n: int = 5) -> list[ContentTempla
           .order_by(ContentTemplateORM.id.asc())
           .all()
     )
+    # 主推 kind 拉到队首
+    primary = [t for t in sys_templates if t.kind == _PRIMARY_TEMPLATE_KIND]
+    others = [t for t in sys_templates if t.kind != _PRIMARY_TEMPLATE_KIND]
+    ordered = primary + others
+
     seen_kinds: set[str] = set()
     picked: list[ContentTemplateORM] = []
-    for tmpl in sys_templates:
+    for tmpl in ordered:
         if tmpl.kind in seen_kinds:
             continue
         seen_kinds.add(tmpl.kind)
