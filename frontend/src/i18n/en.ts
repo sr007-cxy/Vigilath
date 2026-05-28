@@ -384,7 +384,7 @@ const en = {
                 { "name": "Tongyi",     "sub": "Alibaba",    "slug": "tongyi",     "accent": "#615ced" },
                 { "name": "Doubao",     "sub": "ByteDance",  "slug": "doubao",     "accent": "#5b8def" },
                 { "name": "ERNIE",      "sub": "Baidu",      "slug": "ernie",      "accent": "#3370ff" },
-                { "name": "Yuanbao",    "sub": "Tencent",    "slug": "yuanbao",    "accent": "#0052d9" },
+                { "name": "Yuanbao",    "sub": "Tencent",    "slug": "yuanbao",    "accent": "#06c167", "colored": true, "ext": "png" },
                 { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "accent": "#4d6bfe" }
               ]
             },

@@ -384,7 +384,7 @@ const zh = {
                 { "name": "通义",       "sub": "Tongyi",     "slug": "tongyi",     "accent": "#615ced" },
                 { "name": "豆包",       "sub": "Doubao",     "slug": "doubao",     "accent": "#5b8def" },
                 { "name": "文心",       "sub": "ERNIE",      "slug": "ernie",      "accent": "#3370ff" },
-                { "name": "元宝",       "sub": "Yuanbao",    "slug": "yuanbao",    "accent": "#0052d9" },
+                { "name": "元宝",       "sub": "Yuanbao",    "slug": "yuanbao",    "accent": "#06c167", "colored": true, "ext": "png" },
                 { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "accent": "#4d6bfe" }
               ]
             },
