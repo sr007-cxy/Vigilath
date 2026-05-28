@@ -2288,6 +2288,14 @@ export function TopicEditor({
           industry: industry.trim(),
           // 资料里的服务地域 — 让 LLM 把地点维度锁在用户实际经营区域
           service_geo: (profile.service_geo || '').trim(),
+          // 2026-05-28 — 画像字段透传给后端;后端按 scene 自动取舍:
+          //   intent: 用 profile_cases(案例追溯型 query)
+          //   brand:  全用(资质 / 标签 / 业务说明 + 案例)
+          //   search / qa: 后端忽略,所以传了也不影响产出
+          profile_cases: profile.case_stories || [],
+          core_credentials: profile.core_credentials || [],
+          brand_diff_tags: profile.brand_diff_tags || [],
+          core_service_overview: profile.core_service_overview || '',
         }, token);
         for (const q of res.queries) {
           if (seenText.has(q.text)) continue;

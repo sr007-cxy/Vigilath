@@ -593,6 +593,15 @@ export const aiTelemetryApi = {
       scenes?: SceneType[];
       // 每场景产出条数(每维 ≤50,4 维合 ≤200).
       countPerScene?: number;
+      // 2026-05-28 — 画像字段(intent / brand 场景注入,search / qa 忽略):
+      //  - profile_cases:   案例(intent 案例追溯 / brand 业务线)
+      //  - core_credentials: 资质 / 背书(brand 资质评估)
+      //  - brand_diff_tags:  差异化标签(brand 标签型 query)
+      //  - core_service_overview: 业务概述(brand 业务上下文)
+      profile_cases?: string[];
+      core_credentials?: string[];
+      brand_diff_tags?: string[];
+      core_service_overview?: string;
     },
     token: string,
   ): Promise<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }> {
@@ -631,6 +640,11 @@ export const aiTelemetryApi = {
         aliases: args.aliases || [],
         industry: args.industry || '',
         service_geo: args.service_geo || '',
+        // 画像字段 — 后端按 scene 自动取舍(search / qa 忽略,intent / brand 注入)
+        profile_cases: args.profile_cases || [],
+        core_credentials: args.core_credentials || [],
+        brand_diff_tags: args.brand_diff_tags || [],
+        core_service_overview: args.core_service_overview || '',
       },
     );
   },

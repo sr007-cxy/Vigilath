@@ -1338,6 +1338,26 @@ async def suggest_queries(
         aliases_in = []
     aliases = [str(a).strip() for a in aliases_in if str(a).strip()][:20]
 
+    # 2026-05-28 — 画像字段(intent / brand 用,前端从 BrandProfile 透传过来)
+    def _list_from_payload(key: str, *, max_items: int = 20,
+                            per_max: int = 300) -> list[str]:
+        raw = payload.get(key)
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        for x in raw:
+            s = str(x or "").strip()
+            if s:
+                out.append(s[:per_max])
+            if len(out) >= max_items:
+                break
+        return out
+
+    profile_cases = _list_from_payload("profile_cases", max_items=20, per_max=300)
+    core_credentials = _list_from_payload("core_credentials", max_items=20, per_max=300)
+    brand_diff_tags = _list_from_payload("brand_diff_tags", max_items=10, per_max=80)
+    core_service_overview = (payload.get("core_service_overview") or "").strip()[:500]
+
     # brand 场景在 target 为空时无意义 —— 跳过
     runnable_scenes: list[str] = []
     scene_results: dict[str, dict] = {}
@@ -1350,7 +1370,7 @@ async def suggest_queries(
         else:
             runnable_scenes.append(s)
 
-    # 4 路并行 fan-out
+    # 4 路并行 fan-out — 画像字段按场景差异化注入(intent / brand)
     if runnable_scenes:
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
             tasks = [
@@ -1358,6 +1378,10 @@ async def suggest_queries(
                     scene=s, seed=seed, count=count_per_scene,
                     target=target, aliases=aliases,
                     industry=industry, service_geo=service_geo,
+                    profile_cases=profile_cases,
+                    core_credentials=core_credentials,
+                    brand_diff_tags=brand_diff_tags,
+                    core_service_overview=core_service_overview,
                     client=client,
                 )
                 for s in runnable_scenes
@@ -1451,12 +1475,32 @@ async def expand_queries_for_topic(
         aliases = json.loads(t.target_aliases_json or "[]")
     except Exception:  # noqa: BLE001
         aliases = []
-    # 从 topic profile 自动注入服务地域 + 真实案例清单 —— LLM 案例追溯型 query 用这些
-    # 真实案件名(比依赖 LLM 训练数据猜更准),也把地域锁住不再随机扩其它城市/国家.
+    # 2026-05-28 — 从 topic profile 自动注入画像字段,按场景差异化使用:
+    #   search / qa: 只用 service_geo(行业从 t.industry 走)
+    #   intent:      额外用 case_stories
+    #   brand:       全用(case_stories / core_credentials / brand_diff_tags / core_service_overview)
     service_geo = ""
+    profile_cases: list[str] = []
+    core_credentials: list[str] = []
+    brand_diff_tags: list[str] = []
+    core_service_overview = ""
     try:
         profile_obj = json.loads(t.profile_json or "{}")
-        service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
+        if isinstance(profile_obj, dict):
+            service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
+            core_service_overview = str(profile_obj.get("core_service_overview") or "").strip()
+            for s in (profile_obj.get("case_stories") or []):
+                s2 = str(s or "").strip()
+                if s2:
+                    profile_cases.append(s2[:300])
+            for s in (profile_obj.get("core_credentials") or []):
+                s2 = str(s or "").strip()
+                if s2:
+                    core_credentials.append(s2[:300])
+            for s in (profile_obj.get("brand_diff_tags") or []):
+                s2 = str(s or "").strip()
+                if s2:
+                    brand_diff_tags.append(s2[:80])
     except Exception:  # noqa: BLE001
         pass
 
@@ -1472,7 +1516,7 @@ async def expand_queries_for_topic(
         else:
             runnable_scenes.append(s)
 
-    # 4 路并行 fan-out
+    # 4 路并行 fan-out — 画像字段按场景差异化注入
     if runnable_scenes:
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
             tasks = [
@@ -1480,6 +1524,11 @@ async def expand_queries_for_topic(
                     scene=s, seed=seed, count=count_per_scene,
                     target=target, aliases=aliases,
                     industry=industry, service_geo=service_geo,
+                    # intent / brand 才用得到这些 — render_prompt 内会按 scene 决定是否注入
+                    profile_cases=profile_cases,
+                    core_credentials=core_credentials,
+                    brand_diff_tags=brand_diff_tags,
+                    core_service_overview=core_service_overview,
                     client=client,
                 )
                 for s in runnable_scenes

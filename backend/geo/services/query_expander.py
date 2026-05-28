@@ -36,6 +36,12 @@ DEFAULT_TIMEOUT = int(os.environ.get("GEO_EXPANSION_TIMEOUT", "90"))
 
 # ─────────────────── 4 套 prompt 模板 ──────────────────
 
+# 2026-05-28 — 画像注入策略(参考讯灵 AI蒸馏 实测):
+#   search:  弱依赖 — 只用 industry / service_geo(纯品类 SEO 词)
+#   qa:      弱依赖 — 只用 industry / service_geo
+#   intent:  中依赖 — industry / service_geo / case_stories(案例追溯型查询)
+#   brand:   强依赖 — target / aliases / industry / service_geo / case_stories
+#                    / core_credentials / brand_diff_tags / core_service_overview
 SCENE_PROMPTS: dict[SceneType, str] = {
     "search": """你是 SEO 长尾词扩展专家。
 针对种子词「{seed}」扩展 {count} 个**产品搜索意图**的长尾关键词。
@@ -67,7 +73,7 @@ SCENE_PROMPTS: dict[SceneType, str] = {
 
 要求:
 1. 每条 ≤ 40 字,必须带「吗 / 呢 / 哪家 / 怎么 / 哪个」等问句词
-2. 不要重复
+2. 不要重复;不要纯品类词(归 search 场景)
 3. 行业:{industry};地域:{service_geo}
 
 只输出 JSON 对象:{{"queries": ["..."]}};不要 ```json``` 围栏。""",
@@ -75,16 +81,20 @@ SCENE_PROMPTS: dict[SceneType, str] = {
     "intent": """你是用户意图扩展专家。
 针对种子词「{seed}」扩展 {count} 个**意图查询**(用户问怎么做、怎么用、怎么选)。
 
+行业:{industry};地域:{service_geo}
+真实案例 / 业务经历(可作为意图问句的具体背景,**至少 30% 的 query 应围绕这些案例展开**):
+{profile_cases_block}
+
 扩展模式参考:
 - 如何选{seed} / 怎么挑{seed} / {seed}怎么用
 - {seed}攻略 / {seed}教程 / {seed}使用指南
-- 新手{seed}怎么入门 / {seed}操作步骤
-- {seed}使用方法 / {seed}什么时候用
+- {seed}操作步骤 / {seed}使用方法 / {seed}什么时候用
+- **案例追溯型**:如何做{{案例名}}这种交易 / {{案例名}}的关键流程是什么 / 类似{{案例名}}的项目怎么做
 
 要求:
-1. 每条 ≤ 40 字,必须带「如何 / 怎么 / 攻略 / 指南 / 教程 / 方法」等意图词
+1. 每条 ≤ 50 字,必须带「如何 / 怎么 / 攻略 / 指南 / 教程 / 方法 / 步骤 / 流程」等意图词
 2. 不要重复;不要纯品类词(归 search 场景)
-3. 行业:{industry}
+3. 案例追溯型 query 必须用上面列的真实案例名,不要凭空编造案件名
 
 只输出 JSON 对象:{{"queries": ["..."]}};不要 ```json``` 围栏。""",
 
@@ -93,22 +103,38 @@ SCENE_PROMPTS: dict[SceneType, str] = {
 
 品牌全称:{target}
 品牌别名(可用):{aliases}
-业务上下文 seed:{seed}
+行业:{industry};地域:{service_geo}
+品牌业务概述:{core_service_overview}
+品牌差异化标签(直接引用 1-2 条做 query):{brand_diff_tags_block}
+品牌核心资质 / 背书(可作为评估问句的依据):{core_credentials_block}
+品牌真实案例(可作为业务线 / 历史成绩带入):{profile_cases_block}
 
 扩展模式参考:
 - {target}怎么样 / {target}详细介绍 / {target}基本信息
 - {target}公司概况 / {target}客户评价如何 / {target}性价比怎么样
 - {target}实力如何 / {target}靠不靠谱 / {target}口碑
-- {target}有什么{seed}产品(把 seed 作为业务线带入)
 - {service_geo}{target}(若 service_geo 非空,加地域前缀)
+- **业务线 / 案例型**:{target}做过{{案例名}}吗 / {target}在{{业务领域}}方面有什么经验
+- **资质型**:{target}有{{资质}}吗 / {target}的{{差异化标签}}怎么样
 
 要求:
-1. 每条 30~40 字,主语必须是品牌名({target} 或别名),不是品类词
+1. 每条 30~50 字,主语必须是品牌名({target} 或别名),不是品类词
 2. 涵盖正反两面(评价 / 口碑 / 性价比 / 客户 / 实力 / 资质)
-3. 不要重复
+3. **至少 1/3 的 query 必须用上面列的真实案例名 / 资质名 / 差异化标签**,不要凭空编造
+4. 不要重复
 
 只输出 JSON 对象:{{"queries": ["..."]}};不要 ```json``` 围栏。""",
 }
+
+
+def _format_list_block(items: list[str] | None, *, max_items: int = 10,
+                        per_item_max: int = 200) -> str:
+    """把列表渲染成 prompt 里的多行 bullet,空列表 → '(无)'."""
+    items = [str(x or "").strip() for x in (items or []) if str(x or "").strip()]
+    items = items[:max_items]
+    if not items:
+        return "(无 — 用户未在画像里填写,本次不要凭空编造)"
+    return "\n".join(f"  - {s[:per_item_max]}" for s in items)
 
 
 def render_prompt(
@@ -120,17 +146,40 @@ def render_prompt(
     aliases: list[str] | None = None,
     industry: str = "",
     service_geo: str = "",
+    profile_cases: list[str] | None = None,
+    core_credentials: list[str] | None = None,
+    brand_diff_tags: list[str] | None = None,
+    core_service_overview: str = "",
 ) -> str:
-    """渲染 scene 对应的 system+user 合并 prompt(简化:直接当 user 输入)."""
+    """渲染 scene 对应的 prompt(直接当 user 输入).
+
+    2026-05-28 — 按画像依赖度差异化注入:
+      - search / qa: 只用 seed + industry + service_geo
+      - intent:      额外注入 profile_cases(案例追溯)
+      - brand:       注入全部画像字段(target/aliases/cases/credentials/tags/overview)
+    """
     tpl = SCENE_PROMPTS.get(scene) or SCENE_PROMPTS["search"]
-    return tpl.format(
-        seed=seed,
-        count=int(count),
-        target=(target or seed),
-        aliases="、".join((aliases or [])[:5]) or "(无)",
-        industry=industry or "(未指定)",
-        service_geo=service_geo or "",
-    )
+    # 通用字段
+    kw: dict[str, str] = {
+        "seed": seed,
+        "count": str(int(count)),
+        "target": (target or seed),
+        "aliases": "、".join((aliases or [])[:5]) or "(无)",
+        "industry": industry or "(未指定)",
+        "service_geo": service_geo or "",
+    }
+    # 按场景注入额外字段
+    if scene == "intent":
+        kw["profile_cases_block"] = _format_list_block(profile_cases)
+    elif scene == "brand":
+        kw["profile_cases_block"] = _format_list_block(profile_cases)
+        kw["core_credentials_block"] = _format_list_block(core_credentials)
+        kw["brand_diff_tags_block"] = (
+            "、".join([t for t in (brand_diff_tags or []) if (t or "").strip()][:10])
+            or "(无)"
+        )
+        kw["core_service_overview"] = (core_service_overview or "").strip()[:500] or "(无)"
+    return tpl.format(**kw)
 
 
 # ─────────────────── LLM provider 选择(复用 content_generator 同款) ──────────────────
@@ -193,6 +242,11 @@ async def expand_one_scene(
     aliases: list[str] | None = None,
     industry: str = "",
     service_geo: str = "",
+    # 2026-05-28 — 画像注入(intent / brand 场景用,其他 scene 忽略)
+    profile_cases: list[str] | None = None,
+    core_credentials: list[str] | None = None,
+    brand_diff_tags: list[str] | None = None,
+    core_service_overview: str = "",
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     """对单个 scene 调一次 LLM,返回 {"queries": [...], "model": "...", "error": "..."}.
@@ -207,6 +261,10 @@ async def expand_one_scene(
         scene,
         seed=seed, count=count, target=target,
         aliases=aliases, industry=industry, service_geo=service_geo,
+        profile_cases=profile_cases,
+        core_credentials=core_credentials,
+        brand_diff_tags=brand_diff_tags,
+        core_service_overview=core_service_overview,
     )
 
     if provider == "deepseek":
