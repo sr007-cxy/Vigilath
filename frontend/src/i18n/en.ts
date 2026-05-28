@@ -377,15 +377,15 @@ const en = {
               "title": "Tested Across 9 Major AI Platforms",
               "subtitle": "One audit covers every major model — so you know exactly where your brand stands in each engine.",
               "items": [
-                { "name": "ChatGPT",    "sub": "OpenAI",     "accent": "#10a37f" },
-                { "name": "Gemini",     "sub": "Google",     "accent": "#4285f4" },
-                { "name": "Perplexity", "sub": "Perplexity", "accent": "#20808d" },
-                { "name": "Claude",     "sub": "Anthropic",  "accent": "#cc785c" },
-                { "name": "Tongyi",     "sub": "Alibaba",    "accent": "#615ced" },
-                { "name": "Doubao",     "sub": "ByteDance",  "accent": "#5b8def" },
-                { "name": "ERNIE",      "sub": "Baidu",      "accent": "#3370ff" },
-                { "name": "Hunyuan",    "sub": "Tencent",    "accent": "#0052d9" },
-                { "name": "DeepSeek",   "sub": "DeepSeek",   "accent": "#4d6bfe" }
+                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "accent": "#10a37f" },
+                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "accent": "#4285f4" },
+                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "accent": "#20808d" },
+                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "accent": "#cc785c" },
+                { "name": "Tongyi",     "sub": "Alibaba",    "slug": "tongyi",     "accent": "#615ced" },
+                { "name": "Doubao",     "sub": "ByteDance",  "slug": "doubao",     "accent": "#5b8def" },
+                { "name": "ERNIE",      "sub": "Baidu",      "slug": "ernie",      "accent": "#3370ff" },
+                { "name": "Yuanbao",    "sub": "Tencent",    "slug": "yuanbao",    "accent": "#0052d9" },
+                { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "accent": "#4d6bfe" }
               ]
             },
             "partners": {

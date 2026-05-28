@@ -258,7 +258,7 @@ export function Home() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto">
               {(t('home.engines.items', { returnObjects: true }) as {
-                name: string; sub: string; accent: string;
+                name: string; sub: string; slug: string; accent: string;
               }[]).map((eng, idx) => (
                 <div key={idx}
                      className="rounded-xl flex items-center gap-3 px-4 py-4 sm:py-5 transition-transform duration-200 hover:-translate-y-0.5"
@@ -267,15 +267,21 @@ export function Home() {
                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                        border: '1px solid rgba(0,0,0,0.06)',
                      }}>
-                  <div className="rounded-lg flex items-center justify-center shrink-0 select-none"
+                  {/* 引擎 logo:simple-icons 是 monochrome,用 CSS mask 染成品牌色.
+                      SVG 文件缺失时 mask 失败为空 → 显示外层背景纯色块,不破版. */}
+                  <div className="rounded-lg shrink-0 select-none"
                        style={{
                          width: 36, height: 36,
-                         background: `${eng.accent}15`,
-                         color: eng.accent,
-                         fontWeight: 700, fontSize: 14,
-                       }}>
-                    {eng.name.slice(0, 2)}
-                  </div>
+                         background: eng.accent,
+                         WebkitMaskImage: `url(/image/engines/${eng.slug}.svg)`,
+                         maskImage: `url(/image/engines/${eng.slug}.svg)`,
+                         WebkitMaskRepeat: 'no-repeat',
+                         maskRepeat: 'no-repeat',
+                         WebkitMaskPosition: 'center',
+                         maskPosition: 'center',
+                         WebkitMaskSize: '22px 22px',
+                         maskSize: '22px 22px',
+                       }} />
                   <div className="min-w-0">
                     <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
                       {eng.name}
