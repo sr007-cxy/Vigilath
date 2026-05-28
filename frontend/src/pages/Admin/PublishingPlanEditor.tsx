@@ -15,6 +15,9 @@ type RowDraft = {
   localKey: string;      // 行内 React key — 永远稳定
   seq: number;
   publish_date: string;
+  // seed-based 新流程:seed 非空,query 留空;legacy:query ∈ monitored,seed 为空.
+  // 二选一,至少有一个非空.
+  seed: string;
   query: string;
   template_id: number | null;
   platform: string;
@@ -66,6 +69,13 @@ export function PublishingPlanEditor({
   const [savingConfirm, setSavingConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+  // 总页数随 rows 变化;在最后一页删行 / 切到非空 page 时回缩.
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   // 拉一次模板全集,row 的下拉用;抽屉里改了再 refresh
   const refreshTemplates = async () => {
@@ -203,7 +213,14 @@ export function PublishingPlanEditor({
           📋 模板抽屉
         </button>
         <button type="button"
-                onClick={() => setRows(rs => [...rs, newRow()])}
+                onClick={() => {
+                  setRows(rs => {
+                    const next = [...rs, newRow()];
+                    // 新行落到末页 — 调用方 setPage 在下个 tick 跑,直接按 next.length 算
+                    setPage(Math.max(1, Math.ceil(next.length / PAGE_SIZE)));
+                    return next;
+                  });
+                }}
                 className="text-xs px-2.5 py-1 rounded-md"
                 style={{ background: 'var(--accent-primary)', color: '#fff' }}>
           + 添加一行
@@ -232,7 +249,8 @@ export function PublishingPlanEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => {
+            {rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((r, i) => {
+              const globalIdx = (page - 1) * PAGE_SIZE + i;
               const tmpl = r.template_id ? tmplById.get(r.template_id) : null;
               const platOpts = tmpl?.target_platforms?.length
                 ? tmpl.target_platforms
@@ -251,11 +269,20 @@ export function PublishingPlanEditor({
                       cursor: 'pointer',
                     }}>
                   <td className="py-1.5 px-1 tabular-nums text-muted">
-                    {i + 1}
+                    {globalIdx + 1}
                     <div className="flex flex-col">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); moveRow(r.localKey, -1); }}
+                      <button type="button" onClick={(e) => {
+                        e.stopPropagation();
+                        moveRow(r.localKey, -1);
+                        // 跨页:行被推到上一页时跟着翻页
+                        if (globalIdx % PAGE_SIZE === 0 && page > 1) setPage(p => p - 1);
+                      }}
                               className="text-[9px] leading-none text-muted hover:text-primary">▲</button>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); moveRow(r.localKey, 1); }}
+                      <button type="button" onClick={(e) => {
+                        e.stopPropagation();
+                        moveRow(r.localKey, 1);
+                        if (globalIdx % PAGE_SIZE === PAGE_SIZE - 1 && page < totalPages) setPage(p => p + 1);
+                      }}
                               className="text-[9px] leading-none text-muted hover:text-primary">▼</button>
                     </div>
                   </td>
@@ -343,6 +370,29 @@ export function PublishingPlanEditor({
           </tbody>
         </table>
       </div>
+
+      {rows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary pt-1">
+          <span className="tabular-nums text-muted">
+            {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, rows.length)} / {rows.length} 篇
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={page <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              上一页
+            </button>
+            <span className="tabular-nums">{page} / {totalPages}</span>
+            <button type="button" disabled={page >= totalPages}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              下一页
+            </button>
+          </div>
+        </div>
+      )}
 
       <p className="text-[10px] text-muted">
         同一 Query 可排多行(不同时间 / 不同平台)。命中率 0% 行底色浅红,&lt;50% 浅黄,≥50% 浅绿。

@@ -54,6 +54,12 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
   const [err, setErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [openDocId, setOpenDocId] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+  // 行内「通过」按钮的 per-doc busy / err
+  const [inlineBusyId, setInlineBusyId] = useState<number | null>(null);
+  const [inlineErr, setInlineErr] = useState<string | null>(null);
 
   const isAdmin = useMemo(() => {
     try {
@@ -120,6 +126,40 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
       setErr(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // 行内一键通过(pending_review 专用) — 不开 modal,直接 approve.
+  const handleInlineApprove = async (docId: number) => {
+    if (inlineBusyId !== null) return;
+    setInlineBusyId(docId); setInlineErr(null);
+    try {
+      await adminContentReviewApi.approveDoc(docId, token);
+      refreshDocs(); refreshTopics();
+    } catch (e: unknown) {
+      setInlineErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInlineBusyId(null);
+    }
+  };
+
+  // 搜索 + 分页(客户端):docs 顺序由后端给,这里只过滤 + 切片.
+  // 搜索 / 筛选切换时回到第 1 页;status/sourceFilter 在 refreshDocs 触发后 docs 重置,page 也回 1.
+  const filteredDocs = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return docs;
+    return docs.filter(d => {
+      const hay = [d.title, d.summary, d.source_query_text].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [docs, searchText]);
+  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [searchText, status, sourceFilter, topicId]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const pagedDocs = useMemo(
+    () => filteredDocs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredDocs, page],
+  );
 
   return (
     <div className="space-y-4">
@@ -194,7 +234,15 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
           </div>
         </div>
 
-        <div className="flex-1" />
+        <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+          <label className="text-xs text-muted">{t('admin.contentReview.searchLabel', { defaultValue: '搜索' })}</label>
+          <input type="search" value={searchText}
+                 onChange={e => setSearchText(e.target.value)}
+                 placeholder={t('admin.contentReview.searchPlaceholder', { defaultValue: '标题 / 摘要 / 问题…' })}
+                 className="text-sm px-3 py-1.5 rounded-md w-full"
+                 style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)' }} />
+        </div>
 
         {picked.size > 0 && (
           <button type="button" onClick={sendToReview}
@@ -213,21 +261,60 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
         </div>
       )}
 
+      {inlineErr && (
+        <div className="rounded-md p-3 text-sm"
+             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.3)' }}>
+          {inlineErr}
+        </div>
+      )}
+
       {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
 
-      {!loading && docs.length === 0 && (
-        <div className="py-12 text-center text-sm text-muted">{t('admin.contentReview.empty')}</div>
+      {!loading && filteredDocs.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted">
+          {searchText
+            ? t('admin.contentReview.emptySearch', { defaultValue: '没有匹配的文档' })
+            : t('admin.contentReview.empty')}
+        </div>
       )}
 
       <div className="space-y-2">
-        {docs.map(d => (
+        {pagedDocs.map(d => (
           <DocCard key={d.id} doc={d}
                    pickable={d.status === 'draft'}
                    picked={picked.has(d.id)}
                    onPick={() => togglePick(d.id)}
-                   onOpen={() => setOpenDocId(d.id)} />
+                   onOpen={() => setOpenDocId(d.id)}
+                   approveBusy={inlineBusyId === d.id}
+                   onInlineApprove={d.status === 'pending_review'
+                     ? () => handleInlineApprove(d.id)
+                     : undefined} />
         ))}
       </div>
+
+      {filteredDocs.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary px-1 pt-1">
+          <span className="tabular-nums text-muted">
+            {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredDocs.length)} / {filteredDocs.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={page <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              {t('admin.contentReview.prev', { defaultValue: '上一页' })}
+            </button>
+            <span className="tabular-nums">{page} / {totalPages}</span>
+            <button type="button" disabled={page >= totalPages}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              {t('admin.contentReview.next', { defaultValue: '下一页' })}
+            </button>
+          </div>
+        </div>
+      )}
 
       {selectedDoc && (
         <DocDetailModal doc={selectedDoc}
@@ -239,9 +326,12 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
   );
 }
 
-function DocCard({ doc, pickable, picked, onPick, onOpen }: {
+function DocCard({ doc, pickable, picked, onPick, onOpen, onInlineApprove, approveBusy }: {
   doc: GeneratedDoc; pickable: boolean; picked: boolean;
   onPick: () => void; onOpen: () => void;
+  // 仅 pending_review 给 → 渲染行内「✓ 通过」按钮,一键 approve
+  onInlineApprove?: () => void;
+  approveBusy?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -282,12 +372,23 @@ function DocCard({ doc, pickable, picked, onPick, onOpen }: {
           </div>
         )}
       </div>
-      <button type="button" onClick={onOpen}
-              className="text-xs px-3 py-1 rounded-md self-center"
-              style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)',
-                       border: '1px solid var(--border-color)' }}>
-        {t('admin.contentReview.view')}
-      </button>
+      <div className="flex items-center gap-2 self-center">
+        {onInlineApprove && (
+          <button type="button" disabled={approveBusy}
+                  onClick={(e) => { e.stopPropagation(); onInlineApprove(); }}
+                  className="text-xs px-3 py-1 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)',
+                           opacity: approveBusy ? 0.5 : 1 }}>
+            {approveBusy ? '…' : `✓ ${t('admin.contentReview.approve')}`}
+          </button>
+        )}
+        <button type="button" onClick={onOpen}
+                className="text-xs px-3 py-1 rounded-md"
+                style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)',
+                         border: '1px solid var(--border-color)' }}>
+          {t('admin.contentReview.view')}
+        </button>
+      </div>
     </section>
   );
 }

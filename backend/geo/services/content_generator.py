@@ -30,15 +30,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from datetime import datetime
+from typing import Optional
 
 import requests
 
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
     AiTelemetryTopicExecutionPlanORM, AiTelemetryTopicORM, BrandProfile,
-    ContentTemplateORM, TopicGeneratedDocORM,
+    ContentTemplateORM, TopicGeneratedDocORM, TopicMediaORM,
 )
 
 log = logging.getLogger(__name__)
@@ -185,7 +187,7 @@ def _run_generation(
             try:
                 title, body, summary = _generate_one(profile, q, provider, api_key)
                 doc.title = title
-                doc.body_markdown = body
+                doc.body_markdown = _append_media_to_body(db, topic_id, q, body)
                 doc.summary = summary
             except Exception as e:  # noqa: BLE001
                 log.warning("content gen failed for q='%s' topic=%d: %s", q, topic_id, e)
@@ -240,10 +242,13 @@ def _run_per_item(
     for it in plan_items:
         item_id = str(it.get("id") or "")
         q = str(it.get("query") or "").strip()
+        seed = str(it.get("seed") or "").strip()
+        # seed-based 行用 seed 当主题;legacy 行 fallback 到 query.
+        topic_text = seed or q
         platform = str(it.get("platform") or "") or None
         tmpl_id = it.get("template_id")
         tmpl = tmpl_by_id.get(tmpl_id) if tmpl_id else None
-        if not q:
+        if not topic_text:
             continue
 
         doc = existing_by_item.get(item_id)
@@ -253,7 +258,7 @@ def _run_per_item(
                 plan_item_id=item_id or None,
                 template_id=tmpl.id if tmpl else None,
                 platform=platform,
-                source_query_text=q, status="pending_review",
+                source_query_text=topic_text, status="pending_review",
                 selected_for_review=True,
                 llm_model=model_id, source="ai",
             )
@@ -262,7 +267,7 @@ def _run_per_item(
             # 重生:清错 + 把 status 回 pending_review,等 LLM 跑完覆写正文
             doc.template_id = tmpl.id if tmpl else None
             doc.platform = platform
-            doc.source_query_text = q
+            doc.source_query_text = topic_text
             doc.generation_error = None
             doc.status = "pending_review"
             doc.selected_for_review = True
@@ -271,24 +276,25 @@ def _run_per_item(
 
         if not provider:
             doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
-            doc.title = f"[未生成] {q}"
+            doc.title = f"[未生成] {topic_text}"
             continue
         try:
             if tmpl:
                 title, body, summary = _generate_with_template(
-                    profile, tmpl, q, platform or "", provider, api_key,
+                    profile, tmpl, topic_text, platform or "", provider, api_key,
+                    seed=seed or None,
                 )
             else:
-                title, body, summary = _generate_one(profile, q, provider, api_key)
+                title, body, summary = _generate_one(profile, topic_text, provider, api_key)
             doc.title = title
-            doc.body_markdown = body
+            doc.body_markdown = _append_media_to_body(db, topic_id, topic_text, body)
             doc.summary = summary
             n_ok += 1
         except Exception as e:  # noqa: BLE001
             log.warning("content gen failed for item=%s topic=%d: %s",
                         item_id, topic_id, e)
             doc.generation_error = str(e)[:500]
-            doc.title = f"[生成失败] {q}"
+            doc.title = f"[生成失败] {topic_text}"
 
     if mark_auto_run:
         t.auto_generate_last_run_at = datetime.utcnow()
@@ -297,6 +303,75 @@ def _run_per_item(
         "content gen done(per-item) topic %d: ok=%d / total=%d",
         topic_id, n_ok, len(plan_items),
     )
+
+
+_MEDIA_APPEND_MAX = 3
+_MEDIA_BLOCK_HEADER = "── 自动配图建议 ──"
+
+def _match_topic_media(db, topic_id: int, query: str) -> list[TopicMediaORM]:
+    """按 query 关键词模糊匹配 topic 已上传图片(filename 子串).
+
+    召回策略:
+      1. 把 query 拆成关键词(去标点 / 短词),依次在 filename 里找子串
+      2. 命中即累计;同一图片只算一次,按 uploaded_at desc 取前 _MEDIA_APPEND_MAX
+      3. 若 query 无任何命中,退到「最新 3 张图」兜底(让 admin 至少有可挑的)
+    """
+    rows = (
+        db.query(TopicMediaORM)
+          .filter(TopicMediaORM.topic_id == topic_id, TopicMediaORM.kind == "image")
+          .order_by(TopicMediaORM.uploaded_at.desc())
+          .all()
+    )
+    if not rows:
+        return []
+    q = (query or "").lower()
+    # 简单切词:把常见标点 / 空白替换成空格,过滤 1 字短词(英文 1 字母 / 中文单字保留意义低)
+    tokens = [w for w in re.split(r"[\s,。!?:;、,/\\()\[\]【】「」“”\"'·.…—-]+", q) if len(w) >= 2]
+    if not tokens:
+        return rows[:_MEDIA_APPEND_MAX]
+    hits: list[TopicMediaORM] = []
+    seen: set[int] = set()
+    for r in rows:
+        fn = (r.filename or "").lower()
+        if any(t in fn for t in tokens):
+            if r.id not in seen:
+                hits.append(r); seen.add(r.id)
+        if len(hits) >= _MEDIA_APPEND_MAX:
+            break
+    if hits:
+        return hits
+    # 兜底:即使 filename 不匹配,也给最新几张让 admin 决定
+    return rows[:_MEDIA_APPEND_MAX]
+
+
+def _format_media_block(topic_id: int, medias: list[TopicMediaORM]) -> str:
+    """正文末尾追加的纯文本配图块.不用 Markdown(平台直接粘贴会出乱码)."""
+    if not medias:
+        return ""
+    lines = [_MEDIA_BLOCK_HEADER]
+    for i, m in enumerate(medias, 1):
+        # /api/ai-telemetry/topics/{tid}/media/{mid}/blob 是受 owner 鉴权的接口,
+        # admin 在审稿页能直接预览;真正发布到 公众号/小红书 需 admin 手动下载.
+        lines.append(
+            f"{i}. {m.filename or f'media-{m.id}'} "
+            f"→ /api/ai-telemetry/topics/{topic_id}/media/{m.id}/blob"
+        )
+    return "\n\n" + "\n".join(lines)
+
+
+def _append_media_to_body(db, topic_id: int, query: str, body: str) -> str:
+    """业务封装:body 已经生成完,按 query 召回图片,附在末尾.
+    召回失败或 0 张 → 原样返回.异常吞掉(配图属增强,不能拖稿生成失败).
+    """
+    try:
+        medias = _match_topic_media(db, topic_id, query)
+        block = _format_media_block(topic_id, medias)
+        if block:
+            return (body or "") + block
+        return body
+    except Exception:  # noqa: BLE001
+        log.warning("append media failed topic=%d q=%r — skipped", topic_id, query, exc_info=True)
+        return body
 
 
 def _render_template(prompt_template: str, vars: dict[str, object]) -> str:
@@ -327,12 +402,18 @@ def _generate_with_template(
     profile: BrandProfile, tmpl: ContentTemplateORM,
     query: str, platform: str,
     provider: str, api_key: str,
+    seed: Optional[str] = None,
 ) -> tuple[str, str, str]:
-    """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染."""
+    """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染.
+
+    seed 非空时(seed-based plan),模板里 {seed} 拿到种子文本,{query} 拿到 seed 副本以兼容
+    旧模板;legacy plan 行 seed 为 None,两个变量都拿 query.
+    """
     system_prompt = _build_system_prompt(profile)
     brand_block = _build_brand_block(profile)
     user_prompt = _render_template(tmpl.prompt_template, {
         "query": query,
+        "seed": seed or query,
         "brand": profile.company_short_name or profile.company_full_name or "",
         "industry": profile.industry or "",
         "platform": platform or (profile.target_platforms[0] if profile.target_platforms else ""),

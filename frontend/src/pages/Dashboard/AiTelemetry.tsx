@@ -282,7 +282,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   );
 }
 
-// ── 主题列表 ───────────────────────────────────────────────────
+// ── 主题块(每个 topic 渲染成一个独立的卡块,不再 table 行)────────────────
 
 function TopicTable({
   topics, loading, onView, onEdit, onToggleEnabled,
@@ -305,85 +305,82 @@ function TopicTable({
     );
   }
 
-  const c = (k: string) => t(`dashboard.aiTelemetry.col.${k}`);
-
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
-    >
-      <table className="w-full text-sm">
-        <thead>
-          <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-            <th className="text-left px-3 py-2 font-medium w-12">{c('index')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('name')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('status')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('queries')}</th>
-            <th className="text-left px-3 py-2 font-medium">{c('engines')}</th>
-            <th className="text-right px-3 py-2 font-medium">{c('actions')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {topics.map((tp, idx) => {
-            const s = deriveTopicStatus(tp);
-            return (
-            <tr key={tp.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-              <td className="px-3 py-2 text-muted tabular-nums">{idx + 1}</td>
-              <td className="px-3 py-2 text-primary">
-                {tp.name}
-                {typeof tp.version === 'number' && tp.version > 1 && (
-                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
-                        title={`第 ${tp.version} 次修订(每次编辑自增)`}>
-                    v{tp.version}
-                  </span>
-                )}
-              </td>
-              <td className="px-3 py-2">
-                <span
-                  className="inline-block px-2 py-0.5 rounded text-xs"
-                  style={{
-                    background: TOPIC_STATUS_STYLE[s].bg,
-                    color: TOPIC_STATUS_STYLE[s].fg,
-                    border: '1px solid var(--border-color)',
-                  }}
-                >
-                  {t(`dashboard.aiTelemetry.statuses.${s}`)}
-                </span>
-              </td>
-              <td className="px-3 py-2">{tp.queries.length}</td>
-              <td className="px-3 py-2">{tp.engines.length}/10</td>
-              <td className="px-3 py-2 text-right space-x-3">
-                <button
-                  className="text-xs"
-                  style={{ color: 'var(--accent-primary)' }}
-                  onClick={() => onView(tp)}
-                >
-                  {t('dashboard.aiTelemetry.actions.view')}
-                </button>
-                <button
-                  className="text-xs"
-                  style={{ color: 'var(--accent-primary)' }}
-                  onClick={() => onEdit(tp)}
-                >
-                  {t('dashboard.aiTelemetry.actions.edit')}
-                </button>
-                <button
-                  className="text-xs"
-                  style={{ color: tp.enabled ? 'var(--text-muted)' : 'var(--accent-primary)' }}
-                  onClick={() => onToggleEnabled(tp)}
-                >
-                  {tp.enabled
-                    ? t('dashboard.aiTelemetry.actions.disable')
-                    : t('dashboard.aiTelemetry.actions.enable')}
-                </button>
-              </td>
-            </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {topics.map(tp => (
+        <TopicBlock key={tp.id} topic={tp}
+                    onView={onView} onEdit={onEdit} onToggleEnabled={onToggleEnabled} />
+      ))}
     </div>
+  );
+}
+
+function TopicBlock({
+  topic: tp, onView, onEdit, onToggleEnabled,
+}: {
+  topic: Topic;
+  onView: (t: Topic) => void;
+  onEdit: (t: Topic) => void;
+  onToggleEnabled: (t: Topic) => void;
+}) {
+  const { t } = useTranslation();
+  const s = deriveTopicStatus(tp);
+  const stat = TOPIC_STATUS_STYLE[s];
+  return (
+    <section className="rounded-lg p-4"
+             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-semibold text-primary truncate">{tp.name}</h3>
+            {typeof tp.version === 'number' && tp.version > 1 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full tabular-nums"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                    title={`第 ${tp.version} 次修订(每次编辑自增)`}>
+                v{tp.version}
+              </span>
+            )}
+            <span className="inline-block px-2 py-0.5 rounded text-xs"
+                  style={{ background: stat.bg, color: stat.fg,
+                           border: '1px solid var(--border-color)' }}>
+              {t(`dashboard.aiTelemetry.statuses.${s}`)}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-secondary">
+            <span>
+              <span className="text-muted">{t('dashboard.aiTelemetry.col.queries')}:</span>{' '}
+              <span className="text-primary tabular-nums">{tp.queries.length}</span>
+            </span>
+            <span>
+              <span className="text-muted">{t('dashboard.aiTelemetry.col.engines')}:</span>{' '}
+              <span className="text-primary tabular-nums">{tp.engines.length}/10</span>
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button" onClick={() => onView(tp)}
+                  className="text-xs px-3 py-1.5 rounded-md"
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                           border: '1px solid var(--border-color)' }}>
+            {t('dashboard.aiTelemetry.actions.view')}
+          </button>
+          <button type="button" onClick={() => onEdit(tp)}
+                  className="text-xs px-3 py-1.5 rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)' }}>
+            {t('dashboard.aiTelemetry.actions.edit')}
+          </button>
+          <button type="button" onClick={() => onToggleEnabled(tp)}
+                  className="text-xs px-3 py-1.5 rounded-md"
+                  style={{ background: 'transparent',
+                           color: tp.enabled ? 'var(--text-muted)' : 'var(--accent-primary)',
+                           border: '1px solid var(--border-color)' }}>
+            {tp.enabled
+              ? t('dashboard.aiTelemetry.actions.disable')
+              : t('dashboard.aiTelemetry.actions.enable')}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
