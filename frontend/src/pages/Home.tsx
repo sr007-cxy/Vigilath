@@ -622,13 +622,19 @@ export function Home() {
         style={{ background: '#141418' }}
       >
         <div className="w-full max-w-5xl mx-auto">
-          {/* Logo — SVG 默认黑,深色 banner 上用 brightness-0 invert 翻成白 */}
-          <img
-            src="/image/logo.svg"
-            alt="Vigilath"
-            className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
-            draggable={false}
-          />
+          {/* Logo:图标 SVG 默认黑,深色 banner 上 brightness-0 invert 翻白;文字直接白色 CSS 渲染 */}
+          <div className="flex items-center gap-3 mb-10 select-none">
+            <img
+              src="/image/logo.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-12 sm:h-14 w-auto brightness-0 invert"
+              draggable={false}
+            />
+            <span className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+              Vigilath
+            </span>
+          </div>
 
 
           {/* Heading */}

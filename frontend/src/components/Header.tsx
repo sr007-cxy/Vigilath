@@ -106,13 +106,17 @@ export function Header() {
     >
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center" aria-label="Vigilath">
+          <Link to="/" className="flex items-center gap-2" aria-label="Vigilath">
             <img
               src="/image/logo.svg"
-              alt="Vigilath"
+              alt=""
+              aria-hidden="true"
               className="brand-logo h-8 md:h-9 w-auto select-none"
               draggable={false}
             />
+            <span className="text-xl md:text-2xl font-black tracking-tight text-primary select-none">
+              Vigilath
+            </span>
           </Link>
         </div>
 
