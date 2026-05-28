@@ -2269,43 +2269,6 @@ export function TopicEditor({
     } finally { setSaving(false); }
   };
 
-  // 2026-05-28 — 一键给历史 queries 启发式打 scene 标签.
-  // 调后端 /reclassify-queries,拿回新 Topic;同步把当前 suggestions 里对应 text 的 scene 也更新一遍,
-  // 这样 picker 立刻刷新 badge,不用等父组件重 fetch.
-  const [reclassifying, setReclassifying] = useState(false);
-  const [reclassifyMsg, setReclassifyMsg] = useState<string | null>(null);
-  const handleReclassify = async () => {
-    if (!initial?.id || reclassifying) return;
-    setReclassifying(true);
-    setReclassifyMsg(null);
-    try {
-      const updated = await topicProfileApi.reclassifyQueries(initial.id, token);
-      const sceneByText = new Map<string, SceneType>();
-      (updated.queries || []).forEach((qt, i) => {
-        const sc = (updated.query_scene_types || [])[i];
-        if (sc) sceneByText.set(qt, sc);
-      });
-      setSuggestions(prev => prev.map(q => {
-        const sc = sceneByText.get(q.text);
-        return sc ? { ...q, scene: sc } : q;
-      }));
-      // 重置 scene filter 让用户看到结果
-      setSceneFilter(null);
-      const dist: Record<SceneType, number> = { search: 0, qa: 0, intent: 0, brand: 0 };
-      sceneByText.forEach(v => { dist[v] += 1; });
-      setReclassifyMsg(
-        t('dashboard.aiTelemetry.form.reclassifyDone', {
-          n: sceneByText.size,
-          search: dist.search, qa: dist.qa, intent: dist.intent, brand: dist.brand,
-        }) || `已分类 ${sceneByText.size} 条`,
-      );
-    } catch (e: unknown) {
-      setReclassifyMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setReclassifying(false);
-    }
-  };
-
   const handleSuggest = async () => {
     const validSeeds = selectedSeedsForMining;
     if (validSeeds.length === 0 || suggesting) return;
@@ -2687,29 +2650,6 @@ export function TopicEditor({
                 </div>
               ) : (
                 <>
-                  {/* 2026-05-28 — 一键给历史 queries 启发式分类(可重跑) */}
-                  {!readOnly && initial?.id && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button" onClick={handleReclassify} disabled={reclassifying}
-                        className="px-3 py-1 rounded text-xs whitespace-nowrap"
-                        style={{
-                          background: 'var(--bg-input)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid var(--border-color)',
-                          opacity: reclassifying ? 0.5 : 1,
-                        }}
-                        title={t('dashboard.aiTelemetry.form.reclassifyHint') as string}
-                      >
-                        {reclassifying
-                          ? t('dashboard.aiTelemetry.form.reclassifyRunning')
-                          : t('dashboard.aiTelemetry.form.reclassifyBtn')}
-                      </button>
-                      {reclassifyMsg && (
-                        <span className="text-xs text-muted">{reclassifyMsg}</span>
-                      )}
-                    </div>
-                  )}
                   {/* 2026-05-28 — 4 维场景 filter:点 chip 单选一个场景查看,再点取消(回到全部) */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-muted">
