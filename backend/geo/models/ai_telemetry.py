@@ -436,6 +436,12 @@ class ClusterMeta(BaseModel):
 # Phase C — 审核固化:种子词 + query 的审核状态机
 ReviewStatus = str  # "pending" | "approved" | "rejected"
 
+# 2026-05-28 — 4 维场景扩展:同一 seed 并行调 4 套 LLM 模板产出 4 类长尾池
+# seed 本身是中性的,scene_type 只贴在产出的 QueryItem 上
+SceneType = Literal["search", "qa", "intent", "brand"]
+DEFAULT_SCENE: SceneType = "search"
+ALL_SCENES: tuple[SceneType, ...] = ("search", "qa", "intent", "brand")
+
 
 class SeedPromptItem(BaseModel):
     text: str
@@ -458,6 +464,9 @@ class QueryItem(BaseModel):
     selected: bool = True
     # 2026-05-20 — 用户当时从哪个种子提示词扩展出这条 query;空串表示 legacy 或没记录
     seed: str = ""
+    # 2026-05-28 — 4 维场景扩展产出的标签:search/qa/intent/brand
+    # legacy 数据反序列化时填默认 search
+    scene_type: SceneType = DEFAULT_SCENE
 
 
 # ─────────────── Phase D — 品牌资料(6 大模块) ──────────────
@@ -564,6 +573,9 @@ class MonitoredQueryItem(BaseModel):
     # 2026-05-20 — 这条 query 当时是从哪个种子词扩展出来的(候选阶段就有),
     # 选中入库时一并持久化,后续报告 / Queries 明细按种子分组渲染。
     seed: str = ""
+    # 2026-05-28 — 4 维场景标签(search/qa/intent/brand),前端从 SceneExpander 勾选时传入.
+    # legacy / 老 client 不传时由后端兜底成 search.
+    scene_type: SceneType = DEFAULT_SCENE
 
 
 class SelectedQueriesPayload(BaseModel):
@@ -596,8 +608,12 @@ class TopicProgressCell(BaseModel):
 class PublishPlanItem(BaseModel):
     """发文计划单行(GET 输出形态).
 
-    持久化字段:id / seq / publish_date / query / template_id / platform / note。
+    持久化字段:id / seq / publish_date / seed / query / template_id / platform / note。
     其余字段是 GET 时实时聚合 / 联表查出来的派生值,不进 publishing_plan_json。
+
+    seed-based 新流程:每个 approved 种子 × 5 种 system 模板 = 5 行;5 行落同一天.
+    legacy query-based:每条 monitored query 一行,query 非空、seed 为 None。
+    生成内容时优先用 seed(若空则 fallback 到 query),命中率聚合也按 seed 优先.
 
     优先级:
       - high: 监测命中率 0%(AI 完全没提及品牌,要补内容)
@@ -608,7 +624,8 @@ class PublishPlanItem(BaseModel):
     id: str                               # uuid;前端编辑稳定 id,也用来回写 doc.plan_item_id
     seq: int = 0                          # 显示顺序
     publish_date: str                     # YYYY-MM-DD
-    query: str
+    seed: Optional[str] = None            # 种子提示词文本(seed-based 行;legacy 行为 None)
+    query: str = ""                       # 监测 query(legacy 行非空;seed-based 行可空)
     template_id: Optional[int] = None     # 旧数据 fallback 时为 None
     platform: Optional[str] = None
     note: Optional[str] = None
@@ -629,12 +646,15 @@ class PublishPlanItem(BaseModel):
 class PlanItemDraft(BaseModel):
     """PUT /execution-plan 时前端送进来的发文行草稿.
 
-    id 可选:为 None 表示新增行,后端补 uuid。其余字段必填(校验在端点里做)。
+    id 可选:为 None 表示新增行,后端补 uuid.seed / query 至少有一个非空.
+    seed-based 新行:seed 非空,query 留空;
+    legacy 单 query 行:query ∈ monitored,seed 留空.
     """
     id: Optional[str] = None
     seq: int = 0
     publish_date: str                     # YYYY-MM-DD
-    query: str
+    seed: Optional[str] = None
+    query: str = ""
     template_id: int
     platform: str
     note: Optional[str] = None
@@ -878,6 +898,8 @@ class TopicOut(BaseModel):
     # 2026-05-26 — 跟 queries 同长的 locked 标记。locked=True 时前端 picker 不可取消勾选。
     # 当前唯一锁源:is_seed=True 的 query(种子原文 query 强制入监测)。
     query_locked: list[bool] = Field(default_factory=list)
+    # 2026-05-28 — 跟 queries 同长的场景标签;legacy / 未记录的位为 "search"
+    query_scene_types: list[SceneType] = Field(default_factory=list)
     clusters: list[ClusterMeta]
     seed_prompts: list[SeedPromptItem]
     engines: list[str]
@@ -919,6 +941,7 @@ class TopicOut(BaseModel):
         query_seeds: list[str] = []
         query_is_seed: list[bool] = []
         query_locked: list[bool] = []
+        query_scene_types: list[str] = []
         for q in raw:
             if isinstance(q, dict):
                 t = q.get("text") or ""
@@ -934,6 +957,8 @@ class TopicOut(BaseModel):
                     # locked 默认跟 is_seed 走 — 种子原文 query 强制锁定;
                     # 显式给了 locked 字段就尊重之
                     query_locked.append(bool(q.get("locked", q.get("is_seed", False))))
+                    raw_scene = q.get("scene_type") or "search"
+                    query_scene_types.append(raw_scene if raw_scene in ALL_SCENES else "search")
             elif isinstance(q, str):
                 queries.append(q)
                 cluster_ids.append(-1)
@@ -942,6 +967,7 @@ class TopicOut(BaseModel):
                 query_seeds.append("")
                 query_is_seed.append(False)
                 query_locked.append(False)
+                query_scene_types.append("search")
         clusters_raw = json.loads(r.clusters_json or "[]")
         clusters = [ClusterMeta(**c) for c in clusters_raw if isinstance(c, dict)]
         seeds_raw = json.loads(getattr(r, "seed_prompts_json", None) or "[]")
@@ -969,6 +995,7 @@ class TopicOut(BaseModel):
             query_seeds=query_seeds,
             query_is_seed=query_is_seed,
             query_locked=query_locked,
+            query_scene_types=query_scene_types,
             clusters=clusters,
             seed_prompts=seeds,
             engines=json.loads(r.engines_json or "[]"),

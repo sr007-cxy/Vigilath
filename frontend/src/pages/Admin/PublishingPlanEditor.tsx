@@ -37,6 +37,7 @@ const fromPlanItem = (it: PublishPlanItem): RowDraft => ({
   localKey: it.id,
   seq: it.seq,
   publish_date: it.publish_date,
+  seed: it.seed || '',
   query: it.query,
   template_id: it.template_id ?? null,
   platform: it.platform || '',
@@ -104,12 +105,15 @@ export function PublishingPlanEditor({
     const defaultTmpl = templates.find(t => t.scope === 'system') || templates[0];
     const defaultPlat = defaultTmpl?.target_platforms?.[0] || '公众号';
     const localKey = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // 新版默认 seed-based:种子优先,query 留空(运营手填种子文本).
+    // 老 legacy 行管理员若想加,把 query 切到 monitored 列表中.
     return {
       id: undefined,
       localKey,
       seq: rows.length,
       publish_date: date,
-      query: monitored[0] || '',
+      seed: last?.seed || '',
+      query: '',
       template_id: defaultTmpl ? defaultTmpl.id : null,
       platform: defaultPlat,
       note: '',
@@ -144,7 +148,14 @@ export function PublishingPlanEditor({
     const monSet = new Set(monitored);
     const drafts: PlanItemDraft[] = [];
     for (const r of rows) {
-      if (!r.query || !monSet.has(r.query)) {
+      const seed = r.seed.trim();
+      const query = r.query.trim();
+      if (!seed && !query) {
+        setErr(`第 ${r.seq + 1} 行种子和 query 至少要填一个`);
+        return null;
+      }
+      // legacy 行(只填 query)仍要求在监测列表里;seed-based 行(seed 非空)跳过该校验.
+      if (!seed && query && !monSet.has(query)) {
         setErr(`第 ${r.seq + 1} 行 query 不在监测列表里`);
         return null;
       }
@@ -160,7 +171,8 @@ export function PublishingPlanEditor({
         id: r.id || null,
         seq: r.seq,
         publish_date: r.publish_date,
-        query: r.query,
+        seed: seed || null,
+        query,
         template_id: r.template_id,
         platform: r.platform,
         note: r.note || null,
@@ -240,7 +252,8 @@ export function PublishingPlanEditor({
             <tr style={{ color: 'var(--text-muted)' }}>
               <th className="py-2 px-1 text-left">#</th>
               <th className="py-2 px-1 text-left">日期</th>
-              <th className="py-2 px-1 text-left">Query</th>
+              <th className="py-2 px-1 text-left">种子</th>
+              <th className="py-2 px-1 text-left">Query (legacy)</th>
               <th className="py-2 px-1 text-left">命中%</th>
               <th className="py-2 px-1 text-left">模板</th>
               <th className="py-2 px-1 text-left">平台</th>
@@ -296,13 +309,23 @@ export function PublishingPlanEditor({
                            onChange={e => updateRow(r.localKey, { publish_date: e.target.value })} />
                   </td>
                   <td className="py-1.5 px-1">
-                    <select className="rounded-md px-1.5 py-1 w-[220px]"
+                    <input type="text"
+                           className="rounded-md px-1.5 py-1 w-[200px]"
+                           style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                    border: '1px solid var(--border-color)' }}
+                           placeholder="种子提示词文本…"
+                           value={r.seed}
+                           onClick={e => e.stopPropagation()}
+                           onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
+                  </td>
+                  <td className="py-1.5 px-1">
+                    <select className="rounded-md px-1.5 py-1 w-[160px]"
                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
                                      border: '1px solid var(--border-color)' }}
                             value={r.query}
                             onClick={e => e.stopPropagation()}
                             onChange={e => updateRow(r.localKey, { query: e.target.value })}>
-                      <option value="">— 选 query —</option>
+                      <option value="">— 留空(seed-based)—</option>
                       {monitored.map(q => <option key={q} value={q}>{q}</option>)}
                     </select>
                   </td>

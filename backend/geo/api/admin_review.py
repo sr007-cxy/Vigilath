@@ -719,16 +719,38 @@ def _pick_default_template_id(db: Session) -> Optional[int]:
     return t.id if t else None
 
 
-def _seed_initial_plan_items(
+def _pick_template_kinds_per_seed(db: Session, n: int = 5) -> list[ContentTemplateORM]:
+    """挑 N 个 system 范围、kind 互不相同的模板 — seed × 模板 发文表用.
+
+    取前 N 个唯一 kind 的 system 模板,按 id 升序优先.system 模板不够时返回更短列表;
+    全空时返回 [],由调用方 fallback 到 legacy.
+    """
+    sys_templates = (
+        db.query(ContentTemplateORM)
+          .filter(ContentTemplateORM.scope == "system")
+          .order_by(ContentTemplateORM.id.asc())
+          .all()
+    )
+    seen_kinds: set[str] = set()
+    picked: list[ContentTemplateORM] = []
+    for tmpl in sys_templates:
+        if tmpl.kind in seen_kinds:
+            continue
+        seen_kinds.add(tmpl.kind)
+        picked.append(tmpl)
+        if len(picked) >= n:
+            break
+    return picked
+
+
+def _legacy_query_initial_plan_items(
     db: Session, topic_id: int, monitored: list[str],
 ) -> list[dict]:
-    """draft plan 第一次读时,按 query 命中率排序生成种子发文行.
+    """旧版:按 query 命中率排序,每条 query 一行,1 天 1 篇.
 
-    返回 publishing_plan_json 内部存储格式(只放持久化字段).
+    新版没有 system 模板 / 没有 approved 种子 时 fallback 到这里.
     """
     import uuid as _uuid
-
-    # 命中率聚合 — 不要在这里持久化,只用来排序
     cells = (
         db.query(AiTelemetryQueryHitORM)
           .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
@@ -745,7 +767,7 @@ def _seed_initial_plan_items(
     def _priority_rank(q: str) -> int:
         agg = by_query.get(q, {"runs": 0, "hits": 0})
         if agg["runs"] <= 0:
-            return 0       # 没跑过视为最高优先(很可能命中率 0)
+            return 0
         cov = agg["hits"] / agg["runs"] * 100
         if cov == 0: return 0
         if cov < 50: return 1
@@ -773,11 +795,77 @@ def _seed_initial_plan_items(
             "id": str(_uuid.uuid4()),
             "seq": idx,
             "publish_date": (today + timedelta(days=idx)).isoformat(),
+            "seed": None,
             "query": q,
             "template_id": default_tmpl_id,
             "platform": default_platform,
             "note": None,
         })
+    return items
+
+
+def _seed_initial_plan_items(
+    db: Session, topic_id: int, monitored: list[str],
+) -> list[dict]:
+    """seed × 模板 的发文计划 — 每个 approved 种子 × 5 种不同 kind 的 system 模板.
+
+    每天落 5 篇(items_per_day),1 个种子的 5 篇全部排在同一天:
+      day 0:seed[0] × 5 模板
+      day 1:seed[1] × 5 模板
+      ...
+
+    没 approved 种子 / 没 system 模板 时 fallback 到 _legacy_query_initial_plan_items.
+    返回 publishing_plan_json 内部存储格式(只放持久化字段).
+    """
+    import uuid as _uuid
+
+    picked_templates = _pick_template_kinds_per_seed(db, n=5)
+    if not picked_templates:
+        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+
+    topic = db.get(AiTelemetryTopicORM, topic_id)
+    if not topic:
+        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+    try:
+        seeds_raw = json.loads(topic.seed_prompts_json or "[]")
+    except Exception:  # noqa: BLE001
+        seeds_raw = []
+    approved_seeds = [
+        str(s.get("text") or "").strip()
+        for s in seeds_raw
+        if isinstance(s, dict) and s.get("status") == "approved" and s.get("text")
+    ]
+    if not approved_seeds:
+        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+
+    # 默认 platform — 走模板自带的 target_platforms 第一个,空则 fallback.
+    def _default_platform(tmpl: ContentTemplateORM) -> str:
+        try:
+            platforms = json.loads(tmpl.target_platforms_json or "[]")
+        except Exception:  # noqa: BLE001
+            platforms = []
+        if isinstance(platforms, list) and platforms:
+            return str(platforms[0])
+        return DEFAULT_PUBLISH_PLATFORMS[0]
+
+    today = datetime.utcnow().date()
+    items_per_day = len(picked_templates)   # 模板数 = 每天篇数,通常 5
+    items: list[dict] = []
+    seq = 0
+    for seed_text in approved_seeds:
+        for tmpl in picked_templates:
+            day_offset = seq // items_per_day
+            items.append({
+                "id": str(_uuid.uuid4()),
+                "seq": seq,
+                "publish_date": (today + timedelta(days=day_offset)).isoformat(),
+                "seed": seed_text,
+                "query": "",
+                "template_id": tmpl.id,
+                "platform": _default_platform(tmpl),
+                "note": None,
+            })
+            seq += 1
     return items
 
 
@@ -830,8 +918,16 @@ def _enrich_publishing_items(
     out: list[PublishPlanItem] = []
     for it in sorted(items, key=lambda x: (x.get("seq") or 0, x.get("publish_date") or "")):
         q = str(it.get("query") or "")
-        agg = by_query.get(q, {"runs": 0, "hits": 0})
-        runs, hits = agg["runs"], agg["hits"]
+        seed = str(it.get("seed") or "")
+        # 覆盖率:legacy 行用 query 反查;seed-based 行用「种子下所有 query」的聚合.
+        if seed:
+            runs = sum(v["runs"] for k, v in by_query.items()
+                       if k in monitored and _query_seed_of(monitored, k) == seed)
+            hits = sum(v["hits"] for k, v in by_query.items()
+                       if k in monitored and _query_seed_of(monitored, k) == seed)
+        else:
+            agg = by_query.get(q, {"runs": 0, "hits": 0})
+            runs, hits = agg["runs"], agg["hits"]
         cov = round(hits / runs * 100, 1) if runs > 0 else 0.0
         if cov == 0:
             priority = "high"
@@ -841,7 +937,7 @@ def _enrich_publishing_items(
             priority = "low"
 
         item_id = str(it.get("id") or "")
-        d = doc_by_item.get(item_id) or doc_by_query.get(q)
+        d = doc_by_item.get(item_id) or (doc_by_query.get(q) if q else None)
         tmpl = tmpl_by_id.get(it.get("template_id")) if it.get("template_id") else None
         suggested: list[str] = []
         if tmpl:
@@ -858,6 +954,7 @@ def _enrich_publishing_items(
             id=item_id,
             seq=int(it.get("seq") or 0),
             publish_date=str(it.get("publish_date") or ""),
+            seed=seed or None,
             query=q,
             template_id=it.get("template_id"),
             platform=it.get("platform"),
@@ -872,6 +969,13 @@ def _enrich_publishing_items(
             suggested_platforms=suggested,
         ))
     return out
+
+
+def _query_seed_of(_monitored: list[str], _query: str) -> str:
+    """[占位] query → seed 反查.目前 topic.queries_json/query_seeds 关系没拉进来,
+    返回空串(seed-based 覆盖率回退到「按种子算 0%」).日后需要时联表查 query_seeds.
+    """
+    return ""
 
 
 def _build_publishing_plan(
@@ -1007,7 +1111,8 @@ def _validate_plan_items(
 ) -> list[dict]:
     """PUT /execution-plan 入参校验 + 转存储格式(list[dict]).
 
-    - query 必 ∈ monitored
+    - seed 或 query 至少有一个非空
+    - 若 query 非空,必 ∈ monitored;seed-based 行允许 query 为空
     - template_id 必存在
     - platform 必 ∈ template.target_platforms (空列表则不限制)
     返回写回 publishing_plan_json 的 list[dict].
@@ -1016,8 +1121,14 @@ def _validate_plan_items(
     monitored_set = set(monitored)
     out: list[dict] = []
     for it in items:
-        q = it.query.strip()
-        if q not in monitored_set:
+        q = (it.query or "").strip()
+        seed = (it.seed or "").strip()
+        if not q and not seed:
+            raise HTTPException(422, {
+                "code": "MISSING_TOPIC", "field": "seed",
+                "message": "seed 与 query 至少要填一个",
+            })
+        if q and q not in monitored_set:
             raise HTTPException(422, {
                 "code": "INVALID_QUERY", "field": "query",
                 "message": f"query 不在监测列表里:{q}",
@@ -1041,6 +1152,7 @@ def _validate_plan_items(
             "id": it.id or str(_uuid.uuid4()),
             "seq": it.seq,
             "publish_date": it.publish_date,
+            "seed": seed or None,
             "query": q,
             "template_id": it.template_id,
             "platform": it.platform,

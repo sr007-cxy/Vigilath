@@ -101,6 +101,8 @@ export interface PublishPlanItem {
   id: string;
   seq: number;
   publish_date: string;
+  // seed-based 新流程:seed 非空,query 留空;legacy:seed 为 null,query 非空.
+  seed?: string | null;
   query: string;
   template_id?: number | null;
   platform?: string | null;
@@ -120,7 +122,8 @@ export interface PlanItemDraft {
   id?: string | null;                   // 新行可不传 id,后端补
   seq: number;
   publish_date: string;
-  query: string;
+  seed?: string | null;                 // seed-based 新行非空;legacy 留空 (二选一)
+  query: string;                        // legacy 行 ∈ monitored;seed-based 行允许 ""
   template_id: number;
   platform: string;
   note?: string | null;

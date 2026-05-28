@@ -411,7 +411,7 @@ function PublishingPlanSection({
           <thead>
             <tr className="text-left" style={{ color: 'var(--text-muted)' }}>
               <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.date')}</th>
-              <th className="py-2 px-2 font-medium">{t('admin.executionPlan.col.query')}</th>
+              <th className="py-2 px-2 font-medium">主题(种子 / query)</th>
               <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.coverage')}</th>
               <th className="py-2 px-2 font-medium text-center">{t('admin.executionPlan.col.priority')}</th>
               <th className="py-2 px-2 font-medium">模板/平台</th>
@@ -430,9 +430,17 @@ function PublishingPlanSection({
                     {it.publish_date}
                     <span className="text-muted ml-1">(#{it.seq + 1})</span>
                   </td>
-                  <td className="py-2 px-2 text-primary max-w-[280px] truncate cursor-pointer" title={it.query}
+                  <td className="py-2 px-2 max-w-[280px] truncate cursor-pointer"
+                      title={it.seed || it.query}
                       onClick={() => navigate(`/workbench/topics/${plan.topic_id}/edit?step=6`)}>
-                    {it.query}
+                    {it.seed ? (
+                      <>
+                        <span className="text-primary">{it.seed}</span>
+                        <span className="text-[10px] text-muted ml-1">种子</span>
+                      </>
+                    ) : (
+                      <span className="text-primary">{it.query}</span>
+                    )}
                   </td>
                   <td className="py-2 px-2 text-center tabular-nums">
                     <span style={{ color: it.coverage_pct === 0 ? '#ef4444'
