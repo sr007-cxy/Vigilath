@@ -1202,21 +1202,68 @@ async def suggest_queries(
     payload: dict,
     current_user: User = Depends(get_current_user),
 ):
-    """种子主题 → DeepSeek 候选 query,前端 picker 多选回填。
+    """种子主题 → 候选 query(4 维场景扩展).前端 picker 多选回填。
 
-    body: {seed, count?=20, target?, aliases?=[], industry?}
-    resp: {seed, queries: [str, ...]}
+    2026-05-28 起改成本地 4 维 fan-out(同 /topics/{id}/expand-queries),不再透传 telemetry-service.
+    建话题阶段还没有 topic id,所以这个端点比 /expand-queries 早一步用,二者共享 query_expander.
 
-    target 非空时 telemetry-service 走 GEO-aware prompt(候选不含 target / aliases 字眼)。
+    body:
+      seed:              str   种子词
+      scenes:            list  ["search","qa","intent","brand"](默认全 4)
+      count_per_scene:   int   每场景产出条数,默认 50(每维 50 × 4 维 = 200)
+      target:            str   品牌全称(brand 场景需要,空则跳过 brand)
+      aliases:           list  品牌别名
+      industry:          str   行业上下文
+      service_geo:       str   服务地域(可作为关键词前缀)
+      count:             int   兼容老调用方:若没传 count_per_scene 则用 count/4
+
+    resp:
+      {
+        "seed":  str,
+        "total_count": int,
+        "scenes": {
+          "search": {"queries":[...], "model":"...", "error":null|"..."},
+          "qa":     {...},
+          "intent": {...},
+          "brand":  {...}
+        },
+        // 老调用方兼容:queries 字段是 4 场景产出的平铺合集,顺序 search→qa→intent→brand
+        "queries": [str, ...]
+      }
     """
     seed = (payload.get("seed") or "").strip()
     if not seed:
         raise HTTPException(400, "seed cannot be empty")
-    try:
-        count = int(payload.get("count", 200))
-    except (TypeError, ValueError):
-        count = 200
-    count = max(5, min(count, 300))
+
+    # scene 子集校验
+    raw_scenes = payload.get("scenes")
+    if raw_scenes is None:
+        scenes: list[str] = list(ALL_SCENES)
+    elif isinstance(raw_scenes, list):
+        scenes = [s for s in raw_scenes if isinstance(s, str)]
+    else:
+        raise HTTPException(400, "scenes must be an array")
+    invalid = [s for s in scenes if s not in ALL_SCENES]
+    if invalid:
+        raise HTTPException(400, f"invalid scenes: {invalid}")
+    if not scenes:
+        raise HTTPException(400, "at least one scene must be selected")
+
+    # 每场景产出数:default 50,兼容老 count
+    cap_per_scene = max(5, MAX_EXPANSION_CANDIDATES // len(ALL_SCENES))
+    if "count_per_scene" in payload:
+        try:
+            count_per_scene = int(payload["count_per_scene"])
+        except (TypeError, ValueError):
+            count_per_scene = cap_per_scene
+    elif "count" in payload:
+        try:
+            count_per_scene = max(5, int(payload["count"]) // len(ALL_SCENES))
+        except (TypeError, ValueError):
+            count_per_scene = cap_per_scene
+    else:
+        count_per_scene = cap_per_scene
+    count_per_scene = max(5, min(count_per_scene, cap_per_scene))
 
     target = (payload.get("target") or "").strip()
     industry = (payload.get("industry") or "").strip()
@@ -1226,27 +1273,54 @@ async def suggest_queries(
         aliases_in = []
     aliases = [str(a).strip() for a in aliases_in if str(a).strip()][:20]
 
-    body = {
-        "seed": seed, "count": count,
-        "target": target, "aliases": aliases, "industry": industry,
-        "service_geo": service_geo,
-    }
-    url = f"{TELEMETRY_SERVICE_URL}/suggest-queries"
-    try:
-        # 200 条候选 DeepSeek 端 30-90s,留 200s 余量
-        async with httpx.AsyncClient(timeout=200.0) as client:
-            r = await client.post(url, json=body)
-    except httpx.HTTPError as e:
-        log.warning("telemetry-service suggest-queries failed: %s", e)
-        raise HTTPException(502, f"telemetry-service unavailable: {e}")
+    # brand 场景在 target 为空时无意义 —— 跳过
+    runnable_scenes: list[str] = []
+    scene_results: dict[str, dict] = {}
+    for s in scenes:
+        if s == "brand" and not target:
+            scene_results[s] = {
+                "queries": [],
+                "error": "brand scene requires a brand name (target field is empty)",
+            }
+        else:
+            runnable_scenes.append(s)
 
-    if r.status_code != 200:
-        # 透传 telemetry-service 的错误结构(detail.code / detail.message)
-        try:
-            raise HTTPException(r.status_code, r.json().get("detail") or r.text)
-        except ValueError:
-            raise HTTPException(r.status_code, r.text)
-    return r.json()
+    # 4 路并行 fan-out
+    if runnable_scenes:
+        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+            tasks = [
+                expand_one_scene(
+                    scene=s, seed=seed, count=count_per_scene,
+                    target=target, aliases=aliases,
+                    industry=industry, service_geo=service_geo,
+                    client=client,
+                )
+                for s in runnable_scenes
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        for s, res in zip(runnable_scenes, results):
+            if isinstance(res, Exception):
+                scene_results[s] = {"queries": [], "error": str(res)[:300]}
+            else:
+                scene_results[s] = res
+
+    # 聚合:每条 query 打上 scene 字段(供前端在 picker 上分组渲染),并提供平铺 queries 列表保 老调用方兼容
+    flat_queries: list[dict] = []
+    total_count = 0
+    for s in ALL_SCENES:
+        info = scene_results.get(s) or {}
+        qs = info.get("queries") or []
+        for q in qs:
+            flat_queries.append({"text": q, "score": 0, "sources": [], "scene": s})
+        total_count += len(qs)
+
+    return {
+        "seed": seed,
+        "total_count": total_count,
+        "scenes": scene_results,
+        # 老调用方平铺数组兼容:每项含 scene 字段
+        "queries": flat_queries,
+    }
 
 
 @router.post("/topics/{topic_id}/expand-queries")

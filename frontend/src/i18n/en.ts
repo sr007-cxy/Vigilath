@@ -2293,6 +2293,8 @@ const en = {
                 "queriesFilterCount": "{{shown}} of {{total}}",
                 "sortByScoreOn": "By score",
                 "sortByScoreOff": "LLM order",
+                "sceneFilterLabel": "Filter by scene:",
+                "sceneFilterAll": "All",
                 "clusterExpand": "Expand",
                 "clusterCollapse": "Collapse",
                 "clusterPickAll": "Pick all in group",

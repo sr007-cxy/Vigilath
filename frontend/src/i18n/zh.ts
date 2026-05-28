@@ -2299,6 +2299,8 @@ const zh = {
                 "queriesFilterCount": "显示 {{shown}} / {{total}}",
                 "sortByScoreOn": "按评分",
                 "sortByScoreOff": "原顺序",
+                "sceneFilterLabel": "按场景筛选:",
+                "sceneFilterAll": "全部",
                 "clusterExpand": "展开",
                 "clusterCollapse": "收起",
                 "clusterPickAll": "全选此组",

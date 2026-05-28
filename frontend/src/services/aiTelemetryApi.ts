@@ -170,6 +170,8 @@ export interface QueryCandidate {
   // 2026-05-20 — 这条候选是哪个种子提示词扩展出来的。
   // picker 用它做"按种子分组渲染"(不再用 cluster_id)。
   seed?: string;
+  // 2026-05-28 — 4 维场景标签;新后端 /suggest-queries v2 每条候选都带,前端按场景分组/打 badge.
+  scene?: SceneType;
 }
 
 export interface ClusterMeta {
@@ -587,12 +589,17 @@ export const aiTelemetryApi = {
       // 非空时 prompt 会把所有 query 的地点维度锁定在该地域(+ 全国 / 跨地区),
       // 不再随机扩到其它城市/国家。
       service_geo?: string;
+      // 2026-05-28 — 4 维场景扩展;不传默认全 4 维 fan-out.
+      scenes?: SceneType[];
+      // 每场景产出条数(每维 ≤50,4 维合 ≤200).
+      countPerScene?: number;
     },
     token: string,
   ): Promise<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }> {
     if (isMockMode()) {
       // mock: 拼出 args.count 条假候选 + 5 簇 + 递减分数,够前端 picker 调试
       const stems = ['是什么', '怎么样', '推荐', '对比', '替代方案', '价格', '评价', '案例', '使用场景', '行业应用'];
+      const scenesArr: SceneType[] = ['search', 'qa', 'intent', 'brand'];
       const out: QueryCandidate[] = [];
       const clusterLabels = ['认知与定义', '对比与差异', '价格与费用', '案例与口碑', '使用与场景'];
       for (let i = 0; out.length < args.count; i++) {
@@ -601,6 +608,7 @@ export const aiTelemetryApi = {
           score: Math.max(20, 90 - i),
           sources: i % 4 === 0 ? ['suggest:baidu'] : ['llm:deepseek'],
           cluster_id: i % 5,
+          scene: scenesArr[i % scenesArr.length],
         });
       }
       const clusters: ClusterMeta[] = clusterLabels.map((l, i) => ({
@@ -613,7 +621,12 @@ export const aiTelemetryApi = {
     }
     return request<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }>(
       'POST', '/suggest-queries', token, {
-        seed: args.seed, count: args.count,
+        seed: args.seed,
+        count: args.count,
+        // 后端 v2 优先用 count_per_scene;传 countPerScene 时直接生效,
+        // 否则后端用 count/4 兜底,保 老调用方语义稳定.
+        ...(args.countPerScene ? { count_per_scene: args.countPerScene } : {}),
+        ...(args.scenes ? { scenes: args.scenes } : {}),
         target: args.target || '',
         aliases: args.aliases || [],
         industry: args.industry || '',

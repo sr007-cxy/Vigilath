@@ -30,7 +30,17 @@ import {
   type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
   type QueryCandidate,
   type SeedPrompt, type ReviewStatus,
+  type SceneType,
 } from '../../services/aiTelemetryApi';
+
+// 2026-05-28 — 4 维场景标签的展示元数据(label 走 i18n,color 内联避免跨主题串色)
+const SCENE_COLORS: Record<SceneType, string> = {
+  search: '#6366f1',   // 蓝紫
+  qa: '#10b981',       // 绿
+  intent: '#f59e0b',   // 黄
+  brand: '#ec4899',    // 粉
+};
+const SCENE_KEYS: SceneType[] = ['search', 'qa', 'intent', 'brand'];
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell,
@@ -2080,6 +2090,8 @@ export function TopicEditor({
   const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
   const [queryFilter, setQueryFilter] = useState('');
   const [sortByScore, setSortByScore] = useState(true);
+  // 2026-05-28 — 候选 scene filter:null 表示全显示,否则只显示选中的场景
+  const [sceneFilter, setSceneFilter] = useState<SceneType | null>(null);
 
   const queries = useMemo(() => Array.from(picked).slice(0, QUERY_MAX_PICK), [picked]);
   const aliases = useMemo(
@@ -2087,15 +2099,27 @@ export function TopicEditor({
     [aliasesText],
   );
 
+  // 4 维场景计数 — 给场景 filter 按钮上的徽章用,显示每场景在 suggestions 池中的条数
+  const sceneCounts = useMemo<Record<SceneType, number>>(() => {
+    const c: Record<SceneType, number> = { search: 0, qa: 0, intent: 0, brand: 0 };
+    for (const q of suggestions) {
+      const s = q.scene;
+      if (s && s in c) c[s] += 1;
+    }
+    return c;
+  }, [suggestions]);
+
   const filteredSuggestions = useMemo(() => {
     const f = queryFilter.trim().toLowerCase();
-    let out = f ? suggestions.filter(q => q.text.toLowerCase().includes(f)) : suggestions;
+    let out = suggestions;
+    if (sceneFilter) out = out.filter(q => (q.scene || 'search') === sceneFilter);
+    if (f) out = out.filter(q => q.text.toLowerCase().includes(f));
     if (sortByScore) {
       // 纯按评分降序;不再把已勾选项拉到顶部,免得用户每次勾/取消都看到位置漂移
       out = [...out].sort((a, b) => b.score - a.score);
     }
     return out;
-  }, [suggestions, queryFilter, sortByScore]);
+  }, [suggestions, queryFilter, sortByScore, sceneFilter]);
 
   // 按种子提示词分组渲染。组顺序:先按 `seeds`(用户编辑器里现存的种子),再补
   // suggestions 里出现但 seeds 没列的(防止数据漂移)。
@@ -2623,6 +2647,47 @@ export function TopicEditor({
                 </div>
               ) : (
                 <>
+                  {/* 2026-05-28 — 4 维场景 filter:点 chip 单选一个场景查看,再点取消(回到全部) */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted">
+                      {t('dashboard.aiTelemetry.form.sceneFilterLabel')}
+                    </span>
+                    <button
+                      type="button" onClick={() => setSceneFilter(null)}
+                      className="px-2 py-0.5 rounded-full text-xs"
+                      style={{
+                        background: sceneFilter === null ? 'var(--accent-primary)' : 'var(--bg-input)',
+                        color: sceneFilter === null ? '#fff' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      {t('dashboard.aiTelemetry.form.sceneFilterAll')}
+                      <span className="ml-1 opacity-70">({suggestions.length})</span>
+                    </button>
+                    {SCENE_KEYS.map(s => {
+                      const c = sceneCounts[s];
+                      const isActive = sceneFilter === s;
+                      const color = SCENE_COLORS[s];
+                      return (
+                        <button
+                          key={s} type="button"
+                          onClick={() => setSceneFilter(isActive ? null : s)}
+                          disabled={c === 0}
+                          className="px-2 py-0.5 rounded-full text-xs"
+                          style={{
+                            background: isActive ? color : `${color}1a`,
+                            color: isActive ? '#fff' : color,
+                            border: `1px solid ${color}55`,
+                            opacity: c === 0 ? 0.4 : 1,
+                            cursor: c === 0 ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {t(`topic.profile.monitor.scene.${s}.label`)}
+                          <span className="ml-1 opacity-80">({c})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="text" value={queryFilter} onChange={e => setQueryFilter(e.target.value)}
@@ -2691,6 +2756,19 @@ export function TopicEditor({
                                 title={q.sources.join(', ')}
                               >
                                 {q.score}
+                              </span>
+                            )}
+                            {/* 2026-05-28 — 4 维场景 badge */}
+                            {q.scene && (
+                              <span
+                                className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium"
+                                style={{
+                                  background: `${SCENE_COLORS[q.scene]}22`,
+                                  color: SCENE_COLORS[q.scene],
+                                }}
+                                title={t(`topic.profile.monitor.scene.${q.scene}.label`) as string}
+                              >
+                                {t(`topic.profile.monitor.scene.${q.scene}.label`)}
                               </span>
                             )}
                             <span className="break-all flex-1">{q.text}</span>
