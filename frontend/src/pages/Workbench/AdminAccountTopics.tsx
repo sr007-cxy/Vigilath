@@ -210,7 +210,7 @@ export function AdminAccountTopics() {
           {t('workbench.adminAccountTopics.emptyHint')}
         </div>
       ) : (
-        <ul className="grid gap-3">
+        <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {topics.map(tp => {
             // 「是否启动过」用 last_run_at 推断:approve_topic / start_topic / rerun 都会拿
             // run_id,有 last_run_at 说明至少触发过一次跑批.老 approved 主题(admin 直建,
