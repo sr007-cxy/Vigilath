@@ -2453,7 +2453,8 @@ const zh = {
               "sourceFilter": {
                 "all": "全部",
                 "ai": "AI 生成",
-                "user": "用户提交"
+                "user": "用户提交",
+                "manual": "手动添加"
               },
               "statsCard": {
                 "published": "已发布",
@@ -3088,7 +3089,8 @@ const zh = {
               "sourceFilter": {
                 "all": "全部",
                 "ai": "AI 生成",
-                "user": "用户提交"
+                "user": "用户提交",
+                "manual": "手动添加"
               }
             },
             "solution": {

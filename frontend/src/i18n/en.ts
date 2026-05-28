@@ -2447,7 +2447,8 @@ const en = {
               "sourceFilter": {
                 "all": "All",
                 "ai": "AI generated",
-                "user": "User submitted"
+                "user": "User submitted",
+                "manual": "Manual"
               },
               "statsCard": {
                 "published": "Published",
@@ -3082,7 +3083,8 @@ const en = {
               "sourceFilter": {
                 "all": "All",
                 "ai": "AI",
-                "user": "User"
+                "user": "User",
+                "manual": "Manual"
               }
             },
             "solution": {
