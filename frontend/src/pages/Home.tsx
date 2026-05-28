@@ -622,16 +622,14 @@ export function Home() {
         style={{ background: '#141418' }}
       >
         <div className="w-full max-w-5xl mx-auto">
-          {/* Logo */}
-          <picture>
-            <source srcSet="/image/logo.webp" type="image/webp" />
-            <img
-              src="/image/logo.png"
-              alt="Vigilath"
-              className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
-              draggable={false}
-            />
-          </picture>
+          {/* Logo — SVG 默认黑,深色 banner 上用 brightness-0 invert 翻成白 */}
+          <img
+            src="/image/logo.svg"
+            alt="Vigilath"
+            className="h-12 sm:h-14 w-auto mb-10 select-none brightness-0 invert"
+            draggable={false}
+          />
+
 
           {/* Heading */}
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 text-white">

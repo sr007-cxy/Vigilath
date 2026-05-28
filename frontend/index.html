@@ -24,9 +24,8 @@
   <link rel="alternate" type="application/rss+xml" title="Vigilath RSS Feed" href="/feed.xml" />
 
   <!-- 预加载首屏 logo 的 webp(46 KB,Home.tsx + Header.tsx 都用到)。
-       带 type="image/webp":不支持 webp 的老浏览器会忽略这条 preload,
-       走 <picture> 里的 PNG fallback,不会重复拉两份。 -->
-  <link rel="preload" href="/image/logo.webp" as="image" type="image/webp" />
+       SVG 矢量 logo,所有现代浏览器原生支持. -->
+  <link rel="preload" href="/image/logo.svg" as="image" type="image/svg+xml" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
