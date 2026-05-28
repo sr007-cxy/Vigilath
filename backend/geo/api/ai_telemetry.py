@@ -957,6 +957,71 @@ def update_selected_queries(
     return TopicOut.from_orm_row(t)
 
 
+@router.post("/topics/{topic_id}/reclassify-queries", response_model=TopicOut)
+def reclassify_queries(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """2026-05-28 — 把 topic 的历史 queries 用启发式重新打 scene_type 标签.
+
+    用 query_expander.classify_query(text, target, aliases) 给每条 query 一刀切归类.
+    - text 含 target / aliases → brand
+    - 含意图词(如何 / 攻略 / 教程 / 怎么选)→ intent
+    - 含问答词(哪家 / 怎么样 / 对比 / 吗)→ qa
+    - 其余 → search
+
+    幂等可重跑.把已有的 scene_type 覆盖掉(包括之前手动选的也覆盖).
+    返回完整 TopicOut(含 query_scene_types[]),前端拿到后刷新 badge.
+    """
+    from geo.services.query_expander import classify_query
+
+    t = _get_topic_or_404(db, topic_id, current_user.id)
+    _ensure_editable(t)
+    try:
+        arr = json.loads(t.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        arr = []
+    if not isinstance(arr, list):
+        arr = []
+
+    target = (t.target or "").strip()
+    try:
+        aliases = json.loads(t.target_aliases_json or "[]")
+        if not isinstance(aliases, list):
+            aliases = []
+        aliases = [str(a) for a in aliases if isinstance(a, str)]
+    except Exception:  # noqa: BLE001
+        aliases = []
+
+    counts: dict[str, int] = {"search": 0, "qa": 0, "intent": 0, "brand": 0}
+    changed = 0
+    upgraded: list[dict] = []
+    for q in arr:
+        if isinstance(q, str):
+            scene = classify_query(q, target=target, aliases=aliases)
+            counts[scene] = counts.get(scene, 0) + 1
+            upgraded.append({"text": q, "status": "approved", "selected": True,
+                             "scene_type": scene})
+            changed += 1
+        elif isinstance(q, dict) and q.get("text"):
+            new_q = dict(q)
+            scene = classify_query(str(q.get("text") or ""), target=target, aliases=aliases)
+            counts[scene] = counts.get(scene, 0) + 1
+            if new_q.get("scene_type") != scene:
+                new_q["scene_type"] = scene
+                changed += 1
+            upgraded.append(new_q)
+    t.queries_json = json.dumps(upgraded, ensure_ascii=False)
+    _append_changelog(
+        t, actor_id=current_user.id, actor_role="user", field="reclassify_queries",
+        after=f"changed={changed} total={len(upgraded)} dist={counts}",
+    )
+    db.commit()
+    db.refresh(t)
+    return TopicOut.from_orm_row(t)
+
+
 # submit-for-review 端点在去审核流里退役.客户不再提交,admin 在工作台直接「启动项目」.
 # 校验逻辑下沉到 admin_review.start_topic 的 _validate_topic_runnable.
 

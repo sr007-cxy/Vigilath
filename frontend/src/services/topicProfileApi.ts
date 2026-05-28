@@ -102,6 +102,17 @@ export const topicProfileApi = {
       'POST', `/topics/${topicId}/selected-queries`, token, { items },
     );
   },
+  /**
+   * 2026-05-28 — 把 topic 现有 queries 用启发式重新打 scene_type 标签.
+   * 幂等;返回新的 Topic(含 query_scene_types[]),前端拿到后刷新 badge.
+   * 优先级:brand(含 target/alias)→ intent(如何 / 攻略 / 教程 / 怎么选)
+   * → qa(哪家 / 怎么样 / 对比 / 吗)→ search(默认).
+   */
+  async reclassifyQueries(topicId: number, token: string): Promise<Topic> {
+    return request<Topic>(
+      'POST', `/topics/${topicId}/reclassify-queries`, token, {},
+    );
+  },
   async extractProfile(text: string, token: string): Promise<ExtractProfileResp> {
     return request<ExtractProfileResp>('POST', '/profile/extract', token, { text });
   },

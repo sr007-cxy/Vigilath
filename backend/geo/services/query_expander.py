@@ -270,7 +270,70 @@ async def expand_one_scene(
             await client.aclose()
 
 
+# ─────────────────── 启发式分类(给历史 query 打 scene 标签) ──────────────────
+
+# 顺序敏感:意图词必须先于问答词命中,避免「怎么用」被归 qa(怎么 = 问答?其实是意图).
+_INTENT_MARKERS: tuple[str, ...] = (
+    "如何", "怎么用", "怎么做", "怎么选", "怎么挑", "怎么入门",
+    "攻略", "教程", "指南", "操作步骤", "使用方法", "什么时候用",
+)
+_QA_MARKERS: tuple[str, ...] = (
+    "哪家", "哪个", "哪种", "选哪", "怎么样", "怎样",
+    "推荐", "排行", "排名", "对比", "比较", "好不好", "靠谱吗", "靠不靠谱",
+    "性价比怎么", "值不值", "好用吗", "可以信任", "可信", "?",
+    "吗",  # 兜底句尾"吗"
+)
+
+
+def classify_query(
+    text: str,
+    *,
+    target: str = "",
+    aliases: list[str] | None = None,
+) -> SceneType:
+    """启发式把一条 query 归到 4 维场景之一(给历史 query 打标用).
+
+    优先级:
+      1. 文本里含 target 或 alias 字面 → brand
+      2. 含意图词(如何 / 攻略 / 教程 / 怎么选 ...) → intent
+      3. 含问答词(哪家 / 怎么样 / 对比 / 吗 ...) → qa
+      4. 其余 → search
+
+    这个分类只看字面,不调 LLM —— 跑得快、确定性强,适合一次性 backfill 大批量 query.
+    对个别歧义 case(怎么用既像 intent 也像 qa)会按优先级一刀切,接受少量误分.
+    """
+    s = (text or "").strip()
+    if not s:
+        return DEFAULT_SCENE
+
+    # 1. brand:文本含目标品牌名 / 别名
+    brand_terms: list[str] = []
+    if target:
+        brand_terms.append(target.strip())
+    for a in aliases or []:
+        a = (a or "").strip()
+        if a:
+            brand_terms.append(a)
+    for term in brand_terms:
+        if term and term in s:
+            return "brand"
+
+    # 2. intent
+    for marker in _INTENT_MARKERS:
+        if marker in s:
+            return "intent"
+
+    # 3. qa
+    for marker in _QA_MARKERS:
+        if marker in s:
+            return "qa"
+
+    # 4. 默认 search
+    return "search"
+
+
 __all__ = [
     "ALL_SCENES", "SceneType", "SCENE_PROMPTS",
-    "render_prompt", "expand_one_scene",
+    "render_prompt", "expand_one_scene", "DEFAULT_TIMEOUT",
+    "classify_query",
 ]
