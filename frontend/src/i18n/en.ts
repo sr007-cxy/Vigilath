@@ -37,7 +37,7 @@ const en = {
               "description": "Benchmarks and trends from thousands of GApex audits — what's working across industries."
             },
             "contact": {
-              "title": "Contact Sales · GApex",
+              "title": "Book a Demo · GApex",
               "description": "Talk to the GApex team about managed GEO coverage, custom audits, and enterprise support."
             },
             "faq": {
@@ -254,7 +254,7 @@ const en = {
             "title": "Start Your GEO Journey",
             "subtitle": "Fill in the information below and our GEO experts will contact you within 24 hours.",
             "fab": {
-              "label": "Contact Sales"
+              "label": "Book a Demo"
             },
             "name": "Name",
             "email": "Email",
@@ -348,7 +348,7 @@ const en = {
                 "Future-proof your brand — Stay ahead as AI search becomes the default"
               ],
               "cta": "Be discovered globally, Be Chosen By AI",
-              "contactSales": "Contact Sales"
+              "contactSales": "Book a Demo"
             },
             "brandGrowth": {
               "badge": "End-to-end workbench",
@@ -778,7 +778,7 @@ const en = {
                 "enter": "🚀 Open workspace →",
                 "upgrade": "💎 Upgrade →",
                 "login": "Sign in to use →",
-                "contact": "💬 Contact sales"
+                "contact": "💬 Book a Demo"
               }
             }
           },
@@ -1683,7 +1683,7 @@ const en = {
             "cta": {
               "tryNow": "Try Now",
               "subscribeNow": "Subscribe",
-              "contactSales": "Contact Sales",
+              "contactSales": "Book a Demo",
               "popular": "Popular"
             },
             "cards": {
@@ -1738,7 +1738,7 @@ const en = {
               "scale": {
                 "name": "Scale",
                 "period": "",
-                "description": "Full-channel GEO solution + PR for large enterprises — contact sales for a custom plan",
+                "description": "Full-channel GEO solution + PR for large enterprises — book a demo for a custom plan",
                 "getDemoPrice": "Custom",
                 "features": [
                   "Unlimited checks + detailed optimization suggestions",
@@ -3257,7 +3257,7 @@ const en = {
             "membership": {
               "currentPlan": "Current plan",
               "service": "Managed service",
-              "contactSales": "Contact sales",
+              "contactSales": "Book a Demo",
               "startDate": "Start date",
               "endDate": "End date",
               "permanent": "Lifetime",
@@ -3329,6 +3329,7 @@ const en = {
               "title": "Cockpit",
               "heading": "Cockpit",
               "subtitle": "See every topic's full GEO-pipeline progress on a single screen — no step-by-step sidebar clicks.",
+              "newProject": "New project",
               "todo": {
                 "notStarted": "Not started",
                 "runStuck": "Run pending",
@@ -3339,7 +3340,7 @@ const en = {
               "stage": {
                 "submit": "Brand & Topic",
                 "review": "Pre-review",
-                "diagnose": "GEO Strategy Plan",
+                "solution": "GEO Strategy Plan",
                 "plan": "Strategy",
                 "content": "Content",
                 "insight": "Outcome"

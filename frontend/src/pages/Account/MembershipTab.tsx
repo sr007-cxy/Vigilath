@@ -133,7 +133,7 @@ export function MembershipTab() {
                 <p className="text-sm text-secondary">
                   {details.tier_type === 'saas'
                     ? `${formatTierPrice(details)} ${localized.period}`
-                    : t('account.membership.contactSales', '联系销售定制')}
+                    : t('account.membership.contactSales', '预约演示定制')}
                 </p>
                 <p className="text-sm text-secondary">{localized.description}</p>
               </div>

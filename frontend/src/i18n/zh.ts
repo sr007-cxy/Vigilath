@@ -37,7 +37,7 @@ const zh = {
               "description": "来自数千次 GApex 审计的基准与趋势 —— 看清各行业的有效打法。"
             },
             "contact": {
-              "title": "联系销售 · GApex",
+              "title": "预约演示 · GApex",
               "description": "与 GApex 团队洽谈托管 GEO 覆盖、定制审计、企业支持。"
             },
             "faq": {
@@ -254,7 +254,7 @@ const zh = {
             "title": "开启您的 GEO 之旅",
             "subtitle": "填写以下信息，我们的 GEO 专家将在 24 小时内与您联系。",
             "fab": {
-              "label": "联系销售"
+              "label": "预约演示"
             },
             "name": "姓名",
             "email": "邮箱",
@@ -348,7 +348,7 @@ const zh = {
                 "面向未来 — 在 AI 搜索成为默认的时代保持领先"
               ],
               "cta": "被全球发现,被 AI 选择",
-              "contactSales": "联系销售"
+              "contactSales": "预约演示"
             },
             "brandGrowth": {
               "badge": "全流程工作台",
@@ -778,7 +778,7 @@ const zh = {
                 "enter": "🚀 进入工作台 →",
                 "upgrade": "💎 升级开通 →",
                 "login": "登录使用 →",
-                "contact": "💬 联系销售"
+                "contact": "💬 预约演示"
               }
             }
           },
@@ -1683,7 +1683,7 @@ const zh = {
             "cta": {
               "tryNow": "立即试用",
               "subscribeNow": "立即订阅",
-              "contactSales": "联系销售",
+              "contactSales": "预约演示",
               "popular": "热门推荐"
             },
             "cards": {
@@ -1744,7 +1744,7 @@ const zh = {
               "scale": {
                 "name": "旗舰版",
                 "period": "",
-                "description": "大型企业的全渠道 GEO 解决方案 + PR，联系销售定制",
+                "description": "大型企业的全渠道 GEO 解决方案 + PR，预约演示定制",
                 "getDemoPrice": "专属定制",
                 "features": [
                   "无限检测次数 + 详细优化建议",
@@ -3263,7 +3263,7 @@ const zh = {
             "membership": {
               "currentPlan": "当前套餐",
               "service": "人工服务",
-              "contactSales": "联系销售定制",
+              "contactSales": "预约演示定制",
               "startDate": "开始时间",
               "endDate": "到期时间",
               "permanent": "长期有效",
@@ -3335,6 +3335,7 @@ const zh = {
               "title": "项目进度",
               "heading": "项目进度",
               "subtitle": "一屏看完每个主题在 GEO 管线上的进度;无需逐步点击 sidebar。",
+              "newProject": "新建项目",
               "todo": {
                 "notStarted": "未启动项目",
                 "runStuck": "跑批待处理",
@@ -3345,7 +3346,7 @@ const zh = {
               "stage": {
                 "submit": "品牌与主题创建",
                 "review": "诊断与方案预评估",
-                "diagnose": "GEO策略优化方案",
+                "solution": "GEO策略优化方案",
                 "plan": "执行策略与规划",
                 "content": "内容发布与审核",
                 "insight": "效果查验与更新"
