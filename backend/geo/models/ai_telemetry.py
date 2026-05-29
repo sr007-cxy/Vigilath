@@ -674,6 +674,12 @@ class PlanItemDraft(BaseModel):
     template_id: int
     platform: str
     note: Optional[str] = None
+    # 2026-05-28 — 单行 combo override:空数组 / 未传 → 用画像默认
+    # (profile.creation_directions × profile.copywriting_types).
+    # 行内非空 → 本行只跑这个 combo 子集;
+    # 不会突破 GEO_CONTENT_MAX_COMBOS_PER_QUERY 上限(后端会再 cap 一次).
+    creation_directions: list[str] = Field(default_factory=list, max_length=10)
+    copywriting_types: list[str] = Field(default_factory=list, max_length=10)
 
 
 class ExecutionPlanUpdatePayload(BaseModel):

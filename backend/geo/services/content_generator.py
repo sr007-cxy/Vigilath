@@ -277,8 +277,12 @@ def _run_per_item(
         ):
             tmpl_by_id[tmpl.id] = tmpl
 
-    # 已有 doc 索引(plan_item_id → doc)
-    existing_by_item: dict[str, TopicGeneratedDocORM] = {}
+    # 已有 doc 索引 — 2026-05-28 改成 (plan_item_id, creation_direction, copywriting_type)
+    # 三元 key,支持同一 plan_item 有多个 combo 变体(N×M).
+    # combo 字段为 None 时存空串作 key,便于查找.
+    def _doc_key(pid: Optional[str], d: Optional[str], t: Optional[str]) -> str:
+        return f"{pid or ''}|{d or ''}|{t or ''}"
+    existing_by_combo: dict[str, TopicGeneratedDocORM] = {}
     for d in (
         db.query(TopicGeneratedDocORM)
           .filter(TopicGeneratedDocORM.topic_id == topic_id)
@@ -286,7 +290,7 @@ def _run_per_item(
           .all()
     ):
         if d.plan_item_id:
-            existing_by_item[d.plan_item_id] = d
+            existing_by_combo[_doc_key(d.plan_item_id, d.creation_direction, d.copywriting_type)] = d
 
     n_ok = 0
     for it in plan_items:
@@ -301,50 +305,85 @@ def _run_per_item(
         if not topic_text:
             continue
 
-        doc = existing_by_item.get(item_id)
-        if doc is None:
-            doc = TopicGeneratedDocORM(
-                topic_id=topic_id, execution_plan_id=plan_id,
-                plan_item_id=item_id or None,
-                template_id=tmpl.id if tmpl else None,
-                platform=platform,
-                source_query_text=topic_text, status="pending_review",
-                selected_for_review=True,
-                llm_model=model_id, source="ai",
-            )
-            db.add(doc)
+        # 2026-05-28 — 单行 combo override.行内非空 → 用行的,否则用画像默认.
+        # 双方都空 → 单变体 (None, None) 走老路径.
+        row_dirs = [d for d in (it.get("creation_directions") or []) if d and d in DIRECTION_HINTS]
+        row_types = [t for t in (it.get("copywriting_types") or []) if t and t in TYPE_HINTS]
+        if row_dirs or row_types:
+            # 行 override:只用本行的(笛卡尔积,各边空补 [None])
+            dirs = row_dirs or [None]
+            types = row_types or [None]
+            combos: list[tuple[Optional[str], Optional[str]]] = []
+            for dx in dirs:
+                for tx in types:
+                    combos.append((dx, tx))
+                    if len(combos) >= _MAX_COMBOS_PER_QUERY:
+                        break
+                if len(combos) >= _MAX_COMBOS_PER_QUERY:
+                    break
         else:
-            # 重生:清错 + 把 status 回 pending_review,等 LLM 跑完覆写正文
-            doc.template_id = tmpl.id if tmpl else None
-            doc.platform = platform
-            doc.source_query_text = topic_text
-            doc.generation_error = None
-            doc.status = "pending_review"
-            doc.selected_for_review = True
-            doc.llm_model = model_id
-            doc.source = "ai"
+            combos = _build_combos(profile)
 
-        if not provider:
-            doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
-            doc.title = f"[未生成] {topic_text}"
-            continue
-        try:
-            if tmpl:
-                title, body, summary = _generate_with_template(
-                    profile, tmpl, topic_text, platform or "", provider, api_key,
-                    seed=seed or None,
+        for direction, copywriting_type in combos:
+            ckey = _doc_key(item_id, direction, copywriting_type)
+            doc = existing_by_combo.get(ckey)
+            if doc is None:
+                doc = TopicGeneratedDocORM(
+                    topic_id=topic_id, execution_plan_id=plan_id,
+                    plan_item_id=item_id or None,
+                    template_id=tmpl.id if tmpl else None,
+                    platform=platform,
+                    source_query_text=topic_text, status="pending_review",
+                    selected_for_review=True,
+                    llm_model=model_id, source="ai",
+                    creation_direction=direction,
+                    copywriting_type=copywriting_type,
                 )
+                db.add(doc)
             else:
-                title, body, summary = _generate_one(profile, topic_text, provider, api_key)
-            doc.title = title
-            doc.body_markdown = _append_media_to_body(db, topic_id, topic_text, body)
-            doc.summary = summary
-            n_ok += 1
-        except Exception as e:  # noqa: BLE001
-            log.warning("content gen failed for item=%s topic=%d: %s",
-                        item_id, topic_id, e)
-            doc.generation_error = str(e)[:500]
-            doc.title = f"[生成失败] {topic_text}"
+                # 重生:清错 + 把 status 回 pending_review,等 LLM 跑完覆写正文
+                doc.template_id = tmpl.id if tmpl else None
+                doc.platform = platform
+                doc.source_query_text = topic_text
+                doc.generation_error = None
+                doc.status = "pending_review"
+                doc.selected_for_review = True
+                doc.llm_model = model_id
+                doc.source = "ai"
+
+            if not provider:
+                doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
+                doc.title = f"[未生成] {topic_text}"
+                continue
+            try:
+                if tmpl and direction is None and copywriting_type is None:
+                    # 单变体老路径走 template;有 combo 时即使有 template 也走 _generate_one
+                    # (template prompt 不接 combo 注入,直接走 profile combo)
+                    title, body, summary = _generate_with_template(
+                        profile, tmpl, topic_text, platform or "", provider, api_key,
+                        seed=seed or None,
+                    )
+                else:
+                    medias = _match_topic_media(db, topic_id, topic_text)
+                    title, body, summary = _generate_one(
+                        profile, topic_text, provider, api_key,
+                        direction=direction, copywriting_type=copywriting_type,
+                        medias=medias, topic_id=topic_id,
+                    )
+                doc.title = title
+                allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
+                if allow_md:
+                    # LLM 已经在正文内嵌图,不再追加末尾列表
+                    doc.body_markdown = body
+                else:
+                    doc.body_markdown = _append_media_to_body(db, topic_id, topic_text, body)
+                doc.summary = summary
+                n_ok += 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("content gen failed for item=%s combo=(%s,%s) topic=%d: %s",
+                            item_id, direction, copywriting_type, topic_id, e)
+                doc.generation_error = str(e)[:500]
+                doc.title = f"[生成失败] {topic_text}"
 
     if mark_auto_run:
         t.auto_generate_last_run_at = datetime.utcnow()

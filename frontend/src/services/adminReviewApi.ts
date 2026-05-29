@@ -107,6 +107,9 @@ export interface PublishPlanItem {
   template_id?: number | null;
   platform?: string | null;
   note?: string | null;
+  // 2026-05-28 — 单行 combo override(空 → 用画像默认)
+  creation_directions?: string[];
+  copywriting_types?: string[];
   // 后端实时聚合 / 联表算出来的展示字段
   day: number;                          // 老字段,= seq;留着兼容
   coverage_pct: number;
@@ -127,6 +130,9 @@ export interface PlanItemDraft {
   template_id: number;
   platform: string;
   note?: string | null;
+  // 2026-05-28 — 单行 combo override(空 → 用画像默认)
+  creation_directions?: string[];
+  copywriting_types?: string[];
 }
 
 // 新流程:draft(运营在编辑发文表)/ confirmed(已确认,文章在跑)/ failed

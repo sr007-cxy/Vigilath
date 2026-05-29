@@ -23,6 +23,19 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all',            label: 'all' },
 ];
 
+// 2026-05-28 — 多变体 combo 的可读 label(跟 BrandProfileForm 候选项同步)
+const CREATION_DIRECTION_LABELS: Record<string, string> = {
+  industry_insight: '行业洞察', case_story: '案例分享', how_to_guide: '实操指南',
+  trend_forecast: '趋势预测', product_review: '产品评测', customer_story: '客户故事',
+  faq: 'FAQ 答疑',
+};
+const COPYWRITING_TYPE_LABELS: Record<string, string> = {
+  long_form: '深度长文', medium_post: '中等图文', short_social: '短社媒',
+  video_script_long: '长视频脚本', video_script_short: '短视频文案', faq_list: 'FAQ 列表',
+};
+const CREATION_DIRECTION_COLOR = '#3b82f6';   // 蓝
+const COPYWRITING_TYPE_COLOR = '#10b981';     // 绿
+
 interface AdminContentReviewProps {
   // 锁定到指定 topic;给则隐藏 topic 选择器(用于项目详情页 stepper 内嵌)
   lockedTopicId?: number;
@@ -54,6 +67,15 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
   const [err, setErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [openDocId, setOpenDocId] = useState<number | null>(null);
+  // 2026-05-28 — 同一 query 多份稿件折叠;set 里的 query 是收起的
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((q: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(q)) next.delete(q); else next.add(q);
+      return next;
+    });
+  }, []);
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -280,17 +302,71 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
       )}
 
       <div className="space-y-2">
-        {pagedDocs.map(d => (
-          <DocCard key={d.id} doc={d}
-                   pickable={d.status === 'draft'}
-                   picked={picked.has(d.id)}
-                   onPick={() => togglePick(d.id)}
-                   onOpen={() => setOpenDocId(d.id)}
-                   approveBusy={inlineBusyId === d.id}
-                   onInlineApprove={d.status === 'pending_review'
-                     ? () => handleInlineApprove(d.id)
-                     : undefined} />
-        ))}
+        {(() => {
+          // 2026-05-28 — 同一 source_query_text 有 ≥2 篇时折叠成组,展示 query 头 + 子项;
+          // 单篇 query 仍直出 DocCard,保持老体验.
+          const groups: { query: string; docs: typeof pagedDocs }[] = [];
+          const byQuery = new Map<string, typeof pagedDocs>();
+          for (const d of pagedDocs) {
+            const q = (d.source_query_text || '').trim() || '(无 query)';
+            if (!byQuery.has(q)) byQuery.set(q, []);
+            byQuery.get(q)!.push(d);
+          }
+          for (const [q, docs] of byQuery) groups.push({ query: q, docs });
+          return groups.map(g => {
+            if (g.docs.length === 1) {
+              const d = g.docs[0];
+              return (
+                <DocCard key={d.id} doc={d}
+                         pickable={d.status === 'draft'}
+                         picked={picked.has(d.id)}
+                         onPick={() => togglePick(d.id)}
+                         onOpen={() => setOpenDocId(d.id)}
+                         approveBusy={inlineBusyId === d.id}
+                         onInlineApprove={d.status === 'pending_review'
+                           ? () => handleInlineApprove(d.id)
+                           : undefined} />
+              );
+            }
+            const collapsed = collapsedGroups.has(g.query);
+            return (
+              <div key={g.query} className="space-y-1">
+                <button type="button"
+                        onClick={() => toggleGroup(g.query)}
+                        className="w-full text-left rounded-md p-2 flex items-center gap-2"
+                        style={{ background: 'var(--bg-secondary)',
+                                 border: '1px solid var(--border-color)' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {collapsed ? '▶' : '▼'}
+                  </span>
+                  <span className="text-xs font-medium flex-1 truncate"
+                        style={{ color: 'var(--text-primary)' }}>
+                    Query: {g.query}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
+                    {g.docs.length} 篇
+                  </span>
+                </button>
+                {!collapsed && (
+                  <div className="pl-4 space-y-1">
+                    {g.docs.map(d => (
+                      <DocCard key={d.id} doc={d}
+                               pickable={d.status === 'draft'}
+                               picked={picked.has(d.id)}
+                               onPick={() => togglePick(d.id)}
+                               onOpen={() => setOpenDocId(d.id)}
+                               approveBusy={inlineBusyId === d.id}
+                               onInlineApprove={d.status === 'pending_review'
+                                 ? () => handleInlineApprove(d.id)
+                                 : undefined} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          });
+        })()}
       </div>
 
       {filteredDocs.length > PAGE_SIZE && (
@@ -347,6 +423,21 @@ function DocCard({ doc, pickable, picked, onPick, onOpen, onInlineApprove, appro
           <span className="font-semibold text-primary">{doc.title || `#${doc.id}`}</span>
           <DocStatusChip status={doc.status} />
           <DocSourceChip source={doc.source} />
+          {/* 2026-05-28 — combo chips:同一 query 多份稿件按 (direction, type) 区分 */}
+          {doc.creation_direction && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: `${CREATION_DIRECTION_COLOR}22`,
+                           color: CREATION_DIRECTION_COLOR }}>
+              {CREATION_DIRECTION_LABELS[doc.creation_direction] || doc.creation_direction}
+            </span>
+          )}
+          {doc.copywriting_type && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                  style={{ background: `${COPYWRITING_TYPE_COLOR}22`,
+                           color: COPYWRITING_TYPE_COLOR }}>
+              {COPYWRITING_TYPE_LABELS[doc.copywriting_type] || doc.copywriting_type}
+            </span>
+          )}
           {doc.generation_error && (
             <span className="text-[10px]" style={{ color: '#ef4444' }}>
               ⚠ {t('admin.contentReview.genError')}

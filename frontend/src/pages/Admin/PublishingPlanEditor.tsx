@@ -22,7 +22,29 @@ type RowDraft = {
   template_id: number | null;
   platform: string;
   note: string;
+  // 2026-05-28 — 单行 combo override(空 → 用画像默认)
+  creation_directions: string[];
+  copywriting_types: string[];
 };
+
+// 2026-05-28 — combo 候选值与 BrandProfileForm 同步
+const COMBO_DIRECTIONS: { value: string; label: string }[] = [
+  { value: 'industry_insight', label: '行业洞察' },
+  { value: 'case_story',       label: '案例分享' },
+  { value: 'how_to_guide',     label: '实操指南' },
+  { value: 'trend_forecast',   label: '趋势预测' },
+  { value: 'product_review',   label: '产品评测' },
+  { value: 'customer_story',   label: '客户故事' },
+  { value: 'faq',              label: 'FAQ' },
+];
+const COMBO_TYPES: { value: string; label: string }[] = [
+  { value: 'long_form',          label: '深度长文' },
+  { value: 'medium_post',        label: '中等图文' },
+  { value: 'short_social',       label: '短社媒' },
+  { value: 'video_script_long',  label: '长视频脚本' },
+  { value: 'video_script_short', label: '短视频文案' },
+  { value: 'faq_list',           label: 'FAQ 列表' },
+];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -42,6 +64,8 @@ const fromPlanItem = (it: PublishPlanItem): RowDraft => ({
   template_id: it.template_id ?? null,
   platform: it.platform || '',
   note: it.note || '',
+  creation_directions: it.creation_directions || [],
+  copywriting_types: it.copywriting_types || [],
 });
 
 interface Props {
@@ -117,6 +141,8 @@ export function PublishingPlanEditor({
       template_id: defaultTmpl ? defaultTmpl.id : null,
       platform: defaultPlat,
       note: '',
+      creation_directions: [],
+      copywriting_types: [],
     };
   };
 
@@ -176,6 +202,8 @@ export function PublishingPlanEditor({
         template_id: r.template_id,
         platform: r.platform,
         note: r.note || null,
+        creation_directions: r.creation_directions,
+        copywriting_types: r.copywriting_types,
       });
     }
     return drafts;
@@ -389,6 +417,38 @@ export function PublishingPlanEditor({
                   </td>
                 </tr>
               );
+            }).flatMap((tr, idx) => {
+              const r = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)[idx];
+              if (!r) return [tr];
+              const isSel = selected === r.localKey;
+              // 2026-05-28 — 选中行下方折叠出 combo 多选;不选时折起,不占空间
+              if (!isSel) return [tr];
+              const extra = (
+                <tr key={r.localKey + ':combo'}>
+                  <td colSpan={10} className="px-3 py-2"
+                      style={{ background: 'var(--bg-tertiary)',
+                               borderBottom: '1px solid var(--border-color)' }}>
+                    <div className="text-[11px] text-muted mb-1.5">
+                      自定义本行创作偏好(多选,**空则用画像默认**;非空则只用本行勾的)
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <ChipMultiSelect
+                        label={`创作方向(${r.creation_directions.length})`}
+                        options={COMBO_DIRECTIONS}
+                        value={r.creation_directions}
+                        onChange={v => updateRow(r.localKey, { creation_directions: v })}
+                      />
+                      <ChipMultiSelect
+                        label={`文案类型(${r.copywriting_types.length})`}
+                        options={COMBO_TYPES}
+                        value={r.copywriting_types}
+                        onChange={v => updateRow(r.localKey, { copywriting_types: v })}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              );
+              return [tr, extra];
             })}
           </tbody>
         </table>
@@ -456,6 +516,48 @@ export function PublishingPlanEditor({
                         setDrawerTarget(null);
                         refreshTemplates();
                       } : undefined} />
+    </div>
+  );
+}
+
+
+// 2026-05-28 — 小型 chip 多选,行内 combo override 用.
+function ChipMultiSelect({
+  label, options, value, onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const set = new Set(value || []);
+  const toggle = (v: string) => {
+    const n = new Set(set);
+    if (n.has(v)) n.delete(v); else n.add(v);
+    onChange(Array.from(n));
+  };
+  return (
+    <div>
+      <div className="text-[11px] mb-1" style={{ color: 'var(--text-secondary)' }}>{label}</div>
+      <div className="flex flex-wrap gap-1">
+        {options.map(opt => {
+          const checked = set.has(opt.value);
+          return (
+            <button
+              key={opt.value} type="button"
+              onClick={(e) => { e.stopPropagation(); toggle(opt.value); }}
+              className="px-2 py-0.5 rounded-full text-[10px]"
+              style={{
+                background: checked ? 'var(--accent-primary)' : 'var(--bg-card)',
+                color: checked ? '#fff' : 'var(--text-secondary)',
+                border: '1px solid var(--border-color)',
+              }}
+            >
+              {checked && '✓ '}{opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

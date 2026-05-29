@@ -47,6 +47,9 @@ export interface GeneratedDoc {
   reject_reason?: string | null;
   publish_targets: PublishTarget[];
   source: DocSource;
+  // 2026-05-28 — 多变体生成 combo 标识(同一 query 多份稿件按这俩区分)
+  creation_direction?: string | null;
+  copywriting_type?: string | null;
 }
 
 async function request<T>(
