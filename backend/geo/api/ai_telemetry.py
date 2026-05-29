@@ -1219,6 +1219,38 @@ async def upload_topic_media(
     return _serialize_media(row)
 
 
+@router.get("/public/topic-media/{topic_id}/{filename}")
+def get_topic_media_public(topic_id: int, filename: str):
+    """2026-05-28 — 公开图片/视频访问端点,**无需 Bearer auth**.
+
+    URL 含 32 hex UUID 文件名(128 bit 熵,不可猜测),靠 UUID 提供 obscurity-style 保护.
+    LLM 生成稿件用这个 URL 嵌入 markdown ![](url),浏览器 / 公众号 / 知乎都能渲染.
+
+    安全约束:
+      - filename 必须是合法的 32 hex + 扩展名格式(防遍历 / 注入)
+      - 路径必须落在 data/topic_media/{topic_id}/ 内
+      - 文件必须存在
+    """
+    # 简单校验:filename = 32hex + dot + 2~4 char extension
+    import re as _re
+    if not _re.fullmatch(r"[a-f0-9]{32}\.[a-zA-Z0-9]{2,5}", filename):
+        raise HTTPException(404, "media not found")
+    p = _media_root() / str(topic_id) / filename
+    # 防 path traversal:确保 resolved path 真的在 _media_root() 下
+    try:
+        p_real = p.resolve()
+        root_real = _media_root().resolve()
+        if not str(p_real).startswith(str(root_real) + os.sep):
+            raise HTTPException(404, "media not found")
+    except Exception:  # noqa: BLE001
+        raise HTTPException(404, "media not found")
+    if not p_real.exists() or not p_real.is_file():
+        raise HTTPException(404, "media not found")
+    mime, _ = mimetypes.guess_type(str(p_real))
+    return FileResponse(p_real, media_type=mime or "application/octet-stream",
+                        filename=p_real.name)
+
+
 @router.get("/topics/{topic_id}/media/{media_id}/blob")
 def get_topic_media_blob(
     topic_id: int,

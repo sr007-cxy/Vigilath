@@ -359,16 +359,17 @@ _MEDIA_APPEND_MAX = 3
 _MEDIA_BLOCK_HEADER = "── 自动配图建议 ──"
 
 def _match_topic_media(db, topic_id: int, query: str) -> list[TopicMediaORM]:
-    """按 query 关键词模糊匹配 topic 已上传图片(filename 子串).
+    """按 query 关键词模糊匹配 topic 已上传素材(filename 子串).
 
     召回策略:
       1. 把 query 拆成关键词(去标点 / 短词),依次在 filename 里找子串
-      2. 命中即累计;同一图片只算一次,按 uploaded_at desc 取前 _MEDIA_APPEND_MAX
-      3. 若 query 无任何命中,退到「最新 3 张图」兜底(让 admin 至少有可挑的)
+      2. 命中即累计;同一素材只算一次,按 uploaded_at desc 取前 _MEDIA_APPEND_MAX
+      3. 若 query 无任何命中,退到「最新 3 张素材」兜底(让 admin 至少有可挑的)
+      4. 2026-05-28 起 image + video 都召回(由 prompt 决定怎么用)
     """
     rows = (
         db.query(TopicMediaORM)
-          .filter(TopicMediaORM.topic_id == topic_id, TopicMediaORM.kind == "image")
+          .filter(TopicMediaORM.topic_id == topic_id)
           .order_by(TopicMediaORM.uploaded_at.desc())
           .all()
     )
@@ -395,16 +396,19 @@ def _match_topic_media(db, topic_id: int, query: str) -> list[TopicMediaORM]:
 
 
 def _format_media_block(topic_id: int, medias: list[TopicMediaORM]) -> str:
-    """正文末尾追加的纯文本配图块.不用 Markdown(平台直接粘贴会出乱码)."""
+    """正文末尾追加的纯文本配图块.不用 Markdown(平台直接粘贴会出乱码).
+
+    2026-05-28 — URL 改用 /public/topic-media/.. 公开端点(UUID 文件名保护),
+    `<img>` 标签直接渲染,发布到 公众号 / 知乎 / 小红书 都能用.
+    """
     if not medias:
         return ""
     lines = [_MEDIA_BLOCK_HEADER]
     for i, m in enumerate(medias, 1):
-        # /api/ai-telemetry/topics/{tid}/media/{mid}/blob 是受 owner 鉴权的接口,
-        # admin 在审稿页能直接预览;真正发布到 公众号/小红书 需 admin 手动下载.
+        url = _media_public_url(m)
+        kind_label = "视频" if m.kind == "video" else "图片"
         lines.append(
-            f"{i}. {m.filename or f'media-{m.id}'} "
-            f"→ /api/ai-telemetry/topics/{topic_id}/media/{m.id}/blob"
+            f"{i}. [{kind_label}] {m.filename or f'media-{m.id}'} → {url}"
         )
     return "\n\n" + "\n".join(lines)
 
@@ -745,27 +749,59 @@ def _build_combo_block(direction: Optional[str], copywriting_type: Optional[str]
     return "\n".join(lines)
 
 
+def _media_public_url(media: "TopicMediaORM", base: str = "") -> str:
+    """把 storage_path → 公开 URL.
+
+    storage_path 格式:.../data/topic_media/{topic_id}/{32hex}.{ext}
+    返回:{base}/api/ai-telemetry/public/topic-media/{topic_id}/{32hex}.{ext}
+
+    base 为空(默认)→ 相对路径,前端在同源下 / nginx 反代时直接用.
+    设 GEO_PUBLIC_MEDIA_BASE 环境变量 → 绝对 URL(发布到公众号 / 知乎需要绝对 https).
+    """
+    base = base or os.environ.get("GEO_PUBLIC_MEDIA_BASE", "").rstrip("/")
+    sp = (media.storage_path or "").replace("\\", "/")
+    fname = sp.rsplit("/", 1)[-1] if "/" in sp else sp
+    return f"{base}/api/ai-telemetry/public/topic-media/{media.topic_id}/{fname}"
+
+
 def _build_media_block_for_prompt(medias: list["TopicMediaORM"], topic_id: int,
                                     allow_md: bool) -> str:
-    """渲染图片素材清单段塞进 system prompt.
+    """渲染素材清单段塞进 system prompt.
 
-    allow_md=True 时让 LLM 在正文 2-3 处自然位置嵌入 markdown 图片引用 ![](url);
-    allow_md=False 时只列素材给 LLM 参考,不要求嵌入(append 阶段仍会拼到末尾).
+    2026-05-28 — 把用户上传到 TopicMedia 的图 / 视频列给 LLM,带**公开 URL**
+    (走 /public/topic-media/{tid}/{32hex}.{ext} 端点,无需 Bearer auth,
+    UUID 文件名 128 bit 熵不可猜测).LLM 在 allow_md 类型里直接嵌 ![](url) markdown.
+
+    支持:
+      - kind=image → markdown ![](url) 图片
+      - kind=video → markdown [视频:filename](url) 链接(平台不支持 video 自动播放,留链接给 admin)
     """
     if not medias:
         return ""
-    lines: list[str] = ["", "## 可用图片素材"]
-    for i, m in enumerate(medias, 1):
-        url = f"/api/ai-telemetry/topics/{topic_id}/media/{m.id}/blob"
-        fn = m.filename or f"media-{m.id}"
-        lines.append(f"- 素材{i}「{fn}」: {url}")
+    img_list = [m for m in medias if (m.kind or "image") == "image"]
+    vid_list = [m for m in medias if m.kind == "video"]
+    lines: list[str] = ["", "## 可用素材(用户已上传到该主题,均为公开 URL,可直接嵌入正文)"]
+    if img_list:
+        lines.append("图片素材:")
+        for m in img_list:
+            fn = m.filename or f"media-{m.id}"
+            url = _media_public_url(m)
+            lines.append(f"  - 文件名「{fn}」 URL: {url}")
+    if vid_list:
+        lines.append("视频素材:")
+        for m in vid_list:
+            fn = m.filename or f"video-{m.id}"
+            url = _media_public_url(m)
+            lines.append(f"  - 文件名「{fn}」 URL: {url}")
+    lines.append("")
     if allow_md:
-        lines.append("")
-        lines.append("**在正文 2-3 处自然位置插入 markdown 图片引用 ![描述](url),"
-                     "用上面列的 url。首张配图放在文章开头钩子段之后。**")
+        lines.append("**在正文 2-3 处自然位置嵌入图片素材**:")
+        lines.append("  - 图片用 markdown 标准语法: `![描述](url)`,url 从上面图片素材列表挑")
+        lines.append("  - 视频用链接: `[观看视频:filename](url)`,放在引出处")
+        lines.append("  - 首张图放开头钩子段之后,引出客户故事 / 案例时优先用对应素材")
+        lines.append("  - 不要瞎编 URL — 必须用上面列出的真实 URL")
     else:
-        lines.append("")
-        lines.append("(本次文案类型不便内嵌图片,素材会自动追加到正文末尾,你不必处理。)")
+        lines.append("(本次文案偏短 / 视频脚本,无需主动嵌入素材;列表仅供你了解品牌已有视觉资产.)")
     return "\n".join(lines)
 
 
