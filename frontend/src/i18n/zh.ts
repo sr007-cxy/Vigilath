@@ -384,7 +384,7 @@ const zh = {
                 { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "ext": "png" },
                 { "name": "通义",       "sub": "Tongyi",     "slug": "tongyi",     "ext": "svg" },
                 { "name": "豆包",       "sub": "Doubao",     "slug": "doubao",     "ext": "png" },
-                { "name": "文心",       "sub": "ERNIE",      "slug": "ernie",      "ext": "png" },
+                { "name": "文心一言",   "sub": "ERNIE",      "slug": "ernie",      "ext": "png" },
                 { "name": "元宝",       "sub": "Yuanbao",    "slug": "yuanbao",    "ext": "png" },
                 { "name": "Kimi",       "sub": "Moonshot",   "slug": "kimi",       "ext": "png" }
               ]
@@ -511,7 +511,7 @@ const zh = {
                 },
                 {
                   "q": "你们支持哪些 AI 引擎?",
-                  "a": "覆盖主流海外引擎(ChatGPT / Gemini / Perplexity / Claude / DeepSeek)与国内引擎(百度 AI / 文心 / 通义 / 豆包 / 元宝)。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
+                  "a": "覆盖主流海外引擎(ChatGPT / Gemini / Perplexity / Claude / DeepSeek)与国内引擎(文心一言 / 通义 / 豆包 / 元宝 / Kimi)。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
                 },
                 {
                   "q": "8 步流水线和传统 SEO 服务商有什么不同？",
