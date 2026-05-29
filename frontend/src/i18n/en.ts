@@ -377,16 +377,16 @@ const en = {
               "title": "Tested Across 10 Major AI Platforms",
               "subtitle": "One audit covers every major model — so you know exactly where your brand stands in each engine.",
               "items": [
-                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "accent": "#10a37f" },
-                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "accent": "#4285f4" },
-                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "accent": "#20808d" },
-                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "accent": "#cc785c" },
-                { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "accent": "#4d6bfe" },
-                { "name": "Tongyi",     "sub": "Alibaba",    "slug": "tongyi",     "accent": "#615ced" },
-                { "name": "Doubao",     "sub": "ByteDance",  "slug": "doubao",     "accent": "#bcd9ff", "colored": true, "ext": "png" },
-                { "name": "ERNIE",      "sub": "Baidu",      "slug": "ernie",      "accent": "#3370ff" },
-                { "name": "Yuanbao",    "sub": "Tencent",    "slug": "yuanbao",    "accent": "#06c167", "colored": true, "ext": "png" },
-                { "name": "Kimi",       "sub": "Moonshot",   "slug": "kimi",       "accent": "#1f2937" }
+                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "ext": "png" },
+                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "ext": "png" },
+                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "ext": "png" },
+                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "ext": "png" },
+                { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "ext": "png" },
+                { "name": "Tongyi",     "sub": "Alibaba",    "slug": "tongyi",     "ext": "svg" },
+                { "name": "Doubao",     "sub": "ByteDance",  "slug": "doubao",     "ext": "png" },
+                { "name": "ERNIE",      "sub": "Baidu",      "slug": "ernie",      "ext": "png" },
+                { "name": "Yuanbao",    "sub": "Tencent",    "slug": "yuanbao",    "ext": "png" },
+                { "name": "Kimi",       "sub": "Moonshot",   "slug": "kimi",       "ext": "png" }
               ]
             },
             "partners": {

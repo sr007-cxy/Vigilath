@@ -518,12 +518,8 @@ export function Home() {
                 每张卡居中纵向布局:大 logo 在上、引擎名在下;参考截图风格. */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 max-w-5xl mx-auto">
               {(t('home.engines.items', { returnObjects: true }) as {
-                name: string; sub: string; slug: string; accent: string;
-                colored?: boolean; ext?: string;
-              }[]).map((eng, idx) => {
-                const ext = eng.ext || 'svg';
-                const src = `/image/engines/${eng.slug}.${ext}`;
-                return (
+                name: string; sub: string; slug: string; ext?: string;
+              }[]).map((eng, idx) => (
                 <div key={idx}
                      className="rounded-2xl flex flex-col items-center justify-center text-center gap-3 px-3 py-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                      style={{
@@ -531,27 +527,14 @@ export function Home() {
                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                        border: '1px solid rgba(0,0,0,0.08)',
                      }}>
-                  {eng.colored ? (
-                    <div className="rounded-xl flex items-center justify-center select-none overflow-hidden shrink-0"
-                         style={{ width: 56, height: 56, background: '#fff' }}>
-                      <img src={src} alt="" aria-hidden="true"
-                           className="w-full h-full object-contain" draggable={false} />
-                    </div>
-                  ) : (
-                    <div className="shrink-0 select-none"
-                         style={{
-                           width: 56, height: 56,
-                           background: eng.accent,
-                           WebkitMaskImage: `url(${src})`,
-                           maskImage: `url(${src})`,
-                           WebkitMaskRepeat: 'no-repeat',
-                           maskRepeat: 'no-repeat',
-                           WebkitMaskPosition: 'center',
-                           maskPosition: 'center',
-                           WebkitMaskSize: '40px 40px',
-                           maskSize: '40px 40px',
-                         }} />
-                  )}
+                  <div className="shrink-0 rounded-xl overflow-hidden flex items-center justify-center"
+                       style={{ width: 56, height: 56, background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }}>
+                    <img src={`/image/engines/${eng.slug}.${eng.ext || 'png'}`} alt={eng.name}
+                         width={48} height={48}
+                         className="object-contain select-none"
+                         style={{ width: 48, height: 48 }}
+                         draggable={false} />
+                  </div>
                   <div className="min-w-0 w-full">
                     <div className="text-sm sm:text-base font-semibold truncate" style={{ color: '#141418' }}>
                       {eng.name}
@@ -561,8 +544,7 @@ export function Home() {
                     </div>
                   </div>
                 </div>
-                );
-              })}
+              ))}
             </div>
           </section>
 

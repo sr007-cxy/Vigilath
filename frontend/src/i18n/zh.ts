@@ -377,16 +377,16 @@ const zh = {
               "title": "覆盖 10 大主流 AI 平台",
               "subtitle": "一次审计,横跨所有主流模型 —— 立刻看清你的品牌在每个引擎下的真实表现。",
               "items": [
-                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "accent": "#10a37f" },
-                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "accent": "#4285f4" },
-                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "accent": "#20808d" },
-                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "accent": "#cc785c" },
-                { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "accent": "#4d6bfe" },
-                { "name": "通义",       "sub": "Tongyi",     "slug": "tongyi",     "accent": "#615ced" },
-                { "name": "豆包",       "sub": "Doubao",     "slug": "doubao",     "accent": "#bcd9ff", "colored": true, "ext": "png" },
-                { "name": "文心",       "sub": "ERNIE",      "slug": "ernie",      "accent": "#3370ff" },
-                { "name": "元宝",       "sub": "Yuanbao",    "slug": "yuanbao",    "accent": "#06c167", "colored": true, "ext": "png" },
-                { "name": "Kimi",       "sub": "Moonshot",   "slug": "kimi",       "accent": "#1f2937" }
+                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "ext": "png" },
+                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "ext": "png" },
+                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "ext": "png" },
+                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "ext": "png" },
+                { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "ext": "png" },
+                { "name": "通义",       "sub": "Tongyi",     "slug": "tongyi",     "ext": "svg" },
+                { "name": "豆包",       "sub": "Doubao",     "slug": "doubao",     "ext": "png" },
+                { "name": "文心",       "sub": "ERNIE",      "slug": "ernie",      "ext": "png" },
+                { "name": "元宝",       "sub": "Yuanbao",    "slug": "yuanbao",    "ext": "png" },
+                { "name": "Kimi",       "sub": "Moonshot",   "slug": "kimi",       "ext": "png" }
               ]
             },
             "partners": {
