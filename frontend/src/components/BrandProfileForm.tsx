@@ -35,14 +35,36 @@ export function profileMissingFields(profile: BrandProfile, required = PROFILE_R
   return required.filter(k => !isProfileFieldFilled(profile, k));
 }
 
-type SectionKey = 'basic' | 'subject' | 'service' | 'story' | 'extra';
+type SectionKey = 'basic' | 'subject' | 'service' | 'story' | 'extra' | 'creation';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'basic',   label: '一、基础标识' },
-  { key: 'subject', label: '二、品牌主体信息' },
-  { key: 'service', label: '三、产品 / 服务核心信息' },
-  { key: 'story',   label: '四、品牌故事与情感素材' },
-  { key: 'extra',   label: '五、补充素材与创作边界' },
+  { key: 'basic',    label: '一、基础标识' },
+  { key: 'subject',  label: '二、品牌主体信息' },
+  { key: 'service',  label: '三、产品 / 服务核心信息' },
+  { key: 'story',    label: '四、品牌故事与情感素材' },
+  { key: 'extra',    label: '五、补充素材与创作边界' },
+  { key: 'creation', label: '六、内容创作偏好' },
+];
+
+// 2026-05-28 — 创作方向 / 文案类型 候选值(与后端 content_generator.DIRECTION_HINTS /
+// TYPE_HINTS 同 key).多选,选了几个 → 同一条 query 出几篇风格不同的稿件.
+const CREATION_DIRECTION_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'industry_insight',  label: '行业洞察',  desc: '趋势 / 市场数据 / 头部玩家' },
+  { value: 'case_story',        label: '案例分享',  desc: '真实项目复盘' },
+  { value: 'how_to_guide',      label: '实操指南',  desc: '步骤化 / 怎么做' },
+  { value: 'trend_forecast',    label: '趋势预测',  desc: '行业前瞻 + 应对' },
+  { value: 'product_review',    label: '产品评测',  desc: '横向对比 / 优劣矩阵' },
+  { value: 'customer_story',    label: '客户故事',  desc: '第一人称 + 量化成果' },
+  { value: 'faq',               label: 'FAQ 答疑', desc: '常见问题列表' },
+];
+
+const COPYWRITING_TYPE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'long_form',          label: '深度长文',     desc: '1500-2500 字 · 公众号 / 知乎' },
+  { value: 'medium_post',        label: '中等图文',     desc: '500-1500 字 · 公众号中等' },
+  { value: 'short_social',       label: '短社媒文案',   desc: '<500 字 · 小红书 / 微博' },
+  { value: 'video_script_long',  label: '长视频脚本',   desc: '5-8 分钟口播稿' },
+  { value: 'video_script_short', label: '短视频文案',   desc: '30-60 秒口播稿' },
+  { value: 'faq_list',           label: 'FAQ 列表',     desc: '8-12 条 Q&A' },
 ];
 
 interface ProfileFormProps {
@@ -195,6 +217,32 @@ export function BrandProfileForm({
                            value={profile.extra_notes} onChange={v => setField('extra_notes', v)} />
             </>
           )}
+          {tab === 'creation' && (
+            <>
+              <div className="text-xs text-muted -mt-1 mb-2 leading-relaxed"
+                   style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                            padding: '8px 12px', borderRadius: 6 }}>
+                选了几个「创作方向」× 几个「文案类型」,系统就为每条监测问题
+                <strong style={{ color: 'var(--accent-primary)' }}> 出几篇风格不同的稿件 </strong>。
+                例如:勾「案例分享 + 实操指南」× 「深度长文 + 短社媒」= 同一问题 4 篇稿。
+                上限 9 篇/问题(超过自动截断);两边都不选 → 沿用旧行为(每问题 1 篇)。
+              </div>
+              <OptionsMultiRow
+                label="创作方向(多选)"
+                options={CREATION_DIRECTION_OPTIONS}
+                value={profile.creation_directions}
+                onChange={v => setField('creation_directions', v)}
+                readOnly={readOnly}
+              />
+              <OptionsMultiRow
+                label="文案类型(多选)"
+                options={COPYWRITING_TYPE_OPTIONS}
+                value={profile.copywriting_types}
+                onChange={v => setField('copywriting_types', v)}
+                readOnly={readOnly}
+              />
+            </>
+          )}
         </div>
       </section>
     </div>
@@ -289,6 +337,56 @@ function ParagraphRow({ label, required, readOnly, value, onChange, rows = 4 }: 
 interface TagsProps {
   label: string; required: boolean; readOnly: boolean;
   value: string[]; onChange: (v: string[]) => void; placeholder?: string;
+}
+
+// 2026-05-28 — 多选 chip 行,选项是固定枚举(创作方向 / 文案类型);跟 TagsRow 的
+// 自由输入不同,这里是「点 chip 切换勾选」.每个 chip 下方带简短描述.
+function OptionsMultiRow({
+  label, options, value, onChange, readOnly,
+}: {
+  label: string;
+  options: { value: string; label: string; desc: string }[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  readOnly: boolean;
+}) {
+  const set = new Set(value || []);
+  const toggle = (v: string) => {
+    const next = new Set(set);
+    if (next.has(v)) next.delete(v); else next.add(v);
+    onChange(Array.from(next));
+  };
+  return (
+    <div>
+      <Label text={label} required={false} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        {options.map(opt => {
+          const checked = set.has(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={readOnly}
+              onClick={() => toggle(opt.value)}
+              className="text-left px-3 py-2 rounded-md border"
+              style={{
+                background: checked ? 'var(--bg-tertiary)' : 'var(--bg-card)',
+                borderColor: checked ? 'var(--accent-primary)' : 'var(--border-color)',
+                color: 'var(--text-primary)',
+                cursor: readOnly ? 'not-allowed' : 'pointer',
+                opacity: readOnly ? 0.6 : 1,
+              }}
+            >
+              <div className="text-sm font-medium" style={{ color: checked ? 'var(--accent-primary)' : 'var(--text-primary)' }}>
+                {checked && <span className="mr-1">✓</span>}{opt.label}
+              </div>
+              <div className="text-[11px] text-muted mt-0.5">{opt.desc}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function TagsRow({ label, required, readOnly, value, onChange, placeholder }: TagsProps) {

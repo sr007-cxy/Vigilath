@@ -362,6 +362,10 @@ class TopicGeneratedDocORM(Base):
     # 生成时使用的模板 + 平台(plan_item 当时的快照值)
     template_id = Column(Integer, ForeignKey("content_templates.id", ondelete="SET NULL"), nullable=True)
     platform = Column(String(length=16), nullable=True)
+    # 2026-05-28 — 多变体生成:同一 query 按 (creation_direction, copywriting_type) combo
+    # 出多份风格不同的稿;这俩字段做 combo 标识.legacy doc 留空.
+    creation_direction = Column(String(length=64), nullable=True)
+    copywriting_type = Column(String(length=64), nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     source_query_text = Column(Text, nullable=False, default="")
@@ -386,6 +390,18 @@ class TopicGeneratedDocORM(Base):
     # 按引擎记 response_id 列表。空 `{}` = 还没被任何引擎引过。
     # 形态:{"deepseek": [response_id, ...], "doubao": [...], ...}
     cited_by_json = Column(Text, nullable=False, default="{}")
+
+    # ─── Mediumsly 推送状态(2026-05-29)─────────────────────────────
+    # 由 services/mediumsly_publisher.py 写,publish endpoint 读。与
+    # publish_targets_json 解耦:后者是 admin 手动标注,这 4 列追踪自动外发结果。
+    #   - 有 mediumsly_post_id → publisher 走 PATCH 原地更新
+    #   - 没有 → publisher 走 POST 新建(Mediumsly 那边按 email 自动 upsert user)
+    #   - PATCH 收到 404 → publisher 把 mediumsly_post_id 清空 + 写错误,下次重试自动 fallback POST
+    # 见 docs/05-geo-integration.md(mediumsly repo)。
+    mediumsly_post_id    = Column(String(length=64),  nullable=True)
+    mediumsly_url        = Column(String(length=512), nullable=True)
+    mediumsly_pushed_at  = Column(DateTime,           nullable=True)
+    mediumsly_last_error = Column(Text,               nullable=True)
 
 
 class TopicMediaORM(Base):
@@ -756,6 +772,14 @@ class GeneratedDocOut(BaseModel):
     source: str = "ai"
     # 2026-05-19 — URL 级 ROI 命中:{engine: [response_id]}
     cited_by: dict[str, list[int]] = Field(default_factory=dict)
+    # 2026-05-29 — Mediumsly 推送状态(只读;由 publisher 写,前端只展示)
+    mediumsly_post_id: Optional[str] = None
+    mediumsly_url: Optional[str] = None
+    mediumsly_pushed_at: Optional[datetime] = None
+    mediumsly_last_error: Optional[str] = None
+    # 2026-05-28 — 多变体生成标识(同一 query 多份稿件按这俩字段区分)
+    creation_direction: Optional[str] = None
+    copywriting_type: Optional[str] = None
 
     @classmethod
     def from_orm_row(cls, r: "TopicGeneratedDocORM") -> "GeneratedDocOut":
@@ -783,6 +807,12 @@ class GeneratedDocOut(BaseModel):
             reject_reason=r.reject_reason, publish_targets=targets,
             source=getattr(r, "source", None) or "ai",
             cited_by=cited,
+            mediumsly_post_id=getattr(r, "mediumsly_post_id", None),
+            mediumsly_url=getattr(r, "mediumsly_url", None),
+            mediumsly_pushed_at=getattr(r, "mediumsly_pushed_at", None),
+            mediumsly_last_error=getattr(r, "mediumsly_last_error", None),
+            creation_direction=getattr(r, "creation_direction", None),
+            copywriting_type=getattr(r, "copywriting_type", None),
         )
 
 
@@ -794,6 +824,8 @@ class PublishTargetItem(BaseModel):
 
 class PublishPayload(BaseModel):
     publish_targets: list[PublishTargetItem] = Field(..., min_length=1, max_length=20)
+    # 2026-05-29 — 是否同步推到 Mediumsly。缺省 False = 老前端兼容,行为与历史一致。
+    push_to_mediumsly: bool = False
 
 
 # v3.1 — 用户提交 / 编辑自己写的文章

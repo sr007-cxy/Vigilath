@@ -172,34 +172,84 @@ def _run_generation(
 
         provider, model_id, api_key = _resolve_provider()
 
+        # 2026-05-28 — 4 维场景扩展第二波:按 (creation_direction, copywriting_type)
+        # combo 多变体生成.profile 里两边都填了 → N×M combo;一边空 → 单边 fan-out;
+        # 都空 → fallback 单变体(向后兼容).
+        combos = _build_combos(profile)
+        log.info("content gen: topic %d, %d queries × %d combos = %d docs target",
+                 topic_id, len(queries), len(combos), len(queries) * len(combos))
+
         for q in queries:
-            doc = TopicGeneratedDocORM(
-                topic_id=topic_id, execution_plan_id=plan_id,
-                source_query_text=q, status="pending_review",
-                selected_for_review=True,
-                llm_model=model_id, source="ai",
-            )
-            if not provider:
-                doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
-                doc.title = f"[未生成] {q}"
+            for direction, copywriting_type in combos:
+                doc = TopicGeneratedDocORM(
+                    topic_id=topic_id, execution_plan_id=plan_id,
+                    source_query_text=q, status="pending_review",
+                    selected_for_review=True,
+                    llm_model=model_id, source="ai",
+                    creation_direction=direction,
+                    copywriting_type=copywriting_type,
+                )
+                if not provider:
+                    doc.generation_error = "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置"
+                    doc.title = f"[未生成] {q}"
+                    db.add(doc)
+                    continue
+                try:
+                    medias = _match_topic_media(db, topic_id, q)
+                    title, body, summary = _generate_one(
+                        profile, q, provider, api_key,
+                        direction=direction, copywriting_type=copywriting_type,
+                        medias=medias, topic_id=topic_id,
+                    )
+                    doc.title = title
+                    # allow_md 类型的 prompt 已让 LLM 自己嵌图;不再 append URL 列表
+                    # 老规则类型(no md)仍按老路径在末尾追加图片列表
+                    allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
+                    if allow_md:
+                        doc.body_markdown = body
+                    else:
+                        doc.body_markdown = _append_media_to_body(db, topic_id, q, body)
+                    doc.summary = summary
+                except Exception as e:  # noqa: BLE001
+                    log.warning("content gen failed for q='%s' combo=(%s,%s) topic=%d: %s",
+                                q, direction, copywriting_type, topic_id, e)
+                    doc.generation_error = str(e)[:500]
+                    doc.title = f"[生成失败] {q}"
                 db.add(doc)
-                continue
-            try:
-                title, body, summary = _generate_one(profile, q, provider, api_key)
-                doc.title = title
-                doc.body_markdown = _append_media_to_body(db, topic_id, q, body)
-                doc.summary = summary
-            except Exception as e:  # noqa: BLE001
-                log.warning("content gen failed for q='%s' topic=%d: %s", q, topic_id, e)
-                doc.generation_error = str(e)[:500]
-                doc.title = f"[生成失败] {q}"
-            db.add(doc)
         if mark_auto_run:
             t.auto_generate_last_run_at = datetime.utcnow()
         db.commit()
-        log.info("content gen done for topic %d: %d docs", topic_id, len(queries))
+        log.info("content gen done for topic %d: %d queries × %d combos",
+                 topic_id, len(queries), len(combos))
     finally:
         db.close()
+
+
+# 2026-05-28 — combo 构造:从 BrandProfile 拿 creation_directions × copywriting_types.
+# 单边空 → 用一个 None 占位(prompt 里降级,不注 hint);双空 → 单 (None, None) → 老路径
+_MAX_COMBOS_PER_QUERY = int(os.environ.get("GEO_CONTENT_MAX_COMBOS_PER_QUERY", "9"))
+
+
+def _build_combos(profile: BrandProfile) -> list[tuple[Optional[str], Optional[str]]]:
+    """根据 profile.creation_directions × copywriting_types 出 combo 列表.
+
+    cap 在 GEO_CONTENT_MAX_COMBOS_PER_QUERY(默认 9)— 防止 N×M 爆炸.
+    """
+    dirs = [d for d in (profile.creation_directions or []) if d and d in DIRECTION_HINTS]
+    types = [t for t in (profile.copywriting_types or []) if t and t in TYPE_HINTS]
+    if not dirs and not types:
+        return [(None, None)]  # 兜底:老路径,1 篇
+    if not dirs:
+        return [(None, t) for t in types[:_MAX_COMBOS_PER_QUERY]]
+    if not types:
+        return [(d, None) for d in dirs[:_MAX_COMBOS_PER_QUERY]]
+    out: list[tuple[Optional[str], Optional[str]]] = []
+    for d in dirs:
+        for t in types:
+            out.append((d, t))
+            if len(out) >= _MAX_COMBOS_PER_QUERY:
+                return out
+    return out
 
 
 def _run_per_item(
@@ -471,31 +521,60 @@ def _call_llm(
     return title, body, summary
 
 
-def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str) -> tuple[str, str, str]:
+def _generate_one(
+    profile: BrandProfile, query: str, provider: str, api_key: str,
+    *,
+    direction: Optional[str] = None,
+    copywriting_type: Optional[str] = None,
+    medias: Optional[list] = None,
+    topic_id: Optional[int] = None,
+) -> tuple[str, str, str]:
     """单条 query → (title, body_markdown, summary).
 
     provider:
       - "deepseek":  直连 https://api.deepseek.com/chat/completions,model=deepseek-chat
       - "openrouter": 走 https://openrouter.ai,model=deepseek/deepseek-chat
-    两条路 schema 都是 OpenAI 兼容 /chat/completions.
+
+    2026-05-28 — direction / copywriting_type / medias 参数:
+      - 非空时:按 combo 注入形式约束段;allow_md=True 的类型放开 markdown(可内嵌图片)
+      - 全空时:退回到 2026-05-18 的"纯净排版文本"老路径,行为不变
     """
-    system_prompt = _build_system_prompt(profile)
-    # 2026-05-18:稿件直接用于公众号 / 小红书 / 抖音 / 视频号发文,前端用
-    # whitespace-pre-wrap 直出。Markdown 符号(#/**/-) 在这些平台上会以原文
-    # 显示成乱码,所以这里强制要求 LLM 输出**纯净排版文本**。
+    system_prompt = _build_system_prompt(
+        profile, direction=direction, copywriting_type=copywriting_type,
+        medias=medias, topic_id=topic_id,
+    )
+    allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
+    # 篇幅来自 TYPE_HINTS,combo 没给就走老的 800-1500 字默认
+    type_cfg = TYPE_HINTS.get(copywriting_type or "", {})
+    body_len_spec = str(type_cfg.get("len") or "800-1500 字")
+
+    if allow_md:
+        # markdown 友好:允许 # 标题 / **加粗** / ![](url) 图片嵌入,不再 strip
+        body_rules = (
+            f"  1. 可以使用 Markdown 标记(# 标题 / ## 二级 / **加粗** / 列表 / ![图片](url) / [链接](url));\n"
+            f"  2. 如果上面给了图片素材列表,**必须在正文 2-3 处自然位置嵌入 ![描述](素材url)**;\n"
+            f"  3. 段落之间空一行,文章首尾要有钩子段和总结段;\n"
+            f"  4. 标点用中文全角,英文术语 / 数字保留原样。"
+        )
+    else:
+        # 老规则:严禁 markdown,平台直发友好
+        body_rules = (
+            f"  1. 严禁使用 Markdown / HTML 标记 — 不要出现 # ## ### **加粗** *斜体* `代码` > 引用 [链接](url) ![图片] 等任何符号;\n"
+            f"  2. 严禁使用 - * 1. 等列表前缀;需要分点时用「一、二、三、」或「①②③」中文序号开头另起一段;\n"
+            f"  3. 小标题独占一行、不加任何符号修饰,正文段落与小标题之间空一行;\n"
+            f"  4. 段落与段落之间用一个空行分隔,段内不要硬换行;\n"
+            f"  5. 所有标点用中文全角(,。!?:;「」),英文术语 / 数字保留原样即可。"
+        )
+
     user_prompt = (
-        f"针对下面这个问题,写一篇符合资料调性、可以直接复制到公众号/小红书/抖音文案区发布的文章。\n"
+        f"针对下面这个问题,写一篇符合资料调性、可以直接复制发布的文章。\n"
         f"问题:{query}\n\n"
         f"输出严格 JSON,字段:\n"
         f'  "title": 文案标题(吸睛,≤30 字,纯文本不要带任何符号修饰),\n'
         f'  "summary": 200 字内的摘要(纯文本,用于卡片预览),\n'
-        f'  "body": 文章正文(800-1500 字)。\n\n'
+        f'  "body": 文章正文({body_len_spec})。\n\n'
         f"正文排版强制要求(违反会导致稿件不可用):\n"
-        f"  1. 严禁使用 Markdown / HTML 标记 — 不要出现 # ## ### **加粗** *斜体* `代码` > 引用 [链接](url) ![图片] 等任何符号;\n"
-        f"  2. 严禁使用 - * 1. 等列表前缀;需要分点时用「一、二、三、」或「①②③」中文序号开头另起一段;\n"
-        f"  3. 小标题独占一行、不加任何符号修饰,正文段落与小标题之间空一行;\n"
-        f"  4. 段落与段落之间用一个空行分隔,段内不要硬换行;\n"
-        f"  5. 所有标点用中文全角(,。!?:;「」),英文术语 / 数字保留原样即可。\n\n"
+        f"{body_rules}\n\n"
         f"只输出 JSON,不要包前后 ``` 围栏。"
     )
     if provider == "deepseek":
@@ -535,7 +614,10 @@ def _generate_one(profile: BrandProfile, query: str, provider: str, api_key: str
         raise RuntimeError(f"unexpected {provider} response shape: {e}")
     parsed = _parse_json_loose(content)
     title = _strip_md_inline(str(parsed.get("title") or ""))[:200]
-    body = _strip_md_block(str(parsed.get("body") or ""))
+    raw_body = str(parsed.get("body") or "")
+    # 2026-05-28 — allow_md=True 的类型(long_form / medium_post / faq_list)保留 markdown,
+    # 否则按老规则 strip 成纯文本.title / summary 永远 strip 行内符号(卡片用,不允许 MD).
+    body = raw_body if allow_md else _strip_md_block(raw_body)
     summary = _strip_md_inline(str(parsed.get("summary") or ""))[:500]
     if not title or not body:
         raise RuntimeError("LLM returned empty title/body")
@@ -596,8 +678,108 @@ def _strip_md_block(s: str) -> str:
     return s.strip()
 
 
-def _build_system_prompt(profile: BrandProfile) -> str:
-    """资料 → 系统提示词,挑跟"文案创作"相关的字段."""
+# ─────────── 2026-05-28 — 创作方向 × 文案类型 多变体生成 ───────────
+
+# 7 个创作方向 — 每个值对应一段写作指南.profile.creation_directions 多选自此枚举.
+DIRECTION_HINTS: dict[str, str] = {
+    "industry_insight":  "以行业趋势 / 市场数据 / 头部玩家动向切入,产出有信息密度的分析。"
+                         "避免泛泛而谈,每个论点配 1 个数据 / 案例 / 引述支撑。",
+    "case_story":        "围绕一个真实案例展开:背景 → 挑战 → 我方解法 → 量化结果 → 启发。"
+                         "案例主角用资料里的 case_stories 或 customer 真实名字,不要虚构。",
+    "how_to_guide":      "用步骤化叙述:Step 1 / Step 2 / Step 3 ...,每步要有可执行动作 + 判断节点。"
+                         "适合「怎么做 / 怎么选」类意图查询,先给框架再展开。",
+    "trend_forecast":    "用前瞻视角:近 12-36 个月可能发生的变化 + 应对建议。"
+                         "至少引用 1 个权威信号(政策 / 头部公司动作 / 监管文件)。",
+    "product_review":    "对比 2-3 个同类产品 / 方案,列优劣矩阵,给出推荐场景。"
+                         "评测维度 ≥ 4 个(价格 / 性能 / 适配 / 服务),保持客观语气。",
+    "customer_story":    "第一人称引述客户原话(标注客户姓名 + 行业),用 2-3 段还原使用场景 + 量化成果。"
+                         "篇幅 60% 给客户故事,40% 给我方点评 / 关联业务。",
+    "faq":               "8-12 条常见问题 + 每题 100-200 字回答,问题先于回答。"
+                         "问题口语化(模拟真实用户提问),回答专业精炼。",
+}
+
+# 6 种文案类型 — 决定篇幅 / 形式约束 + 是否允许 markdown(图片嵌入).
+# 'allow_md' = True 时 prompt 不强制纯文本,可以嵌入 Markdown 图片 / 加粗;
+# False 时仍走老的"纯净排版文本"规则.
+TYPE_HINTS: dict[str, dict[str, object]] = {
+    "long_form":          {"len": "1500-2500 字", "allow_md": True,
+                           "hint": "正文 3-5 个二级小节,每节 300-500 字,带过渡句。"
+                                   "首段 100-150 字钩子,尾段总结 + 行动召唤。"},
+    "medium_post":        {"len": "500-1500 字", "allow_md": True,
+                           "hint": "正文 2-3 个二级小节,适合公众号 / 知乎中等阅读量帖子。"
+                                   "首段开门见山,正文每节 1 个核心观点。"},
+    "short_social":       {"len": "≤500 字", "allow_md": False,
+                           "hint": "短社媒文案:无小节,1-3 个 emoji,1 个 CTA。"
+                                   "首句 3 秒抓眼球,适合小红书 / 微博。"},
+    "video_script_long":  {"len": "5-8 分钟口播稿(2000-3000 字)", "allow_md": False,
+                           "hint": "段落用 [镜头] / [口播] / [屏幕字] 标注。"
+                                   "前 10 秒钩子吸引完播,中段问题铺陈,尾段解决方案 + CTA。"},
+    "video_script_short": {"len": "30-60 秒口播稿(150-300 字)", "allow_md": False,
+                           "hint": "前 3 秒钩子(疑问 / 痛点) → 5 秒共鸣 → 15 秒解法 → 5 秒 CTA。"
+                                   "用短句,口语化,禁书面词。"},
+    "faq_list":           {"len": "8-12 条 Q&A(总长 1000-2000 字)", "allow_md": True,
+                           "hint": "纯 Q&A 列表,每条问题独占一行(用「Q:」前缀),"
+                                   "回答 100-200 字(用「A:」前缀)。问题口语化,回答专业。"},
+}
+
+
+def _build_combo_block(direction: Optional[str], copywriting_type: Optional[str]) -> str:
+    """渲染 combo hint 段,塞进 system prompt.两个都为空 → 返回 '' (走老路径)."""
+    if not direction and not copywriting_type:
+        return ""
+    lines: list[str] = ["", "## 本次稿件的形式要求"]
+    if direction:
+        h = DIRECTION_HINTS.get(direction, "")
+        if h:
+            lines.append(f"- 创作方向「{direction}」: {h}")
+        else:
+            lines.append(f"- 创作方向: {direction}")
+    if copywriting_type:
+        cfg = TYPE_HINTS.get(copywriting_type, {})
+        len_ = cfg.get("len", "")
+        hint = cfg.get("hint", "")
+        if len_ or hint:
+            lines.append(f"- 文案类型「{copywriting_type}」: 篇幅 {len_};{hint}")
+        else:
+            lines.append(f"- 文案类型: {copywriting_type}")
+    return "\n".join(lines)
+
+
+def _build_media_block_for_prompt(medias: list["TopicMediaORM"], topic_id: int,
+                                    allow_md: bool) -> str:
+    """渲染图片素材清单段塞进 system prompt.
+
+    allow_md=True 时让 LLM 在正文 2-3 处自然位置嵌入 markdown 图片引用 ![](url);
+    allow_md=False 时只列素材给 LLM 参考,不要求嵌入(append 阶段仍会拼到末尾).
+    """
+    if not medias:
+        return ""
+    lines: list[str] = ["", "## 可用图片素材"]
+    for i, m in enumerate(medias, 1):
+        url = f"/api/ai-telemetry/topics/{topic_id}/media/{m.id}/blob"
+        fn = m.filename or f"media-{m.id}"
+        lines.append(f"- 素材{i}「{fn}」: {url}")
+    if allow_md:
+        lines.append("")
+        lines.append("**在正文 2-3 处自然位置插入 markdown 图片引用 ![描述](url),"
+                     "用上面列的 url。首张配图放在文章开头钩子段之后。**")
+    else:
+        lines.append("")
+        lines.append("(本次文案类型不便内嵌图片,素材会自动追加到正文末尾,你不必处理。)")
+    return "\n".join(lines)
+
+
+def _build_system_prompt(profile: BrandProfile,
+                          direction: Optional[str] = None,
+                          copywriting_type: Optional[str] = None,
+                          medias: Optional[list] = None,
+                          topic_id: Optional[int] = None) -> str:
+    """资料 → 系统提示词,挑跟"文案创作"相关的字段.
+
+    2026-05-28 — 加 combo + media 参数:
+      - direction / copywriting_type 非空时追加形式约束段
+      - medias 非空时追加图片素材列表(由 TYPE_HINTS[type].allow_md 决定是否要求内嵌)
+    """
     parts: list[str] = ["你是品牌内容文案专家,根据下面的品牌资料写文案稿:"]
     if profile.company_full_name:
         parts.append(f"- 品牌全称:{profile.company_full_name}")
@@ -627,6 +809,15 @@ def _build_system_prompt(profile: BrandProfile) -> str:
         parts.append(f"- 本次核心信息:{profile.core_message}")
     parts.append("")
     parts.append("严格遵守内容雷区,语气贴合调性,围绕本次核心信息展开。")
+    # combo + media 增强段(2026-05-28)
+    combo_block = _build_combo_block(direction, copywriting_type)
+    if combo_block:
+        parts.append(combo_block)
+    if medias and topic_id is not None:
+        allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
+        media_block = _build_media_block_for_prompt(medias, topic_id, allow_md)
+        if media_block:
+            parts.append(media_block)
     return "\n".join(parts)
 
 
