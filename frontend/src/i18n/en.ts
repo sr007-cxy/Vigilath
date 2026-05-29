@@ -3474,6 +3474,14 @@ const en = {
               "viewPlan": "View plan",
               "viewSolution": "GEO Strategy Plan",
               "reviewDocs": "Review docs",
+              "nodeAction": {
+                "submit": "Edit profile",
+                "review": "Pre-review",
+                "solution": "Diagnostic",
+                "plan": "View plan",
+                "content": "Review docs",
+                "insight": "Outcome"
+              },
               "savedModal": {
                 "title": "Approval Snapshot",
                 "body": "Topic saved. You can now generate the GEO Strategy Plan.",

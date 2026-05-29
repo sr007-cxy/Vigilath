@@ -3480,6 +3480,14 @@ const zh = {
               "viewPlan": "查看计划书",
               "viewSolution": "GEO策略优化方案",
               "reviewDocs": "复审文案",
+              "nodeAction": {
+                "submit": "编辑画像",
+                "review": "评估报告",
+                "solution": "诊断报告",
+                "plan": "查看计划",
+                "content": "复审文案",
+                "insight": "效果报告"
+              },
               "savedModal": {
                 "title": "审批报告",
                 "body": "主题资料已落库,可直接生成 GEO策略优化方案。",

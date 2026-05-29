@@ -307,12 +307,24 @@ export function AdminAccountTopics() {
                             e.stopPropagation();
                             navigate(`/workbench/topics/${tp.id}/edit?step=${STAGE_TO_STEP[k]}`);
                           }}
-                          className="flex flex-col items-center px-1 py-1 rounded transition-colors hover:bg-[var(--bg-tertiary)]"
-                          style={{ width: 96 }}
+                          className="group flex flex-col items-center px-1 py-1 rounded transition-colors hover:bg-[var(--bg-tertiary)]"
+                          style={{ width: 104 }}
                         >
                           <StepCircle state={state} index={i} isCurrent={isCurrent} />
                           <span className="text-[11px] text-secondary mt-1.5 text-center leading-tight">
                             {t(`workbench.adminCockpit.stage.${k}`)}
+                          </span>
+                          {/* 节点下面的 action chip — 视觉上像按钮,实际复用外层 button 的 onClick */}
+                          <span className="mt-2 inline-block text-[11px] px-2 py-0.5 rounded-full transition-colors group-hover:text-white"
+                                style={{
+                                  color: 'var(--accent-primary)',
+                                  border: '1px solid var(--accent-primary)',
+                                  background: 'transparent',
+                                }}
+                                // hover 时把背景填成 accent,沿用 css var(没办法直接 group-hover:bg-var)
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-primary)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                            {t(`workbench.adminAccountTopics.nodeAction.${k}`)}
                           </span>
                         </button>
                         {i < STAGE_ORDER.length - 1 && (
