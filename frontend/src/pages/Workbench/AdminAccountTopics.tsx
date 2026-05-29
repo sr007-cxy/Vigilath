@@ -1,13 +1,19 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { aiTelemetryApi, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
+import { aiTelemetryApi, type AdminAccount, type Topic, type TopicPayload } from '../../services/aiTelemetryApi';
 import { adminReviewApi, type StageState, type TopicReviewListItem } from '../../services/adminReviewApi';
 import { TopicEditor } from '../Dashboard/AiTelemetry';
 
 // 项目进度 6 段顺序,与 cockpit `AdminCockpit.tsx` 对齐.
 type StageKey = 'submit' | 'review' | 'solution' | 'plan' | 'content' | 'insight';
 const STAGE_ORDER: StageKey[] = ['submit', 'review', 'solution', 'plan', 'content', 'insight'];
+
+// 每段对应「画像」主流程的 URL step — 与 TopicStepper.tsx 同源.
+// 点节点 = 直接进入该步,所以旧版的「编辑 / 健康诊断 / 计划书 / 复审文案」按钮就并到节点里了.
+const STAGE_TO_STEP: Record<StageKey, number> = {
+  submit: 1, review: 3, solution: 4, plan: 5, content: 6, insight: 7,
+};
 
 // 把 cockpit 的 StageState 折算到本卡片 chip 调色板(无 pending,合并到 running).
 function stageToChip(s: StageState): PipelineChipState {
@@ -56,6 +62,9 @@ export function AdminAccountTopics() {
   const { t } = useTranslation();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
+  // 客户账号(用于面包屑展示客户名 — brand_target / users.name).没有单条接口,从
+  // adminListAccounts 里 find 出本 user.
+  const [account, setAccount] = useState<AdminAccount | null>(null);
   // 项目进度 6 段状态,从 admin 列表接口拿,按 user_id 过滤 + topic_id 索引.
   const [stagesByTid, setStagesByTid] = useState<Record<number, TopicReviewListItem>>({});
   // undefined = 列表;null = 新建;Topic = 编辑(admin 也用同一个 editor)
@@ -94,10 +103,15 @@ export function AdminAccountTopics() {
     }
   }, [searchParams, setSearchParams]);
 
-  // 客户名称:优先取首个 topic 的 target(= ai_telemetry_topics.target,客户填的品牌名),
-  // 没有时 fallback 到「用户 #id」.AdminAccount 接口的 brand_target 走同一来源,这里不
-  // 额外拉账号列表以节约请求.
-  const customerName = topics[0]?.target || `用户 #${userId}`;
+  // 客户名称展示链 — 与 AdminAccounts.tsx (画像列表) 同源:
+  //   1. account.brand_target  → 客户填的品牌名(ai_telemetry_topics.target,跨主题取最近)
+  //   2. account.name          → admin 注册时填的内部备注(如「测试」)
+  //   3. topics[0]?.target     → 兜底,极个别情况下 admin 接口失败但 topic 列表成功
+  //   4. `用户 #id`            → 全失败兜底
+  const customerName = account?.brand_target
+    || account?.name
+    || topics[0]?.target
+    || `用户 #${userId}`;
 
   const reload = () => {
     if (!userId) return;
@@ -126,6 +140,13 @@ export function AdminAccountTopics() {
         setStagesByTid(m);
       })
       .catch(() => { if (!cancelled) setStagesByTid({}); });
+    // 客户账号信息(为面包屑拿 brand_target / users.name);没有单条 GET,从全表 find.
+    aiTelemetryApi.adminListAccounts(token)
+      .then(accs => {
+        if (cancelled) return;
+        setAccount(accs.find(a => a.id === Number(userId)) || null);
+      })
+      .catch(() => { if (!cancelled) setAccount(null); });
     return () => { cancelled = true; };
   }, [userId, token]);
 
@@ -210,7 +231,7 @@ export function AdminAccountTopics() {
           {t('workbench.adminAccountTopics.emptyHint')}
         </div>
       ) : (
-        <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ul className="grid grid-cols-1 gap-3">
           {topics.map(tp => {
             // 「是否启动过」用 last_run_at 推断:approve_topic / start_topic / rerun 都会拿
             // run_id,有 last_run_at 说明至少触发过一次跑批.老 approved 主题(admin 直建,
@@ -229,10 +250,12 @@ export function AdminAccountTopics() {
               return STAGE_ORDER.length - 1;
             })();
             return (
-              <li key={tp.id} className="flex flex-col p-5 rounded-xl min-h-[280px]"
+              <li key={tp.id}
+                onClick={() => navigate(`/workbench/topics/${tp.id}/edit`)}
+                className="flex flex-col p-5 rounded-xl cursor-pointer transition-colors hover:border-[var(--accent-primary)]"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                {/* 头部:标题 + 客户名 / 行业 */}
-                <div className="flex items-start justify-between gap-3 mb-3">
+                {/* 头部:标题 + 客户名 / 行业 + 「启动项目」CTA(未跑过时) */}
+                <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="min-w-0 flex-1">
                     <h3 className="text-base font-semibold text-primary truncate" title={tp.name}>
                       {tp.name}
@@ -241,22 +264,35 @@ export function AdminAccountTopics() {
                       {tp.target || '—'}{tp.industry ? ` · ${tp.industry}` : ''}
                     </p>
                   </div>
-                  <div className="text-right shrink-0 text-[11px] leading-tight">
-                    <div className="text-secondary">
-                      <span className="tabular-nums text-primary">{tp.queries.length}</span>
-                      <span className="text-muted ml-1">Q</span>
-                      <span className="mx-1 text-muted">/</span>
-                      <span className="tabular-nums text-primary">{tp.engines.length}</span>
-                      <span className="text-muted ml-1">E</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right text-[11px] leading-tight">
+                      <div className="text-secondary">
+                        <span className="tabular-nums text-primary">{tp.queries.length}</span>
+                        <span className="text-muted ml-1">Q</span>
+                        <span className="mx-1 text-muted">/</span>
+                        <span className="tabular-nums text-primary">{tp.engines.length}</span>
+                        <span className="text-muted ml-1">E</span>
+                      </div>
+                      <div className="text-muted mt-1">
+                        {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
+                      </div>
                     </div>
-                    <div className="text-muted mt-1">
-                      {tp.last_run_status || t('workbench.adminAccountTopics.neverRun')}
-                    </div>
+                    {!hasRun && (
+                      <button
+                        type="button"
+                        disabled={isStartBusy}
+                        onClick={(e) => { e.stopPropagation(); handleStart(tp); }}
+                        className="text-xs px-3 py-1.5 rounded-md text-white shrink-0"
+                        style={{ background: 'var(--accent-primary)', opacity: isStartBusy ? 0.5 : 1 }}
+                      >
+                        {isStartBusy ? '…' : t('workbench.adminAccountTopics.startProject')}
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* 项目进度 6 段 stepper — 横向连线 + 步号,当前步高亮 */}
-                <div className="flex items-start mt-1 mb-4">
+                {/* 项目进度 6 段 stepper — 每个节点本身就是按钮,点了直接进对应 step */}
+                <div className="flex items-start mt-1">
                   {STAGE_ORDER.map((k, i) => {
                     const state = stageToChip(stages[k]);
                     const isCurrent = i === currentIdx && state !== 'done';
@@ -265,14 +301,22 @@ export function AdminAccountTopics() {
                     const connectorDone = state === 'done' && (next === 'done' || next === 'running');
                     return (
                       <Fragment key={k}>
-                        <div className="flex flex-col items-center" style={{ width: 36 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/workbench/topics/${tp.id}/edit?step=${STAGE_TO_STEP[k]}`);
+                          }}
+                          className="flex flex-col items-center px-1 py-1 rounded transition-colors hover:bg-[var(--bg-tertiary)]"
+                          style={{ width: 96 }}
+                        >
                           <StepCircle state={state} index={i} isCurrent={isCurrent} />
-                          <span className="text-[10px] text-secondary mt-1.5 text-center leading-tight">
+                          <span className="text-[11px] text-secondary mt-1.5 text-center leading-tight">
                             {t(`workbench.adminCockpit.stage.${k}`)}
                           </span>
-                        </div>
+                        </button>
                         {i < STAGE_ORDER.length - 1 && (
-                          <div className="flex-1 mt-[13px] h-[2px] rounded-full"
+                          <div className="flex-1 mt-[18px] h-[2px] rounded-full"
                                style={{ background: connectorDone ? '#10b981' : 'var(--border-color)' }} />
                         )}
                       </Fragment>
@@ -281,60 +325,10 @@ export function AdminAccountTopics() {
                 </div>
 
                 {startErr && (
-                  <div className="mb-2 text-[11px] text-red-500 break-words">
+                  <div className="mt-3 text-[11px] text-red-500 break-words">
                     {startErr}
                   </div>
                 )}
-
-                <div className="flex flex-wrap items-center gap-2 mt-auto pt-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/workbench/topics/${tp.id}/edit`)}
-                    className="text-xs px-3 py-1.5 rounded-md"
-                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                             border: '1px solid var(--border-color)' }}
-                  >
-                    {t('workbench.adminAccountTopics.edit')}
-                  </button>
-
-                  {!hasRun && (
-                    <button
-                      type="button"
-                      disabled={isStartBusy}
-                      onClick={() => handleStart(tp)}
-                      className="text-xs px-3 py-1.5 rounded-md text-white"
-                      style={{ background: 'var(--accent-primary)', opacity: isStartBusy ? 0.5 : 1 }}
-                    >
-                      {isStartBusy ? '…' : t('workbench.adminAccountTopics.startProject')}
-                    </button>
-                  )}
-
-                  {hasRun && (
-                    <>
-                      {/* 全部走「画像」主流程的对应 step,不再跳独立详情页 */}
-                      <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=4`)}
-                        className="text-xs px-3 py-1.5 rounded-md text-white"
-                        style={{ background: 'var(--accent-primary)' }}>
-                        {t('workbench.adminAccountTopics.viewSolution')}
-                      </button>
-                      <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=5`)}
-                        className="text-xs px-3 py-1.5 rounded-md"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                                 border: '1px solid var(--border-color)' }}>
-                        {t('workbench.adminAccountTopics.viewPlan')}
-                      </button>
-                      <button type="button"
-                        onClick={() => navigate(`/workbench/topics/${tp.id}/edit?step=6`)}
-                        className="text-xs px-3 py-1.5 rounded-md"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                                 border: '1px solid var(--border-color)' }}>
-                        {t('workbench.adminAccountTopics.reviewDocs')}
-                      </button>
-                    </>
-                  )}
-                </div>
               </li>
             );
           })}
