@@ -3078,6 +3078,8 @@ const en = {
               "publishUrlPlaceholder": "Live URL after publishing (optional)",
               "publishPickerHint": "One row per (platform, media) — the same article can target multiple accounts with their own live URLs",
               "addPublishRow": "Add row",
+              "pushToMediumsly": "Also publish to Mediumsly",
+              "pushToMediumslyHint": "Pushes the article body to mediumsly.com; failure here won't block the local publish state",
               "confirmPublish": "Publish to {{n}} channel(s)",
               "sourceLabel": "Source",
               "sourceFilter": {

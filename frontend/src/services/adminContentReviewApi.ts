@@ -112,7 +112,11 @@ export const adminContentReviewApi = {
     docId: number,
     targets: { platform: string; media: string; url?: string }[],
     token: string,
+    pushToMediumsly = false,
   ): Promise<GeneratedDoc> {
-    return request('POST', `/docs/${docId}/publish`, token, { publish_targets: targets });
+    return request('POST', `/docs/${docId}/publish`, token, {
+      publish_targets: targets,
+      push_to_mediumsly: pushToMediumsly,
+    });
   },
 };

@@ -720,8 +720,8 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
 
         {showPublish && (
           <PublishPicker onCancel={() => setShowPublish(false)}
-                         onConfirm={(targets) =>
-                           wrap(() => adminContentReviewApi.publishDoc(doc.id, targets, token))} />
+                         onConfirm={(targets, pushToMediumsly) =>
+                           wrap(() => adminContentReviewApi.publishDoc(doc.id, targets, token, pushToMediumsly))} />
         )}
       </div>
     </div>
@@ -738,13 +738,16 @@ interface PublishRow {
 
 function PublishPicker({ onCancel, onConfirm }: {
   onCancel: () => void;
-  onConfirm: (targets: { platform: string; media: string; url?: string }[]) => void;
+  onConfirm: (targets: { platform: string; media: string; url?: string }[],
+              pushToMediumsly: boolean) => void;
 }) {
   const { t } = useTranslation();
   // 同一稿子可能投到多家平台 + 多个媒体号,所以一行一组 (platform, media, url)
   const [rows, setRows] = useState<PublishRow[]>([
     { platform: PLATFORM_OPTIONS[0], media: '', url: '' },
   ]);
+  // 同步推 Mediumsly:默认勾上(走 server-to-server,失败也不阻塞本地 publish)
+  const [pushToMediumsly, setPushToMediumsly] = useState(true);
 
   const update = (idx: number, patch: Partial<PublishRow>) => {
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -761,7 +764,7 @@ function PublishPicker({ onCancel, onConfirm }: {
       platform: r.platform.trim(),
       media: r.media.trim(),
       url: r.url.trim() || undefined,
-    })));
+    })), pushToMediumsly);
   };
 
   return (
@@ -812,6 +815,14 @@ function PublishPicker({ onCancel, onConfirm }: {
                        border: '1px dashed var(--border-color)' }}>
         + {t('admin.contentReview.addPublishRow')}
       </button>
+
+      <label className="flex items-center gap-2 text-xs cursor-pointer select-none"
+             style={{ color: 'var(--text-primary)' }}>
+        <input type="checkbox" checked={pushToMediumsly}
+               onChange={e => setPushToMediumsly(e.target.checked)} />
+        <span>{t('admin.contentReview.pushToMediumsly')}</span>
+        <span className="text-secondary">— {t('admin.contentReview.pushToMediumslyHint')}</span>
+      </label>
 
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel}

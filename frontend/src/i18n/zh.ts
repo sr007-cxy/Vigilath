@@ -3084,6 +3084,8 @@ const zh = {
               "publishUrlPlaceholder": "发布后的链接(选填)",
               "publishPickerHint": "每个平台 + 媒体单独一行;同一稿子可投到多家不同账号,每行可单独填发布链接",
               "addPublishRow": "再加一行",
+              "pushToMediumsly": "同步发布到 Mediumsly",
+              "pushToMediumslyHint": "勾选后会把正文推送到 mediumsly.com,失败不影响本地发布状态",
               "confirmPublish": "确认发布到 {{n}} 个渠道",
               "sourceLabel": "来源",
               "sourceFilter": {
