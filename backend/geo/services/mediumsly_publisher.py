@@ -2,12 +2,15 @@
 
 约束:
   - 单 token(MEDIUMSLY_INTERNAL_API_TOKEN);整套调用是受信任的服务器到服务器调用。
-  - 用户身份(bot 代发模型):**不**把真用户邮箱推到 Mediumsly,而是统一用
-    `user-<id>@<bot_domain>` 这种受控邮箱注册作者。bot_domain 取自
-    MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST 的第一项(排序后)。这样:
-      • 同一 GEO user 在 Mediumsly 上是同一个稳定作者(email upsert key)
+  - 作者身份(bot 代发模型,按 topic 而不是按 user):**不**把真用户邮箱推到
+    Mediumsly。GEO 里一个 user 可挂多个 topic(品牌),每个 topic 是一个独立作者
+    身份 — 所以 Mediumsly 那边的作者 email 用 `topic-<topic_id>@<bot_domain>`
+    (而不是按 user 合并)。bot_domain 取自 MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST 的
+    第一项(排序后)。
+      • 同一 topic 始终对应同一个 Mediumsly 作者(email upsert key)
       • 真用户邮箱永不外泄到第三方站点
-      • author.name 仍用 user.name(品牌方姓名照常展示)
+      • author.name 用 topic.name(品牌方名字,通常是中文),失败 fallback
+        到 topic.target → user.name → email 前缀
   - 重推:有 mediumsly_post_id 走 PATCH,没有走 POST。PATCH 返回 404 说明 Mediumsly
     那边文章被手动删了 —— publisher 抛 MediumslyPostGone,调用方应清空本地
     mediumsly_post_id 后下次重试自动走 POST 重建。
@@ -29,7 +32,7 @@ from dataclasses import dataclass
 import httpx
 
 from geo.database import settings
-from geo.models.ai_telemetry import TopicGeneratedDocORM
+from geo.models.ai_telemetry import AiTelemetryTopicORM, TopicGeneratedDocORM
 from geo.models.user import UserORM
 
 log = logging.getLogger(__name__)
@@ -81,16 +84,26 @@ def _platform_tags(doc: TopicGeneratedDocORM) -> list[str]:
     return tags[:5]
 
 
-def _bot_email_for(user: UserORM, allowed_domains: frozenset[str]) -> str:
-    """合成 bot 邮箱:`user-<user_id>@<bot_domain>`。
+def _bot_email_for_topic(topic: AiTelemetryTopicORM, allowed_domains: frozenset[str]) -> str:
+    """合成 bot 邮箱:`topic-<topic_id>@<bot_domain>`。
     bot_domain 取 allowlist 第一项(排序后,deterministic)。
     """
     # sorted 让多域名时选择稳定,实际生产通常只配 1 个
     bot_domain = sorted(allowed_domains)[0]
-    return f"user-{user.id}@{bot_domain}"
+    return f"topic-{topic.id}@{bot_domain}"
 
 
-async def push(doc: TopicGeneratedDocORM, user: UserORM) -> PushResult:
+def _author_display_name(topic: AiTelemetryTopicORM, user: UserORM) -> str:
+    """选展示在 Mediumsly 上的作者名,优先级:topic.name > topic.target > user.name > email 前缀."""
+    for candidate in (topic.name, topic.target, user.name):
+        if candidate and candidate.strip():
+            return candidate.strip()
+    if user.email and "@" in user.email:
+        return user.email.split("@")[0]
+    return f"topic-{topic.id}"
+
+
+async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopicORM) -> PushResult:
     """把 doc 推到 Mediumsly。返回 PushResult 或抛 MediumslyError 子类。"""
     if not settings.MEDIUMSLY_INTERNAL_API_TOKEN:
         raise MediumslyNotConfigured("MEDIUMSLY_INTERNAL_API_TOKEN not set")
@@ -136,13 +149,13 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM) -> PushResult:
                         status=404, code="NOT_FOUND",
                     )
             else:
-                # 第一次推:bot 代发 — 用 user-<id>@<bot_domain> 作为 Mediumsly 那边的
-                # 作者 email(upsert key),真用户邮箱只用于 GEO 内部审核通知,
-                # 永不外泄到 Mediumsly。展示用的 name 仍取自 user.name(品牌方姓名)。
-                bot_email = _bot_email_for(user, allowed)
+                # 第一次推:bot 代发 — 用 topic-<id>@<bot_domain> 作为 Mediumsly 那边的
+                # 作者 email(upsert key),真用户邮箱永不外泄。同一 topic 在 Mediumsly
+                # 上始终是同一个作者(同一 user 的不同品牌不会被合并)。
+                # 展示用 topic.name(品牌方中文名),按优先级 fallback。
                 body["author"] = {
-                    "email": bot_email,
-                    "name": user.name or (user.email.split("@")[0] if user.email else f"user-{user.id}"),
+                    "email": _bot_email_for_topic(topic, allowed),
+                    "name":  _author_display_name(topic, user),
                 }
                 r = await client.post(
                     f"{base}/api/internal/posts",

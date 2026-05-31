@@ -231,14 +231,20 @@ def reject_doc(
 
 
 @router.post("/docs/{doc_id}/publish", response_model=GeneratedDocOut)
-def publish_doc(
+async def publish_doc(
     doc_id: int,
     payload: PublishPayload,
     background: BackgroundTasks,
     admin = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """标记发布目标 — 只落 DB,不调外部平台 OpenAPI."""
+    """标记发布目标 + (可选)推到 Mediumsly。
+
+    publish_targets_json 永远写(老语义不变,只是"标注已发到哪里");
+    push_to_mediumsly=true 时,额外调 Mediumsly 内部 API,把返回的 post id/url
+    写到 doc 的 mediumsly_* 列。Mediumsly 推送失败不会回滚 GEO 这边的 publish,
+    错误存到 mediumsly_last_error 让 admin 重试。
+    """
     d = db.get(TopicGeneratedDocORM, doc_id)
     if not d:
         raise HTTPException(404, "doc not found")
@@ -265,6 +271,32 @@ def publish_doc(
     targets.extend(new_targets)
     d.publish_targets_json = json.dumps(targets, ensure_ascii=False)
     d.status = "published"
+
+    # ── Mediumsly 同步推送(可选)──────────────────────────────
+    if payload.push_to_mediumsly:
+        # 延迟 import:不勾选时不必加载 httpx / publisher 模块。
+        from geo.services import mediumsly_publisher
+
+        topic = db.get(AiTelemetryTopicORM, d.topic_id)
+        user = db.get(UserORM, topic.user_id) if topic else None
+        if not user or not user.email:
+            d.mediumsly_last_error = "Topic owner or email missing — cannot push"
+        else:
+            try:
+                result = await mediumsly_publisher.push(d, user, topic)
+                d.mediumsly_post_id   = result.post_id
+                d.mediumsly_url       = result.url
+                d.mediumsly_pushed_at = datetime.utcnow()
+                d.mediumsly_last_error = None
+            except mediumsly_publisher.MediumslyPostGone:
+                # Mediumsly 那边被手动删了 — 清空 id,下次重试自动走 POST 重建
+                d.mediumsly_post_id = None
+                d.mediumsly_last_error = "Mediumsly post was deleted upstream — id cleared, retry to re-create"
+            except mediumsly_publisher.MediumslyError as e:
+                # 记录错误,不打断 GEO 自己的 publish 流程
+                d.mediumsly_last_error = f"{e.code or 'ERROR'}: {e}"
+                log.warning("[mediumsly_publisher] doc=%s push failed: %s", d.id, d.mediumsly_last_error)
+
     db.commit()
     db.refresh(d)
     _notify_user(db, background, d, decision="published", publish_targets=new_targets)
