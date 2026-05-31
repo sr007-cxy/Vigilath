@@ -3080,6 +3080,9 @@ const en = {
               "addPublishRow": "Add row",
               "pushToMediumsly": "Also publish to Mediumsly",
               "pushToMediumslyHint": "Pushes the article body to mediumsly.com; failure here won't block the local publish state",
+              "mediumslyPushed": "Live on Mediumsly",
+              "mediumslyPushedShort": "On Mediumsly",
+              "mediumslyFailed": "Mediumsly push failed",
               "confirmPublish": "Publish to {{n}} channel(s)",
               "sourceLabel": "Source",
               "sourceFilter": {

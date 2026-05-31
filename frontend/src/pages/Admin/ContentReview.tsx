@@ -480,6 +480,7 @@ function DocCard({ doc, pickable, picked, onPick, onOpen, onInlineApprove, appro
             ))}
           </div>
         )}
+        <MediumslyStateChip doc={doc} compact />
       </div>
       <div className="flex items-center gap-2 self-center">
         {onInlineApprove && (
@@ -500,6 +501,44 @@ function DocCard({ doc, pickable, picked, onPick, onOpen, onInlineApprove, appro
       </div>
     </section>
   );
+}
+
+// Mediumsly 推送状态展示:成功 → 绿色链接;失败 → 红色错误。`compact` 是列表卡片用的小尺寸。
+function MediumslyStateChip({ doc, compact = false }: { doc: GeneratedDoc; compact?: boolean }) {
+  const { t } = useTranslation();
+  if (doc.mediumsly_url) {
+    const labelKey = compact ? 'admin.contentReview.mediumslyPushedShort'
+                              : 'admin.contentReview.mediumslyPushed';
+    return (
+      <div className={compact ? 'mt-1' : 'mt-2'}>
+        <a href={doc.mediumsly_url} target="_blank" rel="noreferrer"
+           className={`${compact ? 'text-[10px]' : 'text-xs'} inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full underline`}
+           style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>
+          ✓ {t(labelKey)}
+          {!compact && doc.mediumsly_pushed_at && (
+            <span className="text-muted">
+              · {new Date(doc.mediumsly_pushed_at).toLocaleString()}
+            </span>
+          )}
+        </a>
+      </div>
+    );
+  }
+  if (doc.mediumsly_last_error) {
+    return (
+      <div className={compact ? 'mt-1' : 'mt-2'}>
+        <span className={`${compact ? 'text-[10px]' : 'text-xs'} inline-block px-2 py-0.5 rounded-md`}
+              style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                       border: '1px solid rgba(239,68,68,0.3)',
+                       maxWidth: compact ? 360 : '100%' }}
+              title={doc.mediumsly_last_error}>
+          ⚠ {t('admin.contentReview.mediumslyFailed')}
+          {!compact && `: ${doc.mediumsly_last_error}`}
+        </span>
+      </div>
+    );
+  }
+  return null;
 }
 
 function DocSourceChip({ source }: { source: DocSource }) {
@@ -732,6 +771,7 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
               </div>
             </div>
           )}
+          <MediumslyStateChip doc={doc} />
         </div>
 
         <div className="p-3 border-t flex justify-end gap-2 flex-wrap"

@@ -50,6 +50,11 @@ export interface GeneratedDoc {
   // 2026-05-28 — 多变体生成 combo 标识(同一 query 多份稿件按这俩区分)
   creation_direction?: string | null;
   copywriting_type?: string | null;
+  // Mediumsly 推送状态:成功 → post_id + url + pushed_at;失败 → last_error
+  mediumsly_post_id?: string | null;
+  mediumsly_url?: string | null;
+  mediumsly_pushed_at?: string | null;
+  mediumsly_last_error?: string | null;
 }
 
 async function request<T>(

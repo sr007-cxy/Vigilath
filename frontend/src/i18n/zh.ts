@@ -3086,6 +3086,9 @@ const zh = {
               "addPublishRow": "再加一行",
               "pushToMediumsly": "同步发布到 Mediumsly",
               "pushToMediumslyHint": "勾选后会把正文推送到 mediumsly.com,失败不影响本地发布状态",
+              "mediumslyPushed": "已发布到 Mediumsly",
+              "mediumslyPushedShort": "Mediumsly 已发",
+              "mediumslyFailed": "Mediumsly 推送失败",
               "confirmPublish": "确认发布到 {{n}} 个渠道",
               "sourceLabel": "来源",
               "sourceFilter": {
