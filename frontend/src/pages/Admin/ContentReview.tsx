@@ -827,119 +827,47 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
 
         {showPublish && (
           <PublishPicker onCancel={() => setShowPublish(false)}
-                         onConfirm={handlePublish} />
+                         onConfirm={handlePublish}
+                         busy={busy} />
         )}
       </div>
     </div>
   );
 }
 
-const PLATFORM_OPTIONS = ['抖音', '小红书', '视频号', '公众号', 'B站', '知乎', '微博', 'Twitter', 'LinkedIn'];
-
-interface PublishRow {
-  platform: string;
-  media: string;
-  url: string;
-}
-
-function PublishPicker({ onCancel, onConfirm }: {
+// 通过审核后的发布卡片。目前只有 Mediumsly 一个自动发布渠道,所以 UI 就是一个
+// 确认卡 + 一个大按钮。以后再接其他平台时再扩成多渠道选择器,不预先做空抽象。
+function PublishPicker({ onCancel, onConfirm, busy }: {
   onCancel: () => void;
   onConfirm: (targets: { platform: string; media: string; url?: string }[],
               pushToMediumsly: boolean) => void;
+  busy?: boolean;
 }) {
   const { t } = useTranslation();
-  // 同一稿子可能投到多家平台 + 多个媒体号,所以一行一组 (platform, media, url)
-  const [rows, setRows] = useState<PublishRow[]>([
-    { platform: PLATFORM_OPTIONS[0], media: '', url: '' },
-  ]);
-  // 同步推 Mediumsly:默认勾上(走 server-to-server,失败也不阻塞本地 publish)
-  const [pushToMediumsly, setPushToMediumsly] = useState(true);
-
-  const update = (idx: number, patch: Partial<PublishRow>) => {
-    setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
-  };
-  const addRow = () => setRows(prev => [...prev, { platform: PLATFORM_OPTIONS[0], media: '', url: '' }]);
-  const removeRow = (idx: number) => setRows(prev =>
-    prev.length === 1 ? prev : prev.filter((_, i) => i !== idx),
-  );
-
-  const validRows = rows.filter(r => r.platform.trim());
-  const submit = () => {
-    if (validRows.length === 0) return;
-    onConfirm(validRows.map(r => ({
-      platform: r.platform.trim(),
-      media: r.media.trim(),
-      url: r.url.trim() || undefined,
-    })), pushToMediumsly);
-  };
+  const submit = () => onConfirm([], true);
 
   return (
-    <div className="p-3 border-t space-y-3"
+    <div className="p-4 border-t space-y-3"
          style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
-      <p className="text-xs text-secondary">{t('admin.contentReview.publishPickerHint')}</p>
-
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-12 gap-2 items-start">
-            <select value={r.platform}
-                    onChange={e => update(i, { platform: e.target.value })}
-                    className="col-span-3 text-xs px-2 py-1.5 rounded-md"
-                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                             border: '1px solid var(--border-color)' }}>
-              {PLATFORM_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <input type="text" value={r.media}
-                   onChange={e => update(i, { media: e.target.value })}
-                   placeholder={t('admin.contentReview.publishMediaPlaceholder')}
-                   className="col-span-4 text-xs px-2 py-1.5 rounded-md"
-                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)' }} />
-            <input type="url" value={r.url}
-                   onChange={e => update(i, { url: e.target.value })}
-                   placeholder={t('admin.contentReview.publishUrlPlaceholder')}
-                   className="col-span-4 text-xs px-2 py-1.5 rounded-md"
-                   style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)' }} />
-            <button type="button" onClick={() => removeRow(i)}
-                    disabled={rows.length === 1}
-                    className="col-span-1 text-xs px-2 py-1.5 rounded-md"
-                    style={{
-                      background: 'var(--bg-input)',
-                      color: rows.length === 1 ? 'var(--text-muted)' : '#ef4444',
-                      border: '1px solid var(--border-color)',
-                      opacity: rows.length === 1 ? 0.5 : 1,
-                    }}>
-              ✕
-            </button>
-          </div>
-        ))}
+      <div>
+        <p className="text-sm font-medium text-primary">
+          {t('admin.contentReview.publishToMediumslyTitle')}
+        </p>
+        <p className="text-xs text-secondary mt-1 leading-relaxed">
+          {t('admin.contentReview.publishToMediumslyHint')}
+        </p>
       </div>
-
-      <button type="button" onClick={addRow}
-              className="text-xs px-3 py-1 rounded-md"
-              style={{ background: 'var(--bg-input)', color: 'var(--accent-primary)',
-                       border: '1px dashed var(--border-color)' }}>
-        + {t('admin.contentReview.addPublishRow')}
-      </button>
-
-      <label className="flex items-center gap-2 text-xs cursor-pointer select-none"
-             style={{ color: 'var(--text-primary)' }}>
-        <input type="checkbox" checked={pushToMediumsly}
-               onChange={e => setPushToMediumsly(e.target.checked)} />
-        <span>{t('admin.contentReview.pushToMediumsly')}</span>
-        <span className="text-secondary">— {t('admin.contentReview.pushToMediumslyHint')}</span>
-      </label>
-
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel}
-                className="text-xs px-3 py-1 rounded-md"
-                style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+        <button type="button" onClick={onCancel} disabled={busy}
+                className="text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)',
+                         border: '1px solid var(--border-color)' }}>
           {t('admin.contentReview.cancel')}
         </button>
-        <button type="button" disabled={validRows.length === 0} onClick={submit}
-                className="text-xs px-3 py-1 rounded-md text-white"
-                style={{ background: '#3b82f6', opacity: validRows.length === 0 ? 0.5 : 1 }}>
-          {t('admin.contentReview.confirmPublish', { n: validRows.length })}
+        <button type="button" onClick={submit} disabled={busy}
+                className="text-xs px-4 py-1.5 rounded-md text-white font-medium"
+                style={{ background: '#3b82f6', opacity: busy ? 0.6 : 1 }}>
+          {busy ? `${t('admin.contentReview.publishing')}…` : `✓ ${t('admin.contentReview.publishToMediumslyConfirm')}`}
         </button>
       </div>
     </div>

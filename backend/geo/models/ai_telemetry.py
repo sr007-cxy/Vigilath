@@ -829,8 +829,9 @@ class PublishTargetItem(BaseModel):
 
 
 class PublishPayload(BaseModel):
-    publish_targets: list[PublishTargetItem] = Field(..., min_length=1, max_length=20)
-    # 2026-05-29 — 是否同步推到 Mediumsly。缺省 False = 老前端兼容,行为与历史一致。
+    # 2026-05-31 — min_length 改为 0:Mediumsly 一键发布走"无手填 target,push_to_mediumsly=true"
+    # 路径,publish_targets 由 publisher 成功后由后端按需合成。
+    publish_targets: list[PublishTargetItem] = Field(default_factory=list, max_length=20)
     push_to_mediumsly: bool = False
 
 
