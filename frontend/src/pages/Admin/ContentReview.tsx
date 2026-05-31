@@ -1,7 +1,7 @@
 // Admin 内容审核 — 选账号 + 主题 → 看文档列表 → 勾选送审 → 通过 + 选发布平台/媒体 (或拒绝).
 // 路由:/workbench/content-review
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
@@ -67,6 +67,11 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
   const [err, setErr] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [openDocId, setOpenDocId] = useState<number | null>(null);
+  // 行内「通过」后让模态框开起来时,直接给它一份新数据 — docs[] 可能因 status filter
+  // 把刚 approve 的 doc 过滤掉,光靠 docs.find() 就拿不到了
+  const [forceOpenDoc, setForceOpenDoc] = useState<GeneratedDoc | null>(null);
+  // 行内 approve 触发的「自动展开发布选择器」一次性 flag
+  const [autoOpenPublish, setAutoOpenPublish] = useState(false);
   // 2026-05-28 — 同一 query 多份稿件折叠;set 里的 query 是收起的
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = useCallback((q: string) => {
@@ -128,7 +133,11 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
 
   if (!isAdmin) return null;
 
-  const selectedDoc = openDocId ? docs.find(d => d.id === openDocId) || null : null;
+  const selectedDoc = openDocId
+    ? (forceOpenDoc && forceOpenDoc.id === openDocId
+        ? forceOpenDoc
+        : docs.find(d => d.id === openDocId) || null)
+    : null;
 
   const togglePick = (id: number) => {
     setPicked(prev => {
@@ -149,12 +158,16 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
     }
   };
 
-  // 行内一键通过(pending_review 专用) — 不开 modal,直接 approve.
+  // 行内一键通过(pending_review 专用) — approve 之后直接把发布选择器打开,
+  // 省得用户切到「已通过」tab 再翻一遍.
   const handleInlineApprove = async (docId: number) => {
     if (inlineBusyId !== null) return;
     setInlineBusyId(docId); setInlineErr(null);
     try {
-      await adminContentReviewApi.approveDoc(docId, token);
+      const fresh = await adminContentReviewApi.approveDoc(docId, token);
+      setForceOpenDoc(fresh);
+      setOpenDocId(docId);
+      setAutoOpenPublish(true);
       refreshDocs(); refreshTopics();
     } catch (e: unknown) {
       setInlineErr(e instanceof Error ? e.message : String(e));
@@ -395,8 +408,13 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
       {selectedDoc && (
         <DocDetailModal doc={selectedDoc}
                         token={token}
-                        onClose={() => setOpenDocId(null)}
-                        onAnyChange={() => { setOpenDocId(null); refreshDocs(); refreshTopics(); }} />
+                        autoOpenPublish={autoOpenPublish}
+                        onClose={() => {
+                          setOpenDocId(null);
+                          setForceOpenDoc(null);
+                          setAutoOpenPublish(false);
+                        }}
+                        onAnyChange={() => { refreshDocs(); refreshTopics(); }} />
       )}
     </div>
   );
@@ -515,9 +533,13 @@ function DocStatusChip({ status }: { status: DocStatus }) {
   );
 }
 
-function DocDetailModal({ doc, token, onClose, onAnyChange }:
-  { doc: GeneratedDoc; token: string; onClose: () => void; onAnyChange: () => void }) {
+function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpenPublish }:
+  { doc: GeneratedDoc; token: string; onClose: () => void; onAnyChange: () => void;
+    autoOpenPublish?: boolean }) {
   const { t } = useTranslation();
+  // 模态框自己维护当前 doc;不依赖父组件的 docs[] 过滤后结果(否则一旦状态变了 doc
+  // 被过滤出列表,modal 就会因为 selectedDoc 变 null 而消失)
+  const [doc, setDoc] = useState<GeneratedDoc>(initialDoc);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showReject, setShowReject] = useState(false);
@@ -528,12 +550,56 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
   const [editBody, setEditBody] = useState(doc.body_markdown);
   const [editSummary, setEditSummary] = useState(doc.summary);
 
-  const wrap = async (fn: () => Promise<unknown>) => {
-    if (busy) return;
+  // 行内通过后自动打开发布选择器,一次性
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenPublish && doc.status === 'approved' && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setShowPublish(true);
+    }
+  }, [autoOpenPublish, doc.status]);
+
+  // mutation 后调一次拿到最新 doc — 替换本地 state,模态框 UI 立刻反应新状态
+  const refetch = useCallback(async () => {
+    try {
+      const fresh = await adminContentReviewApi.getDoc(doc.id, token);
+      setDoc(fresh);
+    } catch { /* 留旧 doc,onAnyChange 会让父列表自己刷,模态层降级展示无害 */ }
+  }, [doc.id, token]);
+
+  // 返回 boolean 表示成功 — 调用方按需决定下一步(展开 publish 选择器、关弹窗等)
+  const wrap = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    if (busy) return false;
     setBusy(true); setErr(null);
-    try { await fn(); onAnyChange(); }
-    catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+    try {
+      await fn();
+      await refetch();
+      onAnyChange();
+      return true;
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    const ok = await wrap(() => adminContentReviewApi.approveDoc(doc.id, token));
+    if (ok) setShowPublish(true);   // 通过后直接展开发布选择器,不用再点一次
+  };
+
+  const handleReject = async () => {
+    const ok = await wrap(() => adminContentReviewApi.rejectDoc(doc.id, rejectReason.trim(), token));
+    if (ok) onClose();
+  };
+
+  const handlePublish = async (
+    targets: { platform: string; media: string; url?: string }[],
+    pushToMediumsly: boolean,
+  ) => {
+    const ok = await wrap(() => adminContentReviewApi.publishDoc(doc.id, targets, token, pushToMediumsly));
+    if (ok) onClose();
   };
 
   const handleSaveEdit = async () => {
@@ -543,6 +609,7 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
       await adminContentReviewApi.updateDoc(doc.id, {
         title: editTitle, body_markdown: editBody, summary: editSummary,
       }, token);
+      await refetch();
       setEditing(false);
       onAnyChange();
     } catch (e: unknown) {
@@ -678,7 +745,7 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
                 {t('admin.contentReview.reject')}
               </button>
               <button type="button" disabled={busy}
-                      onClick={() => wrap(() => adminContentReviewApi.approveDoc(doc.id, token))}
+                      onClick={handleApprove}
                       className="text-xs px-4 py-1.5 rounded-md text-white"
                       style={{ background: 'var(--accent-primary)' }}>
                 {t('admin.contentReview.approve')}
@@ -709,7 +776,7 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
                 {t('admin.contentReview.cancel')}
               </button>
               <button type="button" disabled={busy}
-                      onClick={() => wrap(() => adminContentReviewApi.rejectDoc(doc.id, rejectReason.trim(), token))}
+                      onClick={handleReject}
                       className="text-xs px-3 py-1 rounded-md text-white"
                       style={{ background: '#ef4444' }}>
                 {t('admin.contentReview.confirmReject')}
@@ -720,8 +787,7 @@ function DocDetailModal({ doc, token, onClose, onAnyChange }:
 
         {showPublish && (
           <PublishPicker onCancel={() => setShowPublish(false)}
-                         onConfirm={(targets, pushToMediumsly) =>
-                           wrap(() => adminContentReviewApi.publishDoc(doc.id, targets, token, pushToMediumsly))} />
+                         onConfirm={handlePublish} />
         )}
       </div>
     </div>
