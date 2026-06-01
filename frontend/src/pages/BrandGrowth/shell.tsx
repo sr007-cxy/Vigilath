@@ -1,10 +1,10 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
-import { aiTelemetryApi, type Topic } from '../../services/aiTelemetryApi';
+import { aiTelemetryApi, ALL_TIME_PERIOD, type Topic } from '../../services/aiTelemetryApi';
+import { exportGrowthReportPdf } from '../../utils/exportGrowthReportPdf';
 import { useBgLang, engineLabel, sortEngines } from './lang';
-
-export type PeriodDays = 7 | 30 | 90;
 
 export interface ShellState {
   token: string;
@@ -12,8 +12,8 @@ export interface ShellState {
   topic: Topic | null;
   topicId: number | null;
   setTopicId: (id: number) => void;
-  period: PeriodDays;
-  setPeriod: (p: PeriodDays) => void;
+  // 全部历史口径(自上线至今)— 不再有 7/30/90 切换,统一传 ALL_TIME_PERIOD
+  period: number;
   // 模型多选(2026-05-21):空数组 = 全选/汇总语义
   selectedEngines: string[];
   setSelectedEngines: (es: string[]) => void;
@@ -27,8 +27,7 @@ export function useShellState(): ShellState {
   const [loading, setLoading] = useState(true);
 
   const urlTopic = Number(searchParams.get('topic') || '0');
-  const urlPeriod = Number(searchParams.get('period') || '30');
-  const period = ([7, 30, 90].includes(urlPeriod) ? urlPeriod : 30) as PeriodDays;
+  const period = ALL_TIME_PERIOD;
   const topicId = urlTopic > 0 ? urlTopic : (topics[0]?.id ?? null);
   const topic = topics.find(t => t.id === topicId) || null;
 
@@ -55,11 +54,6 @@ export function useShellState(): ShellState {
     next.set('topic', String(id));
     setSearchParams(next, { replace: true });
   };
-  const setPeriod = (p: PeriodDays) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('period', String(p));
-    setSearchParams(next, { replace: true });
-  };
   const setSelectedEngines = (es: string[]) => {
     const next = new URLSearchParams(searchParams);
     if (es.length === 0) next.delete('engines');
@@ -68,7 +62,7 @@ export function useShellState(): ShellState {
   };
 
   return {
-    token, topics, topic, topicId, setTopicId, setPeriod, period,
+    token, topics, topic, topicId, setTopicId, period,
     selectedEngines, setSelectedEngines, loading,
   };
 }
@@ -82,10 +76,9 @@ export function BrandGrowthHeader({
 }) {
   const navigate = useNavigate();
   const L = useBgLang();
-  const periodLabel = `${L.topicPicker === '主题' ? `近 ${state.period} 天` : `last ${state.period}d`}`;
   const subtitle = state.topic
-    ? `${state.topic.name} · ${periodLabel}`
-    : periodLabel;
+    ? `${state.topic.name} · ${L.allTimeLabel}`
+    : L.allTimeLabel;
   const isSubPage = (breadcrumb?.length ?? 0) > 0;
   const backTo = breadcrumb && breadcrumb.length > 0 ? breadcrumb[0].to : null;
   return (
@@ -143,7 +136,8 @@ export function BrandGrowthHeader({
         <div className="flex items-center gap-3 flex-wrap">
           <TopicPicker state={state} />
           <EngineChips state={state} />
-          <PeriodChips state={state} />
+          <LastRunBadge state={state} />
+          <DownloadReportButton state={state} />
         </div>
       </div>
     </div>
@@ -209,26 +203,66 @@ function EngineChips({ state }: { state: ShellState }) {
   );
 }
 
-function PeriodChips({ state }: { state: ShellState }) {
+// 上一次跑完出结果的时间 — 取代原 7/30/90 天切换。
+function formatLastRun(topic: Topic | null, L: ReturnType<typeof useBgLang>): string {
+  const iso = topic?.last_run_at;
+  if (!iso) return L.lastRunNever;
+  const zh = L.topicPicker === '主题';
+  return new Date(iso).toLocaleString(zh ? 'zh-CN' : 'en-US', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function LastRunBadge({ state }: { state: ShellState }) {
   const L = useBgLang();
-  const dayUnit = L.topicPicker === '主题' ? '天' : 'd';
+  const text = formatLastRun(state.topic, L);
   return (
-    <div className="flex gap-1 p-0.5 rounded" style={{ background: 'var(--bg-input)' }}>
-      {([7, 30, 90] as PeriodDays[]).map(p => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => state.setPeriod(p)}
-          className="px-3 py-1 text-xs rounded"
-          style={{
-            background: state.period === p ? 'var(--accent-primary)' : 'transparent',
-            color: state.period === p ? 'white' : 'var(--text-secondary)',
-          }}
-        >
-          {p}{dayUnit}
-        </button>
-      ))}
-    </div>
+    <span
+      className="px-3 py-1 text-xs rounded flex items-center gap-1.5"
+      style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+      title={`${L.lastRunPrefix} ${text}`}
+    >
+      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <circle cx="12" cy="12" r="9" strokeWidth="1.8" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 7v5l3 2" />
+      </svg>
+      <span className="truncate">{L.lastRunPrefix} {text}</span>
+    </span>
+  );
+}
+
+function DownloadReportButton({ state }: { state: ShellState }) {
+  const L = useBgLang();
+  const { t, i18n } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  if (!state.topicId) return null;
+  const onClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const report = await aiTelemetryApi.getGrowthReport(state.topicId!, state.token);
+      await exportGrowthReportPdf(report, t, i18n.language || 'zh');
+    } catch {
+      // 静默失败 — 不打断页面;按钮恢复可用让用户重试
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="px-3 py-1 text-xs rounded flex items-center gap-1.5 transition hover:opacity-90 disabled:opacity-60"
+      style={{ background: 'var(--accent-primary)', color: 'white' }}
+    >
+      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8"
+          d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+      </svg>
+      {busy ? L.downloadReportGenerating : L.downloadReport}
+    </button>
   );
 }
 

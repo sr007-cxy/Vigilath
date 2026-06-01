@@ -13,6 +13,12 @@ interface Dict {
   back: string;
   viewAll: string;
   clearFilter: string;
+  // 头部:数据时间窗口(全部历史)+ 上次跑批时间 + 下载报告
+  allTimeLabel: string;
+  lastRunPrefix: string;
+  lastRunNever: string;
+  downloadReport: string;
+  downloadReportGenerating: string;
   // 主页
   pageTitle: string;
   metricCitations: string;
@@ -228,6 +234,11 @@ const ZH: Dict = {
   back: '返回',
   viewAll: '查看全部 →',
   clearFilter: '清除筛选',
+  allTimeLabel: '全部历史',
+  lastRunPrefix: '数据更新于',
+  lastRunNever: '尚未跑批',
+  downloadReport: '下载报告',
+  downloadReportGenerating: '生成中…',
   pageTitle: '品牌增长',
   metricCitations: '推荐词总数',
   metricPublishedTotal: '媒体投放',
@@ -273,7 +284,7 @@ const ZH: Dict = {
   sourcesCenterTotal: '总引用',
   sourcesViewSamples: '看样本 →',
   sourcesDrawerTitle: (d: string) => `引用样本 · ${d}`,
-  sourcesDrawerEmpty: (p: number) => `该域名近 ${p} 天无引用样本`,
+  sourcesDrawerEmpty: (p: number) => (p > 0 ? `该域名近 ${p} 天无引用样本` : '该域名暂无引用样本'),
   sourcesNoData: '该过滤条件下暂无数据',
   enginesTitle: '平台分析',
   enginesCitationsChart: '各引擎引用次数',
@@ -365,7 +376,7 @@ const ZH: Dict = {
     const parts: string[] = [];
     if (e) parts.push(`引擎: ${e}`);
     if (q) parts.push(`问题: ${q}`);
-    parts.push(`近 ${p} 天共 ${n} 条`);
+    parts.push(p > 0 ? `近 ${p} 天共 ${n} 条` : `全部历史共 ${n} 条`);
     return parts.join(' · ');
   },
   responsesExpand: '展开正文',
@@ -433,6 +444,11 @@ const EN: Dict = {
   back: 'Back',
   viewAll: 'View all →',
   clearFilter: 'Clear filter',
+  allTimeLabel: 'All time',
+  lastRunPrefix: 'Updated',
+  lastRunNever: 'Not run yet',
+  downloadReport: 'Download report',
+  downloadReportGenerating: 'Generating…',
   pageTitle: 'Brand Growth',
   metricCitations: 'Total Recommendations',
   metricPublishedTotal: 'Published',
@@ -478,7 +494,7 @@ const EN: Dict = {
   sourcesCenterTotal: 'Total citations',
   sourcesViewSamples: 'View samples →',
   sourcesDrawerTitle: (d) => `Citation samples · ${d}`,
-  sourcesDrawerEmpty: (p) => `No samples in last ${p} days`,
+  sourcesDrawerEmpty: (p) => (p > 0 ? `No samples in last ${p} days` : 'No citation samples yet'),
   sourcesNoData: 'No data for this filter',
   enginesTitle: 'Engines',
   enginesCitationsChart: 'Citations per engine',
@@ -570,7 +586,7 @@ const EN: Dict = {
     const parts: string[] = [];
     if (e) parts.push(`engine: ${e}`);
     if (q) parts.push(`query: ${q}`);
-    parts.push(`last ${p}d, ${n} rows`);
+    parts.push(p > 0 ? `last ${p}d, ${n} rows` : `all time, ${n} rows`);
     return parts.join(' · ');
   },
   responsesExpand: 'Expand',

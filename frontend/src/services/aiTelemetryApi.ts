@@ -447,6 +447,43 @@ export interface PositionBreakdownResp {
   engines: string[];
 }
 
+// ── 增长报告(首次跑批 vs 当前累计) ────────────────────────
+// period=0 语义:全部历史(自上线至今)。品牌增长页统一传这个。
+export const ALL_TIME_PERIOD = 0;
+
+export type GrowthStatus = 'new_hit' | 'improved' | 'steady' | 'regressed' | 'still_miss';
+
+export interface GrowthQueryRow {
+  query: string;
+  seed?: string | null;
+  baseline_hit: boolean;
+  baseline_rank: number | null;
+  baseline_engines: string[];
+  current_hit: boolean;
+  current_rank: number | null;
+  current_engines: string[];
+  status: GrowthStatus;
+}
+
+export interface GrowthSnapshot {
+  run_at: string | null;
+  queries_total: number;
+  queries_hit: number;
+  hit_rate_pct: number;
+  avg_rank: number | null;
+  engines_covered: number;
+}
+
+export interface GrowthReport {
+  topic_id: number;
+  target: string;
+  generated_at: string;
+  has_baseline: boolean;
+  baseline: GrowthSnapshot;
+  current: GrowthSnapshot;
+  rows: GrowthQueryRow[];
+}
+
 export interface IndustryBenchmark {
   industry: string;
   sample_size: number;
@@ -748,6 +785,10 @@ export const aiTelemetryApi = {
   async getTrackingMatrix(topicId: number, token: string): Promise<TrackingMatrix> {
     if (isMockMode()) return Promise.resolve(_mockMatrix(topicId));
     return request<TrackingMatrix>('GET', `/topics/${topicId}/tracking-matrix`, token);
+  },
+
+  async getGrowthReport(topicId: number, token: string): Promise<GrowthReport> {
+    return request<GrowthReport>('GET', `/topics/${topicId}/growth-report`, token);
   },
 
   async getCellDrawer(

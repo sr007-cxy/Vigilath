@@ -1223,6 +1223,43 @@ class TrackingMatrixOut(BaseModel):
     hit_cells_pct: float                # = hit_cells / total_cells × 100
 
 
+# ─────────────────── 增长报告(首次跑批 vs 当前) ──────────────────
+
+
+class GrowthQueryRow(BaseModel):
+    """报告里的一条监测问题 — 首次跑批结果 vs 当前累计结果。"""
+    query: str
+    seed: Optional[str] = None
+    baseline_hit: bool
+    baseline_rank: Optional[int]        # 首次跑批中最好的品牌排名(命中且抽出 rank 时),否则 None
+    baseline_engines: list[str] = Field(default_factory=list)
+    current_hit: bool
+    current_rank: Optional[int]
+    current_engines: list[str] = Field(default_factory=list)
+    # new_hit(新命中)/ improved(排名提升)/ steady(持平)/ regressed(下滑)/ still_miss(仍未命中)
+    status: str
+
+
+class GrowthSnapshot(BaseModel):
+    """一份快照的汇总指标(首次 / 当前各一份)。"""
+    run_at: Optional[datetime]          # 首次=首跑 started_at;当前=生成时刻
+    queries_total: int
+    queries_hit: int
+    hit_rate_pct: float                 # = queries_hit / queries_total × 100
+    avg_rank: Optional[float]           # 命中且有 rank 的问题的平均排名
+    engines_covered: int                # 有任一命中的引擎数
+
+
+class GrowthReportOut(BaseModel):
+    topic_id: int
+    target: str
+    generated_at: datetime
+    has_baseline: bool                  # 是否找到首次跑批(无 run 时 False)
+    baseline: GrowthSnapshot
+    current: GrowthSnapshot
+    rows: list[GrowthQueryRow]
+
+
 # ─────────────────── v1 / v1.1 drawer 详情 ──────────────────
 
 

@@ -32,7 +32,8 @@ from geo.models.ai_telemetry import (
     BrandProfile, BriefingAction, BriefingFeedbackPayload, BriefingOut,
     CellDrawerOut, CellEvidence, CellInsightOut, CellInsightRec, CompetitorMention,
     CompetitorShareEntry, ClusterBreakdownItem, DomainCount, EngineFirstHit,
-    FeedbackPayload, IntentBreakdownOut, KpiBlock, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
+    FeedbackPayload, GrowthQueryRow, GrowthSnapshot, GrowthReportOut,
+    IntentBreakdownOut, KpiBlock, MAX_EXPANSION_CANDIDATES, MAX_SELECTED_QUERIES,
     OverviewOut, OwnedSplit, PROFILE_REQUIRED_FIELDS, PositionDist,
     PositionBreakdown, PositionBreakdownOut, GroupBreakdown, EngineSlice,
     IndustryBenchmarkOut,
@@ -262,6 +263,24 @@ def _get_topic_or_404(
         if not (allow_admin_user is not None and getattr(allow_admin_user, "is_admin", False)):
             raise HTTPException(404, "topic not found")
     return t
+
+
+def _resolve_period(
+    period: int, topic: AiTelemetryTopicORM, now: Optional[datetime] = None,
+) -> tuple[int, datetime]:
+    """解析时间窗口,返回 (period_days, period_start)。
+
+    - period <= 0 → 全部历史:从 topic.created_at(无则兜底 10 年前)统计到现在,
+      period_days 按实际跨度收敛(不会膨胀成上万天的 trend)。
+    - period > 0  → 近 period 天(上限 90,沿用历史口径)。
+    """
+    now = now or datetime.utcnow()
+    if period <= 0:
+        start = topic.created_at or (now - timedelta(days=3650))
+        days = max(1, (now - start).days + 1)
+        return days, start
+    days = max(1, min(period, 90))
+    return days, now - timedelta(days=days)
 
 
 # ─────────────────────────── CRUD ──────────────────────────────
@@ -1662,9 +1681,8 @@ def topic_overview(
     品牌词来源:topic.target + topic.target_aliases_json(与 runner 落 hit 时同源).
     """
     topic = _get_topic_or_404(db, topic_id, current_user.id)
-    period_days = max(1, min(period, 90))
     now = datetime.utcnow()
-    period_start = now - timedelta(days=period_days)
+    period_days, period_start = _resolve_period(period, topic, now)
     prev_start = period_start - timedelta(days=period_days)
 
     # 品牌词:用 topic 自己的检测词,与 runner detect_hit 同源
@@ -1846,8 +1864,7 @@ def topic_intent_breakdown(
     或者 query 文本与 cluster_id 对不上时落到 uncategorized 桶。
     """
     topic = _get_topic_or_404(db, topic_id, current_user.id)
-    period_days = max(1, min(period, 90))
-    period_start = datetime.utcnow() - timedelta(days=period_days)
+    period_days, period_start = _resolve_period(period, topic)
 
     # 品牌词(沿用 overview 口径:topic.target + aliases,与 runner detect_hit 同源)
     brand_keywords: list[str] = []
@@ -2033,9 +2050,8 @@ def list_topic_responses(
     - query: 锁定单 query
     - period: 近 N 天(1-90)
     """
-    _get_topic_or_404(db, topic_id, current_user.id)
-    period_days = max(1, min(period, 90))
-    cutoff = datetime.utcnow() - timedelta(days=period_days)
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    _, cutoff = _resolve_period(period, topic)
 
     q = (
         db.query(AiTelemetryResponseORM)
@@ -2238,6 +2254,137 @@ def get_tracking_matrix(
     )
 
 
+@router.get("/topics/{topic_id}/growth-report", response_model=GrowthReportOut)
+def get_growth_report(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """增长报告 — 逐条监测问题对比「首次跑批结果」与「当前累计结果」。
+
+    口径:
+      baseline = 该 topic 时间最早的一次 run 的全部 responses。
+      current  = 该 topic 历史全部 responses(累计)。
+    每条问题聚合:命中 = 任一引擎命中;排名 = 命中里最好的 brand_rank;
+    引擎 = 命中过的引擎集合。status 反映从首跑到现在的变化。
+    """
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+
+    # 监测问题集合 + 种子映射(与 tracking-matrix 同源:取所有 query 文本)
+    queries_raw = json.loads(topic.queries_json or "[]")
+    queries: list[str] = []
+    seed_of: dict[str, str] = {}
+    for q in queries_raw:
+        if isinstance(q, dict):
+            txt = q.get("text") or ""
+            if txt:
+                queries.append(txt)
+                if q.get("seed"):
+                    seed_of[txt] = q["seed"]
+        elif isinstance(q, str) and q:
+            queries.append(q)
+    query_set = set(queries)
+
+    # 首次跑批
+    first_run = (
+        db.query(AiTelemetryRunORM)
+          .filter(AiTelemetryRunORM.topic_id == topic_id)
+          .order_by(AiTelemetryRunORM.id.asc())
+          .first()
+    )
+    has_baseline = first_run is not None
+
+    baseline_rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.run_id == first_run.id)
+          .all()
+    ) if first_run else []
+    current_rows = (
+        db.query(AiTelemetryResponseORM)
+          .filter(AiTelemetryResponseORM.topic_id == topic_id)
+          .all()
+    )
+
+    def _group(rows: list[AiTelemetryResponseORM]) -> dict[str, list[AiTelemetryResponseORM]]:
+        g: dict[str, list[AiTelemetryResponseORM]] = {}
+        for r in rows:
+            if r.query in query_set:
+                g.setdefault(r.query, []).append(r)
+        return g
+
+    base_g = _group(baseline_rows)
+    curr_g = _group(current_rows)
+
+    def _agg(rows: list[AiTelemetryResponseORM]) -> tuple[bool, Optional[int], list[str]]:
+        """returns (hit, best_rank, engines_hit)."""
+        hit = False
+        best_rank: Optional[int] = None
+        engines: set[str] = set()
+        for r in rows:
+            if r.hit:
+                hit = True
+                engines.add(r.engine)
+                if r.brand_rank is not None:
+                    best_rank = r.brand_rank if best_rank is None else min(best_rank, r.brand_rank)
+        return hit, best_rank, sorted(engines)
+
+    def _status(b_hit: bool, b_rank: Optional[int], c_hit: bool, c_rank: Optional[int]) -> str:
+        if c_hit and not b_hit:
+            return "new_hit"
+        if c_hit and b_hit:
+            if b_rank is not None and c_rank is not None:
+                if c_rank < b_rank:
+                    return "improved"
+                if c_rank > b_rank:
+                    return "regressed"
+            return "steady"
+        if b_hit and not c_hit:
+            return "regressed"
+        return "still_miss"
+
+    rows_out: list[GrowthQueryRow] = []
+    for q in queries:
+        b_hit, b_rank, b_eng = _agg(base_g.get(q, []))
+        c_hit, c_rank, c_eng = _agg(curr_g.get(q, []))
+        rows_out.append(GrowthQueryRow(
+            query=q, seed=seed_of.get(q),
+            baseline_hit=b_hit, baseline_rank=b_rank, baseline_engines=b_eng,
+            current_hit=c_hit, current_rank=c_rank, current_engines=c_eng,
+            status=_status(b_hit, b_rank, c_hit, c_rank),
+        ))
+
+    def _snapshot(grouped: dict[str, list[AiTelemetryResponseORM]], run_at) -> GrowthSnapshot:
+        total = len(queries)
+        hit_count = 0
+        ranks: list[int] = []
+        engines: set[str] = set()
+        for q in queries:
+            hit, rank, eng = _agg(grouped.get(q, []))
+            if hit:
+                hit_count += 1
+                engines.update(eng)
+                if rank is not None:
+                    ranks.append(rank)
+        return GrowthSnapshot(
+            run_at=run_at,
+            queries_total=total,
+            queries_hit=hit_count,
+            hit_rate_pct=round(hit_count / total * 100, 1) if total else 0.0,
+            avg_rank=round(sum(ranks) / len(ranks), 2) if ranks else None,
+            engines_covered=len(engines),
+        )
+
+    return GrowthReportOut(
+        topic_id=topic_id,
+        target=topic.target or topic.name or "",
+        generated_at=datetime.utcnow(),
+        has_baseline=has_baseline,
+        baseline=_snapshot(base_g, first_run.started_at if first_run else None),
+        current=_snapshot(curr_g, datetime.utcnow()),
+        rows=rows_out,
+    )
+
+
 @router.get("/topics/{topic_id}/share-of-voice", response_model=ShareOfVoiceOut)
 def get_share_of_voice(
     topic_id: int, period: int = 30,
@@ -2254,8 +2401,7 @@ def get_share_of_voice(
       optimal_rate_pct = SUM(QueryHit.total_hits) / SUM(QueryHit.total_runs) × 100
     """
     topic = _get_topic_or_404(db, topic_id, current_user.id)
-    period_days = max(1, min(period, 90))
-    cutoff = datetime.utcnow() - timedelta(days=period_days)
+    period_days, cutoff = _resolve_period(period, topic)
 
     rows = (
         db.query(AiTelemetryResponseORM)
@@ -2686,9 +2832,8 @@ def get_competitor_substitutions(
     口径:近 period 天内,(query, engine) 维度下 hit=False(未命中本品)
           但 competitors_json 非空的 responses;按 query × competitor 聚 count。
     """
-    _get_topic_or_404(db, topic_id, current_user.id)
-    period_days = max(1, min(period, 90))
-    cutoff = datetime.utcnow() - timedelta(days=period_days)
+    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    period_days, cutoff = _resolve_period(period, topic)
 
     rows = (
         db.query(AiTelemetryResponseORM)
