@@ -2385,10 +2385,13 @@ def _aggregate_position_breakdown(
 ) -> PositionBreakdown:
     """口径:cell × lifetime 维度。
 
-    Top3/5 + 可见占比 — 基于 brand_rank,分母 N×M:
+    可见占比 — 基于 N×M:
       - visible_pct = COUNT(cell with any hit) / (N×M)
-      - top3_pct    = COUNT(cell with MIN(brand_rank)≤3) / (N×M)
-      - top5_pct    = COUNT(cell with MIN(brand_rank)≤5) / (N×M)
+
+    Top3/5 占比 — 命中后排名分布(分母改为命中 cell 数,避免被未命中格子稀释):
+      - top3_pct    = COUNT(cell with MIN(brand_rank)≤3) / COUNT(cell with any hit)
+      - top5_pct    = COUNT(cell with MIN(brand_rank)≤5) / COUNT(cell with any hit)
+      - 若 visible=0,top3/5_pct = 0
 
     source_pct(信源占比,2026-05-21 改口径)— 自有文章被引用密度:
       - 分母 = 命中响应的 citation URL 归一化去重数(只看 hit=True)
@@ -2462,8 +2465,8 @@ def _aggregate_position_breakdown(
         if approved_seeds else 0.0
     )
     return PositionBreakdown(
-        top3_pct=round(top3 / total_cells * 100, 2),
-        top5_pct=round(top5 / total_cells * 100, 2),
+        top3_pct=round(top3 / visible * 100, 2) if visible else 0.0,
+        top5_pct=round(top5 / visible * 100, 2) if visible else 0.0,
         visible_pct=round(visible / total_cells * 100, 2),
         source_pct=round(source_pct, 2),
         seed_coverage_pct=round(seed_coverage_pct, 2),

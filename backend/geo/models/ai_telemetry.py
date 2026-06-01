@@ -1332,10 +1332,11 @@ class PositionDist(BaseModel):
 
 
 class PositionBreakdown(BaseModel):
-    """雷达 5 维 + 右核心指标 4 卡的口径。cell × lifetime 维度,分母 N×M(问题×模型),
-    全生命周期聚合,数值单调不减(历史命中也算命中)。"""
-    top3_pct: float = 0.0           # cell 内最佳 brand_rank ≤ 3 的 cell 数 / (N×M) × 100
-    top5_pct: float = 0.0           # cell 内最佳 brand_rank ≤ 5 的 cell 数 / (N×M) × 100
+    """雷达 5 维 + 右核心指标 4 卡的口径。cell × lifetime 维度,全生命周期聚合,
+    数值单调不减(历史命中也算命中)。
+    visible / source / seed_coverage 分母 N×M;top3/5 分母 = 命中 cell 数(避免被未命中稀释)。"""
+    top3_pct: float = 0.0           # cell 内最佳 brand_rank ≤ 3 的 cell 数 / 命中 cell 数 × 100
+    top5_pct: float = 0.0           # cell 内最佳 brand_rank ≤ 5 的 cell 数 / 命中 cell 数 × 100
     visible_pct: float = 0.0        # cell 内任一 hit=True 的 cell 数 / (N×M) × 100
     source_pct: float = 0.0         # 至少一个 cell hit=True 的 query 数 / N × 100
     seed_coverage_pct: float = 0.0  # 至少 1 条扩展 query 命中过的种子数 / approved 种子总数 × 100
