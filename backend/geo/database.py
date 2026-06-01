@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     PERPLEXITY_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
+    # Mediumsly internal publish API. See backend/.env.example for the full
+    # writeup. Empty token disables the publisher (publish flow degrades
+    # gracefully — doc.mediumsly_last_error gets the reason).
+    MEDIUMSLY_API_URL: str = "https://www.mediumsly.com"
+    MEDIUMSLY_INTERNAL_API_TOKEN: str = ""
+    MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST: str = ""  # comma-separated
+
     class Config:
         env_file = ".env"
         extra = "ignore"

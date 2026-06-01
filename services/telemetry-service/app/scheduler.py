@@ -1,13 +1,14 @@
-"""Asyncio cron loop — 每天在固定本地时间跑一次所有 enabled topics.
+"""Asyncio cron loop — 每周在固定本地时间跑一次所有 enabled topics.
 
-默认 北京 02:05(UTC+8 → 即 UTC 18:05 前一天)。可通过 env 调:
+默认 北京周一 02:05(UTC+8 → 即 UTC 周日 18:05)。可通过 env 调:
+- SCHEDULER_CRON_WEEKDAY   (本地星期,Mon=0..Sun=6,默认 0)
 - SCHEDULER_CRON_HOUR      (本地小时,默认 2)
 - SCHEDULER_CRON_MINUTE    (本地分钟,默认 5)
 - SCHEDULER_TIMEZONE_OFFSET (本地 vs UTC 的小时差,默认 8 = 北京)
 
 策略:
-- 每分钟扫一次,匹配「当前 UTC 时间 ∈ [target_utc, target_utc + 2min)」窗口
-- 同一话题同一本地日期只跑一次(防止 2 分钟窗口期内重复触发)
+- 每分钟扫一次,匹配「当前本地时间 ∈ [target, target + 2min)」且 weekday 匹配
+- 同一话题同一本地 ISO 周只跑一次(防止 2 分钟窗口期内重复触发)
 - 单 worker(--workers 1)→ 不需要分布式锁
 - 多个 topic 同时触发 → runner 内部有并发上限(TELEMETRY_MAX_CONCURRENT=3)兜底
 """
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 
 POLL_INTERVAL_SEC = 60
 
+CRON_WEEKDAY = int(os.environ.get("SCHEDULER_CRON_WEEKDAY", "0"))  # Mon=0..Sun=6
 CRON_HOUR_LOCAL = int(os.environ.get("SCHEDULER_CRON_HOUR", "2"))
 CRON_MINUTE = int(os.environ.get("SCHEDULER_CRON_MINUTE", "5"))
 TZ_OFFSET = int(os.environ.get("SCHEDULER_TIMEZONE_OFFSET", "8"))
@@ -36,9 +38,6 @@ BRIEFING_CRON_WEEKDAY = int(os.environ.get("BRIEFING_CRON_WEEKDAY", "0"))  # Mon
 BRIEFING_CRON_HOUR_LOCAL = int(os.environ.get("BRIEFING_CRON_HOUR", "9"))
 BRIEFING_CRON_MINUTE = int(os.environ.get("BRIEFING_CRON_MINUTE", "0"))
 
-# 转 UTC 等价时间(可能为负 → wrap)
-_HOUR_UTC = (CRON_HOUR_LOCAL - TZ_OFFSET) % 24
-_BRIEFING_HOUR_UTC = (BRIEFING_CRON_HOUR_LOCAL - TZ_OFFSET) % 24
 _LOCAL_TZ = timezone(timedelta(hours=TZ_OFFSET))
 
 # 周报每周只跑一次 — 记上次触发的本地周一日期,避免 2 分钟窗口期重复触发
@@ -46,31 +45,36 @@ _last_briefing_local_monday: object | None = None
 
 
 def _in_trigger_window(now_utc: datetime) -> bool:
-    """当前 UTC 时间是否在 [target, target + TRIGGER_WINDOW_MIN) 内."""
-    if now_utc.hour != _HOUR_UTC:
+    """当前本地时间是否落在配置的 weekday × hour:minute ± TRIGGER_WINDOW_MIN 窗口内."""
+    local = now_utc.astimezone(_LOCAL_TZ)
+    if local.weekday() != CRON_WEEKDAY:
         return False
-    return CRON_MINUTE <= now_utc.minute < (CRON_MINUTE + TRIGGER_WINDOW_MIN)
+    if local.hour != CRON_HOUR_LOCAL:
+        return False
+    return CRON_MINUTE <= local.minute < (CRON_MINUTE + TRIGGER_WINDOW_MIN)
 
 
-def _local_date(dt_utc: datetime | None) -> object | None:
+def _local_iso_week(dt_utc: datetime | None) -> tuple[int, int] | None:
+    """返回本地时区下的 ISO (year, week),用作"本周已跑"幂等键."""
     if dt_utc is None:
         return None
     dt = dt_utc if dt_utc.tzinfo else dt_utc.replace(tzinfo=timezone.utc)
-    return dt.astimezone(_LOCAL_TZ).date()
+    iso = dt.astimezone(_LOCAL_TZ).isocalendar()
+    return (iso[0], iso[1])
 
 
 def _should_run_now(topic: TopicORM, now_utc: datetime) -> bool:
     if not _in_trigger_window(now_utc):
         return False
-    today_local = now_utc.astimezone(_LOCAL_TZ).date()
-    last_local = _local_date(topic.last_run_at)
-    return last_local != today_local
+    this_week = _local_iso_week(now_utc)
+    last_week = _local_iso_week(topic.last_run_at)
+    return last_week != this_week
 
 
 async def scheduler_loop(stop_event: asyncio.Event) -> None:
     log.info(
-        "scheduler started: fire at %02d:%02d UTC+%d (= %02d:%02d UTC) daily, poll=%ds",
-        CRON_HOUR_LOCAL, CRON_MINUTE, TZ_OFFSET, _HOUR_UTC, CRON_MINUTE, POLL_INTERVAL_SEC,
+        "scheduler started: fire weekday=%d %02d:%02d UTC+%d weekly, poll=%ds",
+        CRON_WEEKDAY, CRON_HOUR_LOCAL, CRON_MINUTE, TZ_OFFSET, POLL_INTERVAL_SEC,
     )
     while not stop_event.is_set():
         try:
