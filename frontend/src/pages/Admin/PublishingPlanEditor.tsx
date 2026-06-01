@@ -102,6 +102,28 @@ export function PublishingPlanEditor({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  // 2026-05-31 — 按 seed 聚合折叠.同一 seed 下的多个 (模板 × 平台) 行折成一组;
+  // 空 seed 行进「(legacy / 无种子)」组.默认所有组展开,用户点 ▼ 折叠.
+  const [collapsedSeeds, setCollapsedSeeds] = useState<Set<string>>(new Set());
+  const toggleSeed = (key: string) => {
+    setCollapsedSeeds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  // 是否启用聚合视图.≥2 个不同 seed 才启用,否则平铺更直观.
+  const seedGroups = useMemo(() => {
+    const m = new Map<string, RowDraft[]>();
+    for (const r of rows) {
+      const key = r.seed.trim() || '(无种子 / legacy)';
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(r);
+    }
+    return m;
+  }, [rows]);
+  const groupedMode = seedGroups.size >= 2;
+
   // 拉一次模板全集,row 的下拉用;抽屉里改了再 refresh
   const refreshTemplates = async () => {
     try {
@@ -290,171 +312,218 @@ export function PublishingPlanEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((r, i) => {
-              const globalIdx = (page - 1) * PAGE_SIZE + i;
-              const tmpl = r.template_id ? tmplById.get(r.template_id) : null;
-              const platOpts = tmpl?.target_platforms?.length
-                ? tmpl.target_platforms
-                : ['公众号', '小红书', '抖音', '视频号'];
-              const orig = plan.publishing_plan.find(x => x.id === r.id);
-              const cov = orig?.coverage_pct ?? 0;
-              const tint = cov === 0 ? 'rgba(239,68,68,0.06)'
-                : cov < 50 ? 'rgba(234,179,8,0.06)' : 'rgba(16,185,129,0.06)';
-              const isSel = selected === r.localKey;
-              return (
-                <tr key={r.localKey}
-                    onClick={() => setSelected(r.localKey)}
-                    style={{
-                      background: isSel ? 'var(--bg-tertiary)' : tint,
-                      borderTop: '1px solid var(--border-color)',
-                      cursor: 'pointer',
-                    }}>
-                  <td className="py-1.5 px-1 tabular-nums text-muted">
-                    {globalIdx + 1}
-                    <div className="flex flex-col">
-                      <button type="button" onClick={(e) => {
-                        e.stopPropagation();
-                        moveRow(r.localKey, -1);
-                        // 跨页:行被推到上一页时跟着翻页
-                        if (globalIdx % PAGE_SIZE === 0 && page > 1) setPage(p => p - 1);
-                      }}
-                              className="text-[9px] leading-none text-muted hover:text-primary">▲</button>
-                      <button type="button" onClick={(e) => {
-                        e.stopPropagation();
-                        moveRow(r.localKey, 1);
-                        if (globalIdx % PAGE_SIZE === PAGE_SIZE - 1 && page < totalPages) setPage(p => p + 1);
-                      }}
-                              className="text-[9px] leading-none text-muted hover:text-primary">▼</button>
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <input type="date"
-                           className="rounded-md px-1.5 py-1 w-[130px]"
-                           style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                    border: '1px solid var(--border-color)' }}
-                           value={r.publish_date}
-                           onClick={e => e.stopPropagation()}
-                           onChange={e => updateRow(r.localKey, { publish_date: e.target.value })} />
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <input type="text"
-                           className="rounded-md px-1.5 py-1 w-[200px]"
-                           style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                    border: '1px solid var(--border-color)' }}
-                           placeholder="种子提示词文本…"
-                           value={r.seed}
-                           onClick={e => e.stopPropagation()}
-                           onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <select className="rounded-md px-1.5 py-1 w-[160px]"
-                            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                     border: '1px solid var(--border-color)' }}
-                            value={r.query}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => updateRow(r.localKey, { query: e.target.value })}>
-                      <option value="">— 留空(seed-based)—</option>
-                      {monitored.map(q => <option key={q} value={q}>{q}</option>)}
-                    </select>
-                  </td>
-                  <td className="py-1.5 px-1 tabular-nums">
-                    <span style={{ color: cov === 0 ? '#ef4444' : cov < 50 ? '#eab308' : '#10b981' }}>
-                      {cov.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <div className="flex items-center gap-1">
-                      <select className="rounded-md px-1.5 py-1 max-w-[160px]"
+            {(() => {
+              // 2026-05-31 — 渲染单条 item 行;return 数组(包含可能的 combo override 折叠行).
+              const renderItem = (r: RowDraft, globalIdx: number): React.ReactNode[] => {
+                const tmpl = r.template_id ? tmplById.get(r.template_id) : null;
+                const platOpts = tmpl?.target_platforms?.length
+                  ? tmpl.target_platforms
+                  : ['公众号', '小红书', '抖音', '视频号'];
+                const orig = plan.publishing_plan.find(x => x.id === r.id);
+                const cov = orig?.coverage_pct ?? 0;
+                const tint = cov === 0 ? 'rgba(239,68,68,0.06)'
+                  : cov < 50 ? 'rgba(234,179,8,0.06)' : 'rgba(16,185,129,0.06)';
+                const isSel = selected === r.localKey;
+                const out: React.ReactNode[] = [];
+                out.push(
+                  <tr key={r.localKey}
+                      onClick={() => setSelected(r.localKey)}
+                      style={{
+                        background: isSel ? 'var(--bg-tertiary)' : tint,
+                        borderTop: '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                      }}>
+                    <td className="py-1.5 px-1 tabular-nums text-muted">
+                      {globalIdx + 1}
+                      <div className="flex flex-col">
+                        <button type="button" onClick={(e) => {
+                          e.stopPropagation();
+                          moveRow(r.localKey, -1);
+                          if (!groupedMode && globalIdx % PAGE_SIZE === 0 && page > 1) setPage(p => p - 1);
+                        }}
+                                className="text-[9px] leading-none text-muted hover:text-primary">▲</button>
+                        <button type="button" onClick={(e) => {
+                          e.stopPropagation();
+                          moveRow(r.localKey, 1);
+                          if (!groupedMode && globalIdx % PAGE_SIZE === PAGE_SIZE - 1 && page < totalPages) setPage(p => p + 1);
+                        }}
+                                className="text-[9px] leading-none text-muted hover:text-primary">▼</button>
+                      </div>
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <input type="date"
+                             className="rounded-md px-1.5 py-1 w-[130px]"
+                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                      border: '1px solid var(--border-color)' }}
+                             value={r.publish_date}
+                             onClick={e => e.stopPropagation()}
+                             onChange={e => updateRow(r.localKey, { publish_date: e.target.value })} />
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <input type="text"
+                             className="rounded-md px-1.5 py-1 w-[200px]"
+                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                      border: '1px solid var(--border-color)' }}
+                             placeholder="种子提示词文本…"
+                             value={r.seed}
+                             onClick={e => e.stopPropagation()}
+                             onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <select className="rounded-md px-1.5 py-1 w-[160px]"
                               style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
                                        border: '1px solid var(--border-color)' }}
-                              value={r.template_id || ''}
+                              value={r.query}
                               onClick={e => e.stopPropagation()}
-                              onChange={e => {
-                                const newId = Number(e.target.value) || null;
-                                const nt = newId ? tmplById.get(newId) : null;
-                                // 模板换了:如果当前 platform 不在新模板平台列表里,自动切到第一个
-                                const newPlat = (nt && nt.target_platforms.length && !nt.target_platforms.includes(r.platform))
-                                  ? nt.target_platforms[0]
-                                  : r.platform;
-                                updateRow(r.localKey, { template_id: newId, platform: newPlat });
-                              }}>
-                        <option value="">—</option>
-                        {templates.map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
+                              onChange={e => updateRow(r.localKey, { query: e.target.value })}>
+                        <option value="">— 留空(seed-based)—</option>
+                        {monitored.map(q => <option key={q} value={q}>{q}</option>)}
                       </select>
-                      <button type="button"
-                              onClick={(e) => { e.stopPropagation(); setDrawerTarget(r.localKey); setDrawerOpen(true); }}
-                              className="text-[10px] px-1 py-0.5 rounded-md"
-                              style={{ color: 'var(--text-secondary)' }}
-                              title="打开模板抽屉">
-                        📋
-                      </button>
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <select className="rounded-md px-1.5 py-1"
-                            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                     border: '1px solid var(--border-color)' }}
-                            value={r.platform}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => updateRow(r.localKey, { platform: e.target.value })}>
-                      {platOpts.map(p => <option key={p}>{p}</option>)}
-                    </select>
-                  </td>
-                  <td className="py-1.5 px-1">
-                    <input className="rounded-md px-1.5 py-1 w-[140px]"
-                           style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                    border: '1px solid var(--border-color)' }}
-                           placeholder="备注…"
-                           value={r.note}
-                           onClick={e => e.stopPropagation()}
-                           onChange={e => updateRow(r.localKey, { note: e.target.value })} />
-                  </td>
-                  <td className="py-1.5 px-1 text-center">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); removeRow(r.localKey); }}
-                            className="text-muted hover:text-primary">×</button>
-                  </td>
-                </tr>
-              );
-            }).flatMap((tr, idx) => {
-              const r = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)[idx];
-              if (!r) return [tr];
-              const isSel = selected === r.localKey;
-              // 2026-05-28 — 选中行下方折叠出 combo 多选;不选时折起,不占空间
-              if (!isSel) return [tr];
-              const extra = (
-                <tr key={r.localKey + ':combo'}>
-                  <td colSpan={10} className="px-3 py-2"
-                      style={{ background: 'var(--bg-tertiary)',
-                               borderBottom: '1px solid var(--border-color)' }}>
-                    <div className="text-[11px] text-muted mb-1.5">
-                      自定义本行创作偏好(多选,**空则用画像默认**;非空则只用本行勾的)
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <ChipMultiSelect
-                        label={`创作方向(${r.creation_directions.length})`}
-                        options={COMBO_DIRECTIONS}
-                        value={r.creation_directions}
-                        onChange={v => updateRow(r.localKey, { creation_directions: v })}
-                      />
-                      <ChipMultiSelect
-                        label={`文案类型(${r.copywriting_types.length})`}
-                        options={COMBO_TYPES}
-                        value={r.copywriting_types}
-                        onChange={v => updateRow(r.localKey, { copywriting_types: v })}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              );
-              return [tr, extra];
-            })}
+                    </td>
+                    <td className="py-1.5 px-1 tabular-nums">
+                      <span style={{ color: cov === 0 ? '#ef4444' : cov < 50 ? '#eab308' : '#10b981' }}>
+                        {cov.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <div className="flex items-center gap-1">
+                        <select className="rounded-md px-1.5 py-1 max-w-[160px]"
+                                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                         border: '1px solid var(--border-color)' }}
+                                value={r.template_id || ''}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => {
+                                  const newId = Number(e.target.value) || null;
+                                  const nt = newId ? tmplById.get(newId) : null;
+                                  const newPlat = (nt && nt.target_platforms.length && !nt.target_platforms.includes(r.platform))
+                                    ? nt.target_platforms[0]
+                                    : r.platform;
+                                  updateRow(r.localKey, { template_id: newId, platform: newPlat });
+                                }}>
+                          <option value="">—</option>
+                          {templates.map(t => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                        <button type="button"
+                                onClick={(e) => { e.stopPropagation(); setDrawerTarget(r.localKey); setDrawerOpen(true); }}
+                                className="text-[10px] px-1 py-0.5 rounded-md"
+                                style={{ color: 'var(--text-secondary)' }}
+                                title="打开模板抽屉">
+                          📋
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <select className="rounded-md px-1.5 py-1"
+                              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                       border: '1px solid var(--border-color)' }}
+                              value={r.platform}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => updateRow(r.localKey, { platform: e.target.value })}>
+                        {platOpts.map(p => <option key={p}>{p}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-1.5 px-1">
+                      <input className="rounded-md px-1.5 py-1 w-[140px]"
+                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                      border: '1px solid var(--border-color)' }}
+                             placeholder="备注…"
+                             value={r.note}
+                             onClick={e => e.stopPropagation()}
+                             onChange={e => updateRow(r.localKey, { note: e.target.value })} />
+                    </td>
+                    <td className="py-1.5 px-1 text-center">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); removeRow(r.localKey); }}
+                              className="text-muted hover:text-primary">×</button>
+                    </td>
+                  </tr>
+                );
+                if (isSel) {
+                  out.push(
+                    <tr key={r.localKey + ':combo'}>
+                      <td colSpan={10} className="px-3 py-2"
+                          style={{ background: 'var(--bg-tertiary)',
+                                   borderBottom: '1px solid var(--border-color)' }}>
+                        <div className="text-[11px] text-muted mb-1.5">
+                          自定义本行创作偏好(多选,**空则用画像默认**;非空则只用本行勾的)
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <ChipMultiSelect
+                            label={`创作方向(${r.creation_directions.length})`}
+                            options={COMBO_DIRECTIONS}
+                            value={r.creation_directions}
+                            onChange={v => updateRow(r.localKey, { creation_directions: v })}
+                          />
+                          <ChipMultiSelect
+                            label={`文案类型(${r.copywriting_types.length})`}
+                            options={COMBO_TYPES}
+                            value={r.copywriting_types}
+                            onChange={v => updateRow(r.localKey, { copywriting_types: v })}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return out;
+              };
+
+              // 2026-05-31 — 多 seed 时按 seed 聚合;单 seed / 全 legacy 时平铺.
+              if (groupedMode) {
+                const out: React.ReactNode[] = [];
+                let globalIdx = 0;
+                for (const [seedKey, items] of seedGroups) {
+                  const collapsed = collapsedSeeds.has(seedKey);
+                  const isLegacy = seedKey.startsWith('(无种子');
+                  out.push(
+                    <tr key={`seed:${seedKey}`}
+                        onClick={() => toggleSeed(seedKey)}
+                        style={{
+                          background: 'var(--bg-secondary)',
+                          borderTop: '2px solid var(--border-color)',
+                          cursor: 'pointer',
+                        }}>
+                      <td colSpan={9} className="py-2 px-2">
+                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {collapsed ? '▶' : '▼'}
+                        </span>
+                        <span className="ml-2 font-semibold" style={{
+                          color: isLegacy ? 'var(--text-muted)' : 'var(--accent-primary)',
+                        }}>
+                          {isLegacy ? '无种子 / legacy 行' : `种子: ${seedKey}`}
+                        </span>
+                        <span className="ml-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          · {items.length} 篇稿
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                  if (!collapsed) {
+                    for (const r of items) {
+                      out.push(...renderItem(r, globalIdx));
+                      globalIdx++;
+                    }
+                  } else {
+                    globalIdx += items.length;
+                  }
+                }
+                return out;
+              }
+
+              // flat 模式:原老逻辑(单 seed 或全 legacy)
+              const out: React.ReactNode[] = [];
+              const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+              slice.forEach((r, i) => {
+                out.push(...renderItem(r, (page - 1) * PAGE_SIZE + i));
+              });
+              return out;
+            })()}
           </tbody>
         </table>
       </div>
 
-      {rows.length > PAGE_SIZE && (
+      {!groupedMode && rows.length > PAGE_SIZE && (
         <div className="flex items-center justify-between text-xs text-secondary pt-1">
           <span className="tabular-nums text-muted">
             {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, rows.length)} / {rows.length} 篇
