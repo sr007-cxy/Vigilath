@@ -610,8 +610,12 @@ def update_topic(
 ):
     _validate_payload(payload)
     t = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
-    # Phase C — 只增不改:approved query 不允许从 payload 消失
-    _validate_query_diff(payload.queries, t.queries_json)
+    # Phase C — 只增不改:approved query 不允许从 payload 消失.
+    # 2026-05-31 — admin 编辑时跳过该约束(admin 本来就有 auto-approve 权限,
+    # 删 / 改 approved query 应允许;普通用户编辑仍守住,防止绕过审核).
+    is_admin_actor = bool(getattr(current_user, "is_admin", False))
+    if not is_admin_actor:
+        _validate_query_diff(payload.queries, t.queries_json)
     t.name = payload.name.strip()
     t.target = payload.target
     t.target_aliases_json = json.dumps(payload.target_aliases, ensure_ascii=False)
