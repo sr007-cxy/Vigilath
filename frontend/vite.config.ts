@@ -148,6 +148,110 @@ function seoPages(): Plugin {
           </ul>
         </section>`,
     },
+    '/cookie-policy': {
+      title: 'Cookie Policy | Vigilath',
+      description: 'How Vigilath uses cookies and browser storage. Essential localStorage (auth token, user, language, theme) plus third-party Stripe (payments) and Cloudflare (security) cookies — and how to manage them.',
+      h1: 'Cookie Policy',
+      content: `
+        <section>
+          <h2>1. What Are Cookies</h2>
+          <p>Cookies are small text files stored on your device by websites to remember preferences and improve your experience. Vigilath also uses browser storage technologies such as <code>localStorage</code>.</p>
+          <h2>2. Cookies &amp; Storage We Use</h2>
+          <p><strong>Essential storage</strong> (localStorage): <code>token</code> (authentication), <code>user</code> (current user basic info), <code>i18nextLng</code> (language preference), <code>theme</code> (light/dark preference).</p>
+          <p><strong>Third-party cookies:</strong> Stripe — used on the payment checkout page for fraud detection and payment processing; Cloudflare — security and performance (e.g. <code>__cf_bm</code> for bot detection).</p>
+          <h2>3. How to Manage Cookies</h2>
+          <p>You can manage or delete cookies and localStorage data through your browser settings (Chrome, Firefox, Safari). Disabling essential storage may require you to log in again or prevent some features from working properly.</p>
+          <h2>4. Contact Us</h2>
+          <p>Questions about this Cookie Policy? Email <a href="mailto:support@zen7.com">support@zen7.com</a>.</p>
+        </section>`,
+    },
+    '/faq': {
+      title: 'FAQ — GEO &amp; AI Visibility Questions Answered | Vigilath',
+      description: 'Answers to the questions buyers ask most about Vigilath: how GEO differs from SEO, which AI engines are covered, time to results, pricing, the 8-step growth pipeline, and sentiment monitoring.',
+      h1: 'Frequently Asked Questions',
+      content: `
+        <section>
+          <h2>Frequently Asked Questions</h2>
+          <h3>How is GEO different from SEO?</h3>
+          <p>GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO is designed for the AI-search era and complements — not replaces — SEO.</p>
+          <h3>How long until I see results?</h3>
+          <p>Depending on your industry and competition, clients usually see AI mention rate and citation lift improving in 1–3 months and reach full optimization in 3–6 months. Our cockpit produces a visibility curve daily so you can track quantitatively.</p>
+          <h3>Which AI engines do you cover?</h3>
+          <p>All major Western engines (ChatGPT / Gemini / Perplexity / Claude / DeepSeek) and CN engines (Baidu AI / Wenxin / Qwen / Doubao / Yuanbao). New engines are onboarded within 2 weeks if they expose an API or can be crawled.</p>
+          <h3>How is the 8-step pipeline different from a traditional SEO agency?</h3>
+          <p>Traditional SEO is manual: keyword → content → backlinks → wait for ranking. The 8-step pipeline closes the loop automatically — from seed expansion, clustering, drafting, distribution, to AI indexing verification, citation monitoring, and feedback refinement.</p>
+          <h3>Is sentiment monitoring real-time?</h3>
+          <p>Currently daily batch collection plus instant alerts. We scan 42 CN/global trending sources (Weibo, Zhihu, Douyin, Toutiao, Reddit, HN, etc.). When negative coverage or keyword hits are detected, alerts go out within 15 minutes via email and in-app notification.</p>
+          <h3>Can I self-serve, or do I need to talk to sales?</h3>
+          <p>The free tier self-serves a 25-category GEO audit and crawler accessibility test. Membership unlocks all advanced checks. The 8-step pipeline plus content distribution is a growth service requiring a sales engagement.</p>
+          <h3>What does it cost?</h3>
+          <p>GEO self-serve membership starts low per month. The 8-step growth service is priced per project depending on industry, target engines, and content output. Contact sales for a custom quote.</p>
+          <h3>Do you offer ongoing maintenance?</h3>
+          <p>Yes — required, because AI engines' algorithms, crawl preferences, and ranking rules change continuously. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense.</p>
+        </section>
+        <script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+          {"@type":"Question","name":"How is GEO different from SEO?","acceptedAnswer":{"@type":"Answer","text":"GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO complements — not replaces — SEO."}},
+          {"@type":"Question","name":"How long until I see results?","acceptedAnswer":{"@type":"Answer","text":"Clients usually see AI mention rate and citation lift improving in 1–3 months and reach full optimization in 3–6 months, tracked daily via a visibility curve."}},
+          {"@type":"Question","name":"Which AI engines do you cover?","acceptedAnswer":{"@type":"Answer","text":"All major Western engines (ChatGPT, Gemini, Perplexity, Claude, DeepSeek) and CN engines (Baidu AI, Wenxin, Qwen, Doubao, Yuanbao)."}},
+          {"@type":"Question","name":"Can I self-serve, or do I need to talk to sales?","acceptedAnswer":{"@type":"Answer","text":"The free tier self-serves a 25-category GEO audit. Membership unlocks advanced checks. The 8-step growth pipeline is a managed service requiring a sales engagement."}},
+          {"@type":"Question","name":"Do you offer ongoing maintenance?","acceptedAnswer":{"@type":"Answer","text":"Yes. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense."}}
+        ]}
+        </script>`,
+    },
+    '/pricing': {
+      title: 'Pricing — GEO Membership &amp; Growth Plans | Vigilath',
+      description: 'Compare Vigilath plans: Free (3 checks/month), Pro ($9.99/mo, 20 audits), Starter ($999/mo, managed GEO), Growth ($2,500/mo, SEO placements), and Scale (enterprise, custom).',
+      h1: 'Vigilath Pricing',
+      content: `
+        <section>
+          <h2>Membership Plans</h2>
+          <p>Every plan includes the core 25-category audit. Higher tiers unlock more checks, managed services, and enterprise features.</p>
+          <table>
+            <thead><tr><th>Plan</th><th>Price</th><th>Checks / month</th><th>Key features</th></tr></thead>
+            <tbody>
+              <tr><td>Free</td><td>$0</td><td>3</td><td>Basic 25-category audit, AI Visibility Score</td></tr>
+              <tr><td>Pro</td><td>$9.99/mo</td><td>20</td><td>Full audit, check history, prioritized fix list, PDF export</td></tr>
+              <tr><td>Starter</td><td>$999/mo</td><td>Unlimited</td><td>Managed GEO coverage, AI inclusion spec, copywriting compliance</td></tr>
+              <tr><td>Growth</td><td>$2,500/mo</td><td>Unlimited</td><td>Starter features + paid SEO placements, priority support</td></tr>
+              <tr><td>Scale</td><td>Custom</td><td>Unlimited</td><td>Enterprise GEO, reputation management, dedicated advisor</td></tr>
+            </tbody>
+          </table>
+        </section>`,
+    },
+    '/process': {
+      title: 'How Vigilath Works — The GEO Audit Process | Vigilath',
+      description: 'Vigilath\'s process: enter a URL, run a 25-category / 100+ signal audit across crawl access, content extractability, structured data, authority, and answer-format readiness, then get a 0–100 AI Visibility Score and a prioritized fix list.',
+      h1: 'How Vigilath Works',
+      content: `
+        <section>
+          <h2>From URL to AI Visibility Score</h2>
+          <ol>
+            <li><strong>Enter a URL</strong> — point Vigilath at any website or landing page.</li>
+            <li><strong>Audit 25 categories / 100+ signals</strong> — across crawl access, content extractability, meta &amp; structured data, authority &amp; trust, and answer-format readiness.</li>
+            <li><strong>Score</strong> — receive a 0–100 AI Visibility Score and a letter grade.</li>
+            <li><strong>Category breakdown</strong> — see exactly which signals pass, warn, or fail.</li>
+            <li><strong>Prioritized fix list</strong> — actionable recommendations ranked by impact.</li>
+            <li><strong>Optimize</strong> — self-serve the fixes, or hand off to Vigilath's managed GEO / AEO services.</li>
+          </ol>
+        </section>`,
+    },
+    '/data': {
+      title: 'AI Visibility Data &amp; Metrics — How the Score Works | Vigilath',
+      description: 'Understand Vigilath\'s metrics: the 0–100 AI Visibility Score, the 25-category breakdown, 100+ signals, AI citation frequency, and answer-inclusion rate across ChatGPT, Perplexity, Claude, and Google AI Overviews.',
+      h1: 'AI Visibility Data &amp; Metrics',
+      content: `
+        <section>
+          <h2>What the Numbers Mean</h2>
+          <p>The <strong>AI Visibility Score</strong> (0–100) synthesizes 25 categories and 100+ discrete checks into a single actionable number, paired with a letter grade.</p>
+          <ul>
+            <li><strong>25-category breakdown</strong> — every category targets a specific aspect of AI readiness, from robots.txt access to citable content shapes.</li>
+            <li><strong>Citation frequency</strong> — how often AI engines quote or reference your domain.</li>
+            <li><strong>Answer-inclusion rate</strong> — how often your brand appears in AI-generated answers across ChatGPT, Perplexity, Claude, and Google AI Overviews.</li>
+            <li><strong>Daily visibility curve</strong> — track movement over time as fixes land and engines re-crawl.</li>
+          </ul>
+        </section>`,
+    },
   }
 
   return {
