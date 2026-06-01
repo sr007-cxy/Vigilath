@@ -7,11 +7,14 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { adminReviewApi, type TopicReviewListItem } from '../../services/adminReviewApi';
 
+const PAGE_SIZE = 10;
+
 export function AdminInsights() {
   const { t } = useTranslation();
   const token = localStorage.getItem('token') || '';
   const [topics, setTopics] = useState<TopicReviewListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     adminReviewApi.listTopicReviews(token, 'approved')
@@ -19,6 +22,10 @@ export function AdminInsights() {
       .catch(() => setTopics([]))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const totalPages = Math.max(1, Math.ceil(topics.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedTopics = topics.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -43,7 +50,7 @@ export function AdminInsights() {
                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
             <table className="w-full text-xs">
               <tbody>
-                {topics.map(tp => (
+                {pagedTopics.map(tp => (
                   <tr key={tp.topic_id} className="border-t"
                       style={{ borderColor: 'var(--border-color)' }}>
                     <td className="px-3 py-2 text-primary">
@@ -62,6 +69,33 @@ export function AdminInsights() {
               </tbody>
             </table>
           </div>
+
+          {topics.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-xs text-secondary pt-1">
+              <span className="tabular-nums text-muted">
+                {t('workbench.adminInsights.pageRange', {
+                  from: (safePage - 1) * PAGE_SIZE + 1,
+                  to: Math.min(safePage * PAGE_SIZE, topics.length),
+                  total: topics.length,
+                })}
+              </span>
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={safePage <= 1}
+                        onClick={() => setPage(Math.max(1, safePage - 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminInsights.prev')}
+                </button>
+                <span className="tabular-nums">{safePage} / {totalPages}</span>
+                <button type="button" disabled={safePage >= totalPages}
+                        onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminInsights.next')}
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

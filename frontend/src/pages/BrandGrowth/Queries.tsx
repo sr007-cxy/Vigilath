@@ -21,6 +21,8 @@ interface Row {
 
 type SeedKindFilter = '' | 'seed_only' | 'expanded_only';  // '' = 全部
 
+const PAGE_SIZE = 10;
+
 export function Queries() {
   const L = useBgLang();
   return (
@@ -174,6 +176,12 @@ function Body({ state }: { state: ShellState }) {
     setSeedFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
   };
 
+  // 筛选变 → totalPages 变,safePage 在渲染时夹到合法区间.
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   if (!topic || !matrix) return <div className="text-muted">{L.loading}</div>;
 
   const brandKeywords = [topic.target, ...(topic.target_aliases || [])].filter(Boolean);
@@ -307,9 +315,9 @@ function Body({ state }: { state: ShellState }) {
                   {L.queriesEmptyAfterFilter}
                 </td>
               </tr>
-            ) : filteredRows.map((r, i) => (
+            ) : pagedRows.map((r, i) => (
               <tr key={r.query} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
-                <td className="px-2 py-2 text-right tabular-nums text-muted">{i + 1}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{(safePage - 1) * PAGE_SIZE + i + 1}</td>
                 <td className="px-2 py-2 text-primary truncate max-w-[360px]" title={r.query}>
                   {r.isSeed && (
                     <span
@@ -376,6 +384,29 @@ function Body({ state }: { state: ShellState }) {
           </tbody>
         </table>
       </div>
+
+      {filteredRows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary">
+          <span className="tabular-nums text-muted">
+            {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, filteredRows.length)} / 共 {filteredRows.length} 条
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              上一页
+            </button>
+            <span className="tabular-nums">{safePage} / {totalPages}</span>
+            <button type="button" disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              下一页
+            </button>
+          </div>
+        </div>
+      )}
 
       {active && (
         <QueryDetailModal

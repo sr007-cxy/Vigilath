@@ -19,6 +19,8 @@ function fmtDateTime(iso: string | null): string {
   return d.toLocaleString();
 }
 
+const PAGE_SIZE = 10;
+
 function StatusChip({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
     success: { bg: 'rgba(34,197,94,0.15)', fg: '#15803d', label: '成功' },
@@ -43,6 +45,7 @@ export function AdminAllRuns() {
   const [runs, setRuns] = useState<AdminRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     aiTelemetryApi.adminListAccounts(token)
@@ -65,6 +68,11 @@ export function AdminAllRuns() {
   }, [token, day, userId, status]);
 
   useEffect(() => { load(); }, [load]);
+
+  // runs 缩短 / 筛选变后总页数变 → safePage 在渲染时夹到合法区间.
+  const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedRuns = runs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const totals = useMemo(() => {
     let resp = 0, hit = 0;
@@ -179,7 +187,7 @@ export function AdminAllRuns() {
               <tr><td colSpan={10} className="px-3 py-10 text-center" style={{ color: '#ef4444' }}>{err}</td></tr>
             ) : runs.length === 0 ? (
               <tr><td colSpan={10} className="px-3 py-10 text-center text-muted">没有符合条件的跑批</td></tr>
-            ) : runs.map(r => (
+            ) : pagedRuns.map(r => (
               <tr key={r.run_id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <td className="px-2 py-2 text-right tabular-nums">
                   <Link to={`/workbench/runs/${r.run_id}`} className="text-accent hover:underline">
@@ -215,6 +223,29 @@ export function AdminAllRuns() {
           </tbody>
         </table>
       </div>
+
+      {runs.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary">
+          <span className="tabular-nums text-muted">
+            {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, runs.length)} / 共 {runs.length} 条
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              上一页
+            </button>
+            <span className="tabular-nums">{safePage} / {totalPages}</span>
+            <button type="button" disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              下一页
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

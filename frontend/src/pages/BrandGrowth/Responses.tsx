@@ -5,6 +5,8 @@ import { aiTelemetryApi, type ResponseRow } from '../../services/aiTelemetryApi'
 import { useBgLang, engineLabel } from './lang';
 import { InfoHint } from './charts';
 
+const PAGE_SIZE = 10;
+
 export function Responses() {
   const L = useBgLang();
   return (
@@ -23,6 +25,7 @@ function Body({ state }: { state: ShellState }) {
   const [rows, setRows] = useState<ResponseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!topic) return;
@@ -31,6 +34,11 @@ function Body({ state }: { state: ShellState }) {
       engine, query: queryFilter, period, limit: 200,
     }).then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
   }, [token, topic?.id, period, engine, queryFilter]);
+
+  // 筛选 / 数据集变 → totalPages 重新计算,safePage 在渲染时夹到合法区间.
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   if (!topic) return null;
 
@@ -49,7 +57,7 @@ function Body({ state }: { state: ShellState }) {
         <div className="text-xs text-muted text-center py-10">{L.loading}</div>
       ) : (
         <ul className="space-y-2">
-          {rows.map(r => (
+          {pagedRows.map(r => (
             <li key={r.id} className="p-3 rounded-lg text-xs"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
               <div className="flex justify-between mb-2">
@@ -107,6 +115,29 @@ function Body({ state }: { state: ShellState }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {!loading && rows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary">
+          <span className="tabular-nums text-muted">
+            {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, rows.length)} / 共 {rows.length} 条
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              上一页
+            </button>
+            <span className="tabular-nums">{safePage} / {totalPages}</span>
+            <button type="button" disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              下一页
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

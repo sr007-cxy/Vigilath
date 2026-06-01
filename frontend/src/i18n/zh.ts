@@ -3428,7 +3428,10 @@ const zh = {
               "subtitle": "效果查验与更新 — 命中率 / 排名 / 立场反哺信号,异常时回到「诊断与方案预评估」调种子。",
               "pickTopic": "选一个主题查看反哺数据",
               "view": "查看 →",
-              "empty": "暂无可监测的主题"
+              "empty": "暂无可监测的主题",
+              "prev": "上一页",
+              "next": "下一页",
+              "pageRange": "{{from}}-{{to}} / 共 {{total}} 个"
             },
             "adminAccounts": {
               "title": "画像",

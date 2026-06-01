@@ -3422,7 +3422,10 @@ const en = {
               "subtitle": "Outcome verification & iteration — hit rate, ranking, stance feedback signals. Loops back to diagnose & pre-review when anomalies appear.",
               "pickTopic": "Pick a topic to inspect feedback data",
               "view": "View →",
-              "empty": "No monitored topics yet"
+              "empty": "No monitored topics yet",
+              "prev": "Prev",
+              "next": "Next",
+              "pageRange": "{{from}}-{{to}} of {{total}}"
             },
             "adminAccounts": {
               "title": "Customers",

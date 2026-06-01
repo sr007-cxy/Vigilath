@@ -7,6 +7,8 @@ import { InfoHint } from './charts';
 
 type RoiFilter = 'all' | 'hit' | 'miss';
 
+const PAGE_SIZE = 10;
+
 export function Published() {
   const L = useBgLang();
   return (
@@ -24,6 +26,7 @@ function Body({ state }: { state: ShellState }) {
   const platform = params.get('platform') || '';
   const [docs, setDocs] = useState<ContentDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!topic) return;
@@ -40,6 +43,9 @@ function Body({ state }: { state: ShellState }) {
     docs.flatMap(d => d.publish_targets.map(t => t.platform)).filter(Boolean)
   ));
   const visible = platform ? docs.filter(d => d.publish_targets.some(t => t.platform === platform)) : docs;
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedDocs = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const setRoi = (r: RoiFilter) => {
     const next = new URLSearchParams(params);
@@ -96,9 +102,33 @@ function Body({ state }: { state: ShellState }) {
       ) : visible.length === 0 ? (
         <div className="text-xs text-muted text-center py-10">{L.publishedEmpty}</div>
       ) : (
-        <ul className="grid gap-3">
-          {visible.map(d => <DocCard key={d.id} doc={d} topicId={topic.id} />)}
-        </ul>
+        <>
+          <ul className="grid gap-3">
+            {pagedDocs.map(d => <DocCard key={d.id} doc={d} topicId={topic.id} />)}
+          </ul>
+          {visible.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between text-xs text-secondary">
+              <span className="tabular-nums text-muted">
+                {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, visible.length)} / 共 {visible.length} 篇
+              </span>
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={safePage <= 1}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  上一页
+                </button>
+                <span className="tabular-nums">{safePage} / {totalPages}</span>
+                <button type="button" disabled={safePage >= totalPages}
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  下一页
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

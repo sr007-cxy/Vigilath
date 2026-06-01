@@ -15,6 +15,8 @@ const STAGE_TO_STEP: Record<StageKey, number> = {
   submit: 1, review: 3, solution: 4, plan: 5, content: 6, insight: 7,
 };
 
+const PAGE_SIZE = 10;
+
 // 把 cockpit 的 StageState 折算到本卡片 chip 调色板(无 pending,合并到 running).
 function stageToChip(s: StageState): PipelineChipState {
   return s === 'done' ? 'done'
@@ -75,6 +77,7 @@ export function AdminAccountTopics() {
   // 启动按钮的 per-topic busy / error state
   const [startBusyId, setStartBusyId] = useState<number | null>(null);
   const [startErrByTopic, setStartErrByTopic] = useState<Record<number, string>>({});
+  const [page, setPage] = useState(1);
 
   // 启动项目(首次) — 走新的 /admin/topics/{id}/start.
   // 「重启」入口在执行计划书页里(走 /start?force=true),不在卡片上.
@@ -149,6 +152,11 @@ export function AdminAccountTopics() {
       .catch(() => { if (!cancelled) setAccount(null); });
     return () => { cancelled = true; };
   }, [userId, token]);
+
+  // topics 缩短 / 切换客户 → totalPages 变,safePage 在渲染时夹到合法区间.
+  const totalPages = Math.max(1, Math.ceil(topics.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedTopics = topics.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   if (!userId) return null;
 
@@ -232,7 +240,7 @@ export function AdminAccountTopics() {
         </div>
       ) : (
         <ul className="grid grid-cols-1 gap-3">
-          {topics.map(tp => {
+          {pagedTopics.map(tp => {
             // 「是否启动过」用 last_run_at 推断:approve_topic / start_topic / rerun 都会拿
             // run_id,有 last_run_at 说明至少触发过一次跑批.老 approved 主题(admin 直建,
             // 未跑过)走 last_run_at == null 分支,显示「启动项目」首发按钮.
@@ -362,6 +370,29 @@ export function AdminAccountTopics() {
             );
           })}
         </ul>
+      )}
+
+      {topics.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-xs text-secondary mt-4">
+          <span className="tabular-nums text-muted">
+            {(safePage - 1) * PAGE_SIZE + 1}-{Math.min(safePage * PAGE_SIZE, topics.length)} / 共 {topics.length} 个
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={safePage <= 1}
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              上一页
+            </button>
+            <span className="tabular-nums">{safePage} / {totalPages}</span>
+            <button type="button" disabled={safePage >= totalPages}
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    className="px-2 py-1 rounded-md disabled:opacity-40"
+                    style={{ background: 'var(--bg-tertiary)' }}>
+              下一页
+            </button>
+          </div>
+        </div>
       )}
 
     </div>
