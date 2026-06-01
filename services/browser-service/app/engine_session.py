@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Optional
 
@@ -35,6 +36,21 @@ from .session_store import report_session_outcome
 
 
 _log = logging.getLogger(__name__)
+
+# 登录态失效 / DOM 失效时,自动 rotate(换号)并重试的次数。设 0 关闭"失败即换"。
+# 默认 1:坏掉的 hot session 自动 check-in + 换一条新 session 重试一次。
+AUTO_ROTATE_RETRY = int(os.environ.get("BROWSER_AUTO_ROTATE_RETRY", "1"))
+# 定期轮换:每成功跑 N 条 query 就主动 rotate 一次,让池里账号轮流上、单号不过劳
+# (单号被打几百次最容易触发风控 / 登录态失效)。设 0 关闭定期轮换。
+ROTATE_EVERY_N = int(os.environ.get("BROWSER_ROTATE_EVERY_N", "30"))
+# IP 熔断:连续换了这么多个"新号还是立刻失败"→ 判定不是账号问题(多半 IP 被封 /
+# 引擎挂了),停止换号(避免把所有账号一起喂进黑名单),进入退避只用当前号低频探活。
+IP_BAN_ROTATE_FAILS = int(os.environ.get("BROWSER_IP_BAN_ROTATE_FAILS", "3"))
+# 熔断后退避秒数;期间不 rotate,仍用当前 session 探活,成功即恢复。默认 15 分钟。
+BREAKER_COOLDOWN_SEC = float(os.environ.get("BROWSER_BREAKER_COOLDOWN_SEC", "900"))
+# 哪些失败类型触发自动 rotate —— 只对"换个账号就可能好"的失败自愈;
+# captcha / timeout / crash 换号大概率也救不了,不浪费额度,留给隔离策略处理。
+_ROTATE_ON = {"login_lost", "dom_not_found"}
 
 
 class EngineSession:
@@ -47,6 +63,12 @@ class EngineSession:
         self.last_used_at: Optional[float] = None
         self._lock = asyncio.Lock()
         self._initialized = False
+        # 距上次 rotate 已成功跑的 query 数(到 ROTATE_EVERY_N 触发定期轮换)
+        self._queries_since_rotate = 0
+        # 连续"换了新号还是立刻失败"的次数(到 IP_BAN_ROTATE_FAILS 触发 IP 熔断)
+        self._rotate_fail_streak = 0
+        # IP 熔断退避截止(epoch 秒);> now 时只探活不换号
+        self._breaker_until = 0.0
 
     # ── Adapter capability check ─────────────────────────────────
     def _has_hot_protocol(self) -> bool:
@@ -83,9 +105,84 @@ class EngineSession:
         """Reuse hot page to run one query.
 
         并发请求会串行化(_lock).调用前 init() 必须已完成,否则 raise.
+
+        三层换号策略:
+        1. 定期轮换(ROTATE_EVERY_N):每成功 N 条主动 rotate,让池里账号轮流上,
+           单号不过劳——单号被打几百次最容易触发风控 / 登录态失效。
+        2. 失败即换(AUTO_ROTATE_RETRY):login_lost / dom_not_found 时换一条新号重试,
+           解决 hot session 登录态一死就干坐着每条都失败、永不自动换号的问题。
+        3. IP 熔断(IP_BAN_ROTATE_FAILS):连续换了多个新号还是立刻失败 → 判定不是
+           账号问题(多半 IP 被封 / 引擎挂了),停止换号(否则会把所有账号一起喂进
+           黑名单),退避 BREAKER_COOLDOWN_SEC,期间只用当前号低频探活,成功即恢复。
         """
         if not self._initialized:
             await self.init()
+
+        now = time.time()
+        breaker_open = now < self._breaker_until
+
+        # 1) 定期轮换 —— 仅在健康(未熔断)时做
+        if ROTATE_EVERY_N > 0 and self._queries_since_rotate >= ROTATE_EVERY_N and not breaker_open:
+            _log.info("[hot-session] %s periodic rotate after %d queries",
+                      self.engine_name, self._queries_since_rotate)
+            try:
+                await self.rotate(reason="periodic")
+                self._queries_since_rotate = 0
+            except Exception as e:  # noqa: BLE001
+                _log.warning("[hot-session] %s periodic rotate failed: %s", self.engine_name, e)
+
+        attempts = AUTO_ROTATE_RETRY + 1
+        result: Optional[EngineResult] = None
+        rotated = False                                  # 本次调用是否真的换过号
+        for attempt in range(attempts):
+            result, fail_type = await self._query_once(query_text)
+            if fail_type is None:                        # 成功
+                self._queries_since_rotate += 1
+                self._rotate_fail_streak = 0
+                self._breaker_until = 0.0                # 探活成功 → 解除熔断
+                return result
+            if fail_type not in _ROTATE_ON:
+                return result                            # 换号也救不了的失败 → 直接返回
+            if attempt + 1 >= attempts:
+                break                                    # 重试次数用尽
+            if breaker_open:
+                _log.info("[hot-session] %s %s but IP-breaker open, probe-only (no rotate)",
+                          self.engine_name, fail_type)
+                return result                            # 熔断中:不换号,只探活
+            _log.warning("[hot-session] %s %s on query, auto-rotating (attempt %d/%d)",
+                         self.engine_name, fail_type, attempt + 1, attempts - 1)
+            try:
+                await self.rotate(reason=fail_type)
+                self._queries_since_rotate = 0
+                rotated = True
+            except Exception as e:                       # noqa: BLE001
+                _log.warning("[hot-session] %s auto-rotate failed: %s", self.engine_name, e)
+                self._note_rotate_didnt_help()           # 换不出新号(池空/全死)
+                return result
+        # 换了号重试仍失败 → 这次换号没救活,累计;够多就熔断 IP
+        if rotated:
+            self._note_rotate_didnt_help()
+        return result
+
+    def _note_rotate_didnt_help(self) -> None:
+        """记一次"换号也没救活";连续够 IP_BAN_ROTATE_FAILS 次 → 触发 IP 熔断."""
+        self._rotate_fail_streak += 1
+        if self._rotate_fail_streak >= IP_BAN_ROTATE_FAILS:
+            self._breaker_until = time.time() + BREAKER_COOLDOWN_SEC
+            self._rotate_fail_streak = 0
+            _log.error(
+                "[hot-session] %s: 连续 %d 次换号仍失败 —— 疑似 IP 被封 / 引擎挂了,"
+                "熔断 %.0fs 停止换号(避免把所有账号一起喂进黑名单),期间仅探活.",
+                self.engine_name, IP_BAN_ROTATE_FAILS, BREAKER_COOLDOWN_SEC,
+            )
+
+    async def _query_once(self, query_text: str) -> tuple[EngineResult, Optional[str]]:
+        """跑一次 query(持 _lock).返回 (result, failure_type);成功时 failure_type=None.
+
+        失败信号上报给 pool(check-in 记账,驱动 quarantine 策略)——保持原有口径:
+        异常路径报 'crash',result.error 路径报 _classify_error 的类型.
+        但无论哪条路径都把分类后的 failure_type 返给上层,供自动 rotate 判定.
+        """
         async with self._lock:
             t0 = time.time()
             try:
@@ -97,16 +194,16 @@ class EngineSession:
                     self.engine_name, self.query_count, time.time() - t0,
                     len(result.answer or ""), result.error,
                 )
-                # 失败信号反馈给 pool.SUCCESS 不必每次都报(check-in 用 SUCCESS 也行,
-                # 但会涨 use_count;hot 模式下我们用 query_count 自己 track,只在
-                # 真 failure 时 report,SUCCESS 静默)
                 if result.error:
-                    report_session_outcome(self.engine_name, result=_classify_error(result.error))
-                return result
+                    ft = _classify_error(result.error)
+                    report_session_outcome(self.engine_name, result=ft)
+                    return result, ft
+                return result, None
             except Exception as e:
                 _log.exception("[hot-session] %s query crashed: %s", self.engine_name, e)
                 report_session_outcome(self.engine_name, result="crash", error_msg=str(e))
-                return EngineResult(engine=self.adapter.name, query=query_text, error=str(e))
+                err = EngineResult(engine=self.adapter.name, query=query_text, error=str(e))
+                return err, _classify_error(str(e))
 
     async def rotate(self, reason: str = "manual") -> None:
         """Close current ctx + check-in session + re-init with fresh session."""

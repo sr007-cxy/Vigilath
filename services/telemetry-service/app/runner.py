@@ -17,7 +17,8 @@ import json
 import logging
 import os
 import random
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -149,11 +150,23 @@ async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> d
                 "video_url": None, "source_url": None, "error": str(e)}
 
 
-async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None) -> None:
+async def run_topic_once(
+    topic: TopicORM,
+    *,
+    existing_run_id: int | None = None,
+    pairs: Optional[set[tuple[str, str]]] = None,
+    finalize: bool = True,
+) -> None:
     """对一个 topic 把 (queries × engines) 全部跑完并落库.
 
     existing_run_id 非空时复用已建的 RunORM(由 /run-topic HTTP handler 同步建一行
     返回给调用方,这里只补 cell 初始化 + 实际跑批 + finish_run).
+
+    pairs 非空时(scheduler drip 传入)本次只跑这些 (engine, query) 子集,且跳过
+    内部的跨 run 去重 —— 周期级去重由 scheduler 负责.pairs=None 时跑全量(老行为).
+
+    finalize=False 时(drip 多 tick 复用同一 run)本次只跑批、不 finish_run,由
+    scheduler 在整个周期跑完后自己 finish_run.
 
     单 Response 落库时:detect_hit + update_query_hit_after_response 都在同一 session.
     Run 整体结束后:fire-and-forget LLM 抽取(EXTRACT_AFTER_RUN=1 时).
@@ -171,13 +184,16 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
     # 重启 run 70 时,deepseek 已经写库的 15 条不应该再跑)。设 0 关闭去重。
     skip_hours = int(os.environ.get("TELEMETRY_SKIP_RECENT_HOURS", "24"))
     done_set: set[tuple[str, str]] = set()
-    if skip_hours > 0:
+    if pairs is None and skip_hours > 0:
+        # cutoff 在 Python 算好再传参,避免方言差异(NOW()/::interval 是 Postgres 专用,
+        # 在 SQLite / MySQL 上会报错)。created_at 存的是 naive UTC,这里也用 utcnow。
+        cutoff = datetime.utcnow() - timedelta(hours=skip_hours)
         with db_session() as s:
             rows = s.execute(text(
                 "SELECT DISTINCT engine, query FROM ai_telemetry_responses "
                 "WHERE topic_id = :tid AND (error IS NULL OR error = '') "
-                "  AND created_at >= NOW() - (:hrs || ' hours')::interval"
-            ), {"tid": topic_id, "hrs": str(skip_hours)}).all()
+                "  AND created_at >= :cutoff"
+            ), {"tid": topic_id, "cutoff": cutoff}).all()
             done_set = {(r.engine, r.query) for r in rows}
         if done_set:
             log.info("topic %d skip-recent: %d (engine, query) 对在过去 %dh 已有成功 response", topic_id, len(done_set), skip_hours)
@@ -241,16 +257,25 @@ async def run_topic_once(topic: TopicORM, *, existing_run_id: int | None = None)
         # 自然让 Sem 槽位均匀分摊到各引擎(每引擎单 hot context 内部串行,
         # 跨引擎才能真并行)。engine-major 会让一个引擎独占 Sem,其他全排队 —
         # 实测 2026-05-26 run 69 翻船过。
-        tasks = [_one(e, q) for q in queries for e in engines if (e, q) not in done_set]
-        log.info("topic %d run %d: launching %d tasks (skipped %d already-done)",
-                 topic_id, run_id, len(tasks), len(engines) * len(queries) - len(tasks))
+        # pairs 模式(drip):只跑 scheduler 指定的子集;否则跑全量减去 skip-recent。
+        if pairs is not None:
+            run_pairs = [(e, q) for q in queries for e in engines if (e, q) in pairs]
+        else:
+            run_pairs = [(e, q) for q in queries for e in engines if (e, q) not in done_set]
+        tasks = [_one(e, q) for (e, q) in run_pairs]
+        log.info("topic %d run %d: launching %d tasks (matrix=%d, pairs=%s, skipped=%d)",
+                 topic_id, run_id, len(tasks), len(engines) * len(queries),
+                 "yes" if pairs is not None else "no",
+                 len(engines) * len(queries) - len(tasks))
         await asyncio.gather(*tasks)
 
-    total = len(engines) * len(queries) - len(done_set)
-    status = "success" if failures < total else "failed"
-    with db_session() as s:
-        finish_run(s, run_id, status, error=None if failures == 0 else f"{failures}/{total} failed")
-    log.info("topic %d run %d done: %d/%d ok", topic_id, run_id, total - failures, total)
+    total = len(run_pairs)
+    # total=0(本 tick 无可跑)→ 视为 success,不误判 failed
+    status = "failed" if total > 0 and failures >= total else "success"
+    if finalize:
+        with db_session() as s:
+            finish_run(s, run_id, status, error=None if failures == 0 else f"{failures}/{total} failed")
+    log.info("topic %d run %d done: %d/%d ok (finalize=%s)", topic_id, run_id, total - failures, total, finalize)
 
     # v1.1 fire-and-forget LLM 抽取(不阻塞返回)
     if EXTRACT_AFTER_RUN and response_ids:
