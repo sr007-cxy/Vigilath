@@ -14,13 +14,13 @@ type StatusFilter = DocStatus | 'to_review' | 'all';
 type SourceFilter = DocSource | 'all';
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all',            label: 'all' },
   { key: 'to_review',      label: 'to_review' },
   { key: 'draft',          label: 'draft' },
   { key: 'pending_review', label: 'pending_review' },
   { key: 'approved',       label: 'approved' },
   { key: 'rejected',       label: 'rejected' },
   { key: 'published',      label: 'published' },
-  { key: 'all',            label: 'all' },
 ];
 
 // 2026-05-28 — 多变体 combo 的可读 label(跟 BrandProfileForm 候选项同步)
@@ -54,7 +54,7 @@ export function AdminContentReview({ lockedTopicId }: AdminContentReviewProps = 
     const statusParam = sp.get('status');
     return {
       topic: lockedTopicId ?? (topicParam ? Number(topicParam) : null),
-      status: (statusParam as StatusFilter) || 'to_review',
+      status: (statusParam as StatusFilter) || 'all',
     };
   }, [lockedTopicId]);
 
