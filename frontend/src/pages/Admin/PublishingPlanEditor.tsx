@@ -469,15 +469,27 @@ export function PublishingPlanEditor({
                 return out;
               };
 
-              // 2026-05-31 — 多 seed 时按 seed 聚合;单 seed / 全 legacy 时平铺.
+              // 2026-05-31 — 多 seed 时按 seed 聚合;**保留分页**(按行分页),
+              // 当前页 slice 内按 seed 二次分组.同 seed 的 items 跨页时,
+              // header 在每一页该 seed 出现处都重画一次,告诉用户"这是该 seed 的延续部分".
               if (groupedMode) {
                 const out: React.ReactNode[] = [];
-                let globalIdx = 0;
-                for (const [seedKey, items] of seedGroups) {
+                const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+                // 当前 slice 按 seed 分组(保 input order)
+                const sliceGroups = new Map<string, RowDraft[]>();
+                for (const r of slice) {
+                  const key = r.seed.trim() || '(无种子 / legacy 行)';
+                  if (!sliceGroups.has(key)) sliceGroups.set(key, []);
+                  sliceGroups.get(key)!.push(r);
+                }
+                let inPageIdx = 0;
+                for (const [seedKey, items] of sliceGroups) {
                   const collapsed = collapsedSeeds.has(seedKey);
                   const isLegacy = seedKey.startsWith('(无种子');
+                  // 该 seed 在全表的总篇数(给 header 显示 "10 篇" 用,跟当前页区分)
+                  const totalInSeed = seedGroups.get(seedKey)?.length || items.length;
                   out.push(
-                    <tr key={`seed:${seedKey}`}
+                    <tr key={`seed:${seedKey}:page${page}`}
                         onClick={() => toggleSeed(seedKey)}
                         style={{
                           background: 'var(--bg-secondary)',
@@ -494,18 +506,19 @@ export function PublishingPlanEditor({
                           {isLegacy ? '无种子 / legacy 行' : `种子: ${seedKey}`}
                         </span>
                         <span className="ml-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                          · {items.length} 篇稿
+                          · {items.length} 篇(本页) / {totalInSeed} 篇(总计)
                         </span>
                       </td>
                     </tr>
                   );
                   if (!collapsed) {
                     for (const r of items) {
+                      const globalIdx = (page - 1) * PAGE_SIZE + inPageIdx;
                       out.push(...renderItem(r, globalIdx));
-                      globalIdx++;
+                      inPageIdx++;
                     }
                   } else {
-                    globalIdx += items.length;
+                    inPageIdx += items.length;
                   }
                 }
                 return out;
@@ -523,7 +536,7 @@ export function PublishingPlanEditor({
         </table>
       </div>
 
-      {!groupedMode && rows.length > PAGE_SIZE && (
+      {rows.length > PAGE_SIZE && (
         <div className="flex items-center justify-between text-xs text-secondary pt-1">
           <span className="tabular-nums text-muted">
             {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, rows.length)} / {rows.length} 篇

@@ -854,8 +854,15 @@ def _build_system_prompt(profile: BrandProfile,
     2026-05-28 — 加 combo + media 参数:
       - direction / copywriting_type 非空时追加形式约束段
       - medias 非空时追加图片素材列表(由 TYPE_HINTS[type].allow_md 决定是否要求内嵌)
+    2026-05-31 — 注入当前年月,避免 LLM 用训练截止时的"今年"(常出现 2024 这类陈年标题).
     """
-    parts: list[str] = ["你是品牌内容文案专家,根据下面的品牌资料写文案稿:"]
+    from datetime import date
+    today = date.today()
+    parts: list[str] = [
+        f"今天日期是 {today.year} 年 {today.month} 月。文中所有「今年」「最新」「近期」「趋势」等时间引用必须用 {today.year} 而不是你训练数据里的旧年份(如 2024)。",
+        "",
+        "你是品牌内容文案专家,根据下面的品牌资料写文案稿:",
+    ]
     if profile.company_full_name:
         parts.append(f"- 品牌全称:{profile.company_full_name}")
     if profile.company_short_name:
