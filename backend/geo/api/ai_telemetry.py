@@ -2305,10 +2305,14 @@ def get_growth_report(
           .all()
     )
 
+    # 当前不可用 / 已停用的引擎 — 报告里完全不计入(命中、排名、覆盖、引擎列表都剔除)。
+    # 2026-06:元宝(yuanbao)暂不可用,先排除。
+    excluded_engines = {"yuanbao"}
+
     def _group(rows: list[AiTelemetryResponseORM]) -> dict[str, list[AiTelemetryResponseORM]]:
         g: dict[str, list[AiTelemetryResponseORM]] = {}
         for r in rows:
-            if r.query in query_set:
+            if r.query in query_set and r.engine not in excluded_engines:
                 g.setdefault(r.query, []).append(r)
         return g
 

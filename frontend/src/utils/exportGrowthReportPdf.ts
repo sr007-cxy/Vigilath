@@ -7,6 +7,7 @@ import {
   blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml,
 } from './pdfPrimitives';
 import type { GrowthReport, GrowthSnapshot, GrowthStatus } from '../services/aiTelemetryApi';
+import { engineLabel } from '../pages/BrandGrowth/lang';
 
 interface Dict {
   reportTitle: string;
@@ -30,7 +31,8 @@ interface Dict {
   colCurrent: string;
   colChange: string;
   miss: string;
-  rankNo: (n: number) => string;
+  rowsEmpty: string;
+  rankShort: (n: number) => string;
   hitNoRank: string;
   status: Record<GrowthStatus, string>;
   noBaseline: string;
@@ -54,11 +56,12 @@ const ZH: Dict = {
   rowsHeading: '监测问题明细',
   colIndex: '序号',
   colQuery: '监测问题',
-  colBaseline: '首次结果',
-  colCurrent: '当前结果',
+  colBaseline: '首次命中模型',
+  colCurrent: '当前命中模型',
   colChange: '变化',
   miss: '未命中',
-  rankNo: (n) => `命中 · 第 ${n} 位`,
+  rowsEmpty: '暂无命中的监测问题',
+  rankShort: (n) => `第 ${n} 位`,
   hitNoRank: '命中',
   status: {
     new_hit: '新命中',
@@ -88,11 +91,12 @@ const EN: Dict = {
   rowsHeading: 'Tracked queries',
   colIndex: '#',
   colQuery: 'Query',
-  colBaseline: 'First result',
-  colCurrent: 'Current result',
+  colBaseline: 'First-run hits',
+  colCurrent: 'Current hits',
   colChange: 'Change',
   miss: 'Miss',
-  rankNo: (n) => `Hit · rank ${n}`,
+  rowsEmpty: 'No hit queries yet',
+  rankShort: (n) => `rank ${n}`,
   hitNoRank: 'Hit',
   status: {
     new_hit: 'New hit',
@@ -115,8 +119,12 @@ const STATUS_COLOR: Record<GrowthStatus, string> = {
 const fmtDate = (iso: string | null, lang: string): string =>
   iso ? new Date(iso).toLocaleString(lang.startsWith('zh') ? 'zh-CN' : 'en-US') : '';
 
-const resultText = (hit: boolean, rank: number | null, L: Dict): string =>
-  hit ? (rank != null ? L.rankNo(rank) : L.hitNoRank) : L.miss;
+// 命中模型列:列出命中的引擎(本地化名),命中且抽出排名时追加「· 第N位」。未命中显示「未命中」。
+const resultText = (hit: boolean, rank: number | null, engines: string[], L: Dict): string => {
+  if (!hit) return L.miss;
+  const names = engines.length ? engines.map(engineLabel).join('、') : L.hitNoRank;
+  return rank != null ? `${names} · ${L.rankShort(rank)}` : names;
+};
 
 const buildCover = (report: GrowthReport, L: Dict, lang: string): string =>
   blockWrapOpen('padding:6px 0 20px 0;border-bottom:3px solid #6366f1;margin-bottom:8px;') +
@@ -164,20 +172,29 @@ const buildSummary = (b: GrowthSnapshot, c: GrowthSnapshot, L: Dict): string => 
 };
 
 const buildRowsTable = (report: GrowthReport, L: Dict): string => {
+  // 只展示当前命中的监测问题 — 未命中的不进表(噪音)。
+  const rows = report.rows.filter(r => r.current_hit);
+  if (rows.length === 0) {
+    return (
+      blockWrapOpen('padding:14px 0;') +
+      `<div style="font-size:12.5px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;text-align:center;">${escapeHtml(L.rowsEmpty)}</div>` +
+      blockWrapClose
+    );
+  }
   const head =
     `<tr style="background:#f8fafc;">` +
     `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:34px;">${escapeHtml(L.colIndex)}</th>` +
     `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;">${escapeHtml(L.colQuery)}</th>` +
-    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:96px;">${escapeHtml(L.colBaseline)}</th>` +
-    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:96px;">${escapeHtml(L.colCurrent)}</th>` +
-    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:72px;">${escapeHtml(L.colChange)}</th>` +
+    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:128px;">${escapeHtml(L.colBaseline)}</th>` +
+    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:138px;">${escapeHtml(L.colCurrent)}</th>` +
+    `<th style="padding:7px 8px;text-align:left;font-size:10.5px;color:#94a3b8;font-weight:700;width:64px;">${escapeHtml(L.colChange)}</th>` +
     `</tr>`;
-  const body = report.rows.map((r, i) =>
+  const body = rows.map((r, i) =>
     `<tr>` +
     `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#94a3b8;font-size:11px;vertical-align:top;">${i + 1}</td>` +
     `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#0f172a;font-size:11.5px;line-height:1.5;vertical-align:top;">${escapeHtml(r.query)}</td>` +
-    `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#64748b;font-size:11px;vertical-align:top;">${escapeHtml(resultText(r.baseline_hit, r.baseline_rank, L))}</td>` +
-    `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#0f172a;font-size:11px;vertical-align:top;">${escapeHtml(resultText(r.current_hit, r.current_rank, L))}</td>` +
+    `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#64748b;font-size:11px;line-height:1.5;vertical-align:top;">${escapeHtml(resultText(r.baseline_hit, r.baseline_rank, r.baseline_engines, L))}</td>` +
+    `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;color:#0f172a;font-size:11px;line-height:1.5;vertical-align:top;">${escapeHtml(resultText(r.current_hit, r.current_rank, r.current_engines, L))}</td>` +
     `<td style="padding:6px 8px;border-bottom:1px solid #eef2f7;font-size:11px;font-weight:700;vertical-align:top;color:${STATUS_COLOR[r.status]};">${escapeHtml(L.status[r.status])}</td>` +
     `</tr>`,
   ).join('');
