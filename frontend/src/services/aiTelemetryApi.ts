@@ -741,6 +741,10 @@ export const aiTelemetryApi = {
         ],
         owned_split: { owned: 24, other: 200, owned_pct: 10.7, delta_pct: 2.1 },
         engine_domain_matrix: { deepseek: { 'zhihu.com': 8 }, qwen: { 'baike.baidu.com': 5 } },
+        engine_factor_matrix: {
+          deepseek: { list_mention: 12, reviews: 5, social: 8, other: 6 },
+          qwen: { list_mention: 7, directory: 4, social: 5, other: 3 },
+        },
       });
     }
     return request<Overview>('GET', `/topics/${topicId}/overview?period=${periodDays}`, token);
