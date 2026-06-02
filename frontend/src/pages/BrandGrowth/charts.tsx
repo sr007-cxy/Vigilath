@@ -1,5 +1,7 @@
 // 通用 SVG 图表 — 纯 SVG, 0 依赖, 暗色/亮色 theme 通过 currentColor + CSS var 自适应。
 
+import { useState } from 'react';
+
 export interface DonutSlice {
   label: string;
   value: number;
@@ -13,6 +15,8 @@ export function DonutChart({ slices, size = 180, hole = 0.6, centerText, centerS
   centerText?: string;
   centerSub?: string;
 }) {
+  // 鼠标移入分段:灰色提示「因子名 数量 个 · 占比%」
+  const [hover, setHover] = useState<{ label: string; value: number; pct: number; x: number; y: number } | null>(null);
   const total = slices.reduce((s, x) => s + x.value, 0);
   const cx = size / 2;
   const cy = size / 2;
@@ -47,24 +51,43 @@ export function DonutChart({ slices, size = 180, hole = 0.6, centerText, centerS
       `A ${innerR} ${innerR} 0 ${large} 0 ${xi2} ${yi2}`,
       'Z',
     ].join(' ');
-    return <path key={i} d={d} fill={sl.color} />;
+    const pct = total ? (sl.value / total) * 100 : 0;
+    const dim = hover && hover.label !== sl.label;
+    return (
+      <path
+        key={i} d={d} fill={sl.color}
+        style={{ opacity: dim ? 0.4 : 1, transition: 'opacity .12s', cursor: 'default' }}
+        onMouseMove={(e) => setHover({ label: sl.label, value: sl.value, pct, x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setHover(null)}
+      />
+    );
   });
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full" style={{ maxWidth: size }}>
-      {arcs}
-      {centerText && (
-        <text x={cx} y={cy - (centerSub ? 7 : 0)} textAnchor="middle" dominantBaseline="middle"
-          fontSize="22" fontWeight="600" fill="var(--text-primary)">
-          {centerText}
-        </text>
+    <div className="relative w-full" style={{ maxWidth: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full">
+        {arcs}
+        {centerText && (
+          <text x={cx} y={cy - (centerSub ? 7 : 0)} textAnchor="middle" dominantBaseline="middle"
+            fontSize="22" fontWeight="600" fill="var(--text-primary)">
+            {centerText}
+          </text>
+        )}
+        {centerSub && (
+          <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="middle"
+            fontSize="10" fill="var(--text-muted)">
+            {centerSub}
+          </text>
+        )}
+      </svg>
+      {hover && (
+        <div
+          className="fixed z-50 pointer-events-none px-2 py-1 rounded text-[11px] whitespace-nowrap shadow-lg"
+          style={{ left: hover.x + 12, top: hover.y + 12, background: 'rgba(31,41,55,0.94)', color: '#fff' }}
+        >
+          {hover.label} {hover.value.toLocaleString()} 个 · {hover.pct.toFixed(1)}%
+        </div>
       )}
-      {centerSub && (
-        <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="middle"
-          fontSize="10" fill="var(--text-muted)">
-          {centerSub}
-        </text>
-      )}
-    </svg>
+    </div>
   );
 }
 
