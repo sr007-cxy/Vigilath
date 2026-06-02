@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates
+from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates, admin_crawl
 from geo.utils.error_handler import global_exception_handler, AppException
 from geo.utils.request_log import configure_request_log
 
@@ -85,6 +85,7 @@ app.include_router(admin_content_review.router, prefix="/api", tags=["admin-cont
 app.include_router(content_templates.router, prefix="/api", tags=["content-templates"])
 app.include_router(content.router, prefix="/api", tags=["content"])
 app.include_router(engine_sessions.router, prefix="/api", tags=["engine-sessions"])
+app.include_router(admin_crawl.router, prefix="/api", tags=["admin-crawl"])
 
 # 舆情定时任务 — 仅 leader 进程启动 APScheduler.
 # 部署:多 worker 时给一个独立 systemd unit 设 GEO_SCHEDULER_LEADER=1,

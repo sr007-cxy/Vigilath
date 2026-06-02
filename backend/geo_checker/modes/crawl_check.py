@@ -82,6 +82,120 @@ def open_log_file(path):
     return open(path, "r", errors="replace")
 
 
+def analyze_crawl_logs(log_files):
+    """Analyze access logs and return AI/LLM crawler activity as a JSON-serializable dict.
+
+    Same computation as ``crawl_check_files()`` but returns structured data instead
+    of printing — used by the admin crawl-analysis API. ``first_seen`` / ``last_seen``
+    are computed from parsed timestamps (min/max), not file order, so rotated/gzipped
+    logs read out of chronological order still report correct bounds.
+    """
+    import os
+    from collections import defaultdict
+
+    bot_hits = defaultdict(list)      # bot_name -> list of {path, timestamp, ts, status, ip}
+    bot_pages = defaultdict(set)
+    bot_ips = defaultdict(set)
+    total_lines = 0
+    parsed_lines = 0
+    first_ts = None
+    last_ts = None
+
+    readable_files = []
+    for log_file in log_files:
+        try:
+            f = open_log_file(log_file)
+        except OSError:
+            continue  # 不可读(权限/损坏)的日志直接跳过,不让整个分析 500
+        readable_files.append(log_file)
+        with f:
+            for line in f:
+                total_lines += 1
+                entry = parse_log_line(line.strip())
+                if not entry:
+                    continue
+                parsed_lines += 1
+                ua = entry["user_agent"]
+                if not ua:
+                    continue
+                ts = parse_timestamp(entry["timestamp"])
+                if ts:
+                    if first_ts is None or ts < first_ts:
+                        first_ts = ts
+                    if last_ts is None or ts > last_ts:
+                        last_ts = ts
+                for bot_name, bot_info in AI_CRAWLERS.items():
+                    if re.search(bot_info["pattern"], ua):
+                        bot_hits[bot_name].append({
+                            "path": entry["path"],
+                            "timestamp": entry["timestamp"],
+                            "ts": ts,
+                            "status": entry["status"],
+                            "ip": entry["ip"],
+                        })
+                        bot_pages[bot_name].add(entry["path"])
+                        bot_ips[bot_name].add(entry["ip"])
+                        break
+
+    bots = []
+    for bot_name, hits in sorted(bot_hits.items(), key=lambda x: len(x[1]), reverse=True):
+        info = AI_CRAWLERS[bot_name]
+        status_counts = defaultdict(int)
+        page_counts = defaultdict(int)
+        for h in hits:
+            status_counts[h["status"]] += 1
+            page_counts[h["path"]] += 1
+        top_pages = sorted(page_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        ts_list = [h["ts"] for h in hits if h["ts"]]
+        first_seen = min(ts_list).isoformat() if ts_list else hits[0]["timestamp"]
+        last_seen = max(ts_list).isoformat() if ts_list else hits[-1]["timestamp"]
+        bots.append({
+            "name": bot_name,
+            "powers": info["powers"],
+            "importance": info["importance"],
+            "requests": len(hits),
+            "unique_pages": len(bot_pages[bot_name]),
+            "ips": len(bot_ips[bot_name]),
+            "status_codes": {str(k): v for k, v in sorted(status_counts.items())},
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "top_pages": [{"path": p, "count": c} for p, c in top_pages],
+        })
+
+    missing_critical = [
+        {"name": n, "powers": AI_CRAWLERS[n]["powers"]}
+        for n in AI_CRAWLERS
+        if n not in bot_hits and AI_CRAWLERS[n]["importance"] == "critical"
+    ]
+    missing_optional = [
+        {"name": n, "powers": AI_CRAWLERS[n]["powers"]}
+        for n in AI_CRAWLERS
+        if n not in bot_hits and AI_CRAWLERS[n]["importance"] == "optional"
+    ]
+
+    return {
+        "files": [
+            {
+                "path": f,
+                "size_mb": round(os.path.getsize(f) / 1024 / 1024, 2),
+                "gzipped": f.endswith(".gz"),
+            }
+            for f in readable_files
+        ],
+        "total_size_mb": round(sum(os.path.getsize(f) for f in readable_files) / 1024 / 1024, 2),
+        "total_lines": total_lines,
+        "parsed_lines": parsed_lines,
+        "period": {
+            "first": first_ts.isoformat() if first_ts else None,
+            "last": last_ts.isoformat() if last_ts else None,
+        },
+        "total_bot_requests": sum(len(h) for h in bot_hits.values()),
+        "bots": bots,
+        "missing_critical": missing_critical,
+        "missing_optional": missing_optional,
+    }
+
+
 def crawl_check(log_pattern):
     """Convenience wrapper: resolve a single glob pattern and analyze."""
     import os
