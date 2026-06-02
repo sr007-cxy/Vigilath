@@ -428,6 +428,63 @@ const en = {
                 }
               ]
             },
+            "testimonials": {
+              "badge": "Reviews",
+              "title": "What our users say",
+              "subtitle": "Real feedback from law firms, healthcare, clean-tech and AI-tool teams.",
+              "items": [
+                {
+                  "name": "Ms. Cheng",
+                  "role": "Senior Partner · Law Firm",
+                  "text": "When clients ask AI which firm is the most capable, it now reliably names us. Three new inquiries came in this way within the first week."
+                },
+                {
+                  "name": "Mr. Lin",
+                  "role": "Founder · Clean-tech",
+                  "text": "We used to be invisible in AI answers. Two months in, every major model can articulate exactly what our product does best."
+                },
+                {
+                  "name": "Dr. Wang",
+                  "role": "Head of Marketing · Healthcare",
+                  "text": "AI started recommending us near the top to patients, and our organic site traffic climbed nearly 50%."
+                },
+                {
+                  "name": "Mr. Zhao",
+                  "role": "Brand Director · Consumer",
+                  "text": "Competitor monitoring is incredibly useful — how rivals are described in AI, and exactly where we fall short, at a glance."
+                },
+                {
+                  "name": "Ms. Chen",
+                  "role": "Content Lead · Education",
+                  "text": "The auto-generated suggestions are ready to ship. The team no longer spends a week guessing what content AI prefers."
+                },
+                {
+                  "name": "Mr. Li",
+                  "role": "Technical Partner · AI Tools",
+                  "text": "Source analysis showed us the authority sites AI cites most. After covering those, our visibility rose visibly."
+                },
+                {
+                  "name": "Ms. Zhou",
+                  "role": "Marketing Manager · Healthcare",
+                  "text": "Sentiment monitoring flagged a piece of misinformation AI was repeating, letting us correct it before it became a PR crisis."
+                },
+                {
+                  "name": "Mr. Wu",
+                  "role": "CEO · Manufacturing",
+                  "text": "I assumed this was all smoke and mirrors. You fill in seed questions once, the rest runs itself, and the monthly report goes straight to the board."
+                },
+                {
+                  "name": "Mr. Sun",
+                  "role": "Head of Growth · SaaS",
+                  "text": "The dashboard tells me daily how each model talks about us. Our content direction is now data-driven, not guesswork."
+                },
+                {
+                  "name": "Mr. Huang",
+                  "role": "Marketing Director · Cross-border",
+                  "text": "Our mention rate on ChatGPT and Perplexity doubled in three months, and the conversions it drove are very real."
+                }
+              ]
+            },
             "pipeline": {
               "badge": "8-stage workflow",
               "title": "8-stage GEO automation pipeline",

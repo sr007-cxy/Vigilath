@@ -1083,3 +1083,30 @@
     transform: scale(1);
   }
 }
+
+/* 用户评价轮播 —— 无缝横向滚动(marquee).内容渲染两遍,平移 -50% 即可无缝循环 */
+@keyframes testimonial-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.testimonial-track {
+  display: flex;
+  width: max-content;
+  animation: testimonial-marquee var(--marquee-duration, 60s) linear infinite;
+}
+
+/* 悬停暂停,方便阅读 */
+.testimonial-marquee:hover .testimonial-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .testimonial-track {
+    animation: none;
+  }
+}

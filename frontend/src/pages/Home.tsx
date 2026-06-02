@@ -6,6 +6,7 @@ import { useAuthModal } from '../contexts/AuthModalContext';
 import { useTierModal } from '../components/TierModalContext';
 import { useMembership } from '../hooks/useMembership';
 import { PageHead } from '../components/PageHead';
+import { TestimonialsCarousel } from '../components/TestimonialsCarousel';
 import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 
 type AdvancedKey = 'aeo' | 'compare' | 'crawlTest' | 'authority' | 'citation' | 'visibility' | 'entity';
@@ -614,6 +615,9 @@ export function Home() {
               ))}
             </div>
           </section>
+
+          {/* 用户评价 —— 紧跟合作伙伴,无缝横向轮播 */}
+          <TestimonialsCarousel />
         </div>
       </main>
 
