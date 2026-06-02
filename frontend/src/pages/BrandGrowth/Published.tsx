@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
 import { useBgLang, engineLabel, ENGINE_ORDER } from './lang';
-import { InfoHint } from './charts';
+import { InfoHint, LoadingBlock } from './charts';
 
 type RoiFilter = 'all' | 'hit' | 'miss';
 
@@ -19,7 +19,7 @@ export function Published() {
 }
 
 function Body({ state }: { state: ShellState }) {
-  const { token, topic } = state;
+  const { token, topic, selectedEngines } = state;
   const L = useBgLang();
   const [params, setParams] = useSearchParams();
   const roi = (params.get('roi') as RoiFilter) || 'all';
@@ -28,21 +28,35 @@ function Body({ state }: { state: ShellState }) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
+  // ROI(命中/未命中)与模型筛选都按 cited_by 在前端算 —— cited_by 是 URL 级 per-engine
+  // 命中记录,选了某个模型时 ROI 必须按该模型口径重判(后端 query_hit 是全引擎汇总,
+  // miss 口径与单模型对不上),所以这里只拉全量已发布稿件,过滤全在前端。
   useEffect(() => {
     if (!topic) return;
     setLoading(true);
-    contentApi.listDocs(topic.id, {
-      status: 'published',
-      query_hit: roi === 'all' ? undefined : roi,
-    }, token).then(setDocs).catch(() => setDocs([])).finally(() => setLoading(false));
-  }, [token, topic?.id, roi]);
+    contentApi.listDocs(topic.id, { status: 'published' }, token)
+      .then(setDocs).catch(() => setDocs([])).finally(() => setLoading(false));
+  }, [token, topic?.id]);
+
+  // 切换 ROI / 平台 / 模型时回到第一页
+  useEffect(() => { setPage(1); }, [roi, platform, selectedEngines.join(',')]);
 
   if (!topic) return null;
+
+  // 选了部分引擎 → 只看这些引擎是否引用过;全选/未选 → 看任意引擎
+  const isCited = (d: ContentDoc): boolean => {
+    const cb = d.cited_by || {};
+    const engs = selectedEngines.length > 0 ? selectedEngines : Object.keys(cb);
+    return engs.some(e => Array.isArray(cb[e]) && cb[e].length > 0);
+  };
+  const roiFiltered = roi === 'all'
+    ? docs
+    : docs.filter(d => (roi === 'hit' ? isCited(d) : !isCited(d)));
 
   const platforms = Array.from(new Set(
     docs.flatMap(d => d.publish_targets.map(t => t.platform)).filter(Boolean)
   ));
-  const visible = platform ? docs.filter(d => d.publish_targets.some(t => t.platform === platform)) : docs;
+  const visible = platform ? roiFiltered.filter(d => d.publish_targets.some(t => t.platform === platform)) : roiFiltered;
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pagedDocs = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -98,7 +112,7 @@ function Body({ state }: { state: ShellState }) {
       </div>
 
       {loading ? (
-        <div className="text-xs text-muted text-center py-10">{L.loading}</div>
+        <LoadingBlock label={L.loading} />
       ) : visible.length === 0 ? (
         <div className="text-xs text-muted text-center py-10">{L.publishedEmpty}</div>
       ) : (

@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BrandGrowthShell, type ShellState } from './shell';
 import {
-  aiTelemetryApi, type Overview, type ResponseRow,
+  aiTelemetryApi, type Overview, type ResponseRow, type DomainCount, type EngineId,
 } from '../../services/aiTelemetryApi';
 import { contentApi, type ContentDoc } from '../../services/contentApi';
 import {
-  DonutChart, DonutLegend, HorizontalBarChart, InfoHint, CHART_PALETTE,
+  DonutChart, DonutLegend, HorizontalBarChart, InfoHint, LoadingBlock, CHART_PALETTE,
   type DonutSlice, type BarItem,
 } from './charts';
 import { useBgLang, engineLabel } from './lang';
@@ -23,7 +23,7 @@ export function Sources() {
 }
 
 function Body({ state }: { state: ShellState }) {
-  const { token, topic, period } = state;
+  const { token, topic, period, selectedEngines } = state;
   const L = useBgLang();
   const [params, setParams] = useSearchParams();
   const filter: FilterMode = (params.get('filter') as FilterMode) || 'all';
@@ -37,13 +37,33 @@ function Body({ state }: { state: ShellState }) {
     contentApi.listDocs(topic.id, { status: 'published' }, token).then(setPublished).catch(() => setPublished([]));
   }, [token, topic?.id, period]);
 
-  if (!topic || !overview) return <div className="text-muted">{L.loading}</div>;
+  if (!topic || !overview) return <LoadingBlock label={L.loading} />;
 
   // owned 判定:domain 命中 brand_keywords
   const brandKeys = overview.brand_keywords.map(k => k.toLowerCase());
   const isOwned = (d: string) => brandKeys.some(k => d.toLowerCase().includes(k));
 
-  let domains = overview.top_domains;
+  // ── 模型(引擎)筛选:顶部 chip 选了部分引擎时,从 engine_domain_matrix 重算信源口径 ──
+  const allEngines = overview.engines;
+  const isEngineFiltered =
+    selectedEngines.length > 0 && selectedEngines.length < allEngines.length;
+  const effEngines = isEngineFiltered ? selectedEngines : allEngines;
+  // 把所选引擎在 engine_domain_matrix 里的 域名→次数 累加,得到该口径下的信源列表
+  const enginePicked = (engines: string[]): DomainCount[] => {
+    const agg = new Map<string, number>();
+    for (const e of engines) {
+      const dmap = overview.engine_domain_matrix[e as EngineId] || {};
+      for (const [dom, c] of Object.entries(dmap)) agg.set(dom, (agg.get(dom) || 0) + c);
+    }
+    const arr = [...agg.entries()]
+      .map(([domain, count]) => ({ domain, count, pct: 0 }))
+      .sort((a, b) => b.count - a.count);
+    const total = arr.reduce((s, d) => s + d.count, 0);
+    return total ? arr.map(d => ({ ...d, pct: (d.count / total) * 100 })) : arr;
+  };
+  const baseDomains = isEngineFiltered ? enginePicked(selectedEngines) : overview.top_domains;
+
+  let domains = baseDomains;
   if (filter === 'third_party') domains = domains.filter(d => !isOwned(d.domain));
 
   const setFilter = (f: FilterMode) => {
@@ -53,21 +73,25 @@ function Body({ state }: { state: ShellState }) {
   };
 
   // Top 域名构成 donut(top 7 + 其它)
-  const topNSlices: DonutSlice[] = overview.top_domains.slice(0, 7).map((d, i) => ({
+  const topNSlices: DonutSlice[] = baseDomains.slice(0, 7).map((d, i) => ({
     label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
-  const otherCount = overview.top_domains.slice(7).reduce((s, d) => s + d.count, 0);
+  const otherCount = baseDomains.slice(7).reduce((s, d) => s + d.count, 0);
   if (otherCount > 0) topNSlices.push({ label: '其它', value: otherCount, color: '#475569' });
 
   const barItems: BarItem[] = domains.map((d, i) => ({
     label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
 
-  const totalCitations = overview.citations.value;
-  const uniqueDomains = overview.top_domains.length;
+  // 引用总数:筛选时 = 所选引擎信源次数之和(与下方域名列表口径一致),否则用后端汇总值
+  const totalCitations = isEngineFiltered
+    ? baseDomains.reduce((s, d) => s + d.count, 0)
+    : overview.citations.value;
+  const uniqueDomains = baseDomains.length;
   const citedDocCount = published.filter(d => {
     const cb = d.cited_by || {};
-    return Object.values(cb).some(arr => Array.isArray(arr) && arr.length > 0);
+    const engs = isEngineFiltered ? selectedEngines : Object.keys(cb);
+    return engs.some(e => Array.isArray(cb[e]) && cb[e].length > 0);
   }).length;
 
   return (
@@ -141,8 +165,9 @@ function Body({ state }: { state: ShellState }) {
                 <DomainRow
                   domain={d.domain}
                   total={d.count}
-                  engineCounts={extractEngineCounts(overview.engine_domain_matrix, d.domain)}
-                  engines={overview.engines}
+                  engineCounts={extractEngineCounts(overview.engine_domain_matrix, d.domain)
+                    .filter(ec => effEngines.includes(ec.engine as EngineId))}
+                  engines={effEngines}
                   onClick={() => setDrawerDomain(d.domain)}
                 />
               </li>
@@ -154,6 +179,7 @@ function Body({ state }: { state: ShellState }) {
       {drawerDomain && (
         <DomainSamplesDrawer
           topicId={topic.id} domain={drawerDomain} period={period} token={token}
+          engine={selectedEngines.length === 1 ? selectedEngines[0] : undefined}
           onClose={() => setDrawerDomain(null)}
         />
       )}
@@ -252,18 +278,20 @@ function Card({ title, hint, className, children }: {
 }
 
 function DomainSamplesDrawer({
-  topicId, domain, period, token, onClose,
+  topicId, domain, period, token, engine, onClose,
 }: {
-  topicId: number; domain: string; period: number; token: string; onClose: () => void;
+  topicId: number; domain: string; period: number; token: string;
+  engine?: string; onClose: () => void;
 }) {
   const L = useBgLang();
   const [rows, setRows] = useState<ResponseRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    aiTelemetryApi.listTopicResponses(topicId, token, { domain, period, limit: 50 })
+    setLoading(true);
+    aiTelemetryApi.listTopicResponses(topicId, token, { domain, period, engine, limit: 50 })
       .then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
-  }, [topicId, domain, period, token]);
+  }, [topicId, domain, period, token, engine]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex justify-end" onClick={onClose}>
@@ -274,7 +302,7 @@ function DomainSamplesDrawer({
           <button type="button" onClick={onClose} className="text-xs text-muted">{L.matrixDrawerClose}</button>
         </div>
         {loading ? (
-          <div className="text-xs text-muted text-center py-6">{L.loading}</div>
+          <LoadingBlock label={L.loading} className="py-6" />
         ) : rows.length === 0 ? (
           <div className="text-xs text-muted text-center py-6">{L.sourcesDrawerEmpty(period)}</div>
         ) : (
