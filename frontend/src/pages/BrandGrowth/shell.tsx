@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, ALL_TIME_PERIOD, type Topic } from '../../services/aiTelemetryApi';
 import { exportGrowthReportPdf } from '../../utils/exportGrowthReportPdf';
-import { useBgLang, engineLabel, sortEngines } from './lang';
+import { useBgLang, engineLabel, sortEngines, visibleEngines } from './lang';
 
 export interface ShellState {
   token: string;
@@ -168,7 +168,7 @@ function TopicPicker({ state }: { state: ShellState }) {
 
 function EngineChips({ state }: { state: ShellState }) {
   const L = useBgLang();
-  const topicEngines = sortEngines(state.topic?.engines ?? []);
+  const topicEngines = sortEngines(visibleEngines(state.topic?.engines ?? []));
   if (topicEngines.length === 0) return null;
   const sole = state.selectedEngines.length === 1 ? state.selectedEngines[0] : null;
   const allActive =

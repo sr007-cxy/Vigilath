@@ -689,6 +689,13 @@ export function engineLabel(id: string): string {
   return map[id] || id;
 }
 
+// 暂不可用 / 先隐藏的引擎 — 品牌增长页面不展示(2026-06:元宝不可用)
+export const HIDDEN_ENGINES: string[] = ['yuanbao'];
+
+export function visibleEngines<T extends string>(ids: readonly T[]): T[] {
+  return ids.filter(e => !HIDDEN_ENGINES.includes(e));
+}
+
 // 品牌增长统一引擎排序:豆包置顶,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
 export const ENGINE_ORDER: string[] = [
   'doubao', 'deepseek', 'qwen', 'wenxin', 'yuanbao',
