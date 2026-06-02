@@ -93,18 +93,18 @@ export function AdminCrawl() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback((refresh = false) => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
     adminCrawlApi
-      .getAnalysis(token, refresh)
+      .getAnalysis(token)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [token]);
 
   useEffect(() => {
-    load(false);
+    load();
   }, [load]);
 
   return (
@@ -122,7 +122,7 @@ export function AdminCrawl() {
         </div>
         <button
           type="button"
-          onClick={() => load(true)}
+          onClick={() => load()}
           disabled={loading}
           className="text-sm px-3 py-1.5 rounded border border-[var(--border-color)] text-primary hover:bg-surface-hover disabled:opacity-50"
         >

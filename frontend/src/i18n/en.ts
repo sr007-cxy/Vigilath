@@ -3431,10 +3431,10 @@ const en = {
             "adminCrawl": {
               "title": "AI Crawlers",
               "heading": "AI Crawler Activity",
-              "subtitle": "Which AI bots crawled vigilath.com, which pages they read, how often. Auto-refreshed daily from the production nginx access logs.",
+              "subtitle": "Which AI bots crawled vigilath.com (production), which pages they read, how often. Generated daily from the production nginx access logs; this view always shows production data.",
               "generatedAt": "Last analyzed",
-              "refresh": "Re-analyze now",
-              "loading": "Analyzing…",
+              "refresh": "Refresh",
+              "loading": "Loading…",
               "period": "Log period",
               "totalLines": "Log lines",
               "botRequests": "AI bot requests",

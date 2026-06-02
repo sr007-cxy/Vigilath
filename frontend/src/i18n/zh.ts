@@ -3437,10 +3437,10 @@ const zh = {
             "adminCrawl": {
               "title": "AI 爬虫分析",
               "heading": "AI 爬虫活动",
-              "subtitle": "哪些 AI 爬虫来过 vigilath.com、读了哪些页面、来了几次。每天从正式环境 nginx 访问日志自动刷新一次。",
+              "subtitle": "哪些 AI 爬虫来过 vigilath.com(正式环境)、读了哪些页面、来了几次。每天从正式环境 nginx 访问日志生成一次;此页始终展示正式环境数据。",
               "generatedAt": "最近分析时间",
-              "refresh": "立即重新分析",
-              "loading": "分析中…",
+              "refresh": "刷新",
+              "loading": "加载中…",
               "period": "日志区间",
               "totalLines": "日志行数",
               "botRequests": "AI 爬虫请求数",

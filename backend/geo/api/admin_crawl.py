@@ -1,30 +1,25 @@
-"""admin_crawl — AI/LLM 爬虫日志分析(仅 admin,只读本机 nginx 访问日志).
+"""admin_crawl — AI/LLM 爬虫日志分析(仅 admin,只读).
 
-只分析 vigilath 正式环境**自己的** nginx access log,不接受用户上传日志.
-日志路径默认 /var/log/nginx/access.log*(含 .gz 轮转),可用环境变量
-GEO_ACCESS_LOG_GLOB 覆盖.geo.service 以 ubuntu 用户运行,且在 adm 组,
-可直接读 nginx 日志,无需 sudo.
+只读共享库里的快照(由 prod 系统 crontab 每天写一次,读的是 vigilath 正式环境
+nginx 日志).端点**只读不算** —— prod / test 都查同一行,test 看到的就是正式
+环境数据,且 test 永远不会用自己的日志覆盖正式数据.
 
-端点定义为同步 def —— FastAPI 会把它丢到 threadpool 跑,避免解析十几万行
-日志(~1-2s)阻塞事件循环.
+快照生成见 geo/services/crawl_snapshot.py(prod crontab 调 __main__).
 """
 
 from fastapi import APIRouter, Depends
 
 from geo.api.auth import require_admin
-from geo.services.crawl_snapshot import build_and_store, load_snapshot
+from geo.services.crawl_snapshot import _EMPTY, _LOG_GLOB, load_snapshot
 
 router = APIRouter(prefix="/admin/crawl-analysis")
 
 
 @router.get("")
-def get_crawl_analysis(refresh: bool = False, _admin=Depends(require_admin)):
-    """返回 AI 爬虫活动分析(结构化 JSON).
-
-    默认读每天 cron 生成的快照(快).refresh=1 强制现在重新解析日志并落盘.
-    还没有快照(cron 没跑过)时,实时算一次并落盘.
-    """
-    if refresh:
-        return build_and_store()
+def get_crawl_analysis(_admin=Depends(require_admin)):
+    """返回共享库里的 AI 爬虫分析快照(正式环境数据)."""
     snap = load_snapshot()
-    return snap if snap is not None else build_and_store()
+    if snap is not None:
+        return snap
+    # 还没有快照(prod cron 没跑过)— 返回空结构,前端显示"暂无数据".
+    return {**_EMPTY, "log_glob": _LOG_GLOB, "generated_at": None}

@@ -37,10 +37,9 @@ export interface CrawlAnalysis {
 }
 
 export const adminCrawlApi = {
-  // refresh=true 强制后端现在重新解析日志(否则读每天 cron 生成的快照).
-  async getAnalysis(token: string, refresh = false): Promise<CrawlAnalysis> {
-    const qs = refresh ? '?refresh=1' : '';
-    const resp = await fetch(`${API_BASE}/admin/crawl-analysis${qs}`, {
+  // 只读共享库里的快照(正式环境数据,prod 每天 cron 生成).这里不触发重算.
+  async getAnalysis(token: string): Promise<CrawlAnalysis> {
+    const resp = await fetch(`${API_BASE}/admin/crawl-analysis`, {
       headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
     });
     if (!resp.ok) {
