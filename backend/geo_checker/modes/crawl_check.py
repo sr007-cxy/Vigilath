@@ -16,13 +16,19 @@ from ..output import print, fix
 
 
 def parse_log_line(line):
-    """Parse a single access log line (Common Log Format or Combined)."""
-    # Combined/Common log format:
-    # 66.249.66.1 - - [10/Apr/2026:12:34:56 +0000] "GET /page HTTP/1.1" 200 1234 "-" "Mozilla/5.0 ..."
+    """Parse a single access log line (Common Log Format or Combined).
+
+    Tolerates an optional ``$host`` token between the timestamp and the request
+    (nginx ``with_host`` log_format) and ignores any trailing fields such as
+    ``rt=`` / ``uct=`` / ``urt=`` — re.match anchors at the start only.
+    """
+    # Combined/Common:  66.249.66.1 - - [ts] "GET /page HTTP/1.1" 200 1234 "-" "UA"
+    # with_host (nginx): 1.2.3.4 - - [ts] www.example.com "GET /page HTTP/1.1" 200 1234 "-" "UA" rt=0.0
     pattern = (
         r'^(\S+)\s+'           # IP
         r'\S+\s+\S+\s+'       # ident, authuser
         r'\[([^\]]+)\]\s+'    # timestamp
+        r'(?:[^"\s]+\s+)?'    # optional $host (with_host format) — non-capturing
         r'"(\S+)\s+(\S+)\s+[^"]*"\s+'  # method, path
         r'(\d{3})\s+'         # status
         r'(\S+)'              # size
