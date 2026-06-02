@@ -1098,6 +1098,12 @@
   display: flex;
   width: max-content;
   animation: testimonial-marquee var(--marquee-duration, 60s) linear infinite;
+  will-change: transform;
+}
+
+/* 第二排反向滚动,形成对流的动感 */
+.testimonial-track--reverse {
+  animation-direction: reverse;
 }
 
 /* 悬停暂停,方便阅读 */
