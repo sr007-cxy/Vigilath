@@ -9,51 +9,6 @@ type Testimonial = {
 
 const AUTO_MS = 5500;
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #6366f1, #8b5cf6)',
-  'linear-gradient(135deg, #0ea5e9, #22d3ee)',
-  'linear-gradient(135deg, #f59e0b, #f97316)',
-  'linear-gradient(135deg, #10b981, #059669)',
-  'linear-gradient(135deg, #ec4899, #f43f5e)',
-  'linear-gradient(135deg, #8b5cf6, #d946ef)',
-];
-
-function avatarFor(idx: number): string {
-  return `/image/faces/t${String(idx + 1).padStart(2, '0')}.webp`;
-}
-
-function avatarLabel(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return '·';
-  const cjk = trimmed.match(/[一-龥]/g);
-  if (cjk) return cjk[cjk.length - 1];
-  return trimmed[0].toUpperCase();
-}
-
-function Avatar({ idx, name }: { idx: number; name: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <span
-        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center text-xl font-bold text-white select-none ring-4 ring-white shadow-md"
-        style={{ background: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length] }}
-        aria-hidden="true"
-      >
-        {avatarLabel(name)}
-      </span>
-    );
-  }
-  return (
-    <img
-      src={avatarFor(idx)}
-      alt={name}
-      draggable={false}
-      onError={() => setFailed(true)}
-      className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover select-none ring-4 ring-white shadow-md"
-    />
-  );
-}
-
 function Arrow({ dir, onClick }: { dir: 'prev' | 'next'; onClick: () => void }) {
   return (
     <button
@@ -78,7 +33,7 @@ export function TestimonialsCarousel() {
   const items = t('home.testimonials.items', { returnObjects: true }) as Testimonial[];
   const [active, setActive] = useState(0);
   const pausedRef = useRef(false);
-  const [, force] = useState(0); // 仅用于 hover 暂停时触发重渲(配合 ref)
+  const [, force] = useState(0); // hover 暂停时触发重渲(配合 ref)
 
   const len = Array.isArray(items) ? items.length : 0;
 
@@ -148,11 +103,14 @@ export function TestimonialsCarousel() {
         <div className="relative flex-1 min-w-0">
           <div
             key={active}
-            className="animate-fade-in rounded-2xl bg-surface border border-soft shadow-glow px-6 sm:px-10 py-8 sm:py-10 min-h-[280px] sm:min-h-[260px] flex flex-col items-center text-center"
+            className="animate-fade-in rounded-2xl bg-surface border border-soft shadow-glow px-6 sm:px-12 py-9 sm:py-11 min-h-[240px] sm:min-h-[220px] flex flex-col items-center text-center"
           >
-            <Avatar idx={active} name={item.name} />
+            {/* 大引号装饰 */}
+            <svg className="h-9 w-9 text-accent-secondary opacity-30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M9.13 9C8.5 9.41 8 10.2 8 11h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-5c0-3.31 2.02-6.04 5-7l.13 2zm9 0c-.63.41-1.13 1.2-1.13 2h2a2 2 0 012 2v4a2 2 0 01-2 2h-4a2 2 0 01-2-2v-5c0-3.31 2.02-6.04 5-7l.13 2z" />
+            </svg>
 
-            <div className="flex gap-0.5 mt-4" aria-hidden="true">
+            <div className="flex gap-0.5 mt-3" aria-hidden="true">
               {Array.from({ length: 5 }).map((_, i) => (
                 <svg key={i} className="h-4 w-4" viewBox="0 0 20 20" fill="#f59e0b">
                   <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.37 4.22a1 1 0 00.95.69h4.44c.97 0 1.37 1.24.59 1.81l-3.6 2.61a1 1 0 00-.36 1.12l1.37 4.22c.3.92-.75 1.69-1.54 1.12l-3.6-2.61a1 1 0 00-1.18 0l-3.6 2.61c-.78.57-1.83-.2-1.53-1.12l1.37-4.22a1 1 0 00-.36-1.12L1.1 9.66c-.78-.57-.38-1.81.59-1.81h4.44a1 1 0 00.95-.69L8.45 2.93z" />
@@ -160,11 +118,11 @@ export function TestimonialsCarousel() {
               ))}
             </div>
 
-            <blockquote className="mt-4 text-base sm:text-lg leading-relaxed text-primary max-w-xl">
-              “{item.text}”
+            <blockquote className="mt-4 text-base sm:text-xl leading-relaxed text-primary max-w-xl">
+              {item.text}
             </blockquote>
 
-            <figcaption className="mt-5 text-sm">
+            <figcaption className="mt-6 text-sm">
               <span className="font-semibold text-primary">{item.name}</span>
               <span className="text-secondary"> · {item.role}</span>
             </figcaption>
