@@ -133,3 +133,30 @@ def classify_source(url: str, target_domain: str = "") -> str:
         return "forum"
 
     return "other"
+
+
+# Profound 风格大类:把上面的细类收敛成信源分析展示用的少数桶。
+# 细类未列出的(code/review/documentation/education/government/official)统一落 other。
+_BUCKET_MAP: dict[str, str] = {
+    "news": "news",
+    "social": "social",
+    "forum": "community",
+    "wikipedia": "encyclopedia",
+    "video": "video",
+    "blog": "blog",
+    "ecommerce": "ecommerce",
+}
+
+
+def classify_bucket(url: str, target_domain: str = "") -> str:
+    """Classify a URL into a Profound-style coarse source bucket.
+
+    Returns one of: owned, news, social, community, encyclopedia, video,
+    blog, ecommerce, other. ``owned`` is only returned when ``target_domain``
+    matches; callers that判定自有口径不同(如按 brand_keywords)可不传 target_domain
+    并自行叠加 owned。
+    """
+    fine = classify_source(url, target_domain)
+    if fine == "official":
+        return "owned"
+    return _BUCKET_MAP.get(fine, "other")

@@ -366,6 +366,7 @@ export interface DomainCount {
   domain: string;
   count: number;
   pct: number;
+  source_type?: string;   // owned/news/social/community/encyclopedia/video/blog/ecommerce/other
 }
 
 export interface OwnedSplit {

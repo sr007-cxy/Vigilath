@@ -1139,6 +1139,7 @@ class DomainCount(BaseModel):
     domain: str
     count: int
     pct: float                    # 0-100,本 domain 占总 citations 的百分比
+    source_type: str = ""         # 信源类型大类:owned/news/social/community/encyclopedia/video/blog/ecommerce/other
 
 
 class OwnedSplit(BaseModel):
