@@ -10,7 +10,7 @@ import {
   type DonutSlice, type BarItem,
 } from './charts';
 import {
-  useBgLang, engineLabel, sourceTypeLabel, sourceTypeColor, SOURCE_TYPE_ORDER,
+  useBgLang, engineLabel, factorLabel, factorColor, FACTOR_ORDER,
 } from './lang';
 
 type FilterMode = 'all' | 'third_party';
@@ -85,20 +85,30 @@ function Body({ state }: { state: ShellState }) {
     label: d.domain, value: d.count, color: CHART_PALETTE[i % CHART_PALETTE.length],
   }));
 
-  // ── 信源类型构成:域名 → 类型(后端给在 top_domains 上),按当前筛选后的域名口径求和 ──
-  // engine 筛选时 baseDomains 来自 engine_domain_matrix(只含 top 域名),全部能在 typeOf 命中。
-  const typeOf = new Map<string, string>(
-    overview.top_domains.map(d => [d.domain, d.source_type || 'other']),
-  );
-  const typeAgg = new Map<string, number>();
-  for (const d of domains) {
-    const t = typeOf.get(d.domain) || 'other';
-    typeAgg.set(t, (typeAgg.get(t) || 0) + d.count);
+  // ── 信源因子构成(FirstPageSage GEO 因子二次分析)──
+  // engine_factor_matrix: engine -> {factor: count}。按所选引擎(effEngines)算总体 + 各引擎 donut。
+  const factorSlices = (counts: Record<string, number>): DonutSlice[] =>
+    FACTOR_ORDER
+      .filter(f => (counts[f] || 0) > 0)
+      .map(f => ({ label: factorLabel(f), value: counts[f], color: factorColor(f) }));
+
+  const engineFactorOf = (e: string): Record<string, number> =>
+    (overview.engine_factor_matrix[e as EngineId] || {}) as Record<string, number>;
+
+  const overallFactor: Record<string, number> = {};
+  for (const e of effEngines) {
+    for (const [f, c] of Object.entries(engineFactorOf(e))) {
+      overallFactor[f] = (overallFactor[f] || 0) + c;
+    }
   }
-  const typeTotal = [...typeAgg.values()].reduce((s, v) => s + v, 0);
-  const typeSlices: DonutSlice[] = SOURCE_TYPE_ORDER
-    .filter(t => typeAgg.has(t))
-    .map(t => ({ label: sourceTypeLabel(t), value: typeAgg.get(t)!, color: sourceTypeColor(t) }));
+  const overallSlices = factorSlices(overallFactor);
+  const overallFactorTotal = Object.values(overallFactor).reduce((s, v) => s + v, 0);
+  // 各引擎(本期有因子数据的)各一张 donut
+  const perEngine = effEngines
+    .map(e => ({ engine: e, counts: engineFactorOf(e) }))
+    .filter(x => Object.keys(x.counts).length > 0);
+  // 共享图例:总体里出现过的因子(按 FACTOR_ORDER)
+  const legendSlices = overallSlices;
 
   // 引用总数:筛选时 = 所选引擎信源次数之和(与下方域名列表口径一致),否则用后端汇总值
   const totalCitations = isEngineFiltered
@@ -142,16 +152,29 @@ function Body({ state }: { state: ShellState }) {
         </div>
       </div>
 
-      {/* 信源类型构成:按性质把被引域名归类(官网/新闻/社交/社区…) */}
-      <Card title={L.sourceTypesTitle} hint={L.hintSourceTypes}>
-        {typeSlices.length === 0 ? (
+      {/* 信源因子构成:把被引信源按 GEO 排名因子归类(总体 + 各引擎,FirstPageSage 口径) */}
+      <Card title={L.factorsTitle} hint={L.hintFactors}>
+        {overallSlices.length === 0 ? (
           <div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div>
         ) : (
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <DonutChart slices={typeSlices} size={180}
-              centerText={typeTotal.toLocaleString()} centerSub={L.sourcesCenterTotal} />
-            <div className="flex-1 w-full max-h-44 overflow-y-auto">
-              <DonutLegend slices={typeSlices} />
+          <div className="grid gap-4">
+            {/* 共享因子图例 */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px]">
+              {legendSlices.map(s => (
+                <span key={s.label} className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                  <span className="text-secondary">{s.label}</span>
+                </span>
+              ))}
+            </div>
+            {/* 总体 + 各引擎 donut 网格 */}
+            <div className="flex flex-wrap gap-x-6 gap-y-4 justify-start">
+              <FactorDonut label={L.factorsOverall} slices={overallSlices} total={overallFactorTotal} emphasize />
+              {perEngine.map(({ engine, counts }) => {
+                const slices = factorSlices(counts);
+                const total = Object.values(counts).reduce((s, v) => s + v, 0);
+                return <FactorDonut key={engine} label={engineLabel(engine)} slices={slices} total={total} />;
+              })}
             </div>
           </div>
         )}
@@ -196,7 +219,6 @@ function Body({ state }: { state: ShellState }) {
               <li key={d.domain}>
                 <DomainRow
                   domain={d.domain}
-                  sourceType={typeOf.get(d.domain) || 'other'}
                   total={d.count}
                   engineCounts={extractEngineCounts(overview.engine_domain_matrix, d.domain)
                     .filter(ec => effEngines.includes(ec.engine as EngineId))}
@@ -233,23 +255,23 @@ function extractEngineCounts(
   return out;
 }
 
-function TypeBadge({ type }: { type: string }) {
-  const color = sourceTypeColor(type);
+// 一张小因子 donut(总体 / 单引擎共用)
+function FactorDonut({ label, slices, total, emphasize }: {
+  label: string; slices: DonutSlice[]; total: number; emphasize?: boolean;
+}) {
   return (
-    <span
-      className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] leading-none flex-shrink-0"
-      style={{ background: `${color}22`, color }}
-    >
-      {sourceTypeLabel(type)}
-    </span>
+    <div className="flex flex-col items-center gap-1.5">
+      <DonutChart slices={slices} size={emphasize ? 150 : 120} hole={0.62}
+        centerText={total.toLocaleString()} />
+      <span className={`text-[11px] ${emphasize ? 'text-primary font-medium' : 'text-secondary'}`}>{label}</span>
+    </div>
   );
 }
 
 function DomainRow({
-  domain, sourceType, total, engineCounts, onClick,
+  domain, total, engineCounts, onClick,
 }: {
   domain: string;
-  sourceType: string;
   total: number;
   engineCounts: Array<{ engine: string; count: number }>;
   engines: string[];
@@ -259,12 +281,9 @@ function DomainRow({
   return (
     <button
       type="button" onClick={onClick}
-      className="w-full grid grid-cols-[13rem_1fr_auto] items-center gap-3 px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-input)] transition text-left"
+      className="w-full grid grid-cols-[10rem_1fr_auto] items-center gap-3 px-2 py-1.5 rounded text-xs hover:bg-[var(--bg-input)] transition text-left"
     >
-      <span className="flex items-center gap-1.5 min-w-0">
-        <TypeBadge type={sourceType} />
-        <span className="text-primary truncate" title={domain}>{domain}</span>
-      </span>
+      <span className="text-primary truncate" title={domain}>{domain}</span>
       <div className="flex h-3 rounded overflow-hidden" style={{ background: 'var(--bg-input)' }}>
         {engineCounts.map((ec, i) => {
           const w = (ec.count / sum) * 100;
@@ -279,7 +298,7 @@ function DomainRow({
         })}
       </div>
       <span className="tabular-nums text-muted w-14 text-right">{total}</span>
-      <span className="col-span-3 text-[10px] text-muted flex flex-wrap gap-2 pl-[13.5rem]">
+      <span className="col-span-3 text-[10px] text-muted flex flex-wrap gap-2 pl-[10.5rem]">
         {engineCounts.map((ec, i) => (
           <span key={ec.engine} className="inline-flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-sm"

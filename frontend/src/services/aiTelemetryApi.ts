@@ -366,7 +366,6 @@ export interface DomainCount {
   domain: string;
   count: number;
   pct: number;
-  source_type?: string;   // owned/news/social/community/encyclopedia/video/blog/ecommerce/other
 }
 
 export interface OwnedSplit {
@@ -390,6 +389,7 @@ export interface Overview {
   top_domains: DomainCount[];
   owned_split: OwnedSplit;
   engine_domain_matrix: Partial<Record<EngineId, Record<string, number>>>;
+  engine_factor_matrix: Partial<Record<EngineId, Record<string, number>>>;  // engine -> {GEO 因子: count}
 }
 
 export interface ClusterBreakdownItem {

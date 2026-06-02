@@ -71,7 +71,8 @@ interface Dict {
   sourcesDrawerTitle: (domain: string) => string;
   sourcesDrawerEmpty: (period: number) => string;
   sourcesNoData: string;
-  sourceTypesTitle: string;
+  factorsTitle: string;
+  factorsOverall: string;
   // 平台分析
   enginesTitle: string;
   enginesCitationsChart: string;
@@ -208,7 +209,7 @@ interface Dict {
   hintPublished: string;
   hintPublishedCited: string;
   hintSources: string;
-  hintSourceTypes: string;
+  hintFactors: string;
   hintSourcesStat: string;
   hintSourcesUnique: string;
   hintSourcesOwnedPct: string;
@@ -289,7 +290,8 @@ const ZH: Dict = {
   sourcesDrawerTitle: (d: string) => `引用样本 · ${d}`,
   sourcesDrawerEmpty: (p: number) => (p > 0 ? `该域名近 ${p} 天无引用样本` : '该域名暂无引用样本'),
   sourcesNoData: '该过滤条件下暂无数据',
-  sourceTypesTitle: '信源类型构成',
+  factorsTitle: '信源因子构成',
+  factorsOverall: '总体',
   enginesTitle: '平台分析',
   enginesCitationsChart: '各引擎引用次数',
   enginesOverview: '引擎概览',
@@ -421,7 +423,7 @@ const ZH: Dict = {
   hintPublished: '已发布的稿件清单。点 chip 跳外站;有"AI 引用"绿标表示该投放 URL 出现在 AI 答复的引用清单里',
   hintPublishedCited: '该 publish_targets[].url 出现在 Response.citations_json 中,按引擎分组展示被引擎引用的次数',
   hintSources: 'AI 答复里出现过的引用域名排序。Top 7 单独成色块,其余合并到「其它」桶',
-  hintSourceTypes: '把被引域名按性质归类(官网自有 / 新闻媒体 / 社交媒体 / 社区 / 论坛 / 百科 / 视频 / 博客自媒体 / 电商 / 其它),看 AI 更爱引哪类信源。口径随上方筛选联动',
+  hintFactors: '把每条被引信源按它代表的 GEO 排名因子归类(权威榜单提及 / 在线评价 / 数据库与目录 / 奖项资质 / 客户案例与使用数据 / 社交口碑 / 网站权威 / 其它),看每个 AI 引擎更吃哪类信号。按标题与链接启发式判定,口径随上方筛选联动',
   hintSourcesStat: '总引用 = 周期内所有答复的引用条数累加;唯一域名数 ≤ 10(后端只返回 Top 10);自有占比 = owned / total × 100',
   hintSourcesUnique: '本期出现过的不同引用域名数。上限是后端返回的 Top 10 — 实际可能更多但只算 Top 10 内',
   hintSourcesOwnedPct: '权威媒体引用 / 总引用 × 100。比例越高说明 AI 答复越倾向引用品牌自家域名',
@@ -502,7 +504,8 @@ const EN: Dict = {
   sourcesDrawerTitle: (d) => `Citation samples · ${d}`,
   sourcesDrawerEmpty: (p) => (p > 0 ? `No samples in last ${p} days` : 'No citation samples yet'),
   sourcesNoData: 'No data for this filter',
-  sourceTypesTitle: 'Source types',
+  factorsTitle: 'Citation factors',
+  factorsOverall: 'Overall',
   enginesTitle: 'Engines',
   enginesCitationsChart: 'Citations per engine',
   enginesOverview: 'Engine overview',
@@ -634,7 +637,7 @@ const EN: Dict = {
   hintPublished: 'Published docs. Chips link to external posts; the green "cited by" badge means the URL appears in an AI answer\'s citation list',
   hintPublishedCited: 'The publish_targets[].url appears in Response.citations_json; chips show per-engine cite count',
   hintSources: 'Domains cited in AI answers, ranked by count. Top 7 are colored individually; the rest collapse into "Other"',
-  hintSourceTypes: 'Cited domains grouped by nature (owned / news / social / community / forum / encyclopedia / video / blog / e-commerce / other) to see which kind of source AI prefers. Reacts to the filters above',
+  hintFactors: 'Each cited source mapped to the GEO ranking factor it represents (Authoritative List Mentions / Online Reviews / Databases & Directories / Awards & Accreditations / Customer Examples & Usage Data / Social Sentiment / Website Authority / Other), per engine. Heuristic from title + URL; reacts to the filters above',
   hintSourcesStat: 'Total citations = SUM of citations across all responses. Unique domains ≤ 10 (backend returns Top 10 only). Owned share = owned / total × 100',
   hintSourcesUnique: 'Distinct domains cited this period. Capped at backend\'s Top 10 — real count may be higher but only Top 10 is exposed',
   hintSourcesOwnedPct: 'Authoritative citations / total citations × 100. Higher = AI answers favor citing your own domains',
@@ -695,60 +698,54 @@ export function engineLabel(id: string): string {
   return map[id] || id;
 }
 
-// ── 信源类型(后端 source_type 大类)label / color / 排序 ──
-// 大类 key 与后端 classify_bucket 对齐:owned/news/social/community/encyclopedia/video/blog/ecommerce/other
-export const SOURCE_TYPE_LABELS_ZH: Record<string, string> = {
-  owned: '官网/自有',
-  news: '新闻媒体',
-  social: '社交媒体',
-  community: '社区',
-  forum: '论坛',
-  encyclopedia: '百科',
-  video: '视频',
-  blog: '博客/自媒体',
-  ecommerce: '电商',
+// ── 信源 GEO 因子(后端 classify_factor,FirstPageSage 口径)label / color / 排序 ──
+// key 与后端 source_factor.classify_factor 对齐
+export const FACTOR_LABELS_ZH: Record<string, string> = {
+  list_mention: '权威榜单提及',
+  reviews: '在线评价',
+  directory: '数据库与目录',
+  awards: '奖项资质',
+  customer: '客户案例与使用数据',
+  social: '社交口碑',
+  authority: '网站权威',
   other: '其它',
 };
 
-export const SOURCE_TYPE_LABELS_EN: Record<string, string> = {
-  owned: 'Owned',
-  news: 'News media',
-  social: 'Social',
-  community: 'Community',
-  forum: 'Forum',
-  encyclopedia: 'Encyclopedia',
-  video: 'Video',
-  blog: 'Blog',
-  ecommerce: 'E-commerce',
+export const FACTOR_LABELS_EN: Record<string, string> = {
+  list_mention: 'Authoritative List Mentions',
+  reviews: 'Online Reviews',
+  directory: 'Databases & Directories',
+  awards: 'Awards & Accreditations',
+  customer: 'Customer Examples & Usage Data',
+  social: 'Social Sentiment',
+  authority: 'Website Authority',
   other: 'Other',
 };
 
-export function sourceTypeLabel(type: string): string {
+export function factorLabel(factor: string): string {
   const lng = (i18n.language || 'zh').toLowerCase();
-  const map = lng.startsWith('en') ? SOURCE_TYPE_LABELS_EN : SOURCE_TYPE_LABELS_ZH;
-  return map[type] || map.other;
+  const map = lng.startsWith('en') ? FACTOR_LABELS_EN : FACTOR_LABELS_ZH;
+  return map[factor] || map.other;
 }
 
-// donut 与域名行徽章共用一套颜色,保证同一类型颜色一致
-export const SOURCE_TYPE_COLORS: Record<string, string> = {
-  owned: '#db2777',
-  news: '#2563eb',
+// 总体 donut / 各引擎 donut 共用一套颜色,保证同一因子颜色一致
+export const FACTOR_COLORS: Record<string, string> = {
+  list_mention: '#2563eb',
+  reviews: '#f59e0b',
+  directory: '#7c6f9e',
+  awards: '#ef4444',
+  customer: '#10b981',
   social: '#06b6d4',
-  community: '#f59e0b',
-  forum: '#0d9488',
-  encyclopedia: '#10b981',
-  video: '#ef4444',
-  blog: '#8b5cf6',
-  ecommerce: '#84cc16',
+  authority: '#db2777',
   other: '#64748b',
 };
 
-export const SOURCE_TYPE_ORDER: string[] = [
-  'owned', 'news', 'social', 'community', 'forum', 'encyclopedia', 'video', 'blog', 'ecommerce', 'other',
+export const FACTOR_ORDER: string[] = [
+  'list_mention', 'reviews', 'directory', 'awards', 'customer', 'social', 'authority', 'other',
 ];
 
-export function sourceTypeColor(type: string): string {
-  return SOURCE_TYPE_COLORS[type] || SOURCE_TYPE_COLORS.other;
+export function factorColor(factor: string): string {
+  return FACTOR_COLORS[factor] || FACTOR_COLORS.other;
 }
 
 // 暂不可用 / 先隐藏的引擎 — 品牌增长页面不展示(2026-06:元宝不可用)

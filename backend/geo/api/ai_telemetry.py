@@ -56,7 +56,7 @@ from geo.services.query_expander import (
     DEFAULT_TIMEOUT, expand_one_scene,
 )
 from geo.models.user import User
-from geo_checker.analyzers.source_classify import classify_bucket
+from geo_checker.analyzers.source_factor import classify_factor
 from sqlalchemy import func
 
 log = logging.getLogger(__name__)
@@ -1770,13 +1770,13 @@ def topic_overview(
         sparkline_vis.append(round(day_hit.get(d, 0) / succ * 100, 1) if succ > 0 else 0.0)
 
     # ── 引用分析:Top domains + owned/other + engine×domain 矩阵 ──
-    def _domain_stats(rows: list[AiTelemetryResponseORM]) -> tuple[dict[str, int], int, int, dict[str, dict[str, int]], dict[str, str]]:
-        """返回 (domain_total_count, owned_count, total_cit_count, engine_domain[engine][domain] = count, domain_url 样本)."""
+    def _domain_stats(rows: list[AiTelemetryResponseORM]) -> tuple[dict[str, int], int, int, dict[str, dict[str, int]], dict[str, dict[str, int]]]:
+        """返回 (domain_total_count, owned_count, total_cit_count, engine_domain[engine][domain] = count, engine_factor[engine][factor] = count)."""
         domain_count: dict[str, int] = {}
         owned = 0
         total = 0
         engine_domain: dict[str, dict[str, int]] = {}
-        domain_url: dict[str, str] = {}   # 每个域名首个出现的 url,供来源类型分类(路径启发式)
+        engine_factor: dict[str, dict[str, int]] = {}   # engine -> {GEO 因子: count}
         for r in rows:
             if r.error:
                 continue
@@ -1787,29 +1787,25 @@ def topic_overview(
                     continue
                 domain_count[d] = domain_count.get(d, 0) + 1
                 total += 1
-                if d not in domain_url and c.get("url"):
-                    domain_url[d] = c["url"]
                 eng = engine_domain.setdefault(r.engine, {})
                 eng[d] = eng.get(d, 0) + 1
-                if brand_lc and any(k in d for k in brand_lc):
+                is_owned = bool(brand_lc and any(k in d for k in brand_lc))
+                if is_owned:
                     owned += 1
-        return domain_count, owned, total, engine_domain, domain_url
+                # GEO 因子二次分析:按 标题 + url 归因(FirstPageSage 口径)
+                factor = classify_factor(c.get("url") or "", c.get("title") or "", d, owned=is_owned)
+                efac = engine_factor.setdefault(r.engine, {})
+                efac[factor] = efac.get(factor, 0) + 1
+        return domain_count, owned, total, engine_domain, engine_factor
 
-    curr_domains, curr_owned, curr_total_cit, curr_engine_domain, curr_domain_url = _domain_stats(rows_curr)
+    curr_domains, curr_owned, curr_total_cit, curr_engine_domain, curr_engine_factor = _domain_stats(rows_curr)
     _, prev_owned, prev_total_cit, _, _ = _domain_stats(rows_prev)
-
-    def _source_type(domain: str) -> str:
-        # 自有口径与 owned_split 一致:brand_keywords 命中即归「官网/自有」
-        if brand_lc and any(k in domain for k in brand_lc):
-            return "owned"
-        return classify_bucket(curr_domain_url.get(domain) or f"https://{domain}")
 
     top_n = sorted(curr_domains.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
     top_domains_out = [
         DomainCount(
             domain=d, count=c,
             pct=round(c / curr_total_cit * 100, 1) if curr_total_cit > 0 else 0.0,
-            source_type=_source_type(d),
         )
         for d, c in top_n
     ]
@@ -1859,6 +1855,7 @@ def topic_overview(
         top_domains=top_domains_out,
         owned_split=owned_split,
         engine_domain_matrix=engine_domain_filtered,
+        engine_factor_matrix=curr_engine_factor,
     )
 
 

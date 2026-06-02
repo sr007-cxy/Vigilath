@@ -1139,7 +1139,6 @@ class DomainCount(BaseModel):
     domain: str
     count: int
     pct: float                    # 0-100,本 domain 占总 citations 的百分比
-    source_type: str = ""         # 信源类型大类:owned/news/social/community/encyclopedia/video/blog/ecommerce/other
 
 
 class OwnedSplit(BaseModel):
@@ -1181,6 +1180,7 @@ class OverviewOut(BaseModel):
     top_domains: list[DomainCount]                  # 按引用次数降序前 10
     owned_split: OwnedSplit                         # 自家 vs 其他
     engine_domain_matrix: dict[str, dict[str, int]] # engine -> {domain: count},只含 top_domains
+    engine_factor_matrix: dict[str, dict[str, int]] = {}  # engine -> {GEO 因子: count},本期全部 citation
 
 
 # ─────────────────── v1 引用追踪 schemas ────────────────────
