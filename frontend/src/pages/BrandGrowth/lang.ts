@@ -73,6 +73,7 @@ interface Dict {
   sourcesNoData: string;
   factorsTitle: string;
   factorsOverall: string;
+  factorsDesc: string;
   // 平台分析
   enginesTitle: string;
   enginesCitationsChart: string;
@@ -292,6 +293,7 @@ const ZH: Dict = {
   sourcesNoData: '该过滤条件下暂无数据',
   factorsTitle: '信源因子构成',
   factorsOverall: '总体',
+  factorsDesc: '每条被引信源按它代表的 GEO 排名因子归类(按标题与链接启发式判定)。「总体」看整体占比,各引擎单独成环看不同 AI 更吃哪类信号。',
   enginesTitle: '平台分析',
   enginesCitationsChart: '各引擎引用次数',
   enginesOverview: '引擎概览',
@@ -506,6 +508,7 @@ const EN: Dict = {
   sourcesNoData: 'No data for this filter',
   factorsTitle: 'Citation factors',
   factorsOverall: 'Overall',
+  factorsDesc: 'Each cited source mapped to the GEO ranking factor it represents (heuristic from title + URL). "Overall" shows the whole mix; each engine has its own ring to compare what different AIs favor.',
   enginesTitle: 'Engines',
   enginesCitationsChart: 'Citations per engine',
   enginesOverview: 'Engine overview',

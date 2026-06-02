@@ -10,7 +10,7 @@ import {
   type DonutSlice, type BarItem,
 } from './charts';
 import {
-  useBgLang, engineLabel, factorLabel, factorColor, FACTOR_ORDER,
+  useBgLang, engineLabel, factorLabel, factorColor, FACTOR_ORDER, visibleEngines,
 } from './lang';
 
 type FilterMode = 'all' | 'third_party';
@@ -46,10 +46,11 @@ function Body({ state }: { state: ShellState }) {
   const isOwned = (d: string) => brandKeys.some(k => d.toLowerCase().includes(k));
 
   // ── 模型(引擎)筛选:顶部 chip 选了部分引擎时,从 engine_domain_matrix 重算信源口径 ──
-  const allEngines = overview.engines;
+  // visibleEngines 过滤掉隐藏引擎(如元宝),保证因子 donut / 域名拆分都不展示它
+  const allEngines = visibleEngines(overview.engines);
   const isEngineFiltered =
     selectedEngines.length > 0 && selectedEngines.length < allEngines.length;
-  const effEngines = isEngineFiltered ? selectedEngines : allEngines;
+  const effEngines = isEngineFiltered ? visibleEngines(selectedEngines) : allEngines;
   // 把所选引擎在 engine_domain_matrix 里的 域名→次数 累加,得到该口径下的信源列表
   const enginePicked = (engines: string[]): DomainCount[] => {
     const agg = new Map<string, number>();
@@ -154,21 +155,27 @@ function Body({ state }: { state: ShellState }) {
 
       {/* 信源因子构成:把被引信源按 GEO 排名因子归类(总体 + 各引擎,FirstPageSage 口径) */}
       <Card title={L.factorsTitle} hint={L.hintFactors}>
+        <p className="text-[11px] text-muted mb-3">{L.factorsDesc}</p>
         {overallSlices.length === 0 ? (
           <div className="text-xs text-muted py-10 text-center">{L.sourcesNoData}</div>
         ) : (
           <div className="grid gap-4">
-            {/* 共享因子图例 */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px]">
-              {legendSlices.map(s => (
-                <span key={s.label} className="inline-flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
-                  <span className="text-secondary">{s.label}</span>
-                </span>
-              ))}
+            {/* 共享因子图例(含总体占比) */}
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] pb-3 border-b"
+              style={{ borderColor: 'var(--border-color)' }}>
+              {legendSlices.map(s => {
+                const pct = overallFactorTotal ? (s.value / overallFactorTotal) * 100 : 0;
+                return (
+                  <span key={s.label} className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
+                    <span className="text-secondary">{s.label}</span>
+                    <span className="tabular-nums text-muted">{pct.toFixed(0)}%</span>
+                  </span>
+                );
+              })}
             </div>
             {/* 总体 + 各引擎 donut 网格 */}
-            <div className="flex flex-wrap gap-x-6 gap-y-4 justify-start">
+            <div className="flex flex-wrap gap-3">
               <FactorDonut label={L.factorsOverall} slices={overallSlices} total={overallFactorTotal} emphasize />
               {perEngine.map(({ engine, counts }) => {
                 const slices = factorSlices(counts);
@@ -255,15 +262,21 @@ function extractEngineCounts(
   return out;
 }
 
-// 一张小因子 donut(总体 / 单引擎共用)
+// 一张小因子 donut 瓦片(总体 / 单引擎共用),配色与共享图例一致
 function FactorDonut({ label, slices, total, emphasize }: {
   label: string; slices: DonutSlice[]; total: number; emphasize?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <DonutChart slices={slices} size={emphasize ? 150 : 120} hole={0.62}
+    <div
+      className="flex flex-col items-center gap-2 px-4 py-3 rounded-lg"
+      style={{
+        background: emphasize ? 'var(--bg-input)' : 'transparent',
+        border: '1px solid var(--border-color)',
+      }}
+    >
+      <DonutChart slices={slices} size={emphasize ? 132 : 116} hole={0.64}
         centerText={total.toLocaleString()} />
-      <span className={`text-[11px] ${emphasize ? 'text-primary font-medium' : 'text-secondary'}`}>{label}</span>
+      <span className={`text-xs ${emphasize ? 'text-primary font-medium' : 'text-secondary'}`}>{label}</span>
     </div>
   );
 }
