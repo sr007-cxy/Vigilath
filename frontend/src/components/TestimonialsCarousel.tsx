@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type Testimonial = {
@@ -7,17 +7,7 @@ type Testimonial = {
   text: string;
 };
 
-// 带原始下标,头像按下标取 /image/faces/tNN.webp
-type Indexed = Testimonial & { idx: number };
-
-// 名字首字取作头像兜底文字(中文取最后一个字,英文取首字母)
-function avatarLabel(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return '·';
-  const cjk = trimmed.match(/[一-龥]/g);
-  if (cjk) return cjk[cjk.length - 1];
-  return trimmed[0].toUpperCase();
-}
+const AUTO_MS = 5500;
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -32,79 +22,99 @@ function avatarFor(idx: number): string {
   return `/image/faces/t${String(idx + 1).padStart(2, '0')}.webp`;
 }
 
-function Avatar({ item }: { item: Indexed }) {
+function avatarLabel(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '·';
+  const cjk = trimmed.match(/[一-龥]/g);
+  if (cjk) return cjk[cjk.length - 1];
+  return trimmed[0].toUpperCase();
+}
+
+function Avatar({ idx, name }: { idx: number; name: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
       <span
-        className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-sm font-bold text-white select-none ring-2 ring-white/70"
-        style={{ background: AVATAR_GRADIENTS[item.idx % AVATAR_GRADIENTS.length] }}
+        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center text-xl font-bold text-white select-none ring-4 ring-white shadow-md"
+        style={{ background: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length] }}
         aria-hidden="true"
       >
-        {avatarLabel(item.name)}
+        {avatarLabel(name)}
       </span>
     );
   }
   return (
     <img
-      src={avatarFor(item.idx)}
-      alt={item.name}
-      loading="lazy"
+      src={avatarFor(idx)}
+      alt={name}
       draggable={false}
       onError={() => setFailed(true)}
-      className="h-11 w-11 shrink-0 rounded-full object-cover select-none ring-2 ring-white/70 shadow-sm"
+      className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover select-none ring-4 ring-white shadow-md"
     />
   );
 }
 
-function Card({ item }: { item: Indexed }) {
+function Arrow({ dir, onClick }: { dir: 'prev' | 'next'; onClick: () => void }) {
   return (
-    <figure className="shrink-0 w-[300px] sm:w-[348px] rounded-2xl bg-surface border border-soft shadow-glow px-6 py-5 flex flex-col gap-3.5 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-      <div className="flex items-center gap-3">
-        <Avatar item={item} />
-        <div className="min-w-0">
-          <span className="block text-sm font-semibold text-primary truncate">{item.name}</span>
-          <span className="block text-xs text-secondary truncate">{item.role}</span>
-        </div>
-        {/* 五星 */}
-        <div className="flex gap-0.5 ml-auto" aria-hidden="true">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <svg key={i} className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="#f59e0b">
-              <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.37 4.22a1 1 0 00.95.69h4.44c.97 0 1.37 1.24.59 1.81l-3.6 2.61a1 1 0 00-.36 1.12l1.37 4.22c.3.92-.75 1.69-1.54 1.12l-3.6-2.61a1 1 0 00-1.18 0l-3.6 2.61c-.78.57-1.83-.2-1.53-1.12l1.37-4.22a1 1 0 00-.36-1.12L1.1 9.66c-.78-.57-.38-1.81.59-1.81h4.44a1 1 0 00.95-.69L8.45 2.93z" />
-            </svg>
-          ))}
-        </div>
-      </div>
-      <blockquote className="text-sm leading-relaxed text-primary">{item.text}</blockquote>
-    </figure>
-  );
-}
-
-function Row({ items, durationSec, reverse }: { items: Indexed[]; durationSec: number; reverse?: boolean }) {
-  // 渲染两遍实现无缝循环
-  const loop = [...items, ...items];
-  return (
-    <div
-      className={`testimonial-track${reverse ? ' testimonial-track--reverse' : ''} gap-4 sm:gap-5 py-2`}
-      style={{ ['--marquee-duration' as string]: `${durationSec}s` }}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={dir === 'prev' ? 'previous' : 'next'}
+      className="shrink-0 h-10 w-10 rounded-full bg-surface border border-soft shadow-glow flex items-center justify-center text-secondary hover:text-primary hover:-translate-y-0.5 transition-all duration-200"
     >
-      {loop.map((item, i) => (
-        <Card key={i} item={item} />
-      ))}
-    </div>
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d={dir === 'prev' ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}
+        />
+      </svg>
+    </button>
   );
 }
 
 export function TestimonialsCarousel() {
   const { t } = useTranslation();
-  const raw = t('home.testimonials.items', { returnObjects: true }) as Testimonial[];
+  const items = t('home.testimonials.items', { returnObjects: true }) as Testimonial[];
+  const [active, setActive] = useState(0);
+  const pausedRef = useRef(false);
+  const [, force] = useState(0); // 仅用于 hover 暂停时触发重渲(配合 ref)
 
-  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const len = Array.isArray(items) ? items.length : 0;
 
-  const items: Indexed[] = raw.map((it, idx) => ({ ...it, idx }));
-  // 交错分两排:偶数索引在上,奇数索引在下
-  const top = items.filter((_, i) => i % 2 === 0);
-  const bottom = items.filter((_, i) => i % 2 === 1);
+  const go = useCallback(
+    (next: number) => {
+      if (!len) return;
+      setActive(((next % len) + len) % len);
+    },
+    [len],
+  );
+
+  // 自动轮播.悬停暂停,尊重 reduce-motion
+  useEffect(() => {
+    if (!len) return;
+    const reduce =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+    const id = setInterval(() => {
+      if (!pausedRef.current) setActive((a) => (a + 1) % len);
+    }, AUTO_MS);
+    return () => clearInterval(id);
+  }, [len]);
+
+  if (!len) return null;
+  const item = items[active];
+
+  const pause = () => {
+    pausedRef.current = true;
+    force((n) => n + 1);
+  };
+  const resume = () => {
+    pausedRef.current = false;
+    force((n) => n + 1);
+  };
 
   return (
     <section className="mt-10 sm:mt-30">
@@ -128,16 +138,56 @@ export function TestimonialsCarousel() {
         </div>
       </div>
 
-      {/* 双排反向无缝轮播.两侧渐隐 + 悬停暂停 */}
       <div
-        className="testimonial-marquee relative overflow-hidden flex flex-col gap-4 sm:gap-5"
-        style={{
-          maskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)',
-          WebkitMaskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)',
-        }}
+        className="flex items-center justify-center gap-3 sm:gap-5 max-w-3xl mx-auto"
+        onMouseEnter={pause}
+        onMouseLeave={resume}
       >
-        <Row items={top} durationSec={52} />
-        <Row items={bottom} durationSec={64} reverse />
+        <Arrow dir="prev" onClick={() => go(active - 1)} />
+
+        <div className="relative flex-1 min-w-0">
+          <div
+            key={active}
+            className="animate-fade-in rounded-2xl bg-surface border border-soft shadow-glow px-6 sm:px-10 py-8 sm:py-10 min-h-[280px] sm:min-h-[260px] flex flex-col items-center text-center"
+          >
+            <Avatar idx={active} name={item.name} />
+
+            <div className="flex gap-0.5 mt-4" aria-hidden="true">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <svg key={i} className="h-4 w-4" viewBox="0 0 20 20" fill="#f59e0b">
+                  <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.37 4.22a1 1 0 00.95.69h4.44c.97 0 1.37 1.24.59 1.81l-3.6 2.61a1 1 0 00-.36 1.12l1.37 4.22c.3.92-.75 1.69-1.54 1.12l-3.6-2.61a1 1 0 00-1.18 0l-3.6 2.61c-.78.57-1.83-.2-1.53-1.12l1.37-4.22a1 1 0 00-.36-1.12L1.1 9.66c-.78-.57-.38-1.81.59-1.81h4.44a1 1 0 00.95-.69L8.45 2.93z" />
+                </svg>
+              ))}
+            </div>
+
+            <blockquote className="mt-4 text-base sm:text-lg leading-relaxed text-primary max-w-xl">
+              “{item.text}”
+            </blockquote>
+
+            <figcaption className="mt-5 text-sm">
+              <span className="font-semibold text-primary">{item.name}</span>
+              <span className="text-secondary"> · {item.role}</span>
+            </figcaption>
+          </div>
+        </div>
+
+        <Arrow dir="next" onClick={() => go(active + 1)} />
+      </div>
+
+      {/* 圆点指示器 */}
+      <div className="flex items-center justify-center gap-2 mt-6">
+        {items.map((it, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => go(i)}
+            aria-label={`testimonial ${i + 1}: ${it.name}`}
+            aria-current={i === active}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === active ? 'w-6 bg-accent-primary' : 'w-2 bg-border hover:bg-accent-secondary'
+            }`}
+          />
+        ))}
       </div>
     </section>
   );
