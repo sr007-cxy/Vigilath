@@ -585,6 +585,7 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
   const [rejectReason, setRejectReason] = useState('');
   const [showPublish, setShowPublish] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [editTitle, setEditTitle] = useState(doc.title);
   const [editBody, setEditBody] = useState(doc.body_markdown);
   const [editSummary, setEditSummary] = useState(doc.summary);
@@ -658,6 +659,22 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
     }
   };
 
+  const handleRegenerate = async () => {
+    if (busy || regenerating) return;
+    if (!window.confirm('重新生成会用 AI 覆盖当前标题和正文(包括手动修改过的内容),确定继续?')) return;
+    setRegenerating(true); setErr(null);
+    try {
+      const fresh = await adminContentReviewApi.regenerateDoc(doc.id, token);
+      setDoc(fresh);
+      setEditing(false);
+      onAnyChange();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
          style={{ background: 'rgba(0,0,0,0.5)' }}>
@@ -677,18 +694,32 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
             </div>
           </div>
           {!editing && (
-            <button type="button"
-                    onClick={() => {
-                      setEditTitle(doc.title);
-                      setEditBody(doc.body_markdown);
-                      setEditSummary(doc.summary);
-                      setEditing(true);
-                    }}
-                    className="text-xs px-2.5 py-1 rounded-md"
-                    style={{ background: 'transparent', color: 'var(--text-secondary)',
-                             border: '1px solid var(--border-color)' }}>
-              ✎ 编辑
-            </button>
+            <>
+              <button type="button"
+                      onClick={() => {
+                        setEditTitle(doc.title);
+                        setEditBody(doc.body_markdown);
+                        setEditSummary(doc.summary);
+                        setEditing(true);
+                      }}
+                      disabled={regenerating}
+                      className="text-xs px-2.5 py-1 rounded-md"
+                      style={{ background: 'transparent', color: 'var(--text-secondary)',
+                               border: '1px solid var(--border-color)' }}>
+                ✎ 编辑
+              </button>
+              {doc.status !== 'approved' && doc.status !== 'published' && (
+                <button type="button"
+                        onClick={handleRegenerate}
+                        disabled={busy || regenerating}
+                        className="text-xs px-2.5 py-1 rounded-md"
+                        style={{ background: 'transparent', color: 'var(--text-secondary)',
+                                 border: '1px solid var(--border-color)',
+                                 opacity: (busy || regenerating) ? 0.6 : 1 }}>
+                  {regenerating ? '↻ 重新生成中…' : '↻ 重新生成'}
+                </button>
+              )}
+            </>
           )}
           <button type="button" onClick={onClose} className="text-muted hover:text-primary">✕</button>
         </div>

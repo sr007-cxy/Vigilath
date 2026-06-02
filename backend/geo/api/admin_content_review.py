@@ -205,6 +205,33 @@ def approve_doc(
     return GeneratedDocOut.from_orm_row(d)
 
 
+@router.post("/docs/{doc_id}/regenerate", response_model=GeneratedDocOut)
+def regenerate_doc(
+    doc_id: int,
+    _admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """重新生成单篇 doc — 同步跑一次 LLM(~30-60s),覆写正文后返回新 doc.
+
+    用 doc 自带的监测问题 / 创作方向 / 文案类型 / 模板复现原生成路径.
+    已通过 / 已发布的稿不允许重生(避免擦掉已采用内容).
+    """
+    d = db.get(TopicGeneratedDocORM, doc_id)
+    if not d:
+        raise HTTPException(404, "doc not found")
+    if d.status in ("approved", "published"):
+        raise HTTPException(409, {"code": "WRONG_STATUS",
+                                  "message": f"doc status={d.status},不可重新生成"})
+    from geo.services.content_generator import regenerate_doc as _regen
+    try:
+        _regen(db, d)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        log.warning("regenerate doc %d failed: %s", doc_id, e)
+        raise HTTPException(502, {"code": "REGEN_FAILED", "message": str(e)[:300]})
+    return GeneratedDocOut.from_orm_row(d)
+
+
 @router.post("/docs/{doc_id}/reject", response_model=GeneratedDocOut)
 def reject_doc(
     doc_id: int,

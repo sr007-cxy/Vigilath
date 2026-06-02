@@ -110,6 +110,10 @@ export const adminContentReviewApi = {
   async approveDoc(docId: number, token: string): Promise<GeneratedDoc> {
     return request('POST', `/docs/${docId}/approve`, token);
   },
+  // 重新生成单篇稿件 — 同步跑 LLM,返回覆写后的 doc(可能需 30-60s)
+  async regenerateDoc(docId: number, token: string): Promise<GeneratedDoc> {
+    return request('POST', `/docs/${docId}/regenerate`, token);
+  },
   async rejectDoc(docId: number, reason: string, token: string): Promise<GeneratedDoc> {
     return request('POST', `/docs/${docId}/reject`, token, { reason });
   },

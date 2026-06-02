@@ -394,6 +394,68 @@ def _run_per_item(
     )
 
 
+def regenerate_doc(db, doc: TopicGeneratedDocORM) -> TopicGeneratedDocORM:
+    """重新生成单篇已存在的 doc — 就地覆写 title/body/summary.
+
+    复用 doc 自带的 source_query_text / creation_direction / copywriting_type /
+    template_id / platform,尽量复现这篇稿原本的生成路径:
+      - 有 template 且无 combo(direction/type 都空)→ 走模板路径
+      - 否则 → 走 _generate_one(画像 + combo 注入 + 配图)
+    成功 → status 回 pending_review、清 generation_error;失败直接 raise(调用方记错).
+    同步执行(LLM 单条 ~20-60s).
+    """
+    topic_id = doc.topic_id
+    t = db.get(AiTelemetryTopicORM, topic_id)
+    if not t:
+        raise RuntimeError(f"topic {topic_id} not found")
+    try:
+        profile_data = json.loads(t.profile_json or "{}")
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+        profile = BrandProfile(**profile_data)
+    except Exception:  # noqa: BLE001
+        profile = BrandProfile()
+
+    query = (doc.source_query_text or "").strip()
+    if not query:
+        raise RuntimeError("doc 缺少监测问题文本,无法重新生成")
+
+    provider, model_id, api_key = _resolve_provider()
+    if not provider:
+        raise RuntimeError("DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置")
+
+    direction = doc.creation_direction
+    copywriting_type = doc.copywriting_type
+    tmpl = db.get(ContentTemplateORM, doc.template_id) if doc.template_id else None
+
+    if tmpl and direction is None and copywriting_type is None:
+        # 单变体走模板;有 combo 时模板 prompt 不接注入,改走 _generate_one
+        title, body, summary = _generate_with_template(
+            profile, tmpl, query, doc.platform or "", provider, api_key,
+        )
+        doc.body_markdown = body
+    else:
+        medias = _match_topic_media(db, topic_id, query)
+        title, body, summary = _generate_one(
+            profile, query, provider, api_key,
+            direction=direction, copywriting_type=copywriting_type,
+            medias=medias, topic_id=topic_id,
+        )
+        allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
+        doc.body_markdown = body if allow_md else _append_media_to_body(db, topic_id, query, body)
+
+    doc.title = title
+    doc.summary = summary
+    doc.llm_model = model_id
+    doc.generation_error = None
+    doc.status = "pending_review"
+    doc.selected_for_review = True
+    db.commit()
+    db.refresh(doc)
+    log.info("content regen done: doc=%d topic=%d", doc.id, topic_id)
+    return doc
+
+
 _MEDIA_APPEND_MAX = 3
 _MEDIA_BLOCK_HEADER = "── 自动配图建议 ──"
 
