@@ -39,6 +39,7 @@ function Body({ state }: { state: ShellState }) {
   const L = useBgLang();
   const [matrix, setMatrix] = useState<TrackingMatrix | null>(null);
   const [active, setActive] = useState<Row | null>(null);
+  const [search, setSearch] = useState('');   // 自由文本搜索:按问题 / 种子文本匹配
   // 2026-05-26 — seedFilter 从 string(单选)改 string[](多选,空数组 = 全部)
   const [seedFilter, setSeedFilter] = useState<string[]>([]);
   const [hitFilter, setHitFilter] = useState<HitFilter>('');    // 命中筛选,scope 由 soleEngine 决定
@@ -145,7 +146,10 @@ function Body({ state }: { state: ShellState }) {
   }, [queryRows]);
 
   const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return queryRows.filter(r => {
+      // 自由文本搜索:命中问题文本或种子文本即可
+      if (q && !r.query.toLowerCase().includes(q) && !r.seed.toLowerCase().includes(q)) return false;
       // 空数组 = 不过滤(显示全部);非空 = 只显示选中的种子
       if (seedFilter.length > 0 && !seedFilter.includes(r.seed)) return false;
       if (seedKindFilter === 'seed_only' && !r.isSeed) return false;
@@ -161,7 +165,7 @@ function Body({ state }: { state: ShellState }) {
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryRows, seedFilter, seedKindFilter, hitTermFilter, hitFilter, soleEngine]);
+  }, [queryRows, search, seedFilter, seedKindFilter, hitTermFilter, hitFilter, soleEngine]);
 
   // 计算每条 seed 下匹配 row 的数量,chip 上显示
   const seedCounts = useMemo<Map<string, number>>(() => {
@@ -198,11 +202,40 @@ function Body({ state }: { state: ShellState }) {
         <InfoHint text={L.hintQueries} />
       </div>
 
-      {/* 筛选区:种子提示词 + 命中词 + 扩展类型 + 命中状态 */}
+      {/* 筛选区:搜索 + 种子提示词 + 命中词 + 扩展类型 + 命中状态 */}
       <div
         className="rounded-lg p-3 space-y-2.5"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
       >
+        {/* 自由文本搜索 */}
+        <div className="relative" style={{ maxWidth: 420 }}>
+          <svg className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+               style={{ color: 'var(--text-muted)' }}
+               fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <circle cx="10.5" cy="10.5" r="6.5" strokeWidth="2" />
+            <path strokeLinecap="round" strokeWidth="2" d="M20 20l-4.5-4.5" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder={L.queriesSearchPlaceholder}
+            className="w-full pl-8 pr-7 py-1.5 rounded-md text-xs"
+            style={inputStyle}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setPage(1); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-primary"
+              style={{ fontSize: 13, lineHeight: 1 }}
+              aria-label={L.clearFilter}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         {/* 种子提示词 多选下拉 */}
         <FilterRow
           label={L.queriesFilterSeedsLabel}

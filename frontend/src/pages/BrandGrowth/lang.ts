@@ -154,6 +154,7 @@ interface Dict {
   queriesSeedOriginalBadgeHint: string;
   queriesFilterEngineBadge: (engine: string) => string;
   queriesEmptyAfterFilter: string;
+  queriesSearchPlaceholder: string;
   queriesViewMatrix: string;
   // 命中查看弹窗 (2026-05-20)
   queriesViewDetail: string;
@@ -363,6 +364,7 @@ const ZH: Dict = {
   queriesSeedOriginalBadgeHint: '种子原文 query — 由已批准的种子提示词直接派生,默认参与监测,不可取消',
   queriesFilterEngineBadge: (engine: string) => `当前模型:${engine}(在顶部切换)`,
   queriesEmptyAfterFilter: '当前筛选无匹配问题',
+  queriesSearchPlaceholder: '搜索监测问题…',
   queriesViewMatrix: '查矩阵 →',
   queriesViewDetail: '查看',
   queriesDetailEmpty: '暂无 AI 回答',
@@ -573,6 +575,7 @@ const EN: Dict = {
   queriesSeedOriginalBadgeHint: 'Seed-prompt query — directly derived from an approved seed prompt, always monitored, cannot be unchecked',
   queriesFilterEngineBadge: (engine: string) => `Engine: ${engine} (switch via top chips)`,
   queriesEmptyAfterFilter: 'No queries match the current filter',
+  queriesSearchPlaceholder: 'Search queries…',
   queriesViewMatrix: 'See matrix →',
   queriesViewDetail: 'View',
   queriesDetailEmpty: 'No AI responses',
