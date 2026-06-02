@@ -5,7 +5,8 @@
 端点共用。
 
 匹配策略:
-  - host 去掉 `www.` 前缀
+  - host 去掉 `www.` / `m.` 前缀(移动版镜像与 PC 版视为同一信源,
+    如豆包常引 `m.sohu.com/a/<id>`,投放登记的是 `www.sohu.com/a/<id>`)
   - path 去掉末尾 `/`
   - query 排序后保留,丢弃跟踪类参数(`wid`/`log_from`/`c_source`/`timestamp`...)
   - 两侧规范化后字符串相等 = 命中
@@ -38,8 +39,11 @@ def canonicalize(url: str) -> str:
     except Exception:  # noqa: BLE001
         return ""
     host = p.hostname or ""
-    if host.startswith("www."):
-        host = host[4:]
+    # 去掉 www. / m.(移动版镜像)前缀 —— 同一篇文章的 PC/移动 URL 归一为同一信源
+    for prefix in ("www.", "m."):
+        if host.startswith(prefix):
+            host = host[len(prefix):]
+            break
     path = (p.path or "").rstrip("/")
     pairs = [
         (k, v) for k, v in parse_qsl(p.query, keep_blank_values=False)
