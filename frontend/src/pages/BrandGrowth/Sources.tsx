@@ -105,8 +105,17 @@ function Body({ state }: { state: ShellState }) {
   }
   const overallSlices = factorSlices(overallFactor);
   const overallFactorTotal = Object.values(overallFactor).reduce((s, v) => s + v, 0);
-  // 各引擎(本期有因子数据的)各一张 donut,按统一引擎排序(ENGINE_ORDER)展示
-  const perEngine = sortEngines(effEngines)
+  // 各引擎(本期有因子数据的)各一张 donut。仅本区把 DeepSeek 排在豆包前面(header / 其它页不变)
+  const ringEngineOrder = (es: readonly string[]): string[] => {
+    const sorted = sortEngines(es);
+    const di = sorted.indexOf('deepseek');
+    const bi = sorted.indexOf('doubao');
+    if (di > -1 && bi > -1 && di > bi) {
+      [sorted[di], sorted[bi]] = [sorted[bi], sorted[di]];
+    }
+    return sorted;
+  };
+  const perEngine = ringEngineOrder(effEngines)
     .map(e => ({ engine: e, counts: engineFactorOf(e) }))
     .filter(x => Object.keys(x.counts).length > 0);
   // 共享图例:总体里出现过的因子(按 FACTOR_ORDER)

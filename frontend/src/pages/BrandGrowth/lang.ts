@@ -291,7 +291,7 @@ const ZH: Dict = {
   sourcesDrawerTitle: (d: string) => `引用样本 · ${d}`,
   sourcesDrawerEmpty: (p: number) => (p > 0 ? `该域名近 ${p} 天无引用样本` : '该域名暂无引用样本'),
   sourcesNoData: '该过滤条件下暂无数据',
-  factorsTitle: '信源因子构成',
+  factorsTitle: '信源类型分布',
   factorsOverall: '总体',
   factorsDesc: 'AI 答复里每条被引用的网页,都对应一个「被 AI 选中的理由」——比如上了权威榜单、有用户好评、被收进数据库等。这里把这些理由分类统计:「总体」是所有引擎合起来的占比,后面每个圆环是单个 AI 各自的偏好。把鼠标移到下方因子名旁的「?」可看每类的含义。',
   enginesTitle: '平台分析',
@@ -506,7 +506,7 @@ const EN: Dict = {
   sourcesDrawerTitle: (d) => `Citation samples · ${d}`,
   sourcesDrawerEmpty: (p) => (p > 0 ? `No samples in last ${p} days` : 'No citation samples yet'),
   sourcesNoData: 'No data for this filter',
-  factorsTitle: 'Citation factors',
+  factorsTitle: 'Source types',
   factorsOverall: 'Overall',
   factorsDesc: 'Each cited source mapped to the GEO ranking factor it represents (heuristic from title + URL). "Overall" shows the whole mix; each engine has its own ring to compare what different AIs favor.',
   enginesTitle: 'Engines',
@@ -787,9 +787,9 @@ export function visibleEngines<T extends string>(ids: readonly T[]): T[] {
   return ids.filter(e => !HIDDEN_ENGINES.includes(e));
 }
 
-// 品牌增长统一引擎排序:DeepSeek 置顶,豆包次之,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
+// 品牌增长统一引擎排序:豆包置顶,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
 export const ENGINE_ORDER: string[] = [
-  'deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao',
+  'doubao', 'deepseek', 'qwen', 'wenxin', 'yuanbao',
   'chatgpt', 'claude', 'gemini', 'grok', 'copilot',
 ];
 
