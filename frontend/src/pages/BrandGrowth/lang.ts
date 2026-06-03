@@ -293,7 +293,7 @@ const ZH: Dict = {
   sourcesNoData: '该过滤条件下暂无数据',
   factorsTitle: '信源因子构成',
   factorsOverall: '总体',
-  factorsDesc: '每条被引信源按它代表的 GEO 排名因子归类(按标题与链接启发式判定)。「总体」看整体占比,各引擎单独成环看不同 AI 更吃哪类信号。',
+  factorsDesc: 'AI 答复里每条被引用的网页,都对应一个「被 AI 选中的理由」——比如上了权威榜单、有用户好评、被收进数据库等。这里把这些理由分类统计:「总体」是所有引擎合起来的占比,后面每个圆环是单个 AI 各自的偏好。把鼠标移到下方因子名旁的「?」可看每类的含义。',
   enginesTitle: '平台分析',
   enginesCitationsChart: '各引擎引用次数',
   enginesOverview: '引擎概览',
@@ -751,6 +751,35 @@ export function factorColor(factor: string): string {
   return FACTOR_COLORS[factor] || FACTOR_COLORS.other;
 }
 
+// 每类因子的通俗解释 — 鼠标移到图例里因子名旁的 ? 上时显示
+export const FACTOR_DESC_ZH: Record<string, string> = {
+  list_mention: '权威榜单提及:被第三方榜单、排行、盘点类文章点名,如「十大」「推荐榜」「年度精选」。这类信源最容易被 AI 当作客观推荐引用。',
+  reviews: '在线评价:来自点评、评分类平台的用户口碑与打分,反映真实使用反馈。',
+  directory: '数据库与目录:被收录进行业目录、企业名录、产品库等结构化数据站点,便于 AI 检索核对基本信息。',
+  awards: '奖项资质:获奖、认证、资质、官方背书类内容,是 AI 判断可信度的重要凭据。',
+  customer: '客户案例与使用数据:客户案例、成功故事、用量 / 业绩数据等能证明实际效果的内容。',
+  social: '社交口碑:社交媒体、社区、论坛上的讨论与提及,反映大众关注度与话题热度。',
+  authority: '网站权威:来自品牌官网或高权重权威媒体的页面,本身域名权重高。',
+  other: '其它:未能归入以上任一类的信源。',
+};
+
+export const FACTOR_DESC_EN: Record<string, string> = {
+  list_mention: 'Authoritative list mentions: named in third-party rankings, "best-of" lists or roundups — the kind of source AI treats as an objective recommendation.',
+  reviews: 'Online reviews: ratings and user feedback from review platforms, reflecting real-world experience.',
+  directory: 'Databases & directories: listed in industry directories, business registries or product databases — structured data AI can cross-check.',
+  awards: 'Awards & accreditations: awards, certifications and official endorsements that AI uses to judge credibility.',
+  customer: 'Customer examples & usage data: case studies, success stories and usage / performance figures that prove real results.',
+  social: 'Social sentiment: discussion and mentions on social media, communities and forums — a signal of public attention.',
+  authority: 'Website authority: pages from the brand\'s own site or high-authority media with strong domain weight.',
+  other: 'Other: sources that do not fall into any of the categories above.',
+};
+
+export function factorDesc(factor: string): string {
+  const lng = (i18n.language || 'zh').toLowerCase();
+  const map = lng.startsWith('en') ? FACTOR_DESC_EN : FACTOR_DESC_ZH;
+  return map[factor] || map.other;
+}
+
 // 暂不可用 / 先隐藏的引擎 — 品牌增长页面不展示(2026-06:元宝不可用)
 export const HIDDEN_ENGINES: string[] = ['yuanbao'];
 
@@ -758,9 +787,9 @@ export function visibleEngines<T extends string>(ids: readonly T[]): T[] {
   return ids.filter(e => !HIDDEN_ENGINES.includes(e));
 }
 
-// 品牌增长统一引擎排序:豆包置顶,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
+// 品牌增长统一引擎排序:DeepSeek 置顶,豆包次之,其他按业务约定顺序;未列出的 engine 放最后(按字母序)
 export const ENGINE_ORDER: string[] = [
-  'doubao', 'deepseek', 'qwen', 'wenxin', 'yuanbao',
+  'deepseek', 'doubao', 'qwen', 'wenxin', 'yuanbao',
   'chatgpt', 'claude', 'gemini', 'grok', 'copilot',
 ];
 

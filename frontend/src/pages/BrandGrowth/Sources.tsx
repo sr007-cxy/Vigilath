@@ -10,7 +10,8 @@ import {
   type DonutSlice, type BarItem,
 } from './charts';
 import {
-  useBgLang, engineLabel, factorLabel, factorColor, FACTOR_ORDER, visibleEngines,
+  useBgLang, engineLabel, factorLabel, factorColor, factorDesc, FACTOR_ORDER,
+  visibleEngines, sortEngines,
 } from './lang';
 
 type FilterMode = 'all' | 'third_party';
@@ -104,12 +105,12 @@ function Body({ state }: { state: ShellState }) {
   }
   const overallSlices = factorSlices(overallFactor);
   const overallFactorTotal = Object.values(overallFactor).reduce((s, v) => s + v, 0);
-  // 各引擎(本期有因子数据的)各一张 donut
-  const perEngine = effEngines
+  // 各引擎(本期有因子数据的)各一张 donut,按统一引擎排序(ENGINE_ORDER)展示
+  const perEngine = sortEngines(effEngines)
     .map(e => ({ engine: e, counts: engineFactorOf(e) }))
     .filter(x => Object.keys(x.counts).length > 0);
   // 共享图例:总体里出现过的因子(按 FACTOR_ORDER)
-  const legendSlices = overallSlices;
+  const legendFactors = FACTOR_ORDER.filter(f => (overallFactor[f] || 0) > 0);
 
   // 引用总数:筛选时 = 所选引擎信源次数之和(与下方域名列表口径一致),否则用后端汇总值
   const totalCitations = isEngineFiltered
@@ -163,13 +164,15 @@ function Body({ state }: { state: ShellState }) {
             {/* 共享因子图例(含总体占比) */}
             <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] pb-3 border-b"
               style={{ borderColor: 'var(--border-color)' }}>
-              {legendSlices.map(s => {
-                const pct = overallFactorTotal ? (s.value / overallFactorTotal) * 100 : 0;
+              {legendFactors.map(f => {
+                const val = overallFactor[f] || 0;
+                const pct = overallFactorTotal ? (val / overallFactorTotal) * 100 : 0;
                 return (
-                  <span key={s.label} className="inline-flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }} />
-                    <span className="text-secondary">{s.label}</span>
+                  <span key={f} className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: factorColor(f) }} />
+                    <span className="text-secondary">{factorLabel(f)}</span>
                     <span className="tabular-nums text-muted">{pct.toFixed(0)}%</span>
+                    <InfoHint text={factorDesc(f)} />
                   </span>
                 );
               })}
