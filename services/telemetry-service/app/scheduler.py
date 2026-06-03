@@ -55,6 +55,8 @@ ENGINE_DAILY_CAP = int(os.environ.get("TELEMETRY_ENGINE_DAILY_CAP", "50"))
 UNCAPPED_ENGINES = {
     e.strip() for e in os.environ.get("TELEMETRY_UNCAPPED_ENGINES", "doubao").split(",") if e.strip()
 }
+# 僵死 claim 回收:认领超过这么多秒还没交结果的任务(worker 崩溃/重启)→ 退回 queued.
+CLAIM_STALE_SEC = int(os.environ.get("DISPATCH_CLAIM_STALE_SEC", "900"))
 # drip 话题白名单:只跑这些 topic id(逗号分隔);留空 = 全部 enabled topic.
 # 用于"只恢复某个话题"的定向 drip,不必动其它 topic 的 enabled 配置。
 DRIP_ONLY_TOPICS = {
@@ -329,11 +331,26 @@ async def _maybe_run_briefings(now_utc: datetime) -> None:
         log.exception("weekly briefings failed: %s", e)
 
 
+def _reap_stale_claims() -> None:
+    """worker 崩溃/重启后认领的任务会一直 claimed 不交结果 → 超时退回 queued,别的 worker 接手."""
+    cutoff = datetime.utcnow() - timedelta(seconds=CLAIM_STALE_SEC)
+    with db_session() as s:
+        res = s.execute(text(
+            "UPDATE dispatch_tasks SET status='queued', claimed_by=NULL, claimed_at=NULL "
+            "WHERE status='claimed' AND claimed_at < :cutoff"
+        ), {"cutoff": cutoff})
+    n = res.rowcount or 0
+    if n:
+        log.info("[dispatch] reaped %d stale claims → requeued", n)
+
+
 async def _tick() -> None:
     global _last_drip_at
     now = datetime.now(timezone.utc)
     # 周报判定每个 poll 都跑(便宜)
     await _maybe_run_briefings(now)
+    # 僵死 claim 回收每个 poll 都跑(便宜)
+    _reap_stale_claims()
     # drip 按 DRIP_TICK_MINUTES 节流
     if _drip_due(now):
         _last_drip_at = now
