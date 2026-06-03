@@ -228,6 +228,19 @@ def parse_topic(t: TopicORM) -> tuple[list[str], list[str]]:
     return queries, engines
 
 
+def seed_query_texts(t: TopicORM) -> set[str]:
+    """queries_json 里 is_seed==true 的 query text 集合.
+
+    用于 drip"先跑种子提示词,再跑扩展提示词"的优先级排序:
+    种子是 admin 审核过的原始题,扩展是按 cluster 派生的长尾题(is_seed 缺省/false).
+    """
+    out: set[str] = set()
+    for q in json.loads(t.queries_json or "[]"):
+        if isinstance(q, dict) and q.get("is_seed") and q.get("text"):
+            out.add(q["text"])
+    return out
+
+
 def parse_target(t: TopicORM) -> tuple[str, list[str]]:
     """返回 (target, aliases). target 为空时 fallback 到 topic.name."""
     target = (t.target or "").strip()

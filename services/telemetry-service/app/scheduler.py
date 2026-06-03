@@ -34,7 +34,7 @@ from sqlalchemy import text
 from .runner import run_topic_once
 from .briefings import generate_all_briefings_for_week
 from .storage import (
-    db_session, list_enabled_topics, parse_topic,
+    db_session, list_enabled_topics, parse_topic, seed_query_texts,
     TopicORM, RunORM, start_run, finish_run,
 )
 
@@ -53,6 +53,11 @@ DRIP_TICK_MINUTES = int(os.environ.get("TELEMETRY_DRIP_TICK_MINUTES", "60"))
 ENGINE_DAILY_CAP = int(os.environ.get("TELEMETRY_ENGINE_DAILY_CAP", "50"))
 UNCAPPED_ENGINES = {
     e.strip() for e in os.environ.get("TELEMETRY_UNCAPPED_ENGINES", "doubao").split(",") if e.strip()
+}
+# drip 话题白名单:只跑这些 topic id(逗号分隔);留空 = 全部 enabled topic.
+# 用于"只恢复某个话题"的定向 drip,不必动其它 topic 的 enabled 配置。
+DRIP_ONLY_TOPICS = {
+    int(x) for x in os.environ.get("TELEMETRY_DRIP_ONLY_TOPICS", "").replace(" ", "").split(",") if x
 }
 
 # v1.2 周报 cron — 默认本地周一 09:00
@@ -143,13 +148,15 @@ async def _run_drip(now_utc: datetime) -> None:
     with db_session() as s:
         topic_snaps = []
         for t in list_enabled_topics(s):
+            if DRIP_ONLY_TOPICS and t.id not in DRIP_ONLY_TOPICS:
+                continue
             queries, engines = parse_topic(t)
             if queries and engines:
-                topic_snaps.append((t.id, t.name, queries, engines))
+                topic_snaps.append((t.id, t.name, queries, engines, seed_query_texts(t)))
 
     # 3) 本 tick 每引擎全局预算 = ceil(今日剩余额度 / 今日剩余 tick 数)
     tick_budget: dict[str, float] = {}
-    for _, _, _, engines in topic_snaps:
+    for _, _, _, engines, _ in topic_snaps:
         for e in engines:
             if e in tick_budget:
                 continue
@@ -165,7 +172,7 @@ async def _run_drip(now_utc: datetime) -> None:
              {k: ("inf" if v == math.inf else v) for k, v in tick_budget.items()})
 
     # 4) 逐 topic 切片跑批
-    for tid, name, queries, engines in topic_snaps:
+    for tid, name, queries, engines, seeds in topic_snaps:
         with db_session() as s:
             succeeded = {(r.engine, r.query) for r in s.execute(text(
                 "SELECT DISTINCT engine, query FROM ai_telemetry_responses "
@@ -196,8 +203,12 @@ async def _run_drip(now_utc: datetime) -> None:
             with db_session() as s:
                 run_id = start_run(s, tid).id
 
-        # 优先跑"今日还没试过"的 (未试过 -> False=0 排前面),再轮到今日已试过的(重试)
-        pending.sort(key=lambda eq: eq in attempted_today)
+        # 排序优先级(稳定排序,组内保持 queries_json 原顺序):
+        #   1) 先种子提示词,再扩展提示词(eq[1] 是 query;种子 -> False=0 排前面)
+        #   2) 同类内,今日还没试过的优先,再轮到今日已试过的(重试)
+        # → drip 每 tick 按引擎预算切片,种子永远在队首,会先吃满预算、先跑完,
+        #   扩展才轮到,实现"先跑种子、再跑扩展"。
+        pending.sort(key=lambda eq: (eq[1] not in seeds, eq in attempted_today))
 
         slice_pairs: list[tuple[str, str]] = []
         for e, q in pending:
