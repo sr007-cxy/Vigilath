@@ -4,6 +4,7 @@ import {
   aiTelemetryApi,
   type BrowserWorker,
   type WorkerQueueStats,
+  type EngineSessionRow,
 } from '../../services/aiTelemetryApi';
 
 const REFRESH_MS = 10000;
@@ -13,6 +14,7 @@ export function AdminWorkers() {
   const { t } = useTranslation();
   const [workers, setWorkers] = useState<BrowserWorker[]>([]);
   const [stats, setStats] = useState<WorkerQueueStats | null>(null);
+  const [sessions, setSessions] = useState<EngineSessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
@@ -21,8 +23,9 @@ export function AdminWorkers() {
     Promise.all([
       aiTelemetryApi.adminListWorkers(token),
       aiTelemetryApi.adminWorkersQueueStats(token),
+      aiTelemetryApi.adminListEngineSessions(token),
     ])
-      .then(([ws, st]) => { setWorkers(ws); setStats(st); setErr(null); })
+      .then(([ws, st, ss]) => { setWorkers(ws); setStats(st); setSessions(ss); setErr(null); })
       .catch(e => setErr(e?.message || 'failed'))
       .finally(() => setLoading(false));
   }, [token]);
@@ -195,6 +198,63 @@ export function AdminWorkers() {
                 {workers.length === 0 && (
                   <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">
                     {t('workbench.adminWorkers.noWorkers', { defaultValue: '暂无 worker 接入' })}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── 账号池(登录态)── */}
+          <div className="rounded-lg overflow-hidden mt-5"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="px-3 py-2 text-xs text-secondary font-medium border-b"
+                 style={{ borderColor: 'var(--border-color)' }}>
+              {t('workbench.adminWorkers.poolTitle', { defaultValue: '账号池(登录态)' })}
+              <span className="text-muted ml-2">
+                {t('workbench.adminWorkers.poolActive', {
+                  defaultValue: '可用 {{n}} / 共 {{total}}',
+                  n: sessions.filter(s => s.status === 'active').length,
+                  total: sessions.length,
+                })}
+              </span>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted">
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colEngine', { defaultValue: '引擎' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colLabel', { defaultValue: '标识' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colStatus', { defaultValue: '状态' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colUseCount', { defaultValue: '用量' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colCaptcha', { defaultValue: '验证码' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colLastUsed', { defaultValue: '最后使用' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colExpires', { defaultValue: '过期' })}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map(s => {
+                  const color = s.status === 'active' ? 'text-emerald-500'
+                    : s.status === 'quarantined' ? 'text-red-400' : 'text-muted';
+                  const fmt = (d: string | null) => d ? d.slice(0, 16).replace('T', ' ') : '—';
+                  return (
+                    <tr key={s.id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+                      <td className="px-3 py-2 text-primary">{s.engine}</td>
+                      <td className="px-3 py-2 text-secondary">{s.label || `#${s.id}`}</td>
+                      <td className={`px-3 py-2 ${color}`}>
+                        {s.status}
+                        {s.last_fail_type && s.status !== 'active' && (
+                          <span className="text-[10px] text-muted ml-1">({s.last_fail_type})</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.use_count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.captcha_count}</td>
+                      <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.last_used_at)}</td>
+                      <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.expires_at)}</td>
+                    </tr>
+                  );
+                })}
+                {sessions.length === 0 && (
+                  <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">
+                    {t('workbench.adminWorkers.noSessions', { defaultValue: '账号池为空,用浏览器扩展上传登录态' })}
                   </td></tr>
                 )}
               </tbody>

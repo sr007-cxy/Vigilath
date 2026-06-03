@@ -583,6 +583,19 @@ export interface WorkerQueueStats {
   daily_cap: Record<string, number | null>;        // engine → 日上限(null=不限)
 }
 
+export interface EngineSessionRow {
+  id: number;
+  engine: string;
+  label: string | null;
+  status: string;            // active | quarantined | expired
+  use_count: number;
+  captcha_count: number;
+  last_used_at: string | null;
+  captured_at: string | null;
+  expires_at: string | null;
+  last_fail_type: string | null;
+}
+
 async function request<T>(
   method: string, path: string, token: string, body?: unknown,
 ): Promise<T> {
@@ -920,6 +933,9 @@ export const aiTelemetryApi = {
     workerUid: string, action: 'enable' | 'disable' | 'drain', token: string,
   ): Promise<{ ok: boolean; status: string }> {
     return request('POST', `/admin/workers/${workerUid}/${action}`, token);
+  },
+  async adminListEngineSessions(token: string): Promise<EngineSessionRow[]> {
+    return request<EngineSessionRow[]>('GET', '/admin/engine-sessions', token);
   },
   async adminListUserTopics(userId: number, token: string): Promise<Topic[]> {
     return request<Topic[]>('GET', `/admin/users/${userId}/topics`, token);

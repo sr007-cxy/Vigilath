@@ -3202,3 +3202,30 @@ async def admin_worker_action(
         )
         r.raise_for_status()
         return r.json()
+
+
+@router.get("/admin/engine-sessions")
+def admin_list_engine_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """调度中心「账号池」列表 — 每条登录态(账号)的引擎/标识/状态/用量/过期。"""
+    _require_admin(current_user)
+    from geo.models.engine_sessions import EngineSessionORM
+    now = datetime.utcnow()
+    rows = (db.query(EngineSessionORM)
+            .order_by(EngineSessionORM.engine, EngineSessionORM.id).all())
+    out = []
+    for r in rows:
+        expired = r.expires_at is not None and r.expires_at <= now
+        eff = "expired" if (expired and r.status == "active") else r.status
+        out.append({
+            "id": r.id, "engine": r.engine, "label": r.source_label,
+            "status": eff,
+            "use_count": r.use_count or 0, "captcha_count": r.captcha_count or 0,
+            "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
+            "captured_at": r.captured_at.isoformat() if r.captured_at else None,
+            "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+            "last_fail_type": r.last_fail_type,
+        })
+    return out
