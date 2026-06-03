@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { aiTelemetryApi, ALL_TIME_PERIOD, type Topic } from '../../services/aiTelemetryApi';
+import { useAuth } from '../../contexts/AuthContext';
 import { exportGrowthReportPdf } from '../../utils/exportGrowthReportPdf';
 import { useBgLang, engineLabel, sortEngines, visibleEngines } from './lang';
 
@@ -18,16 +19,25 @@ export interface ShellState {
   selectedEngines: string[];
   setSelectedEngines: (es: string[]) => void;
   loading: boolean;
+  // admin 正在看一个不属于自己的客户主题(?topic= 指向他人)→ 头部加「客户视角」提示
+  isForeign: boolean;
 }
 
 export function useShellState(): ShellState {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
   const token = localStorage.getItem('token') || '';
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ownTopics, setOwnTopics] = useState<Topic[]>([]);
+  // admin 看他人主题时单独解析的那条主题(?topic= 指向非自有主题)
+  const [extraTopic, setExtraTopic] = useState<Topic | null>(null);
+  const [loadingOwn, setLoadingOwn] = useState(true);
+  const [resolving, setResolving] = useState(false);
+  const loading = loadingOwn || resolving;
 
   const urlTopic = Number(searchParams.get('topic') || '0');
   const period = ALL_TIME_PERIOD;
+  // 有 extraTopic 时只暴露这条客户主题(picker 显示客户主题名,语义清晰);否则用自有列表
+  const topics = extraTopic ? [extraTopic] : ownTopics;
   const topicId = urlTopic > 0 ? urlTopic : (topics[0]?.id ?? null);
   const topic = topics.find(t => t.id === topicId) || null;
 
@@ -42,12 +52,31 @@ export function useShellState(): ShellState {
     : urlEngines.filter(e => topicEngines.includes(e as Topic['engines'][number]));
 
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
+    if (!token) { setLoadingOwn(false); return; }
+    setLoadingOwn(true);
     aiTelemetryApi.listTopics(token)
-      .then(list => setTopics(list))
-      .catch(() => setTopics([]))
-      .finally(() => setLoading(false));
+      .then(list => setOwnTopics(list))
+      .catch(() => setOwnTopics([]))
+      .finally(() => setLoadingOwn(false));
   }, [token]);
+
+  // admin 访问不属于自己的主题 → 单独解析该主题。所有子页都用同一个 ?topic=<id>,
+  // 所以只要这里统一兜底,整套面板(含下钻子页)都能看到客户数据,无需逐链接透传参数。
+  useEffect(() => {
+    if (loadingOwn) return;  // 等自有列表先加载完再判断,避免误把自有主题当外部主题
+    if (!token || !isAdmin || urlTopic <= 0 || ownTopics.some(t => t.id === urlTopic)) {
+      setExtraTopic(null);
+      setResolving(false);
+      return;
+    }
+    let cancelled = false;
+    setResolving(true);
+    aiTelemetryApi.getTopic(urlTopic, token)
+      .then(t => { if (!cancelled) setExtraTopic(t); })
+      .catch(() => { if (!cancelled) setExtraTopic(null); })
+      .finally(() => { if (!cancelled) setResolving(false); });
+    return () => { cancelled = true; };
+  }, [token, isAdmin, urlTopic, ownTopics, loadingOwn]);
 
   const setTopicId = (id: number) => {
     const next = new URLSearchParams(searchParams);
@@ -64,6 +93,7 @@ export function useShellState(): ShellState {
   return {
     token, topics, topic, topicId, setTopicId, period,
     selectedEngines, setSelectedEngines, loading,
+    isForeign: extraTopic != null,
   };
 }
 
@@ -130,6 +160,14 @@ export function BrandGrowthHeader({
             <div className="flex items-baseline gap-2 min-w-0">
               <h1 className="text-lg font-semibold text-primary truncate">{title}</h1>
               <span className="text-xs text-muted truncate">{subtitle}</span>
+              {state.isForeign && (
+                <span
+                  className="text-[11px] px-1.5 py-0.5 rounded whitespace-nowrap shrink-0"
+                  style={{ background: 'rgba(59,130,246,0.12)', color: '#2563eb', border: '1px solid rgba(59,130,246,0.35)' }}
+                >
+                  {L.adminForeignTag}
+                </span>
+              )}
             </div>
           </div>
         </div>

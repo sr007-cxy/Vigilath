@@ -13,6 +13,8 @@ interface Dict {
   back: string;
   viewAll: string;
   clearFilter: string;
+  // 管理员从「项目进度」点进客户主题时,头部的「客户视角」提示标签
+  adminForeignTag: string;
   // 头部:数据时间窗口(全部历史)+ 上次跑批时间 + 下载报告
   allTimeLabel: string;
   lastRunPrefix: string;
@@ -239,6 +241,7 @@ const ZH: Dict = {
   back: '返回',
   viewAll: '查看全部 →',
   clearFilter: '清除筛选',
+  adminForeignTag: '客户视角',
   allTimeLabel: '全部历史',
   lastRunPrefix: '数据更新于',
   lastRunNever: '尚未跑批',
@@ -454,6 +457,7 @@ const EN: Dict = {
   back: 'Back',
   viewAll: 'View all →',
   clearFilter: 'Clear filter',
+  adminForeignTag: 'Customer view',
   allTimeLabel: 'All time',
   lastRunPrefix: 'Updated',
   lastRunNever: 'Not run yet',

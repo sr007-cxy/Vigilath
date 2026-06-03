@@ -43,20 +43,31 @@ router = APIRouter(prefix="/content")
 _HH_MM_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
-def _own_topic_or_404(db: Session, topic_id: int, user_id: int) -> AiTelemetryTopicORM:
+def _own_topic_or_404(
+    db: Session, topic_id: int, user_id: int, *, allow_admin_user=None,
+) -> AiTelemetryTopicORM:
+    """常规 owner-only;传 allow_admin_user(is_admin=True)时放行 admin 跨用户只读。"""
     t = db.get(AiTelemetryTopicORM, topic_id)
-    if not t or t.user_id != user_id:
+    if not t:
         raise HTTPException(404, "topic not found")
+    if t.user_id != user_id:
+        if not (allow_admin_user is not None and getattr(allow_admin_user, "is_admin", False)):
+            raise HTTPException(404, "topic not found")
     return t
 
 
-def _own_doc_or_404(db: Session, doc_id: int, user_id: int) -> TopicGeneratedDocORM:
+def _own_doc_or_404(
+    db: Session, doc_id: int, user_id: int, *, allow_admin_user=None,
+) -> TopicGeneratedDocORM:
     d = db.get(TopicGeneratedDocORM, doc_id)
     if not d:
         raise HTTPException(404, "doc not found")
     t = db.get(AiTelemetryTopicORM, d.topic_id)
-    if not t or t.user_id != user_id:
+    if not t:
         raise HTTPException(404, "doc not found")
+    if t.user_id != user_id:
+        if not (allow_admin_user is not None and getattr(allow_admin_user, "is_admin", False)):
+            raise HTTPException(404, "doc not found")
     return d
 
 
@@ -89,7 +100,7 @@ def list_my_docs(
     - query_hit: `hit` = AI 真实引用过 doc 的投放 URL(看 cited_by_json);
                  `miss` = 有投放 URL 但还没被引;None 不筛
     """
-    _own_topic_or_404(db, topic_id, current_user.id)
+    _own_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     q = db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic_id)
     if status:
         if status == "to_review":
@@ -128,7 +139,7 @@ def topic_stats(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _own_topic_or_404(db, topic_id, current_user.id)
+    _own_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     rows = (
         db.query(TopicGeneratedDocORM)
           .filter(TopicGeneratedDocORM.topic_id == topic_id)
@@ -163,7 +174,7 @@ def get_doc(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    d = _own_doc_or_404(db, doc_id, current_user.id)
+    d = _own_doc_or_404(db, doc_id, current_user.id, allow_admin_user=current_user)
     return GeneratedDocOut.from_orm_row(d)
 
 

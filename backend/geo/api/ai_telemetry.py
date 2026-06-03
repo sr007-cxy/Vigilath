@@ -577,6 +577,17 @@ def list_topics(
     return [TopicOut.from_orm_row(r) for r in rows]
 
 
+@router.get("/topics/{topic_id}", response_model=TopicOut)
+def get_topic(
+    topic_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """单条主题元信息 — owner 自取;admin 可取任意主题(品牌增长面板按 ?topic= 解析非自有主题用)。"""
+    t = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
+    return TopicOut.from_orm_row(t)
+
+
 @router.post("/topics", response_model=TopicOut, status_code=201)
 def create_topic(
     payload: TopicPayload,
@@ -1681,7 +1692,7 @@ def topic_overview(
       - engines_covered = 本期有 ≥1 成功 response 的引擎数 / topic.engines 总数
     品牌词来源:topic.target + topic.target_aliases_json(与 runner 落 hit 时同源).
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     now = datetime.utcnow()
     period_days, period_start = _resolve_period(period, topic, now)
     prev_start = period_start - timedelta(days=period_days)
@@ -1871,7 +1882,7 @@ def topic_intent_breakdown(
     话题 queries_json 里没有 cluster_id(老话题或聚类失败时全 0)就只有一个簇,
     或者 query 文本与 cluster_id 对不上时落到 uncategorized 桶。
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     period_days, period_start = _resolve_period(period, topic)
 
     # 品牌词(沿用 overview 口径:topic.target + aliases,与 runner detect_hit 同源)
@@ -2058,7 +2069,7 @@ def list_topic_responses(
     - query: 锁定单 query
     - period: 近 N 天(1-90)
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     _, cutoff = _resolve_period(period, topic)
 
     q = (
@@ -2118,7 +2129,7 @@ def get_tracking_matrix(
     db: Session = Depends(get_db),
 ):
     """v1 引用追踪 — 整个 topic 的 (query × engine) 矩阵 + 首次命中时间线."""
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     queries_raw = json.loads(topic.queries_json or "[]")
     queries: list[str] = []
     for q in queries_raw:
@@ -2276,7 +2287,7 @@ def get_growth_report(
     每条问题聚合:命中 = 任一引擎命中;排名 = 命中里最好的 brand_rank;
     引擎 = 命中过的引擎集合。status 反映从首跑到现在的变化。
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
 
     # 监测问题集合 + 种子映射(与 tracking-matrix 同源:取所有 query 文本)
     queries_raw = json.loads(topic.queries_json or "[]")
@@ -2412,7 +2423,7 @@ def get_share_of_voice(
       position_dist = COUNT(Response GROUP BY mention_position) 仅 hit=True
       optimal_rate_pct = SUM(QueryHit.total_hits) / SUM(QueryHit.total_runs) × 100
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     period_days, cutoff = _resolve_period(period, topic)
 
     rows = (
@@ -2641,7 +2652,7 @@ def get_position_breakdown(
 
     返回本期 breakdown + 行业基准(样本不足时 industry_baseline = None)。
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     # period 参数保留是为了向后兼容(前端可能仍在传),但在 lifetime 口径下不再使用。
     period_days = max(1, min(period, 90))
 
@@ -2844,7 +2855,7 @@ def get_competitor_substitutions(
     口径:近 period 天内,(query, engine) 维度下 hit=False(未命中本品)
           但 competitors_json 非空的 responses;按 query × competitor 聚 count。
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     period_days, cutoff = _resolve_period(period, topic)
 
     rows = (
@@ -2913,7 +2924,7 @@ def get_cell_drawer(
 
     诊断块 insight 不在这里取(那是 LLM 调用 / 按需触发),由前端单独 POST /cell-insight 拉.
     """
-    topic = _get_topic_or_404(db, topic_id, current_user.id)
+    topic = _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     cell = (
         db.query(AiTelemetryQueryHitORM)
           .filter(AiTelemetryQueryHitORM.topic_id == topic_id)
@@ -3061,7 +3072,7 @@ def list_briefings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_topic_or_404(db, topic_id, current_user.id)
+    _get_topic_or_404(db, topic_id, current_user.id, allow_admin_user=current_user)
     rows = (
         db.query(AiTelemetryTopicBriefingORM)
           .filter(AiTelemetryTopicBriefingORM.topic_id == topic_id)

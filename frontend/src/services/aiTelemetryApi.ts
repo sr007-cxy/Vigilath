@@ -609,6 +609,16 @@ export const aiTelemetryApi = {
     return request<Topic[]>('GET', '/topics', token);
   },
 
+  // 单条主题元信息 — owner 自取;admin 可取任意主题(品牌增长面板按 ?topic= 解析非自有主题用)。
+  async getTopic(id: number, token: string): Promise<Topic> {
+    if (isMockMode()) {
+      const t = _mockTopics.find(t => t.id === id);
+      if (!t) throw new Error('topic not found');
+      return Promise.resolve(t);
+    }
+    return request<Topic>('GET', `/topics/${id}`, token);
+  },
+
   async createTopic(payload: TopicPayload, token: string): Promise<Topic> {
     if (isMockMode()) {
       const t: Topic = {

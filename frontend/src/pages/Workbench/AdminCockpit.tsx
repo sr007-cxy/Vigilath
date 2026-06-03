@@ -233,6 +233,9 @@ export function AdminCockpit() {
                     {t(`workbench.adminCockpit.stage.${s}`)}
                   </th>
                 ))}
+                <th className="px-2 py-2 text-center whitespace-nowrap">
+                  {t('workbench.adminCockpit.colGrowth')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -259,6 +262,14 @@ export function AdminCockpit() {
                       </td>
                     );
                   })}
+                  {/* 客户视角品牌增长面板入口 — admin 直接看客户看到的那个 /brand-growth */}
+                  <td className="px-2 py-2 text-center">
+                    <Link to={`/brand-growth?topic=${topic.topic_id}`}
+                      className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors hover:opacity-80"
+                      style={{ color: 'var(--accent-primary)', borderColor: 'var(--accent-primary)' }}>
+                      {t('workbench.adminCockpit.viewGrowth')}
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

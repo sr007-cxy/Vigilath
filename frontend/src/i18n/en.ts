@@ -436,7 +436,7 @@ const en = {
               "items": [
                 {
                   "name": "Ms. Cheng",
-                  "role": "Senior Partner · Law Firm",
+                  "role": "Senior Partner · Jingtian & Gongcheng",
                   "text": "When clients ask AI which firm is the most capable, it now reliably names us. Three new inquiries came in this way within the first week."
                 },
                 {
@@ -3446,6 +3446,8 @@ const en = {
               },
               "colTopic": "Topic",
               "colCustomer": "Customer",
+              "colGrowth": "Brand Growth",
+              "viewGrowth": "View",
               "stage": {
                 "submit": "Brand & Topic",
                 "review": "Pre-review",

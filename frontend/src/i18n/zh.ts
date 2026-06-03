@@ -436,7 +436,7 @@ const zh = {
               "items": [
                 {
                   "name": "程律师",
-                  "role": "资深合伙人 · 律所",
+                  "role": "资深合伙人 · 竞天公诚",
                   "text": "客户问 AI「哪家律所更专业」,现在能稳定提到我们。上线一周就有三个新咨询是这么找来的。"
                 },
                 {
@@ -3452,6 +3452,8 @@ const zh = {
               },
               "colTopic": "主题",
               "colCustomer": "客户",
+              "colGrowth": "品牌增长",
+              "viewGrowth": "查看",
               "stage": {
                 "submit": "品牌与主题创建",
                 "review": "诊断与方案预评估",
