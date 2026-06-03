@@ -99,6 +99,7 @@ const zh = {
             "adminInsights": "监测报告",
             "adminRuns": "跑批结果",
             "adminCrawl": "AI 爬虫分析",
+            "adminWorkers": "调度中心",
             "adminReview": "主题审核",
             "adminContentReview": "文案复审",
             "adminContentManagement": "内容库",

@@ -31,12 +31,13 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 
-from .runner import run_topic_once
+from .runner import run_topic_once, CN_ENGINES, is_openrouter_engine
 from .briefings import generate_all_briefings_for_week
 from .storage import (
     db_session, list_enabled_topics, parse_topic, seed_query_texts,
-    TopicORM, RunORM, start_run, finish_run,
+    TopicORM, RunORM, DispatchTaskORM, start_run, finish_run,
 )
+from .tracking import initialize_pending_cells, mark_cells_running
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +107,20 @@ def _ticks_left_today(now_utc: datetime) -> int:
     return max(1, math.ceil(mins_left / DRIP_TICK_MINUTES))
 
 
+def _is_browser_engine(engine: str) -> bool:
+    """走 worker 队列的浏览器引擎 = 国内引擎且不走 API.
+
+    openrouter 海外引擎走 API;doubao 在配了 ARK key 时走 ARK API —— 都不进队列,
+    由中心进程内直跑(无 IP/账号约束)。其余国内引擎(deepseek/qwen/wenxin/yuanbao)
+    入 dispatch_tasks 由 worker 领。
+    """
+    if is_openrouter_engine(engine):
+        return False
+    if engine == "doubao" and os.environ.get("ARK_API_KEY") and os.environ.get("DOUBAO_BOT_ID"):
+        return False
+    return engine in CN_ENGINES
+
+
 def _engine_daily_cap(engine: str) -> float:
     """该引擎每日上限;不限流引擎返回 inf."""
     if engine in UNCAPPED_ENGINES:
@@ -171,8 +186,11 @@ async def _run_drip(now_utc: datetime) -> None:
              cycle_start, day_start, ticks_left,
              {k: ("inf" if v == math.inf else v) for k, v in tick_budget.items()})
 
-    # 4) 逐 topic 切片跑批
+    # 4) 逐 topic 处理:browser 引擎入队列(worker 领),API 引擎进程内直跑
     for tid, name, queries, engines, seeds in topic_snaps:
+        browser_engines = [e for e in engines if _is_browser_engine(e)]
+        api_engines = [e for e in engines if not _is_browser_engine(e)]
+
         with db_session() as s:
             succeeded = {(r.engine, r.query) for r in s.execute(text(
                 "SELECT DISTINCT engine, query FROM ai_telemetry_responses "
@@ -188,51 +206,78 @@ async def _run_drip(now_utc: datetime) -> None:
                         .order_by(RunORM.id.desc()).first())
             open_run_id = open_run.id if open_run else None
 
-        pending = [(e, q) for q in queries for e in engines if (e, q) not in succeeded]
-        if not pending:
-            # 本周期题库已覆盖完 → 收尾,跑完即停
+        pending_browser = [(e, q) for q in queries for e in browser_engines if (e, q) not in succeeded]
+        pending_api = [(e, q) for q in queries for e in api_engines if (e, q) not in succeeded]
+        if not pending_browser and not pending_api:
             if open_run_id is not None:
                 with db_session() as s:
                     finish_run(s, open_run_id, "success")
                 log.info("[drip] topic %d (%s) cycle complete, run %d finished", tid, name, open_run_id)
             continue
 
-        # 本周期还没建 run → 建一个,整周期复用
+        # 本周期还没建 run → 建一个,整周期复用;并初始化矩阵 cell(原 run_topic_once 内做)
         run_id = open_run_id
         if run_id is None:
             with db_session() as s:
                 run_id = start_run(s, tid).id
-
-        # 排序优先级(稳定排序,组内保持 queries_json 原顺序):
-        #   1) 先种子提示词,再扩展提示词(eq[1] 是 query;种子 -> False=0 排前面)
-        #   2) 同类内,今日还没试过的优先,再轮到今日已试过的(重试)
-        # → drip 每 tick 按引擎预算切片,种子永远在队首,会先吃满预算、先跑完,
-        #   扩展才轮到,实现"先跑种子、再跑扩展"。
-        pending.sort(key=lambda eq: (eq[1] not in seeds, eq in attempted_today))
-
-        slice_pairs: list[tuple[str, str]] = []
-        for e, q in pending:
-            b = tick_budget.get(e, 0)
-            if b == math.inf:
-                slice_pairs.append((e, q))
-            elif b > 0:
-                slice_pairs.append((e, q))
-                tick_budget[e] = b - 1
-
-        if not slice_pairs:
-            continue
-
         with db_session() as s:
-            t = s.get(TopicORM, tid)
-            if t is None or not t.enabled:
-                continue
-            s.expunge(t)
-        try:
-            await run_topic_once(t, existing_run_id=run_id, pairs=set(slice_pairs), finalize=False)
-            log.info("[drip] topic %d (%s) run %d: dispatched %d pairs (pending was %d)",
-                     tid, name, run_id, len(slice_pairs), len(pending))
-        except Exception as e:  # noqa: BLE001
-            log.exception("[drip] topic %d run failed: %s", tid, e)
+            t_managed = s.get(TopicORM, tid)
+            if t_managed is not None:
+                initialize_pending_cells(s, t_managed)
+                mark_cells_running(s, t_managed)
+
+        # 4a) browser 引擎 → 入 dispatch_tasks(种子 priority=0、扩展=1);
+        #     已有 task 行(queued/claimed/done/failed)的对不重复入队;日上限在 claim 侧执行。
+        added = 0
+        if pending_browser:
+            with db_session() as s:
+                existing = {(r.engine, r.query) for r in s.execute(text(
+                    "SELECT engine, query FROM dispatch_tasks WHERE run_id=:r"
+                ), {"r": run_id}).all()}
+                for e, q in pending_browser:
+                    if (e, q) in existing:
+                        continue
+                    s.add(DispatchTaskORM(run_id=run_id, topic_id=tid, engine=e, query=q,
+                                          priority=0 if q in seeds else 1))
+                    added += 1
+            if added:
+                log.info("[drip] topic %d (%s) run %d: enqueued %d browser tasks (pending_browser=%d)",
+                         tid, name, run_id, added, len(pending_browser))
+
+        # 4b) API 引擎(doubao-ARK / openrouter)→ 进程内直跑,沿用 tick 预算限速 + 种子优先
+        if pending_api:
+            pending_api.sort(key=lambda eq: (eq[1] not in seeds, eq in attempted_today))
+            slice_pairs: list[tuple[str, str]] = []
+            for e, q in pending_api:
+                b = tick_budget.get(e, 0)
+                if b == math.inf:
+                    slice_pairs.append((e, q))
+                elif b > 0:
+                    slice_pairs.append((e, q))
+                    tick_budget[e] = b - 1
+            if slice_pairs:
+                with db_session() as s:
+                    t = s.get(TopicORM, tid)
+                    if t is None or not t.enabled:
+                        continue
+                    s.expunge(t)
+                try:
+                    await run_topic_once(t, existing_run_id=run_id, pairs=set(slice_pairs), finalize=False)
+                    log.info("[drip] topic %d (%s) run %d: in-proc API %d pairs", tid, name, run_id, len(slice_pairs))
+                except Exception as e:  # noqa: BLE001
+                    log.exception("[drip] topic %d API run failed: %s", tid, e)
+
+        # 4c) 早停优化:没新入队、队列里无 queued/claimed、API 也跑完 → 本周期完结
+        #     (失败到顶的 task 留 failed 行不再重试;真有残留也由下周期 step 0 强制收尾)
+        if added == 0 and not pending_api:
+            with db_session() as s:
+                outstanding = s.execute(text(
+                    "SELECT COUNT(*) c FROM dispatch_tasks "
+                    "WHERE run_id=:r AND status IN ('queued','claimed')"
+                ), {"r": run_id}).scalar() or 0
+                if outstanding == 0:
+                    finish_run(s, run_id, "success")
+                    log.info("[drip] topic %d (%s) run %d: all tasks terminal, finished", tid, name, run_id)
 
 
 # ── loop ─────────────────────────────────────────────────────────

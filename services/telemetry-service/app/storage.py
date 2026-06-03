@@ -151,6 +151,44 @@ class TopicBriefingORM(Base):
     generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class WorkerORM(Base):
+    """browser-service worker 注册表(调度中心 pull 模型)。镜像 backend 同名表。"""
+    __tablename__ = "browser_workers"
+    id = Column(Integer, primary_key=True, index=True)
+    worker_uid = Column(String, nullable=False, unique=True, index=True)
+    hostname = Column(String, nullable=True)
+    label = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    exit_ip = Column(String, nullable=True)
+    engines_json = Column(Text, nullable=False, default="[]")
+    max_concurrency = Column(Integer, nullable=False, default=3)
+    status = Column(String, nullable=False, default="offline")
+    enabled = Column(Boolean, nullable=False, default=True)
+    version = Column(String, nullable=True)
+    last_heartbeat_at = Column(DateTime, nullable=True)
+    registered_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    meta_json = Column(Text, nullable=True)
+
+
+class DispatchTaskORM(Base):
+    """待跑的 (engine, query) 任务队列。drip 入队 → worker claim → 跑 → 交结果。"""
+    __tablename__ = "dispatch_tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("ai_telemetry_runs.id"), nullable=False, index=True)
+    topic_id = Column(Integer, ForeignKey("ai_telemetry_topics.id"), nullable=False)
+    engine = Column(String, nullable=False)
+    query = Column(String(1024), nullable=False)
+    priority = Column(Integer, nullable=False, default=1)        # 种子=0 扩展=1
+    status = Column(String, nullable=False, default="queued")    # queued/claimed/done/failed
+    claimed_by = Column(String, nullable=True, index=True)
+    claimed_at = Column(DateTime, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True)
+    error = Column(Text, nullable=True)
+
+
 @contextmanager
 def db_session() -> Iterator[Session]:
     s = SessionLocal()

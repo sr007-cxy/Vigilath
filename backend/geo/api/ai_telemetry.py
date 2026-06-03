@@ -3147,3 +3147,47 @@ def internal_briefing_email(payload: dict):
     body_md = (payload.get("body_md") or "")[:500]
     log.info("[BRIEFING DELIVER] topic=%s week=%s body=%s", topic_id, label, body_md)
     return {"status": "logged"}
+
+
+# ─────── 调度中心 / Worker 管理(/workbench/workers,admin)────────
+# 转发到 telemetry-service 的 /dispatch/*。telemetry 校验 X-Dispatch-Token,
+# 这里携带共享 token;前端鉴权由 _require_admin 负责。
+DISPATCH_TOKEN = os.environ.get("DISPATCH_TOKEN", "").strip()
+
+
+def _dispatch_headers() -> dict:
+    return {"X-Dispatch-Token": DISPATCH_TOKEN} if DISPATCH_TOKEN else {}
+
+
+@router.get("/admin/workers")
+async def admin_list_workers(current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{TELEMETRY_SERVICE_URL}/dispatch/workers", headers=_dispatch_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.get("/admin/workers-queue-stats")
+async def admin_workers_queue_stats(current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{TELEMETRY_SERVICE_URL}/dispatch/queue/stats", headers=_dispatch_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.post("/admin/workers/{worker_uid}/{action}")
+async def admin_worker_action(
+    worker_uid: str, action: str, current_user: User = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    if action not in ("enable", "disable", "drain"):
+        raise HTTPException(400, "action must be enable|disable|drain")
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{TELEMETRY_SERVICE_URL}/dispatch/workers/{worker_uid}/{action}",
+            headers=_dispatch_headers(),
+        )
+        r.raise_for_status()
+        return r.json()

@@ -99,6 +99,7 @@ const en = {
             "adminInsights": "Insights",
             "adminRuns": "Runs",
             "adminCrawl": "AI Crawlers",
+            "adminWorkers": "Dispatch Center",
             "adminReview": "Topic Review",
             "adminContentReview": "Doc Review",
             "adminContentManagement": "Content Library",

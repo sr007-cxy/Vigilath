@@ -26,6 +26,7 @@ from .storage import db_session, TopicORM
 from .insights import get_or_generate_cell_insight, update_feedback
 from .briefings import generate_briefing_for_topic
 from .query_suggest import suggest_queries, DeepSeekError
+from .dispatch import router as dispatch_router
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Telemetry Service", version="0.1.0", lifespan=lifespan)
+app.include_router(dispatch_router)
 
 
 # ── Schemas ────────────────────────────────────────────────────

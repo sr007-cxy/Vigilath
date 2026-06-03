@@ -92,11 +92,36 @@ _SNAPSHOT_BASE = Path(os.environ.get(
 
 # ── App lifecycle ──────────────────────────────────────────────
 
+_agent_stop: Optional[asyncio.Event] = None
+_agent_task: Optional[asyncio.Task] = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _agent_stop, _agent_task
     _load_adapters()
     print(f"[START] region={REGION} engines={list(_adapters.keys())} max_concurrent={MAX_CONCURRENT}")
+    # 配了 DISPATCH_CENTER_URL → 启动 worker agent loop(pull 模型:自注册 + 领任务)
+    if os.environ.get("DISPATCH_CENTER_URL", "").strip():
+        from .agent import agent_loop
+        _agent_stop = asyncio.Event()
+        _agent_task = asyncio.create_task(agent_loop(
+            run_hot=run_hot_query,
+            engines=list(_adapters.keys()),
+            max_concurrency=MAX_CONCURRENT,
+            breaker_engines=_breaker_engines,
+            stop=_agent_stop,
+        ))
+        print(f"[START] dispatch worker agent → {os.environ['DISPATCH_CENTER_URL']}")
     yield
+    # 停 agent loop
+    if _agent_stop:
+        _agent_stop.set()
+    if _agent_task:
+        try:
+            await asyncio.wait_for(_agent_task, timeout=5)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            _agent_task.cancel()
     # D4:关掉所有 hot sessions
     for engine, sess in list(_hot_sessions.items()):
         try:
@@ -268,6 +293,57 @@ async def fetch_title(req: FetchTitleRequest):
 # D4 hot-browser endpoint ─────────────────────────────────────
 # 同 /search,但走 EngineSession 复用 browser context.engine 必须实现
 # _prepare_page + _query_with_page(目前仅 deepseek).返回相同 SearchResponse.
+
+async def _get_hot_session(engine: str) -> EngineSession:
+    """lazy 创建 + init EngineSession(线程/任务 safe).未适配 hot protocol 抛 NotImplementedError."""
+    adapter = _adapters.get(engine)
+    if not adapter:
+        raise HTTPException(status_code=400, detail=f"Unknown engine: {engine}")
+    async with _hot_lock:
+        sess = _hot_sessions.get(engine)
+        if sess is None:
+            sess = EngineSession(engine, adapter)
+            _hot_sessions[engine] = sess
+    if not sess._initialized:
+        await sess.init()
+    return sess
+
+
+async def run_hot_query(engine: str, query: str) -> dict:
+    """跑一条 hot query,返回 dispatch /result 需要的 dict 形状(供 /search-hot 与 worker agent 共用)。"""
+    search_timeout = int(os.environ.get("ENGINE_SEARCH_TIMEOUT", "300"))
+    try:
+        sess = await _get_hot_session(engine)
+    except NotImplementedError as e:
+        return {"engine": engine, "query": query, "answer": "", "citations": [],
+                "source_url": None, "video_url": None, "error": f"not hot-adapted: {e}"}
+    except Exception as e:  # noqa: BLE001
+        return {"engine": engine, "query": query, "answer": "", "citations": [],
+                "source_url": None, "video_url": None, "error": f"hot-session init failed: {e}"}
+    try:
+        result: EngineResult = await asyncio.wait_for(sess.query(query), timeout=search_timeout)
+    except asyncio.TimeoutError:
+        return {"engine": engine, "query": query, "answer": "", "citations": [],
+                "source_url": None, "video_url": None, "error": f"timeout ({search_timeout}s)"}
+    except Exception as e:  # noqa: BLE001
+        return {"engine": engine, "query": query, "answer": "", "citations": [],
+                "source_url": None, "video_url": None, "error": str(e)}
+    return {
+        "engine": result.engine, "query": result.query, "answer": result.answer or "",
+        "citations": [
+            {"url": c.url, "domain": c.domain, "title": c.title,
+             "snippet": c.snippet, "position": c.position}
+            for c in (result.citations or [])
+        ],
+        "source_url": None, "video_url": None, "error": result.error,
+    }
+
+
+def _breaker_engines() -> set[str]:
+    """当前处于 IP 熔断中的引擎(claim 时跳过,让中心把任务留给别的 worker)。"""
+    now = time.time()
+    return {e for e, s in _hot_sessions.items() if getattr(s, "_breaker_until", 0) > now}
+
 
 @app.post("/search-hot", response_model=SearchResponse)
 async def search_hot(req: SearchRequest):

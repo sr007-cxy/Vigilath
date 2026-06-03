@@ -19,6 +19,7 @@ const sidebarItems = [
   { to: '/workbench/insights',       end: false, icon: 'insights',    labelKey: 'nav.adminInsights' },
   { to: '/workbench/runs',           end: false, icon: 'runs',        labelKey: 'nav.adminRuns' },
   { to: '/workbench/crawl',          end: false, icon: 'crawl',       labelKey: 'nav.adminCrawl' },
+  { to: '/workbench/workers',        end: false, icon: 'workers',     labelKey: 'nav.adminWorkers' },
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {
@@ -74,6 +75,15 @@ function SidebarIcon({ name }: { name: string }) {
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h.01M15 9h.01M9.5 13a3.5 3.5 0 005 0" />
+      </svg>
+    );
+  }
+  // 调度中心 / Worker:服务器堆叠
+  if (name === 'workers') {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M5 4h14a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zM5 14h14a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4a1 1 0 011-1zM8 7h.01M8 17h.01" />
       </svg>
     );
   }

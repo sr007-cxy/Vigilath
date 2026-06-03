@@ -558,6 +558,31 @@ const _mockTopics: Topic[] = [
   },
 ];
 
+export interface BrowserWorker {
+  id: number;
+  worker_uid: string;
+  hostname: string | null;
+  label: string | null;
+  region: string | null;
+  exit_ip: string | null;
+  engines: string[];
+  max_concurrency: number;
+  status: string;          // online | offline(由心跳新鲜度算)
+  raw_status: string;      // online | draining | disabled | offline
+  enabled: boolean;
+  version: string | null;
+  last_heartbeat_at: string | null;
+  done_today: number;
+  in_flight: number;
+  breaker: Record<string, unknown>;
+}
+
+export interface WorkerQueueStats {
+  queue: Record<string, Record<string, number>>;   // engine → {status: count}
+  used_today: Record<string, number>;              // engine → 今日发起数
+  daily_cap: Record<string, number | null>;        // engine → 日上限(null=不限)
+}
+
 async function request<T>(
   method: string, path: string, token: string, body?: unknown,
 ): Promise<T> {
@@ -872,6 +897,19 @@ export const aiTelemetryApi = {
   // ── admin 跨用户管理 ─────────────────────────────────
   async adminListAccounts(token: string): Promise<AdminAccount[]> {
     return request<AdminAccount[]>('GET', '/admin/accounts', token);
+  },
+
+  // ── 调度中心 / Worker 管理 ───────────────────────────
+  async adminListWorkers(token: string): Promise<BrowserWorker[]> {
+    return request<BrowserWorker[]>('GET', '/admin/workers', token);
+  },
+  async adminWorkersQueueStats(token: string): Promise<WorkerQueueStats> {
+    return request<WorkerQueueStats>('GET', '/admin/workers-queue-stats', token);
+  },
+  async adminWorkerAction(
+    workerUid: string, action: 'enable' | 'disable' | 'drain', token: string,
+  ): Promise<{ ok: boolean; status: string }> {
+    return request('POST', `/admin/workers/${workerUid}/${action}`, token);
   },
   async adminListUserTopics(userId: number, token: string): Promise<Topic[]> {
     return request<Topic[]>('GET', `/admin/users/${userId}/topics`, token);
