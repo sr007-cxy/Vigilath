@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from .engines.base import EngineAdapter, EngineResult, Citation
 from .models import (
     SearchRequest, SearchResponse, CitationOut,
+    FetchTitleRequest, FetchTitleResponse,
     SessionInfo, EnginesResponse, HealthResponse,
 )
 from .session_store import load_storage_state, save_storage_state, clear_session, _SESSION_DIR
@@ -214,6 +215,53 @@ async def search(req: SearchRequest):
     except Exception as e:
         return SearchResponse(engine=req.engine, query=req.query, error=str(e))
     finally:
+        _semaphore.release()
+
+
+# fetch-title ─────────────────────────────────────────────────
+# 给定任意 URL,用真实浏览器(带反检测)导航过去取页面标题.知乎等站点对裸 HTTP
+# 请求返回 403,只有真实浏览器能拿到 <title>,所以引用标题回填统一走这里.
+# 不依赖任何引擎登录态 — 用一次性 clean context.best-effort,抓不到返回空.
+
+@app.post("/fetch-title", response_model=FetchTitleResponse)
+async def fetch_title(req: FetchTitleRequest):
+    try:
+        await asyncio.wait_for(_semaphore.acquire(), timeout=SEMAPHORE_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=429, detail="Too many concurrent queries")
+
+    from .browser import create_stealth_page
+    page = context = None
+    try:
+        page, context = await create_stealth_page("_title_probe")
+        await page.goto(req.url, wait_until="domcontentloaded", timeout=req.timeout_ms)
+        title = ""
+        try:
+            title = (await page.title()) or ""
+        except Exception:  # noqa: BLE001
+            title = ""
+        if not title.strip():
+            # 退到 og:title / 首个 h1
+            try:
+                title = (await page.evaluate(
+                    "() => {"
+                    "  const m = document.querySelector('meta[property=\"og:title\"], meta[name=\"og:title\"]');"
+                    "  if (m && m.getAttribute('content')) return m.getAttribute('content');"
+                    "  const h = document.querySelector('h1');"
+                    "  return (h && h.innerText) || '';"
+                    "}"
+                )) or ""
+            except Exception:  # noqa: BLE001
+                pass
+        return FetchTitleResponse(url=req.url, title=(title or "").strip()[:300])
+    except Exception as e:  # noqa: BLE001
+        return FetchTitleResponse(url=req.url, title="", error=str(e))
+    finally:
+        if context is not None:
+            try:
+                await context.close()
+            except Exception:  # noqa: BLE001
+                pass
         _semaphore.release()
 
 

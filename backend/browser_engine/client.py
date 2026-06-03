@@ -86,6 +86,29 @@ async def search_async(engine: str, query: str) -> dict:
         return {"engine": engine, "query": query, "answer": "", "citations": [], "error": str(e)}
 
 
+# ── Fetch page title ───────────────────────────────────────────
+
+def fetch_title(url: str, region: str = "cn", timeout_ms: int = 15000) -> str:
+    """用 browser-service 的真实浏览器抓任意 URL 的页面标题.
+
+    知乎等站点对裸 HTTP 请求 403,只有真实浏览器能拿到 <title>,所以走 browser-service.
+    best-effort — 服务不可用 / 抓不到都返回空字符串,调用方自行回退.
+    region: "cn"(默认,国内信源如知乎)或 "global".
+    """
+    host = BROWSER_GLOBAL_URL if region == "global" else BROWSER_CN_URL
+    if not host:
+        return ""
+    base = f"{host.rstrip('/')}/api/browser-{region}"
+    try:
+        with httpx.Client(timeout=(timeout_ms / 1000.0) + 10.0) as client:
+            resp = client.post(f"{base}/fetch-title",
+                               json={"url": url, "timeout_ms": timeout_ms})
+            resp.raise_for_status()
+            return (resp.json().get("title") or "").strip()
+    except Exception:
+        return ""
+
+
 # ── Session status ─────────────────────────────────────────────
 
 def has_session(engine: str) -> bool:

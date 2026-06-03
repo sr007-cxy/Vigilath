@@ -40,6 +40,29 @@ def analyze_source_trace(
     queries_with_self = set()
     all_queries = set()
 
+    # 聚合前统一回填缺失标题 — 引擎常只回 URL(如 DeepSeek),知乎这类站点又 403 挡裸抓,
+    # 所以走 browser-service 真实浏览器抓 <title>.best-effort,失败保持空 → 下面回退到 URL.
+    try:
+        missing = {
+            c.url for r in results if not r.error
+            for c in r.citations
+            if c.url and not (c.title or "").strip()
+        }
+        if missing:
+            from geo.services.citation_title import resolve_titles
+            title_map = resolve_titles(missing)
+            if title_map:
+                for r in results:
+                    if r.error:
+                        continue
+                    for c in r.citations:
+                        if not (c.title or "").strip():
+                            t = title_map.get(c.url)
+                            if t:
+                                c.title = t
+    except Exception:  # noqa: BLE001
+        pass
+
     for r in results:
         if r.error:
             continue

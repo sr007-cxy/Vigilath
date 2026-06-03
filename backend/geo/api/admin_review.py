@@ -707,6 +707,11 @@ def _post_approval_pipeline(
 
 DEFAULT_PUBLISH_PLATFORMS = ["公众号", "小红书", "抖音", "视频号"]
 
+# 发文计划是「持续滚动」的:每批最多铺一个月(~30 天),定时任务临近末尾再接排下一个月.
+PLAN_WINDOW_DAYS = int(os.environ.get("GEO_PLAN_WINDOW_DAYS", "30"))
+# 计划末尾日期距今 ≤ 该天数时算 runway 不足,自动续期(见 extend_plan_one_month).
+PLAN_REFILL_LEAD_DAYS = int(os.environ.get("GEO_PLAN_REFILL_LEAD_DAYS", "7"))
+
 
 def _pick_default_template_id(db: Session) -> Optional[int]:
     """挑一个默认模板给新 draft 的种子行 — 优先 system 范围,最早一条."""
@@ -754,12 +759,14 @@ def _pick_template_kinds_per_seed(db: Session, n: int = 5) -> list[ContentTempla
     return picked
 
 
-def _legacy_query_initial_plan_items(
+def _legacy_query_window(
     db: Session, topic_id: int, monitored: list[str],
+    *, start_date, days: int, start_seq: int = 0,
 ) -> list[dict]:
-    """旧版:按 query 命中率排序,每条 query 一行,1 天 1 篇.
+    """旧版回退:按 query 命中率排序,循环铺满 [start_date, start_date+days),每天 1 篇.
 
     新版没有 system 模板 / 没有 approved 种子 时 fallback 到这里.
+    query 不足 days 天时循环复用(队首高优先级先排).
     """
     import uuid as _uuid
     cells = (
@@ -785,6 +792,8 @@ def _legacy_query_initial_plan_items(
         return 2
 
     sorted_queries = sorted(monitored, key=lambda q: (_priority_rank(q), q))
+    if not sorted_queries:
+        return []
 
     default_tmpl_id = _pick_default_template_id(db)
     default_tmpl = db.get(ContentTemplateORM, default_tmpl_id) if default_tmpl_id else None
@@ -799,13 +808,13 @@ def _legacy_query_initial_plan_items(
     if not default_platform:
         default_platform = DEFAULT_PUBLISH_PLATFORMS[0]
 
-    today = datetime.utcnow().date()
     items: list[dict] = []
-    for idx, q in enumerate(sorted_queries):
+    for day_offset in range(days):
+        q = sorted_queries[day_offset % len(sorted_queries)]
         items.append({
             "id": str(_uuid.uuid4()),
-            "seq": idx,
-            "publish_date": (today + timedelta(days=idx)).isoformat(),
+            "seq": start_seq + day_offset,
+            "publish_date": (start_date + timedelta(days=day_offset)).isoformat(),
             "seed": None,
             "query": q,
             "template_id": default_tmpl_id,
@@ -815,28 +824,31 @@ def _legacy_query_initial_plan_items(
     return items
 
 
-def _seed_initial_plan_items(
+def _build_plan_window(
     db: Session, topic_id: int, monitored: list[str],
+    *, start_date, days: int, start_seq: int = 0,
 ) -> list[dict]:
-    """seed × 模板 的发文计划 — 每个 approved 种子 × 5 种不同 kind 的 system 模板.
+    """seed × 模板 的滚动发文计划 — 在 [start_date, start_date+days) 内铺满,每天 N 篇.
 
-    每天落 5 篇(items_per_day),1 个种子的 5 篇全部排在同一天:
-      day 0:seed[0] × 5 模板
-      day 1:seed[1] × 5 模板
-      ...
+    N = 选中的 system 模板数(kind 互不相同,通常 5).种子按天 round-robin:
+      day 0:seeds[0] × N 模板
+      day 1:seeds[1] × N 模板
+      ...   seeds 用尽后循环复用,直到铺满 days 天.
 
-    没 approved 种子 / 没 system 模板 时 fallback 到 _legacy_query_initial_plan_items.
-    返回 publishing_plan_json 内部存储格式(只放持久化字段).
+    没 approved 种子 / 没 system 模板 时 fallback 到 _legacy_query_window.
+    返回 publishing_plan_json 内部存储格式(只放持久化字段).每批最多 days 天 → 满足「一次最多一个月」.
     """
     import uuid as _uuid
 
     picked_templates = _pick_template_kinds_per_seed(db, n=5)
     if not picked_templates:
-        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+        return _legacy_query_window(
+            db, topic_id, monitored, start_date=start_date, days=days, start_seq=start_seq)
 
     topic = db.get(AiTelemetryTopicORM, topic_id)
     if not topic:
-        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+        return _legacy_query_window(
+            db, topic_id, monitored, start_date=start_date, days=days, start_seq=start_seq)
     try:
         seeds_raw = json.loads(topic.seed_prompts_json or "[]")
     except Exception:  # noqa: BLE001
@@ -847,7 +859,8 @@ def _seed_initial_plan_items(
         if isinstance(s, dict) and s.get("status") == "approved" and s.get("text")
     ]
     if not approved_seeds:
-        return _legacy_query_initial_plan_items(db, topic_id, monitored)
+        return _legacy_query_window(
+            db, topic_id, monitored, start_date=start_date, days=days, start_seq=start_seq)
 
     # 默认 platform — 走模板自带的 target_platforms 第一个,空则 fallback.
     def _default_platform(tmpl: ContentTemplateORM) -> str:
@@ -859,17 +872,15 @@ def _seed_initial_plan_items(
             return str(platforms[0])
         return DEFAULT_PUBLISH_PLATFORMS[0]
 
-    today = datetime.utcnow().date()
-    items_per_day = len(picked_templates)   # 模板数 = 每天篇数,通常 5
     items: list[dict] = []
-    seq = 0
-    for seed_text in approved_seeds:
+    seq = start_seq
+    for day_offset in range(days):
+        seed_text = approved_seeds[day_offset % len(approved_seeds)]
         for tmpl in picked_templates:
-            day_offset = seq // items_per_day
             items.append({
                 "id": str(_uuid.uuid4()),
                 "seq": seq,
-                "publish_date": (today + timedelta(days=day_offset)).isoformat(),
+                "publish_date": (start_date + timedelta(days=day_offset)).isoformat(),
                 "seed": seed_text,
                 "query": "",
                 "template_id": tmpl.id,
@@ -878,6 +889,64 @@ def _seed_initial_plan_items(
             })
             seq += 1
     return items
+
+
+def _seed_initial_plan_items(
+    db: Session, topic_id: int, monitored: list[str],
+) -> list[dict]:
+    """首批发文计划 — 从今天起铺满一个月(PLAN_WINDOW_DAYS).薄封装 _build_plan_window."""
+    return _build_plan_window(
+        db, topic_id, monitored,
+        start_date=datetime.utcnow().date(),
+        days=PLAN_WINDOW_DAYS, start_seq=0,
+    )
+
+
+def extend_plan_one_month(db: Session, plan: AiTelemetryTopicExecutionPlanORM) -> int:
+    """计划 runway 不足时,从最后一天次日接排一个月(PLAN_WINDOW_DAYS).
+
+    runway 充足(末尾日期距今 > PLAN_REFILL_LEAD_DAYS)时返回 0 不续期 —— 内置幂等,
+    定时任务每天扫也只在临近末尾那次真正续.返回新增行数.
+    """
+    items = _load_publishing_items(plan)
+    if not items:
+        return 0
+
+    def _pdate(it: dict):
+        try:
+            return datetime.fromisoformat(str(it.get("publish_date"))).date()
+        except Exception:  # noqa: BLE001
+            return None
+
+    dates = [d for d in (_pdate(it) for it in items) if d is not None]
+    if not dates:
+        return 0
+    last_date = max(dates)
+    today = datetime.utcnow().date()
+    if (last_date - today).days > PLAN_REFILL_LEAD_DAYS:
+        return 0  # runway 还够,不续
+
+    try:
+        monitored = json.loads(plan.monitored_queries_snapshot_json or "[]")
+    except Exception:  # noqa: BLE001
+        monitored = []
+    monitored = [str(x) for x in monitored if x] if isinstance(monitored, list) else []
+
+    # 正常滚动从末尾次日接排;老的一次性计划末尾已是过去日期时,从今天接排,避免排出过去日期.
+    next_start = max(last_date + timedelta(days=1), today)
+    max_seq = max((int(it.get("seq") or 0) for it in items), default=-1)
+    new_items = _build_plan_window(
+        db, plan.topic_id, monitored,
+        start_date=next_start,
+        days=PLAN_WINDOW_DAYS, start_seq=max_seq + 1,
+    )
+    if not new_items:
+        return 0
+    items.extend(new_items)
+    plan.publishing_plan_json = json.dumps(items, ensure_ascii=False)
+    plan.last_edited_at = datetime.utcnow()
+    db.commit()
+    return len(new_items)
 
 
 def _enrich_publishing_items(

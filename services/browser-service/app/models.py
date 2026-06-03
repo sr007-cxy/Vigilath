@@ -28,6 +28,17 @@ class SearchResponse(BaseModel):
     video_url: Optional[str] = None
 
 
+class FetchTitleRequest(BaseModel):
+    url: str
+    timeout_ms: int = 15000
+
+
+class FetchTitleResponse(BaseModel):
+    url: str
+    title: str = ""
+    error: Optional[str] = None
+
+
 class SessionInfo(BaseModel):
     engine: str
     has_session: bool

@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 
 TIMEZONE = os.environ.get("GEO_CONTENT_SCHED_TZ", "Asia/Shanghai")
 START_MINUTE = int(os.environ.get("GEO_CONTENT_SCHED_MINUTE", "7"))
+# 发文计划「持续滚动」续期 — 每天该小时扫一次,对 runway 不足的计划接排下一个月.
+REFILL_HOUR = int(os.environ.get("GEO_PLAN_REFILL_HOUR", "3"))
 
 
 def _now_local() -> datetime:
@@ -94,6 +96,47 @@ def hourly_tick() -> None:
         db.close()
 
 
+def refill_tick() -> None:
+    """每日触发:扫已审批 + 自动生成的 topic,对发文计划 runway 不足的接排下一个月.
+
+    幂等由 extend_plan_one_month 内部的 PLAN_REFILL_LEAD_DAYS 阈值保证(runway 够就跳过),
+    所以每天扫一次,每个 topic 实际约每月续一次.
+    """
+    from geo.api.admin_review import extend_plan_one_month
+    from geo.models.ai_telemetry import AiTelemetryTopicExecutionPlanORM
+
+    db: Session = SessionLocal()
+    try:
+        topics = (
+            db.query(AiTelemetryTopicORM)
+              .filter(AiTelemetryTopicORM.auto_generate_enabled.is_(True))
+              .filter(AiTelemetryTopicORM.submission_status == "approved")
+              .all()
+        )
+        refilled = 0
+        for t in topics:
+            plan = (
+                db.query(AiTelemetryTopicExecutionPlanORM)
+                  .filter(AiTelemetryTopicExecutionPlanORM.topic_id == t.id)
+                  .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+                  .first()
+            )
+            if not plan or plan.status not in ("draft", "confirmed"):
+                continue
+            try:
+                n = extend_plan_one_month(db, plan)
+            except Exception:  # noqa: BLE001
+                log.exception("[plan-refill] topic=%d failed", t.id)
+                db.rollback()
+                continue
+            if n:
+                refilled += 1
+                log.info("[plan-refill] topic=%d +%d rows", t.id, n)
+        log.info("[plan-refill] %d plans extended", refilled)
+    finally:
+        db.close()
+
+
 _scheduler = None
 
 
@@ -108,7 +151,17 @@ def attach(scheduler) -> None:
         misfire_grace_time=1800,
         max_instances=1,
     )
-    log.info("[content-cron] attached: every hour at :%02d", START_MINUTE)
+    scheduler.add_job(
+        refill_tick,
+        trigger="cron", hour=REFILL_HOUR, minute=0,
+        id="plan_monthly_refill",
+        replace_existing=True,
+        coalesce=True,
+        misfire_grace_time=3600,
+        max_instances=1,
+    )
+    log.info("[content-cron] attached: content @:%02d, plan-refill @%02d:00",
+             START_MINUTE, REFILL_HOUR)
 
 
 def start() -> None:
