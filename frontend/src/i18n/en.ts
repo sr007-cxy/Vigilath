@@ -441,12 +441,12 @@ const en = {
                 },
                 {
                   "name": "Mr. Lin",
-                  "role": "Founder · Clean-tech",
+                  "role": "Founder · JWVS",
                   "text": "We used to be invisible in AI answers. Two months in, every major model can articulate exactly what our product does best."
                 },
                 {
                   "name": "Dr. Wang",
-                  "role": "Head of Marketing · Healthcare",
+                  "role": "Head of Marketing · WM Therapeutics",
                   "text": "AI started recommending us near the top to patients, and our organic site traffic climbed nearly 50%."
                 },
                 {
@@ -461,7 +461,7 @@ const en = {
                 },
                 {
                   "name": "Mr. Li",
-                  "role": "Technical Partner · AI Tools",
+                  "role": "Technical Partner · SimpleWare",
                   "text": "Source analysis showed us the authority sites AI cites most. After covering those, our visibility rose visibly."
                 },
                 {
@@ -471,7 +471,7 @@ const en = {
                 },
                 {
                   "name": "Mr. Wu",
-                  "role": "CEO · Manufacturing",
+                  "role": "CEO · Sparkoz",
                   "text": "I assumed this was all smoke and mirrors. You fill in seed questions once, the rest runs itself, and the monthly report goes straight to the board."
                 },
                 {
