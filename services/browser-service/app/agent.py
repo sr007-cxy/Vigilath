@@ -68,6 +68,7 @@ async def agent_loop(
 
     sem = asyncio.Semaphore(max_concurrency)
     inflight = 0
+    inflight_by_engine: dict[str, int] = {}
 
     async def _register(client: httpx.AsyncClient) -> str:
         body = {"worker_uid": uid or None, "hostname": hostname, "label": label,
@@ -79,9 +80,10 @@ async def agent_loop(
 
     async def _run_and_report(client: httpx.AsyncClient, task: dict, my_uid: str) -> None:
         nonlocal inflight
+        eng = task["engine"]
         try:
             async with sem:
-                res = await run_hot(task["engine"], task["query"])
+                res = await run_hot(eng, task["query"])
             payload = {"worker_uid": my_uid, "task_id": task["task_id"],
                        "answer": res.get("answer", ""), "citations": res.get("citations", []),
                        "source_url": res.get("source_url"), "video_url": res.get("video_url"),
@@ -91,6 +93,7 @@ async def agent_loop(
             log.warning("[agent] task %s run/report failed: %s", task.get("task_id"), e)
         finally:
             inflight -= 1
+            inflight_by_engine[eng] = max(0, inflight_by_engine.get(eng, 0) - 1)
 
     # 注册(失败重试到成功 / stop)
     async with httpx.AsyncClient(timeout=30) as client:
@@ -118,22 +121,26 @@ async def agent_loop(
                     last_hb = now
                 except Exception as e:  # noqa: BLE001
                     log.warning("[agent] heartbeat failed: %s", e)
-            # 领任务
-            free = max_concurrency - inflight
-            if free > 0:
-                claim_engines = [e for e in engines if e not in breaker_engines()]
-                if claim_engines:
-                    try:
-                        r = await client.post(f"{center}/dispatch/claim", headers=headers, json={
-                            "worker_uid": uid, "engines": claim_engines, "free_slots": free,
-                        })
-                        r.raise_for_status()
-                        tasks = r.json()
-                    except Exception as e:  # noqa: BLE001
-                        log.warning("[agent] claim failed: %s", e)
-                        tasks = []
-                    for task in tasks:
-                        inflight += 1
-                        asyncio.create_task(_run_and_report(client, task, uid))
+            # 领任务:每个引擎在 worker 上只有 1 条串行 hot session,所以每引擎最多领 1 条
+            # 在飞行 —— 否则一个慢/坏引擎(如登录失效的 yuanbao)会占满槽位把别的引擎饿死。
+            broken = breaker_engines()
+            idle_engines = [e for e in engines
+                            if e not in broken and inflight_by_engine.get(e, 0) == 0]
+            for eng in idle_engines:
+                if inflight >= max_concurrency:
+                    break
+                try:
+                    r = await client.post(f"{center}/dispatch/claim", headers=headers, json={
+                        "worker_uid": uid, "engines": [eng], "free_slots": 1,
+                    })
+                    r.raise_for_status()
+                    tasks = r.json()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("[agent] claim %s failed: %s", eng, e)
+                    tasks = []
+                for task in tasks:
+                    inflight += 1
+                    inflight_by_engine[eng] = inflight_by_engine.get(eng, 0) + 1
+                    asyncio.create_task(_run_and_report(client, task, uid))
             await asyncio.sleep(poll_sec)
     log.info("[agent] loop stopped")
