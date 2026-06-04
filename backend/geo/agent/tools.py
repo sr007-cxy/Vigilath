@@ -471,7 +471,20 @@ async def ingest_material(
     ctx.deps.db.add(m)
     ctx.deps.db.commit()
     ctx.deps.db.refresh(m)
-    return {"material_id": m.id, "chars": len(body), "title": m.title}
+    # 算向量(DashScope),供语义检索;失败/无 key 不阻断(ask_knowledge 回退关键词)
+    embedded = False
+    try:
+        import json as _json
+
+        from geo.services.embedding import embed_texts
+        vecs = await embed_texts([body])
+        if vecs:
+            m.embedding_json = _json.dumps(vecs[0])
+            ctx.deps.db.commit()
+            embedded = True
+    except Exception:  # noqa: BLE001
+        pass
+    return {"material_id": m.id, "chars": len(body), "title": m.title, "embedded": embedded}
 
 
 async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
@@ -495,6 +508,32 @@ async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
     if not rows:
         return {"hits": [], "hint": "账号还没有上传资料,可先用 ingest_material 添加。"}
 
+    # 1) 语义检索(DashScope 向量)优先 —— 对有 embedding 的资料按 cosine 排
+    try:
+        import json as _json
+
+        from geo.services.embedding import cosine, embed_texts
+        qv = await embed_texts([q])
+        if qv:
+            qvec = qv[0]
+            sem: list[tuple[float, dict]] = []
+            for m in rows:
+                if not m.embedding_json:
+                    continue
+                try:
+                    mv = _json.loads(m.embedding_json)
+                except Exception:  # noqa: BLE001
+                    continue
+                s = cosine(qvec, mv)
+                if s > 0.2:   # 阈值过滤明显无关
+                    sem.append((s, {"title": m.title, "source": m.source, "snippet": (m.text or "")[:400], "score": round(s, 3)}))
+            if sem:
+                sem.sort(key=lambda x: -x[0])
+                return {"hits": [h for _, h in sem[:5]], "count": min(len(sem), 5), "mode": "semantic"}
+    except Exception:  # noqa: BLE001 — 语义失败回退关键词
+        pass
+
+    # 2) 回退:中文 bigram 关键词检索
     def _tokens(s: str) -> list[str]:
         """中文 bigram + 英文/数字词 —— 中文无空格,whitespace 分词无效,故用 2-gram。"""
         s = s.lower()
@@ -521,7 +560,7 @@ async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
     hits = [h for _, _, h in scored[:5]]
     if not hits:  # 无命中 → 回退最近资料摘要
         hits = [{"title": m.title, "source": m.source, "snippet": (m.text or "")[:300]} for m in rows[:3]]
-    return {"hits": hits, "count": len(hits)}
+    return {"hits": hits, "count": len(hits), "mode": "keyword"}
 
 
 async def confirm_template(ctx: RunContext[AgentDeps]) -> dict:

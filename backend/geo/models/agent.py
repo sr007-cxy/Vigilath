@@ -20,6 +20,7 @@ class AgentMaterialORM(Base):
     source = Column(String(length=512), nullable=False, default="")   # url 或文件名
     title = Column(String(length=512), nullable=False, default="")
     text = Column(Text, nullable=False, default="")            # 解析后的纯文本
+    embedding_json = Column(Text, nullable=True)               # 向量(JSON float 数组,DashScope);空=回退关键词
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
