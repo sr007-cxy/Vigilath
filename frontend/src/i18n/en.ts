@@ -42,11 +42,7 @@ const en = {
             },
             "faq": {
               "title": "FAQ · Vigilath",
-              "description": "Answers to common questions on GEO / AEO services, pricing, process, and engine coverage."
-            },
-            "comparison": {
-              "title": "Vigilath vs Traditional SEO Tools · Vigilath",
-              "description": "GEO vs traditional SEO, side by side: Vigilath gets your brand mentioned, cited, and recommended inside AI engines — and gives you an independent third-party AI visibility baseline."
+              "description": "Answers to common questions on GEO / AEO services, pricing, process, engine coverage, and how GEO differs from traditional SEO."
             },
             "login": {
               "title": "Log in · Vigilath",
@@ -85,7 +81,6 @@ const en = {
             "home": "Home",
             "geoKnowledge": "Resources Center",
             "productsServices": "Products & Services",
-            "comparison": "vs Traditional SEO",
             "faq": "FAQ",
             "aboutUs": "About Us",
             "about": "About GEO",
@@ -563,7 +558,7 @@ const en = {
             "faq": {
               "badge": "FAQ",
               "title": "Frequently Asked Questions",
-              "subtitle": "The 20 questions buyers ask AI most — answered up front.",
+              "subtitle": "The 20 questions buyers ask AI most, plus how Vigilath compares to traditional SEO tools.",
               "groups": [
                 {
                   "title": "GEO & AI search basics",
@@ -662,6 +657,23 @@ const en = {
                     {
                       "q": "Do you offer ongoing maintenance?",
                       "a": "Yes — required, because AI engines' algorithms, crawl preferences, and ranking rules change continuously. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense. Comes with the pipeline service by default plus a quarterly review report."
+                    }
+                  ]
+                },
+                {
+                  "title": "Vigilath vs traditional SEO tools",
+                  "items": [
+                    {
+                      "q": "What's the real difference between Vigilath and traditional SEO tools?",
+                      "a": "Traditional SEO tools revolve around ranking higher on the Google / Baidu results page — target keywords, build backlinks, wait to get crawled. Vigilath revolves around getting selected inside AI-generated answers, making ChatGPT, Perplexity, Gemini, DeepSeek, and Doubao mention you — with a citation — when they answer users' questions. The difference comes down to four things: goal (SERP ranking vs AI mention & citation), gateway (traditional search engines vs AI engines), metrics (keyword ranking / traffic vs AI mention rate / citation-slot share / visibility score), and data baseline (rankings swinging with the algorithm, no unified baseline, vs an independent third-party AI visibility baseline you can track quantitatively). The decision gateway is shifting from \"browsing links\" to \"asking AI\" — that's the layer Vigilath fills in."
+                    },
+                    {
+                      "q": "When should I use Vigilath, and when traditional SEO tools?",
+                      "a": "Use Vigilath when your customers start asking AI \"which is best\" or \"how do I choose\" before deciding, when you want to know how AI describes your brand, and when you need to win mention and citation slots inside AI answers. Traditional SEO tools still matter when your core traffic comes from clicks on the results page and you're building long-tail landing pages and backlinks. The two complement each other: Vigilath fills in the AI-search layer, and our GEO work avoids any aggressive tactics that would harm your existing SEO — many GEO signals are positive for SEO too."
+                    },
+                    {
+                      "q": "Why not just use traditional SEO tools for AI optimization?",
+                      "a": "Because the goal and the playbook differ. Traditional SEO tools optimize for crawlers and ranking algorithms and produce keyword rankings; AI engines synthesize multiple sources and cite as they generate, so they reward entity recognition, authority signals, and structured content — and you need a unified play across 10+ Western and CN engines. As an independent third-party AI visibility platform, Vigilath establishes your brand's AI visibility baseline and uses an 8-step automation pipeline to push your brand into the recommendation and citation slots of every major AI engine — an end-to-end AI search visibility solution (detect · audit · optimize · monitor), not something you can bolt onto a traditional SEO tool."
                     }
                   ]
                 }
@@ -1752,114 +1764,6 @@ const en = {
             "submitting": "Redirecting to payment...",
             "payNow": "Pay Now",
             "cancel": "Cancel"
-          },
-          "comparison": {
-            "hero": {
-              "badge": "GEO vs traditional SEO",
-              "title": "Vigilath vs Traditional SEO Tools",
-              "subtitle": "An end-to-end AI search visibility solution (detect · audit · optimize · monitor). Traditional SEO helps you rank on the results page; Vigilath gets your brand mentioned, cited, and recommended inside AI-engine answers — the two complement, not replace, each other."
-            },
-            "intro": {
-              "title": "The difference in one line",
-              "body": "Traditional SEO tools revolve around ranking higher on the Google / Baidu results page: target keywords, build backlinks, wait to get crawled. Vigilath revolves around getting selected inside AI-generated answers: making ChatGPT, Perplexity, Gemini, DeepSeek, and Doubao mention you — with a citation — when they answer users' questions. The decision gateway is shifting from \"browsing links\" to \"asking AI,\" and that's the layer Vigilath fills in."
-            },
-            "table": {
-              "title": "Side-by-side comparison",
-              "colDimension": "Dimension",
-              "colVigilath": "Vigilath",
-              "colSeo": "Traditional SEO tools",
-              "rows": [
-                {
-                  "dim": "Optimization goal",
-                  "vigilath": "Get the brand mentioned, cited, and recommended by AI engines",
-                  "seo": "Lift keyword ranking on the search results page (SERP)"
-                },
-                {
-                  "dim": "Target gateway",
-                  "vigilath": "AI engines — ChatGPT / Perplexity / Gemini / DeepSeek / Doubao",
-                  "seo": "Traditional search engines — Google / Baidu"
-                },
-                {
-                  "dim": "Core metrics",
-                  "vigilath": "AI mention rate, recommendation rate, citation-slot share, visibility score",
-                  "seo": "Keyword ranking, organic traffic, click-through rate"
-                },
-                {
-                  "dim": "Data baseline",
-                  "vigilath": "Independent third-party AI visibility baseline; every optimization is quantifiable",
-                  "seo": "Rankings swing with the algorithm; no unified third-party baseline"
-                },
-                {
-                  "dim": "Content logic",
-                  "vigilath": "Entity recognition, authority signals, and structured content for generated answers",
-                  "seo": "Keywords, backlinks, and on-page tuning for crawlers and ranking algorithms"
-                },
-                {
-                  "dim": "Engine coverage",
-                  "vigilath": "Unified matrix of 10+ Western & CN AI engines, configured per target market",
-                  "seo": "Usually focused on a single search engine"
-                },
-                {
-                  "dim": "Sentiment integration",
-                  "vigilath": "Built-in brand sentiment monitoring + instant alerts + 3-tier response drafts",
-                  "seo": "Generally not covered"
-                },
-                {
-                  "dim": "Automation",
-                  "vigilath": "8-step fully automated loop, self-calibrating daily",
-                  "seo": "Mostly manual analysis + a patchwork of tools"
-                },
-                {
-                  "dim": "Best-fit audience",
-                  "vigilath": "Global brands + domestic (China) companies",
-                  "seo": "Any site that depends on search traffic"
-                }
-              ]
-            },
-            "whenToUse": {
-              "title": "When to use which",
-              "vigilath": {
-                "title": "Use Vigilath when",
-                "points": [
-                  "Your customers start asking AI \"which is best\" or \"how do I choose,\" then act on the answer",
-                  "You want to know how AI actually describes your brand — whether it's wrong, or only recommends competitors",
-                  "You need to win mention and citation slots inside AI answers and track results quantitatively",
-                  "You're a global brand or domestic company that needs a unified play across Western + CN AI engines"
-                ]
-              },
-              "seo": {
-                "title": "Traditional SEO tools still matter when",
-                "points": [
-                  "Your core traffic still comes from clicks on the traditional results page",
-                  "You're building long-tail keyword landing pages, on-site technical SEO, and backlinks",
-                  "You need to monitor keyword ranking swings on Google / Baidu"
-                ]
-              },
-              "note": "Bottom line: they complement each other. Vigilath fills in the AI-search layer, and our GEO work avoids any aggressive tactics that would harm your existing SEO — many GEO signals are positive for SEO too."
-            },
-            "why": {
-              "title": "Why choose Vigilath",
-              "cards": [
-                {
-                  "title": "Independent third-party baseline",
-                  "desc": "An independent third-party AI visibility platform that establishes your brand's AI visibility baseline — results are stated quantitatively (\"up this many points, on this engine\"), not as a vague feeling."
-                },
-                {
-                  "title": "Detection + optimization in one",
-                  "desc": "Not just a score. An 8-step automation pipeline continuously produces and distributes content to push your brand into the recommendation and citation slots of every major AI engine."
-                },
-                {
-                  "title": "End-to-end coverage",
-                  "desc": "An end-to-end AI search visibility solution (detect · audit · optimize · monitor) — from seeing where you stand to changing the outcome, all in one place."
-                }
-              ]
-            },
-            "cta": {
-              "title": "First, see where you really stand inside AI",
-              "subtitle": "Run a free 25-category GEO audit to get your AI visibility starting point, then decide how to optimize.",
-              "primary": "Free GEO audit",
-              "secondary": "Contact us"
-            }
           },
           "aboutUs": {
             "title": "About Us",
