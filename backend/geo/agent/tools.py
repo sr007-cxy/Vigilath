@@ -193,6 +193,41 @@ async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -
     return {"topic_id": topic.id, "added": added, "query_count": len(existing)}
 
 
+async def trigger_diagnosis(ctx: RunContext[AgentDeps]) -> dict:
+    """触发当前主题的**诊断方案生成**(异步,写)。后台跑 geo_checker + LLM,约 30–90s;
+    完成后用 get_report 查看根因/叙述。复刻 admin 端点前置(置 generating + 落 website_url)。
+    """
+    from datetime import datetime
+
+    from geo.models.ai_telemetry import AiTelemetryTopicSolutionORM
+    from geo.services.solution_generator import schedule_solution_generation
+
+    usage_guardrail_check(ctx.deps, "trigger_diagnosis")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db = ctx.deps.db
+    url = (topic.target or "").strip()
+    sol = (
+        db.query(AiTelemetryTopicSolutionORM)
+        .filter(AiTelemetryTopicSolutionORM.topic_id == topic.id)
+        .first()
+    )
+    if sol is not None and sol.status == "generating":
+        return {"status": "generating", "hint": "诊断已在生成中,稍后用 get_report 查看。"}
+    if sol is None:
+        sol = AiTelemetryTopicSolutionORM(topic_id=topic.id)
+        db.add(sol)
+    sol.status = "generating"
+    sol.website_url = url
+    sol.error = None
+    sol.generated_by_admin_id = ctx.deps.account_id
+    sol.updated_at = datetime.utcnow()
+    db.commit()
+    schedule_solution_generation(topic_id=topic.id, website_url=url, admin_id=ctx.deps.account_id)
+    return {"status": "generating", "hint": "诊断生成中(约 30–90s),稍后用 get_report 查看根因/叙述。"}
+
+
 async def get_report(ctx: RunContext[AgentDeps]) -> dict:
     """读当前主题的诊断报告(solution:根因诊断 + 叙述)。只读。无 / 未就绪时给提示。"""
     import json
@@ -388,6 +423,7 @@ TOOLS = [
     expand_prompts,
     set_selected_queries,
     run_geo_checks,
+    trigger_diagnosis,
     get_report,
     get_batch_results,
     get_growth_summary,
