@@ -11,6 +11,7 @@ import { TierModalProvider } from './components/TierModalContext';
 import { TierModal } from './components/TierModal';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthModalProvider, useAuthModal } from './contexts/AuthModalContext';
+import { AgentChatWidget } from './components/AgentChat/AgentChatWidget';
 
 // Eagerly loaded: Home is the landing page
 import { Home } from './pages/Home';
@@ -202,6 +203,7 @@ function App() {
           </Suspense>
           <Footer />
         </div>
+        <AgentChatWidget />
         </Suspense>
       </TierModalProvider>
       </ContactModalProvider>
