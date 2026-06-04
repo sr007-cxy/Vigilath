@@ -686,7 +686,7 @@ def list_briefs(account_id: int, ticker: str) -> dict:
         init_schema(conn)
         rows = list(conn.execute(
             "SELECT id, symbol, date, model, generated_at FROM briefs "
-            "WHERE symbol = ? ORDER BY date DESC, id DESC", (ticker,),
+            "WHERE symbol = %s ORDER BY date DESC, id DESC", (ticker,),
         ))
         return {"count": len(rows), "items": [dict(r) for r in rows]}
 
@@ -695,7 +695,7 @@ def list_briefs(account_id: int, ticker: str) -> dict:
 def get_brief(account_id: int, brief_id: int) -> dict:
     with _account_db_context(account_id):
         conn = _yuqin_connect()
-        row = conn.execute("SELECT * FROM briefs WHERE id = ?", (brief_id,)).fetchone()
+        row = conn.execute("SELECT * FROM briefs WHERE id = %s", (brief_id,)).fetchone()
         if not row:
             raise HTTPException(404, "brief not found")
         return dict(row)
@@ -707,7 +707,7 @@ def list_drafts(account_id: int, ticker: str) -> dict:
         conn = _yuqin_connect()
         init_schema(conn)
         rows = list(conn.execute(
-            "SELECT * FROM drafts WHERE symbol = ? ORDER BY id DESC", (ticker,),
+            "SELECT * FROM drafts WHERE symbol = %s ORDER BY id DESC", (ticker,),
         ))
         return {"count": len(rows), "items": [dict(r) for r in rows]}
 
@@ -738,9 +738,9 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                 count(DISTINCT p.source) AS active_sources
             FROM posts p JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
-            WHERE p.symbol = ?
+            WHERE p.symbol = %s
               AND a.is_relevant = 1
-              AND substr(p.ingested_at, 1, 10) = ?
+              AND substr(p.ingested_at, 1, 10) = %s
         """
         kpi_row = conn.execute(kpi_sql, (ticker, today)).fetchone()
         prev_row = conn.execute(kpi_sql, (ticker, yesterday)).fetchone()
@@ -758,9 +758,9 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                 count(*) AS c
             FROM posts p JOIN analyses a
               ON p.source = a.source AND p.post_id = a.post_id
-            WHERE p.symbol = ? AND a.is_relevant = 1
+            WHERE p.symbol = %s AND a.is_relevant = 1
               AND p.publish_time IS NOT NULL
-              AND substr(p.publish_time, 1, 10) >= ?
+              AND substr(p.publish_time, 1, 10) >= %s
             GROUP BY d, sl
             ORDER BY d ASC
         """, (ticker, cutoff)))
@@ -791,7 +791,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             SELECT a.risk_level AS lvl, count(*) AS c
             FROM analyses a JOIN posts p
               ON a.source = p.source AND a.post_id = p.post_id
-            WHERE a.symbol = ? AND a.is_relevant = 1
+            WHERE a.symbol = %s AND a.is_relevant = 1
             GROUP BY lvl
         """, (ticker,)))
         RISK_COLORS = {"none": "#94a3b8", "low": "#fbbf24", "medium": "#fb923c", "high": "#ef4444"}
@@ -802,7 +802,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
 
         # 最新简报
         brief = conn.execute(
-            "SELECT * FROM briefs WHERE symbol = ? ORDER BY date DESC, id DESC LIMIT 1", (ticker,),
+            "SELECT * FROM briefs WHERE symbol = %s ORDER BY date DESC, id DESC LIMIT 1", (ticker,),
         ).fetchone()
         latest_brief = dict(brief) if brief else None
 
@@ -818,7 +818,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                    a.reasoning, a.is_relevant
             FROM analyses a JOIN posts p
               ON p.source = a.source AND p.post_id = a.post_id
-            WHERE a.symbol = ? AND a.is_relevant = 1
+            WHERE a.symbol = %s AND a.is_relevant = 1
             ORDER BY (coalesce(a.influence_potential,0)
                      * abs(coalesce(a.sentiment_score,0)) + 0.01) DESC,
                      coalesce(p.view_count,0) DESC

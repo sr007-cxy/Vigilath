@@ -17,6 +17,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -360,14 +362,31 @@ def list_run_logs(
 
 
 def _proxy(fn, *args, **kwargs):
-    """统一处理 sentinel-service 网络错误."""
+    """统一处理 sentinel-service 错误.
+
+    区分三类,避免把"上游报错"误显示成"服务连不上":
+      - SentinelError          → 502,sentinel 业务失败(status=failed)
+      - httpx.HTTPStatusError  → 502,sentinel 返回了 4xx/5xx(端点 bug / 数据问题),
+                                  透出上游状态码 + 响应片段便于排障
+      - 连接/超时类异常         → 503,sentinel 真正不可达
+    """
     try:
         return fn(*args, **kwargs)
     except SentinelError as e:
         raise HTTPException(502, f"sentinel error: {e}") from e
-    except Exception as e:
+    except httpx.HTTPStatusError as e:
+        body = (e.response.text or "")[:300]
+        log.error("sentinel-service %s on %s: %s",
+                  e.response.status_code, e.request.url, body)
+        raise HTTPException(
+            502, f"sentinel upstream {e.response.status_code}: {body}"
+        ) from e
+    except (httpx.TimeoutException, httpx.TransportError) as e:
         log.exception("sentinel-service unreachable: %s", e)
         raise HTTPException(503, "sentinel service unavailable") from e
+    except Exception as e:
+        log.exception("sentinel-service proxy error: %s", e)
+        raise HTTPException(502, f"sentinel proxy error: {e}") from e
 
 
 @router.get("/accounts/{account_id}/posts")
