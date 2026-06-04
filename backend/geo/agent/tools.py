@@ -140,6 +140,59 @@ async def get_prompts(ctx: RunContext[AgentDeps]) -> dict:
     }
 
 
+async def expand_prompts(ctx: RunContext[AgentDeps], seed: str, count_per_scene: int = 10) -> dict:
+    """对一个种子词做 4 维场景扩展(search/qa/intent/brand),返回候选 query 供挑选(写*,不直接落库)。
+
+    seed: 要扩展的种子词;count_per_scene: 每场景产出条数(5–50)。
+    引擎/调度由平台固定,与扩展无关。挑好后用 set_selected_queries 落库。
+    """
+    from geo.services.topic_expand import expand_topic_seed
+
+    usage_guardrail_check(ctx.deps, "expand_prompts")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    try:
+        res = await expand_topic_seed(topic, seed, count_per_scene=count_per_scene)
+    except ValueError as e:
+        raise ModelRetry(str(e))
+
+    flat: list[dict] = []
+    seen: set[str] = set()
+    for scene, info in (res.get("scenes") or {}).items():
+        for q in (info.get("queries") or []):
+            if q and q not in seen:
+                seen.add(q)
+                flat.append({"text": q, "scene": scene})
+    return {"seed": res["seed"], "total": res["total_count"], "candidates": flat}
+
+
+async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -> dict:
+    """把选定的 query 落库到当前主题(写),供后续诊断/跑批。已存在的不重复加。"""
+    import json
+    from datetime import datetime
+
+    usage_guardrail_check(ctx.deps, "set_selected_queries")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    cleaned = [q.strip() for q in queries if q and q.strip()]
+    if not cleaned:
+        raise ModelRetry("queries 不能为空。")
+    existing = json.loads(topic.queries_json or "[]")
+    by_text = {q["text"] for q in existing if isinstance(q, dict) and q.get("text")}
+    now = datetime.utcnow().isoformat()
+    added = 0
+    for q in cleaned:
+        if q not in by_text:
+            existing.append({"text": q, "created_at": now, "status": "approved", "approved_at": now})
+            by_text.add(q)
+            added += 1
+    topic.queries_json = json.dumps(existing, ensure_ascii=False)
+    ctx.deps.db.commit()
+    return {"topic_id": topic.id, "added": added, "query_count": len(existing)}
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -155,5 +208,7 @@ TOOLS = [
     get_topic,
     set_seed_prompts,
     get_prompts,
+    expand_prompts,
+    set_selected_queries,
     run_geo_checks,
 ]
