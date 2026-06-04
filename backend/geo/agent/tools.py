@@ -513,6 +513,88 @@ async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
     return {"hits": hits, "count": len(hits)}
 
 
+async def confirm_template(ctx: RunContext[AgentDeps]) -> dict:
+    """确认发文计划(模板)→ 触发文章生成(草稿,异步,写)。计划状态 draft→confirmed。
+    无计划时引导用 draft_articles 直接产稿。复刻 admin confirm_execution_plan。
+    """
+    from datetime import datetime
+
+    from geo.models.ai_telemetry import AiTelemetryTopicExecutionPlanORM
+    from geo.services.content_generator import schedule_generation
+
+    usage_guardrail_check(ctx.deps, "confirm_template")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    plan = (
+        ctx.deps.db.query(AiTelemetryTopicExecutionPlanORM)
+        .filter(AiTelemetryTopicExecutionPlanORM.topic_id == topic.id)
+        .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+        .first()
+    )
+    if plan is None:
+        raise ModelRetry("当前主题还没有发文计划;可用 draft_articles 直接基于选定 query 产稿。")
+    if plan.status != "confirmed":
+        plan.status = "confirmed"
+        plan.confirmed_at = datetime.utcnow()
+        plan.confirmed_by_id = ctx.deps.account_id
+        ctx.deps.db.commit()
+    schedule_generation(topic_id=topic.id, plan_id=plan.id)
+    return {"plan_id": plan.id, "status": "confirmed", "hint": "已确认模板,文章生成中(草稿)。用 get_publish_status 看进度、publish_drafts 发布。"}
+
+
+async def publish_drafts(ctx: RunContext[AgentDeps], draft_ids: list[int] | None = None) -> dict:
+    """把已生成文章**真实发布到外部平台**(写,outward-facing)。
+
+    **环境护栏**:仅当 `AGENT_ALLOW_EXTERNAL_PUBLISH=1` 才真发;否则(如测试环境)拦截不发,防误发。
+    draft_ids: 指定要发的文章 id(不传 = 该主题所有有正文的稿)。
+    """
+    import os
+    from datetime import datetime
+
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+    from geo.models.user import UserORM
+    from geo.services import mediumsly_publisher
+
+    usage_guardrail_check(ctx.deps, "publish_drafts")
+    if os.environ.get("AGENT_ALLOW_EXTERNAL_PUBLISH", "0") != "1":
+        return {
+            "published": 0, "blocked": True,
+            "hint": "外发护栏关闭(测试环境默认),未真实发布。生产侧设 AGENT_ALLOW_EXTERNAL_PUBLISH=1 才开启。",
+        }
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db = ctx.deps.db
+    user = db.get(UserORM, ctx.deps.account_id)
+    if user is None:
+        raise ModelRetry("找不到账号用户。")
+    q = db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic.id)
+    if draft_ids:
+        q = q.filter(TopicGeneratedDocORM.id.in_(draft_ids))
+    docs = [d for d in q.all() if (d.body_markdown or "").strip()]
+    if not docs:
+        raise ModelRetry("没有可发布的文章,请先 draft_articles / confirm_template 产稿。")
+
+    published = 0
+    results: list[dict] = []
+    for d in docs:
+        try:
+            res = await mediumsly_publisher.push(d, user, topic)
+            d.mediumsly_post_id = res.post_id
+            d.mediumsly_url = res.url
+            d.mediumsly_pushed_at = datetime.utcnow()
+            d.mediumsly_last_error = None
+            d.status = "published"
+            published += 1
+            results.append({"doc_id": d.id, "url": res.url})
+        except mediumsly_publisher.MediumslyError as e:  # 不打断其余 doc
+            d.mediumsly_last_error = f"{getattr(e, 'code', None) or 'ERROR'}: {e}"
+            results.append({"doc_id": d.id, "error": d.mediumsly_last_error})
+    db.commit()
+    return {"published": published, "total": len(docs), "results": results}
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -540,4 +622,6 @@ TOOLS = [
     get_publish_status,
     ingest_material,
     ask_knowledge,
+    confirm_template,
+    publish_drafts,
 ]
