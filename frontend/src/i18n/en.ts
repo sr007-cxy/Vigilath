@@ -44,6 +44,10 @@ const en = {
               "title": "FAQ · Vigilath",
               "description": "Answers to common questions on GEO / AEO services, pricing, process, and engine coverage."
             },
+            "comparison": {
+              "title": "Vigilath vs Traditional SEO Tools · Vigilath",
+              "description": "GEO vs traditional SEO, side by side: Vigilath gets your brand mentioned, cited, and recommended inside AI engines — and gives you an independent third-party AI visibility baseline."
+            },
             "login": {
               "title": "Log in · Vigilath",
               "description": "Log in to your Vigilath account."
@@ -81,6 +85,7 @@ const en = {
             "home": "Home",
             "geoKnowledge": "Resources Center",
             "productsServices": "Products & Services",
+            "comparison": "vs Traditional SEO",
             "faq": "FAQ",
             "aboutUs": "About Us",
             "about": "About GEO",
@@ -558,47 +563,107 @@ const en = {
             "faq": {
               "badge": "FAQ",
               "title": "Frequently Asked Questions",
-              "subtitle": "The questions buyers ask most — answered up front.",
-              "items": [
+              "subtitle": "The 20 questions buyers ask AI most — answered up front.",
+              "groups": [
                 {
-                  "q": "What exactly does Vigilath do — is it just a checker?",
-                  "a": "No. We're a detection + optimization GEO growth platform. One side helps you see where you stand — a free 25-category GEO audit plus multi-engine visibility / citation / entity / sentiment diagnostics that quantify your real position in AI search today. The other side helps you change the outcome — an 8-step automation pipeline that continuously produces and distributes content to push your brand into the recommendation and citation slots of every major AI engine. Detection is just the starting point; optimization is what we actually deliver."
+                  "title": "GEO & AI search basics",
+                  "items": [
+                    {
+                      "q": "What is GEO? What is AI search visibility?",
+                      "a": "GEO (Generative Engine Optimization) is about getting your brand mentioned, cited, and recommended when AI engines like ChatGPT, Perplexity, Gemini, DeepSeek, and Doubao generate answers. AI search visibility measures how often you show up in those AI answers, how accurately you're described, and whether you earn a citation. Vigilath is an end-to-end AI search visibility solution (detect · audit · optimize · monitor) that takes a brand from \"AI has never heard of you\" to \"AI recommends you repeatedly.\""
+                    },
+                    {
+                      "q": "How is GEO different from SEO?",
+                      "a": "GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO is designed for the AI-search era and complements — not replaces — SEO."
+                    },
+                    {
+                      "q": "How is GEO different from AEO?",
+                      "a": "AEO (Answer Engine Optimization) aims to become the canonical answer to a question — featured snippets, voice assistants, answer boxes — feeding one structured response straight to the engine. GEO (Generative Engine Optimization) goes further: it targets generative engines like ChatGPT and Perplexity that synthesize multiple sources and cite as they generate, so the goal is to get your brand written into the AI's composed answer with a citation. AEO competes for a single answer slot; GEO competes for mention and credibility across the whole generated passage. We do both."
+                    },
+                    {
+                      "q": "Why must brands care about AI search visibility now?",
+                      "a": "More and more users skip the ten blue links and just ask AI \"which X is best\" or \"how do I choose X,\" then act on the answer. If AI doesn't know you, describes you wrong, or only recommends competitors, you've already lost that round before the user ever sees your brand. AI search visibility is becoming the new traffic and trust gateway after the website and SEO — the earlier you set a baseline and optimize, the better your first-mover position."
+                    },
+                    {
+                      "q": "Why doesn't AI recommend or mention my brand?",
+                      "a": "Three common causes: (1) the engine lacks enough trustworthy information about you (thin website, few third-party mentions, entity not recognized); (2) information exists but is stale or contradictory, so AI won't risk it; (3) competitors have a far stronger presence in AI training data and live retrieval. Vigilath detects the real cause first — entity recognition, content coverage, or authority signals — then fixes the matching gap, instead of blindly publishing content."
+                    }
+                  ]
                 },
                 {
-                  "q": "How is GEO different from SEO?",
-                  "a": "GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO is designed for the AI-search era and complements — not replaces — SEO."
+                  "title": "Detection & the visibility baseline",
+                  "items": [
+                    {
+                      "q": "What exactly does Vigilath do — is it just a checker?",
+                      "a": "No. We're a detection + optimization GEO growth platform. One side helps you see where you stand — a free 25-category GEO audit plus multi-engine visibility / citation / entity / sentiment diagnostics that quantify your real position in AI search today. The other side helps you change the outcome — an 8-step automation pipeline that continuously produces and distributes content to push your brand into the recommendation and citation slots of every major AI engine. Detection is just the starting point; optimization is what we actually deliver."
+                    },
+                    {
+                      "q": "How do I check my brand's visibility inside AI?",
+                      "a": "The most direct way is Vigilath's visibility check: we feed the questions real users ask AI in your category to the major engines in bulk, record whether each engine mentions you, whether the mention is positive or negative, and whether it provides a citation link, then convert that into a quantified AI visibility score. The free tier runs a 25-category GEO audit and crawler accessibility test; membership unlocks full multi-engine visibility / citation / entity / sentiment detection."
+                    },
+                    {
+                      "q": "What is the \"brand AI visibility baseline\" and how is it used?",
+                      "a": "The baseline is a set of starting-point data we measure before any optimization: your current visibility score, mention rate, and citation rate per engine and per question type, plus the gap to competitors. As an independent third-party AI visibility platform, Vigilath establishes your brand's AI visibility baseline — its value is that every later optimization can be quantified against it: how much you gained, on which engine, and whether you've caught up to competitors, instead of vaguely claiming \"it seems to be working.\""
+                    },
+                    {
+                      "q": "Are you an independent third party? How is this different from testing it myself?",
+                      "a": "Yes. Vigilath is an independent third-party AI visibility platform — not tied to any single AI engine and not speaking for any one brand. Asking AI a few questions by hand is easily skewed by phrasing, login state, region, and model version, so results aren't stable or comparable. We run detection with a standardized question set, a fixed engine matrix, and a unified scoring method, producing reproducible, comparable, trackable baseline data — which is exactly what makes the baseline credible."
+                    },
+                    {
+                      "q": "Which AI engines do you cover?",
+                      "a": "All major Western engines (ChatGPT / Gemini / Perplexity / Claude / DeepSeek) and CN engines (Baidu AI / Wenxin / Qwen / Doubao / Yuanbao). New engines are onboarded within 2 weeks if they expose an API or can be crawled."
+                    }
+                  ]
                 },
                 {
-                  "q": "How is GEO different from AEO?",
-                  "a": "AEO (Answer Engine Optimization) aims to become the canonical answer to a question — featured snippets, voice assistants, answer boxes — feeding one structured response straight to the engine. GEO (Generative Engine Optimization) goes further: it targets generative engines like ChatGPT and Perplexity that synthesize multiple sources and cite as they generate, so the goal is to get your brand written into the AI's composed answer with a citation. AEO competes for a single answer slot; GEO competes for mention and credibility across the whole generated passage. We do both."
+                  "title": "Optimization, results & process",
+                  "items": [
+                    {
+                      "q": "How is the 8-step pipeline different from a traditional SEO agency?",
+                      "a": "Traditional SEO is manual: keyword → content → backlinks → wait for ranking. The 8-step pipeline closes the loop automatically — from seed expansion, clustering, drafting, distribution, to AI indexing verification, citation monitoring, and feedback refinement. Self-calibrates daily without manual intervention — one account manager can run 50 brand projects in parallel."
+                    },
+                    {
+                      "q": "How long until I see results?",
+                      "a": "Depending on your industry and competition, clients usually see AI mention rate and citation lift improving in 1–3 months and reach full optimization in 3–6 months. Our cockpit produces a visibility curve daily so you can track quantitatively."
+                    },
+                    {
+                      "q": "Will GEO optimization hurt my existing SEO rankings?",
+                      "a": "No conflict — usually they reinforce each other. The structured content, clear entity information, and authoritative third-party mentions GEO emphasizes are exactly the signals search engines like, so they tend to help traditional SEO. The two target different gateways — SEO competes for the results page, GEO for mention and citation inside AI answers — but both rest on trustworthy content, consistent information, and brand authority. We avoid any aggressive tactics that would damage your existing SEO."
+                    },
+                    {
+                      "q": "Can I do GEO with no website, or very little content?",
+                      "a": "Yes, but the strategy differs. AI engines judge a brand by more than your own website — third-party reviews, Q&A communities, encyclopedias, industry directories, and media mentions all count as external signals. For brands with a thin site, we prioritize building entity information and authoritative external mentions first, then gradually add owned content. That said, a website AI crawlers can actually access makes optimization faster — which is why our audit specifically tests crawler accessibility."
+                    },
+                    {
+                      "q": "How do I measure GEO's results and ROI?",
+                      "a": "We measure against the baseline. Core metrics include AI mention rate, recommendation rate, and citation-slot share on your target questions, plus the visibility gap to competitors — all updated daily into a visibility curve in the cockpit. On the business side, you can fold in conversions from the AI channel (inquiries, sign-ups, leads) to compute ROI. Because there's a third-party baseline, results are stated quantitatively — \"up this many points, on this engine\" — not as a vague feeling."
+                    }
+                  ]
                 },
                 {
-                  "q": "How long until I see results?",
-                  "a": "Depending on your industry and competition, clients usually see AI mention rate and citation lift improving in 1–3 months and reach full optimization in 3–6 months. Our cockpit produces a visibility curve daily so you can track quantitatively."
-                },
-                {
-                  "q": "Which AI engines do you cover?",
-                  "a": "All major Western engines (ChatGPT / Gemini / Perplexity / Claude / DeepSeek) and CN engines (Baidu AI / Wenxin / Qwen / Doubao / Yuanbao). New engines are onboarded within 2 weeks if they expose an API or can be crawled."
-                },
-                {
-                  "q": "How is the 8-step pipeline different from a traditional SEO agency?",
-                  "a": "Traditional SEO is manual: keyword → content → backlinks → wait for ranking. The 8-step pipeline closes the loop automatically — from seed expansion, clustering, drafting, distribution, to AI indexing verification, citation monitoring, and feedback refinement. Self-calibrates daily without manual intervention — one account manager can run 50 brand projects in parallel."
-                },
-                {
-                  "q": "Is sentiment monitoring real-time?",
-                  "a": "Currently daily batch collection + instant alerts. We scan 42 CN/global trending sources (Weibo, Zhihu, Douyin, Toutiao, Reddit, HN, etc.). When negative coverage or keyword hits are detected, alerts go out within 15 minutes via email + in-app notification, with three tiers of response drafts auto-generated."
-                },
-                {
-                  "q": "Can I self-serve, or do I need to talk to sales?",
-                  "a": "The free tier self-serves a 25-category GEO audit and crawler accessibility test. Membership unlocks all advanced checks (visibility / citation / entity / sentiment). The 8-step pipeline + content distribution is a growth service requiring a sales engagement, because we need to onboard brand assets and authorize platform accounts."
-                },
-                {
-                  "q": "What does it cost?",
-                  "a": "GEO self-serve membership starts at $40 / month. The 8-step growth service is priced per project, typically $2,000–$12,000 / month depending on industry, target engines, and content output. Contact sales for a custom quote."
-                },
-                {
-                  "q": "Do you offer ongoing maintenance?",
-                  "a": "Yes — required, because AI engines' algorithms, crawl preferences, and ranking rules change continuously. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense. Comes with the pipeline service by default plus a quarterly review report."
+                  "title": "Sentiment, pricing & engagement",
+                  "items": [
+                    {
+                      "q": "Is sentiment monitoring real-time?",
+                      "a": "Currently daily batch collection + instant alerts. We scan 42 CN/global trending sources (Weibo, Zhihu, Douyin, Toutiao, Reddit, HN, etc.). When negative coverage or keyword hits are detected, alerts go out within 15 minutes via email + in-app notification, with three tiers of response drafts auto-generated."
+                    },
+                    {
+                      "q": "How does GEO differ for global brands vs. domestic (China) companies?",
+                      "a": "Vigilath serves both global brands and domestic Chinese companies, and the engine focus differs by segment. Global brands care more about Western engines (ChatGPT / Gemini / Perplexity / Claude) plus entity recognition and third-party authority in English-language data; domestic companies weight CN engines (Wenxin / Qwen / Doubao / Yuanbao / Kimi) plus Chinese Q&A communities and encyclopedia signals. Our detection and optimization configure the right engine matrix and content strategy for your target market."
+                    },
+                    {
+                      "q": "Can I self-serve, or do I need to talk to sales?",
+                      "a": "The free tier self-serves a 25-category GEO audit and crawler accessibility test. Membership unlocks all advanced checks (visibility / citation / entity / sentiment). The 8-step pipeline + content distribution is a growth service requiring a sales engagement, because we need to onboard brand assets and authorize platform accounts."
+                    },
+                    {
+                      "q": "What does it cost?",
+                      "a": "GEO self-serve membership starts at $40 / month. The 8-step growth service is priced per project, typically $2,000–$12,000 / month depending on industry, target engines, and content output. Contact sales for a custom quote."
+                    },
+                    {
+                      "q": "Do you offer ongoing maintenance?",
+                      "a": "Yes — required, because AI engines' algorithms, crawl preferences, and ranking rules change continuously. Monthly maintenance includes model upgrade tracking, monitored-question refresh, content strategy adjustment, and citation-position defense. Comes with the pipeline service by default plus a quarterly review report."
+                    }
+                  ]
                 }
               ]
             },
@@ -1687,6 +1752,114 @@ const en = {
             "submitting": "Redirecting to payment...",
             "payNow": "Pay Now",
             "cancel": "Cancel"
+          },
+          "comparison": {
+            "hero": {
+              "badge": "GEO vs traditional SEO",
+              "title": "Vigilath vs Traditional SEO Tools",
+              "subtitle": "An end-to-end AI search visibility solution (detect · audit · optimize · monitor). Traditional SEO helps you rank on the results page; Vigilath gets your brand mentioned, cited, and recommended inside AI-engine answers — the two complement, not replace, each other."
+            },
+            "intro": {
+              "title": "The difference in one line",
+              "body": "Traditional SEO tools revolve around ranking higher on the Google / Baidu results page: target keywords, build backlinks, wait to get crawled. Vigilath revolves around getting selected inside AI-generated answers: making ChatGPT, Perplexity, Gemini, DeepSeek, and Doubao mention you — with a citation — when they answer users' questions. The decision gateway is shifting from \"browsing links\" to \"asking AI,\" and that's the layer Vigilath fills in."
+            },
+            "table": {
+              "title": "Side-by-side comparison",
+              "colDimension": "Dimension",
+              "colVigilath": "Vigilath",
+              "colSeo": "Traditional SEO tools",
+              "rows": [
+                {
+                  "dim": "Optimization goal",
+                  "vigilath": "Get the brand mentioned, cited, and recommended by AI engines",
+                  "seo": "Lift keyword ranking on the search results page (SERP)"
+                },
+                {
+                  "dim": "Target gateway",
+                  "vigilath": "AI engines — ChatGPT / Perplexity / Gemini / DeepSeek / Doubao",
+                  "seo": "Traditional search engines — Google / Baidu"
+                },
+                {
+                  "dim": "Core metrics",
+                  "vigilath": "AI mention rate, recommendation rate, citation-slot share, visibility score",
+                  "seo": "Keyword ranking, organic traffic, click-through rate"
+                },
+                {
+                  "dim": "Data baseline",
+                  "vigilath": "Independent third-party AI visibility baseline; every optimization is quantifiable",
+                  "seo": "Rankings swing with the algorithm; no unified third-party baseline"
+                },
+                {
+                  "dim": "Content logic",
+                  "vigilath": "Entity recognition, authority signals, and structured content for generated answers",
+                  "seo": "Keywords, backlinks, and on-page tuning for crawlers and ranking algorithms"
+                },
+                {
+                  "dim": "Engine coverage",
+                  "vigilath": "Unified matrix of 10+ Western & CN AI engines, configured per target market",
+                  "seo": "Usually focused on a single search engine"
+                },
+                {
+                  "dim": "Sentiment integration",
+                  "vigilath": "Built-in brand sentiment monitoring + instant alerts + 3-tier response drafts",
+                  "seo": "Generally not covered"
+                },
+                {
+                  "dim": "Automation",
+                  "vigilath": "8-step fully automated loop, self-calibrating daily",
+                  "seo": "Mostly manual analysis + a patchwork of tools"
+                },
+                {
+                  "dim": "Best-fit audience",
+                  "vigilath": "Global brands + domestic (China) companies",
+                  "seo": "Any site that depends on search traffic"
+                }
+              ]
+            },
+            "whenToUse": {
+              "title": "When to use which",
+              "vigilath": {
+                "title": "Use Vigilath when",
+                "points": [
+                  "Your customers start asking AI \"which is best\" or \"how do I choose,\" then act on the answer",
+                  "You want to know how AI actually describes your brand — whether it's wrong, or only recommends competitors",
+                  "You need to win mention and citation slots inside AI answers and track results quantitatively",
+                  "You're a global brand or domestic company that needs a unified play across Western + CN AI engines"
+                ]
+              },
+              "seo": {
+                "title": "Traditional SEO tools still matter when",
+                "points": [
+                  "Your core traffic still comes from clicks on the traditional results page",
+                  "You're building long-tail keyword landing pages, on-site technical SEO, and backlinks",
+                  "You need to monitor keyword ranking swings on Google / Baidu"
+                ]
+              },
+              "note": "Bottom line: they complement each other. Vigilath fills in the AI-search layer, and our GEO work avoids any aggressive tactics that would harm your existing SEO — many GEO signals are positive for SEO too."
+            },
+            "why": {
+              "title": "Why choose Vigilath",
+              "cards": [
+                {
+                  "title": "Independent third-party baseline",
+                  "desc": "An independent third-party AI visibility platform that establishes your brand's AI visibility baseline — results are stated quantitatively (\"up this many points, on this engine\"), not as a vague feeling."
+                },
+                {
+                  "title": "Detection + optimization in one",
+                  "desc": "Not just a score. An 8-step automation pipeline continuously produces and distributes content to push your brand into the recommendation and citation slots of every major AI engine."
+                },
+                {
+                  "title": "End-to-end coverage",
+                  "desc": "An end-to-end AI search visibility solution (detect · audit · optimize · monitor) — from seeing where you stand to changing the outcome, all in one place."
+                }
+              ]
+            },
+            "cta": {
+              "title": "First, see where you really stand inside AI",
+              "subtitle": "Run a free 25-category GEO audit to get your AI visibility starting point, then decide how to optimize.",
+              "primary": "Free GEO audit",
+              "secondary": "Contact us"
+            }
           },
           "aboutUs": {
             "title": "About Us",

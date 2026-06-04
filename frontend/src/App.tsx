@@ -24,6 +24,7 @@ const GeoKnowledge = lazy(() => import('./pages/GeoKnowledge').then(m => ({ defa
 const GeoKnowledgeMetrics = lazy(() => import('./pages/GeoKnowledgeMetrics').then(m => ({ default: m.GeoKnowledgeMetrics })));
 const Faq = lazy(() => import('./pages/Faq').then(m => ({ default: m.Faq })));
 const ProductsServices = lazy(() => import('./pages/ProductsServices').then(m => ({ default: m.ProductsServices })));
+const Comparison = lazy(() => import('./pages/Comparison').then(m => ({ default: m.Comparison })));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
 const Advanced = lazy(() => import('./pages/Advanced').then(m => ({ default: m.Advanced })));
@@ -126,6 +127,7 @@ function App() {
               <Route path="/geo-knowledge/faq" element={<Navigate to="/faq" replace />} />
               <Route path="/faq" element={<Faq />} />
               <Route path="/products-services" element={<ProductsServices />} />
+              <Route path="/comparison" element={<Comparison />} />
               <Route path="/account" element={<AccountLayout />}>
                 <Route index element={<Navigate to="profile" replace />} />
                 <Route path="profile" element={<ProfileTab />} />

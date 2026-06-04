@@ -2,16 +2,22 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../components/PageHead';
 
+type FaqItem = { q: string; a: string };
+type FaqGroup = { title: string; items: FaqItem[] };
+
 export function Faq() {
   const { t } = useTranslation();
-  const [openFaq, setOpenFaq] = useState<Set<number>>(new Set());
-  const toggleFaq = (idx: number) =>
+  // key = `${groupIndex}-${itemIndex}`,跨分组也唯一
+  const [openFaq, setOpenFaq] = useState<Set<string>>(new Set());
+  const toggleFaq = (key: string) =>
     setOpenFaq((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
+
+  const groups = t('home.faq.groups', { returnObjects: true }) as FaqGroup[];
 
   return (
     <div className="min-h-screen grid-background">
@@ -52,50 +58,58 @@ export function Faq() {
             </div>
           </section>
 
-          <section className="space-y-3">
-            {(t('home.faq.items', { returnObjects: true }) as { q: string; a: string }[]).map(
-              (item, idx) => {
-                const isOpen = openFaq.has(idx);
-                return (
-                  <div
-                    key={idx}
-                    className="card overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleFaq(idx)}
-                      aria-expanded={isOpen}
-                      className="w-full flex items-center justify-between gap-4 px-5 sm:px-6 py-4 sm:py-5 text-left transition-colors hover:bg-surface-hover"
-                    >
-                      <span className="text-sm sm:text-base font-semibold text-primary leading-snug">
-                        {item.q}
-                      </span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 flex-shrink-0 transition-transform duration-200 text-secondary"
-                        style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    <div
-                      className="grid transition-[grid-template-rows] duration-300 ease-out"
-                      style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
-                    >
-                      <div className="overflow-hidden">
-                        <p className="px-5 sm:px-6 pb-4 sm:pb-5 text-sm sm:text-base text-secondary leading-relaxed">
-                          {item.a}
-                        </p>
+          <div className="space-y-10">
+            {groups.map((group, gi) => (
+              <section key={gi} aria-labelledby={`faq-group-${gi}`}>
+                <h2
+                  id={`faq-group-${gi}`}
+                  className="text-lg sm:text-xl font-bold text-primary mb-4 pl-1"
+                >
+                  {group.title}
+                </h2>
+                <div className="space-y-3">
+                  {group.items.map((item, idx) => {
+                    const key = `${gi}-${idx}`;
+                    const isOpen = openFaq.has(key);
+                    return (
+                      <div key={key} className="card overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => toggleFaq(key)}
+                          aria-expanded={isOpen}
+                          className="w-full flex items-center justify-between gap-4 px-5 sm:px-6 py-4 sm:py-5 text-left transition-colors hover:bg-surface-hover"
+                        >
+                          <h3 className="text-sm sm:text-base font-semibold text-primary leading-snug m-0">
+                            {item.q}
+                          </h3>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 flex-shrink-0 transition-transform duration-200 text-secondary"
+                            style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <div
+                          className="grid transition-[grid-template-rows] duration-300 ease-out"
+                          style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
+                        >
+                          <div className="overflow-hidden">
+                            <p className="px-5 sm:px-6 pb-4 sm:pb-5 text-sm sm:text-base text-secondary leading-relaxed">
+                              {item.a}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              },
-            )}
-          </section>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </main>
     </div>
