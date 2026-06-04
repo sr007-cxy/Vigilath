@@ -63,7 +63,8 @@ export function AgentChatWidget() {
         aria-label="GEO 优化助手"
         className="transition-transform hover:scale-105 active:scale-95"
         style={{
-          position: 'fixed', right: 24, bottom: 24, zIndex: 1000,
+          // 「预约演示」浮动按钮在 right:24/bottom:24(ContactModal),把 🤖 上移堆在其上方,避免重叠
+          position: 'fixed', right: 24, bottom: 88, zIndex: 1000,
           width: 56, height: 56, borderRadius: '50%', border: 'none',
           background: 'var(--accent-gradient)', color: '#fff', fontSize: 24, cursor: 'pointer',
           boxShadow: '0 6px 20px rgba(0,0,0,.22)',
@@ -78,8 +79,8 @@ export function AgentChatWidget() {
         <div
           className="animate-fade-in"
           style={{
-            position: 'fixed', right: 24, bottom: 92, zIndex: 1000,
-            width: 384, maxWidth: 'calc(100vw - 48px)', height: 540, maxHeight: 'calc(100vh - 140px)',
+            position: 'fixed', right: 24, bottom: 152, zIndex: 1000,
+            width: 384, maxWidth: 'calc(100vw - 48px)', height: 540, maxHeight: 'calc(100vh - 200px)',
             display: 'flex', flexDirection: 'column',
             background: 'var(--bg-card)', borderRadius: 16, overflow: 'hidden',
             boxShadow: '0 16px 48px rgba(0,0,0,.24)', border: '1px solid var(--border-color)',
