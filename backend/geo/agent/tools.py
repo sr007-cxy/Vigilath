@@ -429,6 +429,90 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
     }
 
 
+async def ingest_material(
+    ctx: RunContext[AgentDeps], text: str | None = None, url: str | None = None, title: str = "",
+) -> dict:
+    """把用户资料存入账号知识库(写,「知识库 = 用户信息」)。可传 text,或传 url(自动抓取并提取正文)。
+    供 ask_knowledge 检索 + 后续 grounding。
+    """
+    from geo.models.agent import AgentMaterialORM
+
+    usage_guardrail_check(ctx.deps, "ingest_material")
+    topic = _account_topic(ctx)
+    body = (text or "").strip()
+    source = (url or "").strip()
+    if source:
+        if not source.startswith(("http://", "https://")):
+            raise ModelRetry("url 必须以 http:// 或 https:// 开头。")
+
+        def _fetch() -> str:
+            import requests
+            from bs4 import BeautifulSoup
+            r = requests.get(source, timeout=20, headers={"User-Agent": "Vigilath-Agent/1.0"})
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+            for tag in soup(["script", "style", "noscript"]):
+                tag.decompose()
+            return soup.get_text(" ", strip=True)
+
+        try:
+            body = (await asyncio.to_thread(_fetch))[:50000]
+        except Exception as e:  # noqa: BLE001
+            raise ModelRetry(f"抓取 url 失败:{str(e)[:200]}")
+    if not body:
+        raise ModelRetry("请提供 text,或可提取正文的 url。")
+    m = AgentMaterialORM(
+        account_id=ctx.deps.account_id,
+        topic_id=(topic.id if topic else None),
+        source=source[:512],
+        title=(title or source or "资料")[:512],
+        text=body,
+    )
+    ctx.deps.db.add(m)
+    ctx.deps.db.commit()
+    ctx.deps.db.refresh(m)
+    return {"material_id": m.id, "chars": len(body), "title": m.title}
+
+
+async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
+    """检索账号**自有资料**里与 query 相关的片段(只读)。返回命中片段,你据此回答用户。
+    MVP 关键词检索(后续可升级语义/向量)。
+    """
+    import re
+
+    from geo.models.agent import AgentMaterialORM
+
+    q = (query or "").strip()
+    if not q:
+        raise ModelRetry("query 不能为空。")
+    rows = (
+        ctx.deps.db.query(AgentMaterialORM)
+        .filter(AgentMaterialORM.account_id == ctx.deps.account_id)
+        .order_by(AgentMaterialORM.id.desc())
+        .limit(200)
+        .all()
+    )
+    if not rows:
+        return {"hits": [], "hint": "账号还没有上传资料,可先用 ingest_material 添加。"}
+
+    terms = [t for t in re.split(r"\s+", q.lower()) if len(t) >= 2][:8]
+    scored: list[tuple[int, dict]] = []
+    for m in rows:
+        low = (m.text or "").lower()
+        score = sum(low.count(t) for t in terms)
+        if q.lower() in low:
+            score += 5
+        if score > 0:
+            idx = next((low.find(t) for t in terms if low.find(t) >= 0), 0)
+            start = max(0, idx - 120)
+            scored.append((score, {"title": m.title, "source": m.source, "snippet": (m.text or "")[start:start + 400]}))
+    scored.sort(key=lambda x: -x[0])
+    hits = [h for _, h in scored[:5]]
+    if not hits:  # 无关键词命中 → 回退给最近资料摘要
+        hits = [{"title": m.title, "source": m.source, "snippet": (m.text or "")[:300]} for m in rows[:3]]
+    return {"hits": hits, "count": len(hits)}
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -454,4 +538,6 @@ TOOLS = [
     get_growth_summary,
     get_today_effect,
     get_publish_status,
+    ingest_material,
+    ask_knowledge,
 ]
