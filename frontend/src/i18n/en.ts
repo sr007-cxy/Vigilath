@@ -326,8 +326,8 @@ const en = {
             "cta": "Check Your Website"
           },
           "home": {
-            "title": "GEO Readiness Checker",
-            "description": "Unlock professional GEO & AEO Tools and gain a complete understanding of how AI engines perceive your brand.",
+            "title": "GEO Audit & Optimization",
+            "description": "More than a checker — unlock professional GEO & AEO tools to first see how AI engines perceive your brand, then optimize until you're recommended and cited.",
             "placeholder": "example.com",
             "button": "Start Check",
             "analyzing": "Analyzing...",
@@ -561,8 +561,16 @@ const en = {
               "subtitle": "The questions buyers ask most — answered up front.",
               "items": [
                 {
+                  "q": "What exactly does Vigilath do — is it just a checker?",
+                  "a": "No. We're a detection + optimization GEO growth platform. One side helps you see where you stand — a free 25-category GEO audit plus multi-engine visibility / citation / entity / sentiment diagnostics that quantify your real position in AI search today. The other side helps you change the outcome — an 8-step automation pipeline that continuously produces and distributes content to push your brand into the recommendation and citation slots of every major AI engine. Detection is just the starting point; optimization is what we actually deliver."
+                },
+                {
                   "q": "How is GEO different from SEO?",
                   "a": "GEO (Generative Engine Optimization) focuses on getting your brand recommended by AI assistants like ChatGPT, Gemini, and Perplexity. SEO focuses on ranking in search engine results. GEO is designed for the AI-search era and complements — not replaces — SEO."
+                },
+                {
+                  "q": "How is GEO different from AEO?",
+                  "a": "AEO (Answer Engine Optimization) aims to become the canonical answer to a question — featured snippets, voice assistants, answer boxes — feeding one structured response straight to the engine. GEO (Generative Engine Optimization) goes further: it targets generative engines like ChatGPT and Perplexity that synthesize multiple sources and cite as they generate, so the goal is to get your brand written into the AI's composed answer with a citation. AEO competes for a single answer slot; GEO competes for mention and credibility across the whole generated passage. We do both."
                 },
                 {
                   "q": "How long until I see results?",
