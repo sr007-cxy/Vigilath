@@ -3,11 +3,65 @@
 // 样式走全局 CSS 变量(--accent-* / --bg-* / --text-* / --border-*),自动跟随明暗主题、与页面风格一致。
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { streamAgentChat } from '../../services/agentApi';
+import { streamAgentChat, type AgentCard } from '../../services/agentApi';
 
 interface Msg {
   role: 'user' | 'assistant';
   text: string;
+  cards?: AgentCard[];
+}
+
+const TOOL_TITLE: Record<string, string> = {
+  get_today_effect: '今日投放效果',
+  get_growth_summary: '品牌增长数据',
+  get_publish_status: '发布进度',
+  get_report: '诊断报告',
+  get_batch_results: '最近跑批',
+};
+
+function pct(v: unknown): string {
+  const n = Number(v);
+  return Number.isFinite(n) ? `${Math.round(n * 100)}%` : '—';
+}
+
+function CardView({ card }: { card: AgentCard }) {
+  const d = card.data || {};
+  const rows: [string, string][] = [];
+  if (card.tool === 'get_today_effect') {
+    rows.push(['扩展问题被搜到', `${d.expanded_hit_today ?? 0} / ${d.expanded_total ?? 0}`]);
+    rows.push(['种子词被搜到', `${d.seed_hit_today ?? 0} / ${d.seed_total ?? 0}`]);
+    if (d.date) rows.push(['日期', String(d.date)]);
+  } else if (card.tool === 'get_growth_summary') {
+    rows.push(['命中率', pct(d.hit_rate)]);
+    const br = (d.brand_rank || {}) as Record<string, unknown>;
+    rows.push(['品牌位次', `Top1 ${br.top1 ?? 0} · Top3 ${br.top3 ?? 0}`]);
+    const comps = (d.top_competitors || []) as Array<{ name: string; count: number }>;
+    if (comps.length) rows.push(['高频竞品', comps.slice(0, 3).map((c) => c.name).join('、')]);
+  } else if (card.tool === 'get_publish_status') {
+    rows.push(['已发布', `${d.published ?? 0} / ${d.total ?? 0}`]);
+  } else if (card.tool === 'get_report') {
+    rows.push(['状态', String(d.status ?? '—')]);
+  } else if (card.tool === 'get_batch_results') {
+    const be = (d.by_engine || {}) as Record<string, { hits: number; total: number }>;
+    Object.entries(be).slice(0, 5).forEach(([e, v]) => rows.push([e, `${v.hits}/${v.total}`]));
+  }
+  if (!rows.length) return null;
+  return (
+    <div style={{
+      marginTop: 8, padding: '10px 12px', borderRadius: 12,
+      background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-secondary)', marginBottom: 6 }}>
+        📊 {TOOL_TITLE[card.tool] || card.tool}
+      </div>
+      {rows.map(([k, v], i) => (
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0', color: 'var(--text-primary)' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>{k}</span>
+          <span style={{ fontWeight: 600 }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function AgentChatWidget() {
@@ -40,7 +94,14 @@ export function AgentChatWidget() {
       onDelta: (d) =>
         setMsgs((m) => {
           const next = [...m];
-          next[next.length - 1] = { role: 'assistant', text: next[next.length - 1].text + d };
+          const last = next[next.length - 1];
+          next[next.length - 1] = { ...last, role: 'assistant', text: last.text + d };
+          return next;
+        }),
+      onCards: (cards) =>
+        setMsgs((m) => {
+          const next = [...m];
+          next[next.length - 1] = { ...next[next.length - 1], cards };
           return next;
         }),
       onError: (msg) =>
@@ -95,7 +156,7 @@ export function AgentChatWidget() {
 
           <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 14, background: 'var(--bg-primary)' }}>
             {msgs.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                 <div
                   style={{
                     maxWidth: '84%', padding: '9px 13px', borderRadius: 14, fontSize: 14, lineHeight: 1.55,
@@ -109,6 +170,11 @@ export function AgentChatWidget() {
                 >
                   {m.text || (busy && i === msgs.length - 1 ? '思考中…' : '')}
                 </div>
+                {m.cards?.length ? (
+                  <div style={{ width: '100%', maxWidth: '92%' }}>
+                    {m.cards.map((c, ci) => <CardView key={ci} card={c} />)}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

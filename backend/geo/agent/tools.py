@@ -495,20 +495,31 @@ async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
     if not rows:
         return {"hits": [], "hint": "账号还没有上传资料,可先用 ingest_material 添加。"}
 
-    terms = [t for t in re.split(r"\s+", q.lower()) if len(t) >= 2][:8]
-    scored: list[tuple[int, dict]] = []
+    def _tokens(s: str) -> list[str]:
+        """中文 bigram + 英文/数字词 —— 中文无空格,whitespace 分词无效,故用 2-gram。"""
+        s = s.lower()
+        toks = re.findall(r"[a-z0-9]{2,}", s)            # ascii 词
+        for run in re.findall(r"[一-鿿]+", s):    # 中文串 → bigram
+            toks += [run] if len(run) == 1 else [run[i:i + 2] for i in range(len(run) - 1)]
+        return toks
+
+    qtoks = list(dict.fromkeys(_tokens(q)))[:40]
+    scored: list[tuple[float, int, dict]] = []
     for m in rows:
         low = (m.text or "").lower()
-        score = sum(low.count(t) for t in terms)
-        if q.lower() in low:
-            score += 5
-        if score > 0:
-            idx = next((low.find(t) for t in terms if low.find(t) >= 0), 0)
-            start = max(0, idx - 120)
-            scored.append((score, {"title": m.title, "source": m.source, "snippet": (m.text or "")[start:start + 400]}))
-    scored.sort(key=lambda x: -x[0])
-    hits = [h for _, h in scored[:5]]
-    if not hits:  # 无关键词命中 → 回退给最近资料摘要
+        if not qtoks:
+            continue
+        hit_toks = sum(1 for t in qtoks if t in low)
+        if hit_toks == 0:
+            continue
+        occ = sum(low.count(t) for t in qtoks)
+        score = hit_toks * 2 + min(occ, 20) + (8 if q.lower() in low else 0)   # 覆盖度为主 + 频次/整句加权
+        idx = next((low.find(t) for t in qtoks if low.find(t) >= 0), 0)
+        start = max(0, idx - 120)
+        scored.append((score, m.id, {"title": m.title, "source": m.source, "snippet": (m.text or "")[start:start + 400]}))
+    scored.sort(key=lambda x: (-x[0], -x[1]))
+    hits = [h for _, _, h in scored[:5]]
+    if not hits:  # 无命中 → 回退最近资料摘要
         hits = [{"title": m.title, "source": m.source, "snippet": (m.text or "")[:300]} for m in rows[:3]]
     return {"hits": hits, "count": len(hits)}
 

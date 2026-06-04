@@ -14,9 +14,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from geo.agent.auth import get_current_user          # 独立校验,不 import geo.api
-from geo.agent.methods import resolve_account
+from geo.agent.methods import (
+    load_message_history,
+    reset_conversation,
+    resolve_account,
+    save_message_history,
+)
 from geo.database import SessionLocal
 from geo.models.user import UserORM
+
+# 这些「数据工具」的返回会作为结构化卡片推给前端渲染
+CARD_TOOLS = {"get_report", "get_growth_summary", "get_today_effect", "get_publish_status", "get_batch_results"}
 
 router = APIRouter(prefix="/agent")
 
@@ -48,20 +56,45 @@ async def chat(
     current_user: UserORM = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """对话(SSE 流式)。会话单位 = 账号;每次请求新建 deps 注入账号上下文。"""
+    """对话(SSE 流式)。会话单位 = 账号;多轮记忆落库 + 数据工具结果作结构化卡片推前端。"""
     agent = _load_agent()
     deps = resolve_account(current_user, db, topic_id=body.topic_id)
+    history = load_message_history(deps)   # 多轮:载入账号历史
 
     async def event_stream():
         try:
-            async with agent.run_stream(body.message, deps=deps) as result:
+            async with agent.run_stream(body.message, deps=deps, message_history=history) as result:
                 async for delta in result.stream_text(delta=True):
                     yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+                # 流式文本结束后:抽数据工具返回 → 结构化卡片
+                cards = []
+                for m in result.all_messages():
+                    for p in getattr(m, "parts", []):
+                        if getattr(p, "part_kind", "") == "tool-return" and getattr(p, "tool_name", "") in CARD_TOOLS:
+                            cards.append({"tool": p.tool_name, "data": p.content})
+                if cards:
+                    yield f"data: {json.dumps({'cards': cards}, ensure_ascii=False, default=str)}\n\n"
+                # 落库多轮记忆
+                try:
+                    save_message_history(deps, result.all_messages_json())
+                except Exception:  # noqa: BLE001 — 存历史失败不影响本轮回答
+                    pass
             yield "data: {\"done\": true}\n\n"
         except Exception as e:  # noqa: BLE001
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/reset")
+async def reset(
+    current_user: UserORM = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """清空当前账号的对话记忆(用户「重新开始」)。"""
+    deps = resolve_account(current_user, db)
+    reset_conversation(deps)
+    return {"ok": True}
 
 
 @router.post("/diagnose")

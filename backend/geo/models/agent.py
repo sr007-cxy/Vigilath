@@ -21,3 +21,13 @@ class AgentMaterialORM(Base):
     title = Column(String(length=512), nullable=False, default="")
     text = Column(Text, nullable=False, default="")            # 解析后的纯文本
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AgentConversationORM(Base):
+    """账号级多轮对话记忆(会话单位=账号↔助手)。messages_json 存 Pydantic AI 序列化的消息历史。"""
+    __tablename__ = "agent_conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, nullable=False, unique=True, index=True)  # 一账号一会话
+    messages_json = Column(Text, nullable=False, default="[]")            # ModelMessagesTypeAdapter 序列化
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -5,8 +5,14 @@ import { localizedHeaders } from './apiError';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
+export interface AgentCard {
+  tool: string;
+  data: Record<string, unknown>;
+}
+
 export interface ChatCallbacks {
   onDelta: (text: string) => void;
+  onCards?: (cards: AgentCard[]) => void;   // 数据工具返回 → 结构化卡片
   onDone?: () => void;
   onError?: (msg: string) => void;
   signal?: AbortSignal;
@@ -54,8 +60,9 @@ export async function streamAgentChat(
         if (!line.startsWith('data:')) continue;
         const payload = line.slice(5).trim();
         try {
-          const obj = JSON.parse(payload) as { delta?: string; error?: string; done?: boolean };
+          const obj = JSON.parse(payload) as { delta?: string; cards?: AgentCard[]; error?: string; done?: boolean };
           if (obj.delta) cb.onDelta(obj.delta);
+          else if (obj.cards) cb.onCards?.(obj.cards);
           else if (obj.error) cb.onError?.(obj.error);
           else if (obj.done) { cb.onDone?.(); return; }
         } catch { /* 跳过非 JSON 行 */ }

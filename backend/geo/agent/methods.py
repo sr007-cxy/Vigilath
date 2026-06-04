@@ -15,6 +15,44 @@ def resolve_account(current_user: UserORM, db: Session, topic_id: int | None = N
     return AgentDeps(account_id=current_user.id, user_id=current_user.id, db=db, topic_id=topic_id)
 
 
+def load_message_history(deps: AgentDeps):
+    """读账号多轮对话历史 → Pydantic AI message_history(无则 None)。"""
+    from geo.models.agent import AgentConversationORM
+
+    row = deps.db.query(AgentConversationORM).filter(AgentConversationORM.account_id == deps.account_id).first()
+    if not row or not row.messages_json or row.messages_json in ("[]", ""):
+        return None
+    try:
+        from pydantic_ai.messages import ModelMessagesTypeAdapter
+        return ModelMessagesTypeAdapter.validate_json(row.messages_json)
+    except Exception:  # noqa: BLE001 — 历史损坏不阻断对话
+        return None
+
+
+def save_message_history(deps: AgentDeps, messages_json: bytes | str) -> None:
+    """保存账号多轮历史(全量,供下轮续接)。capped:超长只留最近 ~50 条。"""
+    from datetime import datetime
+
+    from geo.models.agent import AgentConversationORM
+
+    s = messages_json.decode() if isinstance(messages_json, (bytes, bytearray)) else str(messages_json)
+    row = deps.db.query(AgentConversationORM).filter(AgentConversationORM.account_id == deps.account_id).first()
+    if row is None:
+        row = AgentConversationORM(account_id=deps.account_id)
+        deps.db.add(row)
+    row.messages_json = s
+    row.updated_at = datetime.utcnow()
+    deps.db.commit()
+
+
+def reset_conversation(deps: AgentDeps) -> None:
+    """清空账号对话记忆(用户「重新开始」用)。"""
+    from geo.models.agent import AgentConversationORM
+
+    deps.db.query(AgentConversationORM).filter(AgentConversationORM.account_id == deps.account_id).delete()
+    deps.db.commit()
+
+
 def usage_guardrail_check(deps: AgentDeps, action: str) -> None:
     """用量护栏(非计费):token 预算 / 步数 / 引擎资源上限。超额抛错即停。
 
