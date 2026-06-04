@@ -228,6 +228,30 @@ async def trigger_diagnosis(ctx: RunContext[AgentDeps]) -> dict:
     return {"status": "generating", "hint": "诊断生成中(约 30–90s),稍后用 get_report 查看根因/叙述。"}
 
 
+async def draft_articles(ctx: RunContext[AgentDeps], max_docs: int = 3, queries: list[str] | None = None) -> dict:
+    """基于选定 query **生成文章草稿**(异步,写)。产出进 TopicGeneratedDoc(草稿),稍后用 get_publish_status 看进度。
+
+    max_docs: 本次生成篇数(1–20);queries: 指定 query 列表(不传则用主题已选 query)。
+    """
+    import json
+
+    from geo.services.content_generator import schedule_generation
+
+    usage_guardrail_check(ctx.deps, "draft_articles")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    qs = [q.strip() for q in (queries or []) if q and q.strip()] or None
+    if qs is None and not json.loads(topic.queries_json or "[]"):
+        raise ModelRetry("当前主题还没有 query,请先 expand_prompts + set_selected_queries,或显式传 queries。")
+    try:
+        md = max(1, min(int(max_docs or 3), 20))
+    except (TypeError, ValueError):
+        md = 3
+    schedule_generation(topic_id=topic.id, max_docs=md, queries_override=qs)
+    return {"status": "generating", "max_docs": md, "hint": "文章生成中(每篇约 30–90s),稍后用 get_publish_status 看进度。"}
+
+
 async def get_report(ctx: RunContext[AgentDeps]) -> dict:
     """读当前主题的诊断报告(solution:根因诊断 + 叙述)。只读。无 / 未就绪时给提示。"""
     import json
@@ -424,6 +448,7 @@ TOOLS = [
     set_selected_queries,
     run_geo_checks,
     trigger_diagnosis,
+    draft_articles,
     get_report,
     get_batch_results,
     get_growth_summary,
