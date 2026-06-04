@@ -24,7 +24,7 @@ from geo.database import SessionLocal
 from geo.models.user import UserORM
 
 # 这些「数据工具」的返回会作为结构化卡片推给前端渲染
-CARD_TOOLS = {"get_report", "get_growth_summary", "get_today_effect", "get_publish_status", "get_batch_results"}
+CARD_TOOLS = {"get_report", "get_growth_summary", "get_today_effect", "get_query_coverage", "get_publish_status", "get_batch_results"}
 
 router = APIRouter(prefix="/agent")
 

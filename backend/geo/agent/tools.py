@@ -378,6 +378,50 @@ async def get_growth_summary(ctx: RunContext[AgentDeps]) -> dict:
     }
 
 
+async def get_query_coverage(ctx: RunContext[AgentDeps]) -> dict:
+    """**累计**被 AI 引擎搜到(命中)的情况(all-time,非今天):监测 query 总数、被命中的 query 数、
+    被命中的种子词数。口径与品牌增长 dashboard 一致(读 ai_telemetry_query_hits 命中追踪表)。
+    用户问「被搜到几个 / 命中多少 / 收录情况」用本工具;问「今天」才用 get_today_effect。
+    """
+    import json
+
+    from sqlalchemy import distinct, func
+
+    from geo.models.ai_telemetry import AiTelemetryQueryHitORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db = ctx.deps.db
+    base = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+        AiTelemetryQueryHitORM.topic_id == topic.id,
+    )
+    monitored = base.scalar() or 0
+    hit = base.filter(AiTelemetryQueryHitORM.total_hits > 0).scalar() or 0
+
+    # 被命中 query → 经 queries_json 的 seed 字段回溯到种子词
+    text2seed: dict[str, str] = {}
+    for q in json.loads(topic.queries_json or "[]"):
+        if isinstance(q, dict) and q.get("text"):
+            text2seed[q["text"]] = q.get("seed") or ""
+    hit_query_texts = {
+        r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
+            AiTelemetryQueryHitORM.topic_id == topic.id,
+            AiTelemetryQueryHitORM.total_hits > 0,
+        ).all()
+    }
+    seeds_hit = {text2seed[t] for t in hit_query_texts if text2seed.get(t)}
+    seeds_total = len(json.loads(topic.seed_prompts_json or "[]"))
+
+    return {
+        "topic_id": topic.id, "topic_name": topic.name, "scope": "all-time",
+        "hit_queries": hit, "monitored_queries": monitored,
+        "hit_seeds": len(seeds_hit), "seed_total": seeds_total,
+        "note": "累计被 AI 引擎命中的 query / 种子词;今天的增量用 get_today_effect。" if monitored else
+                "该主题暂无监测命中记录(可能未跑批或选错主题)。",
+    }
+
+
 async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
     """今天(Asia/Shanghai)投放效果:今天有多少**扩展问题**被引擎搜到(命中)、多少**种子词**被搜到。只读。
 
@@ -419,7 +463,8 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
     expanded_hit = len(hit_q & expanded_all)
     seeds_hit = {text2seed[t] for t in hit_q if text2seed.get(t)}
 
-    return {
+    out = {
+        "scope": "today",
         "date": sh_now.strftime("%Y-%m-%d"),
         "expanded_hit_today": expanded_hit,
         "expanded_total": len(expanded_all),
@@ -427,6 +472,11 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
         "seed_total": len(seeds_all),
         "distinct_queries_hit_today": len(hit_q),
     }
+    if not expanded_all and not seeds_all:
+        out["note"] = "当前主题还没有种子词/扩展词(未配置或选错主题);若要看累计命中请用 get_query_coverage。"
+    elif len(hit_q) == 0:
+        out["note"] = "今天还没有命中记录(可能今天未跑批);累计命中请用 get_query_coverage。"
+    return out
 
 
 async def ingest_material(
@@ -668,6 +718,7 @@ TOOLS = [
     get_report,
     get_batch_results,
     get_growth_summary,
+    get_query_coverage,
     get_today_effect,
     get_publish_status,
     ingest_material,

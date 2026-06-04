@@ -13,6 +13,7 @@ interface Msg {
 
 const TOOL_TITLE: Record<string, string> = {
   get_today_effect: '今日投放效果',
+  get_query_coverage: '累计命中(被搜到)',
   get_growth_summary: '品牌增长数据',
   get_publish_status: '发布进度',
   get_report: '诊断报告',
@@ -28,9 +29,12 @@ function CardView({ card }: { card: AgentCard }) {
   const d = card.data || {};
   const rows: [string, string][] = [];
   if (card.tool === 'get_today_effect') {
-    rows.push(['扩展问题被搜到', `${d.expanded_hit_today ?? 0} / ${d.expanded_total ?? 0}`]);
-    rows.push(['种子词被搜到', `${d.seed_hit_today ?? 0} / ${d.seed_total ?? 0}`]);
+    rows.push(['扩展问题被搜到(今天)', `${d.expanded_hit_today ?? 0} / ${d.expanded_total ?? 0}`]);
+    rows.push(['种子词被搜到(今天)', `${d.seed_hit_today ?? 0} / ${d.seed_total ?? 0}`]);
     if (d.date) rows.push(['日期', String(d.date)]);
+  } else if (card.tool === 'get_query_coverage') {
+    rows.push(['被搜到的问题(累计)', `${d.hit_queries ?? 0} / ${d.monitored_queries ?? 0}`]);
+    rows.push(['被搜到的种子词(累计)', `${d.hit_seeds ?? 0} / ${d.seed_total ?? 0}`]);
   } else if (card.tool === 'get_growth_summary') {
     rows.push(['命中率', pct(d.hit_rate)]);
     const br = (d.brand_rank || {}) as Record<string, unknown>;
