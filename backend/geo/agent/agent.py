@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from geo.agent.deps import AgentDeps
@@ -33,6 +34,16 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 def build_agent():
     """构造并缓存 Agent(无状态、工具注册一次;每次对话用 deps 注入账号上下文)。"""
     from pydantic_ai import Agent
+    from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+    settings = None
+    # 走 OpenRouter 时:强制只路由「支持 tools 参数」的 provider,并优先 DeepSeek 一方,
+    # 避免某些 provider 把 DeepSeek 原生 tool-call 格式泄漏成文本(实测间歇性发生)。
+    # DeepSeek 官方 API(DEEPSEEK_API_KEY)原生稳定,不需要此 extra_body。
+    if os.environ.get("OPENROUTER_API_KEY", "").strip() and not os.environ.get("DEEPSEEK_API_KEY", "").strip():
+        settings = OpenAIChatModelSettings(
+            extra_body={"provider": {"require_parameters": True, "order": ["DeepSeek"]}},
+        )
 
     return Agent(
         get_deepseek_model(),
@@ -40,4 +51,5 @@ def build_agent():
         system_prompt=SYSTEM_PROMPT,
         tools=TOOLS,
         retries=2,  # DeepSeek tool 漂:ModelRetry 回灌纠正
+        model_settings=settings,
     )
