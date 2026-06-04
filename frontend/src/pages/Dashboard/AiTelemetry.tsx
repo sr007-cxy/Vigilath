@@ -2687,9 +2687,10 @@ export function TopicEditor({
                           disabled={c === 0}
                           className="px-2 py-0.5 rounded-full text-xs"
                           style={{
-                            background: isActive ? color : `${color}1a`,
+                            background: isActive ? color : `${color}26`,
                             color: isActive ? '#fff' : color,
-                            border: `1px solid ${color}55`,
+                            border: `1px solid ${isActive ? color : `${color}aa`}`,
+                            fontWeight: 600,
                             opacity: c === 0 ? 0.4 : 1,
                             cursor: c === 0 ? 'not-allowed' : 'pointer',
                           }}
@@ -2770,13 +2771,14 @@ export function TopicEditor({
                                 {q.score}
                               </span>
                             )}
-                            {/* 2026-05-28 — 4 维场景 badge */}
+                            {/* 2026-05-28 — 4 维场景 badge;2026-06-04 改实心填充 + 白字,原 13% 半透明底太淡看不清 */}
                             {q.scene && (
                               <span
-                                className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium"
+                                className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none tracking-wide"
                                 style={{
-                                  background: `${SCENE_COLORS[q.scene]}22`,
-                                  color: SCENE_COLORS[q.scene],
+                                  background: SCENE_COLORS[q.scene],
+                                  color: '#fff',
+                                  boxShadow: `0 1px 2px ${SCENE_COLORS[q.scene]}55`,
                                 }}
                                 title={t(`topic.profile.monitor.scene.${q.scene}.label`) as string}
                               >
