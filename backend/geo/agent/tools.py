@@ -46,10 +46,11 @@ def _account_topic(ctx: RunContext[AgentDeps]):
         if t is None or t.user_id != acc:
             raise ModelRetry("指定主题不存在或不属于当前账号。")
         return t
+    # 多主题账号:优先「最近跑批」的主题(用户多半在看那个),其次最新创建;避免选到旧空主题
     return (
         db.query(AiTelemetryTopicORM)
         .filter(AiTelemetryTopicORM.user_id == acc)
-        .order_by(AiTelemetryTopicORM.id.asc())
+        .order_by(AiTelemetryTopicORM.last_run_at.desc().nullslast(), AiTelemetryTopicORM.id.desc())
         .first()
     )
 
