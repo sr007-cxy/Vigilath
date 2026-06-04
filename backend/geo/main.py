@@ -87,9 +87,8 @@ app.include_router(content.router, prefix="/api", tags=["content"])
 app.include_router(engine_sessions.router, prefix="/api", tags=["engine-sessions"])
 app.include_router(admin_crawl.router, prefix="/api", tags=["admin-crawl"])
 
-# GEO 优化 Agent(对话式)。模块级不依赖 pydantic-ai(端点内惰性加载),未装也不影响启动。
-from geo.agent import api as agent_api  # noqa: E402
-app.include_router(agent_api.router, prefix="/api", tags=["agent"])
+# GEO 优化 Agent(对话式)跑在**独立 service**(方案 B,geo.agent.service:app + 独立 venv),
+# nginx 把 /api/agent/* 反代到它。主后端不挂载 agent、不装 pydantic-ai —— 彻底隔离版本冲突。
 
 # 舆情定时任务 — 仅 leader 进程启动 APScheduler.
 # 部署:多 worker 时给一个独立 systemd unit 设 GEO_SCHEDULER_LEADER=1,

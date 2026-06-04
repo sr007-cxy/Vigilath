@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from geo.api.auth import get_current_user
+from geo.agent.auth import get_current_user          # 独立校验,不 import geo.api
 from geo.agent.methods import resolve_account
 from geo.database import SessionLocal
 from geo.models.user import UserORM
