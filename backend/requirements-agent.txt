@@ -11,6 +11,7 @@ pydantic-ai-slim[openai]>=1.0,<2
 
 # geo 服务/模型层(被 agent 工具复用)所需,与主后端版本对齐:
 sqlalchemy==2.0.23
+psycopg[binary]>=3.1          # geo.database 用 postgresql+psycopg://(import 时即建 engine)
 requests==2.31.0
 beautifulsoup4==4.12.2
 python-jose==3.3.0
