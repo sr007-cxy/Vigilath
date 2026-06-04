@@ -109,19 +109,51 @@ async def run_geo_checks(ctx: RunContext[AgentDeps], categories: list[str] | Non
     return GeoCheckResult(url=url, raw=raw if isinstance(raw, dict) else {"result": raw})
 
 
-# ── 其余工具(占位,按 §5 逐个补)──────────────────────────────
-# 形如:
-#   async def expand_prompts(ctx, seed_ids): usage_guardrail_check(ctx.deps, "expand_prompts");
-#       ... 调 query_expander.expand_one_scene ...
-# create_topic / ingest_material / set_seed_prompts / confirm_prompts /
-# probe_visibility / probe_citation / trace_sources / analyze_competitor /
-# get_report / draft_content_plan / confirm_template / draft_article / edit_article /
-# get_publish_status / get_batch_results / ask_knowledge
+async def set_seed_prompts(ctx: RunContext[AgentDeps], prompts: list[str]) -> dict:
+    """设定/覆盖当前主题的种子提示词(写)。
+
+    prompts: 种子词列表(品类/品牌相关短语)。
+    """
+    import json
+    usage_guardrail_check(ctx.deps, "set_seed_prompts")
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    cleaned = [p.strip() for p in prompts if p and p.strip()]
+    if not cleaned:
+        raise ModelRetry("prompts 不能为空。")
+    topic.seed_prompts_json = json.dumps(cleaned, ensure_ascii=False)
+    ctx.deps.db.commit()
+    return {"topic_id": topic.id, "seed_prompts": cleaned}
+
+
+async def get_prompts(ctx: RunContext[AgentDeps]) -> dict:
+    """读当前主题的种子词 + 已扩展的 query 列表(只读)。"""
+    import json
+    topic = _account_topic(ctx)
+    if topic is None:
+        return {"seed": [], "queries": []}
+    return {
+        "topic_id": topic.id,
+        "seed": json.loads(topic.seed_prompts_json or "[]"),
+        "queries": json.loads(topic.queries_json or "[]"),
+    }
+
+
+# ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
+# 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
+#   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
+#   probe_*(异步 run 管线)/ trace_sources / analyze_competitor /
+#   get_report(Solution)/ draft_content_plan(ExecutionPlan)/ confirm_template /
+#   draft_article(content_generator)/ edit_article / get_publish_status /
+#   get_batch_results(runs/responses)/ ingest_material + ask_knowledge(RAG)
 
 
 # 注册到 Agent 的工具列表(agent.py 引用)。新增工具加到这里即 drop-in。
 TOOLS = [
     create_topic,
     get_topic,
+    set_seed_prompts,
+    get_prompts,
     run_geo_checks,
 ]
