@@ -20,3 +20,6 @@ playwright>=1.44.0
 apscheduler>=3.10.4
 python-docx>=1.1.0
 pypdf>=4.0.0
+# GEO 优化 Agent(对话式)— Pydantic AI(大脑走 DeepSeek,OpenAI 兼容)
+# 用 slim+openai(DeepSeek 走 OpenAI 兼容端,无需全 provider);本地验证 1.105.0
+pydantic-ai-slim[openai]>=1.0,<2
