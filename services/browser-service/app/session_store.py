@@ -52,6 +52,13 @@ _POOL_URL = (os.environ.get("ENGINE_SESSION_POOL_URL") or "").rstrip("/")
 _POOL_TOKEN = (os.environ.get("ENGINE_SESSION_SERVICE_TOKEN") or "").strip()
 _POOL_HTTP_TIMEOUT = float(os.environ.get("ENGINE_SESSION_POOL_TIMEOUT", "5"))
 
+# 身份绑定:check-out 时带本 worker 的稳定 id(由 WORKER_UID crc32),池子据此
+# 把账号"粘"在固定 worker/出口 IP 上(sticky lease),降低 deepseek 等按 IP 风控。
+# 未设 WORKER_UID(如手动调用)→ None,池子退回"最少被用"老策略。
+import zlib as _zlib
+_uid = (os.environ.get("WORKER_UID") or "").strip()
+_WORKER_POOL_ID = (_zlib.crc32(_uid.encode("utf-8")) & 0x7FFFFFFF) if _uid else None
+
 # 记录最近一次 check-out 的 session_id,供 report_session_outcome 用。
 # 用 thread-local 是因为 browser-service 是 thread-pool 模型,每个并发 search
 # 在自己的 thread 里。AsyncIO 单进程下也成立 — Playwright async 不会在
@@ -79,10 +86,13 @@ def _pool_checkout(engine_name: str) -> Optional[dict]:
     if not _pool_enabled():
         return None
     try:
+        params = {"engine": engine_name}
+        if _WORKER_POOL_ID is not None:
+            params["worker_id"] = _WORKER_POOL_ID
         with httpx.Client(timeout=_POOL_HTTP_TIMEOUT) as client:
             r = client.post(
                 f"{_POOL_URL}/api/engine-sessions/check-out",
-                params={"engine": engine_name},
+                params=params,
                 headers={"X-Service-Token": _POOL_TOKEN},
             )
         if r.status_code == 404:

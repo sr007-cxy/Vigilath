@@ -78,6 +78,9 @@ def _valid_engines() -> set[str]:
 
 
 _CAPTCHA_QUARANTINE_THRESHOLD = 3   # 累计被挑 CAPTCHA 3 次 → quarantine
+# 身份绑定:check-out 带 worker_id 时给账号打租约,粘在该 worker/IP 上这么久;
+# 活跃 worker 每次 check-out 会续租,挂掉的 worker 租约到期后账号释放给别人。
+_LEASE_TTL_HOURS = int(os.environ.get("ENGINE_SESSION_LEASE_TTL_HOURS", "6"))
 
 # ── Quarantine policy(D2 — P1 失败信号 enum 化)──────────────────
 #
@@ -137,31 +140,53 @@ def upload_session(
 @router.post("/engine-sessions/check-out", response_model=SessionCheckedOut)
 def check_out(
     engine: str,
+    worker_id: Optional[int] = None,
     db: Session = Depends(get_db),
     _auth: None = Depends(_require_service_token),
 ):
-    """browser-service 拿一条最少被用的 active session。
+    """browser-service 拿一条 active session。
 
-    选择策略:active + captcha_count < 阈值 + 未过期,按
-    (use_count ASC, last_used_at ASC NULLS FIRST) 排序 — 没被用过的优先,
-    其次最久没被用的。
+    身份绑定(2026-06):带 worker_id 时优先回该 worker 上次用的那条(sticky lease),
+    让账号粘在固定 worker / 出口 IP 上,降低按 IP 风控;自己没有就领一条空闲 / 租约
+    过期的并绑给自己;都被别人占着才退回"最少被用"抢一条。不带 worker_id → 老策略。
+
+    基础过滤:active + captcha_count < 阈值 + 未过期。排序:use_count ASC, last_used ASC。
     """
     if engine not in _valid_engines():
         raise HTTPException(400, f"unsupported engine: {engine!r}")
 
     now = datetime.utcnow()
-    q = (
-        db.query(EngineSessionORM)
-        .filter(EngineSessionORM.engine == engine)
-        .filter(EngineSessionORM.status == "active")
-        .filter(EngineSessionORM.captcha_count < _CAPTCHA_QUARANTINE_THRESHOLD)
-        .filter((EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now))  # noqa: E711
-        .order_by(
-            EngineSessionORM.use_count.asc(),
-            EngineSessionORM.last_used_at.asc().nullsfirst(),
+
+    def _base():
+        return (
+            db.query(EngineSessionORM)
+            .filter(EngineSessionORM.engine == engine)
+            .filter(EngineSessionORM.status == "active")
+            .filter(EngineSessionORM.captcha_count < _CAPTCHA_QUARANTINE_THRESHOLD)
+            .filter((EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now))  # noqa: E711
         )
-    )
-    row = q.first()
+
+    _least = (EngineSessionORM.use_count.asc(), EngineSessionORM.last_used_at.asc().nullsfirst())
+
+    if worker_id is not None:
+        # 1) 我上次绑的账号(sticky)
+        row = _base().filter(EngineSessionORM.leased_by_worker_id == worker_id).order_by(*_least).first()
+        if row is None:
+            # 2) 空闲 / 租约过期的 → 领来绑给我
+            row = (_base()
+                   .filter((EngineSessionORM.leased_by_worker_id == None)  # noqa: E711
+                           | (EngineSessionORM.leased_until == None)       # noqa: E711
+                           | (EngineSessionORM.leased_until < now))
+                   .order_by(*_least).first())
+        if row is None:
+            # 3) 都被别人占着 → 退回最少被用,抢一条
+            row = _base().order_by(*_least).first()
+        if row is not None:
+            row.leased_by_worker_id = worker_id
+            row.leased_until = now + timedelta(hours=_LEASE_TTL_HOURS)
+    else:
+        row = _base().order_by(*_least).first()
+
     if row is None:
         raise HTTPException(404, f"no active session available for engine={engine}")
 
@@ -240,9 +265,9 @@ def check_in(
 
     row.fail_counts_json = json.dumps(fc)
 
-    # 释放 lease(P3 D4 才用,但 D2 顺手清,避免下次 check-out 看到 stale lease)
-    row.leased_by_worker_id = None
-    row.leased_until = None
+    # 身份绑定(2026-06):check-in 不清租约 —— 让账号继续粘在该 worker/IP 上,
+    # 下次同 worker check-out 优先拿回它(sticky)。挂掉的 worker 由 leased_until
+    # 到期(_LEASE_TTL_HOURS)自动释放;quarantine / 过期的会被基础过滤排除,租约无害。
 
     db.commit()
     return {
