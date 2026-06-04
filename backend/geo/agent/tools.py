@@ -193,6 +193,183 @@ async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -
     return {"topic_id": topic.id, "added": added, "query_count": len(existing)}
 
 
+async def get_report(ctx: RunContext[AgentDeps]) -> dict:
+    """读当前主题的诊断报告(solution:根因诊断 + 叙述)。只读。无 / 未就绪时给提示。"""
+    import json
+    from geo.models.ai_telemetry import AiTelemetryTopicSolutionORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    sol = (
+        ctx.deps.db.query(AiTelemetryTopicSolutionORM)
+        .filter(AiTelemetryTopicSolutionORM.topic_id == topic.id)
+        .order_by(AiTelemetryTopicSolutionORM.id.desc())
+        .first()
+    )
+    if sol is None or sol.status != "ready":
+        return {"status": (sol.status if sol else "none"), "report": None, "hint": "诊断报告尚未生成或生成中"}
+    return {
+        "status": sol.status,
+        "diagnosis": json.loads(sol.diagnosis_json or "{}"),
+        "narrative": json.loads(sol.narrative_json or "{}"),
+    }
+
+
+async def get_batch_results(ctx: RunContext[AgentDeps]) -> dict:
+    """读最近一次跑批的真实引擎可见性(每引擎命中率)。只读;引擎/调度平台固定,用户只看结果。"""
+    from geo.models.ai_telemetry import AiTelemetryResponseORM, AiTelemetryRunORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    run = (
+        ctx.deps.db.query(AiTelemetryRunORM)
+        .filter(AiTelemetryRunORM.topic_id == topic.id)
+        .order_by(AiTelemetryRunORM.id.desc())
+        .first()
+    )
+    if run is None:
+        return {"status": "none", "hint": "还没有跑批结果"}
+    resps = ctx.deps.db.query(AiTelemetryResponseORM).filter(AiTelemetryResponseORM.run_id == run.id).all()
+    by_engine: dict[str, dict] = {}
+    for r in resps:
+        e = by_engine.setdefault(r.engine, {"total": 0, "hits": 0})
+        e["total"] += 1
+        if r.hit:
+            e["hits"] += 1
+    return {"run_id": run.id, "status": run.status, "response_count": len(resps), "by_engine": by_engine}
+
+
+async def get_publish_status(ctx: RunContext[AgentDeps]) -> dict:
+    """读当前主题文章的发布进度(按 status 聚合:draft/pending_review/approved/published 等)。只读。"""
+    from sqlalchemy import func
+
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    rows = (
+        ctx.deps.db.query(TopicGeneratedDocORM.status, func.count())
+        .filter(TopicGeneratedDocORM.topic_id == topic.id)
+        .group_by(TopicGeneratedDocORM.status)
+        .all()
+    )
+    agg = {s: int(c) for s, c in rows}
+    return {"topic_id": topic.id, "by_status": agg, "published": agg.get("published", 0), "total": sum(agg.values())}
+
+
+async def get_growth_summary(ctx: RunContext[AgentDeps]) -> dict:
+    """读品牌增长数据(从最近一次跑批的真实引擎结果聚合):每引擎命中率、品牌位次 Top1/Top3、
+    高频竞品、高频被引域名、提及位置分布。只读;引擎/调度平台固定。"""
+    import json
+    from collections import Counter
+
+    from geo.models.ai_telemetry import AiTelemetryResponseORM, AiTelemetryRunORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    run = (
+        ctx.deps.db.query(AiTelemetryRunORM)
+        .filter(AiTelemetryRunORM.topic_id == topic.id)
+        .order_by(AiTelemetryRunORM.id.desc())
+        .first()
+    )
+    if run is None:
+        return {"status": "none", "hint": "还没有跑批结果,无法给品牌增长数据"}
+    resps = ctx.deps.db.query(AiTelemetryResponseORM).filter(AiTelemetryResponseORM.run_id == run.id).all()
+
+    engines: dict[str, dict] = {}
+    top1 = top3 = hit_total = 0
+    competitors: Counter = Counter()
+    domains: Counter = Counter()
+    positions: Counter = Counter()
+    for r in resps:
+        e = engines.setdefault(r.engine, {"total": 0, "hits": 0})
+        e["total"] += 1
+        if r.hit:
+            e["hits"] += 1
+            hit_total += 1
+            if isinstance(r.brand_rank, int):
+                if r.brand_rank <= 1:
+                    top1 += 1
+                if r.brand_rank <= 3:
+                    top3 += 1
+            if r.mention_position:
+                positions[r.mention_position] += 1
+        for c in (json.loads(r.competitors_json or "[]") if r.competitors_json else []):
+            if isinstance(c, dict) and c.get("name"):
+                competitors[c["name"]] += int(c.get("count") or 1)
+        for d in (json.loads(r.citation_domains_json or "[]") if r.citation_domains_json else []):
+            if d:
+                domains[d] += 1
+
+    total = len(resps)
+    return {
+        "run_id": run.id,
+        "response_count": total,
+        "hit_rate": round(hit_total / total, 3) if total else 0,
+        "by_engine": {e: {**v, "hit_rate": round(v["hits"] / v["total"], 3) if v["total"] else 0} for e, v in engines.items()},
+        "brand_rank": {"top1": top1, "top3": top3, "hits": hit_total},
+        "top_competitors": [{"name": n, "count": c} for n, c in competitors.most_common(8)],
+        "top_citation_domains": [{"domain": d, "count": c} for d, c in domains.most_common(8)],
+        "mention_positions": dict(positions),
+    }
+
+
+async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
+    """今天(Asia/Shanghai)投放效果:今天有多少**扩展问题**被引擎搜到(命中)、多少**种子词**被搜到。只读。
+
+    口径:扫今天该主题命中(hit)的真实引擎结果,命中的 query 计入扩展问题;
+    经 queries_json 的 seed 字段回溯到种子词,统计被搜到的种子数。
+    """
+    import json
+    from datetime import datetime, timedelta
+
+    from geo.models.ai_telemetry import AiTelemetryResponseORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+
+    seeds_all = set(json.loads(topic.seed_prompts_json or "[]"))
+    text2seed: dict[str, str] = {}
+    for q in json.loads(topic.queries_json or "[]"):
+        if isinstance(q, dict) and q.get("text"):
+            text2seed[q["text"]] = q.get("seed") or ""
+        elif isinstance(q, str):
+            text2seed[q] = ""
+    expanded_all = set(text2seed.keys())
+
+    # 今天(Asia/Shanghai)起点 → UTC(created_at 存 UTC)
+    sh_now = datetime.utcnow() + timedelta(hours=8)
+    today_start_utc = sh_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=8)
+
+    rows = (
+        ctx.deps.db.query(AiTelemetryResponseORM.query)
+        .filter(
+            AiTelemetryResponseORM.topic_id == topic.id,
+            AiTelemetryResponseORM.hit.is_(True),
+            AiTelemetryResponseORM.created_at >= today_start_utc,
+        )
+        .all()
+    )
+    hit_q = {r[0] for r in rows}
+    expanded_hit = len(hit_q & expanded_all)
+    seeds_hit = {text2seed[t] for t in hit_q if text2seed.get(t)}
+
+    return {
+        "date": sh_now.strftime("%Y-%m-%d"),
+        "expanded_hit_today": expanded_hit,
+        "expanded_total": len(expanded_all),
+        "seed_hit_today": len(seeds_hit),
+        "seed_total": len(seeds_all),
+        "distinct_queries_hit_today": len(hit_q),
+    }
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -211,4 +388,9 @@ TOOLS = [
     expand_prompts,
     set_selected_queries,
     run_geo_checks,
+    get_report,
+    get_batch_results,
+    get_growth_summary,
+    get_today_effect,
+    get_publish_status,
 ]
