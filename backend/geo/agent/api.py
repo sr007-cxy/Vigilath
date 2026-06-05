@@ -63,22 +63,32 @@ async def chat(
 
     async def event_stream():
         try:
-            async with agent.run_stream(body.message, deps=deps, message_history=history) as result:
-                async for delta in result.stream_text(delta=True):
-                    yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
-                # 流式文本结束后:抽数据工具返回 → 结构化卡片
-                cards = []
-                for m in result.all_messages():
-                    for p in getattr(m, "parts", []):
-                        if getattr(p, "part_kind", "") == "tool-return" and getattr(p, "tool_name", "") in CARD_TOOLS:
-                            cards.append({"tool": p.tool_name, "data": p.content})
-                if cards:
-                    yield f"data: {json.dumps({'cards': cards}, ensure_ascii=False, default=str)}\n\n"
-                # 落库多轮记忆
-                try:
-                    save_message_history(deps, result.all_messages_json())
-                except Exception:  # noqa: BLE001 — 存历史失败不影响本轮回答
-                    pass
+            # 必须用 agent.run() 跑完整「模型→工具→模型」循环。
+            # run_stream()+stream_text() 在 DeepSeek 同时吐文本+tool_call 时会把文本当最终结果,
+            # 工具被标成 "Tool not executed - a final result was already processed",卡片全空(0/0)。
+            result = await agent.run(body.message, deps=deps, message_history=history)
+
+            # 伪流式:把最终文本分块推前端,保留逐字 UX
+            text = result.output or ""
+            step = 24
+            for i in range(0, len(text), step):
+                yield f"data: {json.dumps({'delta': text[i:i + step]}, ensure_ascii=False)}\n\n"
+
+            # 抽真实执行的数据工具返回 → 结构化卡片(去重:同工具留最后一次)
+            cards_by_tool: dict[str, dict] = {}
+            for m in result.all_messages():
+                for p in getattr(m, "parts", []):
+                    if getattr(p, "part_kind", "") == "tool-return" and getattr(p, "tool_name", "") in CARD_TOOLS:
+                        cards_by_tool[p.tool_name] = {"tool": p.tool_name, "data": p.content}
+            cards = list(cards_by_tool.values())
+            if cards:
+                yield f"data: {json.dumps({'cards': cards}, ensure_ascii=False, default=str)}\n\n"
+
+            # 落库多轮记忆
+            try:
+                save_message_history(deps, result.all_messages_json())
+            except Exception:  # noqa: BLE001 — 存历史失败不影响本轮回答
+                pass
             yield "data: {\"done\": true}\n\n"
         except Exception as e:  # noqa: BLE001
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
