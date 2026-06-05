@@ -136,7 +136,17 @@ export function AgentChatWidget() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        {open ? '×' : '🤖'}
+        {open ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        ) : (
+          // AI 闪光图标
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 2.6l1.7 4.4 4.4 1.7-4.4 1.7L12 14.8l-1.7-4.4L5.9 8.7l4.4-1.7L12 2.6z" />
+            <path d="M18.5 14l.95 2.45L21.9 17.4l-2.45.95L18.5 20.8l-.95-2.45L15.1 17.4l2.45-.95L18.5 14z" opacity="0.92" />
+          </svg>
+        )}
       </button>
 
       {/* 聊天面板 */}
@@ -155,7 +165,10 @@ export function AgentChatWidget() {
             padding: '14px 16px', background: 'var(--accent-gradient)', color: '#fff',
             fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            <span>🤖 GEO 优化助手</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+              <path d="M12 2.6l1.7 4.4 4.4 1.7-4.4 1.7L12 14.8l-1.7-4.4L5.9 8.7l4.4-1.7L12 2.6z" />
+            </svg>
+            <span>GEO 优化助手</span>
           </div>
 
           <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 14, background: 'var(--bg-primary)' }}>
