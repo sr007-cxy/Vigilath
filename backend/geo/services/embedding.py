@@ -12,15 +12,28 @@ import os
 
 
 def _provider() -> tuple[str | None, str, str, str]:
-    """返回 (provider, url, model, key);无 key 返回 (None, ...)。优先 GLM。"""
+    """返回 (provider, url, model, key);无 key 返回 (None, ...)。
+
+    顺序:OpenAI(有 key 且支持 embedding)→ GLM 智谱 → DashScope 通义。
+    可用 AGENT_EMBED_PROVIDER 强制指定(openai/glm/dashscope)。
+    """
+    force = (os.environ.get("AGENT_EMBED_PROVIDER") or "").strip().lower()
+
+    oa = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if oa and force in ("", "openai"):
+        base = (os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        return "openai", f"{base}/embeddings", os.environ.get("OPENAI_EMBED_MODEL", "text-embedding-3-small"), oa
+
     glm = (os.environ.get("GLM_API_KEY") or "").strip()
-    if glm:
+    if glm and force in ("", "glm"):
         base = (os.environ.get("GLM_BASE_URL") or "https://open.bigmodel.cn/api/paas/v4/").rstrip("/")
         return "glm", f"{base}/embeddings", os.environ.get("GLM_EMBED_MODEL", "embedding-3"), glm
+
     qwen = (os.environ.get("QWEN_API_KEY") or os.environ.get("DASHSCOPE_API_KEY") or "").strip()
-    if qwen:
+    if qwen and force in ("", "dashscope"):
         url = os.environ.get("DASHSCOPE_EMBED_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings")
         return "dashscope", url, os.environ.get("AGENT_EMBED_MODEL", "text-embedding-v3"), qwen
+
     return None, "", "", ""
 
 
