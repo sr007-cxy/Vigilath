@@ -52,4 +52,7 @@ def build_agent():
         tools=TOOLS,
         retries=2,  # DeepSeek tool 漂:ModelRetry 回灌纠正
         model_settings=settings,
+        # DeepSeek 常在同一条响应里同时吐文本 + tool_call,默认 end_strategy='early'
+        # 会把文本当最终结果、跳过工具(卡片全 0/0)。exhaustive 强制执行完所有工具调用。
+        end_strategy="exhaustive",
     )
