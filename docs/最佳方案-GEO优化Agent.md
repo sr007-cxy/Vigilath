@@ -119,17 +119,18 @@
 
 ---
 
-## 9. 框架选择(已定:OpenAI Agents SDK)
+## 9. 框架选择(✅ 已落地:Pydantic AI + DeepSeek)
 
-**大脑 = DeepSeek**(OpenAI 兼容 function-calling;成本远低于 Claude、与现有内容生成同栈)。
+**大脑 = DeepSeek**(OpenAI 兼容 function-calling;成本远低于 Claude、与现有内容生成同栈;测试环境经 OpenRouter,加 `provider:{require_parameters,order:[DeepSeek]}` 修 tool-call 泄漏)。
 
-**框架 = OpenAI Agents SDK**(`openai-agents`)。
+**框架 = Pydantic AI**(`pydantic-ai-slim[openai]`)—— **已实现并上线 vm02 测试环境**(详见 `实现设计-Agent.md`)。
 
+> 初评时一度倾向 OpenAI Agents SDK(下方矩阵),但**落地选了 Pydantic AI**:头号风险是 DeepSeek 多步 tool-calling 不稳,**Pydantic AI 的结构化校验最对症**;deps 注入也正好对齐租户上下文。实测验证通过(19 工具、多轮记忆、语义检索)。
 > 候选只在**确认真实、成熟**的 Python agent 框架里评(此前误纳的 OpenClaw / Hermes / Pi SDK 来自不可靠的联网信息,已剔除)。
 
 **候选对比矩阵**(✅强 / ◯可 / ⚠️弱;粗体为本项目权重高的维度):
 
-| 维度 | **OpenAI Agents SDK(选)** | Pydantic AI | LangGraph |
+| 维度 | OpenAI Agents SDK | **Pydantic AI(选)** | LangGraph |
 |---|---|---|---|
 | 语言/可嵌入(Python) | ✅ | ✅ | ✅ |
 | DeepSeek(OpenAI 兼容,base_url) | ✅ | ✅ | ✅ |
@@ -139,14 +140,12 @@
 | 多 agent(**不确定的未来**) | ✅ handoff | ◯ delegation | ✅ supervisor/swarm |
 | 我们用得到的重特性 | 单 agent 循环 + 工具 + 流式即够 | 同 | 持久化/checkpoint/记忆 **我们自建,用不上** |
 
-**决策逻辑(随你最新两点澄清落定)**:
-1. **多 agent 不确定** → LangGraph 的主理由(为多 agent 编排 + 重特性)不成立;而它的持久化/记忆/checkpoint 我们全自建,用不上 → **过度工程,出局**(真要复杂多 agent 编排再上)。
-2. **你看重出名 + 好用,且担心 Pydantic AI 不够出名** → 在轻量真实框架里,**OpenAI Agents SDK 出名度(官方)+ 简单**最贴你的取向。
-3. **头号风险 DeepSeek tool-call 稳健性** → Pydantic AI 最强,降为**备选**:若实测 OpenAI Agents SDK 下 DeepSeek tool 漂严重,切 Pydantic AI(其结构化校验专治此),**Tool/Method 解耦,不动工具层**。
+**决策逻辑(落地结论)**:
+1. **多 agent 不确定** → LangGraph 的持久化/记忆/checkpoint 我们全自建,用不上 → **过度工程,出局**(真要复杂多 agent 编排再上)。
+2. **头号风险 = DeepSeek 多步 tool-calling 不稳** → **Pydantic AI 的结构化校验最对症**,deps 注入对齐租户上下文;故**最终落地 Pydantic AI**(OpenAI Agents SDK 为同级备选,Tool/Method 与框架解耦,换不动工具层)。
+3. **实测**:经 OpenRouter 时 DeepSeek 会把 tool-call 泄漏成文本 → 加 `provider:{require_parameters,order:[DeepSeek]}` 解决,Pydantic AI schema 校验 + 重试兜底。
 
-**唯一代价 + 缓解**:OpenAI Agents SDK 的结构化校验不如 Pydantic AI → 严格 JSON Schema + 服务端校验重试、单轮少工具、步数硬上限、关键归因步升级更强模型。
-
-**低风险**:W1 地基与框架无关;三个候选都支持「将来要多 agent 也能长」,故选轻量不赌掉未来。
+**低风险**:W1 地基与框架无关;三个候选都支持「将来要多 agent 也能长」。**现状:Pydantic AI 已上线、19 工具全工作流验证通过。**
 
 ---
 
