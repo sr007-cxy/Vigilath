@@ -1,39 +1,49 @@
-"""通义 DashScope text-embedding(OpenAI 兼容端)—— 给 agent 资料 RAG 做向量语义检索。
+"""文本 embedding(多供应商,OpenAI 兼容)—— 给 agent 资料 RAG 做向量语义检索。
 
-用现有 QWEN_API_KEY(通义/DashScope 账号级 key,可同时用于 generation + embedding);
-无 key 时 embedding_enabled()=False,ask_knowledge 自动回退 bigram 关键词检索。
+供应商优先级:
+  1) GLM 智谱(GLM_API_KEY,open.bigmodel.cn,model embedding-3)—— 项目已在用、账户正常
+  2) 通义 DashScope(QWEN_API_KEY / DASHSCOPE_API_KEY,text-embedding-v3)
+无任何 key 时 embedding_enabled()=False,ask_knowledge 自动回退 bigram 关键词检索。
 """
 from __future__ import annotations
 
 import math
 import os
 
-import httpx
 
-DASHSCOPE_EMBED_URL = os.environ.get(
-    "DASHSCOPE_EMBED_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
-)
-EMBED_MODEL = os.environ.get("AGENT_EMBED_MODEL", "text-embedding-v3")
-
-
-def _key() -> str:
-    return (os.environ.get("QWEN_API_KEY") or os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+def _provider() -> tuple[str | None, str, str, str]:
+    """返回 (provider, url, model, key);无 key 返回 (None, ...)。优先 GLM。"""
+    glm = (os.environ.get("GLM_API_KEY") or "").strip()
+    if glm:
+        base = (os.environ.get("GLM_BASE_URL") or "https://open.bigmodel.cn/api/paas/v4/").rstrip("/")
+        return "glm", f"{base}/embeddings", os.environ.get("GLM_EMBED_MODEL", "embedding-3"), glm
+    qwen = (os.environ.get("QWEN_API_KEY") or os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+    if qwen:
+        url = os.environ.get("DASHSCOPE_EMBED_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings")
+        return "dashscope", url, os.environ.get("AGENT_EMBED_MODEL", "text-embedding-v3"), qwen
+    return None, "", "", ""
 
 
 def embedding_enabled() -> bool:
-    return bool(_key())
+    return _provider()[0] is not None
+
+
+def current_provider() -> str | None:
+    return _provider()[0]
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]] | None:
     """批量 embedding;失败/无 key 返回 None(调用方回退关键词)。input 截断到 ~2000 字。"""
-    key = _key()
+    import httpx
+
+    provider, url, model, key = _provider()
     cleaned = [(t or "")[:2000] for t in texts if (t or "").strip()]
-    if not key or not cleaned:
+    if not provider or not cleaned:
         return None
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(DASHSCOPE_EMBED_URL, json={"model": EMBED_MODEL, "input": cleaned}, headers=headers)
+            r = await client.post(url, json={"model": model, "input": cleaned}, headers=headers)
             r.raise_for_status()
             data = sorted(r.json().get("data", []), key=lambda d: d.get("index", 0))
             vecs = [d["embedding"] for d in data]
