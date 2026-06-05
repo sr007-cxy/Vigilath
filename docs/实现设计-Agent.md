@@ -117,3 +117,39 @@ backend/geo/agent/
 ## 8. 落地顺序(一步到位,内部构建依赖)
 
 `deps/model/agent 骨架 → 第一个真实工具 run_geo_checks(+ geo_checker 会话化)→ 批量补齐工具 → api(chat SSE)→ 方法层 publish/guardrail/deliver → RAG/ingest → IM bot`。地基与工具不依赖框架细节,Pydantic AI 仅在 agent.py/tools.py 出现,换框架只动这两处。
+
+---
+
+## 9. 技术栈(已上线)
+
+| 项 | 用的什么 | 备注 |
+|---|---|---|
+| Agent 框架 | **Pydantic AI**(`pydantic-ai-slim[openai]`) | 独立 service `geo-agent:8010` + 独立 venv;只在 `model.py`/`agent.py`/`tools.py` 出现 |
+| 大脑 LLM | **DeepSeek**(OpenAI 兼容 function-calling) | 测试经 OpenRouter,加 `extra_body provider:{require_parameters,order:[DeepSeek]}` 治 tool-call 泄漏;优先 `DEEPSEEK_API_KEY` 直连否则 `OPENROUTER_API_KEY` |
+| 后端 | FastAPI(Python),与主后端隔离 | 主后端 fastapi 0.104+pydantic 2.5,与 pydantic-ai 不兼容 → 独立 venv |
+| 前端 | React + Vite 悬浮聊天窗(SSE 流式 + 结构化卡片) | `components/AgentChat/`、`services/agentApi.ts` |
+| 鉴权 | 复用 `SECRET_KEY` + `user_service`(`geo/agent/auth.py`,不 import geo.api) | 账号级隔离,`account_id` 后端注入、不给模型 |
+
+## 10. 向量语义检索
+
+| 项 | 方案 |
+|---|---|
+| **向量模型** | **通义 DashScope `text-embedding-v3`(1024 维)** 首选;多供应商可切:OpenAI `text-embedding-3-small`、GLM `embedding-3`;`AGENT_EMBED_PROVIDER` 强制指定 |
+| **向量库** | **无专用向量库 / 未装 pgvector**;向量以 JSON 存 `agent_materials.embedding_json`,检索时 **Python 算 cosine**(每账号语料小,够用) |
+| 检索策略 | 语义(cosine,阈值 0.2)**优先** → 无 key/调用失败/无命中 **回退中文 bigram**(2-gram,治中文无空格);`embed` 超时 8s 快速回退 |
+| 何时升级 | 语料涨到很大时改 **pgvector**(列已是 JSON,迁移即可);embedding 维度/模型由 env 切换 |
+
+## 11. 数据存储(PostgreSQL 共用 appdb)
+
+**复用现有(不新建工作流)**:`ai_telemetry_topics`(主题/种子/扩展词/profile/engines)、`ai_telemetry_runs`/`responses`(跑批+引擎答案+命中)、`ai_telemetry_query_hits`(**命中追踪表,被搜到/累计命中的真相源**)、`AiTelemetryTopicSolutionORM`(诊断)、`...ExecutionPlanORM`(发文计划)、`TopicGeneratedDoc`(文章+发布状态)。
+
+**新增 3 项**:
+- `agent_materials`(账号知识库:source/title/text/**embedding_json**)— ingest_material + ask_knowledge
+- `agent_conversations`(账号级多轮记忆,存 Pydantic AI 序列化 message_history)
+- `agent_materials.embedding_json` 列(向量)
+
+> 「被搜到几个/累计命中」一律读 `ai_telemetry_query_hits`(与品牌增长 dashboard 同源);`get_today_effect` 给「今日新增 + 累计」,`get_query_coverage` 给「累计 query/种子」。
+
+## 12. 部署拓扑(vm02 测试)
+
+`nginx /api/agent/* → 127.0.0.1:8010(geo-agent.service,独立 venv)`;主后端 :8000 不动、不装 pydantic-ai。迁移 3 个(`alembic upgrade head`)。前端 `npm run build`。主动触达走中心 cron(prod 无 scheduler leader)。详见 `backend/deploy/README-agent.md`。
