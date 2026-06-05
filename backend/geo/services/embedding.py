@@ -55,7 +55,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]] | None:
         return None
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=8) as client:   # 短超时:供应商不可用时快速回退 bigram
             r = await client.post(url, json={"model": model, "input": cleaned}, headers=headers)
             r.raise_for_status()
             data = sorted(r.json().get("data", []), key=lambda d: d.get("index", 0))
