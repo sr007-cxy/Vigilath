@@ -423,61 +423,66 @@ async def get_query_coverage(ctx: RunContext[AgentDeps]) -> dict:
     }
 
 
-async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
-    """今天(Asia/Shanghai)投放效果:今天有多少**扩展问题**被引擎搜到(命中)、多少**种子词**被搜到。只读。
+def _seed_texts(raw: str | None) -> list[str]:
+    """seed_prompts_json 项可能是 dict({'text':...}) 或 str —— 统一取文本。"""
+    import json
+    out: list[str] = []
+    for s in json.loads(raw or "[]"):
+        if isinstance(s, dict) and s.get("text"):
+            out.append(s["text"])
+        elif isinstance(s, str) and s.strip():
+            out.append(s)
+    return out
 
-    口径:扫今天该主题命中(hit)的真实引擎结果,命中的 query 计入扩展问题;
-    经 queries_json 的 seed 字段回溯到种子词,统计被搜到的种子数。
+
+async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
+    """投放效果:**今日新增命中** + **累计被搜到**的问题/种子词(读命中表 query_hits,口径同品牌增长 dashboard)。只读。
+
+    cumulative_* = 至今被 AI 引擎搜到的问题/种子词;today_new_hits = 今天跑批新命中的问题数。
     """
     import json
     from datetime import datetime, timedelta
 
-    from geo.models.ai_telemetry import AiTelemetryResponseORM
+    from sqlalchemy import distinct, func
+
+    from geo.models.ai_telemetry import AiTelemetryQueryHitORM, AiTelemetryResponseORM
 
     topic = _account_topic(ctx)
     if topic is None:
         raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db, tid = ctx.deps.db, topic.id
 
-    seeds_all = set(json.loads(topic.seed_prompts_json or "[]"))
     text2seed: dict[str, str] = {}
     for q in json.loads(topic.queries_json or "[]"):
         if isinstance(q, dict) and q.get("text"):
             text2seed[q["text"]] = q.get("seed") or ""
-        elif isinstance(q, str):
-            text2seed[q] = ""
-    expanded_all = set(text2seed.keys())
+    seed_total = len(_seed_texts(topic.seed_prompts_json))
 
-    # 今天(Asia/Shanghai)起点 → UTC(created_at 存 UTC)
+    # 累计(命中追踪表)
+    monitored = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+        AiTelemetryQueryHitORM.topic_id == tid).scalar() or 0
+    hit_rows = [r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
+        AiTelemetryQueryHitORM.topic_id == tid, AiTelemetryQueryHitORM.total_hits > 0).all()]
+    cum_hit_seeds = {text2seed[x] for x in hit_rows if text2seed.get(x)}
+
+    # 今日新增(responses 今天 + hit)
     sh_now = datetime.utcnow() + timedelta(hours=8)
     today_start_utc = sh_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=8)
-
-    rows = (
-        ctx.deps.db.query(AiTelemetryResponseORM.query)
-        .filter(
-            AiTelemetryResponseORM.topic_id == topic.id,
+    today_hit = {
+        r[0] for r in db.query(AiTelemetryResponseORM.query).filter(
+            AiTelemetryResponseORM.topic_id == tid,
             AiTelemetryResponseORM.hit.is_(True),
             AiTelemetryResponseORM.created_at >= today_start_utc,
-        )
-        .all()
-    )
-    hit_q = {r[0] for r in rows}
-    expanded_hit = len(hit_q & expanded_all)
-    seeds_hit = {text2seed[t] for t in hit_q if text2seed.get(t)}
-
-    out = {
-        "scope": "today",
-        "date": sh_now.strftime("%Y-%m-%d"),
-        "expanded_hit_today": expanded_hit,
-        "expanded_total": len(expanded_all),
-        "seed_hit_today": len(seeds_hit),
-        "seed_total": len(seeds_all),
-        "distinct_queries_hit_today": len(hit_q),
+        ).all()
     }
-    if not expanded_all and not seeds_all:
-        out["note"] = "当前主题还没有种子词/扩展词(未配置或选错主题);若要看累计命中请用 get_query_coverage。"
-    elif len(hit_q) == 0:
-        out["note"] = "今天还没有命中记录(可能今天未跑批);累计命中请用 get_query_coverage。"
-    return out
+
+    return {
+        "topic_name": topic.name, "date": sh_now.strftime("%Y-%m-%d"),
+        "today_new_hits": len(today_hit),
+        "cumulative_hit_queries": len(set(hit_rows)), "monitored_queries": monitored,
+        "cumulative_hit_seeds": len(cum_hit_seeds), "seed_total": seed_total,
+        "note": "今天没有新跑批,下列为累计数据。" if not today_hit else "",
+    }
 
 
 async def ingest_material(

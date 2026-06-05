@@ -29,9 +29,9 @@ function CardView({ card }: { card: AgentCard }) {
   const d = card.data || {};
   const rows: [string, string][] = [];
   if (card.tool === 'get_today_effect') {
-    rows.push(['扩展问题被搜到(今天)', `${d.expanded_hit_today ?? 0} / ${d.expanded_total ?? 0}`]);
-    rows.push(['种子词被搜到(今天)', `${d.seed_hit_today ?? 0} / ${d.seed_total ?? 0}`]);
-    if (d.date) rows.push(['日期', String(d.date)]);
+    rows.push(['今日新增命中', String(d.today_new_hits ?? 0)]);
+    rows.push(['累计被搜到问题', `${d.cumulative_hit_queries ?? 0} / ${d.monitored_queries ?? 0}`]);
+    rows.push(['累计被搜到种子词', `${d.cumulative_hit_seeds ?? 0} / ${d.seed_total ?? 0}`]);
   } else if (card.tool === 'get_query_coverage') {
     rows.push(['被搜到的问题(累计)', `${d.hit_queries ?? 0} / ${d.monitored_queries ?? 0}`]);
     rows.push(['被搜到的种子词(累计)', `${d.hit_seeds ?? 0} / ${d.seed_total ?? 0}`]);
