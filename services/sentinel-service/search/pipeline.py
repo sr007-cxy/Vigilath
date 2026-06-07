@@ -21,9 +21,11 @@ from .baidu import baidu_search
 from .cnbing import cnbing_search
 from .ddg import ddg_search, throttle
 from .sogou import sogou_search
+from .searxng import searxng_search
 
 
-DEFAULT_ENGINES = ("ddg", "cnbing", "baidu", "sogou")
+# SearXNG 单引擎(server 端聚合多上游 + 处理反爬/IP池);自带引擎保留可回退。
+DEFAULT_ENGINES = ("searxng",)
 
 
 # DDG occasionally returns titles where the `&` of an HTML numeric entity has
@@ -98,7 +100,7 @@ def normalize_result(r: dict, symbol: str) -> dict:
         "author": None,
         "title": _clean(r.get("title")),
         "content": _clean(r.get("body")),  # SERP snippet — short but usually enough
-        "publish_time": None,               # DDG doesn't expose dates reliably
+        "publish_time": r.get("publish_time"),  # SearXNG 透传 publishedDate（自带引擎不给则 None）
         "view_count": None,
         "reply_count": None,
         "url": url,
@@ -127,7 +129,10 @@ def _call_engine(eng: str, query: str, max_results: int,
                  region: str, timelimit: str | None) -> tuple[str, list[dict]]:
     """Call a single engine, return (engine_name, results). Thread-safe."""
     try:
-        if eng == "ddg":
+        if eng == "searxng":
+            r = searxng_search(query, max_results=max_results,
+                               timelimit=timelimit)
+        elif eng == "ddg":
             r = ddg_search(query, max_results=max_results,
                            region=region, timelimit=timelimit)
         elif eng == "cnbing":

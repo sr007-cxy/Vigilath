@@ -58,6 +58,7 @@ def _bootstrap_env_from_dotenv() -> None:
             "DDG_REMOTE_URL", "DDG_REMOTE_TOKEN",
             "DDGS_BACKENDS", "DDGS_TIMEOUT_S",
             "BAIDU_COOKIE",
+            "SEARXNG_URL",
             "HTTP_PROXY", "HTTPS_PROXY",
         ):
             if not os.environ.get(k) and vals.get(k):
