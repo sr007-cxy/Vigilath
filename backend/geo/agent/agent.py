@@ -45,14 +45,47 @@ def build_agent():
             extra_body={"provider": {"require_parameters": True, "order": ["DeepSeek"]}},
         )
 
+    return _make_agent(TOOLS)
+
+
+def _make_agent(tools):
+    from pydantic_ai import Agent
+    from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+    settings = None
+    if os.environ.get("OPENROUTER_API_KEY", "").strip() and not os.environ.get("DEEPSEEK_API_KEY", "").strip():
+        settings = OpenAIChatModelSettings(
+            extra_body={"provider": {"require_parameters": True, "order": ["DeepSeek"]}},
+        )
     return Agent(
         get_deepseek_model(),
         deps_type=AgentDeps,
         system_prompt=SYSTEM_PROMPT,
-        tools=TOOLS,
+        tools=tools,
         retries=2,  # DeepSeek tool 漂:ModelRetry 回灌纠正
         model_settings=settings,
         # DeepSeek 常在同一条响应里同时吐文本 + tool_call,默认 end_strategy='early'
         # 会把文本当最终结果、跳过工具(卡片全 0/0)。exhaustive 强制执行完所有工具调用。
         end_strategy="exhaustive",
     )
+
+
+# ── 对外(embed)agent:工具按能力收敛,且**永不**含 publish_drafts ────────
+from geo.agent import tools as _t   # noqa: E402
+
+_READ_TOOLS = [
+    _t.get_topic, _t.get_prompts, _t.get_report, _t.get_batch_results,
+    _t.get_growth_summary, _t.get_query_coverage, _t.get_today_effect,
+    _t.get_publish_status, _t.ask_knowledge,
+]
+_WRITE_TOOLS = [   # 对外可写,但不含 publish_drafts(真实外发只内部触发)
+    _t.create_topic, _t.set_seed_prompts, _t.expand_prompts, _t.set_selected_queries,
+    _t.run_geo_checks, _t.trigger_diagnosis, _t.draft_articles, _t.ingest_material,
+    _t.confirm_template,
+]
+
+
+@lru_cache(maxsize=2)
+def build_embed_agent(can_write: bool):
+    """对外 agent:read-only 只给只读工具;含 write 再加写工具(永不含 publish_drafts)。"""
+    return _make_agent(_READ_TOOLS + (_WRITE_TOOLS if can_write else []))

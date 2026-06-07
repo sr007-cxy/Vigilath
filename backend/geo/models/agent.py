@@ -32,3 +32,22 @@ class AgentConversationORM(Base):
     account_id = Column(Integer, nullable=False, unique=True, index=True)  # 一账号一会话
     messages_json = Column(Text, nullable=False, default="[]")            # ModelMessagesTypeAdapter 序列化
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AgentTokenORM(Base):
+    """对外开放的账号级 token(见 docs/对外开放设计-Agent小龙虾 §12)。
+
+    1 年期 token,API-key 风格,给外部 agent(小龙虾)链接本 GEO agent 用。
+    token 本身是签名 JWT(库里只存 tid + 元数据,不存明文);校验时**必查 enabled**(长期 token 吊销命门)。
+    """
+    __tablename__ = "agent_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tid = Column(String(length=64), nullable=False, unique=True, index=True)   # token id = JWT 的 tid
+    account_id = Column(Integer, nullable=False, index=True)                    # 这只小龙虾代表的账号
+    caps = Column(String(length=128), nullable=False, default="read")          # 逗号分隔:read[,write]
+    origins = Column(Text, nullable=False, default="")                         # 逗号分隔 CORS 白名单(浏览器直连才校验)
+    label = Column(String(length=255), nullable=False, default="")             # 备注(发给谁)
+    enabled = Column(Integer, nullable=False, default=1)                       # 0=吊销
+    expires_at = Column(DateTime, nullable=False)                              # 默认 +1 年
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

@@ -21,6 +21,7 @@ class AgentDeps:
     db: Session
     topic_id: int | None = None          # 当前激活主题(MVP 限 1;为多主题留 account×topic)
     budget: dict[str, Any] = field(default_factory=dict)   # 用量护栏:token/步数(非计费)
+    caps: list[str] = field(default_factory=lambda: ["read", "write"])   # 能力 scope;内部全权,对外由 embed token 收敛
 
 
 class OwnershipError(PermissionError):

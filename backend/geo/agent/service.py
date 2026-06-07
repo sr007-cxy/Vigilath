@@ -10,12 +10,29 @@ nginx 把 /api/agent/* 反代到本 service(而非主后端)。
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from geo.agent.api import router as agent_router
+from geo.agent.embed.api import router as embed_router
 
 app = FastAPI(title="Vigilath GEO Agent Service", version="0.1")
-app.include_router(agent_router, prefix="/api", tags=["agent"])
+
+# 对外 /api/agent/v1/* 走 Bearer token(非 cookie),CORS 用 "*" 且不带 credentials 是安全的。
+# 浏览器直连场景的精细 Origin 白名单在 token 层(agent_tokens.origins)另校验。
+_origins = [o.strip() for o in (os.environ.get("AGENT_EMBED_ORIGINS") or "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(agent_router, prefix="/api", tags=["agent"])          # 内部:/api/agent/*(登录 JWT)
+app.include_router(embed_router, prefix="/api", tags=["agent-embed"])    # 对外:/api/agent/v1/*(embed token)
 
 
 @app.get("/health")
