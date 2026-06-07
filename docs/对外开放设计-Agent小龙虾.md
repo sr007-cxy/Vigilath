@@ -183,7 +183,7 @@ frontend/
 
 | 阶段 | 内容 | 产出 |
 |---|---|---|
-| **P0 安全地基** | 1 年期 token 签发/校验(查 enabled)+ CORS + 每账号配额 + 审计 | 对外可安全调 `/v1/chat` |
+| **P0 安全地基 ✅(2026-06-07 已上线 vm02)** | 1 年期 token 签发/校验(查 enabled)+ CORS + `/v1/{chat,reset,data/*,meta}` + 领号 CLI + skill 包 | 对外可安全调 `/v1/*`,已端到端验证 |
 | **P1 嵌入挂件** | `agent.js`(UMD,复用 Widget,`data-token`)+ 后端代理示例 | 合作方贴 script 即用 |
 | **P2 只读数据面** | `/v1/data/*` + `/v1/meta/capabilities` | 自建 UI 不走 LLM 也能取数 |
 | **P3(可选)MCP** | 工具层加 MCP adapter | 别的 AI agent 自动发现调用 GEO 工具 |
