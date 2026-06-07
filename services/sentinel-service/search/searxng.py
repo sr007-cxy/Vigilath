@@ -26,7 +26,7 @@ _UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36"
 )
-_TIMEOUT = 20
+_TIMEOUT = 60   # SearXNG 经 Web Unlocker 抓百度每条可达 ~30s，给足
 _MAX_PAGES = 5
 
 
