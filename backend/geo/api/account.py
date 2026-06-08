@@ -255,11 +255,12 @@ def _mask(s: str) -> str:
 
 
 class IMConnectorRequest(BaseModel):
-    platform: str = "feishu"          # feishu / wecom
-    app_id: str
+    platform: str = "feishu"          # feishu / wecom / dingtalk
+    app_id: str                       # 飞书 App ID / 企微 CorpID / 钉钉 AppKey(robotCode)
     app_secret: str = ""
-    verify_token: str = ""
-    aes_key: str = ""
+    verify_token: str = ""            # 企微 Token(飞书可空)
+    aes_key: str = ""                 # 企微 EncodingAESKey / 飞书 Encrypt Key
+    agentid: str = ""                 # 企微自建应用 AgentId
 
 
 @router.get("/im-connectors")
@@ -294,8 +295,10 @@ async def upsert_im_connector(
     """保存/更新本账号某平台的 IM 接入器(一账号一平台一条)。返回回调路径供填回飞书。"""
     from geo.models.agent import AgentIMConnectorORM
 
-    if payload.platform not in ("feishu", "wecom"):
-        raise AppException(status_code=400, message="platform must be feishu or wecom")
+    if payload.platform not in ("feishu", "wecom", "dingtalk"):
+        raise AppException(status_code=400, message="platform must be feishu / wecom / dingtalk")
+    import json as _json
+
     db = SessionLocal()
     try:
         row = (
@@ -310,6 +313,7 @@ async def upsert_im_connector(
         row.app_secret = payload.app_secret.strip()
         row.verify_token = payload.verify_token.strip()
         row.aes_key = payload.aes_key.strip()
+        row.config_json = _json.dumps({"agentid": payload.agentid.strip()} if payload.agentid.strip() else {})
         row.enabled = 1
         db.commit()
         return {"success": True, "id": row.id, "callback_path": f"/api/agent/im/{payload.platform}/callback"}

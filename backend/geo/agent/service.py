@@ -19,6 +19,8 @@ from geo.agent.api import router as agent_router
 from geo.agent.embed.api import router as embed_router
 from geo.agent.embed.im_feishu import router as im_feishu_router
 from geo.agent.embed.feishu_isv import router as feishu_isv_router
+from geo.agent.embed.im_wecom import router as im_wecom_router
+from geo.agent.embed.im_dingtalk import router as im_dingtalk_router
 
 app = FastAPI(title="Vigilath GEO Agent Service", version="0.1")
 
@@ -37,6 +39,8 @@ app.include_router(agent_router, prefix="/api", tags=["agent"])          # 内�
 app.include_router(embed_router, prefix="/api", tags=["agent-embed"])    # 对外:/api/agent/v1/*(embed token)
 app.include_router(im_feishu_router, prefix="/api", tags=["agent-im"])   # IM 自建:/api/agent/im/feishu/callback
 app.include_router(feishu_isv_router, prefix="/api", tags=["agent-im-isv"])  # IM ISV:/api/agent/im/feishu-isv/callback
+app.include_router(im_wecom_router, prefix="/api", tags=["agent-im-wecom"])  # IM 企微:/api/agent/im/wecom/callback
+app.include_router(im_dingtalk_router, prefix="/api", tags=["agent-im-dingtalk"])  # IM 钉钉:/api/agent/im/dingtalk/callback
 
 
 @app.get("/health")

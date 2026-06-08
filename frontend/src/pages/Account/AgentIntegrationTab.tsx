@@ -15,6 +15,35 @@ interface TokenRow {
 
 const card: React.CSSProperties = { background: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
+type PField = [key: string, label: string, placeholder: string];
+interface IMPlatform { key: 'feishu' | 'wecom' | 'dingtalk'; name: string; idLabel: string; callbackWhere: string; note: string; fields: PField[] }
+const IM_PLATFORMS: IMPlatform[] = [
+  {
+    key: 'feishu', name: '飞书', idLabel: 'App ID', callbackWhere: '事件订阅',
+    note: '回飞书:订阅「接收消息 im.message.receive_v1」事件 + 开 im:message 权限 + 创建版本并发布,即可在飞书内对话。',
+    fields: [
+      ['app_id', 'App ID', 'cli_xxxxx'], ['app_secret', 'App Secret', '应用密钥'],
+      ['verify_token', 'Verification Token', '事件订阅校验串'], ['aes_key', 'Encrypt Key(可选,留空=不加密)', '留空即可'],
+    ],
+  },
+  {
+    key: 'wecom', name: '企业微信', idLabel: 'CorpID', callbackWhere: '接收消息服务器配置',
+    note: '回企微:在应用「接收消息」里填回调URL + Token + EncodingAESKey,可信域名/IP 配好,即可对话。',
+    fields: [
+      ['app_id', 'CorpID(企业ID)', 'ww_xxxxx'], ['app_secret', 'Secret(应用Secret)', ''],
+      ['agentid', 'AgentId(应用ID)', '如 1000002'],
+      ['verify_token', 'Token', '接收消息 Token'], ['aes_key', 'EncodingAESKey', '43 位'],
+    ],
+  },
+  {
+    key: 'dingtalk', name: '钉钉', idLabel: 'AppKey', callbackWhere: '机器人 · 消息接收地址',
+    note: '回钉钉:在机器人配置里把「消息接收地址」填为上面的回调URL,发布机器人,@它即可对话。',
+    fields: [
+      ['app_id', 'AppKey(机器人 robotCode)', ''], ['app_secret', 'AppSecret', '用于验签'],
+    ],
+  },
+];
+
 function authHeaders(): HeadersInit {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') || ''}` };
 }
@@ -40,8 +69,9 @@ export function AgentIntegrationTab() {
   const [fresh, setFresh] = useState<string | null>(null);   // 刚生成的明文 token(只显示这一次)
   const [err, setErr] = useState('');
 
-  // IM 接入器(自建应用)
-  const [im, setIm] = useState({ app_id: '', app_secret: '', verify_token: '', aes_key: '' });
+  // IM 接入器(自建应用):支持飞书 / 企业微信 / 钉钉
+  const [imPlatform, setImPlatform] = useState<'feishu' | 'wecom' | 'dingtalk'>('feishu');
+  const [im, setIm] = useState<Record<string, string>>({});
   const [imConns, setImConns] = useState<Array<{ id: number; platform: string; app_id: string; app_secret_masked: string; enabled: boolean }>>([]);
   const [imBusy, setImBusy] = useState(false);
   const [imMsg, setImMsg] = useState('');
@@ -49,7 +79,8 @@ export function AgentIntegrationTab() {
 
   const origin = window.location.origin;
   const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
-  const feishuCallback = `${origin}/api/agent/im/feishu/callback`;
+  const curPlatform = IM_PLATFORMS.find((p) => p.key === imPlatform)!;
+  const imCallback = `${origin}/api/agent/im/${imPlatform}/callback`;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -70,11 +101,11 @@ export function AgentIntegrationTab() {
     try {
       const r = await fetch(`${API_BASE}/account/im-connector`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ platform: 'feishu', ...im }),
+        body: JSON.stringify({ platform: imPlatform, ...im }),
       });
       if (!r.ok) throw new Error(await r.text());
-      setImMsg('✅ 已保存。把上面的回调地址填回飞书事件订阅即可。');
-      setIm({ app_id: '', app_secret: '', verify_token: '', aes_key: '' });
+      setImMsg('✅ 已保存。把上面的回调地址填回对应平台即可。');
+      setIm({});
       await reload();
     } catch (e) { setImMsg(`保存失败:${e instanceof Error ? e.message : e}`); } finally { setImBusy(false); }
   };
@@ -203,46 +234,54 @@ export function AgentIntegrationTab() {
         )}
       </div>
 
-      {/* ── IM 接入(飞书,自建应用)── */}
+      {/* ── IM 对话接入(自建应用):飞书 / 企业微信 / 钉钉 ── */}
       <div className="rounded-xl p-5" style={card}>
-        <h2 className="text-base font-semibold text-primary mb-1">IM 对话接入 · 飞书</h2>
+        <h2 className="text-base font-semibold text-primary mb-1">IM 对话接入</h2>
         <p className="text-sm text-secondary mb-4">
-          让团队在飞书里直接 @机器人 问「我被搜到几个?」「帮我诊断」——非技术同事零安装、零命令。
-          在你公司飞书后台建一个<strong>企业自建应用</strong>,把凭证填到这里即可(应用与凭证都在你自己飞书,不经过我们)。
+          让团队在 IM 里直接 @机器人 问「我被搜到几个?」「帮我诊断」——非技术同事零安装、零命令。
+          在你公司的 IM 后台建一个<strong>企业自建应用/机器人</strong>,把凭证填到这里(应用与凭证都在你自己的 IM,不经过我们)。
         </p>
 
-        {/* 现有连接 */}
-        {imConns.filter((c) => c.platform === 'feishu').map((c) => (
+        {/* 平台切换 */}
+        <div className="flex gap-2 mb-4">
+          {IM_PLATFORMS.map((p) => (
+            <button key={p.key} onClick={() => { setImPlatform(p.key); setIm({}); setImMsg(''); }}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium"
+              style={imPlatform === p.key
+                ? { background: 'var(--accent-primary)', color: '#fff' }
+                : { background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+
+        {/* 现有连接(当前平台) */}
+        {imConns.filter((c) => c.platform === imPlatform).map((c) => (
           <div key={c.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg mb-3" style={{ background: 'var(--bg-surface)' }}>
             <div className="text-sm text-primary min-w-0">
-              已连接 · App ID <span className="text-secondary">{c.app_id}</span> · Secret {c.app_secret_masked}
+              已连接 · {curPlatform.idLabel} <span className="text-secondary">{c.app_id}</span> · 密钥 {c.app_secret_masked}
             </div>
             <button onClick={() => void deleteIm(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: '#f43f5e', border: '1px solid rgba(244,63,94,0.35)', background: 'transparent' }}>删除</button>
           </div>
         ))}
 
-        {/* 回调地址(填回飞书事件订阅)*/}
+        {/* 回调地址 */}
         <div className="mb-4">
-          <p className="text-xs text-secondary mb-1">① 在飞书「事件订阅」里把请求地址填成:</p>
+          <p className="text-xs text-secondary mb-1">① 在{curPlatform.name}「{curPlatform.callbackWhere}」把回调/请求地址填成:</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 px-3 py-2 rounded-lg text-xs break-all" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>{feishuCallback}</code>
-            <CopyBtn text={feishuCallback} />
+            <code className="flex-1 px-3 py-2 rounded-lg text-xs break-all" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>{imCallback}</code>
+            <CopyBtn text={imCallback} />
           </div>
         </div>
 
-        {/* 凭证表单 */}
-        <p className="text-xs text-secondary mb-2">② 把飞书应用「凭证与基础信息」「事件订阅」里的值填进来:</p>
+        {/* 凭证表单(按平台) */}
+        <p className="text-xs text-secondary mb-2">② 把{curPlatform.name}应用里的凭证填进来:</p>
         <div className="grid sm:grid-cols-2 gap-3">
-          {([
-            ['app_id', 'App ID', 'cli_xxxxx'],
-            ['app_secret', 'App Secret', '应用密钥'],
-            ['verify_token', 'Verification Token', '事件订阅校验串'],
-            ['aes_key', 'Encrypt Key(可选,留空=不加密)', '留空即可'],
-          ] as const).map(([k, lbl, ph]) => (
+          {curPlatform.fields.map(([k, lbl, ph]) => (
             <label key={k} className="text-sm">
               <span className="block text-secondary mb-1">{lbl}</span>
               <input
-                value={(im as Record<string, string>)[k]}
+                value={im[k] || ''}
                 onChange={(e) => setIm((p) => ({ ...p, [k]: e.target.value }))}
                 placeholder={ph}
                 className="w-full px-3 py-2 rounded-lg text-sm"
@@ -261,7 +300,7 @@ export function AgentIntegrationTab() {
           </button>
           {imMsg && <span className="text-xs" style={{ color: imMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{imMsg}</span>}
         </div>
-        <p className="text-xs text-secondary mt-3">③ 回飞书把应用发布给成员,在「机器人」里开启,即可在飞书内对话。企业微信接入同模式,即将开放。</p>
+        <p className="text-xs text-secondary mt-3">③ {curPlatform.note}</p>
       </div>
 
       {/* ── 飞书绑定码(应用市场版机器人,每个使用者各自绑定)── */}
