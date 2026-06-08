@@ -221,6 +221,41 @@ def generate_monitoring_plan(
         plan = ensure_all_platforms(plan, targets, ticker, allowed_domains=media)
     if keywords:
         plan = augment_queries_with_keywords(plan, keywords)
+    plan = add_general_queries(plan, targets, keywords)
+    return plan
+
+
+def add_general_queries(plan: dict, targets: list[str],
+                        keywords: list[str] | None = None) -> dict:
+    """追加不限 site 的通用查询。
+
+    监测计划默认都是 `site:平台 (...)` 限定查询;但有些引擎(如经 Web Unlocker
+    的百度)对 site: 限定不返回结果,只对通用查询返回。这里补两条通用查询,
+    让百度等也能贡献(覆盖新闻、自媒体等非平台来源)。
+    """
+    aliases = plan.get("aliases") or []
+    terms: list[str] = []
+    for t in list(targets) + list(aliases):
+        t = (t or "").strip()
+        if t and t not in terms:
+            terms.append(t)
+    if not terms:
+        return plan
+    group = " OR ".join(terms[:6])  # 控制 OR 组长度
+    queries = plan.get("queries") or []
+    existing = {q.get("query") for q in queries}
+
+    extra = [{"platform": "general", "query": f"({group})",
+              "intent": "通用召回:全网提及(覆盖百度/新闻/自媒体等非平台来源)"}]
+    kw = " OR ".join(k.strip() for k in (keywords or []) if k.strip())
+    if kw:
+        extra.append({"platform": "general", "query": f"({group}) ({kw})",
+                      "intent": "通用召回:关键词/负面信号(不限平台)"})
+
+    for q in extra:
+        if q["query"] not in existing:
+            queries.append(q)
+    plan["queries"] = queries
     return plan
 
 
