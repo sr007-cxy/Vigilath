@@ -186,8 +186,21 @@ frontend/
 | **P0 安全地基 ✅(2026-06-07 vm02)** | 1 年期 token 签发/校验(查 enabled)+ CORS + `/v1/{chat,reset,data/*,meta}` + 领号 CLI + skill 包 | 对外可安全调 `/v1/*`,已端到端验证 |
 | **P1 一行安装 + 自助领号 ✅(2026-06-08 vm02)** | `skills/vigilath-geo/install.sh`(`curl\|bash`,写 token+API基址到 `~/.vigilath/config`)+ nginx `/skill/` 静态托管 + 控制台「对接集成」页(`/account/integration`,自助生成 token + 显示安装命令 + 列出/吊销) | 用户复制一行即装,跨服务验签已验 |
 | **P2 只读数据面 ✅** | `/v1/data/*` + `/v1/meta/capabilities` | 自建 UI 不走 LLM 也能取数 |
-| **P3(可选)MCP / 嵌入挂件** | MCP adapter / `agent.js` UMD | 别的 AI agent 自动发现工具 / 贴 script 即用 |
-| **P4 生产上线(待确认)** | 把 agent 整套(独立 venv + `agent_tokens` 迁移 + nginx `/api/agent/` & `/skill/`)部署到生产 EC2 | `geo.vigilath.com` 上 `curl\|bash` 真正可用 |
+| **P3 飞书 IM 接入 ✅(2026-06-08 vm02)** | 自建应用模式:`agent_im_connectors` + 连接器页 + `/api/agent/im/feishu/callback` | 非技术同事在飞书 @机器人 即用,零安装 |
+| **P4(可选)企微 IM / MCP / 嵌入挂件** | 企微接入器(同模式)/ MCP adapter / `agent.js` UMD | 覆盖更多入口 |
+| **P5 生产上线(待确认)** | 把 agent 整套(独立 venv + `agent_tokens`/`agent_im_connectors` 迁移 + nginx `/api/agent/` & `/skill/`)部署到生产 EC2 | 生产域名上 `curl\|bash` 与 IM 真正可用 |
+
+---
+
+## 14. IM 接入(自建应用模式,飞书已落地)
+
+**为什么自建应用而非 ISV 上架**:用户要"自己对接、不找我们要审核",而飞书/企微只开两道门——自建应用(用户在自己租户建、自己持凭证)或 ISV 市场(我们一次性注册上架)。自建应用最贴合 skill 式自助,选它。
+
+**关键简化**:一个自建应用 = 一个 Vigilath 账号。回调按 `app_id` 反查 `agent_im_connectors` → `account_id`,该应用下所有 IM 用户都以这个账号身份对话(数据靠 account_id 隔离),**无需每个 IM 用户单独扫码绑号**。
+
+**流程**:客户在自己飞书建企业自建应用 → 控制台「对接集成」填 App ID/Secret/Verify Token(可选 Encrypt Key)+ 把回调地址 `<host>/api/agent/im/feishu/callback` 填回飞书事件订阅 → 用户在飞书 @机器人 → 回调查 connector → 后台跑 agent(慢,故 3s 内先 200、答案用消息 API 异步回贴)→ 飞书内出答案。复用账号级 agent + 多轮记忆;发布工具不暴露。
+
+企业微信同模式(CorpID/Secret/Token/EncodingAESKey + 回调),接入器再加一个 `im_wecom.py` 即可,前端连接器页已留位。
 
 ---
 
