@@ -183,10 +183,11 @@ frontend/
 
 | 阶段 | 内容 | 产出 |
 |---|---|---|
-| **P0 安全地基 ✅(2026-06-07 已上线 vm02)** | 1 年期 token 签发/校验(查 enabled)+ CORS + `/v1/{chat,reset,data/*,meta}` + 领号 CLI + skill 包 | 对外可安全调 `/v1/*`,已端到端验证 |
-| **P1 嵌入挂件** | `agent.js`(UMD,复用 Widget,`data-token`)+ 后端代理示例 | 合作方贴 script 即用 |
-| **P2 只读数据面** | `/v1/data/*` + `/v1/meta/capabilities` | 自建 UI 不走 LLM 也能取数 |
-| **P3(可选)MCP** | 工具层加 MCP adapter | 别的 AI agent 自动发现调用 GEO 工具 |
+| **P0 安全地基 ✅(2026-06-07 vm02)** | 1 年期 token 签发/校验(查 enabled)+ CORS + `/v1/{chat,reset,data/*,meta}` + 领号 CLI + skill 包 | 对外可安全调 `/v1/*`,已端到端验证 |
+| **P1 一行安装 + 自助领号 ✅(2026-06-08 vm02)** | `skills/vigilath-geo/install.sh`(`curl\|bash`,写 token+API基址到 `~/.vigilath/config`)+ nginx `/skill/` 静态托管 + 控制台「对接集成」页(`/account/integration`,自助生成 token + 显示安装命令 + 列出/吊销) | 用户复制一行即装,跨服务验签已验 |
+| **P2 只读数据面 ✅** | `/v1/data/*` + `/v1/meta/capabilities` | 自建 UI 不走 LLM 也能取数 |
+| **P3(可选)MCP / 嵌入挂件** | MCP adapter / `agent.js` UMD | 别的 AI agent 自动发现工具 / 贴 script 即用 |
+| **P4 生产上线(待确认)** | 把 agent 整套(独立 venv + `agent_tokens` 迁移 + nginx `/api/agent/` & `/skill/`)部署到生产 EC2 | `geo.vigilath.com` 上 `curl\|bash` 真正可用 |
 
 ---
 
