@@ -122,34 +122,51 @@ export function AgentChatWidget() {
 
   return (
     <>
-      {/* 浮标 */}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="GEO 优化助手"
-        className="transition-transform hover:scale-105 active:scale-95"
+      {/* 浮标:头像按钮 + 下方「GEO 市场专员」文字 */}
+      <div
         style={{
           // 「预约演示」浮动按钮在 right:24/bottom:24(ContactModal),把助手上移堆在其上方,避免重叠
           position: 'fixed', right: 24, bottom: 88, zIndex: 1000,
-          width: 56, height: 56, borderRadius: '50%', border: 'none',
-          background: 'var(--accent-gradient)', color: '#fff', fontSize: 24, cursor: 'pointer',
-          boxShadow: '0 6px 20px rgba(0,0,0,.22)', overflow: 'hidden', padding: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
         }}
       >
-        {open ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        ) : (
-          // 市场专员头像(真实照片)
-          <img
-            src="/image/agent-avatar.jpg"
-            alt=""
-            aria-hidden="true"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
+        <button
+          onClick={() => setOpen((o) => !o)}
+          aria-label="GEO 市场专员"
+          className="transition-transform hover:scale-105 active:scale-95"
+          style={{
+            width: 56, height: 56, borderRadius: '50%', border: 'none',
+            background: 'var(--accent-gradient)', color: '#fff', fontSize: 24, cursor: 'pointer',
+            boxShadow: '0 6px 20px rgba(0,0,0,.22)', overflow: 'hidden', padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {open ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          ) : (
+            // 市场专员头像(真实照片)
+            <img
+              src="/image/agent-avatar.jpg"
+              alt=""
+              aria-hidden="true"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          )}
+        </button>
+        {!open && (
+          <span
+            style={{
+              fontSize: 11, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap',
+              color: '#fff', background: 'rgba(0,0,0,.55)', padding: '3px 8px', borderRadius: 999,
+              boxShadow: '0 2px 8px rgba(0,0,0,.18)',
+            }}
+          >
+            GEO 市场专员
+          </span>
         )}
-      </button>
+      </div>
 
       {/* 聊天面板 */}
       {open && (
@@ -165,18 +182,18 @@ export function AgentChatWidget() {
         >
           <div style={{
             padding: '14px 16px', background: 'var(--accent-gradient)', color: '#fff',
-            fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8,
+            fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 11,
           }}>
             <img
               src="/image/agent-avatar.jpg"
               alt=""
               aria-hidden="true"
               style={{
-                width: 32, height: 32, borderRadius: '50%', objectFit: 'cover',
-                border: '1.5px solid rgba(255,255,255,.65)', flexShrink: 0,
+                width: 48, height: 48, borderRadius: '50%', objectFit: 'cover',
+                border: '2px solid rgba(255,255,255,.7)', flexShrink: 0,
               }}
             />
-            <span>GEO 优化助手</span>
+            <span>GEO 市场专员</span>
           </div>
 
           <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 14, background: 'var(--bg-primary)' }}>
