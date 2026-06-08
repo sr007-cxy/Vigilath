@@ -187,7 +187,8 @@ frontend/
 | **P1 一行安装 + 自助领号 ✅(2026-06-08 vm02)** | `skills/vigilath-geo/install.sh`(`curl\|bash`,写 token+API基址到 `~/.vigilath/config`)+ nginx `/skill/` 静态托管 + 控制台「对接集成」页(`/account/integration`,自助生成 token + 显示安装命令 + 列出/吊销) | 用户复制一行即装,跨服务验签已验 |
 | **P2 只读数据面 ✅** | `/v1/data/*` + `/v1/meta/capabilities` | 自建 UI 不走 LLM 也能取数 |
 | **P3 飞书 IM 接入 ✅(2026-06-08 vm02)** | 自建应用模式:`agent_im_connectors` + 连接器页 + `/api/agent/im/feishu/callback` | 非技术同事在飞书 @机器人 即用,零安装 |
-| **P4(可选)企微 IM / MCP / 嵌入挂件** | 企微接入器(同模式)/ MCP adapter / `agent.js` UMD | 覆盖更多入口 |
+| **P4 飞书 ISV 多租户 ✅代码(2026-06-08 vm02,待上架联调)** | ISV 三段式鉴权 + 每用户绑定码 + `/api/agent/im/feishu-isv/callback` | 上架后客户一键装、用户发绑定码即用;待飞书审核上架 |
+| **P4b(可选)企微 IM / MCP / 嵌入挂件** | 企微接入器(同模式)/ MCP adapter / `agent.js` UMD | 覆盖更多入口 |
 | **P5 生产上线(待确认)** | 把 agent 整套(独立 venv + `agent_tokens`/`agent_im_connectors` 迁移 + nginx `/api/agent/` & `/skill/`)部署到生产 EC2 | 生产域名上 `curl\|bash` 与 IM 真正可用 |
 
 ---
@@ -201,6 +202,18 @@ frontend/
 **流程**:客户在自己飞书建企业自建应用 → 控制台「对接集成」填 App ID/Secret/Verify Token(可选 Encrypt Key)+ 把回调地址 `<host>/api/agent/im/feishu/callback` 填回飞书事件订阅 → 用户在飞书 @机器人 → 回调查 connector → 后台跑 agent(慢,故 3s 内先 200、答案用消息 API 异步回贴)→ 飞书内出答案。复用账号级 agent + 多轮记忆;发布工具不暴露。
 
 企业微信同模式(CorpID/Secret/Token/EncodingAESKey + 回调),接入器再加一个 `im_wecom.py` 即可,前端连接器页已留位。
+
+## 15. 飞书 ISV 模式(上架应用市场,多租户)
+
+自建模式每个客户都要建应用 + 配事件 + 发布(很痛);**ISV 模式我们只做一次、上架飞书应用市场,客户一键安装、管理员授权即用**。两模式并存。
+
+**鉴权(ISV 三段式)**:飞书定时推 `app_ticket` → 换 `app_access_token` → 用各租户 `tenant_key` 换 `tenant_access_token`。我方 ISV 凭证走 env:`FEISHU_ISV_APP_ID / FEISHU_ISV_APP_SECRET / FEISHU_ISV_VERIFY_TOKEN / FEISHU_ISV_ENCRYPT_KEY`。回调地址(ISV 应用配一次):`<host>/api/agent/im/feishu-isv/callback`。
+
+**绑定(每用户各自绑,已拍板)**:ISV 一个 app 服务无数企业,靠 `(tenant_key, open_id)` 定位飞书用户 → `account_id`。用户首次对话前,在控制台「对接集成」**生成绑定码**(`/api/account/im-bind-code`,10 分钟),在飞书把绑定码发给机器人 → 建立 `agent_im_user_bindings` 绑定;之后该用户消息都以其账号身份对话。未绑定则提示去拿绑定码。
+
+**代码**:`backend/geo/agent/embed/feishu_isv.py`;表 `agent_im_user_bindings` / `agent_im_bind_codes` / `agent_isv_state`(迁移 c6f1a9d3e820)。复用 agent + markdown 卡片回复。
+
+**待你方做(公司级,代替不了)**:飞书开放平台建「应用商店应用(ISV)」需企业认证 → 配机器人/权限/事件(同自建那套)+ 凭证存储选 ISV(app_ticket)→ 准备上架材料(介绍/图标/隐私合规)→ 提交应用市场审核 → 上架。拿到 ISV 的 app_id/secret 填进 env 即可联调。
 
 ---
 
