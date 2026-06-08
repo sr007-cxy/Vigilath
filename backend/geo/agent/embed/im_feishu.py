@@ -18,7 +18,7 @@ class _Log:
     """直接 print 到 stdout(journald 必收);自定义 logger 不一定挂到 uvicorn handler。"""
 
     def info(self, msg, *a):
-        print("[im-feishu] " + (msg % a if a else msg), flush=True)
+        print(msg % a if a else msg, flush=True)
 
     warning = info
 
@@ -88,13 +88,17 @@ async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> N
     if not tok:
         log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
         return
+    # 用交互卡片的 markdown 元素发,飞书才会渲染 **加粗** / 列表 / 代码,
+    # 否则纯文本会把 Markdown 符号原样裸露出来。
+    card = {"config": {"wide_screen_mode": True},
+            "elements": [{"tag": "markdown", "content": text}]}
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
                 f"{FEISHU_BASE}/im/v1/messages",
                 params={"receive_id_type": "chat_id"},
                 headers={"Authorization": f"Bearer {tok}"},
-                json={"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
+                json={"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
             )
         d = r.json()
         if d.get("code") not in (0, None):
