@@ -128,11 +128,11 @@ export function AgentChatWidget() {
         aria-label="GEO 优化助手"
         className="transition-transform hover:scale-105 active:scale-95"
         style={{
-          // 「预约演示」浮动按钮在 right:24/bottom:24(ContactModal),把 🤖 上移堆在其上方,避免重叠
+          // 「预约演示」浮动按钮在 right:24/bottom:24(ContactModal),把助手上移堆在其上方,避免重叠
           position: 'fixed', right: 24, bottom: 88, zIndex: 1000,
           width: 56, height: 56, borderRadius: '50%', border: 'none',
           background: 'var(--accent-gradient)', color: '#fff', fontSize: 24, cursor: 'pointer',
-          boxShadow: '0 6px 20px rgba(0,0,0,.22)',
+          boxShadow: '0 6px 20px rgba(0,0,0,.22)', overflow: 'hidden', padding: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
@@ -141,11 +141,13 @@ export function AgentChatWidget() {
             <path d="M6 9l6 6 6-6" />
           </svg>
         ) : (
-          // 市场专员头像(头+肩)
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
-            <path d="M12 12a3.8 3.8 0 1 0 0-7.6A3.8 3.8 0 0 0 12 12z" />
-            <path d="M12 13.4c-4.3 0-7.7 2.5-7.7 5.7 0 .8.6 1.4 1.4 1.4h12.6c.8 0 1.4-.6 1.4-1.4 0-3.2-3.4-5.7-7.7-5.7z" />
-          </svg>
+          // 市场专员头像(真实照片)
+          <img
+            src="/image/agent-avatar.jpg"
+            alt=""
+            aria-hidden="true"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
         )}
       </button>
 
@@ -165,10 +167,15 @@ export function AgentChatWidget() {
             padding: '14px 16px', background: 'var(--accent-gradient)', color: '#fff',
             fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
-              <path d="M12 12a3.8 3.8 0 1 0 0-7.6A3.8 3.8 0 0 0 12 12z" />
-              <path d="M12 13.4c-4.3 0-7.7 2.5-7.7 5.7 0 .8.6 1.4 1.4 1.4h12.6c.8 0 1.4-.6 1.4-1.4 0-3.2-3.4-5.7-7.7-5.7z" />
-            </svg>
+            <img
+              src="/image/agent-avatar.jpg"
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: 32, height: 32, borderRadius: '50%', objectFit: 'cover',
+                border: '1.5px solid rgba(255,255,255,.65)', flexShrink: 0,
+              }}
+            />
             <span>GEO 优化助手</span>
           </div>
 
