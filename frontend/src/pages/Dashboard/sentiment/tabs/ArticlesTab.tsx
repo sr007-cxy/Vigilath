@@ -535,6 +535,12 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return dist;
   }, [filtered]);
 
+  // 看空帖数(从全量 posts 算)— 有则在「看空」筛选 chip 上显示红点提示
+  const bearishCount = useMemo(
+    () => posts.filter(p => ((p.sentiment_label as string) || '') === 'bearish').length,
+    [posts]
+  );
+
   // selected = null 时右栏显示筛选面板;明确点击文章后才显示详情
   const selected: SentimentPost | null = useMemo(() => {
     if (!selectedKey) return null;
@@ -1083,6 +1089,7 @@ function FilterRail({
           <FilterChip key={s}
             label={t(`dashboard.sentiment.articles.labels.${s}`)}
             active={sentiments.has(s)}
+            dot={s === 'bearish' && bearishCount > 0}
             onClick={() => setSentiments(toggle(sentiments, s))} />
         ))}
       </RailSectionChips>

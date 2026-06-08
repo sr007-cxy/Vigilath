@@ -5,17 +5,26 @@
 // ExpandableGridChip: 在 GridChip 上加 ▾,展开后内联渲染下属平台 list
 import { useState } from 'react';
 
-export function FilterChip({ label, active, onClick }:
-  { label: string; active: boolean; onClick: () => void }) {
+export function FilterChip({ label, active, onClick, dot }:
+  { label: string; active: boolean; onClick: () => void; dot?: boolean }) {
   return (
     <button type="button" onClick={onClick}
-      className="text-xs px-2 py-0.5 rounded transition-colors"
+      className="relative text-xs px-2 py-0.5 rounded transition-colors"
       style={{
         background: active ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
         color: active ? '#ffffff' : 'var(--text-secondary)',
         border: '1px solid transparent',
       }}>
       {label}
+      {dot && (
+        <span aria-label="有看空内容"
+          style={{
+            position: 'absolute', top: -3, right: -3,
+            width: 8, height: 8, borderRadius: '50%',
+            background: '#ef4444',
+            border: '1px solid var(--bg-primary)',
+          }} />
+      )}
     </button>
   );
 }
