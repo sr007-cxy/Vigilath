@@ -15,9 +15,40 @@ import time
 import httpx
 
 
+def _tables_to_lines(text: str) -> str:
+    """飞书卡片 markdown 不渲染表格(`| a | b |` 会裸露),把 Markdown 表格转成可读列表行。
+
+    2 列 → `• 左:右`;多列 → `• 表头1 值1 · 表头2 值2 …`。非表格内容原样保留。
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    sep = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")   # 分隔行 |---|---|
+    while i < len(lines):
+        cur = lines[i]
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if "|" in cur and "|" in nxt and "-" in nxt and sep.match(nxt):
+            header = [c.strip() for c in cur.strip().strip("|").split("|")]
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                if len(cells) == 2:
+                    out.append(f"• {cells[0]}:{cells[1]}")
+                else:
+                    parts = [f"{header[j] + ' ' if j < len(header) and header[j] else ''}{c}".strip()
+                             for j, c in enumerate(cells)]
+                    out.append("• " + " · ".join(p for p in parts if p))
+                i += 1
+            continue
+        out.append(cur)
+        i += 1
+    return "\n".join(out)
+
+
 def _to_feishu_md(text: str) -> str:
-    """飞书卡片 markdown 不渲染 # 标题(会裸露 ###),转成加粗;其余 Markdown(加粗/列表/代码)飞书认。"""
-    return re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", text or "")
+    """转成飞书卡片能渲染的 Markdown:# 标题→加粗、表格→列表行;加粗/列表/代码飞书本就认。"""
+    t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", text or "")
+    return _tables_to_lines(t)
 
 
 class _Log:
