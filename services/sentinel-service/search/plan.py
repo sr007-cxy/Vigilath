@@ -233,24 +233,21 @@ def add_general_queries(plan: dict, targets: list[str],
     的百度)对 site: 限定不返回结果,只对通用查询返回。这里补两条通用查询,
     让百度等也能贡献(覆盖新闻、自媒体等非平台来源)。
     """
-    aliases = plan.get("aliases") or []
-    terms: list[str] = []
-    for t in list(targets) + list(aliases):
-        t = (t or "").strip()
-        if t and t not in terms:
-            terms.append(t)
-    if not terms:
+    primary = ((targets[0] if targets else plan.get("target")) or "").strip()
+    if not primary:
         return plan
-    group = " OR ".join(terms[:6])  # 控制 OR 组长度
     queries = plan.get("queries") or []
     existing = {q.get("query") for q in queries}
 
-    extra = [{"platform": "general", "query": f"({group})",
-              "intent": "通用召回:全网提及(覆盖百度/新闻/自媒体等非平台来源)"}]
-    kw = " OR ".join(k.strip() for k in (keywords or []) if k.strip())
-    if kw:
-        extra.append({"platform": "general", "query": f"({group}) ({kw})",
-                      "intent": "通用召回:关键词/负面信号(不限平台)"})
+    # 简单 `目标 关键词` 配对(空格=AND),不用 OR 组、不带泛词别名(如 VNET):
+    # 实测百度对 `世纪互联 欠薪` 这种简单查询命中最好,OR 组反而把目标新闻挤出前列。
+    extra = [{"platform": "general", "query": primary,
+              "intent": "通用召回:全网提及(覆盖百度/新闻/自媒体)"}]
+    for k in (keywords or []):
+        k = k.strip()
+        if k:
+            extra.append({"platform": "general", "query": f"{primary} {k}",
+                          "intent": f"通用召回:{k}(不限平台)"})
 
     for q in extra:
         if q["query"] not in existing:
