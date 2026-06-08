@@ -289,6 +289,23 @@ export function AgentChatWidget() {
               }}
             />
             <span>GEO 市场专员</span>
+            {/* 收起按钮:stopPropagation 避免触发标题栏拖动 */}
+            <button
+              onClick={() => setOpen(false)}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="收起"
+              title="收起"
+              className="transition-opacity hover:opacity-80"
+              style={{
+                marginLeft: 'auto', width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                border: 'none', background: 'rgba(255,255,255,.18)', color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
           </div>
 
           <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 14px', background: 'var(--bg-primary)' }}>
