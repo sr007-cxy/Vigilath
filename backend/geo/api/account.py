@@ -247,3 +247,91 @@ async def revoke_agent_token(tid: str, current_user: UserORM = Depends(get_curre
         return {"success": True, "tid": tid}
     finally:
         db.close()
+
+
+# ── 对外开放:IM 接入器(自建应用模式,飞书/企微)────────────────────────────
+def _mask(s: str) -> str:
+    return (s[:4] + "••••" + s[-2:]) if s and len(s) > 8 else ("••••" if s else "")
+
+
+class IMConnectorRequest(BaseModel):
+    platform: str = "feishu"          # feishu / wecom
+    app_id: str
+    app_secret: str = ""
+    verify_token: str = ""
+    aes_key: str = ""
+
+
+@router.get("/im-connectors")
+async def list_im_connectors(current_user: UserORM = Depends(get_current_user)):
+    """列出本账号的 IM 接入器(密钥脱敏)。"""
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        rows = db.query(AgentIMConnectorORM).filter(AgentIMConnectorORM.account_id == current_user.id).all()
+        return {
+            "connectors": [
+                {
+                    "id": r.id, "platform": r.platform, "app_id": r.app_id,
+                    "app_secret_masked": _mask(r.app_secret),
+                    "has_verify_token": bool(r.verify_token), "has_aes_key": bool(r.aes_key),
+                    "enabled": r.enabled == 1,
+                    "callback_path": f"/api/agent/im/{r.platform}/callback",
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.post("/im-connector")
+async def upsert_im_connector(
+    payload: IMConnectorRequest,
+    current_user: UserORM = Depends(get_current_user),
+):
+    """保存/更新本账号某平台的 IM 接入器(一账号一平台一条)。返回回调路径供填回飞书。"""
+    from geo.models.agent import AgentIMConnectorORM
+
+    if payload.platform not in ("feishu", "wecom"):
+        raise AppException(status_code=400, message="platform must be feishu or wecom")
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(AgentIMConnectorORM)
+            .filter(AgentIMConnectorORM.account_id == current_user.id, AgentIMConnectorORM.platform == payload.platform)
+            .first()
+        )
+        if row is None:
+            row = AgentIMConnectorORM(account_id=current_user.id, platform=payload.platform)
+            db.add(row)
+        row.app_id = payload.app_id.strip()
+        row.app_secret = payload.app_secret.strip()
+        row.verify_token = payload.verify_token.strip()
+        row.aes_key = payload.aes_key.strip()
+        row.enabled = 1
+        db.commit()
+        return {"success": True, "id": row.id, "callback_path": f"/api/agent/im/{payload.platform}/callback"}
+    finally:
+        db.close()
+
+
+@router.post("/im-connector/{cid}/delete")
+async def delete_im_connector(cid: int, current_user: UserORM = Depends(get_current_user)):
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(AgentIMConnectorORM)
+            .filter(AgentIMConnectorORM.id == cid, AgentIMConnectorORM.account_id == current_user.id)
+            .first()
+        )
+        if row is None:
+            raise AppException(status_code=404, message="connector not found")
+        db.delete(row)
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()

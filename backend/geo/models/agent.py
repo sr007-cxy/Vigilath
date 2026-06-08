@@ -51,3 +51,24 @@ class AgentTokenORM(Base):
     enabled = Column(Integer, nullable=False, default=1)                       # 0=吊销
     expires_at = Column(DateTime, nullable=False)                              # 默认 +1 年
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AgentIMConnectorORM(Base):
+    """IM 接入器(自建应用模式)。客户在自己飞书/企微建自建应用,把 App 凭证粘到这里。
+
+    一个自建应用 = 一个 Vigilath 账号:回调按 app_id 反查本表 → account_id,
+    该应用下所有 IM 用户都以这个账号身份对话(数据隔离靠 account_id)。
+    """
+    __tablename__ = "agent_im_connectors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, nullable=False, index=True)
+    platform = Column(String(length=16), nullable=False)        # feishu / wecom
+    app_id = Column(String(length=128), nullable=False, index=True)   # 飞书 App ID / 企微 CorpID
+    app_secret = Column(String(length=256), nullable=False, default="")
+    verify_token = Column(String(length=128), nullable=False, default="")   # 事件订阅 Verification Token / 企微 Token
+    aes_key = Column(String(length=128), nullable=False, default="")        # 飞书 Encrypt Key / 企微 EncodingAESKey(空=不加密)
+    config_json = Column(Text, nullable=False, default="{}")    # 平台特有(企微 agent_id 等)
+    enabled = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

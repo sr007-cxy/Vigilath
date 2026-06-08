@@ -40,8 +40,15 @@ export function AgentIntegrationTab() {
   const [fresh, setFresh] = useState<string | null>(null);   // 刚生成的明文 token(只显示这一次)
   const [err, setErr] = useState('');
 
+  // IM 接入器(自建应用)
+  const [im, setIm] = useState({ app_id: '', app_secret: '', verify_token: '', aes_key: '' });
+  const [imConns, setImConns] = useState<Array<{ id: number; platform: string; app_id: string; app_secret_masked: string; enabled: boolean }>>([]);
+  const [imBusy, setImBusy] = useState(false);
+  const [imMsg, setImMsg] = useState('');
+
   const origin = window.location.origin;
   const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
+  const feishuCallback = `${origin}/api/agent/im/feishu/callback`;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -49,10 +56,33 @@ export function AgentIntegrationTab() {
       const r = await fetch(`${API_BASE}/account/agent-tokens`, { headers: authHeaders() });
       const d = await r.json();
       setTokens(d.tokens || []);
+      const r2 = await fetch(`${API_BASE}/account/im-connectors`, { headers: authHeaders() });
+      const d2 = await r2.json();
+      setImConns(d2.connectors || []);
     } catch { setErr('加载失败'); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  const saveIm = async () => {
+    setImBusy(true); setImMsg('');
+    try {
+      const r = await fetch(`${API_BASE}/account/im-connector`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ platform: 'feishu', ...im }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setImMsg('✅ 已保存。把上面的回调地址填回飞书事件订阅即可。');
+      setIm({ app_id: '', app_secret: '', verify_token: '', aes_key: '' });
+      await reload();
+    } catch (e) { setImMsg(`保存失败:${e instanceof Error ? e.message : e}`); } finally { setImBusy(false); }
+  };
+
+  const deleteIm = async (id: number) => {
+    if (!confirm('确认删除此 IM 接入?删除后机器人将无法再回复。')) return;
+    await fetch(`${API_BASE}/account/im-connector/${id}/delete`, { method: 'POST', headers: authHeaders() });
+    await reload();
+  };
 
   const generate = async () => {
     setBusy(true); setErr(''); setFresh(null);
@@ -161,6 +191,67 @@ export function AgentIntegrationTab() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── IM 接入(飞书,自建应用)── */}
+      <div className="rounded-xl p-5" style={card}>
+        <h2 className="text-base font-semibold text-primary mb-1">IM 对话接入 · 飞书</h2>
+        <p className="text-sm text-secondary mb-4">
+          让团队在飞书里直接 @机器人 问「我被搜到几个?」「帮我诊断」——非技术同事零安装、零命令。
+          在你公司飞书后台建一个<strong>企业自建应用</strong>,把凭证填到这里即可(应用与凭证都在你自己飞书,不经过我们)。
+        </p>
+
+        {/* 现有连接 */}
+        {imConns.filter((c) => c.platform === 'feishu').map((c) => (
+          <div key={c.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg mb-3" style={{ background: 'var(--bg-surface)' }}>
+            <div className="text-sm text-primary min-w-0">
+              已连接 · App ID <span className="text-secondary">{c.app_id}</span> · Secret {c.app_secret_masked}
+            </div>
+            <button onClick={() => void deleteIm(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: '#f43f5e', border: '1px solid rgba(244,63,94,0.35)', background: 'transparent' }}>删除</button>
+          </div>
+        ))}
+
+        {/* 回调地址(填回飞书事件订阅)*/}
+        <div className="mb-4">
+          <p className="text-xs text-secondary mb-1">① 在飞书「事件订阅」里把请求地址填成:</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-3 py-2 rounded-lg text-xs break-all" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>{feishuCallback}</code>
+            <CopyBtn text={feishuCallback} />
+          </div>
+        </div>
+
+        {/* 凭证表单 */}
+        <p className="text-xs text-secondary mb-2">② 把飞书应用「凭证与基础信息」「事件订阅」里的值填进来:</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {([
+            ['app_id', 'App ID', 'cli_xxxxx'],
+            ['app_secret', 'App Secret', '应用密钥'],
+            ['verify_token', 'Verification Token', '事件订阅校验串'],
+            ['aes_key', 'Encrypt Key(可选,留空=不加密)', '留空即可'],
+          ] as const).map(([k, lbl, ph]) => (
+            <label key={k} className="text-sm">
+              <span className="block text-secondary mb-1">{lbl}</span>
+              <input
+                value={(im as Record<string, string>)[k]}
+                onChange={(e) => setIm((p) => ({ ...p, [k]: e.target.value }))}
+                placeholder={ph}
+                className="w-full px-3 py-2 rounded-lg text-sm"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={() => void saveIm()} disabled={imBusy || !im.app_id || !im.app_secret}
+            className="px-5 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: 'var(--accent-primary)', color: '#fff', opacity: imBusy || !im.app_id || !im.app_secret ? 0.5 : 1 }}
+          >
+            {imBusy ? '保存中…' : '保存并连接'}
+          </button>
+          {imMsg && <span className="text-xs" style={{ color: imMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{imMsg}</span>}
+        </div>
+        <p className="text-xs text-secondary mt-3">③ 回飞书把应用发布给成员,在「机器人」里开启,即可在飞书内对话。企业微信接入同模式,即将开放。</p>
       </div>
     </div>
   );
