@@ -265,14 +265,15 @@ export function AgentChatWidget() {
             boxShadow: '0 16px 48px rgba(0,0,0,.24)', border: '1px solid var(--border-color)',
           }}
         >
-          {/* 标题栏:拖动手柄。头像放大并超出标题栏下沿。 */}
+          {/* 标题栏:拖动手柄(矮)。头像放大,一半探出标题栏下沿。 */}
           <div
             {...panel.handleProps}
+            title="按住标题栏可拖动"
             style={{
-              position: 'relative', padding: '13px 16px 13px 92px', minHeight: 58,
+              position: 'relative', padding: '9px 14px 9px 84px', minHeight: 40,
               background: 'var(--accent-gradient)', color: '#fff',
               borderTopLeftRadius: 16, borderTopRightRadius: 16,
-              fontWeight: 600, fontSize: 15, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center',
               cursor: 'grab', touchAction: 'none', userSelect: 'none',
             }}
           >
@@ -282,16 +283,15 @@ export function AgentChatWidget() {
               aria-hidden="true"
               draggable={false}
               style={{
-                position: 'absolute', left: 14, bottom: -16, width: 68, height: 68,
+                position: 'absolute', left: 14, bottom: -32, width: 64, height: 64,
                 borderRadius: '50%', objectFit: 'cover', flexShrink: 0, pointerEvents: 'none',
                 border: '2.5px solid var(--bg-card)', boxShadow: '0 4px 10px rgba(0,0,0,.28)',
               }}
             />
             <span>GEO 市场专员</span>
-            <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 1 }}>在线 · 按住标题栏可拖动</span>
           </div>
 
-          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 14px 14px', background: 'var(--bg-primary)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 14px 14px', background: 'var(--bg-primary)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
             {msgs.map((m, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                 <div
