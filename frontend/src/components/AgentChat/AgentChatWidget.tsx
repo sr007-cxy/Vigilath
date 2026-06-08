@@ -213,7 +213,8 @@ export function AgentChatWidget() {
           title="点击对话 · 拖动可移动位置"
           className="transition-transform hover:scale-105 active:scale-95"
           style={{
-            width: 60, height: 60, borderRadius: '50%', border: 'none', padding: 0,
+            width: 60, height: 60, borderRadius: '50%', padding: 0,
+            border: open ? 'none' : '2.5px solid #fff',
             background: open ? 'var(--accent-gradient)' : 'transparent',
             color: '#fff', cursor: 'grab', overflow: 'hidden',
             boxShadow: '0 6px 20px rgba(0,0,0,.22)',
@@ -282,8 +283,8 @@ export function AgentChatWidget() {
               draggable={false}
               style={{
                 position: 'absolute', left: 14, bottom: -16, width: 68, height: 68,
-                objectFit: 'cover', flexShrink: 0, pointerEvents: 'none',
-                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,.28))',
+                borderRadius: '50%', objectFit: 'cover', flexShrink: 0, pointerEvents: 'none',
+                border: '2.5px solid var(--bg-card)', boxShadow: '0 4px 10px rgba(0,0,0,.28)',
               }}
             />
             <span>GEO 市场专员</span>
