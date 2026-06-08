@@ -2,13 +2,34 @@
 // 仅登录后显示;右下角浮标点开,SSE 流式对话。
 // 样式走全局 CSS 变量(--accent-* / --bg-* / --text-* / --border-*),自动跟随明暗主题、与页面风格一致。
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { streamAgentChat, type AgentCard } from '../../services/agentApi';
+
+// 快速前往:聊天窗里的页面导航(轻量版「帮你找页面」)。
+// keywords 用于按用户输入做关键词匹配,命中则在对话里追加「前往 X」按钮。
+interface NavLink { label: string; path: string; keywords: string[] }
+const NAV_LINKS: NavLink[] = [
+  { label: '数据看板', path: '/brand-growth', keywords: ['看板', '增长', '数据', '命中', '概览', '位次', 'dashboard'] },
+  { label: '根因分析', path: '/brand-growth/insights', keywords: ['根因', '洞察', '建议', '优化建议', 'insight'] },
+  { label: '发布进度', path: '/brand-growth/published', keywords: ['发布', '投放', '战报', '已发布', 'publish'] },
+  { label: '问题/投放管理', path: '/brand-growth/queries', keywords: ['问题库', '投放管理', '监测问题', 'query'] },
+  { label: '舆情监控', path: '/sentiment', keywords: ['舆情', '监控', '热点', 'sentiment'] },
+  { label: '诊断报告', path: '/result', keywords: ['诊断', '报告', '检测', '评分', 'report'] },
+  { label: '对接集成', path: '/account/integration', keywords: ['对接', '集成', '领号', 'token', '接入', 'api'] },
+  { label: '账号设置', path: '/account/profile', keywords: ['账号', '设置', '资料', '品牌设置', '会员', '个人'] },
+];
+
+function matchNavLinks(text: string): NavLink[] {
+  const t = text.toLowerCase();
+  return NAV_LINKS.filter((l) => l.keywords.some((k) => t.includes(k.toLowerCase())));
+}
 
 interface Msg {
   role: 'user' | 'assistant';
   text: string;
   cards?: AgentCard[];
+  nav?: NavLink[];
 }
 
 const TOOL_TITLE: Record<string, string> = {
@@ -109,13 +130,20 @@ function useDraggable() {
 
 export function AgentChatWidget() {
   const { isLoggedIn } = useAuth();
+  const navigate = useNavigate();
   const launcher = useDraggable();
   const panel = useDraggable();
+
+  // 跳转到目标页并收起聊天窗
+  const go = useCallback((path: string) => {
+    navigate(path);
+    setOpen(false);
+  }, [navigate]);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([
-    { role: 'assistant', text: '你好,我是 Vigilath GEO 优化助手。可以帮你建主题、跑诊断、看根因。试试:「帮我诊断当前主题」。' },
+    { role: 'assistant', text: '你好,我是 Vigilath GEO 市场专员。可以帮你跑诊断、看根因、查数据,也能带你去对应页面 —— 试试问「发布进度在哪看」,或点下方「快速前往」。' },
   ]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -131,7 +159,9 @@ export function AgentChatWidget() {
     if (!text || busy) return;
     setInput('');
     setBusy(true);
-    setMsgs((m) => [...m, { role: 'user', text }, { role: 'assistant', text: '' }]);
+    // 轻量「找页面」:命中导航关键词时,给这条助手回复挂上「前往 X」按钮
+    const navs = matchNavLinks(text).slice(0, 4);
+    setMsgs((m) => [...m, { role: 'user', text }, { role: 'assistant', text: '', nav: navs.length ? navs : undefined }]);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     await streamAgentChat(text, null, {
@@ -281,7 +311,45 @@ export function AgentChatWidget() {
                     {m.cards.map((c, ci) => <CardView key={ci} card={c} />)}
                   </div>
                 ) : null}
+                {m.nav?.length ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, maxWidth: '92%' }}>
+                    {m.nav.map((l) => (
+                      <button
+                        key={l.path}
+                        onClick={() => go(l.path)}
+                        className="transition-opacity hover:opacity-80"
+                        style={{
+                          fontSize: 13, fontWeight: 600, padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+                          border: '1px solid var(--accent-primary)', background: 'transparent', color: 'var(--accent-primary)',
+                        }}
+                      >
+                        前往 · {l.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+            ))}
+          </div>
+
+          {/* 快速前往:常驻页面导航条(横向滚动) */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', overflowX: 'auto',
+            borderTop: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 }}>快速前往</span>
+            {NAV_LINKS.map((l) => (
+              <button
+                key={l.path}
+                onClick={() => go(l.path)}
+                className="transition-colors hover:opacity-80"
+                style={{
+                  fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+                }}
+              >
+                {l.label}
+              </button>
             ))}
           </div>
 
