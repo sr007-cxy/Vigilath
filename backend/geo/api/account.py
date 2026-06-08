@@ -317,6 +317,34 @@ async def upsert_im_connector(
         db.close()
 
 
+@router.post("/im-bind-code")
+async def gen_im_bind_code(current_user: UserORM = Depends(get_current_user)):
+    """生成一次性飞书绑定码(ISV 模式):用户在飞书把它发给机器人即可绑定本账号。10 分钟有效。"""
+    import random
+    import string
+    from datetime import datetime, timedelta
+
+    from geo.models.agent import AgentIMBindCodeORM
+
+    db = SessionLocal()
+    try:
+        # 6 位、去掉易混字符(0/O/1/I)
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        for _ in range(8):
+            code = "".join(random.choice(alphabet) for _ in range(6))
+            if not db.query(AgentIMBindCodeORM).filter(AgentIMBindCodeORM.code == code).first():
+                break
+        row = AgentIMBindCodeORM(
+            code=code, account_id=current_user.id,
+            expires_at=datetime.utcnow() + timedelta(minutes=10), used=0,
+        )
+        db.add(row)
+        db.commit()
+        return {"code": code, "expires_in": 600}
+    finally:
+        db.close()
+
+
 @router.post("/im-connector/{cid}/delete")
 async def delete_im_connector(cid: int, current_user: UserORM = Depends(get_current_user)):
     from geo.models.agent import AgentIMConnectorORM

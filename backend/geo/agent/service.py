@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from geo.agent.api import router as agent_router
 from geo.agent.embed.api import router as embed_router
 from geo.agent.embed.im_feishu import router as im_feishu_router
+from geo.agent.embed.feishu_isv import router as feishu_isv_router
 
 app = FastAPI(title="Vigilath GEO Agent Service", version="0.1")
 
@@ -34,7 +35,8 @@ app.add_middleware(
 
 app.include_router(agent_router, prefix="/api", tags=["agent"])          # 内部:/api/agent/*(登录 JWT)
 app.include_router(embed_router, prefix="/api", tags=["agent-embed"])    # 对外:/api/agent/v1/*(embed token)
-app.include_router(im_feishu_router, prefix="/api", tags=["agent-im"])   # IM:/api/agent/im/feishu/callback
+app.include_router(im_feishu_router, prefix="/api", tags=["agent-im"])   # IM 自建:/api/agent/im/feishu/callback
+app.include_router(feishu_isv_router, prefix="/api", tags=["agent-im-isv"])  # IM ISV:/api/agent/im/feishu-isv/callback
 
 
 @app.get("/health")

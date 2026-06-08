@@ -72,3 +72,41 @@ class AgentIMConnectorORM(Base):
     enabled = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AgentIMUserBindingORM(Base):
+    """IM 使用者 ↔ Vigilath 账号绑定(ISV 模式,每用户各自绑)。
+
+    ISV 一个 app 服务无数企业,靠 (platform, tenant_key, open_id) 定位飞书用户 → account_id。
+    """
+    __tablename__ = "agent_im_user_bindings"
+    __table_args__ = (Index("ix_agent_im_bind_lookup", "platform", "tenant_key", "open_id", unique=True),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    platform = Column(String(length=16), nullable=False)        # feishu / wecom
+    tenant_key = Column(String(length=128), nullable=False, default="")   # 飞书企业标识(ISV)
+    open_id = Column(String(length=128), nullable=False)        # 该用户在本 app 下的 open_id
+    account_id = Column(Integer, nullable=False, index=True)     # 绑定到的 Vigilath 账号
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AgentIMBindCodeORM(Base):
+    """一次性绑定码:控制台为登录账号生成,用户在 IM 发给机器人完成绑定。"""
+    __tablename__ = "agent_im_bind_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(length=16), nullable=False, unique=True, index=True)
+    account_id = Column(Integer, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AgentISVStateORM(Base):
+    """ISV 动态状态(主要存飞书定时推送的 app_ticket;换 app_access_token 必需)。"""
+    __tablename__ = "agent_isv_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(String(length=128), nullable=False, unique=True, index=True)
+    app_ticket = Column(String(length=256), nullable=False, default="")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

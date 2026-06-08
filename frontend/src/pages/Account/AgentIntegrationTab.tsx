@@ -45,6 +45,7 @@ export function AgentIntegrationTab() {
   const [imConns, setImConns] = useState<Array<{ id: number; platform: string; app_id: string; app_secret_masked: string; enabled: boolean }>>([]);
   const [imBusy, setImBusy] = useState(false);
   const [imMsg, setImMsg] = useState('');
+  const [bindCode, setBindCode] = useState('');
 
   const origin = window.location.origin;
   const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
@@ -82,6 +83,15 @@ export function AgentIntegrationTab() {
     if (!confirm('确认删除此 IM 接入?删除后机器人将无法再回复。')) return;
     await fetch(`${API_BASE}/account/im-connector/${id}/delete`, { method: 'POST', headers: authHeaders() });
     await reload();
+  };
+
+  const genBindCode = async () => {
+    setBindCode('');
+    try {
+      const r = await fetch(`${API_BASE}/account/im-bind-code`, { method: 'POST', headers: authHeaders() });
+      const d = await r.json();
+      setBindCode(d.code || '');
+    } catch { setBindCode('生成失败'); }
   };
 
   const generate = async () => {
@@ -252,6 +262,33 @@ export function AgentIntegrationTab() {
           {imMsg && <span className="text-xs" style={{ color: imMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{imMsg}</span>}
         </div>
         <p className="text-xs text-secondary mt-3">③ 回飞书把应用发布给成员,在「机器人」里开启,即可在飞书内对话。企业微信接入同模式,即将开放。</p>
+      </div>
+
+      {/* ── 飞书绑定码(应用市场版机器人,每个使用者各自绑定)── */}
+      <div className="rounded-xl p-5" style={card}>
+        <h2 className="text-base font-semibold text-primary mb-1">飞书绑定码(应用市场机器人)</h2>
+        <p className="text-sm text-secondary mb-4">
+          如果你用的是 Vigilath 上架在飞书应用市场的机器人(无需自建应用),首次在飞书里跟它对话前,
+          先在这里生成绑定码,然后**把绑定码发给机器人**,即可把飞书账号绑定到当前 Vigilath 账号。
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => void genBindCode()}
+            className="px-5 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: 'var(--accent-primary)', color: '#fff' }}
+          >
+            生成绑定码
+          </button>
+          {bindCode && (
+            <>
+              <code className="px-4 py-2 rounded-lg text-lg font-bold tracking-widest" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--accent-secondary)' }}>
+                {bindCode}
+              </code>
+              <CopyBtn text={bindCode} />
+              <span className="text-xs text-secondary">10 分钟内有效,发给飞书机器人即可绑定</span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
