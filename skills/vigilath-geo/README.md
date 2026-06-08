@@ -4,36 +4,32 @@
 
 底层 = 一个 1 年期账号 token + Vigilath 的 `/api/agent/v1/*` 接口;本 skill 是 drop-in 封装,纯标准库、零依赖。
 
-## 安装
+## 安装(一行,推荐)
 
-把 `vigilath-geo/` 整个目录放进你 agent 的 skills 目录,例如:
-
-```
-你的-agent/
-  skills/
-    vigilath-geo/
-      SKILL.md
-      scripts/geo_client.py
-      README.md
-```
-
-## 配置(领号拿 token)
-
-向 Vigilath 领一个账号 token(1 年期),设进环境变量:
+在 Vigilath 控制台「集成」页一键拿到 token,然后:
 
 ```bash
-export VIGILATH_AGENT_TOKEN="emb_..."        # 必填,机密,等同 API key,别提交进代码库
-# export VIGILATH_BASE="https://geo.vigilath.com/api/agent/v1"   # 选填,默认即此
+curl -fsSL https://geo.vigilath.com/skill/install.sh | bash -s -- <你的token>
 ```
 
-> token 是机密:放环境变量 / 密钥管理,**不要硬编码、不要打印、不要提交**。一个 token = 一个账号,只能访问该账号自己的数据。
+脚本自动:① 把 skill 拷进探测到的 skills 目录(Claude `~/.claude/skills`、当前项目 `./skills`,或兜底 `~/.vigilath/skills`;也可 `--dir <路径>` 指定)② token 写进 `~/.vigilath/config`(权限 600,**无需设环境变量**)③ 自检链路。
+
+装完即用,无需手动拷文件、无需配环境变量。
+
+## 手动安装(可选)
+
+把 `vigilath-geo/` 目录放进你 agent 的 skills 目录,token 二选一:
+- 写进 `~/.vigilath/config`:`VIGILATH_AGENT_TOKEN=...`(一行 KEY=VALUE)
+- 或设环境变量:`export VIGILATH_AGENT_TOKEN="..."`
+
+> token 是机密(等同 API key):**不要硬编码、不要打印、不要提交**。一个 token = 一个账号,只能访问该账号自己的数据。
 
 ## 自测
 
 ```bash
-python skills/vigilath-geo/scripts/geo_client.py capabilities
-python skills/vigilath-geo/scripts/geo_client.py data today
-python skills/vigilath-geo/scripts/geo_client.py chat "我的品牌累计被搜到几个问题?"
+python3 ~/.claude/skills/vigilath-geo/scripts/geo_client.py capabilities
+python3 ~/.claude/skills/vigilath-geo/scripts/geo_client.py data today
+python3 ~/.claude/skills/vigilath-geo/scripts/geo_client.py chat "我的品牌累计被搜到几个问题?"
 ```
 
 - `chat` 输出 = 自然语言回答 + 结构化卡片 JSON(命中数字、竞品等)。

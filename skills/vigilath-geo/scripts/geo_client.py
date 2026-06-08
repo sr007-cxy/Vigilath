@@ -8,9 +8,10 @@
   python geo_client.py data today          # today / coverage / report ...
   python geo_client.py capabilities        # 当前 token 能做什么
 
-环境变量:
-  VIGILATH_AGENT_TOKEN   必填,1 年期账号 token(Vigilath 领号发放)
+凭证来源(优先级:环境变量 > ~/.vigilath/config):
+  VIGILATH_AGENT_TOKEN   1 年期账号 token(Vigilath 领号发放),必填
   VIGILATH_BASE          选填,默认 https://geo.vigilath.com/api/agent/v1
+一行安装(install.sh)会把 token 写进 ~/.vigilath/config,装完直接可用、无需设环境变量。
 """
 from __future__ import annotations
 
@@ -20,7 +21,31 @@ import sys
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get("VIGILATH_BASE", "https://geo.vigilath.com/api/agent/v1").rstrip("/")
+
+def _load_config() -> dict:
+    """读 ~/.vigilath/config(KEY=VALUE 行),给免设环境变量的安装方式用。"""
+    cfg: dict[str, str] = {}
+    path = os.path.expanduser("~/.vigilath/config")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    cfg[k.strip()] = v.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    return cfg
+
+
+_CFG = _load_config()
+
+
+def _conf(key: str, default: str = "") -> str:
+    return (os.environ.get(key) or _CFG.get(key) or default).strip()
+
+
+BASE = _conf("VIGILATH_BASE", "https://geo.vigilath.com/api/agent/v1").rstrip("/")
 
 
 def _die(msg: str, code: int = 1) -> "None":
@@ -29,9 +54,9 @@ def _die(msg: str, code: int = 1) -> "None":
 
 
 def _headers() -> dict:
-    token = os.environ.get("VIGILATH_AGENT_TOKEN", "").strip()
+    token = _conf("VIGILATH_AGENT_TOKEN")
     if not token:
-        _die("缺少环境变量 VIGILATH_AGENT_TOKEN(1 年期账号 token,由 Vigilath 领号发放)。")
+        _die("缺少 token —— 跑一行安装,或设环境变量 VIGILATH_AGENT_TOKEN / 写进 ~/.vigilath/config。")
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
