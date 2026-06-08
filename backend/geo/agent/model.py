@@ -21,11 +21,11 @@ def get_deepseek_model():
 
     if ds_key:
         base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
-        model_name = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+        model_name = "deepseek-v4-pro"          # 写死:官方直连用 deepseek-v4-pro
         provider = OpenAIProvider(base_url=base_url, api_key=ds_key)
     elif or_key:
         base_url = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-        model_name = os.environ.get("OPENROUTER_DEEPSEEK_MODEL", "deepseek/deepseek-chat")
+        model_name = "deepseek/deepseek-v4-pro"  # 写死:OpenRouter 回退也用 v4-pro
         provider = OpenAIProvider(base_url=base_url, api_key=or_key)
     else:
         raise RuntimeError("缺少 DEEPSEEK_API_KEY 或 OPENROUTER_API_KEY")
