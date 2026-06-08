@@ -105,7 +105,8 @@ def _build_card_v2(text: str) -> dict:
                              "row_height": "low", "columns": cols, "rows": trows})
     if not elements:
         elements = [{"tag": "markdown", "content": text or "（无输出）"}]
-    return {"schema": "2.0", "config": {"wide_screen_mode": True}, "body": {"elements": elements}}
+    # 2.0 卡片外层只要 schema + body(wide_screen_mode 是 1.0 字段,2.0 放进来会被拒)
+    return {"schema": "2.0", "body": {"elements": elements}}
 
 
 def _has_table(text: str) -> bool:
