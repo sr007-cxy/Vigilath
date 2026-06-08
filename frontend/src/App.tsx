@@ -34,6 +34,7 @@ const AccountLayout = lazy(() => import('./pages/Account/AccountLayout').then(m 
 const ProfileTab = lazy(() => import('./pages/Account/ProfileTab').then(m => ({ default: m.ProfileTab })));
 const MembershipTab = lazy(() => import('./pages/Account/MembershipTab').then(m => ({ default: m.MembershipTab })));
 const UsageTab = lazy(() => import('./pages/Account/UsageTab').then(m => ({ default: m.UsageTab })));
+const AgentIntegrationTab = lazy(() => import('./pages/Account/AgentIntegrationTab').then(m => ({ default: m.AgentIntegrationTab })));
 const HistoryTab = lazy(() => import('./pages/Account/HistoryTab').then(m => ({ default: m.HistoryTab })));
 const PaymentsTab = lazy(() => import('./pages/Account/PaymentsTab').then(m => ({ default: m.PaymentsTab })));
 const BrandSettingsTab = lazy(() => import('./pages/Account/BrandSettingsTab').then(m => ({ default: m.BrandSettingsTab })));
@@ -132,6 +133,7 @@ function App() {
                 <Route path="brand" element={<BrandSettingsTab />} />
                 <Route path="membership" element={<MembershipTab />} />
                 <Route path="usage" element={<UsageTab />} />
+                <Route path="integration" element={<AgentIntegrationTab />} />
                 <Route path="history" element={<HistoryTab />} />
                 <Route path="payments" element={<PaymentsTab />} />
               </Route>

@@ -164,3 +164,84 @@ async def change_password(
         db.close()
 
     return {"success": True}
+
+
+# ── 对外开放:账号自助 embed token(给外部 agent / 小龙虾链接本账号)──────────
+# 签发模块 geo.agent.embed.tokens 不依赖 pydantic-ai,可在主后端安全调用;
+# 签名密钥与 agent service 共用(同 .env),故主后端签的 token 在 :8010 校验通过。
+
+class IssueTokenRequest(BaseModel):
+    caps: list[str] = Field(default_factory=lambda: ["read", "write"])
+    label: str = ""
+    days: int = 365
+
+
+@router.get("/agent-tokens")
+async def list_agent_tokens(current_user: UserORM = Depends(get_current_user)):
+    """列出本账号的 embed token(不返回明文,只元数据)。"""
+    from geo.models.agent import AgentTokenORM
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AgentTokenORM)
+            .filter(AgentTokenORM.account_id == current_user.id)
+            .order_by(AgentTokenORM.id.desc())
+            .all()
+        )
+        return {
+            "tokens": [
+                {
+                    "tid": r.tid,
+                    "caps": r.caps,
+                    "label": r.label,
+                    "enabled": r.enabled == 1,
+                    "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.post("/agent-token")
+async def issue_agent_token(
+    payload: IssueTokenRequest,
+    current_user: UserORM = Depends(get_current_user),
+):
+    """自助领号:为当前账号签发 1 年期 embed token(明文只此一次返回)。发布能力对外永不开放。"""
+    from geo.agent.embed.tokens import issue_token
+
+    caps = [c for c in payload.caps if c in ("read", "write")] or ["read"]
+    days = max(1, min(int(payload.days or 365), 366))
+    db = SessionLocal()
+    try:
+        token, tid = issue_token(
+            db, current_user.id, caps=caps, label=(payload.label or "")[:255], ttl_days=days,
+        )
+        return {"token": token, "tid": tid, "caps": caps, "days": days, "can_publish": False}
+    finally:
+        db.close()
+
+
+@router.post("/agent-token/{tid}/revoke")
+async def revoke_agent_token(tid: str, current_user: UserORM = Depends(get_current_user)):
+    """吊销本账号的某个 token(只能吊销自己的)。"""
+    from geo.models.agent import AgentTokenORM
+
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(AgentTokenORM)
+            .filter(AgentTokenORM.tid == tid, AgentTokenORM.account_id == current_user.id)
+            .first()
+        )
+        if row is None:
+            raise AppException(status_code=404, message="token not found")
+        row.enabled = 0
+        db.commit()
+        return {"success": True, "tid": tid}
+    finally:
+        db.close()

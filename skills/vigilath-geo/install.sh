@@ -46,12 +46,17 @@ fetch "SKILL.md" "$DEST/SKILL.md"
 fetch "README.md" "$DEST/README.md"
 fetch "scripts/geo_client.py" "$DEST/scripts/geo_client.py"
 
-# ② token 写配置(不进 skills 目录、不进代码库),chmod 600
+# ② token + API 基址写配置(API 基址从下载 skill 的同一 host 推出,自动对齐 test/prod)
 mkdir -p "$HOME/.vigilath"
 umask 077
-{ echo "# Vigilath GEO —— 机密,勿提交"; echo "VIGILATH_AGENT_TOKEN=$TOKEN"; } > "$HOME/.vigilath/config"
+API_BASE="${SKILL_BASE%/skill}/api/agent/v1"
+{
+  echo "# Vigilath GEO —— 机密,勿提交"
+  echo "VIGILATH_AGENT_TOKEN=$TOKEN"
+  echo "VIGILATH_BASE=$API_BASE"
+} > "$HOME/.vigilath/config"
 chmod 600 "$HOME/.vigilath/config"
-say "token 已写入 ~/.vigilath/config(权限 600)"
+say "token + API 基址($API_BASE)已写入 ~/.vigilath/config(权限 600)"
 
 # ③ 自检
 say "自检中…"
