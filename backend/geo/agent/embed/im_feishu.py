@@ -8,11 +8,14 @@
 """
 from __future__ import annotations
 
-import asyncio
 import json
+import logging
 import time
 
 import httpx
+
+log = logging.getLogger("geo.agent.im")
+logging.getLogger("geo.agent.im").setLevel(logging.INFO)
 from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
@@ -75,17 +78,23 @@ async def _tenant_token(app_id: str, app_secret: str) -> str | None:
 async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> None:
     tok = await _tenant_token(app_id, app_secret)
     if not tok:
+        log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
         return
     try:
         async with httpx.AsyncClient(timeout=15) as c:
-            await c.post(
+            r = await c.post(
                 f"{FEISHU_BASE}/im/v1/messages",
                 params={"receive_id_type": "chat_id"},
                 headers={"Authorization": f"Bearer {tok}"},
                 json={"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
             )
-    except Exception:  # noqa: BLE001
-        pass
+        d = r.json()
+        if d.get("code") not in (0, None):
+            log.warning("[im-feishu] 发消息失败 code=%s msg=%s(多半缺 im:message 发送权限)", d.get("code"), d.get("msg"))
+        else:
+            log.info("[im-feishu] 已回贴 chat_id=%s", chat_id)
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] 发消息异常:%s", e)
 
 
 async def _handle_message(app_id: str, app_secret: str, account_id: int, chat_id: str, user_text: str) -> None:
@@ -113,6 +122,8 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, chat_id
 @router.post("/feishu/callback")
 async def feishu_callback(request: Request, bg: BackgroundTasks):
     body = await request.json()
+    log.info("[im-feishu] 收到回调:type=%s event_type=%s keys=%s",
+             body.get("type"), (body.get("header") or {}).get("event_type"), list(body.keys()))
 
     # 先按 app_id 找 connector(拿 aes_key 解密 / 拿 secret 回贴)。明文事件 app_id 在 header。
     app_id = (body.get("header") or {}).get("app_id") or body.get("app_id") or ""
@@ -149,19 +160,22 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
         if header.get("event_type") == "im.message.receive_v1":
             event = body.get("event") or {}
             msg = event.get("message") or {}
-            # 忽略机器人自己/非文本
             if msg.get("message_type") == "text":
                 chat_id = msg.get("chat_id") or ""
                 try:
                     text = json.loads(msg.get("content") or "{}").get("text", "").strip()
                 except json.JSONDecodeError:
                     text = ""
-                # 群里 @机器人会带 @_user_1 之类,去掉前导 @ 文本
                 text = text.replace("@_user_1", "").strip()
                 if chat_id and text:
-                    account_id = conn.account_id
-                    app_secret = conn.app_secret
-                    bg.add_task(_handle_message, app_id, app_secret, account_id, chat_id, text)
+                    log.info("[im-feishu] 消息→后台跑 agent:account=%s chat=%s text=%r", conn.account_id, chat_id, text[:50])
+                    bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, chat_id, text)
+                else:
+                    log.info("[im-feishu] 文本消息但 chat_id/text 为空,跳过")
+            else:
+                log.info("[im-feishu] 非文本消息(type=%s),跳过", msg.get("message_type"))
+        else:
+            log.info("[im-feishu] 非消息事件(event_type=%s),跳过", header.get("event_type"))
         return {"code": 0}
     finally:
         db.close()
