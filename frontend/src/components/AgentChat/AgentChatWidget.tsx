@@ -11,6 +11,11 @@ import { streamAgentChat, type AgentCard } from '../../services/agentApi';
 interface NavLink { label: string; path: string; keywords: string[] }
 const NAV_LINKS: NavLink[] = [
   { label: '数据看板', path: '/brand-growth', keywords: ['看板', '增长', '数据', '命中', '概览', '位次', 'dashboard'] },
+  { label: '信源分析', path: '/brand-growth/sources', keywords: ['信源', '信源分析', '来源', '引用来源', '引用域名', 'source'] },
+  { label: '引擎分析', path: '/brand-growth/engines', keywords: ['引擎', '引擎分析', '模型表现', '各引擎', 'engine'] },
+  { label: '竞品分析', path: '/brand-growth/competitors', keywords: ['竞品', '竞品分析', '对手', '竞争', 'competitor'] },
+  { label: '可见性矩阵', path: '/brand-growth/matrix', keywords: ['矩阵', '可见性矩阵', 'matrix'] },
+  { label: 'AI 回答', path: '/brand-growth/responses', keywords: ['回答', 'ai回答', '原文', 'response'] },
   { label: '根因分析', path: '/brand-growth/insights', keywords: ['根因', '洞察', '建议', '优化建议', 'insight'] },
   { label: '发布进度', path: '/brand-growth/published', keywords: ['发布', '投放', '战报', '已发布', 'publish'] },
   { label: '问题/投放管理', path: '/brand-growth/queries', keywords: ['问题库', '投放管理', '监测问题', 'query'] },
