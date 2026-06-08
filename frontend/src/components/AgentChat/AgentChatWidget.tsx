@@ -261,7 +261,7 @@ export function AgentChatWidget() {
               : { right: 24, bottom: 152 }),
             width: 384, maxWidth: 'calc(100vw - 48px)', height: 540, maxHeight: 'calc(100vh - 200px)',
             display: 'flex', flexDirection: 'column',
-            background: 'var(--bg-card)', borderRadius: 16, overflow: 'hidden',
+            background: 'var(--bg-card)', borderRadius: 16, overflow: 'visible',
             boxShadow: '0 16px 48px rgba(0,0,0,.24)', border: '1px solid var(--border-color)',
           }}
         >
@@ -283,7 +283,7 @@ export function AgentChatWidget() {
               aria-hidden="true"
               draggable={false}
               style={{
-                position: 'absolute', left: 14, bottom: -32, width: 64, height: 64,
+                position: 'absolute', left: 14, top: -32, width: 64, height: 64,
                 borderRadius: '50%', objectFit: 'cover', flexShrink: 0, pointerEvents: 'none',
                 border: '2.5px solid var(--bg-card)', boxShadow: '0 4px 10px rgba(0,0,0,.28)',
               }}
@@ -291,7 +291,7 @@ export function AgentChatWidget() {
             <span>GEO 市场专员</span>
           </div>
 
-          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 14px 14px', background: 'var(--bg-primary)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 14px', background: 'var(--bg-primary)' }}>
             {msgs.map((m, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                 <div
@@ -357,6 +357,7 @@ export function AgentChatWidget() {
           <div style={{
             display: 'flex', gap: 8, padding: 12,
             borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)',
+            borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
           }}>
             <input
               value={input}
