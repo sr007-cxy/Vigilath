@@ -171,7 +171,6 @@ async def change_password(
 # 签名密钥与 agent service 共用(同 .env),故主后端签的 token 在 :8010 校验通过。
 
 class IssueTokenRequest(BaseModel):
-    caps: list[str] = Field(default_factory=lambda: ["read", "write"])
     label: str = ""
     days: int = 365
 
@@ -211,10 +210,13 @@ async def issue_agent_token(
     payload: IssueTokenRequest,
     current_user: UserORM = Depends(get_current_user),
 ):
-    """自助领号:为当前账号签发 1 年期 embed token(明文只此一次返回)。发布能力对外永不开放。"""
+    """自助领号:为当前账号签发 1 年期 embed token(明文只此一次返回)。
+
+    能力一律全开(读 + 诊断/产稿);真实对外发布不在 token 能力内,由平台护栏控制(can_publish 恒 False)。
+    """
     from geo.agent.embed.tokens import issue_token
 
-    caps = [c for c in payload.caps if c in ("read", "write")] or ["read"]
+    caps = ["read", "write"]
     days = max(1, min(int(payload.days or 365), 366))
     db = SessionLocal()
     try:

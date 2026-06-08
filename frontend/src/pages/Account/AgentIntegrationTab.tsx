@@ -36,7 +36,6 @@ export function AgentIntegrationTab() {
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [caps, setCaps] = useState<'read' | 'read,write'>('read,write');
   const [label, setLabel] = useState('');
   const [fresh, setFresh] = useState<string | null>(null);   // 刚生成的明文 token(只显示这一次)
   const [err, setErr] = useState('');
@@ -60,7 +59,7 @@ export function AgentIntegrationTab() {
     try {
       const r = await fetch(`${API_BASE}/account/agent-token`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ caps: caps.split(','), label }),
+        body: JSON.stringify({ label }),
       });
       if (!r.ok) throw new Error(await r.text());
       const d = await r.json();
@@ -89,17 +88,6 @@ export function AgentIntegrationTab() {
       <div className="rounded-xl p-5" style={card}>
         <h2 className="text-base font-semibold text-primary mb-4">生成接入 token</h2>
         <div className="flex flex-wrap items-end gap-4">
-          <label className="text-sm">
-            <span className="block text-secondary mb-1">能力范围</span>
-            <select
-              value={caps} onChange={(e) => setCaps(e.target.value as 'read' | 'read,write')}
-              className="px-3 py-2 rounded-lg text-sm"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-            >
-              <option value="read">只读(查数据、看诊断)</option>
-              <option value="read,write">读写(可跑诊断 / 产稿)</option>
-            </select>
-          </label>
           <label className="text-sm flex-1 min-w-[180px]">
             <span className="block text-secondary mb-1">备注(可选)</span>
             <input
@@ -116,7 +104,7 @@ export function AgentIntegrationTab() {
             {busy ? '生成中…' : '生成'}
           </button>
         </div>
-        <p className="text-xs text-secondary mt-3">真实对外发布不在对接能力内(由平台护栏控制)。token 等同密钥,只显示一次,请妥善保管。</p>
+        <p className="text-xs text-secondary mt-3">token 含完整对接能力(查数据 / 诊断 / 产稿);真实对外发布不在对接能力内(由平台护栏控制)。token 等同密钥,只显示一次,请妥善保管。</p>
         {err && <p className="text-xs mt-2" style={{ color: '#f43f5e' }}>{err}</p>}
       </div>
 
