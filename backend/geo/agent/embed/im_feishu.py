@@ -9,13 +9,21 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 
 import httpx
 
-log = logging.getLogger("geo.agent.im")
-logging.getLogger("geo.agent.im").setLevel(logging.INFO)
+
+class _Log:
+    """直接 print 到 stdout(journald 必收);自定义 logger 不一定挂到 uvicorn handler。"""
+
+    def info(self, msg, *a):
+        print("[im-feishu] " + (msg % a if a else msg), flush=True)
+
+    warning = info
+
+
+log = _Log()
 from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
