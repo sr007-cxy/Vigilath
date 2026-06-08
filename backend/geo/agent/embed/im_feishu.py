@@ -51,6 +51,67 @@ def _to_feishu_md(text: str) -> str:
     return _tables_to_lines(t)
 
 
+_SEP = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
+
+
+def _segment(text: str) -> list:
+    """把文本切成块:('md', 文本) 或 ('table', 表头, 行列表)。"""
+    lines = (text or "").split("\n")
+    blocks: list = []
+    buf: list[str] = []
+    i = 0
+
+    def flush():
+        if buf:
+            blocks.append(("md", "\n".join(buf)))
+            buf.clear()
+
+    while i < len(lines):
+        cur = lines[i]
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if "|" in cur and "|" in nxt and "-" in nxt and _SEP.match(nxt):
+            flush()
+            header = [c.strip() for c in cur.strip().strip("|").split("|")]
+            i += 2
+            rows: list[list[str]] = []
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                rows.append([c.strip() for c in lines[i].strip().strip("|").split("|")])
+                i += 1
+            blocks.append(("table", header, rows))
+            continue
+        buf.append(cur)
+        i += 1
+    flush()
+    return blocks
+
+
+def _build_card_v2(text: str) -> dict:
+    """构造飞书 2.0 卡片:Markdown 段落 + **真表格组件**(table)。供有表格时渲染成真正的表格。"""
+    header_to_bold = lambda s: re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", s)  # noqa: E731
+    elements: list = []
+    for blk in _segment(text):
+        if blk[0] == "md":
+            content = header_to_bold(blk[1]).strip()
+            if content:
+                elements.append({"tag": "markdown", "content": content})
+        else:
+            _, header, rows = blk
+            ncols = max([len(header)] + [len(r) for r in rows]) if rows else len(header)
+            cols = [{"name": f"c{j}",
+                     "display_name": (header[j] if j < len(header) and header[j] else f"列{j + 1}"),
+                     "data_type": "text"} for j in range(ncols)]
+            trows = [{f"c{j}": (r[j] if j < len(r) else "") for j in range(ncols)} for r in rows]
+            elements.append({"tag": "table", "page_size": min(max(len(trows), 1), 10),
+                             "row_height": "low", "columns": cols, "rows": trows})
+    if not elements:
+        elements = [{"tag": "markdown", "content": text or "（无输出）"}]
+    return {"schema": "2.0", "config": {"wide_screen_mode": True}, "body": {"elements": elements}}
+
+
+def _has_table(text: str) -> bool:
+    return any(b[0] == "table" for b in _segment(text))
+
+
 class _Log:
     """直接 print 到 stdout(journald 必收);自定义 logger 不一定挂到 uvicorn handler。"""
 
@@ -120,15 +181,8 @@ async def _tenant_token(app_id: str, app_secret: str) -> str | None:
         return None
 
 
-async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> None:
-    tok = await _tenant_token(app_id, app_secret)
-    if not tok:
-        log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
-        return
-    # 用交互卡片的 markdown 元素发,飞书才会渲染 **加粗** / 列表 / 代码,
-    # 否则纯文本会把 Markdown 符号原样裸露出来。
-    card = {"config": {"wide_screen_mode": True},
-            "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
+async def _post_card(tok: str, chat_id: str, card: dict) -> int | None:
+    """发一张交互卡片,返回飞书 code(0=成功,None=异常)。"""
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
@@ -137,13 +191,34 @@ async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> N
                 headers={"Authorization": f"Bearer {tok}"},
                 json={"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
             )
-        d = r.json()
-        if d.get("code") not in (0, None):
-            log.warning("[im-feishu] 发消息失败 code=%s msg=%s(多半缺 im:message 发送权限)", d.get("code"), d.get("msg"))
-        else:
-            log.info("[im-feishu] 已回贴 chat_id=%s", chat_id)
+        return r.json().get("code")
     except Exception as e:  # noqa: BLE001
         log.warning("[im-feishu] 发消息异常:%s", e)
+        return None
+
+
+async def send_reply(tok: str, chat_id: str, text: str) -> None:
+    """回贴飞书:有表格 → 渲染成真表格卡片(2.0);失败/无表格 → 退回 markdown(表格转列表行)卡片。"""
+    if _has_table(text):
+        code = await _post_card(tok, chat_id, _build_card_v2(text))
+        if code == 0:
+            log.info("[im-feishu] 已回贴(表格卡片)chat=%s", chat_id)
+            return
+        log.warning("[im-feishu] 表格卡片被拒(code=%s),回退列表行", code)
+    simple = {"config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
+    code = await _post_card(tok, chat_id, simple)
+    if code not in (0, None):
+        log.warning("[im-feishu] 发消息失败 code=%s(多半缺 im:message 发送权限)", code)
+    elif code == 0:
+        log.info("[im-feishu] 已回贴 chat=%s", chat_id)
+
+
+async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> None:
+    tok = await _tenant_token(app_id, app_secret)
+    if not tok:
+        log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
+        return
+    await send_reply(tok, chat_id, text)
 
 
 async def _handle_message(app_id: str, app_secret: str, account_id: int, chat_id: str, user_text: str) -> None:

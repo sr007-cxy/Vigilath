@@ -21,7 +21,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from geo.agent.deps import AgentDeps
-from geo.agent.embed.im_feishu import _maybe_decrypt, _to_feishu_md, log
+from geo.agent.embed.im_feishu import _build_card_v2, _has_table, _maybe_decrypt, _to_feishu_md, log
 from geo.database import SessionLocal
 from geo.models.agent import AgentIMBindCodeORM, AgentIMUserBindingORM, AgentISVStateORM
 
@@ -120,21 +120,30 @@ async def _send_card(db: Session, tenant_key: str, chat_id: str, text: str) -> N
     if not tok:
         log.warning("ISV 拿不到 tenant_access_token(tenant=%s),无法回贴", tenant_key)
         return
-    card = {"config": {"wide_screen_mode": True},
-            "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
-    try:
-        async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.post(f"{FEISHU_BASE}/im/v1/messages", params={"receive_id_type": "chat_id"},
-                             headers={"Authorization": f"Bearer {tok}"},
-                             json={"receive_id": chat_id, "msg_type": "interactive",
-                                   "content": json.dumps(card, ensure_ascii=False)})
-        d = r.json()
-        if d.get("code") not in (0, None):
-            log.warning("ISV 发消息失败 code=%s msg=%s", d.get("code"), d.get("msg"))
-        else:
-            log.info("ISV 已回贴 tenant=%s chat=%s", tenant_key, chat_id)
-    except Exception as e:  # noqa: BLE001
-        log.warning("ISV 发消息异常:%s", e)
+
+    async def _post(card: dict) -> int | None:
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.post(f"{FEISHU_BASE}/im/v1/messages", params={"receive_id_type": "chat_id"},
+                                 headers={"Authorization": f"Bearer {tok}"},
+                                 json={"receive_id": chat_id, "msg_type": "interactive",
+                                       "content": json.dumps(card, ensure_ascii=False)})
+            return r.json().get("code")
+        except Exception as e:  # noqa: BLE001
+            log.warning("ISV 发消息异常:%s", e)
+            return None
+
+    # 有表格 → 真表格卡片;失败/无表格 → markdown(表格转列表行)
+    if _has_table(text):
+        if await _post(_build_card_v2(text)) == 0:
+            log.info("ISV 已回贴(表格卡片)tenant=%s", tenant_key)
+            return
+        log.warning("ISV 表格卡片被拒,回退列表行")
+    code = await _post({"config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]})
+    if code not in (0, None):
+        log.warning("ISV 发消息失败 code=%s", code)
+    elif code == 0:
+        log.info("ISV 已回贴 tenant=%s chat=%s", tenant_key, chat_id)
 
 
 def _resolve_account(db: Session, tenant_key: str, open_id: str) -> int | None:
