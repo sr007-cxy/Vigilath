@@ -230,7 +230,11 @@ async def trigger_diagnosis(ctx: RunContext[AgentDeps]) -> dict:
 
 
 async def draft_articles(ctx: RunContext[AgentDeps], max_docs: int = 3, queries: list[str] | None = None) -> dict:
-    """基于选定 query **生成文章草稿**(异步,写)。产出进 TopicGeneratedDoc(草稿),稍后用 get_publish_status 看进度。
+    """⚠️【写操作·生成新内容】基于选定 query **生成全新文章草稿**(异步,会真的产出文章)。
+
+    **仅在用户明确表达"生成/写/产稿/帮我写文章/创作"等意图时才可调用。**
+    用户问"今天发了哪些文章""发布了什么""看看文章""文章进度"等**查看类**问题时,
+    **绝对不要调用本工具**,改用只读的 get_publish_status。拿不准是不是"要生成"就先别调,先问用户。
 
     max_docs: 本次生成篇数(1–20);queries: 指定 query 列表(不传则用主题已选 query)。
     """
@@ -302,7 +306,12 @@ async def get_batch_results(ctx: RunContext[AgentDeps]) -> dict:
 
 
 async def get_publish_status(ctx: RunContext[AgentDeps]) -> dict:
-    """读当前主题文章的发布进度(按 status 聚合:draft/pending_review/approved/published 等)。只读。"""
+    """读当前主题文章的发布进度 + 已发布文章列表(含今日发布)。**纯只读**,不生成任何内容。
+
+    回答「今天发了哪些文章 / 发布了什么 / 看文章」这类**查看类**问题就用本工具,绝不要调 draft_articles。
+    """
+    from datetime import datetime
+
     from sqlalchemy import func
 
     from geo.models.ai_telemetry import TopicGeneratedDocORM
@@ -310,14 +319,43 @@ async def get_publish_status(ctx: RunContext[AgentDeps]) -> dict:
     topic = _account_topic(ctx)
     if topic is None:
         raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db = ctx.deps.db
     rows = (
-        ctx.deps.db.query(TopicGeneratedDocORM.status, func.count())
+        db.query(TopicGeneratedDocORM.status, func.count())
         .filter(TopicGeneratedDocORM.topic_id == topic.id)
         .group_by(TopicGeneratedDocORM.status)
         .all()
     )
     agg = {s: int(c) for s, c in rows}
-    return {"topic_id": topic.id, "by_status": agg, "published": agg.get("published", 0), "total": sum(agg.values())}
+
+    # 已发布文章列表(标题 + 发布时间),并统计「今天发了哪些」
+    pub = (
+        db.query(TopicGeneratedDocORM)
+        .filter(TopicGeneratedDocORM.topic_id == topic.id, TopicGeneratedDocORM.status == "published")
+        .order_by(TopicGeneratedDocORM.mediumsly_pushed_at.desc().nullslast(), TopicGeneratedDocORM.id.desc())
+        .limit(20)
+        .all()
+    )
+    today = datetime.utcnow().date()
+    recent, today_list = [], []
+    for d in pub:
+        ts = d.mediumsly_pushed_at or d.created_at
+        item = {
+            "id": d.id,
+            "title": d.title or (d.source_query_text or "")[:40] or f"doc#{d.id}",
+            "url": getattr(d, "mediumsly_url", None),
+            "published_at": ts.isoformat() if ts else None,
+        }
+        recent.append(item)
+        if ts and ts.date() == today:
+            today_list.append(item)
+    return {
+        "topic_id": topic.id, "by_status": agg,
+        "published": agg.get("published", 0), "total": sum(agg.values()),
+        "published_today_count": len(today_list),
+        "published_today": today_list,          # 今天发了哪些文章
+        "recent_published": recent[:10],         # 最近已发布(最多 10 篇)
+    }
 
 
 async def get_growth_summary(ctx: RunContext[AgentDeps]) -> dict:
