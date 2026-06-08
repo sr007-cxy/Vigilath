@@ -68,8 +68,49 @@ function CardView({ card }: { card: AgentCard }) {
   );
 }
 
+// 可拖拽:把 handle(头像/标题栏)的指针拖动转成容器的 left/top。
+// pos=null 时用默认锚点(right/bottom);拖动后切到绝对坐标并夹在视口内。
+// movedRef 用来区分「点击」与「拖动」,拖动后抑制 onClick(避免拖完就开关窗)。
+function useDraggable() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const st = useRef<{ sx: number; sy: number; bx: number; by: number; moved: boolean } | null>(null);
+  const movedRef = useRef(false);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    st.current = { sx: e.clientX, sy: e.clientY, bx: rect.left, by: rect.top, moved: false };
+    movedRef.current = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const s = st.current;
+    if (!s) return;
+    const dx = e.clientX - s.sx, dy = e.clientY - s.sy;
+    if (!s.moved && Math.hypot(dx, dy) < 4) return;
+    s.moved = true;
+    movedRef.current = true;
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const nx = Math.min(Math.max(8, s.bx + dx), window.innerWidth - w - 8);
+    const ny = Math.min(Math.max(8, s.by + dy), window.innerHeight - h - 8);
+    setPos({ x: nx, y: ny });
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    st.current = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  };
+
+  return { ref, pos, movedRef, handleProps: { onPointerDown, onPointerMove, onPointerUp } };
+}
+
 export function AgentChatWidget() {
   const { isLoggedIn } = useAuth();
+  const launcher = useDraggable();
+  const panel = useDraggable();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -122,22 +163,30 @@ export function AgentChatWidget() {
 
   return (
     <>
-      {/* 浮标:头像按钮 + 下方「GEO 市场专员」文字 */}
+      {/* 浮标:头像按钮 + 下方「GEO 市场专员」文字。可拖动改变位置。 */}
       <div
+        ref={launcher.ref}
         style={{
-          // 「预约演示」浮动按钮在 right:24/bottom:24(ContactModal),把助手上移堆在其上方,避免重叠
-          position: 'fixed', right: 24, bottom: 88, zIndex: 1000,
+          // 默认锚点:「预约演示」浮动按钮在 right:24/bottom:24,把助手堆在其上方避免重叠;拖动后切到绝对坐标
+          position: 'fixed', zIndex: 1000,
+          ...(launcher.pos
+            ? { left: launcher.pos.x, top: launcher.pos.y }
+            : { right: 24, bottom: 88 }),
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+          touchAction: 'none', userSelect: 'none',
         }}
       >
         <button
-          onClick={() => setOpen((o) => !o)}
+          {...launcher.handleProps}
+          onClick={() => { if (launcher.movedRef.current) return; setOpen((o) => !o); }}
           aria-label="GEO 市场专员"
+          title="点击对话 · 拖动可移动位置"
           className="transition-transform hover:scale-105 active:scale-95"
           style={{
-            width: 56, height: 56, borderRadius: '50%', border: 'none',
-            background: 'var(--accent-gradient)', color: '#fff', fontSize: 24, cursor: 'pointer',
-            boxShadow: '0 6px 20px rgba(0,0,0,.22)', overflow: 'hidden', padding: 0,
+            width: 60, height: 60, borderRadius: '50%', border: 'none', padding: 0,
+            background: open ? 'var(--accent-gradient)' : 'transparent',
+            color: '#fff', cursor: 'grab', overflow: 'hidden',
+            boxShadow: '0 6px 20px rgba(0,0,0,.22)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
@@ -146,12 +195,13 @@ export function AgentChatWidget() {
               <path d="M6 9l6 6 6-6" />
             </svg>
           ) : (
-            // 市场专员头像(真实照片)
+            // 市场专员头像(自带圆环,透明角)
             <img
-              src="/image/agent-avatar.jpg"
+              src="/image/agent-avatar.png"
               alt=""
               aria-hidden="true"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
             />
           )}
         </button>
@@ -160,7 +210,7 @@ export function AgentChatWidget() {
             style={{
               fontSize: 11, fontWeight: 600, lineHeight: 1, whiteSpace: 'nowrap',
               color: '#fff', background: 'rgba(0,0,0,.55)', padding: '3px 8px', borderRadius: 999,
-              boxShadow: '0 2px 8px rgba(0,0,0,.18)',
+              boxShadow: '0 2px 8px rgba(0,0,0,.18)', pointerEvents: 'none',
             }}
           >
             GEO 市场专员
@@ -168,35 +218,49 @@ export function AgentChatWidget() {
         )}
       </div>
 
-      {/* 聊天面板 */}
+      {/* 聊天面板。标题栏可拖动改变窗口位置。 */}
       {open && (
         <div
+          ref={panel.ref}
           className="animate-fade-in"
           style={{
-            position: 'fixed', right: 24, bottom: 152, zIndex: 1000,
+            position: 'fixed', zIndex: 1000,
+            ...(panel.pos
+              ? { left: panel.pos.x, top: panel.pos.y }
+              : { right: 24, bottom: 152 }),
             width: 384, maxWidth: 'calc(100vw - 48px)', height: 540, maxHeight: 'calc(100vh - 200px)',
             display: 'flex', flexDirection: 'column',
             background: 'var(--bg-card)', borderRadius: 16, overflow: 'hidden',
             boxShadow: '0 16px 48px rgba(0,0,0,.24)', border: '1px solid var(--border-color)',
           }}
         >
-          <div style={{
-            padding: '14px 16px', background: 'var(--accent-gradient)', color: '#fff',
-            fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 11,
-          }}>
+          {/* 标题栏:拖动手柄。头像放大并超出标题栏下沿。 */}
+          <div
+            {...panel.handleProps}
+            style={{
+              position: 'relative', padding: '13px 16px 13px 92px', minHeight: 58,
+              background: 'var(--accent-gradient)', color: '#fff',
+              borderTopLeftRadius: 16, borderTopRightRadius: 16,
+              fontWeight: 600, fontSize: 15, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              cursor: 'grab', touchAction: 'none', userSelect: 'none',
+            }}
+          >
             <img
-              src="/image/agent-avatar.jpg"
+              src="/image/agent-avatar.png"
               alt=""
               aria-hidden="true"
+              draggable={false}
               style={{
-                width: 48, height: 48, borderRadius: '50%', objectFit: 'cover',
-                border: '2px solid rgba(255,255,255,.7)', flexShrink: 0,
+                position: 'absolute', left: 14, bottom: -16, width: 68, height: 68,
+                objectFit: 'cover', flexShrink: 0, pointerEvents: 'none',
+                filter: 'drop-shadow(0 4px 10px rgba(0,0,0,.28))',
               }}
             />
             <span>GEO 市场专员</span>
+            <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 1 }}>在线 · 按住标题栏可拖动</span>
           </div>
 
-          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 14, background: 'var(--bg-primary)' }}>
+          <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 14px 14px', background: 'var(--bg-primary)', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
             {msgs.map((m, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                 <div
