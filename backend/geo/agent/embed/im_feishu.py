@@ -9,9 +9,15 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 
 import httpx
+
+
+def _to_feishu_md(text: str) -> str:
+    """飞书卡片 markdown 不渲染 # 标题(会裸露 ###),转成加粗;其余 Markdown(加粗/列表/代码)飞书认。"""
+    return re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", text or "")
 
 
 class _Log:
@@ -91,7 +97,7 @@ async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> N
     # 用交互卡片的 markdown 元素发,飞书才会渲染 **加粗** / 列表 / 代码,
     # 否则纯文本会把 Markdown 符号原样裸露出来。
     card = {"config": {"wide_screen_mode": True},
-            "elements": [{"tag": "markdown", "content": text}]}
+            "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
