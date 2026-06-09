@@ -11,9 +11,12 @@
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -24,7 +27,7 @@ from sqlalchemy import bindparam, text
 
 from .scheduler import _day_start_utc, _engine_daily_cap
 from .storage import (
-    DispatchTaskORM, JobORM, ResponseORM, TopicORM, WorkerORM,
+    ApiTenantORM, DispatchTaskORM, JobORM, ResponseORM, TopicORM, UsageLedgerORM, WorkerORM,
     db_session, engine as _db_engine, parse_target, save_response,
 )
 from .tracking import detect_hit, update_query_hit_after_response
@@ -35,7 +38,32 @@ DISPATCH_TOKEN = os.environ.get("DISPATCH_TOKEN", "").strip()
 WORKER_OFFLINE_SEC = int(os.environ.get("DISPATCH_WORKER_OFFLINE_SEC", "90"))
 # 外部 jobs 每引擎最多吃掉该引擎日上限的这个比例,其余给内部舆情兜底(P0 的容量护栏)
 JOBS_EXTERNAL_ENGINE_SHARE = float(os.environ.get("JOBS_EXTERNAL_ENGINE_SHARE", "0.5"))
+# 每引擎单价(credits / 成功 query),稀缺/贵的引擎更高。可被 ENGINE_PRICE_JSON 覆盖。
+_DEFAULT_PRICE = {"deepseek": 2, "qwen": 1, "wenxin": 1, "yuanbao": 1, "doubao": 1,
+                  "chatgpt": 5, "claude": 5, "gemini": 3, "copilot": 3, "grok": 3}
+ENGINE_PRICE = {**_DEFAULT_PRICE, **json.loads(os.environ.get("ENGINE_PRICE_JSON", "{}"))}
+GATEWAY_WEBHOOK_SECRET = os.environ.get("GATEWAY_WEBHOOK_SECRET", "").strip()
 _IS_PG = _db_engine.dialect.name == "postgresql"
+
+
+def _engine_price(engine: str) -> int:
+    return int(ENGINE_PRICE.get(engine, 1))
+
+
+def _fire_webhook(url: str, payload: dict) -> None:
+    """best-effort 异步回调:HMAC-SHA256 签名放 X-Signature,短超时,失败只记日志。"""
+    def _send() -> None:
+        try:
+            import httpx  # 局部导入,避免无 httpx 环境 import 失败
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            headers = {"Content-Type": "application/json"}
+            if GATEWAY_WEBHOOK_SECRET:
+                sig = hmac.new(GATEWAY_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+                headers["X-Signature"] = f"sha256={sig}"
+            httpx.post(url, content=body, headers=headers, timeout=8)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[dispatch] webhook %s failed: %s", url, e)
+    threading.Thread(target=_send, daemon=True).start()
 
 
 def _require_token(x_dispatch_token: str = Header(default="")) -> None:
@@ -276,8 +304,9 @@ def result(body: ResultBody) -> dict:
 
 
 def _result_job(body: ResultBody) -> dict:
-    """外部 job 交结果:就地写 browser_jobs,不碰任何舆情表。失败有余量则退回队列。"""
+    """外部 job 交结果:就地写 browser_jobs,不碰任何舆情表。终态时计量计费 + 回调。"""
     error = (body.error or "").strip() or None
+    webhook: Optional[tuple[str, dict]] = None
     with db_session() as s:
         job = s.get(JobORM, body.task_id)
         if job is None:
@@ -285,18 +314,42 @@ def _result_job(body: ResultBody) -> dict:
         if error and (job.attempts or 0) < (job.max_attempts or 1):
             job.status = "queued"; job.claimed_by = None; job.claimed_at = None
             job.error = error
-            requeued = True
-        else:
-            job.status = "failed" if error else "done"
-            job.answer = body.answer or ""
-            job.citations_json = json.dumps(body.citations or [], ensure_ascii=False)
-            job.source_url = body.source_url
-            job.video_url = body.video_url
-            job.error = error
-            job.finished_at = datetime.utcnow()
-            requeued = False
-        # TODO(P2): job.callback_url 存在且非 requeued → 异步触发 webhook 回调
-    return {"ok": True, "requeued": requeued}
+            return {"ok": True, "requeued": True}      # 还要重试,先不计费/不回调
+
+        # 终态:落结果
+        ok = not error
+        job.status = "done" if ok else "failed"
+        job.answer = body.answer or ""
+        job.citations_json = json.dumps(body.citations or [], ensure_ascii=False)
+        job.source_url = body.source_url
+        job.video_url = body.video_url
+        job.error = error
+        job.finished_at = datetime.utcnow()
+
+        # 计量计费(P2):成功才计费 + 扣额度;失败只记一行 billable=False
+        cost = _engine_price(job.engine) if ok else 0
+        if job.tenant_id:
+            try:
+                tid = int(job.tenant_id)
+            except (TypeError, ValueError):
+                tid = None
+            if tid is not None:
+                s.add(UsageLedgerORM(tenant_id=tid, job_id=job.id, engine=job.engine,
+                                     billable=ok, cost=cost))
+                if ok and cost:
+                    t = s.get(ApiTenantORM, tid)
+                    if t is not None:
+                        t.credit_balance = (t.credit_balance or 0) - cost
+        if job.callback_url:
+            webhook = (job.callback_url, {
+                "job_id": job.id, "status": job.status, "engine": job.engine,
+                "answer": job.answer, "error": job.error,
+                "citations": json.loads(job.citations_json or "[]"),
+                "video_url": job.video_url,
+            })
+    if webhook:                                        # 出 session 再触发,不占着事务
+        _fire_webhook(*webhook)
+    return {"ok": True, "requeued": False}
 
 
 # ── 外部 job 队列接口(P0:内部/admin 经 X-Dispatch-Token 入队 + 查结果)──────────

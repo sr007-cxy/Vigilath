@@ -813,6 +813,35 @@ async def reject_article(ctx: RunContext[AgentDeps], doc_id: int, reason: str = 
     return _review_doc(ctx, doc_id, approve=False, reason=reason)
 
 
+async def list_unhit_queries(ctx: RunContext[AgentDeps]) -> dict:
+    """列出当前主题**投放了但还没被 AI 引擎命中(搜到)**的 query。只读。
+
+    回答「哪几个没命中 / 没被搜到 / 未覆盖的是哪些 / 那 5 个是什么」就用本工具。
+    口径:投放集(queries_json)里 命中表 total_hits=0 的 query。
+    """
+    import json
+
+    from sqlalchemy import distinct
+
+    from geo.models.ai_telemetry import AiTelemetryQueryHitORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    db, tid = ctx.deps.db, topic.id
+    selected = [q["text"] for q in json.loads(topic.queries_json or "[]")
+                if isinstance(q, dict) and q.get("text")]
+    hit_set = {r[0] for r in db.query(distinct(AiTelemetryQueryHitORM.query)).filter(
+        AiTelemetryQueryHitORM.topic_id == tid, AiTelemetryQueryHitORM.total_hits > 0).all()}
+    unhit = [q for q in selected if q not in hit_set]
+    return {
+        "monitored": len(selected), "hit": len(selected) - len(unhit), "unhit_count": len(unhit),
+        "unhit_queries": unhit[:60],
+        "note": ("全部已命中。" if not unhit else
+                 f"投放 {len(selected)} 个,{len(unhit)} 个未命中" + ("(列表已截断,只显示前 60)" if len(unhit) > 60 else "")),
+    }
+
+
 def _sentiment_account(ctx: RunContext[AgentDeps], active_only: bool = False):
     from geo.models.sentiment import SentimentAccountORM
 
@@ -908,6 +937,7 @@ TOOLS = [
     get_query_coverage,
     get_today_effect,
     get_publish_status,
+    list_unhit_queries,
     list_pending_articles,
     approve_article,
     reject_article,

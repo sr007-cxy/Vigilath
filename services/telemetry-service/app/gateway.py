@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from .scheduler import _day_start_utc
-from .storage import ApiKeyORM, ApiTenantORM, JobORM, db_session
+from .storage import ApiKeyORM, ApiTenantORM, JobORM, UsageLedgerORM, db_session
 
 # 当前 worker 机队支持的引擎(与 browser-service 适配器对齐)
 ALL_ENGINES = (
@@ -83,6 +83,23 @@ def _used_today(s, tenant_id: int, engine: str, day_start) -> int:
     ), {"tid": str(tenant_id), "e": engine, "ds": day_start}).scalar() or 0
 
 
+# 内容审核(P2 基础版):命中即拒,保护共享账号池不被违规 query 连累封号。
+# 真正上量应换成可插拔的 LLM 审核;这里先用黑名单 + 长度兜底,留好接口。
+_BLOCKLIST = tuple(w for w in os.environ.get(
+    "GATEWAY_BLOCKLIST", "制造炸弹,制毒,儿童色情,枪支购买").split(",") if w.strip())
+
+
+def _moderate(query: str) -> Optional[str]:
+    """返回拒绝原因;通过返回 None。"""
+    if len(query) > 2000:
+        return "query too long (>2000 chars)"
+    low = query.lower()
+    for w in _BLOCKLIST:
+        if w.strip() and w.strip().lower() in low:
+            return "query rejected by content policy"
+    return None
+
+
 # ── 公开端点 ────────────────────────────────────────────────────────
 class CreateJobIn(BaseModel):
     engine: str
@@ -113,6 +130,9 @@ def create_job(body: CreateJobIn, t: dict = Depends(require_tenant)) -> dict:
         raise HTTPException(400, "query is required")
     if engine not in _allowed_engines(t):
         raise HTTPException(403, f"engine '{engine}' not enabled for this tenant")
+    reason = _moderate(query)
+    if reason:
+        raise HTTPException(422, reason)
 
     now_utc = datetime.now(timezone.utc)
     day_start = _day_start_utc(now_utc)
@@ -125,6 +145,10 @@ def create_job(body: CreateJobIn, t: dict = Depends(require_tenant)) -> dict:
             ex = s.query(JobORM).filter(JobORM.idempotency_key == idem).one_or_none()
             if ex is not None:
                 return {"job_id": ex.id, "status": ex.status, "dedup": True}
+        # 预付额度护栏:余额不足直接 402(实际扣费在 job 成功后由调度中心做)
+        tnow = s.get(ApiTenantORM, t["tenant_id"])
+        if tnow is not None and (tnow.credit_balance or 0) <= 0:
+            raise HTTPException(402, "insufficient credits")
         used = _used_today(s, t["tenant_id"], engine, day_start)
         quota = _engine_quota(t, engine)
         if used >= quota:
@@ -138,6 +162,27 @@ def create_job(body: CreateJobIn, t: dict = Depends(require_tenant)) -> dict:
         s.add(j); s.flush()
         jid = j.id
     return {"job_id": jid, "status": "queued"}
+
+
+@router.get("/usage")
+def usage(t: dict = Depends(require_tenant)) -> dict:
+    """租户用量 + 余额:总计费次数/credits、当日各引擎计数。"""
+    day_start = _day_start_utc(datetime.now(timezone.utc))
+    with db_session() as s:
+        tnow = s.get(ApiTenantORM, t["tenant_id"])
+        agg = s.execute(text(
+            "SELECT COALESCE(SUM(CASE WHEN billable THEN 1 ELSE 0 END),0) billable_n, "
+            "COALESCE(SUM(cost),0) spent FROM usage_ledger WHERE tenant_id = :tid"
+        ), {"tid": t["tenant_id"]}).one()
+        today = s.execute(text(
+            "SELECT engine, COUNT(*) n FROM browser_jobs "
+            "WHERE tenant_id = :tid AND created_at >= :ds AND status != 'failed' GROUP BY engine"
+        ), {"tid": str(t["tenant_id"]), "ds": day_start}).all()
+    return {
+        "credit_balance": (tnow.credit_balance if tnow else 0),
+        "billable_total": int(agg.billable_n), "credits_spent_total": int(agg.spent),
+        "today_by_engine": {r.engine: r.n for r in today},
+    }
 
 
 @router.get("/jobs/{job_id}")
@@ -187,3 +232,21 @@ def create_tenant(body: CreateTenantIn) -> dict:
         tid, kid = t.id, k.id
     return {"tenant_id": tid, "key_id": kid, "api_key": raw,
             "note": "api_key 仅此一次明文返回,请妥存"}
+
+
+class TopUpIn(BaseModel):
+    amount: int
+
+
+@router.post("/admin/tenants/{tenant_id}/credits", dependencies=[Depends(_require_admin)])
+def top_up(tenant_id: int, body: TopUpIn) -> dict:
+    """充值额度(P2 占位:正式应由 Stripe 支付成功回调触发,这里手动加)。"""
+    if body.amount == 0:
+        raise HTTPException(400, "amount must be non-zero")
+    with db_session() as s:
+        t = s.get(ApiTenantORM, tenant_id)
+        if t is None:
+            raise HTTPException(404, "tenant not found")
+        t.credit_balance = (t.credit_balance or 0) + body.amount
+        bal = t.credit_balance
+    return {"tenant_id": tenant_id, "credit_balance": bal}

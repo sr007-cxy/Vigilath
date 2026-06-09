@@ -34,6 +34,7 @@ def upgrade() -> None:
         sa.Column("engines_json", sa.Text(), nullable=False, server_default="[]"),
         sa.Column("daily_quota_json", sa.Text(), nullable=False, server_default="{}"),
         sa.Column("daily_quota_default", sa.Integer(), nullable=False, server_default="20"),
+        sa.Column("credit_balance", sa.Integer(), nullable=False, server_default="100"),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
     )
     op.create_table(

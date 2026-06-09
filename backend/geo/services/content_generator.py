@@ -171,6 +171,7 @@ def _run_generation(
         queries = queries[:cap]
 
         provider, model_id, api_key = _resolve_provider()
+        style_refs = _load_style_refs(db, topic_id)
 
         # 2026-05-28 — 4 维场景扩展第二波:按 (creation_direction, copywriting_type)
         # combo 多变体生成.profile 里两边都填了 → N×M combo;一边空 → 单边 fan-out;
@@ -199,7 +200,7 @@ def _run_generation(
                     title, body, summary = _generate_one(
                         profile, q, provider, api_key,
                         direction=direction, copywriting_type=copywriting_type,
-                        medias=medias, topic_id=topic_id,
+                        medias=medias, topic_id=topic_id, style_refs=style_refs,
                     )
                     doc.title = title
                     # allow_md 类型的 prompt 已让 LLM 自己嵌图;不再 append URL 列表
@@ -265,6 +266,7 @@ def _run_per_item(
     模板缺失或不存在 → 直接走旧的 _generate_one(画像 prompt 兜底).
     """
     provider, model_id, api_key = _resolve_provider()
+    style_refs = _load_style_refs(db, topic_id)
 
     # 批量取模板,减少 N 次查询
     tmpl_ids = {it.get("template_id") for it in plan_items if it.get("template_id")}
@@ -558,13 +560,14 @@ def _generate_with_template(
     query: str, platform: str,
     provider: str, api_key: str,
     seed: Optional[str] = None,
+    style_refs: Optional[list] = None,
 ) -> tuple[str, str, str]:
     """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染.
 
     seed 非空时(seed-based plan),模板里 {seed} 拿到种子文本,{query} 拿到 seed 副本以兼容
     旧模板;legacy plan 行 seed 为 None,两个变量都拿 query.
     """
-    system_prompt = _build_system_prompt(profile)
+    system_prompt = _build_system_prompt(profile, style_refs=style_refs)
     brand_block = _build_brand_block(profile)
     user_prompt = _render_template(tmpl.prompt_template, {
         "query": query,
@@ -633,6 +636,7 @@ def _generate_one(
     copywriting_type: Optional[str] = None,
     medias: Optional[list] = None,
     topic_id: Optional[int] = None,
+    style_refs: Optional[list] = None,
 ) -> tuple[str, str, str]:
     """单条 query → (title, body_markdown, summary).
 
@@ -646,7 +650,7 @@ def _generate_one(
     """
     system_prompt = _build_system_prompt(
         profile, direction=direction, copywriting_type=copywriting_type,
-        medias=medias, topic_id=topic_id,
+        medias=medias, topic_id=topic_id, style_refs=style_refs,
     )
     allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
     # 篇幅来自 TYPE_HINTS,combo 没给就走老的 800-1500 字默认
@@ -906,11 +910,81 @@ def _build_media_block_for_prompt(medias: list["TopicMediaORM"], topic_id: int,
     return "\n".join(lines)
 
 
+# ─────────── 自有文章文风学习(few-shot)───────────
+# 2026-06-09 — 老的生成只喂品牌画像,完全没参考用户导入的自有文章,导致出稿
+# 文风/结构/节奏跟自有稿对不上(例:程晓峰主题,用户上传了几篇自有文章,但 AI
+# 出稿读起来完全是另一个人写的)。这里把同主题下 source="user" 的自有文章当文风
+# 范例注入 system prompt,让 LLM 模仿其文风/结构/段落节奏/开头钩子/结尾,而不是
+# 照抄内容。只取自有(user)稿,绝不拿 AI 自己生成的稿当范例(否则会自我强化跑偏)。
+_STYLE_REF_MAX = int(os.environ.get("GEO_CONTENT_STYLE_REF_MAX", "2"))
+_STYLE_REF_BODY_CHARS = int(os.environ.get("GEO_CONTENT_STYLE_REF_CHARS", "1800"))
+
+
+def _load_style_refs(db, topic_id: int, limit: int = _STYLE_REF_MAX) -> list[dict]:
+    """加载同主题下用户导入的自有文章,当文风范例.
+
+    只取 source="user" 且正文非空的稿,按 created_at desc 取最近 limit 篇.
+    优先已 approved/published 的(更代表用户认可的成稿),不足再补其它状态.
+    返回 [{title, body}],body 截到 _STYLE_REF_BODY_CHARS 控 token.
+    """
+    if limit <= 0:
+        return []
+    try:
+        rows = (
+            db.query(TopicGeneratedDocORM)
+              .filter(TopicGeneratedDocORM.topic_id == topic_id)
+              .filter(TopicGeneratedDocORM.source == "user")
+              .filter(TopicGeneratedDocORM.body_markdown != "")
+              .order_by(TopicGeneratedDocORM.created_at.desc())
+              .all()
+        )
+    except Exception:  # noqa: BLE001
+        log.warning("load style refs failed topic=%d — skipped", topic_id, exc_info=True)
+        return []
+    if not rows:
+        return []
+    _PREFERRED = ("published", "approved")
+    rows.sort(key=lambda d: 0 if (d.status or "") in _PREFERRED else 1)
+    refs: list[dict] = []
+    for d in rows[:limit]:
+        body = (d.body_markdown or "").strip()
+        if not body:
+            continue
+        if len(body) > _STYLE_REF_BODY_CHARS:
+            body = body[:_STYLE_REF_BODY_CHARS].rstrip() + "……(略)"
+        refs.append({"title": (d.title or "").strip(), "body": body})
+    return refs
+
+
+def _build_style_ref_block(style_refs: Optional[list]) -> str:
+    """把自有文章范例拼成 system prompt 的「文风模仿」段."""
+    if not style_refs:
+        return ""
+    lines = [
+        "",
+        "─── 自有文章文风范例(必须严格模仿)───",
+        "下面是该品牌已导入的自有文章。请你深度学习并模仿它们的**文风、结构、",
+        "段落节奏、开头钩子、结尾收束、句式长短、用词习惯、口吻语气**,让本次出稿",
+        "读起来像同一个作者、同一个品牌写出来的。注意:",
+        "  - 只学「怎么写」,不要照抄范例里的具体内容/事实/数据/案例;",
+        "  - 本次主题以上面的「问题 / 核心信息」为准,不要被范例的主题带跑;",
+        "  - 范例怎么分段、怎么起标题、用不用小标题、口语还是书面,都尽量对齐。",
+    ]
+    for i, ref in enumerate(style_refs, 1):
+        title = ref.get("title") or "(无标题)"
+        body = ref.get("body") or ""
+        lines.append(f"\n【范例 {i}】标题:{title}")
+        lines.append(f"正文:\n{body}")
+    lines.append("─── 范例结束 ───")
+    return "\n".join(lines)
+
+
 def _build_system_prompt(profile: BrandProfile,
                           direction: Optional[str] = None,
                           copywriting_type: Optional[str] = None,
                           medias: Optional[list] = None,
-                          topic_id: Optional[int] = None) -> str:
+                          topic_id: Optional[int] = None,
+                          style_refs: Optional[list] = None) -> str:
     """资料 → 系统提示词,挑跟"文案创作"相关的字段.
 
     2026-05-28 — 加 combo + media 参数:
@@ -962,6 +1036,10 @@ def _build_system_prompt(profile: BrandProfile,
         media_block = _build_media_block_for_prompt(medias, topic_id, allow_md)
         if media_block:
             parts.append(media_block)
+    # 自有文章文风范例(2026-06-09)— 放最后,作为最强的文风锚
+    style_block = _build_style_ref_block(style_refs)
+    if style_block:
+        parts.append(style_block)
     return "\n".join(parts)
 
 

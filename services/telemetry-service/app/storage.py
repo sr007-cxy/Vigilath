@@ -230,6 +230,19 @@ class ApiTenantORM(Base):
     engines_json = Column(Text, nullable=False, default="[]")    # 引擎白名单,空=全放开
     daily_quota_json = Column(Text, nullable=False, default="{}")  # {engine: n};缺省走 default
     daily_quota_default = Column(Integer, nullable=False, default=20)
+    credit_balance = Column(Integer, nullable=False, default=100)  # 预付额度(credits),成功 job 扣减
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class UsageLedgerORM(Base):
+    """计量计费账本(P2)。每个 job 终态写一行:成功 billable+扣额度,失败不计费。"""
+    __tablename__ = "usage_ledger"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, nullable=False, index=True)
+    job_id = Column(Integer, nullable=False, index=True)
+    engine = Column(String, nullable=False)
+    billable = Column(Boolean, nullable=False, default=False)
+    cost = Column(Integer, nullable=False, default=0)            # 扣的 credits
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
