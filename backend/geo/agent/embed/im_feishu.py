@@ -433,17 +433,22 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
             MENU_KEY_Q = {
                 "today": "今日投放效果如何?", "coverage": "我累计被搜到几个问题?",
                 "unhit": "哪些 query 没命中?", "sentiment": "今天舆情怎么样?",
-                "articles": "文章发布进度如何?", "help": None,
+                "articles": "文章发布进度如何?", "menu": "__menu__", "help": "__help__",
             }
-            q = MENU_KEY_Q.get(key, None)
+            q = MENU_KEY_Q.get(key)
+            if q is None and key and len(key) <= 40:   # 未配在表里的 key:当问句直接问
+                q = key
             if conn and oid:
                 tok = await _tenant_token(app_id, conn.app_secret)
-                if tok and q:
-                    # 菜单点击没有 chat_id,按 open_id 私聊回
-                    bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, oid, q, "open_id")
-                elif tok:
+                if not tok:
+                    return {"code": 0}
+                if q == "__menu__":
+                    await _post_card(tok, oid, _menu_card(), "open_id")
+                elif q in (None, "__help__"):
                     await _post_card(tok, oid, {"config": {"wide_screen_mode": True},
                                      "elements": [{"tag": "markdown", "content": _HELP_TEXT}]}, "open_id")
+                else:
+                    bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, oid, q, "open_id")
         else:
             log.info("[im-feishu] 非消息事件(event_type=%s),跳过", header.get("event_type"))
         return {"code": 0}
