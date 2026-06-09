@@ -189,6 +189,37 @@ class DispatchTaskORM(Base):
     error = Column(Text, nullable=True)
 
 
+class JobORM(Base):
+    """域中性的浏览器任务队列(对外服务 P0)。
+
+    与 dispatch_tasks 的区别:dispatch_tasks 焊死舆情域(run_id/topic_id,结果走
+    detect_hit/save_response 落 ai_telemetry_responses);browser_jobs 不带任何业务
+    语义,只有 (engine, query) → (answer, citations, ...),结果就地存本表。worker
+    用同一 pull 模型领取,claim 时内部 dispatch_tasks 绝对优先、外部 jobs 填剩余槽。
+    tenant_id / idempotency_key / callback_url 为多租户网关(P1)预留,P0 可空。
+    """
+    __tablename__ = "browser_jobs"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String, nullable=True, index=True)        # 多租户预留,P0 可空
+    engine = Column(String, nullable=False)
+    query = Column(String(2048), nullable=False)
+    priority = Column(Integer, nullable=False, default=10)        # 外部默认低于内部(种子0/扩展1)
+    status = Column(String, nullable=False, default="queued")     # queued/claimed/done/failed
+    claimed_by = Column(String, nullable=True, index=True)
+    claimed_at = Column(DateTime, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=2)
+    idempotency_key = Column(String, nullable=True, unique=True, index=True)
+    callback_url = Column(String, nullable=True)                  # done 后 webhook(P2 firing)
+    answer = Column(Text, nullable=True)
+    citations_json = Column(Text, nullable=True)
+    source_url = Column(String, nullable=True)
+    video_url = Column(String, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True)
+
+
 @contextmanager
 def db_session() -> Iterator[Session]:
     s = SessionLocal()

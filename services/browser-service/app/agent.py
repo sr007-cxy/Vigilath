@@ -85,6 +85,7 @@ async def agent_loop(
             async with sem:
                 res = await run_hot(eng, task["query"])
             payload = {"worker_uid": my_uid, "task_id": task["task_id"],
+                       "kind": task.get("kind", "telemetry"),   # 原样回传,中心据此路由落库
                        "answer": res.get("answer", ""), "citations": res.get("citations", []),
                        "source_url": res.get("source_url"), "video_url": res.get("video_url"),
                        "error": res.get("error")}

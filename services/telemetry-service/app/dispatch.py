@@ -24,7 +24,7 @@ from sqlalchemy import bindparam, text
 
 from .scheduler import _day_start_utc, _engine_daily_cap
 from .storage import (
-    DispatchTaskORM, ResponseORM, TopicORM, WorkerORM,
+    DispatchTaskORM, JobORM, ResponseORM, TopicORM, WorkerORM,
     db_session, engine as _db_engine, parse_target, save_response,
 )
 from .tracking import detect_hit, update_query_hit_after_response
@@ -33,6 +33,8 @@ log = logging.getLogger("telemetry-service.dispatch")
 
 DISPATCH_TOKEN = os.environ.get("DISPATCH_TOKEN", "").strip()
 WORKER_OFFLINE_SEC = int(os.environ.get("DISPATCH_WORKER_OFFLINE_SEC", "90"))
+# 外部 jobs 每引擎最多吃掉该引擎日上限的这个比例,其余给内部舆情兜底(P0 的容量护栏)
+JOBS_EXTERNAL_ENGINE_SHARE = float(os.environ.get("JOBS_EXTERNAL_ENGINE_SHARE", "0.5"))
 _IS_PG = _db_engine.dialect.name == "postgresql"
 
 
@@ -71,15 +73,17 @@ class ClaimBody(BaseModel):
 
 class ClaimedTask(BaseModel):
     task_id: int
-    run_id: int
-    topic_id: int
     engine: str
     query: str
+    kind: str = "telemetry"      # telemetry=内部 dispatch_tasks / job=外部 browser_jobs
+    run_id: int = 0              # 仅 telemetry 有意义,job 恒 0(worker 不用)
+    topic_id: int = 0
 
 
 class ResultBody(BaseModel):
     worker_uid: str = ""
     task_id: int
+    kind: str = "telemetry"      # worker 原样回传 claim 时拿到的 kind,中心据此路由落库
     answer: str = ""
     citations: list[dict] = []
     source_url: Optional[str] = None
@@ -140,17 +144,33 @@ def claim(body: ClaimBody) -> list[ClaimedTask]:
         w = s.query(WorkerORM).filter(WorkerORM.worker_uid == body.worker_uid).one_or_none()
         if w is None or not w.enabled or w.status == "draining":
             return []                       # 未注册 / 被禁用 / 排空中 → 不派活
-        # 今日各引擎已发起数(success+fail 都占额度),据此筛掉到顶的引擎
-        rows = s.execute(text(
+        # 今日各引擎已发起数:内部舆情(ai_telemetry_responses)+ 外部 jobs(已领取的)
+        # 都消耗同一账号池、同一引擎日上限,所以两边都要计入才不会把池子打穿。
+        tele_rows = s.execute(text(
             "SELECT engine, COUNT(*) n FROM ai_telemetry_responses "
             "WHERE created_at >= :ds GROUP BY engine"
         ), {"ds": day_start}).all()
-        used = {r.engine: r.n for r in rows}
+        job_rows = s.execute(text(
+            "SELECT engine, COUNT(*) n FROM browser_jobs "
+            "WHERE claimed_at >= :ds GROUP BY engine"
+        ), {"ds": day_start}).all()
+        tele_used = {r.engine: r.n for r in tele_rows}
+        job_used = {r.engine: r.n for r in job_rows}
+        used = {e: tele_used.get(e, 0) + job_used.get(e, 0)
+                for e in set(tele_used) | set(job_used)}
         allowed = [e for e in body.engines
                    if used.get(e, 0) < _engine_daily_cap(e)]
         if not allowed:
             return []
+        # 1) 内部舆情绝对优先:先从 dispatch_tasks 领满
         tasks = _claim_rows(s, allowed, n, body.worker_uid)
+        # 2) 还有空槽 → 外部 jobs 填,但每引擎只许吃日上限的 EXTERNAL_SHARE,给内部兜底
+        remaining = n - len(tasks)
+        if remaining > 0:
+            ext_engines = [e for e in allowed
+                           if job_used.get(e, 0) < _engine_daily_cap(e) * JOBS_EXTERNAL_ENGINE_SHARE]
+            if ext_engines:
+                tasks += _claim_job_rows(s, ext_engines, remaining, body.worker_uid)
     return [ClaimedTask(**t) for t in tasks]
 
 
@@ -187,9 +207,43 @@ def _claim_rows(s, engines: list[str], n: int, uid: str) -> list[dict]:
     return out
 
 
+def _claim_job_rows(s, engines: list[str], n: int, uid: str) -> list[dict]:
+    """原子领取 n 条外部 browser_jobs(域中性,无 run_id/topic_id)。与 _claim_rows 同机制。"""
+    if n <= 0 or not engines:
+        return []
+    now = datetime.utcnow()
+    if _IS_PG:
+        sql = text(
+            "WITH picked AS ("
+            "  SELECT id FROM browser_jobs "
+            "  WHERE status='queued' AND engine IN :engines "
+            "  ORDER BY priority, id "
+            "  FOR UPDATE SKIP LOCKED LIMIT :n"
+            ") "
+            "UPDATE browser_jobs t "
+            "SET status='claimed', claimed_by=:uid, claimed_at=:now, attempts=attempts+1 "
+            "FROM picked WHERE t.id = picked.id "
+            "RETURNING t.id, t.engine, t.query"
+        ).bindparams(bindparam("engines", expanding=True))
+        rows = s.execute(sql, {"engines": engines, "n": n, "uid": uid, "now": now}).all()
+        return [{"task_id": r.id, "engine": r.engine, "query": r.query, "kind": "job"}
+                for r in rows]
+    picked = (s.query(JobORM)
+              .filter(JobORM.status == "queued", JobORM.engine.in_(engines))
+              .order_by(JobORM.priority, JobORM.id)
+              .limit(n).all())
+    out = []
+    for j in picked:
+        j.status = "claimed"; j.claimed_by = uid; j.claimed_at = now; j.attempts = (j.attempts or 0) + 1
+        out.append({"task_id": j.id, "engine": j.engine, "query": j.query, "kind": "job"})
+    return out
+
+
 @router.post("/result")
 def result(body: ResultBody) -> dict:
-    """交结果:落 response(命中判定+矩阵)与 push 路径一致;失败且有重试余量则退回队列。"""
+    """交结果:按 kind 路由。job 就地存本表(无业务语义);telemetry 走命中判定落库。"""
+    if body.kind == "job":
+        return _result_job(body)
     with db_session() as s:
         task = s.get(DispatchTaskORM, body.task_id)
         if task is None:
@@ -219,6 +273,78 @@ def result(body: ResultBody) -> dict:
             task.error = error
             requeued = False
     return {"ok": True, "hit": hit, "requeued": requeued}
+
+
+def _result_job(body: ResultBody) -> dict:
+    """外部 job 交结果:就地写 browser_jobs,不碰任何舆情表。失败有余量则退回队列。"""
+    error = (body.error or "").strip() or None
+    with db_session() as s:
+        job = s.get(JobORM, body.task_id)
+        if job is None:
+            raise HTTPException(404, "job not found")
+        if error and (job.attempts or 0) < (job.max_attempts or 1):
+            job.status = "queued"; job.claimed_by = None; job.claimed_at = None
+            job.error = error
+            requeued = True
+        else:
+            job.status = "failed" if error else "done"
+            job.answer = body.answer or ""
+            job.citations_json = json.dumps(body.citations or [], ensure_ascii=False)
+            job.source_url = body.source_url
+            job.video_url = body.video_url
+            job.error = error
+            job.finished_at = datetime.utcnow()
+            requeued = False
+        # TODO(P2): job.callback_url 存在且非 requeued → 异步触发 webhook 回调
+    return {"ok": True, "requeued": requeued}
+
+
+# ── 外部 job 队列接口(P0:内部/admin 经 X-Dispatch-Token 入队 + 查结果)──────────
+# 公开多租户网关(API Key 鉴权 + 配额 + 计费)是 P1,届时在 /v1 前置一层后转发到这里。
+class EnqueueJobBody(BaseModel):
+    engine: str
+    query: str
+    priority: int = 10
+    tenant_id: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    callback_url: Optional[str] = None
+    max_attempts: int = 2
+
+
+@router.post("/jobs")
+def enqueue_job(body: EnqueueJobBody) -> dict:
+    if not body.engine or not body.query.strip():
+        raise HTTPException(400, "engine and query are required")
+    with db_session() as s:
+        if body.idempotency_key:
+            ex = (s.query(JobORM)
+                  .filter(JobORM.idempotency_key == body.idempotency_key).one_or_none())
+            if ex is not None:
+                return {"job_id": ex.id, "status": ex.status, "dedup": True}
+        j = JobORM(
+            tenant_id=body.tenant_id, engine=body.engine, query=body.query.strip()[:2048],
+            priority=body.priority, status="queued", max_attempts=max(1, body.max_attempts),
+            idempotency_key=body.idempotency_key or None, callback_url=body.callback_url,
+        )
+        s.add(j); s.flush()
+        jid = j.id
+    return {"job_id": jid, "status": "queued"}
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: int) -> dict:
+    with db_session() as s:
+        j = s.get(JobORM, job_id)
+        if j is None:
+            raise HTTPException(404, "job not found")
+        return {
+            "job_id": j.id, "tenant_id": j.tenant_id, "engine": j.engine, "query": j.query,
+            "status": j.status, "attempts": j.attempts,
+            "answer": j.answer or "", "citations": json.loads(j.citations_json or "[]"),
+            "source_url": j.source_url, "video_url": j.video_url, "error": j.error,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+        }
 
 
 # ── 管理接口(后端 require_admin 代理调用)────────────────────────────

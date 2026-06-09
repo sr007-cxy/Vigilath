@@ -63,16 +63,26 @@ async def chat(
 
     async def event_stream():
         try:
-            # 必须用 agent.run() 跑完整「模型→工具→模型」循环。
-            # run_stream()+stream_text() 在 DeepSeek 同时吐文本+tool_call 时会把文本当最终结果,
-            # 工具被标成 "Tool not executed - a final result was already processed",卡片全空(0/0)。
-            result = await agent.run(body.message, deps=deps, message_history=history)
+            # 用 agent.iter() 走完整图(模型→工具→模型,工具正常执行),并**边生成边流式**推 token。
+            # 不能用 run_stream()+stream_text():DeepSeek 同响应吐文本+tool_call 时它会把文本当最终结果、
+            # 跳过工具(卡片全 0/0)。iter() 逐节点执行,工具照跑,且每个模型节点可流式出 token。
+            from pydantic_ai import Agent
+            from pydantic_ai.messages import PartDeltaEvent, PartStartEvent, TextPart, TextPartDelta
 
-            # 伪流式:把最终文本分块推前端,保留逐字 UX
-            text = result.output or ""
-            step = 24
-            for i in range(0, len(text), step):
-                yield f"data: {json.dumps({'delta': text[i:i + step]}, ensure_ascii=False)}\n\n"
+            async with agent.iter(body.message, deps=deps, message_history=history) as run:
+                async for node in run:
+                    if not Agent.is_model_request_node(node):
+                        continue
+                    async with node.stream(run.ctx) as req_stream:
+                        async for ev in req_stream:
+                            delta = None
+                            if isinstance(ev, PartStartEvent) and isinstance(ev.part, TextPart):
+                                delta = ev.part.content
+                            elif isinstance(ev, PartDeltaEvent) and isinstance(ev.delta, TextPartDelta):
+                                delta = ev.delta.content_delta
+                            if delta:
+                                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+                result = run.result
 
             # 抽真实执行的数据工具返回 → 结构化卡片(去重:同工具留最后一次)
             cards_by_tool: dict[str, dict] = {}
