@@ -3,6 +3,8 @@
 // 样式走全局 CSS 变量(--accent-* / --bg-* / --text-* / --border-*),自动跟随明暗主题、与页面风格一致。
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '../../contexts/AuthContext';
 import { streamAgentChat, type AgentCard } from '../../services/agentApi';
 
@@ -131,6 +133,26 @@ function useDraggable() {
   };
 
   return { ref, pos, movedRef, handleProps: { onPointerDown, onPointerMove, onPointerUp } };
+}
+
+// ── Markdown 渲染:react-markdown + remark-gfm(完整 GFM:表格/列表/代码/链接/删除线等)──
+const mdComponents = {
+  table: (p: any) => <div style={{ overflowX: 'auto', margin: '6px 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }} {...p} /></div>,
+  th: (p: any) => <th style={{ border: '1px solid var(--border-color)', padding: '4px 8px', textAlign: 'left', background: 'var(--bg-surface)', fontWeight: 600 }} {...p} />,
+  td: (p: any) => <td style={{ border: '1px solid var(--border-color)', padding: '4px 8px', textAlign: 'left' }} {...p} />,
+  a: (p: any) => <a {...p} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }} />,
+  code: (p: any) => <code style={{ background: 'var(--bg-surface)', padding: '0 4px', borderRadius: 4, fontSize: 12 }} {...p} />,
+  ul: (p: any) => <ul style={{ margin: '4px 0', paddingLeft: 18 }} {...p} />,
+  ol: (p: any) => <ol style={{ margin: '4px 0', paddingLeft: 18 }} {...p} />,
+  li: (p: any) => <li style={{ margin: '1px 0' }} {...p} />,
+  p: (p: any) => <p style={{ margin: '3px 0' }} {...p} />,
+  h1: (p: any) => <div style={{ fontWeight: 700, fontSize: 15, margin: '6px 0 2px' }} {...p} />,
+  h2: (p: any) => <div style={{ fontWeight: 700, margin: '6px 0 2px' }} {...p} />,
+  h3: (p: any) => <div style={{ fontWeight: 700, margin: '6px 0 2px' }} {...p} />,
+};
+
+function MarkdownView({ text }: { text: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>;
 }
 
 export function AgentChatWidget() {
@@ -319,7 +341,7 @@ export function AgentChatWidget() {
                 <div
                   style={{
                     maxWidth: '84%', padding: '9px 13px', borderRadius: 14, fontSize: 14, lineHeight: 1.55,
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    whiteSpace: m.role === 'user' ? 'pre-wrap' : 'normal', wordBreak: 'break-word',
                     background: m.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-card)',
                     color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
                     border: m.role === 'user' ? 'none' : '1px solid var(--border-color)',
@@ -327,7 +349,9 @@ export function AgentChatWidget() {
                     borderBottomLeftRadius: m.role === 'user' ? 14 : 4,
                   }}
                 >
-                  {m.text || (busy && i === msgs.length - 1 ? '思考中…' : '')}
+                  {m.role === 'assistant'
+                    ? (m.text ? <MarkdownView text={m.text} /> : (busy && i === msgs.length - 1 ? '思考中…' : ''))
+                    : m.text}
                 </div>
                 {m.cards?.length ? (
                   <div style={{ width: '100%', maxWidth: '92%' }}>
