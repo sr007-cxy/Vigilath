@@ -820,6 +820,8 @@ function AutoScheduleDrawer({
     enabled: !!topic.auto_generate_enabled,
     time: topic.auto_generate_time || '09:00',
     count: topic.auto_generate_count || 3,
+    // 默认开:topic 没显式关过(undefined)就当开
+    publish_enabled: topic.auto_publish_enabled !== false,
   });
   const [busy, setBusy] = useState(false);
   const [running, setRunning] = useState(false);
@@ -931,6 +933,21 @@ function AutoScheduleDrawer({
             <div className="text-xs text-muted self-end pb-1">
               {t('dashboard.content.scheduleTimeNote')}
             </div>
+          </div>
+
+          <div className="pt-1 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <label className="flex items-center gap-2 cursor-pointer pt-3">
+              <input type="checkbox"
+                     checked={cfg.publish_enabled !== false}
+                     onChange={e => setCfg({ ...cfg, publish_enabled: e.target.checked })}
+                     style={{ accentColor: 'var(--accent-primary)' }} />
+              <span className="text-sm text-primary">
+                {t('dashboard.content.schedulePublishLabel')}
+              </span>
+            </label>
+            <p className="text-xs text-muted mt-1 ml-6">
+              {t('dashboard.content.schedulePublishHint')}
+            </p>
           </div>
 
           <div className="rounded-md p-3 space-y-2"

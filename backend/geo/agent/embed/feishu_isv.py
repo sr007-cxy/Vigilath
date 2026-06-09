@@ -186,6 +186,7 @@ async def _handle_message(tenant_key: str, chat_id: str, open_id: str, text: str
             await _send_card(db, tenant_key, chat_id,
                              "请先绑定您的 Vigilath 账号:登录 Vigilath 控制台 → 对接集成 → 获取**飞书绑定码**,把绑定码发给我即可。")
             return
+        await _send_card(db, tenant_key, chat_id, "⏳ 正在查询,请稍候…")    # 即时回执
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
         agent = build_embed_agent(True)
         history = load_message_history(deps)

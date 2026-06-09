@@ -83,6 +83,10 @@ class AiTelemetryTopicORM(Base):
     auto_generate_time = Column(String(length=8), nullable=False, default="09:00")  # "HH:MM",24h, Asia/Shanghai
     auto_generate_count = Column(Integer, nullable=False, default=3)                 # 每次跑几条 query → 几篇稿
     auto_generate_last_run_at = Column(DateTime, nullable=True)                       # 上次自动跑批的 UTC
+    # 按 publish_date 自动发布开关(2026-06-09):默认开,admin 可关闭后续发文。
+    # content_scheduler.publish_tick 每天 11:00 扫已审批 + auto_publish_enabled 的 topic,
+    # 把执行计划里到期(publish_date<=今天)且未发布的稿真发 Mediumsly + 标记其他平台。
+    auto_publish_enabled = Column(Boolean, nullable=False, default=True)
 
     # 修订号 — 每次任何字段改动(包括 admin 编辑 / 审核状态机迁移)都 +1。
     # 跟 topic_changelog_json 配对:changelog 第 N 条对应的就是 version=N+1 的快照。
@@ -861,6 +865,8 @@ class AutoGenerateConfigPayload(BaseModel):
     # "HH:MM",24h,Asia/Shanghai;后端校验格式
     time: str = Field("09:00", min_length=4, max_length=5)
     count: int = Field(3, ge=1, le=20)
+    # 自动发布开关;None = 本次不改,True/False = 设置。admin 关掉即停后续按排期发文。
+    publish_enabled: Optional[bool] = None
 
 
 class RejectDocPayload(BaseModel):
@@ -911,6 +917,19 @@ class TopicPayload(BaseModel):
     prompt_extension: Optional[str] = Field(default=None, max_length=2000)
 
 
+class TopicDraftPayload(BaseModel):
+    """Step1 落库 — POST /topics/draft。只存品牌资料(6 大模块)+ 基础字段,
+    queries/engines 允许为空,submission_status=draft;后续 step3 再用
+    PUT /topics/{id} 补 queries/engines + 走提交审核。"""
+    name: str = Field("", max_length=128)
+    target: str = Field("", max_length=128)
+    target_aliases: list[str] = Field(default_factory=list, max_length=10)
+    industry: str = Field("", max_length=128)
+    engines: list[str] = Field(default_factory=list, max_length=10)
+    enabled: bool = True
+    profile: Optional[BrandProfile] = None
+
+
 class SeedPromptSubmitPayload(BaseModel):
     """甲方追加新种子词 — POST /topics/{id}/seed-prompts."""
     text: str = Field(..., min_length=1, max_length=256)
@@ -959,6 +978,7 @@ class TopicOut(BaseModel):
     auto_generate_time: str = "09:00"
     auto_generate_count: int = 3
     auto_generate_last_run_at: Optional[datetime] = None
+    auto_publish_enabled: bool = True       # 按 publish_date 自动发布;admin 可关
     # v1.4 — admin 配的扩展提示词;TopicOut 暴露给 admin 前端,普通用户前端不渲染。
     prompt_extension: Optional[str] = None
     created_at: datetime
@@ -1053,6 +1073,7 @@ class TopicOut(BaseModel):
             auto_generate_time=str(getattr(r, "auto_generate_time", None) or "09:00"),
             auto_generate_count=int(getattr(r, "auto_generate_count", 3) or 3),
             auto_generate_last_run_at=getattr(r, "auto_generate_last_run_at", None),
+            auto_publish_enabled=bool(getattr(r, "auto_publish_enabled", True)),
             prompt_extension=getattr(r, "prompt_extension", None),
             created_at=r.created_at,
             updated_at=r.updated_at,

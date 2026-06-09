@@ -328,12 +328,15 @@ def configure_auto_generate(
     t.auto_generate_enabled = bool(payload.enabled)
     t.auto_generate_time = payload.time
     t.auto_generate_count = max(1, min(20, int(payload.count)))
+    if payload.publish_enabled is not None:
+        t.auto_publish_enabled = bool(payload.publish_enabled)
     db.commit()
     db.refresh(t)
     return {
         "auto_generate_enabled": t.auto_generate_enabled,
         "auto_generate_time": t.auto_generate_time,
         "auto_generate_count": t.auto_generate_count,
+        "auto_publish_enabled": t.auto_publish_enabled,
         "auto_generate_last_run_at":
             t.auto_generate_last_run_at.isoformat() if t.auto_generate_last_run_at else None,
     }

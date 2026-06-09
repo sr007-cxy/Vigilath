@@ -488,7 +488,7 @@ const zh = {
             },
             "pipeline": {
               "badge": "8 步工作流",
-              "title": "8 步 GEO 自动化流水线",
+              "title": "8 阶段 GEO 自动化内容铺设全流程",
               "subtitle": "种子进，闭环出。每天自校准，品牌资料一次填好，后续全程自动。",
               "phases": [
                 { "id": "INGEST", "label": "采集" },
@@ -2633,6 +2633,8 @@ const zh = {
               "scheduleDrawerTitle": "AI 自动生成设置",
               "scheduleDrawerHint": "启用后,系统会每天到点根据该主题的资料 + 种子词 + 监测问题,自动生成 N 篇文案进草稿队列",
               "scheduleEnableLabel": "启用每日自动生成",
+              "schedulePublishLabel": "按发布日期自动发文",
+              "schedulePublishHint": "开启后,每天上午 11 点把发文计划里到了发布日期、且还没发的稿件自动发出去。随时关闭即停止后续自动发文,不影响已发内容。",
               "scheduleTimeLabel": "生成时间",
               "scheduleCountLabel": "每次生成数量",
               "scheduleTimeNote": "时区 Asia/Shanghai",

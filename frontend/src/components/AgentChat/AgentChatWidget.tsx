@@ -284,7 +284,7 @@ export function AgentChatWidget() {
               alt=""
               aria-hidden="true"
               draggable={false}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', pointerEvents: 'none' }}
             />
           )}
           {!open && unread > 0 && (

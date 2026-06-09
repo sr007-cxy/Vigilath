@@ -16,9 +16,11 @@
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -32,6 +34,10 @@ TIMEZONE = os.environ.get("GEO_CONTENT_SCHED_TZ", "Asia/Shanghai")
 START_MINUTE = int(os.environ.get("GEO_CONTENT_SCHED_MINUTE", "7"))
 # 发文计划「持续滚动」续期 — 每天该小时扫一次,对 runway 不足的计划接排下一个月.
 REFILL_HOUR = int(os.environ.get("GEO_PLAN_REFILL_HOUR", "3"))
+# 按 publish_date 自动发布 — 每天该小时扫一次,把到期且未发布的稿发出去.默认 11 点.
+PUBLISH_HOUR = int(os.environ.get("GEO_AUTO_PUBLISH_HOUR", "11"))
+# 总闸:默认开(=1).生产侧设 0 可一键停掉所有按排期自动发布(应急用,不动 DB).
+AUTO_PUBLISH_ENABLED = os.environ.get("GEO_AUTO_PUBLISH_ENABLED", "1") == "1"
 
 
 def _now_local() -> datetime:
@@ -137,6 +143,137 @@ def refill_tick() -> None:
         db.close()
 
 
+def _mark_platform_target(d) -> None:
+    """把 doc.platform 追加一条到 publish_targets_json,标记「系统自动发布到此平台」.
+
+    marked_by=0 表示系统自动(非某个 admin 手点).与 admin 手动 publish 同一份字段,
+    前端按已发布平台渲染时无需区分来源.
+    """
+    try:
+        targets = json.loads(d.publish_targets_json or "[]")
+    except Exception:  # noqa: BLE001
+        targets = []
+    if not isinstance(targets, list):
+        targets = []
+    targets.append({
+        "platform": d.platform or "",
+        "media": "",
+        "url": "",
+        "marked_at": datetime.utcnow().isoformat(),
+        "marked_by": 0,
+    })
+    d.publish_targets_json = json.dumps(targets, ensure_ascii=False)
+
+
+async def _run_publish() -> None:
+    """扫到期稿并发布.单 event loop 内串行 await(Mediumsly publisher 自带并发闸)."""
+    from geo.models.ai_telemetry import (
+        AiTelemetryTopicExecutionPlanORM,
+        AiTelemetryTopicORM,
+        TopicGeneratedDocORM,
+    )
+    from geo.models.user import UserORM
+    from geo.services import mediumsly_publisher
+
+    today = _now_local().date()
+    db: Session = SessionLocal()
+    published = 0
+    try:
+        topics = (
+            db.query(AiTelemetryTopicORM)
+              .filter(AiTelemetryTopicORM.auto_publish_enabled.is_(True))
+              .filter(AiTelemetryTopicORM.submission_status == "approved")
+              .all()
+        )
+        for t in topics:
+            plan = (
+                db.query(AiTelemetryTopicExecutionPlanORM)
+                  .filter(AiTelemetryTopicExecutionPlanORM.topic_id == t.id)
+                  .order_by(AiTelemetryTopicExecutionPlanORM.id.desc())
+                  .first()
+            )
+            if not plan or plan.status not in ("draft", "confirmed"):
+                continue
+            try:
+                items = json.loads(plan.publishing_plan_json or "[]")
+            except Exception:  # noqa: BLE001
+                items = []
+            # 到期(publish_date <= 今天)的 plan_item id 集合 — 含历史欠发的补发.
+            due_ids: set[str] = set()
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                pd = str(it.get("publish_date") or "")[:10]
+                if not pd:
+                    continue
+                try:
+                    if date.fromisoformat(pd) <= today and it.get("id"):
+                        due_ids.add(str(it["id"]))
+                except ValueError:
+                    continue
+            if not due_ids:
+                continue
+            docs = (
+                db.query(TopicGeneratedDocORM)
+                  .filter(TopicGeneratedDocORM.topic_id == t.id)
+                  .filter(TopicGeneratedDocORM.plan_item_id.in_(list(due_ids)))
+                  .filter(TopicGeneratedDocORM.status.notin_(("published", "rejected")))
+                  .all()
+            )
+            if not docs:
+                continue
+            user = db.get(UserORM, t.user_id)
+            for d in docs:
+                if not (d.body_markdown or "").strip():
+                    continue  # 没正文(生成失败 / 占位)不发
+                _mark_platform_target(d)
+                # 真发 Mediumsly;token 没配 → 降级为只标记,不阻塞.
+                if user and user.email:
+                    try:
+                        result = await mediumsly_publisher.push(d, user, t)
+                        d.mediumsly_post_id = result.post_id
+                        d.mediumsly_url = result.url
+                        d.mediumsly_pushed_at = datetime.utcnow()
+                        d.mediumsly_last_error = None
+                    except mediumsly_publisher.MediumslyNotConfigured:
+                        pass  # 未配 token,只标记 publish_targets
+                    except mediumsly_publisher.MediumslyPostGone:
+                        d.mediumsly_post_id = None
+                        d.mediumsly_last_error = (
+                            "Mediumsly post deleted upstream — id cleared, retry"
+                        )
+                    except mediumsly_publisher.MediumslyError as e:
+                        d.mediumsly_last_error = f"{e.code or 'ERROR'}: {e}"
+                        log.warning("[publish-cron] doc=%s push failed: %s",
+                                    d.id, d.mediumsly_last_error)
+                # 与 admin 手动 publish 同语义:外发失败也置 published,错误留 mediumsly_last_error.
+                d.status = "published"
+                published += 1
+            db.commit()
+            if docs:
+                log.info("[publish-cron] topic=%d published %d docs", t.id, len(docs))
+        log.info("[publish-cron] %d docs published total", published)
+    finally:
+        db.close()
+
+
+def publish_tick() -> None:
+    """每天 PUBLISH_HOUR 触发:把发文计划里到期且未发布的稿按排期发出去.
+
+    选稿:auto_publish_enabled 的已审批 topic → 最新执行计划 →
+          publish_date<=今天 的 plan_item → 关联且 status∉(published,rejected) 且有正文的 doc.
+    发布:真发 Mediumsly(token 缺失降级为只标记)+ 写 publish_targets 标记平台,置 published.
+    幂等:published 的 doc 下次不再入选(status 过滤),天然防重发.
+    """
+    if not AUTO_PUBLISH_ENABLED:
+        log.info("[publish-cron] GEO_AUTO_PUBLISH_ENABLED!=1, skip")
+        return
+    try:
+        asyncio.run(_run_publish())
+    except Exception:  # noqa: BLE001
+        log.exception("[publish-cron] crashed")
+
+
 _scheduler = None
 
 
@@ -160,8 +297,18 @@ def attach(scheduler) -> None:
         misfire_grace_time=3600,
         max_instances=1,
     )
-    log.info("[content-cron] attached: content @:%02d, plan-refill @%02d:00",
-             START_MINUTE, REFILL_HOUR)
+    scheduler.add_job(
+        publish_tick,
+        trigger="cron", hour=PUBLISH_HOUR, minute=0,
+        id="content_auto_publish",
+        replace_existing=True,
+        coalesce=True,
+        misfire_grace_time=3600,
+        max_instances=1,
+    )
+    log.info("[content-cron] attached: content @:%02d, plan-refill @%02d:00, "
+             "auto-publish @%02d:00",
+             START_MINUTE, REFILL_HOUR, PUBLISH_HOUR)
 
 
 def start() -> None:

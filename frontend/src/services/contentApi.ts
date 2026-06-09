@@ -68,10 +68,12 @@ export interface AutoGenerateConfig {
   enabled: boolean;
   time: string;       // "HH:MM"
   count: number;
+  publish_enabled?: boolean;   // 按 publish_date 自动发布开关;不传则后端不改
 }
 
 export interface AutoGenerateState extends AutoGenerateConfig {
   auto_generate_last_run_at?: string | null;
+  auto_publish_enabled?: boolean;
 }
 
 async function request<T>(

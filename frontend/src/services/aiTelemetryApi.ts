@@ -62,6 +62,7 @@ export interface Topic {
   auto_generate_time?: string;    // "HH:MM"
   auto_generate_count?: number;
   auto_generate_last_run_at?: string | null;
+  auto_publish_enabled?: boolean;   // 按 publish_date 自动发布;admin 可关
   // v1.4 — admin 配的扩展提示词;TopicOut 返回但普通用户不渲染
   prompt_extension?: string | null;
   created_at?: string;
@@ -152,6 +153,17 @@ export interface TopicPayload {
   profile?: BrandProfile;
   // v1.4 — admin 工作台编辑时可写;普通用户编辑时即使带也会被后端忽略
   prompt_extension?: string | null;
+}
+
+// Step1 落库专用 — POST /topics/draft。queries/engines 可空,只带品牌资料 + 基础字段。
+export interface TopicDraftPayload {
+  name: string;
+  target: string;
+  target_aliases: string[];
+  industry: string;
+  engines: EngineId[];
+  enabled: boolean;
+  profile?: BrandProfile;
 }
 
 export interface RunNowResult {
@@ -642,6 +654,24 @@ export const aiTelemetryApi = {
       return Promise.resolve(t);
     }
     return request<Topic>('POST', '/topics', token, payload);
+  },
+
+  // Step1「下一步」即落库:只存品牌资料 + 基础字段,queries/engines 可空,后端建 draft。
+  // 返回带 id 的 topic,供后续 step 增量更新,避免拖到最后才一次性保存丢数据。
+  async createDraftTopic(payload: TopicDraftPayload, token: string): Promise<Topic> {
+    if (isMockMode()) {
+      const t: Topic = {
+        id: _mockSeq++,
+        name: payload.name, target: payload.target,
+        target_aliases: payload.target_aliases, industry: payload.industry,
+        queries: [], engines: payload.engines, enabled: payload.enabled,
+        profile: payload.profile,
+        last_run_at: null, last_run_status: null,
+      } as Topic;
+      _mockTopics.push(t);
+      return Promise.resolve(t);
+    }
+    return request<Topic>('POST', '/topics/draft', token, payload);
   },
 
   async updateTopic(id: number, payload: TopicPayload, token: string): Promise<Topic> {

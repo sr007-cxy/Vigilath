@@ -2064,6 +2064,9 @@ export function TopicEditor({
   // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
   const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);
+  // Step1「下一步」即落库:资料填完就建 draft / 存 profile,不拖到最后一次性保存。
+  const [step1Saving, setStep1Saving] = useState(false);
+  const [step1Err, setStep1Err] = useState<string | null>(null);
 
   // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
   // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
@@ -2206,7 +2209,10 @@ export function TopicEditor({
   // 把"保存"流程抽成纯函数,返回 saved topic;handleSave / handleSubmitForReview 复用
   const persistTopic = async (): Promise<Topic | null> => {
     if (!valid) return null;
-    if (initial?.id) {
+    // step1 已可能建过 draft(savedTopicId);此时它和"编辑已有主题"一样走 update,
+    // 不能再 create 否则会重复建一条。effectiveId 为空才是真·全新(admin 新建 / draft 没建成)。
+    const effectiveId = savedTopicId ?? initial?.id ?? null;
+    if (effectiveId) {
       const existingTexts = new Set(seedPrompts.map(s => s.text));
       const newSeeds = seeds.map(s => s.trim()).filter(s => s && !existingTexts.has(s));
       for (const s of newSeeds) {
@@ -2215,17 +2221,24 @@ export function TopicEditor({
     }
     // admin 替别人新建主题:走 admin 通道,seeds 一次性进 payload + 落库即 approved;
     // 跳过下面的 submitSeedPrompt 二次循环(那条接口会把 seed 强制设回 pending)。
-    const isAdminNew = !initial?.id && typeof adminTargetUserId === 'number';
-    const saved = isAdminNew
-      ? await aiTelemetryApi.adminCreateTopicForUser(adminTargetUserId, buildPayload(), token)
-      : await onSave(buildPayload());
-    if (!isAdminNew && !initial?.id && saved?.id) {
-      const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
-      for (const s of cleanSeeds) {
-        try {
-          await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
-        } catch (e) {
-          setSeedSubmitErr(e instanceof Error ? e.message : String(e));
+    const isAdminNew = !effectiveId && typeof adminTargetUserId === 'number';
+    let saved: Topic | null;
+    if (effectiveId) {
+      // 已有主题(含 step1 建的 draft)→ 增量更新;补 queries/engines + 走提交审核
+      saved = await aiTelemetryApi.updateTopic(effectiveId, buildPayload(), token);
+    } else if (isAdminNew) {
+      saved = await aiTelemetryApi.adminCreateTopicForUser(adminTargetUserId, buildPayload(), token);
+    } else {
+      // 兜底:step1 没建成 draft 的全新主题,仍走 create
+      saved = await onSave(buildPayload());
+      if (saved?.id) {
+        const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
+        for (const s of cleanSeeds) {
+          try {
+            await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
+          } catch (e) {
+            setSeedSubmitErr(e instanceof Error ? e.message : String(e));
+          }
         }
       }
     }
@@ -2365,10 +2378,12 @@ export function TopicEditor({
 
   const handleSubmitSeed = async (rawText: string): Promise<boolean> => {
     const text = rawText.trim();
-    if (!text || !initial?.id) return false;
+    // savedTopicId 初值即 initial?.id;step1 建草稿后变成草稿 id,种子也能立即落库
+    const topicId = savedTopicId ?? initial?.id ?? null;
+    if (!text || !topicId) return false;
     setSeedSubmitErr(null);
     try {
-      const updated = await aiTelemetryApi.submitSeedPrompt(initial.id, text, token);
+      const updated = await aiTelemetryApi.submitSeedPrompt(topicId, text, token);
       setSeedPrompts(updated.seed_prompts || []);
       return true;
     } catch (e: unknown) {
@@ -2398,8 +2413,34 @@ export function TopicEditor({
 
   const step1Valid = name.trim().length > 0 && target.trim().length > 0;
   const step2Valid = seeds.map(s => s.trim()).filter(Boolean).length > 0;
+
+  // step1「下一步」即落库:资料(6 大模块)+ 名称/简称/行业立即存,不拖到 step3 才一次性保存。
+  //   - 已有主题 / step1 已建过 draft → PUT /profile 增量存资料
+  //   - 全新主题 → POST /topics/draft 建 draft 草稿,拿到 id 给后续 step 用
+  //   - admin 替别人 / 只读 → 不预存,沿用 step3 权威保存(admin 走 adminCreate,避开锁状态校验)
+  const persistStep1 = async () => {
+    if (readOnly || typeof adminTargetUserId === 'number') { setStep(2); return; }
+    if (step1Saving) return;
+    setStep1Saving(true); setStep1Err(null);
+    try {
+      if (savedTopicId) {
+        await topicProfileApi.updateProfile(savedTopicId, profile, token);
+      } else {
+        const saved = await aiTelemetryApi.createDraftTopic({
+          name: name.trim(), target: target.trim(),
+          target_aliases: aliases, industry: industry.trim(),
+          engines: Array.from(engines), enabled, profile,
+        }, token);
+        if (saved?.id) setSavedTopicId(saved.id);
+      }
+      setStep(2);
+    } catch (e) {
+      setStep1Err(e instanceof Error ? e.message : String(e));
+    } finally { setStep1Saving(false); }
+  };
+
   const goNext = () => {
-    if (step === 1 && step1Valid) setStep(2);
+    if (step === 1 && step1Valid) { void persistStep1(); }
     else if (step === 2 && step2Valid) setStep(3);
     else if (step === 3 && valid) setStep(4);
     else if (step === 4 && savedTopicId) setStep(5);
@@ -2933,11 +2974,11 @@ export function TopicEditor({
           {(step < 3 || (step >= 4 && step < 7 && !!savedTopicId)) && (
             <button
               type="button" onClick={goNext}
-              disabled={(step === 1 && !step1Valid) || (step === 2 && !step2Valid)}
+              disabled={(step === 1 && (!step1Valid || step1Saving)) || (step === 2 && !step2Valid)}
               className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
               style={{ background: 'var(--accent-primary)' }}
             >
-              {t('dashboard.aiTelemetry.form.next')} →
+              {step === 1 && step1Saving ? '…' : `${t('dashboard.aiTelemetry.form.next')} →`}
             </button>
           )}
           {step === 3 && !readOnly && (
@@ -2969,6 +3010,11 @@ export function TopicEditor({
       {submitErr && (
         <div className="px-5 pb-3 text-xs" style={{ color: '#ef4444' }}>
           ⚠ {submitErr}
+        </div>
+      )}
+      {step1Err && (
+        <div className="px-5 pb-3 text-xs" style={{ color: '#ef4444' }}>
+          ⚠ {step1Err}
         </div>
       )}
     </section>

@@ -44,7 +44,7 @@ from geo.models.ai_telemetry import (
     SelectedQueriesPayload, ShareOfVoiceOut,
     TopicGeneratedDocORM,
     TopicMediaOut, TopicMediaORM,
-    TopicOut, TopicPayload, TrackingMatrixOut,
+    TopicDraftPayload, TopicOut, TopicPayload, TrackingMatrixOut,
     TrendPoint, VALID_ENGINES,
 )
 from urllib.parse import urlparse as _urlparse
@@ -626,6 +626,60 @@ def create_topic(
             t, actor_id=current_user.id, actor_role="user", field="profile",
             after=payload.profile.profile_name or payload.profile.company_short_name,
             note="created with profile",
+        )
+        db.commit()
+        db.refresh(t)
+    return TopicOut.from_orm_row(t)
+
+
+@router.post("/topics/draft", response_model=TopicOut, status_code=201)
+def create_draft_topic(
+    payload: TopicDraftPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Step1「下一步」即落库 — 只存品牌资料(6 大模块)+ 基础字段,queries/engines 可空,
+    submission_status=draft。让用户填完资料就有 topic.id,后续 step 直接增量改,不必拖到最后才一次性保存。
+    后续 step3 用 PUT /topics/{id} 补 queries/engines + 提交审核。"""
+    # 引擎传了才校验白名单(草稿阶段可空);去重保序
+    engines: list[str] = []
+    for e in (payload.engines or []):
+        if e in VALID_ENGINES and e not in engines:
+            engines.append(e)
+    name = payload.name.strip()
+    target = payload.target.strip()
+    industry = payload.industry.strip()
+    profile_init = "{}"
+    if payload.profile is not None:
+        profile_init = json.dumps(payload.profile.model_dump(), ensure_ascii=False)
+        # 跟 update_topic_profile 一致:资料里的简称 / 行业 / 名称回填到 topic 顶层字段
+        if payload.profile.industry and not industry:
+            industry = payload.profile.industry
+        if payload.profile.company_short_name and not target:
+            target = payload.profile.company_short_name
+        if payload.profile.profile_name and not name:
+            name = payload.profile.profile_name
+    t = AiTelemetryTopicORM(
+        user_id=current_user.id,
+        name=name or "(unnamed)",
+        target=target,
+        target_aliases_json=json.dumps(payload.target_aliases, ensure_ascii=False),
+        industry=industry,
+        seed_prompts_json="[]",
+        queries_json="[]",
+        engines_json=json.dumps(engines, ensure_ascii=False),
+        enabled=payload.enabled,
+        profile_json=profile_init,
+        submission_status="draft",
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    if payload.profile is not None:
+        _append_changelog(
+            t, actor_id=current_user.id, actor_role="user", field="profile",
+            after=payload.profile.profile_name or payload.profile.company_short_name,
+            note="draft created with profile",
         )
         db.commit()
         db.refresh(t)
