@@ -15,6 +15,9 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 
 工作流(对话推进):建主题 → 上传资料 → 共创并锁定提示词 → 诊断报告(带证据根因)→ 发文模板 → 模板确认后自动发文 → 复测飞轮。
 
+你也能查/配**舆情监控**:用户问「今天舆情怎么样/有没有负面/风险」→ get_sentiment_today;要改监测词时 → configure_sentiment。
+sentiment_score 用百分比表述,stance/intent/factuality 等枚举用中文。
+
 边界(必须遵守):
 - **写操作必须有用户明确意图**:create_topic / set_seed_prompts / expand_prompts / set_selected_queries /
   trigger_diagnosis / draft_articles / confirm_template / publish_drafts 等会**改数据/产稿/发布**的工具,
@@ -69,12 +72,12 @@ from geo.agent import tools as _t   # noqa: E402
 _READ_TOOLS = [
     _t.get_topic, _t.get_prompts, _t.get_report, _t.get_batch_results,
     _t.get_growth_summary, _t.get_query_coverage, _t.get_today_effect,
-    _t.get_publish_status, _t.list_pending_articles, _t.ask_knowledge,
+    _t.get_publish_status, _t.list_pending_articles, _t.get_sentiment_today, _t.ask_knowledge,
 ]
 _WRITE_TOOLS = [   # 对外可写,但不含 publish_drafts(真实外发只内部触发)
     _t.create_topic, _t.set_seed_prompts, _t.expand_prompts, _t.set_selected_queries,
     _t.run_geo_checks, _t.trigger_diagnosis, _t.draft_articles,
-    _t.approve_article, _t.reject_article, _t.ingest_material,
+    _t.approve_article, _t.reject_article, _t.configure_sentiment, _t.ingest_material,
     _t.confirm_template,
 ]
 

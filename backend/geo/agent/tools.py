@@ -796,6 +796,75 @@ async def reject_article(ctx: RunContext[AgentDeps], doc_id: int, reason: str = 
     return _review_doc(ctx, doc_id, approve=False, reason=reason)
 
 
+def _sentiment_account(ctx: RunContext[AgentDeps], active_only: bool = False):
+    from geo.models.sentiment import SentimentAccountORM
+
+    q = ctx.deps.db.query(SentimentAccountORM).filter(SentimentAccountORM.user_id == ctx.deps.account_id)
+    if active_only:
+        q = q.filter(SentimentAccountORM.active.is_(True))
+    return q.order_by(SentimentAccountORM.last_run_at.desc().nullslast(), SentimentAccountORM.id.desc()).first()
+
+
+def _shallow_trim(d, cap: int = 6):
+    """防 token 膨胀:把 dict 里的列表截到前 cap 项(浅层)。"""
+    if isinstance(d, dict):
+        return {k: (v[:cap] if isinstance(v, list) else v) for k, v in d.items()}
+    return d
+
+
+async def get_sentiment_today(ctx: RunContext[AgentDeps]) -> dict:
+    """查询当前账号的**今日舆情概况**(KPI / 7天趋势 / 风险分布 / 最新简报 / 高风险 Top)。只读。
+
+    回答「今天舆情怎么样 / 舆情情况 / 有没有负面 / 风险」就用本工具。sentiment_score 等以百分比理解,
+    stance/intent/factuality 等枚举请用中文表述。未配置舆情则提示用户去配置。
+    """
+    from geo.services import sentinel_client
+
+    acc = _sentiment_account(ctx, active_only=True)
+    if acc is None:
+        return {"configured": False, "note": "当前账号还没有配置舆情监控。可用 configure_sentiment 调整关键词,或去舆情页创建监控账户。"}
+    try:
+        data = await asyncio.to_thread(sentinel_client.get_today, acc.id, acc.ticker, 7)
+    except Exception as e:  # noqa: BLE001 — 舆情服务取数失败不阻断
+        return {"configured": True, "brand": acc.target, "status": acc.last_run_status,
+                "note": f"舆情服务暂时取不到数据({e});可稍后再试或检查监控状态。"}
+    return {"configured": True, "brand": acc.target, "status": acc.last_run_status, "today": _shallow_trim(data)}
+
+
+async def configure_sentiment(
+    ctx: RunContext[AgentDeps],
+    keywords: list[str] | None = None,
+    aliases: list[str] | None = None,
+    brand: str | None = None,
+) -> dict:
+    """【写】配置当前账号的舆情监控:更新监测**关键词 / 别名 / 品牌名**。仅在用户明确要配置时调。
+
+    还没有舆情账户时,提示去舆情页创建(创建涉及会员档位/配额校验,不在对话内做)。改动下次跑批生效。
+    """
+    import json
+
+    usage_guardrail_check(ctx.deps, "configure_sentiment")
+    acc = _sentiment_account(ctx)
+    if acc is None:
+        raise ModelRetry("当前账号还没有舆情监控账户;创建需会员/配额校验,请先去舆情页创建一个,再用本工具调整关键词/别名。")
+    changed: list[str] = []
+    if brand and brand.strip():
+        acc.target = brand.strip()
+        changed.append("品牌名")
+    if keywords is not None:
+        kw = [k.strip() for k in keywords if k and k.strip()]
+        acc.keywords_json = json.dumps(kw, ensure_ascii=False)
+        changed.append(f"关键词({len(kw)}个)")
+    if aliases is not None:
+        al = [a.strip() for a in aliases if a and a.strip()]
+        acc.aliases_json = json.dumps(al, ensure_ascii=False)
+        changed.append(f"别名({len(al)}个)")
+    if not changed:
+        return {"updated": False, "note": "没有要更新的内容,请提供 keywords / aliases / brand 之一。"}
+    ctx.deps.db.commit()
+    return {"updated": True, "brand": acc.target, "changed": changed, "note": "已更新,下次舆情跑批生效。"}
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -825,6 +894,8 @@ TOOLS = [
     list_pending_articles,
     approve_article,
     reject_article,
+    get_sentiment_today,
+    configure_sentiment,
     ingest_material,
     ask_knowledge,
     confirm_template,

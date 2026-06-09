@@ -220,6 +220,32 @@ class JobORM(Base):
     finished_at = Column(DateTime, nullable=True)
 
 
+class ApiTenantORM(Base):
+    """对外服务的租户(多租户网关 P1)。一个租户一套配额 + 引擎白名单 + 计费档。"""
+    __tablename__ = "api_tenants"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="active")    # active/suspended
+    tier = Column(String, nullable=False, default="free")        # free/pro... 决定 job 优先级
+    engines_json = Column(Text, nullable=False, default="[]")    # 引擎白名单,空=全放开
+    daily_quota_json = Column(Text, nullable=False, default="{}")  # {engine: n};缺省走 default
+    daily_quota_default = Column(Integer, nullable=False, default=20)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ApiKeyORM(Base):
+    """租户的 API Key。明文只在创建时返回一次,库里只存 sha256。"""
+    __tablename__ = "api_keys"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("api_tenants.id"), nullable=False, index=True)
+    key_prefix = Column(String, nullable=False)                  # sk-live-xxxx 前 12 位,便于识别
+    key_hash = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="active")    # active/revoked
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+
 @contextmanager
 def db_session() -> Iterator[Session]:
     s = SessionLocal()
