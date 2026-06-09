@@ -3281,6 +3281,7 @@ const zh = {
               },
               "brandFields": {
                 "industry": "行业",
+                "entity_type": "主体类型",
                 "service_geo": "服务地域",
                 "core_business_lines": "核心业务",
                 "target_scenarios": "目标场景",

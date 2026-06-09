@@ -503,6 +503,9 @@ class BrandProfile(BaseModel):
     company_full_name: str = Field("", max_length=256)          # 公司 / 品牌全称
     company_short_name: str = Field("", max_length=64)          # 公司 / 品牌简称
     industry: str = Field("", max_length=128)                   # 所属行业 / 赛道
+    # 主体类型 — 驱动扩展词风格(服务工具→功能/价格/集成;制造商→厂家/参数/OEM)。
+    # 取值:service_tool / manufacturer / brand_owner / other / ""(资料抽取时 AI 判,可手改)
+    entity_type: str = Field("", max_length=32)
     core_business_lines: list[str] = Field(default_factory=list, max_length=20)  # 核心业务线(多选)
     service_geo: str = Field("", max_length=256)                # 服务地域
     website: str = Field("", max_length=512)                    # 品牌官网(选填,填了体检报告直接复用,不填则跳过站内技术诊断)

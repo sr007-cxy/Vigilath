@@ -1453,6 +1453,7 @@ async def suggest_queries(
 
     target = (payload.get("target") or "").strip()
     industry = (payload.get("industry") or "").strip()
+    entity_type = (payload.get("entity_type") or "").strip()[:32]
     service_geo = (payload.get("service_geo") or "").strip()[:200]
     aliases_in = payload.get("aliases") or []
     if not isinstance(aliases_in, list):
@@ -1499,6 +1500,7 @@ async def suggest_queries(
                     scene=s, seed=seed, count=count_per_scene,
                     target=target, aliases=aliases,
                     industry=industry, service_geo=service_geo,
+                    entity_type=entity_type,
                     profile_cases=profile_cases,
                     core_credentials=core_credentials,
                     brand_diff_tags=brand_diff_tags,
@@ -1601,6 +1603,7 @@ async def expand_queries_for_topic(
     #   intent:      额外用 case_stories
     #   brand:       全用(case_stories / core_credentials / brand_diff_tags / core_service_overview)
     service_geo = ""
+    entity_type = ""
     profile_cases: list[str] = []
     core_credentials: list[str] = []
     brand_diff_tags: list[str] = []
@@ -1609,6 +1612,7 @@ async def expand_queries_for_topic(
         profile_obj = json.loads(t.profile_json or "{}")
         if isinstance(profile_obj, dict):
             service_geo = str(profile_obj.get("service_geo") or "").strip()[:200]
+            entity_type = str(profile_obj.get("entity_type") or "").strip()[:32]
             core_service_overview = str(profile_obj.get("core_service_overview") or "").strip()
             for s in (profile_obj.get("case_stories") or []):
                 s2 = str(s or "").strip()
@@ -1645,6 +1649,7 @@ async def expand_queries_for_topic(
                     scene=s, seed=seed, count=count_per_scene,
                     target=target, aliases=aliases,
                     industry=industry, service_geo=service_geo,
+                    entity_type=entity_type,
                     # intent / brand 才用得到这些 — render_prompt 内会按 scene 决定是否注入
                     profile_cases=profile_cases,
                     core_credentials=core_credentials,

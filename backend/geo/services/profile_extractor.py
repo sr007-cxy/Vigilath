@@ -39,6 +39,7 @@ _SCHEMA_HINT = """\
   "company_full_name": "...",
   "company_short_name": "...",
   "industry": "...",
+  "entity_type": "service_tool | manufacturer | brand_owner | other",
   "core_business_lines": ["..."],
   "service_geo": "...",
   "creation_directions": ["..."],
@@ -80,6 +81,13 @@ case_stories 典型案例 / service_features / service_process / target_scenario
    「证券虚假陈述应对」/「证券虚假陈述」/「证券诉讼」等任何精简版本 —— 字字照搬原句。
    原文写「企业合规体系建设与刑事风险防控」,**不要**拆成
    「企业合规」+「刑事风险」两项,也**不要**简化成「合规建设」。
+
+entity_type 是该主体的【业务主体类型】,据原文判断后**只输出下面四个英文 key 之一**:
+- service_tool   服务 / 工具类:SaaS、软件、在线平台、API、咨询 / 代运营等「提供服务或工具」的主体
+- manufacturer   生产制造商:工厂、代工、设备 / 零部件 / 硬件制造,核心是「生产实体产品」
+- brand_owner    品牌方 / 零售商:消费品牌、渠道商、代理 / 贸易,核心是「拥有品牌或卖货」
+- other          不属于以上三类
+判断不出来就留空字符串,不要乱猜;它会影响后续监测词的措辞方向。
 
 seed_suggestions 是给后续监测扩展用的「种子提示词」,要求:
 - 3-8 条,每条 4-12 字
@@ -150,6 +158,8 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
         raise RuntimeError(f"unexpected {provider} response shape: {e}")
     parsed = _parse_json_loose(content)
     safe = _coerce_to_profile_fields(parsed)
+    # entity_type 归一到枚举 key(模型可能回中文或近义词);非法 / 空 → ""
+    safe["entity_type"] = _normalize_entity_type(parsed.get("entity_type"))
     try:
         profile = BrandProfile(**safe)
     except Exception as e:  # noqa: BLE001
@@ -172,6 +182,31 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
             if len(seeds) >= 8:
                 break
     return profile, seeds, model_id
+
+
+_ENTITY_TYPE_KEYS = ("service_tool", "manufacturer", "brand_owner", "other")
+_ENTITY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
+    "service_tool": ("service_tool", "服务工具", "服务", "工具", "软件", "saas", "平台",
+                     "tool", "software", "platform", "api", "在线服务", "咨询", "代运营"),
+    "manufacturer": ("manufacturer", "生产制造商", "制造商", "厂商", "厂家", "工厂", "制造",
+                     "代工", "oem", "factory", "设备", "零部件", "硬件"),
+    "brand_owner": ("brand_owner", "品牌方", "品牌", "零售", "零售商", "经销", "代理",
+                    "贸易", "brand", "retailer"),
+    "other": ("other", "其他", "其它"),
+}
+
+
+def _normalize_entity_type(raw) -> str:
+    """模型给的 entity_type 归一到 4 个枚举 key 之一;识别不出 → ""(让用户在表单里手选)."""
+    s = str(raw or "").strip().lower()
+    if not s:
+        return ""
+    if s in _ENTITY_TYPE_KEYS:
+        return s
+    for key, aliases in _ENTITY_TYPE_ALIASES.items():
+        if any(a in s for a in aliases):
+            return key
+    return ""
 
 
 def _coerce_to_profile_fields(parsed: dict) -> dict:

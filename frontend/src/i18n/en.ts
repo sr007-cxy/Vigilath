@@ -3275,6 +3275,7 @@ const en = {
               },
               "brandFields": {
                 "industry": "Industry",
+                "entity_type": "Entity type",
                 "service_geo": "Service geography",
                 "core_business_lines": "Core business lines",
                 "target_scenarios": "Target scenarios",

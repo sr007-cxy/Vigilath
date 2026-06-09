@@ -34,6 +34,27 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = int(os.environ.get("GEO_EXPANSION_TIMEOUT", "90"))
 
 
+# ─────────── 主体类型 → 扩展词风格指令(覆盖模板里默认的制造业措辞) ───────────
+# 资料里的 entity_type 决定扩展词往哪个方向走。空 / other → 不注入,模板按原样跑。
+ENTITY_TYPE_HINTS: dict[str, str] = {
+    "service_tool": (
+        "【主体类型:服务 / 工具类(SaaS、软件、在线平台、API、咨询 / 代运营服务)】\n"
+        "扩展词围绕:功能 / 价格套餐 / 免费试用 / 集成对接 / API / 竞品对比 / 适用场景 / 怎么用 / 教程;\n"
+        "禁止出现「厂家 / 供应商 / 生产商 / 制造商 / 批发 / OEM / 工厂 / 产能」这类制造业词。"
+    ),
+    "manufacturer": (
+        "【主体类型:生产制造商(工厂、代工、设备、零部件、硬件制造)】\n"
+        "扩展词围绕:厂家 / 供应商 / 生产商 / OEM / 定制加工 / 批发 / 参数规格 / 选型 / 产能 / 交期。"
+    ),
+    "brand_owner": (
+        "【主体类型:品牌方 / 零售商(消费品牌、渠道、代理、贸易)】\n"
+        "扩展词围绕:品牌口碑 / 正品 / 价格 / 哪里买 / 旗舰店 / 系列对比 / 代理加盟 / 用户评价;\n"
+        "少用「厂家 / 供应商 / 生产商」这类上游制造词。"
+    ),
+    "other": "",
+}
+
+
 # ─────────────────── 4 套 prompt 模板 ──────────────────
 
 # 2026-05-28 — 画像注入策略(参考讯灵 AI蒸馏 实测):
@@ -45,8 +66,8 @@ DEFAULT_TIMEOUT = int(os.environ.get("GEO_EXPANSION_TIMEOUT", "90"))
 SCENE_PROMPTS: dict[SceneType, str] = {
     "search": """你是 SEO 长尾词扩展专家。
 针对种子词「{seed}」扩展 {count} 个**产品搜索意图**的长尾关键词。
-
-扩展模式参考:
+{entity_hint}
+扩展模式参考(以下为制造类示例,若上方主体类型不是制造商请按其指引调整用词):
 - {seed}厂家 / {seed}供应商 / {seed}生产商 / {seed}制造商
 - 推荐{seed}厂家 / 优质{seed}供应商 / 高性价比{seed}
 - {seed}多少钱 / {seed}评测 / {seed}排行
@@ -64,7 +85,7 @@ SCENE_PROMPTS: dict[SceneType, str] = {
 
     "qa": """你是 AI 问答词扩展专家。
 针对种子词「{seed}」扩展 {count} 个**Q&A / 推荐 / 对比**类长尾问句。
-
+{entity_hint}
 扩展模式参考:
 - 哪家{seed}好 / {seed}怎么选 / {seed}选哪家
 - {seed}对比 / {seed}推荐排行 / 求推荐{seed}
@@ -80,7 +101,7 @@ SCENE_PROMPTS: dict[SceneType, str] = {
 
     "intent": """你是用户意图扩展专家。
 针对种子词「{seed}」扩展 {count} 个**意图查询**(用户问怎么做、怎么用、怎么选)。
-
+{entity_hint}
 行业:{industry};地域:{service_geo}
 真实案例 / 业务经历(可作为意图问句的具体背景,**至少 30% 的 query 应围绕这些案例展开**):
 {profile_cases_block}
@@ -100,7 +121,7 @@ SCENE_PROMPTS: dict[SceneType, str] = {
 
     "brand": """你是品牌评估词扩展专家。
 针对品牌名「{target}」(seed 是「{seed}」,作为业务/品类上下文)扩展 {count} 个**品牌评估**长尾问句。
-
+{entity_hint}
 品牌全称:{target}
 品牌别名(可用):{aliases}
 行业:{industry};地域:{service_geo}
@@ -146,6 +167,7 @@ def render_prompt(
     aliases: list[str] | None = None,
     industry: str = "",
     service_geo: str = "",
+    entity_type: str = "",
     profile_cases: list[str] | None = None,
     core_credentials: list[str] | None = None,
     brand_diff_tags: list[str] | None = None,
@@ -167,6 +189,8 @@ def render_prompt(
         "aliases": "、".join((aliases or [])[:5]) or "(无)",
         "industry": industry or "(未指定)",
         "service_geo": service_geo or "",
+        # 主体类型指令 — 空 / other / 未知都退化成空串(模板按原样跑)
+        "entity_hint": ENTITY_TYPE_HINTS.get((entity_type or "").strip(), ""),
     }
     # 按场景注入额外字段
     if scene == "intent":
@@ -242,6 +266,7 @@ async def expand_one_scene(
     aliases: list[str] | None = None,
     industry: str = "",
     service_geo: str = "",
+    entity_type: str = "",
     # 2026-05-28 — 画像注入(intent / brand 场景用,其他 scene 忽略)
     profile_cases: list[str] | None = None,
     core_credentials: list[str] | None = None,
@@ -261,6 +286,7 @@ async def expand_one_scene(
         scene,
         seed=seed, count=count, target=target,
         aliases=aliases, industry=industry, service_geo=service_geo,
+        entity_type=entity_type,
         profile_cases=profile_cases,
         core_credentials=core_credentials,
         brand_diff_tags=brand_diff_tags,

@@ -78,6 +78,9 @@ export interface BrandProfile {
   company_full_name: string;
   company_short_name: string;
   industry: string;
+  // 主体类型 — 驱动扩展词风格。service_tool / manufacturer / brand_owner / other / ''
+  // 资料抽取时 AI 自动判,表单里可手改。
+  entity_type: string;
   core_business_lines: string[];
   service_geo: string;
   website: string;
@@ -112,7 +115,7 @@ export interface BrandProfile {
 
 export const EMPTY_BRAND_PROFILE: BrandProfile = {
   profile_name: '', company_full_name: '', company_short_name: '',
-  industry: '', core_business_lines: [], service_geo: '', website: '',
+  industry: '', entity_type: '', core_business_lines: [], service_geo: '', website: '',
   creation_directions: [], copywriting_types: [], target_platforms: [],
   content_tones: [], content_redlines: [],
   team_size: '', founded_year: '', core_credentials: [], brand_diff_tags: [],
@@ -701,6 +704,8 @@ export const aiTelemetryApi = {
     args: {
       seed: string; count: number;
       target?: string; aliases?: string[]; industry?: string;
+      // 主体类型 — 驱动扩展词风格(service_tool / manufacturer / brand_owner / other / '')
+      entity_type?: string;
       // 2026-05-20 — 用户在 profile 里填的服务地域。
       // 非空时 prompt 会把所有 query 的地点维度锁定在该地域(+ 全国 / 跨地区),
       // 不再随机扩到其它城市/国家。
@@ -755,6 +760,7 @@ export const aiTelemetryApi = {
         target: args.target || '',
         aliases: args.aliases || [],
         industry: args.industry || '',
+        entity_type: args.entity_type || '',
         service_geo: args.service_geo || '',
         // 画像字段 — 后端按 scene 自动取舍(search / qa 忽略,intent / brand 注入)
         profile_cases: args.profile_cases || [],

@@ -2303,6 +2303,8 @@ export function TopicEditor({
           target: target.trim(),
           aliases,
           industry: industry.trim(),
+          // 主体类型 — 让后端按 服务/制造/品牌 切换扩展词措辞
+          entity_type: profile.entity_type || '',
           // 资料里的服务地域 — 让 LLM 把地点维度锁在用户实际经营区域
           service_geo: (profile.service_geo || '').trim(),
           // 2026-05-28 — 画像字段透传给后端;后端按 scene 自动取舍:

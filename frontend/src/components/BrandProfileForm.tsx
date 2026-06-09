@@ -35,6 +35,15 @@ export function profileMissingFields(profile: BrandProfile, required = PROFILE_R
   return required.filter(k => !isProfileFieldFilled(profile, k));
 }
 
+// 主体类型 — 单选,驱动扩展词风格(与后端 query_expander.ENTITY_TYPE_HINTS 同 key)。
+// 资料抽取时 AI 自动判,用户可改;空 = 未判定,扩展按通用模板跑。
+const ENTITY_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'service_tool',  label: '服务工具' },
+  { value: 'manufacturer',  label: '生产制造商' },
+  { value: 'brand_owner',   label: '品牌方' },
+  { value: 'other',         label: '其他' },
+];
+
 type SectionKey = 'basic' | 'subject' | 'service' | 'story' | 'extra' | 'creation';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
@@ -128,6 +137,14 @@ export function BrandProfileForm({
                 <TextRow label="所属行业 / 赛道" required={req.has('industry')} readOnly={readOnly}
                          value={profile.industry} onChange={v => setField('industry', v)} />
               </Pair>
+              <SegmentedRow
+                label="主体类型"
+                aiBadge
+                options={ENTITY_TYPE_OPTIONS}
+                value={profile.entity_type}
+                onChange={v => setField('entity_type', v)}
+                readOnly={readOnly}
+              />
               <Pair>
                 <TextRow label="服务地域" required={req.has('service_geo')} readOnly={readOnly}
                          value={profile.service_geo} onChange={v => setField('service_geo', v)} />
@@ -385,6 +402,62 @@ function OptionsMultiRow({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// 单选分段按钮 — 选项固定枚举,只能选一个(再点同一项可取消回空)。
+// 带 ✨AI 判断 小标 + 动态提示:已选时说明当前判定可改,未选时说明它影响扩展词方向。
+function SegmentedRow({
+  label, options, value, onChange, readOnly, aiBadge = false,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  readOnly: boolean;
+  aiBadge?: boolean;
+}) {
+  const current = options.find(o => o.value === value);
+  const hint = current
+    ? `已按资料自动判为「${current.label}」,不对可直接改`
+    : '按资料自动判断;影响扩展词方向(服务工具→功能/价格/集成 · 制造商→厂家/参数/OEM)';
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <label className="block text-xs text-secondary">{label}</label>
+        {aiBadge && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>
+            ✨AI 判断
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map(opt => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={readOnly}
+              onClick={() => onChange(active ? '' : opt.value)}
+              className="px-3 py-1.5 rounded-md text-sm border"
+              style={{
+                background: active ? 'var(--accent-primary)' : 'var(--bg-card)',
+                borderColor: active ? 'var(--accent-primary)' : 'var(--border-color)',
+                color: active ? '#fff' : 'var(--text-primary)',
+                fontWeight: active ? 600 : 400,
+                cursor: readOnly ? 'not-allowed' : 'pointer',
+                opacity: readOnly ? 0.6 : 1,
+              }}
+            >
+              {active && <span className="mr-1">●</span>}{opt.label}
+            </button>
+          );
+        })}
+      </div>
+      <span className="block mt-1 text-xs text-muted">{hint}</span>
     </div>
   );
 }

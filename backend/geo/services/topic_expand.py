@@ -49,6 +49,7 @@ async def expand_topic_seed(
         aliases = []
 
     service_geo = ""
+    entity_type = ""
     profile_cases: list[str] = []
     core_credentials: list[str] = []
     brand_diff_tags: list[str] = []
@@ -57,6 +58,7 @@ async def expand_topic_seed(
         p = json.loads(topic.profile_json or "{}")
         if isinstance(p, dict):
             service_geo = str(p.get("service_geo") or "").strip()[:200]
+            entity_type = str(p.get("entity_type") or "").strip()[:32]
             core_service_overview = str(p.get("core_service_overview") or "").strip()
             profile_cases = [str(s).strip()[:300] for s in (p.get("case_stories") or []) if str(s).strip()]
             core_credentials = [str(s).strip()[:300] for s in (p.get("core_credentials") or []) if str(s).strip()]
@@ -78,6 +80,7 @@ async def expand_topic_seed(
                 expand_one_scene(
                     scene=s, seed=seed, count=cps,
                     target=target, aliases=aliases, industry=industry, service_geo=service_geo,
+                    entity_type=entity_type,
                     profile_cases=profile_cases, core_credentials=core_credentials,
                     brand_diff_tags=brand_diff_tags, core_service_overview=core_service_overview,
                     client=client,
