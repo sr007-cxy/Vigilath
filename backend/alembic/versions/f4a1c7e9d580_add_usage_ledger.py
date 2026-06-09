@@ -34,8 +34,14 @@ def upgrade() -> None:
     op.create_index("idx_usage_ledger_tenant", "usage_ledger", ["tenant_id"])
     op.create_index("idx_usage_ledger_job", "usage_ledger", ["job_id"])
 
+    # credit_balance 本应在 e2c4f8a1b360 建表时就有,但那条已落库无法重跑,
+    # 故在此 add_column 补上 —— 现有库经本迁移补列,全新库同样在此补,schema 收敛一致。
+    op.add_column("api_tenants",
+                  sa.Column("credit_balance", sa.Integer(), nullable=False, server_default="100"))
+
 
 def downgrade() -> None:
+    op.drop_column("api_tenants", "credit_balance")
     op.drop_index("idx_usage_ledger_job", table_name="usage_ledger")
     op.drop_index("idx_usage_ledger_tenant", table_name="usage_ledger")
     op.drop_table("usage_ledger")

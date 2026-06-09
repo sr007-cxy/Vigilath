@@ -34,9 +34,10 @@ def upgrade() -> None:
         sa.Column("engines_json", sa.Text(), nullable=False, server_default="[]"),
         sa.Column("daily_quota_json", sa.Text(), nullable=False, server_default="{}"),
         sa.Column("daily_quota_default", sa.Integer(), nullable=False, server_default="20"),
-        sa.Column("credit_balance", sa.Integer(), nullable=False, server_default="100"),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
     )
+    # 注意:credit_balance 不在这里加 —— 本迁移已落库,改它不会被 alembic 重跑。
+    # 该列由后续 f4a1c7e9d580 用 add_column 补,保证现有库与全新库 schema 一致。
     op.create_table(
         "api_keys",
         sa.Column("id", sa.Integer(), primary_key=True),
