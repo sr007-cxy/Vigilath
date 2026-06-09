@@ -308,6 +308,11 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     from geo.agent.agent import build_embed_agent
     from geo.agent.methods import load_message_history, save_message_history
 
+    # 即时回执:飞书不支持网页那种逐字 SSE,先回个「正在查询」减少等待焦虑,算完再回结果。
+    tok0 = await _tenant_token(app_id, app_secret)
+    if tok0:
+        await _post_card(tok0, receive_id, {"config": {"wide_screen_mode": True},
+                         "elements": [{"tag": "markdown", "content": "⏳ 正在查询,请稍候…"}]}, rid_type)
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
