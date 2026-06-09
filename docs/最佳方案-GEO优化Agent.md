@@ -164,6 +164,34 @@
 - **Web**:Workbench 内嵌一等聊天面板(`/api/agent/chat` SSE 流式),与富文本编辑 / 报告图表 / 模板表同页联动。
 - **IM = 飞书 / 企微 ISV 第三方应用**:Vigilath 做成第三方应用,**各客户企业授权安装**,触达其成员;自建 bot(webhook / 事件 / 卡片 / OAuth);入站按发信人 → 账号会话,1对1。
 
+### 11.1 各入口用户接入流程(已落地,2026-06-08)
+
+四种入口,对应 `docs/对外开放设计-Agent小龙虾.md`。渲染:网页 react-markdown 全 GFM;飞书真表格卡片(2.0 table);企微/钉钉 markdown(表格转列表行)。
+
+**A. 网页端(最省事,零配置)**
+登录 Vigilath → 右下角浮窗直接聊;可让 agent 带跳转「信源分析」等页(`open page` 关键词匹配)。
+
+**B. 自建应用 IM(飞书 / 企业微信 / 钉钉)** — 一应用 = 一账号,团队共用
+1. 控制台 → 对接集成 → 选平台 → 复制**回调地址**。
+2. 去自己 IM 开放平台建企业自建应用/机器人,拿凭证、配回调、订阅「接收消息」、开消息读写权限(飞书还要**发布版本**)。
+3. 回控制台填凭证 → 保存并连接。
+4. 团队 @机器人 对话。
+   - 飞书坑:事件 `im.message.receive_v1` + `im:message`(单聊要 `im:message.p2p_msg:readonly`)+ **必须发布版本**;可用范围含本人。详见 [[reference_feishu_im_bot_setup]]。
+   - 后端:`backend/geo/agent/embed/im_{feishu,wecom,dingtalk}.py`。
+
+**C. 飞书应用商店(ISV)** — 一键装,每用户各自绑
+1.(前提:Vigilath ISV 应用已上架飞书市场)
+2. 客户管理员市场搜 Vigilath → 一键安装 + 授权(无需建应用/配事件/发布)。
+3. 每个使用者:控制台 → 对接集成 → **生成飞书绑定码** → 飞书发给机器人 → 绑定成功。
+4. 之后直接对话,数据按各人绑定账号隔离。后端 `feishu_isv.py`(app_ticket 三段式鉴权)。
+
+**D. 小龙虾对接(skill / API)** — 一 token = 一账号
+1. 控制台 → 对接集成 → **生成 1 年期 token** → 复制一行安装命令。
+2. 小龙虾机器跑 `curl -fsSL <域名>/skill/install.sh | bash -s -- <token>`(skill 包 `skills/vigilath-geo/`)。
+3. 或直接调 `POST /api/agent/v1/chat`、`GET /api/agent/v1/data/*`(Bearer token)。
+
+> 共性:account_id 后端注入、不给模型;**真实发布对外永不开放**(平台护栏);写操作需明确意图。
+
 ---
 
 ## 12. 主动触达(周期轮询 + 事件,中心 cron)
