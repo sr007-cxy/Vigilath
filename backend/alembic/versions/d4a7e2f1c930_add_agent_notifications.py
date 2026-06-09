@@ -3,7 +3,7 @@
 新建表 + 加列,不动现有数据。见 docs/对外开放设计-Agent小龙虾 / 最佳方案 §12 主动触达。
 
 Revision ID: d4a7e2f1c930
-Revises: c6f1a9d3e820
+Revises: e2c4f8a1b360
 Create Date: 2026-06-09
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4a7e2f1c930"
-down_revision: Union[str, None] = "c6f1a9d3e820"
+down_revision: Union[str, None] = "e2c4f8a1b360"   # 接在 browser_jobs 链之后,避免双 head 分叉
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
