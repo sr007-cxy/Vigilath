@@ -33,6 +33,7 @@ from .tracking import (
 )
 from .llm import extract_response_insights
 from .openrouter import call_openrouter, is_openrouter_engine
+from .yuanbao_search import run_yuanbao, yuanbao_api_enabled
 from .citation_match import (
     extract_publish_urls, match_citations_to_docs, merge_cited_by,
 )
@@ -130,6 +131,9 @@ async def _call_browser(client: httpx.AsyncClient, engine: str, query: str) -> d
         return await call_openrouter(client, engine, query, timeout=PER_QUERY_TIMEOUT)
     if engine == "doubao" and os.environ.get("ARK_API_KEY") and os.environ.get("DOUBAO_BOT_ID"):
         return await _call_doubao_api(client, query)
+    if engine == "yuanbao" and yuanbao_api_enabled():
+        # 元宝走「元宝搜索 + deepseek 合成」API,不占浏览器账号(TENCENT_SEARCH_API_KEY 配了才启用)
+        return await run_yuanbao(client, query, timeout=PER_QUERY_TIMEOUT)
     base = _browser_url(engine)
     body = {"engine": engine, "query": query}
 

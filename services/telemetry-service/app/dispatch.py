@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -21,6 +22,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import bindparam, text
@@ -31,6 +33,17 @@ from .storage import (
     db_session, engine as _db_engine, parse_target, save_response,
 )
 from .tracking import detect_hit, update_query_hit_after_response
+from .yuanbao_search import run_yuanbao, yuanbao_api_enabled
+
+# 由中心进程内(API)处理的引擎 —— 不交给浏览器 worker 领,改由 api_jobs_loop 直跑。
+API_QUEUE_ENGINES = ("yuanbao",)
+
+
+def _worker_claimable(engines: list[str]) -> list[str]:
+    """从 worker 可领的引擎里剔除「中心 API 处理」的引擎(如启用了 API 的元宝)。"""
+    if yuanbao_api_enabled():
+        return [e for e in engines if e not in API_QUEUE_ENGINES]
+    return engines
 
 log = logging.getLogger("telemetry-service.dispatch")
 
@@ -164,7 +177,8 @@ def heartbeat(body: HeartbeatBody) -> dict:
 @router.post("/claim", response_model=list[ClaimedTask])
 def claim(body: ClaimBody) -> list[ClaimedTask]:
     n = max(0, min(body.free_slots, 50))
-    if n == 0 or not body.engines:
+    claim_engines = _worker_claimable(body.engines)   # 元宝(API)不给 worker 领
+    if n == 0 or not claim_engines:
         return []
     now_utc = datetime.now(timezone.utc)
     day_start = _day_start_utc(now_utc)
@@ -186,7 +200,7 @@ def claim(body: ClaimBody) -> list[ClaimedTask]:
         job_used = {r.engine: r.n for r in job_rows}
         used = {e: tele_used.get(e, 0) + job_used.get(e, 0)
                 for e in set(tele_used) | set(job_used)}
-        allowed = [e for e in body.engines
+        allowed = [e for e in claim_engines
                    if used.get(e, 0) < _engine_daily_cap(e)]
         if not allowed:
             return []
@@ -485,3 +499,63 @@ def worker_action(worker_uid: str, action: str) -> WorkerActionResult:
             w.status = "draining"
         status = w.status
     return WorkerActionResult(ok=True, status=status)
+
+
+# ── 中心 API 引擎处理器(元宝等不走浏览器 worker 的引擎)──────────────────
+def _claim_one_api_job() -> Optional[tuple[int, str]]:
+    """领一条 queued 的 API 引擎 job(目前=元宝),置 claimed,返回 (id, query)。"""
+    now = datetime.utcnow()
+    with db_session() as s:
+        if _IS_PG:
+            row = s.execute(text(
+                "WITH picked AS ("
+                "  SELECT id FROM browser_jobs "
+                "  WHERE status='queued' AND engine IN :engines "
+                "  ORDER BY priority, id FOR UPDATE SKIP LOCKED LIMIT 1"
+                ") "
+                "UPDATE browser_jobs t "
+                "SET status='claimed', claimed_by='telemetry-api', claimed_at=:now, attempts=attempts+1 "
+                "FROM picked WHERE t.id=picked.id RETURNING t.id, t.query"
+            ).bindparams(bindparam("engines", expanding=True)),
+                {"engines": list(API_QUEUE_ENGINES), "now": now}).first()
+            return (row.id, row.query) if row else None
+        j = (s.query(JobORM)
+             .filter(JobORM.status == "queued", JobORM.engine.in_(API_QUEUE_ENGINES))
+             .order_by(JobORM.priority, JobORM.id).first())
+        if j is None:
+            return None
+        j.status = "claimed"; j.claimed_by = "telemetry-api"; j.claimed_at = now
+        j.attempts = (j.attempts or 0) + 1
+        return (j.id, j.query)
+
+
+async def api_jobs_loop(stop: asyncio.Event) -> None:
+    """后台循环:领取并处理元宝(API)外部 job —— 搜+合成 → 交结果(复用 _result_job 计费/回调)。"""
+    if not yuanbao_api_enabled():
+        log.info("[api-jobs] 元宝 API 未启用(无 TENCENT_SEARCH_API_KEY),processor 不启动")
+        return
+    log.info("[api-jobs] processor started, engines=%s", API_QUEUE_ENGINES)
+    async with httpx.AsyncClient() as client:
+        while not stop.is_set():
+            try:
+                claimed = _claim_one_api_job()
+            except Exception as e:  # noqa: BLE001
+                log.warning("[api-jobs] claim failed: %s", e); claimed = None
+            if not claimed:
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=3)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            jid, query = claimed
+            try:
+                res = await run_yuanbao(client, query, timeout=90)
+            except Exception as e:  # noqa: BLE001
+                res = {"answer": "", "citations": [], "error": f"yuanbao exception: {e}"}
+            try:
+                _result_job(ResultBody(worker_uid="telemetry-api", task_id=jid, kind="job",
+                                       answer=res.get("answer", ""), citations=res.get("citations", []),
+                                       error=res.get("error")))
+            except Exception as e:  # noqa: BLE001
+                log.warning("[api-jobs] result job %s failed: %s", jid, e)
+    log.info("[api-jobs] processor stopped")

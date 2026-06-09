@@ -26,7 +26,7 @@ from .storage import db_session, TopicORM
 from .insights import get_or_generate_cell_insight, update_feedback
 from .briefings import generate_briefing_for_topic
 from .query_suggest import suggest_queries, DeepSeekError
-from .dispatch import router as dispatch_router
+from .dispatch import router as dispatch_router, api_jobs_loop
 from .gateway import router as gateway_router
 
 logging.basicConfig(
@@ -37,26 +37,30 @@ log = logging.getLogger("telemetry-service")
 
 _stop_event: Optional[asyncio.Event] = None
 _scheduler_task: Optional[asyncio.Task] = None
+_api_jobs_task: Optional[asyncio.Task] = None
 SCHEDULER_ENABLED = os.environ.get("SCHEDULER_ENABLED", "1") == "1"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _stop_event, _scheduler_task
+    global _stop_event, _scheduler_task, _api_jobs_task
     _stop_event = asyncio.Event()
     if SCHEDULER_ENABLED:
         _scheduler_task = asyncio.create_task(scheduler_loop(_stop_event))
         log.info("[start] scheduler launched")
     else:
         log.info("[start] scheduler disabled by env")
+    # 元宝(API)外部 job 处理器 —— 自门控:无 TENCENT_SEARCH_API_KEY 时直接退出
+    _api_jobs_task = asyncio.create_task(api_jobs_loop(_stop_event))
     yield
     if _stop_event:
         _stop_event.set()
-    if _scheduler_task:
-        try:
-            await asyncio.wait_for(_scheduler_task, timeout=5)
-        except asyncio.TimeoutError:
-            _scheduler_task.cancel()
+    for task in (_scheduler_task, _api_jobs_task):
+        if task:
+            try:
+                await asyncio.wait_for(task, timeout=5)
+            except asyncio.TimeoutError:
+                task.cancel()
     log.info("[stop] shut down")
 
 

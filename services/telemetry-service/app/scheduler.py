@@ -120,6 +120,8 @@ def _is_browser_engine(engine: str) -> bool:
         return False
     if engine == "doubao" and os.environ.get("ARK_API_KEY") and os.environ.get("DOUBAO_BOT_ID"):
         return False
+    if engine == "yuanbao" and os.environ.get("TENCENT_SEARCH_API_KEY", "").strip():
+        return False        # 元宝走 SearchPro+deepseek API,进程内直跑,不入 worker 队列
     return engine in CN_ENGINES
 
 
