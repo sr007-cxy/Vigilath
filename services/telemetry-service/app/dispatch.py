@@ -60,8 +60,11 @@ log = logging.getLogger("telemetry-service.dispatch")
 
 DISPATCH_TOKEN = os.environ.get("DISPATCH_TOKEN", "").strip()
 WORKER_OFFLINE_SEC = int(os.environ.get("DISPATCH_WORKER_OFFLINE_SEC", "90"))
-# 外部 jobs 每引擎最多吃掉该引擎日上限的这个比例,其余给内部舆情兜底(P0 的容量护栏)
+# 外部 jobs 每引擎最多吃掉该引擎日上限的这个比例(天花板 ceiling),其余给内部舆情兜底
 JOBS_EXTERNAL_ENGINE_SHARE = float(os.environ.get("JOBS_EXTERNAL_ENGINE_SHARE", "0.5"))
+# 给外部预留的底量(floor):内部舆情封顶在 cap×(1-RESERVE),这部分日额度永远留给外部,
+# 避免外部 job 被内部积压饿死。默认 0.2(给外部留 20%)。设 0 则回到"内部可吃满"的旧行为。
+JOBS_EXTERNAL_ENGINE_RESERVE = float(os.environ.get("JOBS_EXTERNAL_ENGINE_RESERVE", "0.2"))
 # 每引擎单价(credits / 成功 query),稀缺/贵的引擎更高。可被 ENGINE_PRICE_JSON 覆盖。
 _DEFAULT_PRICE = {"deepseek": 2, "qwen": 1, "wenxin": 1, "yuanbao": 1, "doubao": 1,
                   "chatgpt": 5, "claude": 5, "gemini": 3, "copilot": 3, "grok": 3}
@@ -211,17 +214,19 @@ def claim(body: ClaimBody) -> list[ClaimedTask]:
         job_used = {r.engine: r.n for r in job_rows}
         used = {e: tele_used.get(e, 0) + job_used.get(e, 0)
                 for e in set(tele_used) | set(job_used)}
-        allowed = [e for e in claim_engines
-                   if used.get(e, 0) < _engine_daily_cap(e)]
-        if not allowed:
-            return []
-        # 1) 内部舆情绝对优先:先从 dispatch_tasks 领满
-        tasks = _claim_rows(s, allowed, n, body.worker_uid)
-        # 2) 还有空槽 → 外部 jobs 填,但每引擎只许吃日上限的 EXTERNAL_SHARE,给内部兜底
+        cap = _engine_daily_cap
+        # 1) 内部舆情优先,但封顶在 cap×(1-RESERVE) —— 留出 RESERVE 那部分给外部(floor)。
+        #    内部按自身用量(tele_used)判定,这样它吃不到预留给外部的额度。
+        internal_allowed = [e for e in claim_engines
+                            if tele_used.get(e, 0) < cap(e) * (1 - JOBS_EXTERNAL_ENGINE_RESERVE)]
+        tasks = _claim_rows(s, internal_allowed, n, body.worker_uid) if internal_allowed else []
+        # 2) 还有空槽 → 外部 jobs 填:外部用量 < cap×SHARE(天花板)且引擎总量 < cap(不打穿池子)。
+        #    因内部已封顶在 (1-RESERVE),外部总能拿到至少 RESERVE 那部分,不会被饿死。
         remaining = n - len(tasks)
         if remaining > 0:
-            ext_engines = [e for e in allowed
-                           if job_used.get(e, 0) < _engine_daily_cap(e) * JOBS_EXTERNAL_ENGINE_SHARE]
+            ext_engines = [e for e in claim_engines
+                           if job_used.get(e, 0) < cap(e) * JOBS_EXTERNAL_ENGINE_SHARE
+                           and used.get(e, 0) < cap(e)]
             if ext_engines:
                 tasks += _claim_job_rows(s, ext_engines, remaining, body.worker_uid)
     return [ClaimedTask(**t) for t in tasks]
