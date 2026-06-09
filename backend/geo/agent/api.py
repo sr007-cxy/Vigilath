@@ -42,10 +42,10 @@ class ChatIn(BaseModel):
     topic_id: int | None = None
 
 
-def _load_agent():
+def _load_agent(scene: str = "chat"):
     try:
         from geo.agent.agent import build_agent
-        return build_agent()
+        return build_agent(scene)
     except Exception as e:  # pydantic-ai 未装 / 缺 DEEPSEEK_API_KEY
         raise HTTPException(status_code=503, detail=f"Agent 暂不可用:{e}")
 
@@ -123,8 +123,8 @@ async def diagnose(
     current_user: UserORM = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """对当前主题跑诊断并给带证据根因(非流式)。"""
-    agent = _load_agent()
+    """对当前主题跑诊断并给带证据根因(非流式)。重活 → 用 pro 模型。"""
+    agent = _load_agent("pro")
     deps = resolve_account(current_user, db, topic_id=topic_id)
     result = await agent.run("请对当前主题跑 GEO 诊断,并给出带证据的根因结论。", deps=deps)
     return {"output": result.output}

@@ -33,35 +33,25 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 """
 
 
-@lru_cache(maxsize=1)
-def build_agent():
-    """构造并缓存 Agent(无状态、工具注册一次;每次对话用 deps 注入账号上下文)。"""
+# 场景 → 模型:对话用快模型(v4-flash),诊断/重活用 v4-pro;均可用 env AGENT_MODEL_{CHAT,PRO} 覆盖(见 model.py)。
+@lru_cache(maxsize=4)
+def build_agent(scene: str = "chat"):
+    """构造并缓存 Agent(按场景选模型;无状态、工具注册一次,每次对话用 deps 注入账号上下文)。"""
+    return _make_agent(TOOLS, scene)
+
+
+def _make_agent(tools, scene: str = "chat"):
     from pydantic_ai import Agent
     from pydantic_ai.models.openai import OpenAIChatModelSettings
 
     settings = None
-    # 走 OpenRouter 时:强制只路由「支持 tools 参数」的 provider,并优先 DeepSeek 一方,
-    # 避免某些 provider 把 DeepSeek 原生 tool-call 格式泄漏成文本(实测间歇性发生)。
-    # DeepSeek 官方 API(DEEPSEEK_API_KEY)原生稳定,不需要此 extra_body。
-    if os.environ.get("OPENROUTER_API_KEY", "").strip() and not os.environ.get("DEEPSEEK_API_KEY", "").strip():
-        settings = OpenAIChatModelSettings(
-            extra_body={"provider": {"require_parameters": True, "order": ["DeepSeek"]}},
-        )
-
-    return _make_agent(TOOLS)
-
-
-def _make_agent(tools):
-    from pydantic_ai import Agent
-    from pydantic_ai.models.openai import OpenAIChatModelSettings
-
-    settings = None
+    # 走 OpenRouter 时:强制只路由「支持 tools 参数」且优先 DeepSeek 的 provider,治 tool-call 泄漏。
     if os.environ.get("OPENROUTER_API_KEY", "").strip() and not os.environ.get("DEEPSEEK_API_KEY", "").strip():
         settings = OpenAIChatModelSettings(
             extra_body={"provider": {"require_parameters": True, "order": ["DeepSeek"]}},
         )
     return Agent(
-        get_deepseek_model(),
+        get_deepseek_model(scene),
         deps_type=AgentDeps,
         system_prompt=SYSTEM_PROMPT,
         tools=tools,
@@ -88,7 +78,7 @@ _WRITE_TOOLS = [   # 对外可写,但不含 publish_drafts(真实外发只内部
 ]
 
 
-@lru_cache(maxsize=2)
-def build_embed_agent(can_write: bool):
-    """对外 agent:read-only 只给只读工具;含 write 再加写工具(永不含 publish_drafts)。"""
-    return _make_agent(_READ_TOOLS + (_WRITE_TOOLS if can_write else []))
+@lru_cache(maxsize=4)
+def build_embed_agent(can_write: bool, scene: str = "chat"):
+    """对外 agent:read-only 只给只读工具;含 write 再加写工具(永不含 publish_drafts)。按场景选模型。"""
+    return _make_agent(_READ_TOOLS + (_WRITE_TOOLS if can_write else []), scene)
