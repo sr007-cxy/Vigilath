@@ -2183,7 +2183,8 @@ const en = {
                 "actions": "Actions"
               },
               "statuses": {
-                "draft": "Draft",
+                "incomplete": "Draft",
+                "draft": "Editing",
                 "reviewing": "In review",
                 "rejected": "Rejected",
                 "enabled": "Active",
@@ -2627,6 +2628,8 @@ const en = {
               "scheduleDrawerTitle": "AI auto-generation",
               "scheduleDrawerHint": "When enabled, the system generates N article drafts each day from this topic's profile + seeds + monitoring questions",
               "scheduleEnableLabel": "Enable daily auto-generation",
+              "schedulePublishLabel": "Auto-publish by scheduled date",
+              "schedulePublishHint": "When on, every day at 11:00 the system publishes any drafts whose publish date has arrived and that haven't been published yet. Turn it off anytime to stop further auto-publishing; already-published content is unaffected.",
               "scheduleTimeLabel": "Time",
               "scheduleCountLabel": "Count per day",
               "scheduleTimeNote": "Timezone Asia/Shanghai",

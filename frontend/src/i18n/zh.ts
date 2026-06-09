@@ -2189,6 +2189,7 @@ const zh = {
                 "actions": "操作"
               },
               "statuses": {
+                "incomplete": "草稿",
                 "draft": "编辑",
                 "reviewing": "审核中",
                 "rejected": "已驳回",

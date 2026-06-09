@@ -395,7 +395,7 @@ function TopicBlock({
   );
 }
 
-type TopicStatus = 'draft' | 'reviewing' | 'rejected' | 'enabled' | 'disabled';
+type TopicStatus = 'incomplete' | 'draft' | 'reviewing' | 'rejected' | 'enabled' | 'disabled';
 
 function deriveTopicStatus(tp: Topic): TopicStatus {
   // submission_status 是审核主真相;旧逻辑(看 seed_prompts.pending)会让"draft 但种子是 pending"
@@ -404,12 +404,15 @@ function deriveTopicStatus(tp: Topic): TopicStatus {
   if (sub === 'pending') return 'reviewing';
   if (sub === 'rejected') return 'rejected';
   if (sub === 'approved') return tp.enabled === false ? 'disabled' : 'enabled';
-  // draft 或 undefined
+  // draft 或 undefined。step1「下一步」只落了资料、还没配监测问题的骨架草稿(queries 为空)
+  // 单独标「草稿」,跟已配置好的可编辑主题区分,方便识别 / 清理中途放弃的半成品。
+  if ((tp.queries?.length ?? 0) === 0) return 'incomplete';
   if (!tp.enabled) return 'disabled';
   return 'draft';
 }
 
 const TOPIC_STATUS_STYLE: Record<TopicStatus, { bg: string; fg: string }> = {
+  incomplete:{ bg: 'rgba(148,163,184,0.18)', fg: '#64748b' },
   draft:    { bg: 'rgba(59,130,246,0.15)', fg: '#3b82f6' },
   reviewing:{ bg: 'rgba(234,179,8,0.15)',  fg: '#b45309' },
   rejected: { bg: 'rgba(239,68,68,0.15)',  fg: '#dc2626' },
@@ -2728,11 +2731,11 @@ export function TopicEditor({
                           disabled={c === 0}
                           className="px-2 py-0.5 rounded-full text-xs"
                           style={{
-                            background: isActive ? color : `${color}26`,
+                            background: isActive ? color : `${color}33`,
                             color: isActive ? '#fff' : color,
-                            border: `1px solid ${isActive ? color : `${color}aa`}`,
-                            fontWeight: 600,
-                            opacity: c === 0 ? 0.4 : 1,
+                            border: `1px solid ${color}`,
+                            fontWeight: 700,
+                            opacity: c === 0 ? 0.6 : 1,
                             cursor: c === 0 ? 'not-allowed' : 'pointer',
                           }}
                         >
