@@ -739,6 +739,63 @@ async def publish_drafts(ctx: RunContext[AgentDeps], draft_ids: list[int] | None
     return {"published": published, "total": len(docs), "results": results}
 
 
+async def list_pending_articles(ctx: RunContext[AgentDeps]) -> dict:
+    """列出当前主题**待审核**的文章(草稿 / 待审,含 id+标题+摘要),供用户自审。**纯只读**。
+
+    回答「有哪些待审文章 / 要审核的文章」就用本工具。审核通过/驳回用 approve_article / reject_article。
+    """
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    rows = (
+        ctx.deps.db.query(TopicGeneratedDocORM)
+        .filter(TopicGeneratedDocORM.topic_id == topic.id,
+                TopicGeneratedDocORM.status.in_(["draft", "pending_review"]))
+        .order_by(TopicGeneratedDocORM.id.desc()).limit(30).all()
+    )
+    return {
+        "count": len(rows),
+        "pending": [{"id": d.id, "title": d.title or (d.source_query_text or "")[:40] or f"doc#{d.id}",
+                     "status": d.status, "summary": (d.summary or "")[:120]} for d in rows],
+    }
+
+
+def _review_doc(ctx: RunContext[AgentDeps], doc_id: int, *, approve: bool, reason: str = ""):
+    from datetime import datetime
+
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+
+    usage_guardrail_check(ctx.deps, "review_article")
+    topic = _account_topic(ctx)
+    d = ctx.deps.db.get(TopicGeneratedDocORM, doc_id)
+    if d is None or topic is None or d.topic_id != topic.id:
+        raise ModelRetry("找不到这篇文章,或它不属于当前账号主题;先用 list_pending_articles 看 id。")
+    if d.status not in ("draft", "pending_review"):
+        raise ModelRetry(f"文章当前 status={d.status},不可审核(只能审 草稿/待审)。")
+    d.status = "approved" if approve else "rejected"
+    d.review_decision_at = datetime.utcnow()
+    d.reviewer_id = ctx.deps.account_id
+    if approve:
+        d.selected_for_review = True
+        d.reject_reason = None
+    else:
+        d.reject_reason = (reason or "").strip()[:500]
+    ctx.deps.db.commit()
+    return {"id": d.id, "title": d.title, "status": d.status}
+
+
+async def approve_article(ctx: RunContext[AgentDeps], doc_id: int) -> dict:
+    """【写】审核**通过**一篇文章(draft/pending_review → approved)。仅在用户明确要「通过/批准」某篇时调。"""
+    return _review_doc(ctx, doc_id, approve=True)
+
+
+async def reject_article(ctx: RunContext[AgentDeps], doc_id: int, reason: str = "") -> dict:
+    """【写】审核**驳回**一篇文章(→ rejected,带原因)。仅在用户明确要「驳回/拒绝」某篇时调。"""
+    return _review_doc(ctx, doc_id, approve=False, reason=reason)
+
+
 # ── 其余工具(按 docs/实现设计-Agent.md §5 逐个补)──────────────────
 # 待接(多数需把现有 ai_telemetry 端点逻辑抽成可复用 service,再薄包装):
 #   expand_prompts(query_expander)/ confirm_prompts(queries_json 固化)/
@@ -765,6 +822,9 @@ TOOLS = [
     get_query_coverage,
     get_today_effect,
     get_publish_status,
+    list_pending_articles,
+    approve_article,
+    reject_article,
     ingest_material,
     ask_knowledge,
     confirm_template,

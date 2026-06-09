@@ -130,6 +130,12 @@ export const contentApi = {
   async submitForReview(docId: number, token: string): Promise<ContentDoc> {
     return request('POST', `/docs/${docId}/submit-review`, token);
   },
+  async approveMyDoc(docId: number, token: string): Promise<ContentDoc> {
+    return request('POST', `/docs/${docId}/approve`, token);
+  },
+  async rejectMyDoc(docId: number, reason: string, token: string): Promise<ContentDoc> {
+    return request('POST', `/docs/${docId}/reject`, token, { reason });
+  },
   async configureAutoGenerate(
     topicId: number, payload: AutoGenerateConfig, token: string,
   ): Promise<AutoGenerateState> {

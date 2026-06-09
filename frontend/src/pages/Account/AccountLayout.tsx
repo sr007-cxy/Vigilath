@@ -47,6 +47,7 @@ export function AccountLayout() {
     { to: '/account/brand', label: t('account.menu.brand', '品牌与监控') },
     { to: '/account/membership', label: t('account.menu.membership', '会员信息') },
     { to: '/account/usage', label: t('account.menu.usage', '使用情况') },
+    { to: '/account/articles', label: t('account.menu.articles', '文章审核') },
     { to: '/account/integration', label: t('account.menu.integration', '对接集成') },
     { to: '/account/history', label: t('account.menu.history', '检测记录') },
     { to: '/account/payments', label: t('account.menu.payments', '支付记录') },

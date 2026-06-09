@@ -265,6 +265,54 @@ def submit_doc_for_review(
     return GeneratedDocOut.from_orm_row(d)
 
 
+class RejectPayload(BaseModel):
+    reason: str = ""
+
+
+@router.post("/docs/{doc_id}/approve", response_model=GeneratedDocOut)
+def approve_my_doc(
+    doc_id: int,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """用户自审通过自己主题下的稿件(draft / pending_review → approved)。审核通过后可进入发布。"""
+    from datetime import datetime
+
+    d = _own_doc_or_404(db, doc_id, current_user.id)
+    if d.status not in ("draft", "pending_review"):
+        raise HTTPException(409, {"code": "WRONG_STATUS", "message": f"稿件 status={d.status},不可通过"})
+    d.status = "approved"
+    d.selected_for_review = True
+    d.review_decision_at = datetime.utcnow()
+    d.reviewer_id = current_user.id
+    d.reject_reason = None
+    db.commit()
+    db.refresh(d)
+    return GeneratedDocOut.from_orm_row(d)
+
+
+@router.post("/docs/{doc_id}/reject", response_model=GeneratedDocOut)
+def reject_my_doc(
+    doc_id: int,
+    payload: RejectPayload,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """用户自审驳回自己主题下的稿件(draft / pending_review → rejected,带原因)。驳回后可编辑重提。"""
+    from datetime import datetime
+
+    d = _own_doc_or_404(db, doc_id, current_user.id)
+    if d.status not in ("draft", "pending_review"):
+        raise HTTPException(409, {"code": "WRONG_STATUS", "message": f"稿件 status={d.status},不可驳回"})
+    d.status = "rejected"
+    d.review_decision_at = datetime.utcnow()
+    d.reviewer_id = current_user.id
+    d.reject_reason = (payload.reason or "").strip()[:500]
+    db.commit()
+    db.refresh(d)
+    return GeneratedDocOut.from_orm_row(d)
+
+
 # ─────────────────────── AI 自动生成排程 ──────────────────────
 
 @router.patch("/topics/{topic_id}/auto-generate")

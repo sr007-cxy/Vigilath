@@ -133,6 +133,7 @@ function App() {
                 <Route path="brand" element={<BrandSettingsTab />} />
                 <Route path="membership" element={<MembershipTab />} />
                 <Route path="usage" element={<UsageTab />} />
+                <Route path="articles" element={<Content />} />
                 <Route path="integration" element={<AgentIntegrationTab />} />
                 <Route path="history" element={<HistoryTab />} />
                 <Route path="payments" element={<PaymentsTab />} />

@@ -398,6 +398,24 @@ function DocDetailDrawer({
 
   const canEdit = doc.source === 'user' && (doc.status === 'draft' || doc.status === 'rejected');
   const canSubmit = doc.status === 'draft' || doc.status === 'rejected';
+  const canReview = doc.status === 'draft' || doc.status === 'pending_review';   // 用户自审
+
+  const approve = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await contentApi.approveMyDoc(doc.id, token);
+      onChanged(); onClose();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
+  const reject = async () => {
+    const reason = window.prompt('驳回原因(可留空):') ?? null;
+    if (reason === null) return;
+    setBusy(true); setErr(null);
+    try {
+      await contentApi.rejectMyDoc(doc.id, reason, token);
+      onChanged(); onClose();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  };
 
   const save = async () => {
     setBusy(true); setErr(null);
@@ -580,10 +598,24 @@ function DocDetailDrawer({
           )}
           {!editing && canSubmit && (
             <button type="button" disabled={busy} onClick={submitReview}
-                    className="text-xs px-3 py-1.5 rounded-md text-white"
-                    style={{ background: '#10b981', opacity: busy ? 0.5 : 1 }}>
+                    className="text-xs px-3 py-1.5 rounded-md"
+                    style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', opacity: busy ? 0.5 : 1 }}>
               {t('dashboard.content.submitForReviewBtn')}
             </button>
+          )}
+          {!editing && canReview && (
+            <>
+              <button type="button" disabled={busy} onClick={reject}
+                      className="text-xs px-3 py-1.5 rounded-md"
+                      style={{ background: 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', opacity: busy ? 0.5 : 1 }}>
+                驳回
+              </button>
+              <button type="button" disabled={busy} onClick={approve}
+                      className="text-xs px-3 py-1.5 rounded-md text-white"
+                      style={{ background: '#10b981', opacity: busy ? 0.5 : 1 }}>
+                {busy ? '...' : '审核通过'}
+              </button>
+            </>
           )}
         </footer>
       </div>
