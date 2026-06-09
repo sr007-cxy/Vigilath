@@ -170,6 +170,7 @@ def usage(t: dict = Depends(require_tenant)) -> dict:
     day_start = _day_start_utc(datetime.now(timezone.utc))
     with db_session() as s:
         tnow = s.get(ApiTenantORM, t["tenant_id"])
+        balance = (tnow.credit_balance if tnow else 0)
         agg = s.execute(text(
             "SELECT COALESCE(SUM(CASE WHEN billable THEN 1 ELSE 0 END),0) billable_n, "
             "COALESCE(SUM(cost),0) spent FROM usage_ledger WHERE tenant_id = :tid"
@@ -178,11 +179,11 @@ def usage(t: dict = Depends(require_tenant)) -> dict:
             "SELECT engine, COUNT(*) n FROM browser_jobs "
             "WHERE tenant_id = :tid AND created_at >= :ds AND status != 'failed' GROUP BY engine"
         ), {"tid": str(t["tenant_id"]), "ds": day_start}).all()
-    return {
-        "credit_balance": (tnow.credit_balance if tnow else 0),
-        "billable_total": int(agg.billable_n), "credits_spent_total": int(agg.spent),
-        "today_by_engine": {r.engine: r.n for r in today},
-    }
+        return {
+            "credit_balance": balance,
+            "billable_total": int(agg.billable_n), "credits_spent_total": int(agg.spent),
+            "today_by_engine": {r.engine: r.n for r in today},
+        }
 
 
 @router.get("/jobs/{job_id}")

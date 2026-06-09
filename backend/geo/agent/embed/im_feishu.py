@@ -182,6 +182,27 @@ async def _tenant_token(app_id: str, app_secret: str) -> str | None:
         return None
 
 
+_bot_id_cache: dict[str, str] = {}
+
+
+async def _bot_open_id(app_id: str, app_secret: str) -> str:
+    """取机器人自己的 open_id(判断群里是否被 @ 用),缓存。"""
+    if app_id in _bot_id_cache:
+        return _bot_id_cache[app_id]
+    tok = await _tenant_token(app_id, app_secret)
+    if not tok:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f"{FEISHU_BASE}/bot/v3/info", headers={"Authorization": f"Bearer {tok}"})
+        oid = (r.json().get("bot") or {}).get("open_id", "")
+        if oid:
+            _bot_id_cache[app_id] = oid
+        return oid
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 async def _post_card(tok: str, chat_id: str, card: dict) -> int | None:
     """发一张交互卡片,返回飞书 code(0=成功,None=异常)。"""
     try:
@@ -287,11 +308,21 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
             msg = event.get("message") or {}
             if msg.get("message_type") == "text":
                 chat_id = msg.get("chat_id") or ""
+                chat_type = msg.get("chat_type") or ""
+                mentions = msg.get("mentions") or []
                 try:
                     text = json.loads(msg.get("content") or "{}").get("text", "").strip()
                 except json.JSONDecodeError:
                     text = ""
-                text = text.replace("@_user_1", "").strip()
+                text = re.sub(r"@_user_\d+", "", text).strip()    # 去掉所有 @占位符
+                # 群聊只在 @机器人 时才回;单聊照常回(避免群里逢消息必回)
+                if chat_type == "group":
+                    bot_oid = await _bot_open_id(app_id, conn.app_secret)
+                    mentioned = (any((m.get("id") or {}).get("open_id") == bot_oid for m in mentions)
+                                 if bot_oid else bool(mentions))
+                    if not mentioned:
+                        log.info("[im-feishu] 群消息未@机器人,忽略 chat=%s", chat_id)
+                        return {"code": 0}
                 if chat_id and text:
                     if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
                         conn.last_chat_id = chat_id

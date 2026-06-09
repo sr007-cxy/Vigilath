@@ -236,6 +236,7 @@ async def feishu_isv_callback(request: Request, bg: BackgroundTasks):
         if header.get("event_type") == "im.message.receive_v1":
             msg = event.get("message") or {}
             if msg.get("message_type") == "text":
+                import re as _re
                 tenant_key = header.get("tenant_key") or ""
                 open_id = (((event.get("sender") or {}).get("sender_id") or {}).get("open_id")) or ""
                 chat_id = msg.get("chat_id") or ""
@@ -243,7 +244,10 @@ async def feishu_isv_callback(request: Request, bg: BackgroundTasks):
                     text = json.loads(msg.get("content") or "{}").get("text", "").strip()
                 except json.JSONDecodeError:
                     text = ""
-                text = text.replace("@_user_1", "").strip()
+                text = _re.sub(r"@_user_\d+", "", text).strip()
+                # 群聊只在有 @(机器人)时才回;单聊照常(ISV 暂用「有@即回」的轻量判断)
+                if (msg.get("chat_type") or "") == "group" and not (msg.get("mentions") or []):
+                    return {"code": 0}
                 if chat_id and open_id and text:
                     log.info("ISV 消息 tenant=%s open_id=%s text=%r", tenant_key, open_id, text[:40])
                     bg.add_task(_handle_message, tenant_key, chat_id, open_id, text)
