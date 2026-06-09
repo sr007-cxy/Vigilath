@@ -631,6 +631,45 @@ async function request<T>(
   return resp.json() as Promise<T>;
 }
 
+// 种子扩展入参 — suggestQueries(普通) 与 suggestQueriesStream(SSE) 共用,避免两处漂移。
+export interface SuggestQueryArgs {
+  seed: string; count: number;
+  target?: string; aliases?: string[]; industry?: string;
+  // 主体类型 — 驱动扩展词风格(service_tool / manufacturer / brand_owner / other / '')
+  entity_type?: string;
+  // 用户在 profile 里填的服务地域;非空时 prompt 把地点维度锁在该地域。
+  service_geo?: string;
+  // 4 维场景;不传默认全 4 维 fan-out。
+  scenes?: SceneType[];
+  // 每场景产出条数(每维 ≤50,4 维合 ≤200)。
+  countPerScene?: number;
+  // 画像字段(intent / brand 场景注入,search / qa 忽略)。
+  profile_cases?: string[];
+  core_credentials?: string[];
+  brand_diff_tags?: string[];
+  core_service_overview?: string;
+}
+
+// 普通版和流式版发同一套 body,后端 _parse_suggest_args 统一解析。
+function buildSuggestBody(args: SuggestQueryArgs): Record<string, unknown> {
+  return {
+    seed: args.seed,
+    count: args.count,
+    // 后端 v2 优先用 count_per_scene;否则用 count/4 兜底,保 老调用方语义稳定。
+    ...(args.countPerScene ? { count_per_scene: args.countPerScene } : {}),
+    ...(args.scenes ? { scenes: args.scenes } : {}),
+    target: args.target || '',
+    aliases: args.aliases || [],
+    industry: args.industry || '',
+    entity_type: args.entity_type || '',
+    service_geo: args.service_geo || '',
+    profile_cases: args.profile_cases || [],
+    core_credentials: args.core_credentials || [],
+    brand_diff_tags: args.brand_diff_tags || [],
+    core_service_overview: args.core_service_overview || '',
+  };
+}
+
 export const aiTelemetryApi = {
   async listTopics(token: string): Promise<Topic[]> {
     if (isMockMode()) return Promise.resolve([..._mockTopics]);
@@ -701,29 +740,7 @@ export const aiTelemetryApi = {
   },
 
   async suggestQueries(
-    args: {
-      seed: string; count: number;
-      target?: string; aliases?: string[]; industry?: string;
-      // 主体类型 — 驱动扩展词风格(service_tool / manufacturer / brand_owner / other / '')
-      entity_type?: string;
-      // 2026-05-20 — 用户在 profile 里填的服务地域。
-      // 非空时 prompt 会把所有 query 的地点维度锁定在该地域(+ 全国 / 跨地区),
-      // 不再随机扩到其它城市/国家。
-      service_geo?: string;
-      // 2026-05-28 — 4 维场景扩展;不传默认全 4 维 fan-out.
-      scenes?: SceneType[];
-      // 每场景产出条数(每维 ≤50,4 维合 ≤200).
-      countPerScene?: number;
-      // 2026-05-28 — 画像字段(intent / brand 场景注入,search / qa 忽略):
-      //  - profile_cases:   案例(intent 案例追溯 / brand 业务线)
-      //  - core_credentials: 资质 / 背书(brand 资质评估)
-      //  - brand_diff_tags:  差异化标签(brand 标签型 query)
-      //  - core_service_overview: 业务概述(brand 业务上下文)
-      profile_cases?: string[];
-      core_credentials?: string[];
-      brand_diff_tags?: string[];
-      core_service_overview?: string;
-    },
+    args: SuggestQueryArgs,
     token: string,
   ): Promise<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }> {
     if (isMockMode()) {
@@ -750,25 +767,59 @@ export const aiTelemetryApi = {
       return Promise.resolve({ seed: args.seed, queries: out, clusters });
     }
     return request<{ seed: string; queries: QueryCandidate[]; clusters: ClusterMeta[] }>(
-      'POST', '/suggest-queries', token, {
-        seed: args.seed,
-        count: args.count,
-        // 后端 v2 优先用 count_per_scene;传 countPerScene 时直接生效,
-        // 否则后端用 count/4 兜底,保 老调用方语义稳定.
-        ...(args.countPerScene ? { count_per_scene: args.countPerScene } : {}),
-        ...(args.scenes ? { scenes: args.scenes } : {}),
-        target: args.target || '',
-        aliases: args.aliases || [],
-        industry: args.industry || '',
-        entity_type: args.entity_type || '',
-        service_geo: args.service_geo || '',
-        // 画像字段 — 后端按 scene 自动取舍(search / qa 忽略,intent / brand 注入)
-        profile_cases: args.profile_cases || [],
-        core_credentials: args.core_credentials || [],
-        brand_diff_tags: args.brand_diff_tags || [],
-        core_service_overview: args.core_service_overview || '',
-      },
+      'POST', '/suggest-queries', token, buildSuggestBody(args),
     );
+  },
+
+  // SSE 流式扩展:每个场景生成完就回调一次,前端边收边渲染,不必等整包。
+  // onScene(scene, queries):某场景的候选到了(可能为空,带 error 时表示该场景失败)。
+  // 整个流走完才 resolve;中途异常 reject。提示词/解析与 suggestQueries 完全一致。
+  async suggestQueriesStream(
+    args: SuggestQueryArgs,
+    token: string,
+    onScene: (scene: SceneType, queries: QueryCandidate[], error?: string | null) => void,
+  ): Promise<void> {
+    if (isMockMode()) {
+      // mock:直接复用普通版结果,按 scene 分组逐组回调,模拟流式。
+      const { queries } = await this.suggestQueries(args, token);
+      for (const sc of (['search', 'qa', 'intent', 'brand'] as SceneType[])) {
+        onScene(sc, queries.filter(q => q.scene === sc));
+      }
+      return;
+    }
+    const resp = await fetch(`${API_BASE}/ai-telemetry/suggest-queries/stream`, {
+      method: 'POST',
+      headers: localizedHeaders({
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }),
+      body: JSON.stringify(buildSuggestBody(args)),
+    });
+    if (!resp.ok || !resp.body) {
+      throw new Error(await readApiError(resp, 'POST /suggest-queries/stream failed'));
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      // SSE 以空行(\n\n)分隔事件
+      const parts = buf.split('\n\n');
+      buf = parts.pop() || '';
+      for (const part of parts) {
+        const dataLine = part.split('\n').find(l => l.startsWith('data:'));
+        if (!dataLine) continue;
+        const json = dataLine.slice(5).trim();
+        if (!json) continue;
+        let obj: { type?: string; scene?: SceneType; queries?: QueryCandidate[]; error?: string | null };
+        try { obj = JSON.parse(json); } catch { continue; }
+        if (obj.type === 'scene' && obj.scene) {
+          onScene(obj.scene, Array.isArray(obj.queries) ? obj.queries : [], obj.error ?? null);
+        }
+      }
+    }
   },
 
   async runNow(payload: TopicPayload, token: string): Promise<RunNowResult[]> {

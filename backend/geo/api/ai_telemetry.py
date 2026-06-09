@@ -14,7 +14,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pathlib import Path
 import mimetypes
 import uuid
@@ -1383,6 +1383,89 @@ def delete_topic_media(
 # ─────────────── 候选 query 生成(DeepSeek)— 建话题时用 ───────────
 
 
+def _parse_suggest_args(payload: dict) -> dict:
+    """解析 /suggest-queries[/stream] 的 body → 规整后的参数 dict。
+    普通版和 SSE 流式版共用,避免两处解析漂移。"""
+    seed = (payload.get("seed") or "").strip()
+    if not seed:
+        raise HTTPException(400, "seed cannot be empty")
+    # scene 子集校验
+    raw_scenes = payload.get("scenes")
+    if raw_scenes is None:
+        scenes: list[str] = list(ALL_SCENES)
+    elif isinstance(raw_scenes, list):
+        scenes = [s for s in raw_scenes if isinstance(s, str)]
+    else:
+        raise HTTPException(400, "scenes must be an array")
+    invalid = [s for s in scenes if s not in ALL_SCENES]
+    if invalid:
+        raise HTTPException(400, f"invalid scenes: {invalid}")
+    if not scenes:
+        raise HTTPException(400, "at least one scene must be selected")
+    # 每场景产出数:default 50,兼容老 count
+    cap_per_scene = max(5, MAX_EXPANSION_CANDIDATES // len(ALL_SCENES))
+    if "count_per_scene" in payload:
+        try:
+            count_per_scene = int(payload["count_per_scene"])
+        except (TypeError, ValueError):
+            count_per_scene = cap_per_scene
+    elif "count" in payload:
+        try:
+            count_per_scene = max(5, int(payload["count"]) // len(ALL_SCENES))
+        except (TypeError, ValueError):
+            count_per_scene = cap_per_scene
+    else:
+        count_per_scene = cap_per_scene
+    count_per_scene = max(5, min(count_per_scene, cap_per_scene))
+
+    aliases_in = payload.get("aliases") or []
+    if not isinstance(aliases_in, list):
+        aliases_in = []
+
+    def _list_from_payload(key: str, *, max_items: int = 20, per_max: int = 300) -> list[str]:
+        raw = payload.get(key)
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        for x in raw:
+            s = str(x or "").strip()
+            if s:
+                out.append(s[:per_max])
+            if len(out) >= max_items:
+                break
+        return out
+
+    return {
+        "seed": seed,
+        "scenes": scenes,
+        "count_per_scene": count_per_scene,
+        "target": (payload.get("target") or "").strip(),
+        "industry": (payload.get("industry") or "").strip(),
+        "entity_type": (payload.get("entity_type") or "").strip()[:32],
+        "service_geo": (payload.get("service_geo") or "").strip()[:200],
+        "aliases": [str(a).strip() for a in aliases_in if str(a).strip()][:20],
+        "profile_cases": _list_from_payload("profile_cases", max_items=20, per_max=300),
+        "core_credentials": _list_from_payload("core_credentials", max_items=20, per_max=300),
+        "brand_diff_tags": _list_from_payload("brand_diff_tags", max_items=10, per_max=80),
+        "core_service_overview": (payload.get("core_service_overview") or "").strip()[:500],
+    }
+
+
+async def _expand_scene_call(scene: str, args: dict, client):
+    """按 args 调一次单场景扩展;两个端点共用同一套入参,避免漏传字段。"""
+    return await expand_one_scene(
+        scene=scene, seed=args["seed"], count=args["count_per_scene"],
+        target=args["target"], aliases=args["aliases"],
+        industry=args["industry"], service_geo=args["service_geo"],
+        entity_type=args["entity_type"],
+        profile_cases=args["profile_cases"],
+        core_credentials=args["core_credentials"],
+        brand_diff_tags=args["brand_diff_tags"],
+        core_service_overview=args["core_service_overview"],
+        client=client,
+    )
+
+
 @router.post("/suggest-queries")
 async def suggest_queries(
     payload: dict,
@@ -1417,68 +1500,10 @@ async def suggest_queries(
         "queries": [str, ...]
       }
     """
-    seed = (payload.get("seed") or "").strip()
-    if not seed:
-        raise HTTPException(400, "seed cannot be empty")
-
-    # scene 子集校验
-    raw_scenes = payload.get("scenes")
-    if raw_scenes is None:
-        scenes: list[str] = list(ALL_SCENES)
-    elif isinstance(raw_scenes, list):
-        scenes = [s for s in raw_scenes if isinstance(s, str)]
-    else:
-        raise HTTPException(400, "scenes must be an array")
-    invalid = [s for s in scenes if s not in ALL_SCENES]
-    if invalid:
-        raise HTTPException(400, f"invalid scenes: {invalid}")
-    if not scenes:
-        raise HTTPException(400, "at least one scene must be selected")
-
-    # 每场景产出数:default 50,兼容老 count
-    cap_per_scene = max(5, MAX_EXPANSION_CANDIDATES // len(ALL_SCENES))
-    if "count_per_scene" in payload:
-        try:
-            count_per_scene = int(payload["count_per_scene"])
-        except (TypeError, ValueError):
-            count_per_scene = cap_per_scene
-    elif "count" in payload:
-        try:
-            count_per_scene = max(5, int(payload["count"]) // len(ALL_SCENES))
-        except (TypeError, ValueError):
-            count_per_scene = cap_per_scene
-    else:
-        count_per_scene = cap_per_scene
-    count_per_scene = max(5, min(count_per_scene, cap_per_scene))
-
-    target = (payload.get("target") or "").strip()
-    industry = (payload.get("industry") or "").strip()
-    entity_type = (payload.get("entity_type") or "").strip()[:32]
-    service_geo = (payload.get("service_geo") or "").strip()[:200]
-    aliases_in = payload.get("aliases") or []
-    if not isinstance(aliases_in, list):
-        aliases_in = []
-    aliases = [str(a).strip() for a in aliases_in if str(a).strip()][:20]
-
-    # 2026-05-28 — 画像字段(intent / brand 用,前端从 BrandProfile 透传过来)
-    def _list_from_payload(key: str, *, max_items: int = 20,
-                            per_max: int = 300) -> list[str]:
-        raw = payload.get(key)
-        if not isinstance(raw, list):
-            return []
-        out: list[str] = []
-        for x in raw:
-            s = str(x or "").strip()
-            if s:
-                out.append(s[:per_max])
-            if len(out) >= max_items:
-                break
-        return out
-
-    profile_cases = _list_from_payload("profile_cases", max_items=20, per_max=300)
-    core_credentials = _list_from_payload("core_credentials", max_items=20, per_max=300)
-    brand_diff_tags = _list_from_payload("brand_diff_tags", max_items=10, per_max=80)
-    core_service_overview = (payload.get("core_service_overview") or "").strip()[:500]
+    args = _parse_suggest_args(payload)
+    seed = args["seed"]
+    scenes = args["scenes"]
+    target = args["target"]
 
     # brand 场景在 target 为空时无意义 —— 跳过
     runnable_scenes: list[str] = []
@@ -1495,20 +1520,7 @@ async def suggest_queries(
     # 4 路并行 fan-out — 画像字段按场景差异化注入(intent / brand)
     if runnable_scenes:
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-            tasks = [
-                expand_one_scene(
-                    scene=s, seed=seed, count=count_per_scene,
-                    target=target, aliases=aliases,
-                    industry=industry, service_geo=service_geo,
-                    entity_type=entity_type,
-                    profile_cases=profile_cases,
-                    core_credentials=core_credentials,
-                    brand_diff_tags=brand_diff_tags,
-                    core_service_overview=core_service_overview,
-                    client=client,
-                )
-                for s in runnable_scenes
-            ]
+            tasks = [_expand_scene_call(s, args, client) for s in runnable_scenes]
             results = await asyncio.gather(*tasks, return_exceptions=True)
         for s, res in zip(runnable_scenes, results):
             if isinstance(res, Exception):
@@ -1533,6 +1545,75 @@ async def suggest_queries(
         # 老调用方平铺数组兼容:每项含 scene 字段
         "queries": flat_queries,
     }
+
+
+@router.post("/suggest-queries/stream")
+async def suggest_queries_stream(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """SSE 流式版 /suggest-queries:4 场景并行,哪个场景先生成完就先推一帧,前端边收边渲染,
+    不必等整包(慢模型下体验差别明显)。提示词 / 解析与普通版完全一致,只是把结果改成逐场景流出。
+
+    事件(均为 `data: <json>\\n\\n`):
+      {"type":"scene","scene":"search","queries":[{text,score,sources,scene}],"model":..,"error":..}
+      {"type":"done","total": N}
+    """
+    args = _parse_suggest_args(payload)
+    scenes = args["scenes"]
+    target = args["target"]
+
+    runnable: list[str] = []
+    skipped: dict[str, str] = {}
+    for s in scenes:
+        if s == "brand" and not target:
+            skipped[s] = "brand scene requires a brand name (target field is empty)"
+        else:
+            runnable.append(s)
+
+    def _sse(obj: dict) -> str:
+        return "data: " + json.dumps(obj, ensure_ascii=False) + "\n\n"
+
+    async def gen():
+        total = 0
+        # 先把跳过的场景(brand 无 target)作为一帧推出去,前端立即知道它不跑
+        for s, err in skipped.items():
+            yield _sse({"type": "scene", "scene": s, "queries": [], "error": err})
+        if runnable:
+            try:
+                async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+                    async def _labeled(scene: str):
+                        try:
+                            res = await _expand_scene_call(scene, args, client)
+                            return scene, res
+                        except Exception as e:  # noqa: BLE001
+                            return scene, {"queries": [], "error": str(e)[:300]}
+                    for fut in asyncio.as_completed([_labeled(s) for s in runnable]):
+                        scene, res = await fut
+                        qs = res.get("queries") or []
+                        total += len(qs)
+                        items = [
+                            {"text": q, "score": 0, "sources": [], "scene": scene}
+                            for q in qs
+                        ]
+                        yield _sse({
+                            "type": "scene", "scene": scene, "queries": items,
+                            "model": res.get("model"), "error": res.get("error"),
+                        })
+            except Exception as e:  # noqa: BLE001
+                yield _sse({"type": "error", "error": str(e)[:300]})
+        yield _sse({"type": "done", "total": total})
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # 关掉 nginx 缓冲,SSE 才能逐帧到前端
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/topics/{topic_id}/expand-queries")

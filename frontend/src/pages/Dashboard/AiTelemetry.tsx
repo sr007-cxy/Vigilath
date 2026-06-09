@@ -2292,13 +2292,13 @@ export function TopicEditor({
     setSuggesting(true);
     setSuggestErr(null);
     try {
-      // 多个种子串行扇出 — 每条候选打上 `seed` 字段,picker 按 seed 分组渲染。
+      // 多个种子串行扇出;每个种子走 SSE 流式扩展 —— 某场景生成完就立刻把候选追加进 picker,
+      // 不必等整包(慢模型下体验差别明显)。每条候选打上 `seed` 字段,picker 按 seed 分组渲染。
       // queries 全局去重(相同文本不同 seed 视作同一候选,沿用先到的 seed)。
       const seenText = new Set(suggestions.map(q => q.text));
-      const additions: QueryCandidate[] = [];
 
       for (let i = 0; i < validSeeds.length; i++) {
-        const res = await aiTelemetryApi.suggestQueries({
+        await aiTelemetryApi.suggestQueriesStream({
           seed: validSeeds[i], count: SUGGEST_COUNT,
           target: target.trim(),
           aliases,
@@ -2315,15 +2315,18 @@ export function TopicEditor({
           core_credentials: profile.core_credentials || [],
           brand_diff_tags: profile.brand_diff_tags || [],
           core_service_overview: profile.core_service_overview || '',
-        }, token);
-        for (const q of res.queries) {
-          if (seenText.has(q.text)) continue;
-          seenText.add(q.text);
-          additions.push({ ...q, seed: validSeeds[i] });
-        }
+        }, token, (_scene, queries) => {
+          // 某场景到货 — 去重后增量追加,UI 立即可见
+          const additions: QueryCandidate[] = [];
+          for (const q of queries) {
+            if (seenText.has(q.text)) continue;
+            seenText.add(q.text);
+            additions.push({ ...q, seed: validSeeds[i] });
+          }
+          if (additions.length) setSuggestions(prev => [...prev, ...additions]);
+        });
       }
 
-      setSuggestions(prev => [...prev, ...additions]);
       setCollapsedSeeds(new Set());
     } catch (e: unknown) {
       setSuggestErr(e instanceof Error ? e.message : String(e));
