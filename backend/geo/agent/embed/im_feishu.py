@@ -173,7 +173,31 @@ def _menu_card() -> dict:
     return {"config": {"wide_screen_mode": True}, "elements": [
         {"tag": "div", "text": {"tag": "lark_md", "content": "**Vigilath GEO 助手** —— 点按钮快捷查询,或直接打字问我:"}},
         {"tag": "action", "actions": btns},
+        {"tag": "note", "elements": [{"tag": "plain_text", "content": "发「功能」查看全部能力 · 直接打字也行"}]},
     ]}
+
+
+_HELP_TEXT = """**Vigilath GEO 助手 · 全部功能**(直接打字问,或发「菜单」用按钮)
+
+**📊 数据查询**
+- 今日投放效果 / 累计被搜到几个 / 哪些 query 没命中
+- 种子词几个、query 多少、每个种子扩展了几个
+- 品牌增长、各引擎命中率、竞品对比
+- 文章发布进度 / 今天发了哪些文章
+- 今天舆情怎么样、有没有负面/风险
+- 查我上传的资料(知识库)
+
+**📝 诊断与内容**
+- 跑 GEO 诊断、看诊断报告(带根因)
+- 生成文章、审核文章(通过/驳回)
+
+**⚙️ 配置**
+- 设/扩展提示词、配置舆情监测关键词
+
+**🔗 页面跳转**(网页端)
+- 「去信源分析 / 竞品 / 引擎」带你跳到对应页
+
+> 真实对外发布不在对话内开放(平台护栏)。发「菜单」可用快捷按钮。"""
 
 
 def _maybe_decrypt(body: dict, aes_key: str) -> dict:
@@ -234,15 +258,15 @@ async def _bot_open_id(app_id: str, app_secret: str) -> str:
         return ""
 
 
-async def _post_card(tok: str, chat_id: str, card: dict) -> int | None:
-    """发一张交互卡片,返回飞书 code(0=成功,None=异常)。"""
+async def _post_card(tok: str, receive_id: str, card: dict, rid_type: str = "chat_id") -> int | None:
+    """发一张交互卡片,返回飞书 code(0=成功,None=异常)。rid_type: chat_id / open_id。"""
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.post(
                 f"{FEISHU_BASE}/im/v1/messages",
-                params={"receive_id_type": "chat_id"},
+                params={"receive_id_type": rid_type},
                 headers={"Authorization": f"Bearer {tok}"},
-                json={"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
+                json={"receive_id": receive_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
             )
         return r.json().get("code")
     except Exception as e:  # noqa: BLE001
@@ -250,32 +274,33 @@ async def _post_card(tok: str, chat_id: str, card: dict) -> int | None:
         return None
 
 
-async def send_reply(tok: str, chat_id: str, text: str) -> None:
-    """回贴飞书:有表格 → 渲染成真表格卡片(2.0);失败/无表格 → 退回 markdown(表格转列表行)卡片。"""
+async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
+    """回贴飞书:有表格 → 渲染成真表格卡片(2.0);失败/无表格 → 退回 markdown 卡片。rid_type: chat_id / open_id。"""
     if _has_table(text):
-        code = await _post_card(tok, chat_id, _build_card_v2(text))
+        code = await _post_card(tok, receive_id, _build_card_v2(text), rid_type)
         if code == 0:
-            log.info("[im-feishu] 已回贴(表格卡片)chat=%s", chat_id)
+            log.info("[im-feishu] 已回贴(表格卡片)to=%s", receive_id)
             return
         log.warning("[im-feishu] 表格卡片被拒(code=%s),回退列表行", code)
     simple = {"config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
-    code = await _post_card(tok, chat_id, simple)
+    code = await _post_card(tok, receive_id, simple, rid_type)
     if code not in (0, None):
         log.warning("[im-feishu] 发消息失败 code=%s(多半缺 im:message 发送权限)", code)
     elif code == 0:
-        log.info("[im-feishu] 已回贴 chat=%s", chat_id)
+        log.info("[im-feishu] 已回贴 to=%s", receive_id)
 
 
-async def _send_text(app_id: str, app_secret: str, chat_id: str, text: str) -> None:
+async def _send_text(app_id: str, app_secret: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
     tok = await _tenant_token(app_id, app_secret)
     if not tok:
         log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
         return
-    await send_reply(tok, chat_id, text)
+    await send_reply(tok, receive_id, text, rid_type)
 
 
-async def _handle_message(app_id: str, app_secret: str, account_id: int, chat_id: str, user_text: str) -> None:
-    """后台:跑 agent → 回贴飞书。复用账号级 agent + 多轮记忆(发布工具不暴露)。"""
+async def _handle_message(app_id: str, app_secret: str, account_id: int, receive_id: str, user_text: str,
+                          rid_type: str = "chat_id") -> None:
+    """后台:跑 agent → 回贴飞书。复用账号级 agent + 多轮记忆(发布工具不暴露)。rid_type: chat_id / open_id。"""
     from geo.agent.agent import build_embed_agent
     from geo.agent.methods import load_message_history, save_message_history
 
@@ -289,9 +314,9 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, chat_id
             save_message_history(deps, result.all_messages_json())
         except Exception:  # noqa: BLE001
             pass
-        await _send_text(app_id, app_secret, chat_id, (result.output or "（无输出）").strip())
+        await _send_text(app_id, app_secret, receive_id, (result.output or "（无输出）").strip(), rid_type)
     except Exception as e:  # noqa: BLE001
-        await _send_text(app_id, app_secret, chat_id, f"抱歉,处理出错了:{e}")
+        await _send_text(app_id, app_secret, receive_id, f"抱歉,处理出错了:{e}", rid_type)
     finally:
         db.close()
 
@@ -372,11 +397,18 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                     if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
                         conn.last_chat_id = chat_id
                         db.commit()
-                    # 「菜单/帮助」→ 发快捷操作按钮卡片,不跑 agent
-                    if text in ("菜单", "帮助", "help", "menu", "开始", "/menu"):
+                    # 「菜单/帮助」→ 按钮卡片;「功能/能做什么」→ 全部能力清单。都不跑 agent
+                    low = text.lower()
+                    if text in ("菜单", "帮助", "开始", "/menu") or low in ("help", "menu"):
                         tok = await _tenant_token(app_id, conn.app_secret)
                         if tok:
                             await _post_card(tok, chat_id, _menu_card())
+                        return {"code": 0}
+                    if text in ("功能", "全部功能", "所有功能", "能做什么", "你能做什么", "/help") or low == "/help":
+                        tok = await _tenant_token(app_id, conn.app_secret)
+                        if tok:
+                            await _post_card(tok, chat_id, {"config": {"wide_screen_mode": True},
+                                                            "elements": [{"tag": "markdown", "content": _HELP_TEXT}]})
                         return {"code": 0}
                     log.info("[im-feishu] 消息→后台跑 agent:account=%s chat=%s text=%r", conn.account_id, chat_id, text[:50])
                     bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, chat_id, text)
@@ -392,6 +424,26 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                 tok = await _tenant_token(app_id, conn.app_secret)
                 if tok:
                     await _post_card(tok, chat_id, _menu_card())
+        elif header.get("event_type") == "application.bot.menu_v6":
+            # 飞书控制台配的「机器人菜单」被点击:event_key 映射到查询(菜单项在控制台配)
+            ev = body.get("event") or {}
+            key = ev.get("event_key") or ""
+            oid = ((ev.get("operator") or {}).get("operator_id") or {}).get("open_id") or ""
+            log.info("[im-feishu] 机器人菜单点击 event_key=%r op=%s", key, oid)
+            MENU_KEY_Q = {
+                "today": "今日投放效果如何?", "coverage": "我累计被搜到几个问题?",
+                "unhit": "哪些 query 没命中?", "sentiment": "今天舆情怎么样?",
+                "articles": "文章发布进度如何?", "help": None,
+            }
+            q = MENU_KEY_Q.get(key, None)
+            if conn and oid:
+                tok = await _tenant_token(app_id, conn.app_secret)
+                if tok and q:
+                    # 菜单点击没有 chat_id,按 open_id 私聊回
+                    bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, oid, q, "open_id")
+                elif tok:
+                    await _post_card(tok, oid, {"config": {"wide_screen_mode": True},
+                                     "elements": [{"tag": "markdown", "content": _HELP_TEXT}]}, "open_id")
         else:
             log.info("[im-feishu] 非消息事件(event_type=%s),跳过", header.get("event_type"))
         return {"code": 0}
