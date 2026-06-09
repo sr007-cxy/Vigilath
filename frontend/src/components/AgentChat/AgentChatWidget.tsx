@@ -57,7 +57,8 @@ function CardView({ card }: { card: AgentCard }) {
   const d = card.data || {};
   const rows: [string, string][] = [];
   if (card.tool === 'get_today_effect') {
-    rows.push(['今日新增命中', String(d.today_new_hits ?? 0)]);
+    rows.push(['今日新增命中(首次)', String(d.today_new_hits ?? 0)]);
+    if (d.today_batch_hits != null) rows.push(['今日跑批命中', String(d.today_batch_hits)]);
     rows.push(['累计被搜到问题', `${d.cumulative_hit_queries ?? 0} / ${d.monitored_queries ?? 0}`]);
     rows.push(['累计被搜到种子词', `${d.cumulative_hit_seeds ?? 0} / ${d.seed_total ?? 0}`]);
   } else if (card.tool === 'get_query_coverage') {
