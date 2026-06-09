@@ -174,6 +174,9 @@ async def wecom_callback(request: Request, bg: BackgroundTasks):
         if msg_id:
             _seen[msg_id] = now
         if from_user and content:
+            if conn.last_chat_id != from_user:           # 记最近用户,供主动推送回推
+                conn.last_chat_id = from_user
+                db.commit()
             try:
                 agentid = json.loads(conn.config_json or "{}").get("agentid")
             except json.JSONDecodeError:

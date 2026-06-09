@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAuth } from '../../contexts/AuthContext';
-import { streamAgentChat, type AgentCard } from '../../services/agentApi';
+import { streamAgentChat, fetchNotifications, markNotificationsRead, type AgentCard } from '../../services/agentApi';
 
 // 快速前往:聊天窗里的页面导航(轻量版「帮你找页面」)。
 // keywords 用于按用户输入做关键词匹配,命中则在对话里追加「前往 X」按钮。
@@ -172,6 +172,7 @@ export function AgentChatWidget() {
   const [msgs, setMsgs] = useState<Msg[]>([
     { role: 'assistant', text: '你好,我是 Vigilath GEO 市场专员。可以帮你跑诊断、看根因、查数据,也能带你去对应页面 —— 试试问「发布进度在哪看」,或点下方「快速前往」。' },
   ]);
+  const [unread, setUnread] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -180,6 +181,28 @@ export function AgentChatWidget() {
   }, [msgs, open]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // 主动通知:登录后轮询未读数(浮标红点);打开聊天窗时拉全文展示 + 标记已读。
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let stop = false;
+    const poll = async () => { if (!stop) setUnread((await fetchNotifications()).length); };
+    void poll();
+    const t = setInterval(poll, 60000);
+    return () => { stop = true; clearInterval(t); };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!open || unread === 0) return;
+    void (async () => {
+      const ns = await fetchNotifications();
+      if (ns.length) {
+        setMsgs((m) => [...m, ...ns.map((n) => ({ role: 'assistant' as const, text: `⚠️ **${n.title}**\n\n${n.body}` }))]);
+        await markNotificationsRead();
+      }
+      setUnread(0);
+    })();
+  }, [open, unread]);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -240,10 +263,11 @@ export function AgentChatWidget() {
           title="点击对话 · 拖动可移动位置"
           className="transition-transform hover:scale-105 active:scale-95"
           style={{
+            position: 'relative',
             width: 60, height: 60, borderRadius: '50%', padding: 0,
             border: open ? 'none' : '2.5px solid #fff',
             background: open ? 'var(--accent-gradient)' : 'transparent',
-            color: '#fff', cursor: 'grab', overflow: 'hidden',
+            color: '#fff', cursor: 'grab', overflow: 'visible',
             boxShadow: '0 6px 20px rgba(0,0,0,.22)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
@@ -261,6 +285,13 @@ export function AgentChatWidget() {
               draggable={false}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
             />
+          )}
+          {!open && unread > 0 && (
+            <span style={{
+              position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, padding: '0 5px',
+              borderRadius: 9, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 700,
+              lineHeight: '18px', textAlign: 'center', border: '2px solid #fff',
+            }}>{unread > 99 ? '99+' : unread}</span>
           )}
         </button>
         {!open && (

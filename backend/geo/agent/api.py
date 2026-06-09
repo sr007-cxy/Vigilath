@@ -128,3 +128,39 @@ async def diagnose(
     deps = resolve_account(current_user, db, topic_id=topic_id)
     result = await agent.run("请对当前主题跑 GEO 诊断,并给出带证据的根因结论。", deps=deps)
     return {"output": result.output}
+
+
+@router.get("/notifications")
+async def list_notifications(
+    current_user: UserORM = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """拉当前账号的未读主动通知(舆情高风险等),聊天窗打开时展示。"""
+    from geo.models.agent import AgentNotificationORM
+
+    rows = (
+        db.query(AgentNotificationORM)
+        .filter(AgentNotificationORM.account_id == current_user.id, AgentNotificationORM.read_at.is_(None))
+        .order_by(AgentNotificationORM.id.desc())
+        .limit(20)
+        .all()
+    )
+    return {"notifications": [{"id": r.id, "title": r.title, "body": r.body,
+                               "created_at": r.created_at.isoformat() if r.created_at else None} for r in rows]}
+
+
+@router.post("/notifications/read")
+async def mark_notifications_read(
+    current_user: UserORM = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """把当前账号所有未读通知标记为已读(聊天窗展示后调)。"""
+    from datetime import datetime
+
+    from geo.models.agent import AgentNotificationORM
+
+    (db.query(AgentNotificationORM)
+     .filter(AgentNotificationORM.account_id == current_user.id, AgentNotificationORM.read_at.is_(None))
+     .update({AgentNotificationORM.read_at: datetime.utcnow()}, synchronize_session=False))
+    db.commit()
+    return {"ok": True}

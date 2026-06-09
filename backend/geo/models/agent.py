@@ -69,9 +69,24 @@ class AgentIMConnectorORM(Base):
     verify_token = Column(String(length=128), nullable=False, default="")   # 事件订阅 Verification Token / 企微 Token
     aes_key = Column(String(length=128), nullable=False, default="")        # 飞书 Encrypt Key / 企微 EncodingAESKey(空=不加密)
     config_json = Column(Text, nullable=False, default="{}")    # 平台特有(企微 agent_id 等)
+    last_chat_id = Column(String(length=256), nullable=False, default="")  # 最近一次对话的会话/用户标识,主动推送回推用
     enabled = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AgentNotificationORM(Base):
+    """主动通知(舆情高风险等)。Web 端打开聊天窗时拉未读;IM 端最佳努力回推。"""
+    __tablename__ = "agent_notifications"
+    __table_args__ = (Index("ix_agent_notif_acct", "account_id", "read_at"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, nullable=False)
+    title = Column(String(length=255), nullable=False, default="")
+    body = Column(Text, nullable=False, default="")
+    dedup_key = Column(String(length=128), nullable=False, unique=True, index=True)  # 去重:同事件不重复推
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    read_at = Column(DateTime, nullable=True)
 
 
 class AgentIMUserBindingORM(Base):

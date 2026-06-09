@@ -74,3 +74,36 @@ export async function streamAgentChat(
   }
   cb.onDone?.();
 }
+
+export interface AgentNotification {
+  id: number;
+  title: string;
+  body: string;
+  created_at: string | null;
+}
+
+/** 拉未读主动通知(舆情高风险等)。 */
+export async function fetchNotifications(): Promise<AgentNotification[]> {
+  const token = localStorage.getItem('token');
+  try {
+    const r = await fetch(`${API_BASE}/agent/notifications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.notifications as AgentNotification[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+/** 标记所有未读为已读。 */
+export async function markNotificationsRead(): Promise<void> {
+  const token = localStorage.getItem('token');
+  try {
+    await fetch(`${API_BASE}/agent/notifications/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch { /* 忽略 */ }
+}

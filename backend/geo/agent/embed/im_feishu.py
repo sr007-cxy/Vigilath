@@ -293,6 +293,9 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                     text = ""
                 text = text.replace("@_user_1", "").strip()
                 if chat_id and text:
+                    if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
+                        conn.last_chat_id = chat_id
+                        db.commit()
                     log.info("[im-feishu] 消息→后台跑 agent:account=%s chat=%s text=%r", conn.account_id, chat_id, text[:50])
                     bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, chat_id, text)
                 else:
