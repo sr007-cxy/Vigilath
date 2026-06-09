@@ -129,15 +129,33 @@ async def set_seed_prompts(ctx: RunContext[AgentDeps], prompts: list[str]) -> di
 
 
 async def get_prompts(ctx: RunContext[AgentDeps]) -> dict:
-    """读当前主题的种子词 + 已扩展的 query 列表(只读)。"""
+    """读当前主题的**种子提示词 + 扩展 query**:各自数量 + 列表 + 每个种子扩展了几个。只读。
+
+    回答「种子词有几个 / query 有多少 / 扩展了多少 / 列一下提示词」就用本工具。
+    """
     import json
+
     topic = _account_topic(ctx)
     if topic is None:
-        return {"seed": [], "queries": []}
+        return {"seed_count": 0, "query_count": 0, "seeds": [], "queries": []}
+    seeds = _seed_texts(topic.seed_prompts_json)
+    raw_q = json.loads(topic.queries_json or "[]")
+    query_texts = [q["text"] for q in raw_q if isinstance(q, dict) and q.get("text")]
+    # 每个种子扩展出多少 query(query.seed 回溯)
+    by_seed: dict[str, int] = {}
+    for q in raw_q:
+        if isinstance(q, dict) and q.get("text"):
+            by_seed[q.get("seed") or "(未归属种子)"] = by_seed.get(q.get("seed") or "(未归属种子)", 0) + 1
     return {
         "topic_id": topic.id,
-        "seed": json.loads(topic.seed_prompts_json or "[]"),
-        "queries": json.loads(topic.queries_json or "[]"),
+        "seed_count": len(seeds),
+        "query_count": len(query_texts),            # = 投放/监控问题数(对齐 dashboard)
+        "expansion_count": len(query_texts),         # 扩展出的 query 总数
+        "seeds": seeds,                              # 种子词列表
+        "expansion_by_seed": by_seed,               # 每个种子扩展了几个
+        "queries": query_texts[:80],                # query 列表(截断前 80)
+        "note": (f"{len(seeds)} 个种子词,扩展出 {len(query_texts)} 个 query"
+                 + ("(列表已截断,只显示前 80)" if len(query_texts) > 80 else "")),
     }
 
 
@@ -438,22 +456,21 @@ async def get_query_coverage(ctx: RunContext[AgentDeps]) -> dict:
         if isinstance(q, dict) and q.get("text"):
             text2seed[q["text"]] = q.get("seed") or ""
 
-    # 监控/投放问题总数 = 当前选中的 query 数(queries_json),与品牌增长 dashboard 一致;
-    # queries_json 为空时回退到命中表里出现过的 distinct query。
-    hit = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
-        AiTelemetryQueryHitORM.topic_id == topic.id, AiTelemetryQueryHitORM.total_hits > 0,
-    ).scalar() or 0
-    monitored = len(text2seed) or db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
-        AiTelemetryQueryHitORM.topic_id == topic.id,
-    ).scalar() or 0
-    hit_query_texts = {
-        r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
-            AiTelemetryQueryHitORM.topic_id == topic.id,
-            AiTelemetryQueryHitORM.total_hits > 0,
-        ).all()
-    }
-    seeds_hit = {text2seed[t] for t in hit_query_texts if text2seed.get(t)}
-    seeds_total = len(json.loads(topic.seed_prompts_json or "[]"))
+    # 命中表里 total_hits>0 的 query 全集
+    hit_all = {r[0] for r in db.query(distinct(AiTelemetryQueryHitORM.query)).filter(
+        AiTelemetryQueryHitORM.topic_id == topic.id, AiTelemetryQueryHitORM.total_hits > 0).all()}
+    # 监控/投放问题总数 = 当前选中 query 数(queries_json),与 dashboard 一致。
+    # 命中数**限定在投放集内**,保证 命中 + 未命中 = 投放(否则旧的已移除 query 命中会让总数对不上)。
+    if text2seed:
+        selected = set(text2seed)
+        monitored = len(selected)
+        hit = len(selected & hit_all)
+    else:
+        monitored = len(hit_all) or (db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+            AiTelemetryQueryHitORM.topic_id == topic.id).scalar() or 0)
+        hit = len(hit_all)
+    seeds_hit = {text2seed[t] for t in hit_all if text2seed.get(t)}      # 复用 hit_all,命中 query 的种子
+    seeds_total = len(_seed_texts(topic.seed_prompts_json))
 
     return {
         "topic_id": topic.id, "topic_name": topic.name, "scope": "all-time",

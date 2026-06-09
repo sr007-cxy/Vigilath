@@ -363,14 +363,14 @@ def _run_per_item(
                     # (template prompt 不接 combo 注入,直接走 profile combo)
                     title, body, summary = _generate_with_template(
                         profile, tmpl, topic_text, platform or "", provider, api_key,
-                        seed=seed or None,
+                        seed=seed or None, style_refs=style_refs,
                     )
                 else:
                     medias = _match_topic_media(db, topic_id, topic_text)
                     title, body, summary = _generate_one(
                         profile, topic_text, provider, api_key,
                         direction=direction, copywriting_type=copywriting_type,
-                        medias=medias, topic_id=topic_id,
+                        medias=medias, topic_id=topic_id, style_refs=style_refs,
                     )
                 doc.title = title
                 allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
@@ -429,11 +429,13 @@ def regenerate_doc(db, doc: TopicGeneratedDocORM) -> TopicGeneratedDocORM:
     direction = doc.creation_direction
     copywriting_type = doc.copywriting_type
     tmpl = db.get(ContentTemplateORM, doc.template_id) if doc.template_id else None
+    style_refs = _load_style_refs(db, topic_id)
 
     if tmpl and direction is None and copywriting_type is None:
         # 单变体走模板;有 combo 时模板 prompt 不接注入,改走 _generate_one
         title, body, summary = _generate_with_template(
             profile, tmpl, query, doc.platform or "", provider, api_key,
+            style_refs=style_refs,
         )
         doc.body_markdown = body
     else:
@@ -441,7 +443,7 @@ def regenerate_doc(db, doc: TopicGeneratedDocORM) -> TopicGeneratedDocORM:
         title, body, summary = _generate_one(
             profile, query, provider, api_key,
             direction=direction, copywriting_type=copywriting_type,
-            medias=medias, topic_id=topic_id,
+            medias=medias, topic_id=topic_id, style_refs=style_refs,
         )
         allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
         doc.body_markdown = body if allow_md else _append_media_to_body(db, topic_id, query, body)
