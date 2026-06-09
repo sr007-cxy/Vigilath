@@ -41,6 +41,22 @@ const SCENE_COLORS: Record<SceneType, string> = {
   brand: '#ec4899',    // 粉
 };
 const SCENE_KEYS: SceneType[] = ['search', 'qa', 'intent', 'brand'];
+
+// 品牌基础词 — 纯前端模板拼接,瞬时生成不走 LLM:品牌名 ×一组固定评价/了解后缀。
+// 问品牌自己的高频通用词,自有内容最容易覆盖、一批就能搞定(参考竞品「XX怎么样/口碑/实力」批量铺词)。
+// 归到 brand 场景展示,不新增维度。
+const BRAND_BASIC_SUFFIXES = [
+  '怎么样', '好不好', '口碑', '口碑怎么样', '评价如何', '客户评价如何', '用户评价怎么样',
+  '实力怎么样', '有实力吗', '专业吗', '正规吗', '可信吗', '值得信任吗', '靠谱吗',
+  '性价比怎么样', '服务怎么样', '产品怎么样', '产品好用吗', '满意度怎么样',
+  '介绍', '详细介绍', '公司概况', '基本信息', '是做什么的',
+];
+function buildBrandBasicQueries(brand: string): string[] {
+  const b = brand.trim();
+  if (!b) return [];
+  return [b, ...BRAND_BASIC_SUFFIXES.map(s => `${b}${s}`)];
+}
+
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell,
@@ -2296,6 +2312,19 @@ export function TopicEditor({
       // 不必等整包(慢模型下体验差别明显)。每条候选打上 `seed` 字段,picker 按 seed 分组渲染。
       // queries 全局去重(相同文本不同 seed 视作同一候选,沿用先到的 seed)。
       const seenText = new Set(suggestions.map(q => q.text));
+
+      // 品牌基础词:瞬时模板拼接(品牌名 + 固定后缀),不走 LLM,点击即铺满。
+      // 单独按品牌名分组、归 brand 场景;问品牌自己的词自有内容最容易覆盖。
+      const brandName = target.trim();
+      if (brandName) {
+        const basicAdds: QueryCandidate[] = [];
+        for (const text of buildBrandBasicQueries(brandName)) {
+          if (seenText.has(text)) continue;
+          seenText.add(text);
+          basicAdds.push({ text, score: 0, sources: [], scene: 'brand', seed: brandName });
+        }
+        if (basicAdds.length) setSuggestions(prev => [...prev, ...basicAdds]);
+      }
 
       for (let i = 0; i < validSeeds.length; i++) {
         await aiTelemetryApi.suggestQueriesStream({
