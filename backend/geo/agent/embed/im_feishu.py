@@ -145,6 +145,37 @@ def _connector_by_app(db: Session, app_id: str) -> AgentIMConnectorORM | None:
     )
 
 
+def _connector_by_token(db: Session, token: str) -> AgentIMConnectorORM | None:
+    """卡片按钮回调不带 app_id,用 verify_token 反查连接器。"""
+    if not token:
+        return None
+    return (db.query(AgentIMConnectorORM)
+            .filter(AgentIMConnectorORM.platform == "feishu", AgentIMConnectorORM.verify_token == token,
+                    AgentIMConnectorORM.enabled == 1).first())
+
+
+# 快捷操作按钮(label, 点击后等价于问的问题)
+QUICK_ACTIONS = [
+    ("📊 今日投放效果", "今日投放效果如何?"),
+    ("🎯 累计命中", "我累计被搜到几个问题?"),
+    ("❓ 未命中列表", "哪些 query 还没命中?"),
+    ("📰 今日舆情", "今天舆情怎么样?"),
+    ("📝 文章进度", "文章发布进度如何?"),
+]
+
+
+def _menu_card() -> dict:
+    """快捷操作菜单(1.0 卡片 action 按钮,点击走卡片回调)。"""
+    btns = [{"tag": "button",
+             "text": {"tag": "plain_text", "content": label},
+             "type": "primary" if i == 0 else "default",
+             "value": {"q": q}} for i, (label, q) in enumerate(QUICK_ACTIONS)]
+    return {"config": {"wide_screen_mode": True}, "elements": [
+        {"tag": "div", "text": {"tag": "lark_md", "content": "**Vigilath GEO 助手** —— 点按钮快捷查询,或直接打字问我:"}},
+        {"tag": "action", "actions": btns},
+    ]}
+
+
 def _maybe_decrypt(body: dict, aes_key: str) -> dict:
     """飞书设了 Encrypt Key 时事件体是 {'encrypt': '...'};未设则明文直接返回。"""
     if "encrypt" not in body:
@@ -286,6 +317,20 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
         if body.get("type") == "url_verification":
             return {"challenge": body.get("challenge", "")}
 
+        # 卡片按钮点击回调(legacy: 顶层 action;v2: event.action / header.event_type=card.action.trigger)
+        action = body.get("action") or (body.get("event") or {}).get("action")
+        if action and isinstance(action, dict) and action.get("value"):
+            log.info("[im-feishu] 卡片按钮回调 keys=%s value=%s", list(body.keys()), action.get("value"))
+            q = (action.get("value") or {}).get("q")
+            tok_field = body.get("token") or (body.get("header") or {}).get("token") or ""
+            c = (_connector_by_token(db, tok_field) or (_connector_by_app(db, app_id) if app_id else None))
+            ev = body.get("event") or {}
+            chat = (body.get("open_chat_id") or ev.get("open_chat_id")
+                    or ((ev.get("context") or {}).get("open_chat_id")) or "")
+            if c and q and chat:
+                bg.add_task(_handle_message, c.app_id, c.app_secret, c.account_id, chat, q)
+            return {}        # 卡片回调:返回 200 空体即可(不弹 toast)
+
         header = body.get("header") or {}
         # 校验 verify token(连接器里存的)
         if conn and header.get("token") and conn.verify_token and header["token"] != conn.verify_token:
@@ -327,12 +372,26 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                     if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
                         conn.last_chat_id = chat_id
                         db.commit()
+                    # 「菜单/帮助」→ 发快捷操作按钮卡片,不跑 agent
+                    if text in ("菜单", "帮助", "help", "menu", "开始", "/menu"):
+                        tok = await _tenant_token(app_id, conn.app_secret)
+                        if tok:
+                            await _post_card(tok, chat_id, _menu_card())
+                        return {"code": 0}
                     log.info("[im-feishu] 消息→后台跑 agent:account=%s chat=%s text=%r", conn.account_id, chat_id, text[:50])
                     bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, chat_id, text)
                 else:
                     log.info("[im-feishu] 文本消息但 chat_id/text 为空,跳过")
             else:
                 log.info("[im-feishu] 非文本消息(type=%s),跳过", msg.get("message_type"))
+        elif header.get("event_type") == "im.chat.access_event.bot_p2p_chat_entered_v1":
+            # 用户打开与机器人的会话 → 发欢迎 + 快捷操作菜单
+            ev = body.get("event") or {}
+            chat_id = ev.get("chat_id") or ""
+            if chat_id and conn:
+                tok = await _tenant_token(app_id, conn.app_secret)
+                if tok:
+                    await _post_card(tok, chat_id, _menu_card())
         else:
             log.info("[im-feishu] 非消息事件(event_type=%s),跳过", header.get("event_type"))
         return {"code": 0}
