@@ -20,6 +20,7 @@ const sidebarItems = [
   { to: '/workbench/runs',           end: false, icon: 'runs',        labelKey: 'nav.adminRuns' },
   { to: '/workbench/crawl',          end: false, icon: 'crawl',       labelKey: 'nav.adminCrawl' },
   { to: '/workbench/workers',        end: false, icon: 'workers',     labelKey: 'nav.adminWorkers' },
+  { to: '/workbench/gateway',        end: false, icon: 'workers',     labelKey: 'nav.adminGateway' },
 ] as const;
 
 function SidebarIcon({ name }: { name: string }) {

@@ -631,6 +631,18 @@ async function request<T>(
   return resp.json() as Promise<T>;
 }
 
+// 对外网关:租户 / 调用流水(运营管理页用)
+export interface GatewayTenant {
+  id: number; name: string; status: string; tier: string;
+  engines: string[]; daily_quota_default: number; daily_quota: Record<string, number>;
+  credit_balance: number; active_keys: number; calls_today: number;
+  billable_total: number; credits_spent_total: number; created_at: string | null;
+}
+export interface GatewayJob {
+  id: number; tenant_id: string | null; engine: string; query: string;
+  status: string; error: string | null; created_at: string | null; finished_at: string | null;
+}
+
 // 种子扩展入参 — suggestQueries(普通) 与 suggestQueriesStream(SSE) 共用,避免两处漂移。
 export interface SuggestQueryArgs {
   seed: string; count: number;
@@ -1023,6 +1035,37 @@ export const aiTelemetryApi = {
   },
   async adminListEngineSessions(token: string): Promise<EngineSessionRow[]> {
     return request<EngineSessionRow[]>('GET', '/admin/engine-sessions', token);
+  },
+
+  // ── 对外网关运营管理 ─────────────────────────────────
+  async adminGatewayTenants(token: string): Promise<{ tenants: GatewayTenant[] }> {
+    return request('GET', '/admin/gateway/tenants', token);
+  },
+  async adminGatewayCreateTenant(
+    payload: { name: string; tier?: string; engines?: string[]; daily_quota_default?: number; daily_quota?: Record<string, number> },
+    token: string,
+  ): Promise<{ tenant_id: number; key_id: number; api_key: string }> {
+    return request('POST', '/admin/gateway/tenants', token, payload);
+  },
+  async adminGatewayUpdateTenant(
+    tenantId: number,
+    payload: { status?: string; tier?: string; engines?: string[]; daily_quota_default?: number; daily_quota?: Record<string, number> },
+    token: string,
+  ): Promise<{ ok: boolean }> {
+    return request('PATCH', `/admin/gateway/tenants/${tenantId}`, token, payload);
+  },
+  async adminGatewayTopUp(tenantId: number, amount: number, token: string): Promise<{ credit_balance: number }> {
+    return request('POST', `/admin/gateway/tenants/${tenantId}/credits`, token, { amount });
+  },
+  async adminGatewayReissueKey(tenantId: number, token: string): Promise<{ api_key: string }> {
+    return request('POST', `/admin/gateway/tenants/${tenantId}/keys`, token);
+  },
+  async adminGatewayRevokeKey(keyId: number, token: string): Promise<{ ok: boolean }> {
+    return request('POST', `/admin/gateway/keys/${keyId}/revoke`, token);
+  },
+  async adminGatewayJobs(token: string, tenantId?: number, limit = 50): Promise<{ jobs: GatewayJob[] }> {
+    const q = tenantId != null ? `?tenant_id=${tenantId}&limit=${limit}` : `?limit=${limit}`;
+    return request('GET', `/admin/gateway/jobs${q}`, token);
   },
   async adminListUserTopics(userId: number, token: string): Promise<Topic[]> {
     return request<Topic[]>('GET', `/admin/users/${userId}/topics`, token);

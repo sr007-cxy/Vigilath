@@ -63,6 +63,7 @@ const AdminCockpit = lazy(() => import('./pages/Workbench/AdminCockpit').then(m 
 const AdminInsights = lazy(() => import('./pages/Workbench/AdminInsights').then(m => ({ default: m.AdminInsights })));
 const AdminCrawl = lazy(() => import('./pages/Workbench/AdminCrawl').then(m => ({ default: m.AdminCrawl })));
 const AdminWorkers = lazy(() => import('./pages/Workbench/AdminWorkers').then(m => ({ default: m.AdminWorkers })));
+const AdminGateway = lazy(() => import('./pages/Workbench/AdminGateway').then(m => ({ default: m.AdminGateway })));
 const TopicProfile = lazy(() => import('./pages/User/TopicProfile').then(m => ({ default: m.TopicProfile })));
 const WorkbenchLayout = lazy(() => import('./pages/Workbench/WorkbenchLayout').then(m => ({ default: m.WorkbenchLayout })));
 const Sentiment = lazy(() => import('./pages/Dashboard/Sentiment').then(m => ({ default: m.Sentiment })));
@@ -172,6 +173,7 @@ function App() {
                 <Route path="insights" element={<AdminInsights />} />
                 <Route path="crawl" element={<AdminCrawl />} />
                 <Route path="workers" element={<AdminWorkers />} />
+                <Route path="gateway" element={<AdminGateway />} />
                 <Route path="runs" element={<AdminAllRuns />} />
                 <Route path="runs/:runId" element={<AdminRunDetail />} />
                 {/* 详情页 / 非 sidebar 直达 */}

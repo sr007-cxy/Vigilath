@@ -3369,3 +3369,88 @@ def admin_list_engine_sessions(
             "last_fail_type": r.last_fail_type,
         })
     return out
+
+
+# ─────── 对外网关运营管理(/workbench/gateway,admin)────────
+# 转发到 telemetry-service 的 /v1/admin/*(校验 X-Admin-Token);前端鉴权由
+# _require_admin 负责。GATEWAY_ADMIN_TOKEN 只在服务端持有,绝不下发浏览器。
+GATEWAY_ADMIN_TOKEN = os.environ.get("GATEWAY_ADMIN_TOKEN", "").strip()
+
+
+def _gateway_headers() -> dict:
+    return {"X-Admin-Token": GATEWAY_ADMIN_TOKEN} if GATEWAY_ADMIN_TOKEN else {}
+
+
+@router.get("/admin/gateway/tenants")
+async def admin_gateway_tenants(current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{TELEMETRY_SERVICE_URL}/v1/admin/tenants", headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.post("/admin/gateway/tenants")
+async def admin_gateway_create_tenant(payload: dict, current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{TELEMETRY_SERVICE_URL}/v1/admin/tenants",
+                              json=payload, headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.patch("/admin/gateway/tenants/{tenant_id}")
+async def admin_gateway_update_tenant(tenant_id: int, payload: dict,
+                                      current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.patch(f"{TELEMETRY_SERVICE_URL}/v1/admin/tenants/{tenant_id}",
+                               json=payload, headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.post("/admin/gateway/tenants/{tenant_id}/credits")
+async def admin_gateway_topup(tenant_id: int, payload: dict,
+                              current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{TELEMETRY_SERVICE_URL}/v1/admin/tenants/{tenant_id}/credits",
+                              json=payload, headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.post("/admin/gateway/tenants/{tenant_id}/keys")
+async def admin_gateway_reissue_key(tenant_id: int, current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{TELEMETRY_SERVICE_URL}/v1/admin/tenants/{tenant_id}/keys",
+                              headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.post("/admin/gateway/keys/{key_id}/revoke")
+async def admin_gateway_revoke_key(key_id: int, current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{TELEMETRY_SERVICE_URL}/v1/admin/keys/{key_id}/revoke",
+                              headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@router.get("/admin/gateway/jobs")
+async def admin_gateway_jobs(tenant_id: int | None = None, limit: int = 50,
+                             current_user: User = Depends(get_current_user)):
+    _require_admin(current_user)
+    params: dict = {"limit": limit}
+    if tenant_id is not None:
+        params["tenant_id"] = tenant_id
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{TELEMETRY_SERVICE_URL}/v1/admin/jobs",
+                             params=params, headers=_gateway_headers())
+        r.raise_for_status()
+        return r.json()

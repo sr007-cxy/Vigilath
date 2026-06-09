@@ -100,6 +100,7 @@ const en = {
             "adminRuns": "Runs",
             "adminCrawl": "AI Crawlers",
             "adminWorkers": "Dispatch Center",
+            "adminGateway": "API Gateway",
             "adminReview": "Topic Review",
             "adminContentReview": "Doc Review",
             "adminContentManagement": "Content Library",

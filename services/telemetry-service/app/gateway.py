@@ -251,3 +251,113 @@ def top_up(tenant_id: int, body: TopUpIn) -> dict:
         t.credit_balance = (t.credit_balance or 0) + body.amount
         bal = t.credit_balance
     return {"tenant_id": tenant_id, "credit_balance": bal}
+
+
+# ── 运营面板用:列表 / 更新 / 调用流水 / 重发 key ────────────────────────
+@router.get("/admin/tenants", dependencies=[Depends(_require_admin)])
+def admin_list_tenants() -> dict:
+    day_start = _day_start_utc(datetime.now(timezone.utc))
+    with db_session() as s:
+        tenants = s.query(ApiTenantORM).order_by(ApiTenantORM.id).all()
+        today_rows = s.execute(text(
+            "SELECT tenant_id, COUNT(*) n FROM browser_jobs "
+            "WHERE created_at >= :ds AND status != 'failed' GROUP BY tenant_id"
+        ), {"ds": day_start}).all()
+        today = {r.tenant_id: r.n for r in today_rows}          # tenant_id 是字符串
+        bill_rows = s.execute(text(
+            "SELECT tenant_id, COUNT(*) n, COALESCE(SUM(cost),0) c FROM usage_ledger "
+            "WHERE billable GROUP BY tenant_id"
+        )).all()
+        bill = {r.tenant_id: (r.n, r.c) for r in bill_rows}     # tenant_id 是整数
+        key_rows = s.execute(text(
+            "SELECT tenant_id, COUNT(*) n FROM api_keys WHERE status='active' GROUP BY tenant_id"
+        )).all()
+        keys = {r.tenant_id: r.n for r in key_rows}
+        out = []
+        for t in tenants:
+            bn, bc = bill.get(t.id, (0, 0))
+            out.append({
+                "id": t.id, "name": t.name, "status": t.status, "tier": t.tier,
+                "engines": json.loads(t.engines_json or "[]"),
+                "daily_quota_default": t.daily_quota_default,
+                "daily_quota": json.loads(t.daily_quota_json or "{}"),
+                "credit_balance": t.credit_balance,
+                "active_keys": keys.get(t.id, 0),
+                "calls_today": today.get(str(t.id), 0),
+                "billable_total": int(bn), "credits_spent_total": int(bc),
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            })
+        return {"tenants": out}
+
+
+class UpdateTenantIn(BaseModel):
+    status: Optional[str] = None
+    tier: Optional[str] = None
+    engines: Optional[list[str]] = None
+    daily_quota_default: Optional[int] = None
+    daily_quota: Optional[dict] = None
+
+
+@router.patch("/admin/tenants/{tenant_id}", dependencies=[Depends(_require_admin)])
+def admin_update_tenant(tenant_id: int, body: UpdateTenantIn) -> dict:
+    with db_session() as s:
+        t = s.get(ApiTenantORM, tenant_id)
+        if t is None:
+            raise HTTPException(404, "tenant not found")
+        if body.status is not None:
+            if body.status not in ("active", "suspended"):
+                raise HTTPException(400, "status must be active|suspended")
+            t.status = body.status
+        if body.tier is not None:
+            t.tier = body.tier
+        if body.engines is not None:
+            t.engines_json = json.dumps(body.engines, ensure_ascii=False)
+        if body.daily_quota_default is not None:
+            t.daily_quota_default = body.daily_quota_default
+        if body.daily_quota is not None:
+            t.daily_quota_json = json.dumps(body.daily_quota, ensure_ascii=False)
+    return {"ok": True}
+
+
+@router.post("/admin/tenants/{tenant_id}/keys", dependencies=[Depends(_require_admin)])
+def admin_reissue_key(tenant_id: int) -> dict:
+    """给租户新发一把 key(旧 key 不动,需要时另行吊销)。明文只此一次返回。"""
+    raw = "sk-live-" + secrets.token_urlsafe(32)
+    with db_session() as s:
+        t = s.get(ApiTenantORM, tenant_id)
+        if t is None:
+            raise HTTPException(404, "tenant not found")
+        k = ApiKeyORM(tenant_id=tenant_id, key_prefix=raw[:12], key_hash=_hash_key(raw),
+                      name="reissued")
+        s.add(k); s.flush()
+        kid = k.id
+    return {"tenant_id": tenant_id, "key_id": kid, "api_key": raw,
+            "note": "api_key 仅此一次明文返回,请妥存"}
+
+
+@router.post("/admin/keys/{key_id}/revoke", dependencies=[Depends(_require_admin)])
+def admin_revoke_key(key_id: int) -> dict:
+    with db_session() as s:
+        k = s.get(ApiKeyORM, key_id)
+        if k is None:
+            raise HTTPException(404, "key not found")
+        k.status = "revoked"
+    return {"ok": True}
+
+
+@router.get("/admin/jobs", dependencies=[Depends(_require_admin)])
+def admin_list_jobs(tenant_id: Optional[int] = None, limit: int = 50) -> dict:
+    """最近调用流水(运营看板)。可按租户过滤。"""
+    n = max(1, min(limit, 200))
+    with db_session() as s:
+        q = s.query(JobORM).order_by(JobORM.id.desc())
+        if tenant_id is not None:
+            q = q.filter(JobORM.tenant_id == str(tenant_id))
+        rows = q.limit(n).all()
+        return {"jobs": [{
+            "id": j.id, "tenant_id": j.tenant_id, "engine": j.engine,
+            "query": (j.query or "")[:120], "status": j.status,
+            "error": j.error,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+        } for j in rows]}
