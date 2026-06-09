@@ -33,17 +33,28 @@ from .storage import (
     db_session, engine as _db_engine, parse_target, save_response,
 )
 from .tracking import detect_hit, update_query_hit_after_response
-from .yuanbao_search import run_yuanbao, yuanbao_api_enabled
+from .yuanbao_search import yuanbao_api_enabled
 
-# 由中心进程内(API)处理的引擎 —— 不交给浏览器 worker 领,改由 api_jobs_loop 直跑。
-API_QUEUE_ENGINES = ("yuanbao",)
+
+def _api_queue_engines() -> tuple[str, ...]:
+    """由中心进程内(API)处理、不交给浏览器 worker 的引擎(据 env 动态判定)。
+
+    元宝:配了 TENCENT_SEARCH_API_KEY → 搜索+deepseek RAG;
+    豆包:配了 ARK_API_KEY + DOUBAO_BOT_ID → 火山方舟 ARK API。
+    与 runner._call_browser / scheduler._is_browser_engine 的判定保持一致。
+    """
+    out: list[str] = []
+    if yuanbao_api_enabled():
+        out.append("yuanbao")
+    if os.environ.get("ARK_API_KEY") and os.environ.get("DOUBAO_BOT_ID"):
+        out.append("doubao")
+    return tuple(out)
 
 
 def _worker_claimable(engines: list[str]) -> list[str]:
-    """从 worker 可领的引擎里剔除「中心 API 处理」的引擎(如启用了 API 的元宝)。"""
-    if yuanbao_api_enabled():
-        return [e for e in engines if e not in API_QUEUE_ENGINES]
-    return engines
+    """从 worker 可领的引擎里剔除「中心 API 处理」的引擎。"""
+    api = set(_api_queue_engines())
+    return [e for e in engines if e not in api] if api else engines
 
 log = logging.getLogger("telemetry-service.dispatch")
 
@@ -502,8 +513,11 @@ def worker_action(worker_uid: str, action: str) -> WorkerActionResult:
 
 
 # ── 中心 API 引擎处理器(元宝等不走浏览器 worker 的引擎)──────────────────
-def _claim_one_api_job() -> Optional[tuple[int, str]]:
-    """领一条 queued 的 API 引擎 job(目前=元宝),置 claimed,返回 (id, query)。"""
+def _claim_one_api_job() -> Optional[tuple[int, str, str]]:
+    """领一条 queued 的 API 引擎 job(元宝/豆包),置 claimed,返回 (id, engine, query)。"""
+    engines = _api_queue_engines()
+    if not engines:
+        return None
     now = datetime.utcnow()
     with db_session() as s:
         if _IS_PG:
@@ -515,26 +529,32 @@ def _claim_one_api_job() -> Optional[tuple[int, str]]:
                 ") "
                 "UPDATE browser_jobs t "
                 "SET status='claimed', claimed_by='telemetry-api', claimed_at=:now, attempts=attempts+1 "
-                "FROM picked WHERE t.id=picked.id RETURNING t.id, t.query"
+                "FROM picked WHERE t.id=picked.id RETURNING t.id, t.engine, t.query"
             ).bindparams(bindparam("engines", expanding=True)),
-                {"engines": list(API_QUEUE_ENGINES), "now": now}).first()
-            return (row.id, row.query) if row else None
+                {"engines": list(engines), "now": now}).first()
+            return (row.id, row.engine, row.query) if row else None
         j = (s.query(JobORM)
-             .filter(JobORM.status == "queued", JobORM.engine.in_(API_QUEUE_ENGINES))
+             .filter(JobORM.status == "queued", JobORM.engine.in_(engines))
              .order_by(JobORM.priority, JobORM.id).first())
         if j is None:
             return None
         j.status = "claimed"; j.claimed_by = "telemetry-api"; j.claimed_at = now
         j.attempts = (j.attempts or 0) + 1
-        return (j.id, j.query)
+        return (j.id, j.engine, j.query)
 
 
 async def api_jobs_loop(stop: asyncio.Event) -> None:
-    """后台循环:领取并处理元宝(API)外部 job —— 搜+合成 → 交结果(复用 _result_job 计费/回调)。"""
-    if not yuanbao_api_enabled():
-        log.info("[api-jobs] 元宝 API 未启用(无 TENCENT_SEARCH_API_KEY),processor 不启动")
+    """后台循环:领取并处理 API 引擎(元宝/豆包)的外部 job。
+
+    按引擎经 runner._call_browser 统一分发(元宝→搜索RAG、豆包→ARK),
+    再交结果复用 _result_job(计费/回调)。无 API 引擎启用时不启动。
+    """
+    engines = _api_queue_engines()
+    if not engines:
+        log.info("[api-jobs] 无 API 引擎启用(元宝/豆包 key 均未配),processor 不启动")
         return
-    log.info("[api-jobs] processor started, engines=%s", API_QUEUE_ENGINES)
+    from .runner import _call_browser   # 延迟导入,避免 import 期循环
+    log.info("[api-jobs] processor started, engines=%s", engines)
     async with httpx.AsyncClient() as client:
         while not stop.is_set():
             try:
@@ -547,14 +567,15 @@ async def api_jobs_loop(stop: asyncio.Event) -> None:
                 except asyncio.TimeoutError:
                     pass
                 continue
-            jid, query = claimed
+            jid, engine, query = claimed
             try:
-                res = await run_yuanbao(client, query, timeout=90)
+                res = await _call_browser(client, engine, query)
             except Exception as e:  # noqa: BLE001
-                res = {"answer": "", "citations": [], "error": f"yuanbao exception: {e}"}
+                res = {"answer": "", "citations": [], "error": f"{engine} exception: {e}"}
             try:
                 _result_job(ResultBody(worker_uid="telemetry-api", task_id=jid, kind="job",
                                        answer=res.get("answer", ""), citations=res.get("citations", []),
+                                       source_url=res.get("source_url"), video_url=res.get("video_url"),
                                        error=res.get("error")))
             except Exception as e:  # noqa: BLE001
                 log.warning("[api-jobs] result job %s failed: %s", jid, e)
