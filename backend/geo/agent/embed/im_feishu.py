@@ -160,6 +160,27 @@ def _help_card() -> dict:
             "elements": [{"tag": "markdown", "content": _HELP_TEXT}]}
 
 
+# 快捷操作按钮(label, 点击等价于问的问题)—— 群聊用消息内按钮卡片(底部常驻菜单飞书群聊不支持)
+QUICK_ACTIONS = [
+    ("📊 今日投放效果", "今日投放效果如何?"),
+    ("🎯 累计命中", "我累计被搜到几个问题?"),
+    ("❓ 未命中列表", "哪些 query 还没命中?"),
+    ("📰 今日舆情", "今天舆情怎么样?"),
+    ("📝 文章进度", "文章发布进度如何?"),
+]
+
+
+def _menu_card() -> dict:
+    """快捷操作按钮卡片(1.0 action;群聊可点)。"""
+    btns = [{"tag": "button", "text": {"tag": "plain_text", "content": label},
+             "type": "primary" if i == 0 else "default", "value": {"q": q}}
+            for i, (label, q) in enumerate(QUICK_ACTIONS)]
+    return {"config": {"wide_screen_mode": True}, "elements": [
+        {"tag": "div", "text": {"tag": "lark_md", "content": "**Vigilath GEO 助手** —— 点按钮查询,或直接打字问我:"}},
+        {"tag": "action", "actions": btns},
+    ]}
+
+
 _HELP_TEXT = """**Vigilath GEO 助手 · 全部功能**(直接打字问我即可)
 
 **📊 数据查询**
@@ -325,6 +346,23 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
         if body.get("type") == "url_verification":
             return {"challenge": body.get("challenge", "")}
 
+        # 卡片按钮点击回调(群聊快捷按钮):legacy 顶层 action / v2 event.action
+        action = body.get("action") or (body.get("event") or {}).get("action")
+        if action and isinstance(action, dict) and action.get("value"):
+            ev = body.get("event") or {}
+            log.info("[im-feishu] 卡片按钮回调 keys=%s value=%s", list(body.keys()), action.get("value"))
+            q = (action.get("value") or {}).get("q")
+            tok_field = body.get("token") or (body.get("header") or {}).get("token") or ""
+            c = _connector_by_token(db, tok_field) or (_connector_by_app(db, app_id) if app_id else None)
+            chat = (body.get("open_chat_id") or ev.get("open_chat_id")
+                    or ((ev.get("context") or {}).get("open_chat_id")) or "")
+            oid = (body.get("open_id") or ((ev.get("operator") or {}).get("operator_id") or {}).get("open_id") or "")
+            if c and q and chat:
+                bg.add_task(_handle_message, c.app_id, c.app_secret, c.account_id, chat, q, "chat_id")
+            elif c and q and oid:
+                bg.add_task(_handle_message, c.app_id, c.app_secret, c.account_id, oid, q, "open_id")
+            return {}        # 卡片回调:200 空体即可
+
         header = body.get("header") or {}
         # 校验 verify token(连接器里存的)
         if conn and header.get("token") and conn.verify_token and header["token"] != conn.verify_token:
@@ -366,13 +404,13 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                     if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
                         conn.last_chat_id = chat_id
                         db.commit()
-                    # 「功能/菜单/帮助」→ 全部能力清单(不跑 agent;底部按钮在飞书控制台「机器人菜单」配)
+                    # 「菜单/功能/帮助」→ 按钮卡片(群聊也能点;单聊另有底部常驻菜单)。不跑 agent
                     low = text.lower()
-                    if (text in ("功能", "全部功能", "所有功能", "能做什么", "你能做什么", "菜单", "帮助", "开始")
+                    if (text in ("菜单", "帮助", "开始", "功能", "全部功能", "所有功能", "能做什么", "你能做什么")
                             or low in ("help", "menu", "/help", "/menu")):
                         tok = await _tenant_token(app_id, conn.app_secret)
                         if tok:
-                            await _post_card(tok, chat_id, _help_card())
+                            await _post_card(tok, chat_id, _menu_card())
                         return {"code": 0}
                     log.info("[im-feishu] 消息→后台跑 agent:account=%s chat=%s text=%r", conn.account_id, chat_id, text[:50])
                     bg.add_task(_handle_message, app_id, conn.app_secret, conn.account_id, chat_id, text)
