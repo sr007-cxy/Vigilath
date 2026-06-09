@@ -432,17 +432,20 @@ async def get_query_coverage(ctx: RunContext[AgentDeps]) -> dict:
     if topic is None:
         raise ModelRetry("当前账号还没有主题,请先 create_topic。")
     db = ctx.deps.db
-    base = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
-        AiTelemetryQueryHitORM.topic_id == topic.id,
-    )
-    monitored = base.scalar() or 0
-    hit = base.filter(AiTelemetryQueryHitORM.total_hits > 0).scalar() or 0
-
     # 被命中 query → 经 queries_json 的 seed 字段回溯到种子词
     text2seed: dict[str, str] = {}
     for q in json.loads(topic.queries_json or "[]"):
         if isinstance(q, dict) and q.get("text"):
             text2seed[q["text"]] = q.get("seed") or ""
+
+    # 监控/投放问题总数 = 当前选中的 query 数(queries_json),与品牌增长 dashboard 一致;
+    # queries_json 为空时回退到命中表里出现过的 distinct query。
+    hit = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+        AiTelemetryQueryHitORM.topic_id == topic.id, AiTelemetryQueryHitORM.total_hits > 0,
+    ).scalar() or 0
+    monitored = len(text2seed) or db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+        AiTelemetryQueryHitORM.topic_id == topic.id,
+    ).scalar() or 0
     hit_query_texts = {
         r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
             AiTelemetryQueryHitORM.topic_id == topic.id,
@@ -496,9 +499,10 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
             text2seed[q["text"]] = q.get("seed") or ""
     seed_total = len(_seed_texts(topic.seed_prompts_json))
 
-    # 累计(命中追踪表)
-    monitored = db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+    # 监控/投放问题总数 = 当前选中 query 数(queries_json),与 dashboard 一致;空则回退命中表 distinct。
+    monitored = len(text2seed) or db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
         AiTelemetryQueryHitORM.topic_id == tid).scalar() or 0
+    # 累计被命中 query(命中追踪表)
     hit_rows = [r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
         AiTelemetryQueryHitORM.topic_id == tid, AiTelemetryQueryHitORM.total_hits > 0).all()]
     cum_hit_seeds = {text2seed[x] for x in hit_rows if text2seed.get(x)}
