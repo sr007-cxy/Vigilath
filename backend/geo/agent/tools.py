@@ -1024,6 +1024,34 @@ async def get_sentiment_history(
     }
 
 
+async def get_hot_topics(ctx: RunContext[AgentDeps], source: str | None = None, limit: int = 15) -> dict:
+    """查 **NewsNow 实时热榜/热点**(舆情页「热点」tab 同源)。只读。
+
+    回答「今天有什么热点/热榜/微博热搜/有什么可蹭的热点/最近热门话题」时用本工具。
+    source 不填则用账号订阅的热榜源(newsnow_sources)的第一个;也可指定如 weibo/zhihu/toutiao/v2ex/baidu。
+    返回该源 top N 热点(标题/链接/热度),供选题、蹭热点参考。
+    注意:这是**大盘实时热点**(不绑品牌);要查**品牌相关的负面/舆情**请用 get_sentiment_today / get_sentiment_history。
+    """
+    import json
+
+    from geo.services import sentinel_client
+
+    acc = _sentiment_account(ctx, active_only=True)
+    srcs: list = []
+    if acc is not None:
+        try:
+            srcs = json.loads(acc.newsnow_sources_json or "[]")
+        except (ValueError, TypeError):
+            srcs = []
+    src = (source or "").strip() or (str(srcs[0]) if srcs else "weibo")
+    limit = max(1, min(int(limit or 15), 30))
+    try:
+        data = await asyncio.to_thread(sentinel_client.get_newsnow_hot, src, limit)
+    except Exception as e:  # noqa: BLE001 — 热点取数失败不阻断
+        return {"source": src, "subscribed_sources": srcs, "note": f"热点取数失败({e});可稍后再试或换个 source。"}
+    return {"source": src, "subscribed_sources": srcs, "hot": _shallow_trim(data, limit)}
+
+
 async def configure_sentiment(
     ctx: RunContext[AgentDeps],
     keywords: list[str] | None = None,
@@ -1092,6 +1120,7 @@ TOOLS = [
     reject_article,
     get_sentiment_today,
     get_sentiment_history,
+    get_hot_topics,
     configure_sentiment,
     ingest_material,
     ask_knowledge,
