@@ -946,6 +946,78 @@ async def get_sentiment_today(ctx: RunContext[AgentDeps]) -> dict:
     return {"configured": True, "brand": acc.target, "status": acc.last_run_status, "today": _shallow_trim(data)}
 
 
+# 负面判定:中英文负面标签 + 看跌(bearish,股票口径)+ 低情绪分。与历史检索口径一致。
+_NEG_SQL = "(lower(coalesce(a.sentiment_label,'')) IN ('负面','negative','bearish','看跌','利空') OR a.sentiment_score < -0.2)"
+
+
+async def get_sentiment_history(
+    ctx: RunContext[AgentDeps],
+    before: str | None = None,
+    after: str | None = None,
+    only_negative: bool = True,
+    limit: int = 10,
+) -> dict:
+    """查询**历史舆情**(已入库的帖子+情绪分析,可追溯到很久以前)。只读。
+
+    回答「X 日之前/某段时间有没有负面」「历史上有哪些负面/利空」「以前的舆情」时**必须**用本工具——
+    get_sentiment_today 只看今日,**不要**凭空说「之前没数据/未保留」。
+    before/after 填 'YYYY-MM-DD'(按帖子发布时间过滤;before=该日之前,after=该日及以后)。
+    only_negative=True 只返回负面(默认)。返回命中总数 + 最多 limit 条样本(标题/来源/链接/时间/情绪)。
+    注:股票口径里 bearish=看跌≈负面;sentiment_score 越低越负面。
+    """
+    from datetime import datetime as _dt
+    from sqlalchemy import text
+
+    acc = _sentiment_account(ctx, active_only=True)
+    if acc is None:
+        return {"configured": False, "note": "当前账号还没有配置舆情监控,无法查历史。可去舆情页创建监控账户。"}
+
+    def _vd(s):  # 校验 YYYY-MM-DD,防注入 + 防脏输入
+        if not s:
+            return None
+        try:
+            return _dt.strptime(s.strip(), "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            return None
+
+    before_d, after_d = _vd(before), _vd(after)
+    schema = f"tenant_{int(acc.id)}"          # acc.id 是整数,强转后插入 schema 名(无法用绑定参数)
+    limit = max(1, min(int(limit or 10), 25))
+
+    where = ["a.symbol = :sym", "p.publish_time IS NOT NULL"]
+    params: dict = {"sym": acc.ticker}
+    if before_d:
+        where.append("p.publish_time < :before"); params["before"] = before_d
+    if after_d:
+        where.append("p.publish_time >= :after"); params["after"] = after_d
+    if only_negative:
+        where.append(_NEG_SQL)
+    wsql = " AND ".join(where)
+    base = f"FROM {schema}.analyses a JOIN {schema}.posts p USING (source, post_id, symbol) WHERE {wsql}"
+
+    try:
+        total = ctx.deps.db.execute(text(f"SELECT count(*) {base}"), params).scalar() or 0
+        rows = ctx.deps.db.execute(text(
+            f"SELECT p.title, a.source, p.url, p.publish_time, a.sentiment_label, a.sentiment_score, a.summary "
+            f"{base} ORDER BY p.publish_time DESC LIMIT :lim"), {**params, "lim": limit}).fetchall()
+    except Exception as e:  # noqa: BLE001 — schema 不存在/取数失败不阻断
+        return {"configured": True, "brand": acc.target,
+                "note": f"历史舆情取数失败({e});可能该账号还没跑过批或数据未入库。"}
+
+    items = [{
+        "title": (r[0] or "")[:120], "source": r[1], "url": r[2],
+        "publish_time": str(r[3])[:10] if r[3] else None,
+        "sentiment_label": r[4], "sentiment_score": r[5],
+        "summary": (r[6] or "")[:160],
+    } for r in rows]
+    return {
+        "configured": True, "brand": acc.target, "ticker": acc.ticker,
+        "window": {"before": before_d, "after": after_d}, "only_negative": only_negative,
+        "matched_total": int(total), "returned": len(items), "items": items,
+        "note": "matched_total 是命中总数,items 仅样本(最多 limit 条,按时间倒序)。无 publish_time 的帖子未计入。",
+    }
+
+
 async def configure_sentiment(
     ctx: RunContext[AgentDeps],
     keywords: list[str] | None = None,
@@ -1013,6 +1085,7 @@ TOOLS = [
     approve_article,
     reject_article,
     get_sentiment_today,
+    get_sentiment_history,
     configure_sentiment,
     ingest_material,
     ask_knowledge,
