@@ -174,34 +174,31 @@ def _help_card() -> dict:
     return _text_card(_HELP_TEXT)
 
 
-# 固定快捷按钮(label, 点击等价于问的问题)—— 每条回复底部常驻,点击即把对应问句发给 agent。
-QUICK_ACTIONS = [
-    ("📈 投放进展", "今日投放进展和效果如何?"),
-    ("📰 今日舆情", "今天舆情怎么样?"),
-    ("🔍 舆情分析", "最近有哪些负面舆情?帮我分析一下趋势"),
-    ("🎯 GEO 检测", "我最新的 GEO 诊断报告结果如何?"),
-]
+# 快捷按钮默认值 / 解析见 geo.im_quick_config(可按连接器在控制台配置;此处仅默认兜底)。
+from geo.im_quick_config import DEFAULT_QUICK_ACTIONS as _DEF_QA  # noqa: E402
+QUICK_ACTIONS = [(l, q) for l, q in _DEF_QA]
 
 
-def _footer_buttons_1x() -> dict:
+def _footer_buttons_1x(actions) -> dict:
     """1.0 卡片底部按钮行(action + button,value.q 回调)。"""
     return {"tag": "action", "actions": [
         {"tag": "button", "text": {"tag": "plain_text", "content": label},
-         "type": "default", "value": {"q": q}} for label, q in QUICK_ACTIONS]}
+         "type": "default", "value": {"q": q}} for label, q in actions]}
 
 
-def _with_footer(card: dict) -> dict:
-    """给回复卡片底部追加固定快捷按钮(1.0 与 2.0 卡片都支持)。失败不影响正文。"""
+def _with_footer(card: dict, actions=None) -> dict:
+    """给回复卡片底部追加快捷按钮(actions=[(label,q)…];None 用默认)。1.0/2.0 都支持,失败不影响正文。"""
+    actions = actions or QUICK_ACTIONS
     try:
         if card.get("schema") == "2.0":
             cols = [{"tag": "column", "width": "auto", "vertical_align": "center", "elements": [
                 {"tag": "button", "text": {"tag": "plain_text", "content": label}, "type": "default",
-                 "behaviors": [{"type": "callback", "value": {"q": q}}]}]} for label, q in QUICK_ACTIONS]
+                 "behaviors": [{"type": "callback", "value": {"q": q}}]}]} for label, q in actions]
             card["body"]["elements"].append(
                 {"tag": "column_set", "flex_mode": "flow", "horizontal_spacing": "8px", "columns": cols})
         else:
             card.setdefault("elements", []).append({"tag": "hr"})
-            card["elements"].append(_footer_buttons_1x())
+            card["elements"].append(_footer_buttons_1x(actions))
     except Exception:  # noqa: BLE001 — 加按钮失败就发不带按钮的原卡,别因此丢正文
         pass
     return card
@@ -351,15 +348,15 @@ def _text_card(text: str) -> dict:
             "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": _to_feishu_md(text)}}]}
 
 
-def _result_card(text: str) -> dict:
-    """结果卡片:有表格走 2.0 table;否则 1.0 div+lark_md(可靠渲染 **加粗**)。底部统一附固定快捷按钮。"""
+def _result_card(text: str, actions=None) -> dict:
+    """结果卡片:有表格走 2.0 table;否则 1.0 div+lark_md(可靠渲染 **加粗**)。底部附快捷按钮(按连接器配置)。"""
     card = _build_card_v2(text) if _has_table(text) else _text_card(text)
-    return _with_footer(card)
+    return _with_footer(card, actions)
 
 
-async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
+async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id", actions=None) -> None:
     """回贴飞书:有表格→2.0 table 卡片,否则→1.0 lark_md 卡片;失败退纯文本。rid_type: chat_id / open_id。"""
-    code = await _post_card(tok, receive_id, _result_card(text), rid_type)
+    code = await _post_card(tok, receive_id, _result_card(text, actions), rid_type)
     if code == 0:
         log.info("[im-feishu] 已回贴 to=%s", receive_id)
         return
@@ -374,12 +371,24 @@ async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat
         log.warning("[im-feishu] 纯文本兜底也失败:%s", e)
 
 
-async def _send_text(app_id: str, app_secret: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
+async def _send_text(app_id: str, app_secret: str, receive_id: str, text: str, rid_type: str = "chat_id",
+                     actions=None) -> None:
     tok = await _tenant_token(app_id, app_secret)
     if not tok:
         log.warning("[im-feishu] 拿不到 tenant_access_token(app_id/secret 错?或缺权限),无法回贴")
         return
-    await send_reply(tok, receive_id, text, rid_type)
+    await send_reply(tok, receive_id, text, rid_type, actions)
+
+
+def _conn_actions(app_id: str):
+    """按 app_id 取该连接器配置的快捷按钮(未配则默认)。独立 session,只读。"""
+    from geo.im_quick_config import quick_actions
+    db = SessionLocal()
+    try:
+        conn = _connector_by_app(db, app_id)
+        return quick_actions(conn.config_json if conn else None)
+    finally:
+        db.close()
 
 
 async def _handle_message(app_id: str, app_secret: str, account_id: int, receive_id: str, user_text: str,
@@ -388,6 +397,7 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     from geo.agent.agent import build_embed_agent
     from geo.agent.methods import load_message_history, save_message_history
 
+    actions = _conn_actions(app_id)        # 该连接器配置的底部快捷按钮(可在控制台改)
     # 即时回执 + 原地更新:先发一张「正在查询」卡片拿 message_id,算完把同一张卡 PATCH 成结果
     #(飞书不支持网页式逐字 SSE,但可更新已发卡片,体验上等于"占位→替换"而非两条消息)。
     tok = await _tenant_token(app_id, app_secret)
@@ -410,8 +420,8 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     finally:
         db.close()
     # 更新占位卡为结果;更新失败(如超时窗口)则退回发新消息
-    if not (tok and msg_id and await _patch_card(tok, msg_id, _result_card(text))):
-        await _send_text(app_id, app_secret, receive_id, text, rid_type)
+    if not (tok and msg_id and await _patch_card(tok, msg_id, _result_card(text, actions))):
+        await _send_text(app_id, app_secret, receive_id, text, rid_type, actions)
 
 
 @router.post("/feishu/callback")
@@ -521,12 +531,8 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
             key = ev.get("event_key") or ""
             oid = ((ev.get("operator") or {}).get("operator_id") or {}).get("open_id") or ""
             log.info("[im-feishu] 机器人菜单点击 event_key=%r op=%s", key, oid)
-            MENU_KEY_Q = {
-                "today": "今日投放效果如何?", "coverage": "我累计被搜到几个问题?",
-                "unhit": "哪些 query 没命中?", "sentiment": "今天舆情怎么样?",
-                "articles": "文章发布进度如何?", "help": "__help__", "menu": "__help__",
-            }
-            q = MENU_KEY_Q.get(key)
+            from geo.im_quick_config import menu_map
+            q = menu_map(conn.config_json if conn else None).get(key)   # 该连接器配置的菜单映射(可在控制台改)
             if q is None and key and len(key) <= 40:   # 未配在表里的 key:当问句直接问
                 q = key
             if conn and oid:
