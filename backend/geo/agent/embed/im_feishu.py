@@ -456,12 +456,12 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
             chat = (body.get("open_chat_id") or ev.get("open_chat_id")
                     or ((ev.get("context") or {}).get("open_chat_id")) or "")
             oid = (body.get("open_id") or ((ev.get("operator") or {}).get("operator_id") or {}).get("open_id") or "")
-            # 去重:同一次点击飞书会按 legacy + 2.0 两种格式各投一条(两者无共享 event_id),
-            # 用 卡片消息id+操作人+q 组合键 + 短 TTL 折叠瞬时双投(几秒后真实再点仍有效)。
-            omid = (body.get("open_message_id")
-                    or ((ev.get("context") or {}).get("open_message_id")) or "")
-            ckey = f"cardcb:{omid}:{oid or chat}:{q}"
-            if omid and await seen_before(ckey, ttl=12):
+            # 去重:同一次点击飞书会按 legacy + 2.0 两种格式各投一条(两者字段位置不同、无共享 event_id),
+            # 用「连接器账号 + 问句」当键(两条都带 value.q、都解析到同一连接器)+ 10s TTL,
+            # 折叠瞬时双投;10 秒后再点同一按钮仍会响应。
+            acct = c.account_id if c else (app_id or "")
+            ckey = f"cardcb:{acct}:{q}"
+            if q and await seen_before(ckey, ttl=10):
                 log.info("[im-feishu] 卡片回调重复投递,忽略 key=%s", ckey)
                 return {}
             if c and q and chat:
