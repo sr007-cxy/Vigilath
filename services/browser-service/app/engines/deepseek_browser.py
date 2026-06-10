@@ -109,6 +109,10 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             # Fallback if text changes back to "新对话":
             "text=新对话",
             "button:has-text('新对话')",
+            # 2026-06:DS 网页改英文 UI,按钮文案变 "New chat"(DOM probe 实测,账号未掉登录)
+            ":text-is('New chat')",
+            "[role='button']:has-text('New chat')",
+            "text=New chat",
         ]
         import sys
         for sel in candidates:
