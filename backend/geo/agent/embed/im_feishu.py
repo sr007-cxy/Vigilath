@@ -394,7 +394,7 @@ def _conn_actions(app_id: str):
 async def _handle_message(app_id: str, app_secret: str, account_id: int, receive_id: str, user_text: str,
                           rid_type: str = "chat_id") -> None:
     """后台:跑 agent → 回贴飞书。复用账号级 agent + 多轮记忆(发布工具不暴露)。rid_type: chat_id / open_id。"""
-    from geo.agent.agent import build_embed_agent
+    from geo.agent.agent import build_embed_agent, route_line
     from geo.agent.methods import load_message_history, save_message_history
 
     actions = _conn_actions(app_id)        # 该连接器配置的底部快捷按钮(可在控制台改)
@@ -407,7 +407,7 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
-        agent = build_embed_agent(True)
+        agent = build_embed_agent(True, line=route_line(user_text))   # 按消息路由到 GEO / 舆情 工具集
         history = load_message_history(deps)
         result = await agent.run(user_text, deps=deps, message_history=history)
         try:

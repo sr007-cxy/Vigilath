@@ -101,14 +101,14 @@ async def _send_markdown(corpid: str, secret: str, agentid, touser: str, text: s
 
 
 async def _handle(corpid: str, secret: str, agentid, account_id: int, touser: str, text: str) -> None:
-    from geo.agent.agent import build_embed_agent
+    from geo.agent.agent import build_embed_agent, route_line
     from geo.agent.methods import load_message_history, save_message_history
 
     await _send_markdown(corpid, secret, agentid, touser, "⏳ 正在查询,请稍候…")    # 即时回执
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
-        result = await build_embed_agent(True).run(text, deps=deps, message_history=load_message_history(deps))
+        result = await build_embed_agent(True, line=route_line(text)).run(text, deps=deps, message_history=load_message_history(deps))
         try:
             save_message_history(deps, result.all_messages_json())
         except Exception:  # noqa: BLE001

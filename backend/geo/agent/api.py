@@ -42,10 +42,10 @@ class ChatIn(BaseModel):
     topic_id: int | None = None
 
 
-def _load_agent(scene: str = "chat"):
+def _load_agent(scene: str = "chat", line: str = "both"):
     try:
         from geo.agent.agent import build_agent
-        return build_agent(scene)
+        return build_agent(scene, line)
     except Exception as e:  # pydantic-ai 未装 / 缺 DEEPSEEK_API_KEY
         raise HTTPException(status_code=503, detail=f"Agent 暂不可用:{e}")
 
@@ -57,7 +57,8 @@ async def chat(
     db: Session = Depends(get_db),
 ):
     """对话(SSE 流式)。会话单位 = 账号;多轮记忆落库 + 数据工具结果作结构化卡片推前端。"""
-    agent = _load_agent()
+    from geo.agent.agent import route_line
+    agent = _load_agent("chat", route_line(body.message))   # 按消息路由到 GEO / 舆情 工具集
     deps = resolve_account(current_user, db, topic_id=body.topic_id)
     history = load_message_history(deps)   # 多轮:载入账号历史
 

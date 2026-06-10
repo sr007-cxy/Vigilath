@@ -55,10 +55,13 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 
 
 # 场景 → 模型:对话用快模型(v4-flash),诊断/重活用 v4-pro;均可用 env AGENT_MODEL_{CHAT,PRO} 覆盖(见 model.py)。
-@lru_cache(maxsize=4)
-def build_agent(scene: str = "chat"):
-    """构造并缓存 Agent(按场景选模型;无状态、工具注册一次,每次对话用 deps 注入账号上下文)。"""
-    return _make_agent(TOOLS, scene)
+# line → 业务线工具集(机制隔离):geo 只给 GEO 工具、sentiment 只给舆情工具,both = 全量(内部默认)。
+@lru_cache(maxsize=16)
+def build_agent(scene: str = "chat", line: str = "both"):
+    """构造并缓存内部 Agent(全量工具,含 publish_drafts)。line 收敛到单条业务线时只给该线工具。"""
+    if line == "both":
+        return _make_agent(TOOLS, scene)
+    return _make_agent(_line_tools(line, can_write=True, include_publish=True), scene)
 
 
 def _make_agent(tools, scene: str = "chat"):
@@ -84,25 +87,52 @@ def _make_agent(tools, scene: str = "chat"):
     )
 
 
-# ── 对外(embed)agent:工具按能力收敛,且**永不**含 publish_drafts ────────
+# ── 工具按业务线分组(机制隔离两条线:每条线只加载本线工具,模型够不到另一条线)────────
 from geo.agent import tools as _t   # noqa: E402
 
-_READ_TOOLS = [
+# 舆情线:今日/历史/热点(读)+ 配置监测词(写)
+_SENTIMENT_READ = [_t.get_sentiment_today, _t.get_sentiment_history, _t.get_hot_topics]
+_SENTIMENT_WRITE = [_t.configure_sentiment]
+# GEO 可见性线:主题/提示词/命中/报告/文章/知识库(读)+ 建主题/落库/诊断/产稿/审核/发文计划(写)
+_GEO_READ = [
     _t.get_topic, _t.get_prompts, _t.get_report, _t.get_batch_results,
     _t.get_growth_summary, _t.get_query_coverage, _t.get_today_effect,
     _t.get_publish_status, _t.list_unhit_queries, _t.list_pending_articles,
-    _t.list_articles, _t.get_article, _t.get_sentiment_today, _t.get_sentiment_history,
-    _t.get_hot_topics, _t.ask_knowledge,
+    _t.list_articles, _t.get_article, _t.ask_knowledge,
 ]
-_WRITE_TOOLS = [   # 对外可写,但不含 publish_drafts(真实外发只内部触发)
+_GEO_WRITE = [
     _t.create_topic, _t.set_seed_prompts, _t.expand_prompts, _t.set_selected_queries,
     _t.run_geo_checks, _t.trigger_diagnosis, _t.draft_articles,
-    _t.approve_article, _t.reject_article, _t.configure_sentiment, _t.ingest_material,
-    _t.confirm_template,
+    _t.approve_article, _t.reject_article, _t.ingest_material, _t.confirm_template,
 ]
+# 兼容旧引用("both" 全量,对外仍永不含 publish_drafts)
+_READ_TOOLS = _GEO_READ + _SENTIMENT_READ
+_WRITE_TOOLS = _GEO_WRITE + _SENTIMENT_WRITE
+
+# 关键词路由:判断这条消息属于哪条业务线(命中舆情词→sentiment,否则→geo)
+_SENTIMENT_KW = (
+    "舆情", "舆论", "负面", "正面", "利空", "利好", "风险", "口碑", "声量", "情绪",
+    "监测词", "监控词", "热点", "热榜", "热搜", "newsnow", "看跌", "看涨", "bearish", "bullish",
+)
 
 
-@lru_cache(maxsize=4)
-def build_embed_agent(can_write: bool, scene: str = "chat"):
-    """对外 agent:read-only 只给只读工具;含 write 再加写工具(永不含 publish_drafts)。按场景选模型。"""
-    return _make_agent(_READ_TOOLS + (_WRITE_TOOLS if can_write else []), scene)
+def route_line(text: str) -> str:
+    """把一条用户消息路由到业务线:sentiment / geo。命中舆情关键词→舆情线,否则→GEO 线。"""
+    t = text or ""
+    return "sentiment" if any(k in t for k in _SENTIMENT_KW) else "geo"
+
+
+def _line_tools(line: str, can_write: bool, include_publish: bool = False):
+    if line == "sentiment":
+        return _SENTIMENT_READ + (_SENTIMENT_WRITE if can_write else [])
+    if line == "both":
+        base = _READ_TOOLS + (_WRITE_TOOLS if can_write else [])
+        return base + ([_t.publish_drafts] if (include_publish and can_write) else [])
+    base = _GEO_READ + (_GEO_WRITE if can_write else [])      # geo
+    return base + ([_t.publish_drafts] if (include_publish and can_write) else [])
+
+
+@lru_cache(maxsize=16)
+def build_embed_agent(can_write: bool, scene: str = "chat", line: str = "both"):
+    """对外 agent:按 caps 收敛 + 按业务线收敛(line=geo/sentiment 只给该线工具)。永不含 publish_drafts。"""
+    return _make_agent(_line_tools(line, can_write, include_publish=False), scene)
