@@ -218,7 +218,8 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
                 _push_brief_email(acc, r3.get("body", ""), emails)
 
             # 飞书 / 企微推送:账户接入了 IM(有绑定会话)就把当天简报推过去
-            _push_brief_im(db, account_id, acc.target, r3.get("body", ""))
+            # 注意:IM connector 按 user_id 绑定(同 alerts._push_im),不是 SentimentAccount.id
+            _push_brief_im(db, acc.user_id, acc.target, r3.get("body", ""))
 
             _mark_success(db, acc, log_row, stats)
             log.info("run_pipeline[%s]: done", account_id)
@@ -235,12 +236,12 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
         db.close()
 
 
-def _push_brief_im(db, account_id: int, target: str, body_md: str) -> None:
-    """跑完把当天简报推到账户绑定的飞书 / 企微会话(接入的人或群)。
+def _push_brief_im(db, user_id: int, target: str, body_md: str) -> None:
+    """跑完把当天简报推到该 user 绑定的飞书 / 企微会话(接入的人或群)。
 
-    复用 agent.alerts._push_im:它查 AgentIMConnectorORM(platform=feishu/wecom,
-    last_chat_id=最近会话)→ 飞书 send_reply / 企微 markdown。无绑定或无会话则静默跳过。
-    best-effort:推送失败不影响 pipeline 成功状态。
+    复用 agent.alerts._push_im:它按 AgentIMConnectorORM.account_id == user_id 查
+    (platform=feishu/wecom,last_chat_id=最近会话)→ 飞书 send_reply / 企微 markdown。
+    无绑定或无会话则静默跳过。best-effort:推送失败不影响 pipeline 成功状态。
     """
     if not body_md:
         return
@@ -249,10 +250,10 @@ def _push_brief_im(db, account_id: int, target: str, body_md: str) -> None:
         from geo.agent.alerts import _push_im
         date = datetime.utcnow().strftime("%Y-%m-%d")
         text = f"📊 **{target} · 今日舆情简报 {date}**\n\n{body_md}"
-        asyncio.run(_push_im(db, account_id, text))
-        log.info("run_pipeline[%s]: brief pushed to IM", account_id)
+        asyncio.run(_push_im(db, user_id, text))
+        log.info("run_pipeline: brief pushed to IM (user=%s)", user_id)
     except Exception as e:  # noqa: BLE001
-        log.warning("run_pipeline[%s]: IM push failed: %s", account_id, e)
+        log.warning("run_pipeline: IM push failed (user=%s): %s", user_id, e)
 
 
 def _push_brief_email(acc: SentimentAccountORM, body_md: str, recipients: list[str]) -> None:
