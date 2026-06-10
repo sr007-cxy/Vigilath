@@ -132,9 +132,23 @@ class DeepSeekBrowserAdapter(EngineAdapter):
                 except Exception:
                     continue
             await asyncio.sleep(0.8)
-        sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector (18s)\n")
+        # 18s 没找到按钮 → 区分两种:① 这条会话掉登录(显示登录页)→ 报 login_lost,
+        # 让账号池隔离这条坏会话,不再重复抽到(自愈);② 真没渲染出来 → dom_not_found。
+        login_page = False
+        try:
+            txt = (await page.inner_text("body"))[:1500]
+            if any(kw in txt for kw in ("发送验证码", "密码登录", "微信扫码登录", "注册登录", "手机号登录")):
+                login_page = True
+        except Exception:
+            pass
+        sys.__stdout__.write(
+            f"[DeepSeek-new-chat] button NOT found via any selector (18s) login_page={login_page}\n")
         sys.__stdout__.flush()
-        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        if login_page:
+            # 含 "login may have expired" → _classify_error 归 login_lost → 池子隔离这条坏会话
+            raise RuntimeError(
+                "deepseek login may have expired (login page shown, no new-chat button)"
+            )
         raise RuntimeError(
             "deepseek new-chat button not found — refusing to send query into stale session"
         )
