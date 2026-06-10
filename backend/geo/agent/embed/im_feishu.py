@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 
@@ -141,6 +142,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from geo.agent.deps import AgentDeps
+from geo.agent.embed.dedup import seen_before
 from geo.database import SessionLocal
 from geo.models.agent import AgentIMConnectorORM
 
@@ -148,7 +150,6 @@ router = APIRouter(prefix="/agent/im")
 
 FEISHU_BASE = "https://open.feishu.cn/open-apis"
 _token_cache: dict[str, tuple[str, float]] = {}     # app_id -> (tenant_access_token, expire_ts)
-_seen_events: dict[str, float] = {}                  # event_id -> ts(去重,飞书会重投)
 
 
 def _connector_by_app(db: Session, app_id: str) -> AgentIMConnectorORM | None:
@@ -434,15 +435,10 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
         if conn is None:
             return {"code": 0}        # 未知 app,忽略
 
-        # 去重 + 只处理用户文本消息
+        # 去重(跨 worker,Redis 共享)+ 只处理用户文本消息
         eid = header.get("event_id") or ""
-        now = time.time()
-        if eid:
-            for k in [k for k, t in _seen_events.items() if now - t > 600]:
-                _seen_events.pop(k, None)
-            if eid in _seen_events:
-                return {"code": 0}
-            _seen_events[eid] = now
+        if eid and await seen_before(eid):
+            return {"code": 0}
 
         if header.get("event_type") == "im.message.receive_v1":
             event = body.get("event") or {}

@@ -19,6 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from geo.agent.deps import AgentDeps
+from geo.agent.embed.dedup import seen_before
 from geo.agent.embed.im_feishu import _tables_to_lines, log
 from geo.database import SessionLocal
 from geo.models.agent import AgentIMConnectorORM
@@ -107,13 +108,8 @@ async def dingtalk_callback(request: Request, bg: BackgroundTasks):
         content = ((body.get("text") or {}).get("content") or "").strip()
         session_webhook = body.get("sessionWebhook") or ""
         msg_id = body.get("msgId") or ""
-        now = time.time()
-        for k in [k for k, t in _seen.items() if now - t > 600]:
-            _seen.pop(k, None)
-        if msg_id and msg_id in _seen:
+        if msg_id and await seen_before(msg_id):
             return {"errcode": 0}
-        if msg_id:
-            _seen[msg_id] = now
         if content and session_webhook:
             log.info("[dingtalk] 消息 account=%s text=%r", conn.account_id, content[:40])
             bg.add_task(_handle, conn.account_id, session_webhook, content)
