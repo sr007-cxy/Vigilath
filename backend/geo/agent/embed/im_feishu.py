@@ -479,10 +479,15 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                         if tok:
                             await _post_card(tok, chat_id, _text_card("✅ 已清空对话记忆,后续以最新数据为准。"))
                         return {"code": 0}
-                    # 「菜单/功能/帮助」→ 按钮卡片(群聊也能点;单聊另有底部常驻菜单)。不跑 agent
+                    # 「功能/能做什么/帮助」→ 文字能力清单;「菜单」→ 按钮卡片(留给群聊快捷)。都不跑 agent
                     low = text.lower()
-                    if (text in ("菜单", "帮助", "开始", "功能", "全部功能", "所有功能", "能做什么", "你能做什么")
-                            or low in ("help", "menu", "/help", "/menu")):
+                    if (text in ("功能", "全部功能", "所有功能", "能做什么", "你能做什么", "帮助")
+                            or low in ("help", "/help")):
+                        tok = await _tenant_token(app_id, conn.app_secret)
+                        if tok:
+                            await _post_card(tok, chat_id, _help_card())
+                        return {"code": 0}
+                    if text in ("菜单", "开始", "快捷菜单") or low in ("menu", "/menu"):
                         tok = await _tenant_token(app_id, conn.app_secret)
                         if tok:
                             await _post_card(tok, chat_id, _menu_card())
