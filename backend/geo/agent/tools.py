@@ -801,6 +801,53 @@ async def list_pending_articles(ctx: RunContext[AgentDeps]) -> dict:
     }
 
 
+async def list_articles(ctx: RunContext[AgentDeps], status: str | None = None, limit: int = 5) -> dict:
+    """列出文章并**带标题+摘要+正文摘录**(可按状态:draft/pending_review/approved/published/rejected)。只读。
+
+    用户要「展示/看这几篇文章、文章内容、待审文章正文、把文章发这里」时用本工具。
+    要某一篇的**完整正文**用 get_article(doc_id)。
+    """
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+
+    topic = _account_topic(ctx)
+    if topic is None:
+        raise ModelRetry("当前账号还没有主题,请先 create_topic。")
+    q = ctx.deps.db.query(TopicGeneratedDocORM).filter(TopicGeneratedDocORM.topic_id == topic.id)
+    if status in ("draft", "pending_review", "approved", "published", "rejected"):
+        q = q.filter(TopicGeneratedDocORM.status == status)
+    try:
+        lim = max(1, min(int(limit or 5), 10))
+    except (TypeError, ValueError):
+        lim = 5
+    rows = q.order_by(TopicGeneratedDocORM.id.desc()).limit(lim).all()
+    return {
+        "count": len(rows),
+        "articles": [{
+            "id": d.id, "title": d.title or (d.source_query_text or "")[:40] or f"doc#{d.id}",
+            "status": d.status, "summary": (d.summary or "")[:200],
+            "body_excerpt": (d.body_markdown or "")[:800],
+            "truncated": len(d.body_markdown or "") > 800,
+        } for d in rows],
+        "note": "正文已截断到 800 字;要某篇完整正文用 get_article(doc_id)。" if rows else "没有符合条件的文章。",
+    }
+
+
+async def get_article(ctx: RunContext[AgentDeps], doc_id: int) -> dict:
+    """查看**某一篇文章的完整内容**(标题/摘要/正文/状态)。只读。用户要「看/展示第 N 篇、某篇全文」时用。"""
+    from geo.models.ai_telemetry import TopicGeneratedDocORM
+
+    topic = _account_topic(ctx)
+    d = ctx.deps.db.get(TopicGeneratedDocORM, doc_id)
+    if d is None or topic is None or d.topic_id != topic.id:
+        raise ModelRetry("找不到这篇文章,或不属于当前账号主题;先用 list_articles 看 id。")
+    body = d.body_markdown or ""
+    return {
+        "id": d.id, "title": d.title or "(无标题)", "status": d.status,
+        "summary": (d.summary or "")[:400], "body": body[:4000], "truncated": len(body) > 4000,
+        "source_query": d.source_query_text or "",
+    }
+
+
 def _review_doc(ctx: RunContext[AgentDeps], doc_id: int, *, approve: bool, reason: str = ""):
     from datetime import datetime
 
@@ -961,6 +1008,8 @@ TOOLS = [
     get_publish_status,
     list_unhit_queries,
     list_pending_articles,
+    list_articles,
+    get_article,
     approve_article,
     reject_article,
     get_sentiment_today,
