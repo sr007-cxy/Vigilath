@@ -114,19 +114,25 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             "[role='button']:has-text('New chat')",
             "text=New chat",
         ]
-        import sys
-        for sel in candidates:
-            try:
-                btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1500):
-                    await btn.click()
-                    await human_delay(0.5, 1.0)
-                    sys.__stdout__.write(f"[DeepSeek-new-chat] clicked via {sel!r}\n")
-                    sys.__stdout__.flush()
-                    return
-            except Exception:
-                continue
-        sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector\n")
+        import sys, time
+        # cloakbrowser headed 下 DS 的 SPA 渲染较慢,按钮要几秒才出来,且语言随指纹/locale
+        # 变(中文"开启新对话" / 英文"New chat")。轮询等待最多 ~18s,任一候选可见即点,
+        # 避免"查得太早 → 误判 stale session"。
+        deadline = time.monotonic() + 18
+        while time.monotonic() < deadline:
+            for sel in candidates:
+                try:
+                    btn = page.locator(sel).first
+                    if await btn.is_visible(timeout=800):
+                        await btn.click()
+                        await human_delay(0.5, 1.0)
+                        sys.__stdout__.write(f"[DeepSeek-new-chat] clicked via {sel!r}\n")
+                        sys.__stdout__.flush()
+                        return
+                except Exception:
+                    continue
+            await asyncio.sleep(0.8)
+        sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector (18s)\n")
         sys.__stdout__.flush()
         # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
         raise RuntimeError(
