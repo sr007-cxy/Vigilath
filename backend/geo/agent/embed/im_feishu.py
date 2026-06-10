@@ -174,14 +174,37 @@ def _help_card() -> dict:
     return _text_card(_HELP_TEXT)
 
 
-# 快捷操作按钮(label, 点击等价于问的问题)—— 群聊用消息内按钮卡片(底部常驻菜单飞书群聊不支持)
+# 固定快捷按钮(label, 点击等价于问的问题)—— 每条回复底部常驻,点击即把对应问句发给 agent。
 QUICK_ACTIONS = [
-    ("📊 今日投放效果", "今日投放效果如何?"),
-    ("🎯 累计命中", "我累计被搜到几个问题?"),
-    ("❓ 未命中列表", "哪些 query 还没命中?"),
+    ("📈 投放进展", "今日投放进展和效果如何?"),
     ("📰 今日舆情", "今天舆情怎么样?"),
-    ("📝 文章进度", "文章发布进度如何?"),
+    ("🔍 舆情分析", "最近有哪些负面舆情?帮我分析一下趋势"),
+    ("🎯 GEO 检测", "我最新的 GEO 诊断报告结果如何?"),
 ]
+
+
+def _footer_buttons_1x() -> dict:
+    """1.0 卡片底部按钮行(action + button,value.q 回调)。"""
+    return {"tag": "action", "actions": [
+        {"tag": "button", "text": {"tag": "plain_text", "content": label},
+         "type": "default", "value": {"q": q}} for label, q in QUICK_ACTIONS]}
+
+
+def _with_footer(card: dict) -> dict:
+    """给回复卡片底部追加固定快捷按钮(1.0 与 2.0 卡片都支持)。失败不影响正文。"""
+    try:
+        if card.get("schema") == "2.0":
+            cols = [{"tag": "column", "width": "auto", "vertical_align": "center", "elements": [
+                {"tag": "button", "text": {"tag": "plain_text", "content": label}, "type": "default",
+                 "behaviors": [{"type": "callback", "value": {"q": q}}]}]} for label, q in QUICK_ACTIONS]
+            card["body"]["elements"].append(
+                {"tag": "column_set", "flex_mode": "flow", "horizontal_spacing": "8px", "columns": cols})
+        else:
+            card.setdefault("elements", []).append({"tag": "hr"})
+            card["elements"].append(_footer_buttons_1x())
+    except Exception:  # noqa: BLE001 — 加按钮失败就发不带按钮的原卡,别因此丢正文
+        pass
+    return card
 
 
 def _menu_card() -> dict:
@@ -329,8 +352,9 @@ def _text_card(text: str) -> dict:
 
 
 def _result_card(text: str) -> dict:
-    """结果卡片:有表格走 2.0 table;否则 1.0 div+lark_md(可靠渲染 **加粗**)。"""
-    return _build_card_v2(text) if _has_table(text) else _text_card(text)
+    """结果卡片:有表格走 2.0 table;否则 1.0 div+lark_md(可靠渲染 **加粗**)。底部统一附固定快捷按钮。"""
+    card = _build_card_v2(text) if _has_table(text) else _text_card(text)
+    return _with_footer(card)
 
 
 async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
