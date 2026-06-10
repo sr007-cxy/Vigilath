@@ -160,6 +160,10 @@ def init_schema(conn: psycopg.Connection) -> None:
     都调一次也无所谓 — 已存在的 schema/表会直接跳过.
     """
     with conn.cursor() as cur:
+        # 串行化并发 schema 初始化:多个爬虫端点并行调用时,CREATE INDEX / ALTER 的
+        # AccessExclusiveLock 会两两死锁。事务级咨询锁让它们排队(持有到 commit),
+        # 而不是死锁。key 任意常量,全局唯一即可。
+        cur.execute("SELECT pg_advisory_xact_lock(727274)")
         for stmt in SCHEMA_STATEMENTS:
             cur.execute(stmt)
         # 历史 ADD COLUMN 兼容:posts 后期加 like_count / share_count
