@@ -45,10 +45,19 @@ def _tables_to_lines(text: str) -> str:
     return "\n".join(out)
 
 
+def _clean_md(text: str) -> str:
+    """清洗飞书卡片不渲染的 markdown 记号:# 标题→加粗;去掉 ---/***/___ 分隔线;***粗斜体***→**粗体**。"""
+    t = text or ""
+    t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", t)   # 标题→加粗
+    t = re.sub(r"(?m)^[ \t]{0,3}([*\-_])(?:[ \t]*\1){2,}[ \t]*$", "", t)      # 分隔线 ***/---/___ 整行→删
+    t = re.sub(r"\*\*\*([^*\n]+)\*\*\*", r"**\1**", t)                         # ***x***→**x**
+    t = re.sub(r"\*{3,}", "", t)                                               # 残留 3+ 连续星号(孤立 ***)→删,不碰**粗体**
+    return t
+
+
 def _to_feishu_md(text: str) -> str:
-    """转成飞书卡片能渲染的 Markdown:# 标题→加粗、表格→列表行;加粗/列表/代码飞书本就认。"""
-    t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", text or "")
-    return _tables_to_lines(t)
+    """转成飞书卡片能渲染的 Markdown:标题→加粗、分隔线清理、表格→列表行;加粗/列表/代码飞书本就认。"""
+    return _tables_to_lines(_clean_md(text))
 
 
 _SEP = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
@@ -87,11 +96,10 @@ def _segment(text: str) -> list:
 
 def _build_card_v2(text: str) -> dict:
     """构造飞书 2.0 卡片:Markdown 段落 + **真表格组件**(table)。供有表格时渲染成真正的表格。"""
-    header_to_bold = lambda s: re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", s)  # noqa: E731
     elements: list = []
     for blk in _segment(text):
         if blk[0] == "md":
-            content = header_to_bold(blk[1]).strip()
+            content = _clean_md(blk[1]).strip()
             if content:
                 elements.append({"tag": "markdown", "content": content})
         else:
