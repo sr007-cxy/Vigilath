@@ -163,9 +163,8 @@ def _connector_by_token(db: Session, token: str) -> AgentIMConnectorORM | None:
 
 
 def _help_card() -> dict:
-    """全部功能清单卡片(纯 markdown,无按钮)。"""
-    return {"config": {"wide_screen_mode": True},
-            "elements": [{"tag": "markdown", "content": _HELP_TEXT}]}
+    """全部功能清单卡片(1.0 lark_md,渲染加粗)。"""
+    return _text_card(_HELP_TEXT)
 
 
 # 快捷操作按钮(label, 点击等价于问的问题)—— 群聊用消息内按钮卡片(底部常驻菜单飞书群聊不支持)
@@ -316,26 +315,32 @@ async def _patch_card(tok: str, message_id: str, card: dict) -> bool:
         return False
 
 
+def _text_card(text: str) -> dict:
+    """纯文本/加粗卡片:用 1.0 div+lark_md(飞书最稳的加粗/链接渲染,`markdown` 标签可能裸露 `**`)。"""
+    return {"config": {"wide_screen_mode": True},
+            "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": _to_feishu_md(text)}}]}
+
+
 def _result_card(text: str) -> dict:
-    """结果卡片:有表格走 2.0 table,否则 markdown(表格转列表行)。"""
-    return _build_card_v2(text) if _has_table(text) else {
-        "config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
+    """结果卡片:有表格走 2.0 table;否则 1.0 div+lark_md(可靠渲染 **加粗**)。"""
+    return _build_card_v2(text) if _has_table(text) else _text_card(text)
 
 
 async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
-    """回贴飞书:有表格 → 渲染成真表格卡片(2.0);失败/无表格 → 退回 markdown 卡片。rid_type: chat_id / open_id。"""
-    if _has_table(text):
-        code = await _post_card(tok, receive_id, _build_card_v2(text), rid_type)
-        if code == 0:
-            log.info("[im-feishu] 已回贴(表格卡片)to=%s", receive_id)
-            return
-        log.warning("[im-feishu] 表格卡片被拒(code=%s),回退列表行", code)
-    simple = {"config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
-    code = await _post_card(tok, receive_id, simple, rid_type)
-    if code not in (0, None):
-        log.warning("[im-feishu] 发消息失败 code=%s(多半缺 im:message 发送权限)", code)
-    elif code == 0:
+    """回贴飞书:有表格→2.0 table 卡片,否则→1.0 lark_md 卡片;失败退纯文本。rid_type: chat_id / open_id。"""
+    code = await _post_card(tok, receive_id, _result_card(text), rid_type)
+    if code == 0:
         log.info("[im-feishu] 已回贴 to=%s", receive_id)
+        return
+    log.warning("[im-feishu] 卡片发送失败 code=%s,退纯文本", code)
+    try:                                  # 兜底:纯文本(去 markdown 记号,至少不裸露符号)
+        plain = re.sub(r"[*#`]", "", _to_feishu_md(text))
+        async with httpx.AsyncClient(timeout=15) as c:
+            await c.post(f"{FEISHU_BASE}/im/v1/messages", params={"receive_id_type": rid_type},
+                         headers={"Authorization": f"Bearer {tok}"},
+                         json={"receive_id": receive_id, "msg_type": "text", "content": json.dumps({"text": plain})})
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] 纯文本兜底也失败:%s", e)
 
 
 async def _send_text(app_id: str, app_secret: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
@@ -357,9 +362,7 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     tok = await _tenant_token(app_id, app_secret)
     msg_id = ""
     if tok:
-        ack = {"config": {"wide_screen_mode": True},
-               "elements": [{"tag": "markdown", "content": "⏳ 正在查询,请稍候…"}]}
-        msg_id = await _send_card_id(tok, receive_id, ack, rid_type)
+        msg_id = await _send_card_id(tok, receive_id, _text_card("⏳ 正在查询,请稍候…"), rid_type)
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])

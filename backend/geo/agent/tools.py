@@ -517,17 +517,20 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
     seed_total = len(_seed_texts(topic.seed_prompts_json))
 
     # 监控/投放问题总数 = 当前选中 query 数(queries_json),与 dashboard 一致;空则回退命中表 distinct。
-    monitored = len(text2seed) or db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
+    selected = set(text2seed)
+    monitored = len(selected) or db.query(func.count(distinct(AiTelemetryQueryHitORM.query))).filter(
         AiTelemetryQueryHitORM.topic_id == tid).scalar() or 0
-    # 累计被命中 query(命中追踪表)
+    # 累计被命中 query —— **限定在投放集内**,与 get_query_coverage / list_unhit_queries 一致
+    #(命中表里可能含已从投放集移除的老 query,不限定会让 命中+未命中≠投放)。
     hit_rows = [r[0] for r in db.query(AiTelemetryQueryHitORM.query).filter(
         AiTelemetryQueryHitORM.topic_id == tid, AiTelemetryQueryHitORM.total_hits > 0).all()]
-    cum_hit_seeds = {text2seed[x] for x in hit_rows if text2seed.get(x)}
+    cum_hit_set = (set(hit_rows) & selected) if selected else set(hit_rows)
+    cum_hit_seeds = {text2seed[x] for x in cum_hit_set if text2seed.get(x)}
 
     # 今日(上海时区)起点
     sh_now = datetime.utcnow() + timedelta(hours=8)
     today_start_utc = sh_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=8)
-    # 今天跑批命中的去重 query
+    # 今天跑批命中的去重 query(同样限定投放集内)
     today_hit = {
         r[0] for r in db.query(distinct(AiTelemetryResponseORM.query)).filter(
             AiTelemetryResponseORM.topic_id == tid,
@@ -535,7 +538,6 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
             AiTelemetryResponseORM.created_at >= today_start_utc,
         ).all()
     }
-    # 今天之前就命中过的 query —— 用来扣掉,得到「真正今天首次命中」
     prior_hit = {
         r[0] for r in db.query(distinct(AiTelemetryResponseORM.query)).filter(
             AiTelemetryResponseORM.topic_id == tid,
@@ -543,6 +545,9 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
             AiTelemetryResponseORM.created_at < today_start_utc,
         ).all()
     }
+    if selected:
+        today_hit &= selected
+        prior_hit &= selected
     new_today = today_hit - prior_hit            # 今天才首次命中的 query(真正“新增”)
 
     ran_today = bool(today_hit)
@@ -550,7 +555,7 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
         "topic_name": topic.name, "date": sh_now.strftime("%Y-%m-%d"),
         "today_new_hits": len(new_today),            # 真正今日新增(之前没命中、今天首次命中)
         "today_batch_hits": len(today_hit),          # 今天跑批命中的 query 数(含旧 query 复命中)
-        "cumulative_hit_queries": len(set(hit_rows)), "monitored_queries": monitored,
+        "cumulative_hit_queries": len(cum_hit_set), "monitored_queries": monitored,
         "cumulative_hit_seeds": len(cum_hit_seeds), "seed_total": seed_total,
         "note": ("今天没有跑批,下列为累计数据。" if not ran_today
                  else f"今天跑批命中 {len(today_hit)} 个 query,其中 {len(new_today)} 个为首次命中(真正新增)。"),
