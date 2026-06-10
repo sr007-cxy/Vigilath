@@ -278,6 +278,42 @@ async def _post_card(tok: str, receive_id: str, card: dict, rid_type: str = "cha
         return None
 
 
+async def _send_card_id(tok: str, receive_id: str, card: dict, rid_type: str = "chat_id") -> str:
+    """发卡片并返回 message_id(用于稍后原地更新同一张卡)。"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(
+                f"{FEISHU_BASE}/im/v1/messages", params={"receive_id_type": rid_type},
+                headers={"Authorization": f"Bearer {tok}"},
+                json={"receive_id": receive_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
+            )
+        return ((r.json().get("data") or {}).get("message_id")) or ""
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] 发卡片异常:%s", e)
+        return ""
+
+
+async def _patch_card(tok: str, message_id: str, card: dict) -> bool:
+    """原地更新已发的卡片(把「正在查询」那张改成结果)。成功返回 True。"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.patch(
+                f"{FEISHU_BASE}/im/v1/messages/{message_id}",
+                headers={"Authorization": f"Bearer {tok}"},
+                json={"content": json.dumps(card, ensure_ascii=False)},
+            )
+        return r.json().get("code") == 0
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] 更新卡片异常:%s", e)
+        return False
+
+
+def _result_card(text: str) -> dict:
+    """结果卡片:有表格走 2.0 table,否则 markdown(表格转列表行)。"""
+    return _build_card_v2(text) if _has_table(text) else {
+        "config": {"wide_screen_mode": True}, "elements": [{"tag": "markdown", "content": _to_feishu_md(text)}]}
+
+
 async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat_id") -> None:
     """回贴飞书:有表格 → 渲染成真表格卡片(2.0);失败/无表格 → 退回 markdown 卡片。rid_type: chat_id / open_id。"""
     if _has_table(text):
@@ -308,11 +344,14 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
     from geo.agent.agent import build_embed_agent
     from geo.agent.methods import load_message_history, save_message_history
 
-    # 即时回执:飞书不支持网页那种逐字 SSE,先回个「正在查询」减少等待焦虑,算完再回结果。
-    tok0 = await _tenant_token(app_id, app_secret)
-    if tok0:
-        await _post_card(tok0, receive_id, {"config": {"wide_screen_mode": True},
-                         "elements": [{"tag": "markdown", "content": "⏳ 正在查询,请稍候…"}]}, rid_type)
+    # 即时回执 + 原地更新:先发一张「正在查询」卡片拿 message_id,算完把同一张卡 PATCH 成结果
+    #(飞书不支持网页式逐字 SSE,但可更新已发卡片,体验上等于"占位→替换"而非两条消息)。
+    tok = await _tenant_token(app_id, app_secret)
+    msg_id = ""
+    if tok:
+        ack = {"config": {"wide_screen_mode": True},
+               "elements": [{"tag": "markdown", "content": "⏳ 正在查询,请稍候…"}]}
+        msg_id = await _send_card_id(tok, receive_id, ack, rid_type)
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
@@ -323,11 +362,14 @@ async def _handle_message(app_id: str, app_secret: str, account_id: int, receive
             save_message_history(deps, result.all_messages_json())
         except Exception:  # noqa: BLE001
             pass
-        await _send_text(app_id, app_secret, receive_id, (result.output or "（无输出）").strip(), rid_type)
+        text = (result.output or "（无输出）").strip()
     except Exception as e:  # noqa: BLE001
-        await _send_text(app_id, app_secret, receive_id, f"抱歉,处理出错了:{e}", rid_type)
+        text = f"抱歉,处理出错了:{e}"
     finally:
         db.close()
+    # 更新占位卡为结果;更新失败(如超时窗口)则退回发新消息
+    if not (tok and msg_id and await _patch_card(tok, msg_id, _result_card(text))):
+        await _send_text(app_id, app_secret, receive_id, text, rid_type)
 
 
 @router.post("/feishu/callback")
