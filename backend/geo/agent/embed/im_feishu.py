@@ -468,6 +468,17 @@ async def feishu_callback(request: Request, bg: BackgroundTasks):
                     if conn.last_chat_id != chat_id:        # 记最近会话,供主动推送回推
                         conn.last_chat_id = chat_id
                         db.commit()
+                    # 「重新开始/清空记忆」→ 清掉本账号对话记忆(消除改名/删主题后残留的旧上下文)
+                    if text in ("重新开始", "清空记忆", "清空对话", "重置", "清除记忆") or text.lower() == "reset":
+                        from geo.agent.methods import reset_conversation
+                        try:
+                            reset_conversation(AgentDeps(account_id=conn.account_id, user_id=conn.account_id, db=db))
+                        except Exception:  # noqa: BLE001
+                            pass
+                        tok = await _tenant_token(app_id, conn.app_secret)
+                        if tok:
+                            await _post_card(tok, chat_id, _text_card("✅ 已清空对话记忆,后续以最新数据为准。"))
+                        return {"code": 0}
                     # 「菜单/功能/帮助」→ 按钮卡片(群聊也能点;单聊另有底部常驻菜单)。不跑 agent
                     low = text.lower()
                     if (text in ("菜单", "帮助", "开始", "功能", "全部功能", "所有功能", "能做什么", "你能做什么")
