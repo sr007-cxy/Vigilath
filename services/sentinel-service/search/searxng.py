@@ -27,7 +27,9 @@ _UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 _TIMEOUT = 60   # SearXNG 经 Web Unlocker 抓百度每条可达 ~30s，给足
-_MAX_PAGES = 5
+# 只取第 1 页:SearXNG 一次请求已聚合多引擎 ~10-20 条，足够监测用。
+# 翻页会成倍触发 Web Unlocker 调用(慢 + 计费),稀疏查询还会一路翻到底导致 monitor 超时。
+_MAX_PAGES = 1
 
 
 def _base_url() -> str:
