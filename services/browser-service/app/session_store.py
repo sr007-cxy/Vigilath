@@ -77,6 +77,24 @@ def _pool_enabled() -> bool:
     return bool(_POOL_URL and _POOL_TOKEN)
 
 
+def _normalize_storage_state(state: Optional[dict]) -> Optional[dict]:
+    """把 origins[].localStorage / sessionStorage 从对象 {k:v} 归一化成 Playwright 要求的
+    数组 [{name,value}]。扩展导出的登录态常是 JS 原生对象格式,不归一化时 new_context 会报
+    `storageState.origins[0].localStorage: expected array, got object`,导致整条引擎热会话起不来。
+    防御性:已坏的会话加载即修,无需重新上传账号。"""
+    if not isinstance(state, dict):
+        return state
+    for origin in state.get("origins") or []:
+        if not isinstance(origin, dict):
+            continue
+        for key in ("localStorage", "sessionStorage"):
+            v = origin.get(key)
+            if isinstance(v, dict):
+                origin[key] = [{"name": str(k), "value": "" if val is None else str(val)}
+                               for k, val in v.items()]
+    return state
+
+
 def _pool_checkout(engine_name: str) -> Optional[dict]:
     """Try to fetch a session from central pool. Returns storage_state dict or None.
 
@@ -113,7 +131,7 @@ def _pool_checkout(engine_name: str) -> Optional[dict]:
         slots[engine_name] = sid
         _log.info("[session-pool] engine=%s: checked out id=%s use_count=%s source=%r",
                   engine_name, sid, data.get("use_count"), data.get("source_label"))
-        return state
+        return _normalize_storage_state(state)
     except Exception as e:
         _log.warning("[session-pool] engine=%s: check-out failed: %s", engine_name, e)
         return None
@@ -214,7 +232,7 @@ def load_storage_state(engine_name: str) -> Optional[dict]:
         data = json.loads(path.read_text())
         # New format: {"cookies": [...], "origins": [...]}
         if isinstance(data, dict) and "cookies" in data:
-            return data
+            return _normalize_storage_state(data)
         # Legacy format: plain list of cookies
         if isinstance(data, list):
             return {"cookies": data, "origins": []}
