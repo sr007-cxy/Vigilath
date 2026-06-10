@@ -56,7 +56,7 @@ def _account_topic(ctx: RunContext[AgentDeps]):
 
 
 async def create_topic(ctx: RunContext[AgentDeps], name: str, url: str, industry: str = "") -> TopicInfo:
-    """新建品牌主题(写)。MVP:**每账号限 1 个主题**,已存在则拒绝。
+    """【写】新建品牌主题。MVP:**每账号限 1 个主题**,已存在则拒绝。
 
     name: 品牌/项目名;url: 目标站点;industry: 行业(可空)。
     """
@@ -89,7 +89,7 @@ async def get_topic(ctx: RunContext[AgentDeps]) -> TopicInfo | None:
 
 
 async def run_geo_checks(ctx: RunContext[AgentDeps], categories: list[str] | None = None) -> GeoCheckResult:
-    """跑 25 项 GEO 检查并打分(只读)。引擎集/调度由平台固定,不接受用户/模型指定。
+    """【动作】跑 25 项 GEO 检查并打分(发起一次跑批,非纯查询;仅用户明确要「跑/检测」时调)。引擎集/调度由平台固定,不接受用户/模型指定。
 
     categories: 可选,限定检查项;空=全量。
     """
@@ -111,7 +111,7 @@ async def run_geo_checks(ctx: RunContext[AgentDeps], categories: list[str] | Non
 
 
 async def set_seed_prompts(ctx: RunContext[AgentDeps], prompts: list[str]) -> dict:
-    """设定/覆盖当前主题的种子提示词(写)。
+    """【写】设定/覆盖当前主题的种子提示词。
 
     prompts: 种子词列表(品类/品牌相关短语)。
     """
@@ -160,7 +160,7 @@ async def get_prompts(ctx: RunContext[AgentDeps]) -> dict:
 
 
 async def expand_prompts(ctx: RunContext[AgentDeps], seed: str, count_per_scene: int = 10) -> dict:
-    """对一个种子词做 4 维场景扩展(search/qa/intent/brand),返回候选 query 供挑选(写*,不直接落库)。
+    """【写*】对一个种子词做 4 维场景扩展(search/qa/intent/brand),返回候选 query 供挑选(只生成候选、不直接落库;落库用 set_selected_queries)。
 
     seed: 要扩展的种子词;count_per_scene: 每场景产出条数(5–50)。
     引擎/调度由平台固定,与扩展无关。挑好后用 set_selected_queries 落库。
@@ -187,7 +187,7 @@ async def expand_prompts(ctx: RunContext[AgentDeps], seed: str, count_per_scene:
 
 
 async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -> dict:
-    """把选定的 query 落库到当前主题(写),供后续诊断/跑批。已存在的不重复加。"""
+    """【写】把选定的 query 落库到当前主题,供后续诊断/跑批。已存在的不重复加。"""
     import json
     from datetime import datetime
 
@@ -213,7 +213,7 @@ async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -
 
 
 async def trigger_diagnosis(ctx: RunContext[AgentDeps]) -> dict:
-    """触发当前主题的**诊断方案生成**(异步,写)。后台跑 geo_checker + LLM,约 30–90s;
+    """【写】触发当前主题的**诊断方案生成**(异步)。后台跑 geo_checker + LLM,约 30–90s;
     完成后用 get_report 查看根因/叙述。复刻 admin 端点前置(置 generating + 落 website_url)。
     """
     from datetime import datetime
@@ -299,7 +299,8 @@ async def get_report(ctx: RunContext[AgentDeps]) -> dict:
 
 
 async def get_batch_results(ctx: RunContext[AgentDeps]) -> dict:
-    """读最近一次跑批的真实引擎可见性(每引擎命中率)。只读;引擎/调度平台固定,用户只看结果。"""
+    """读最近一次跑批的真实引擎可见性(每引擎命中率原始明细)。只读;引擎/调度平台固定,用户只看结果。
+    【何时用】要「最近一次跑批的每引擎命中原始明细」→ 用我;要聚合的增长/位次/竞品 → get_growth_summary。"""
     from geo.models.ai_telemetry import AiTelemetryResponseORM, AiTelemetryRunORM
 
     topic = _account_topic(ctx)
@@ -325,6 +326,7 @@ async def get_batch_results(ctx: RunContext[AgentDeps]) -> dict:
 
 async def get_publish_status(ctx: RunContext[AgentDeps]) -> dict:
     """读当前主题文章的发布进度 + 已发布文章列表(含今日发布)。**纯只读**,不生成任何内容。
+    【何时用】问「发了哪些·发布进度·已发布列表」→ 用我;要看草稿/正文/按状态列 → list_articles。
 
     回答「今天发了哪些文章 / 发布了什么 / 看文章」这类**查看类**问题就用本工具,绝不要调 draft_articles。
     """
@@ -378,7 +380,8 @@ async def get_publish_status(ctx: RunContext[AgentDeps]) -> dict:
 
 async def get_growth_summary(ctx: RunContext[AgentDeps]) -> dict:
     """读品牌增长数据(从最近一次跑批的真实引擎结果聚合):每引擎命中率、品牌位次 Top1/Top3、
-    高频竞品、高频被引域名、提及位置分布。只读;引擎/调度平台固定。"""
+    高频竞品、高频被引域名、提及位置分布。只读;引擎/调度平台固定。
+    【何时用】问「每引擎命中率·品牌位次·竞品·增长」→ 用我;问命中了几个 query/覆盖率 → get_query_coverage;问今日新增 → get_today_effect。"""
     import json
     from collections import Counter
 
@@ -438,7 +441,8 @@ async def get_growth_summary(ctx: RunContext[AgentDeps]) -> dict:
 async def get_query_coverage(ctx: RunContext[AgentDeps]) -> dict:
     """**累计**被 AI 引擎搜到(命中)的情况(all-time,非今天):监测 query 总数、被命中的 query 数、
     被命中的种子词数。口径与品牌增长 dashboard 一致(读 ai_telemetry_query_hits 命中追踪表)。
-    用户问「被搜到几个 / 命中多少 / 收录情况」用本工具;问「今天」才用 get_today_effect。
+    【何时用】问「累计/总共 被搜到几个·命中多少·收录情况·覆盖率」→ 用我;问「今天/今日 新增」→ get_today_effect;
+    问每引擎命中率/品牌位次/增长 → get_growth_summary。
     """
     import json
 
@@ -495,6 +499,7 @@ def _seed_texts(raw: str | None) -> list[str]:
 
 async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
     """投放效果:**今日新增命中** + **累计被搜到**的问题/种子词(读命中表 query_hits,口径同品牌增长 dashboard)。只读。
+    【何时用】问「今天/今日 效果·新增命中·进展」→ 用我;只问累计总数/覆盖率 → get_query_coverage;问每引擎命中率/品牌位次 → get_growth_summary。
 
     cumulative_* = 至今被 AI 引擎搜到的问题/种子词;today_new_hits = 今天跑批新命中的问题数。
     """
@@ -565,7 +570,7 @@ async def get_today_effect(ctx: RunContext[AgentDeps]) -> dict:
 async def ingest_material(
     ctx: RunContext[AgentDeps], text: str | None = None, url: str | None = None, title: str = "",
 ) -> dict:
-    """把用户资料存入账号知识库(写,「知识库 = 用户信息」)。可传 text,或传 url(自动抓取并提取正文)。
+    """【写】把用户资料存入账号知识库(「知识库 = 用户自有资料」,**与舆情数据无关**)。可传 text,或传 url(自动抓取并提取正文)。
     供 ask_knowledge 检索 + 后续 grounding。
     """
     from geo.models.agent import AgentMaterialORM
@@ -697,7 +702,7 @@ async def ask_knowledge(ctx: RunContext[AgentDeps], query: str) -> dict:
 
 
 async def confirm_template(ctx: RunContext[AgentDeps]) -> dict:
-    """确认发文计划(模板)→ 触发文章生成(草稿,异步,写)。计划状态 draft→confirmed。
+    """【写】确认发文计划(模板)→ 触发文章生成(草稿,异步)。计划状态 draft→confirmed。
     无计划时引导用 draft_articles 直接产稿。复刻 admin confirm_execution_plan。
     """
     from datetime import datetime
@@ -727,7 +732,7 @@ async def confirm_template(ctx: RunContext[AgentDeps]) -> dict:
 
 
 async def publish_drafts(ctx: RunContext[AgentDeps], draft_ids: list[int] | None = None) -> dict:
-    """把已生成文章**真实发布到外部平台**(写,outward-facing)。
+    """【写·对外】把已生成文章**真实发布到外部平台**(outward-facing,真实外发)。
 
     **环境护栏**:仅当 `AGENT_ALLOW_EXTERNAL_PUBLISH=1` 才真发;否则(如测试环境)拦截不发,防误发。
     draft_ids: 指定要发的文章 id(不传 = 该主题所有有正文的稿)。
@@ -803,6 +808,7 @@ async def list_pending_articles(ctx: RunContext[AgentDeps]) -> dict:
 
 async def list_articles(ctx: RunContext[AgentDeps], status: str | None = None, limit: int = 5) -> dict:
     """列出文章并**带标题+摘要+正文摘录**(可按状态:draft/pending_review/approved/published/rejected)。只读。
+    【何时用】要「列多篇·按状态浏览·展示几篇」→ 用我;看某篇全文 → get_article;只看待审 → list_pending_articles;只看发布进度 → get_publish_status。
 
     用户要「展示/看这几篇文章、文章内容、待审文章正文、把文章发这里」时用本工具。
     要某一篇的**完整正文**用 get_article(doc_id)。
