@@ -313,7 +313,18 @@ async def upsert_im_connector(
         row.app_secret = payload.app_secret.strip()
         row.verify_token = payload.verify_token.strip()
         row.aes_key = payload.aes_key.strip()
-        row.config_json = _json.dumps({"agentid": payload.agentid.strip()} if payload.agentid.strip() else {})
+        # 保留已有的快捷按钮/菜单配置(quick_actions / menu_map),只更新 agentid
+        try:
+            cfg = _json.loads(row.config_json) if row.config_json else {}
+            if not isinstance(cfg, dict):
+                cfg = {}
+        except (ValueError, TypeError):
+            cfg = {}
+        if payload.agentid.strip():
+            cfg["agentid"] = payload.agentid.strip()
+        else:
+            cfg.pop("agentid", None)
+        row.config_json = _json.dumps(cfg, ensure_ascii=False)
         row.enabled = 1
         db.commit()
         return {"success": True, "id": row.id, "callback_path": f"/api/agent/im/{payload.platform}/callback"}
@@ -365,5 +376,69 @@ async def delete_im_connector(cid: int, current_user: UserORM = Depends(get_curr
         db.delete(row)
         db.commit()
         return {"success": True}
+    finally:
+        db.close()
+
+
+class QuickConfigRequest(BaseModel):
+    # 回复底部快捷按钮:[["📈 投放进展","今日投放进展和效果如何?"], ...]
+    quick_actions: list[list[str]] = []
+    # 飞书机器人底部菜单 event_key → 问句:{"today":"今日投放效果如何?", ...}
+    menu_map: dict[str, str] = {}
+
+
+@router.get("/im-connector/{cid}/quick-config")
+async def get_im_quick_config(cid: int, current_user: UserORM = Depends(get_current_user)):
+    """读某连接器的快捷按钮 + 菜单映射(未配返回默认,供控制台编辑)。"""
+    from geo.im_quick_config import DEFAULT_MENU_MAP, DEFAULT_QUICK_ACTIONS, menu_map, quick_actions
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        row = (db.query(AgentIMConnectorORM)
+               .filter(AgentIMConnectorORM.id == cid, AgentIMConnectorORM.account_id == current_user.id).first())
+        if row is None:
+            raise AppException(status_code=404, message="connector not found")
+        return {
+            "platform": row.platform,
+            "quick_actions": [[l, q] for l, q in quick_actions(row.config_json)],
+            "menu_map": menu_map(row.config_json),
+            "defaults": {"quick_actions": DEFAULT_QUICK_ACTIONS, "menu_map": DEFAULT_MENU_MAP},
+        }
+    finally:
+        db.close()
+
+
+@router.post("/im-connector/{cid}/quick-config")
+async def set_im_quick_config(
+    cid: int, payload: QuickConfigRequest, current_user: UserORM = Depends(get_current_user),
+):
+    """保存某连接器的快捷按钮 + 菜单映射(合并进 config_json,不动凭证)。"""
+    import json as _json
+
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        row = (db.query(AgentIMConnectorORM)
+               .filter(AgentIMConnectorORM.id == cid, AgentIMConnectorORM.account_id == current_user.id).first())
+        if row is None:
+            raise AppException(status_code=404, message="connector not found")
+        try:
+            cfg = _json.loads(row.config_json) if row.config_json else {}
+            if not isinstance(cfg, dict):
+                cfg = {}
+        except (ValueError, TypeError):
+            cfg = {}
+        # 清洗:label/问句非空,按钮最多 6 个
+        qa = [[str(it[0]).strip(), str(it[1]).strip()] for it in payload.quick_actions
+              if isinstance(it, (list, tuple)) and len(it) >= 2 and str(it[0]).strip() and str(it[1]).strip()][:6]
+        mm = {str(k).strip(): str(v).strip() for k, v in payload.menu_map.items()
+              if str(k).strip() and str(v).strip()}
+        cfg["quick_actions"] = qa
+        cfg["menu_map"] = mm
+        row.config_json = _json.dumps(cfg, ensure_ascii=False)
+        db.commit()
+        return {"success": True, "quick_actions": qa, "menu_map": mm}
     finally:
         db.close()
