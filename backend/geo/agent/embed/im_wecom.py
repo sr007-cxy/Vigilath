@@ -22,6 +22,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from geo.agent.deps import AgentDeps
+from geo.agent.embed.dedup import seen_before
 from geo.agent.embed.im_feishu import _tables_to_lines, log
 from geo.database import SessionLocal
 from geo.models.agent import AgentIMConnectorORM
@@ -167,13 +168,8 @@ async def wecom_callback(request: Request, bg: BackgroundTasks):
         from_user = node.findtext("FromUserName") or ""
         content = (node.findtext("Content") or "").strip()
         msg_id = node.findtext("MsgId") or ""
-        now = time.time()
-        for k in [k for k, t in _seen.items() if now - t > 600]:
-            _seen.pop(k, None)
-        if msg_id and msg_id in _seen:
+        if msg_id and await seen_before(msg_id):
             return PlainTextResponse("")
-        if msg_id:
-            _seen[msg_id] = now
         if from_user and content:
             if conn.last_chat_id != from_user:           # 记最近用户,供主动推送回推
                 conn.last_chat_id = from_user

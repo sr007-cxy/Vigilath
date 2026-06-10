@@ -114,21 +114,41 @@ class DeepSeekBrowserAdapter(EngineAdapter):
             "[role='button']:has-text('New chat')",
             "text=New chat",
         ]
-        import sys
-        for sel in candidates:
-            try:
-                btn = page.locator(sel).first
-                if await btn.is_visible(timeout=1500):
-                    await btn.click()
-                    await human_delay(0.5, 1.0)
-                    sys.__stdout__.write(f"[DeepSeek-new-chat] clicked via {sel!r}\n")
-                    sys.__stdout__.flush()
-                    return
-            except Exception:
-                continue
-        sys.__stdout__.write("[DeepSeek-new-chat] button NOT found via any selector\n")
+        import sys, time
+        # cloakbrowser headed 下 DS 的 SPA 渲染较慢,按钮要几秒才出来,且语言随指纹/locale
+        # 变(中文"开启新对话" / 英文"New chat")。轮询等待最多 ~18s,任一候选可见即点,
+        # 避免"查得太早 → 误判 stale session"。
+        deadline = time.monotonic() + 18
+        while time.monotonic() < deadline:
+            for sel in candidates:
+                try:
+                    btn = page.locator(sel).first
+                    if await btn.is_visible(timeout=800):
+                        await btn.click()
+                        await human_delay(0.5, 1.0)
+                        sys.__stdout__.write(f"[DeepSeek-new-chat] clicked via {sel!r}\n")
+                        sys.__stdout__.flush()
+                        return
+                except Exception:
+                    continue
+            await asyncio.sleep(0.8)
+        # 18s 没找到按钮 → 区分两种:① 这条会话掉登录(显示登录页)→ 报 login_lost,
+        # 让账号池隔离这条坏会话,不再重复抽到(自愈);② 真没渲染出来 → dom_not_found。
+        login_page = False
+        try:
+            txt = (await page.inner_text("body"))[:1500]
+            if any(kw in txt for kw in ("发送验证码", "密码登录", "微信扫码登录", "注册登录", "手机号登录")):
+                login_page = True
+        except Exception:
+            pass
+        sys.__stdout__.write(
+            f"[DeepSeek-new-chat] button NOT found via any selector (18s) login_page={login_page}\n")
         sys.__stdout__.flush()
-        # raise 让 EngineSession 归 error,runner 不抽竞品,避免旧会话上下文污染数据
+        if login_page:
+            # 含 "login may have expired" → _classify_error 归 login_lost → 池子隔离这条坏会话
+            raise RuntimeError(
+                "deepseek login may have expired (login page shown, no new-chat button)"
+            )
         raise RuntimeError(
             "deepseek new-chat button not found — refusing to send query into stale session"
         )
