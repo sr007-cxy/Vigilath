@@ -14,6 +14,7 @@
 
 | 文档 | 说明 |
 |---|---|
+| ⭐ [architecture.md](./architecture.md) | 系统架构总览:服务拓扑(前端 / 主后端 / Agent / 微服务群)、数据层、部署、关键架构张力点 |
 | [url-validation-cases.md](./url-validation-cases.md) | 前后端 URL 校验规则的单一事实源,含 22 条 case |
 | [i18n-status.md](./i18n-status.md) | 前端中英双语覆盖现状与未完成项 |
 | [系统处理方案.md](./系统处理方案.md) | 系统级功能实现方案 |
