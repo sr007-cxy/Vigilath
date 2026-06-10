@@ -201,7 +201,134 @@ get_sentiment_today / configure_sentiment   舆情
 - **backend/Dockerfile** + `start.sh` / `start-local.sh`;依赖管理用 **uv**(`backend/.venv` 无 pip)。
 - 其它:`dist-harvester/extension`(浏览器扩展)、`skills/vigilath-geo`(Claude skill)。
 
-## 9. 关键架构张力与注意点
+## 9. 横向扩展(Horizontal Scaling)
+
+> 现状一句话:**为横扩做好了准备的「单机多 worker」**。Web 层是标准的「无状态 + 共享
+> PG/Redis + JWT」可横扩形态;但 PG 单主库、进程内 daemon 后台任务、静态 leader 这三点,
+> 决定了它离真正的多节点弹性集群还差一个外置任务队列与库层读写分离/分片。
+>
+> 当前生产是一台 EC2:`geo.service ... uvicorn --workers 4`(`docs/deployment-guide.md`),
+> 即单机 4 进程,前面 AWS ALB → nginx 回源 `127.0.0.1:8070`。
+
+### 9.1 Web 层 — 可水平扩(无状态前提已满足)
+
+横扩的根本前提是无状态 worker,本系统满足:
+
+- **会话无状态**:认证走 **JWT**(`jose` 签名,`SECRET_KEY` 所有进程共享,`geo/api/auth.py`),
+  无服务端 session → 请求可任意路由到任意进程/节点。
+- **多进程并发**:`uvicorn --workers 4` 是单机多进程;扩成多台 EC2 × N worker,**代码层无需改动**。
+- **入口已有 LB**:AWS ALB → nginx → uvicorn。加节点理论上只是 ALB target group 多挂机器
+  +(目前 nginx/ALB 回源写死单机)把 upstream 改成多 target —— 配置工作,非架构障碍。
+
+### 9.2 共享状态全部外置 — 横扩的核心
+
+worker 间不靠进程内内存协调,而靠三个外部共享后端:
+
+| 共享后端 | 作用 | 横扩含义 |
+|---|---|---|
+| **PostgreSQL**(单主库) | 业务数据 / 配额 / 支付 / 检测结果 | 所有 worker 连同一库 → 数据天然一致 |
+| **Redis**(`db=7`, TTL 24h) | 检测报表缓存(`services/cache_service.py`) | 跨 worker/节点共享,且**降级安全**(Redis 宕只变慢,不打挂业务) |
+| **JWT** | 认证态 | 无需共享 session 存储 |
+
+**连接池为多 worker 量身配**(`geo/database.py`):`DB_POOL_SIZE`/`DB_MAX_OVERFLOW` 按 env 配
+(注释示例:geo-agent 8 worker × 每 worker 上限 8 = 64,留给 PG `max_connections=100`)。
+👉 **PG 连接数是当前横扩的硬上限**:节点 × worker × pool 不能撑爆 100。
+
+### 9.3 定时任务 — env 静态 leader(穷人版选举)
+
+横扩最易踩的坑是定时任务被每个 worker 重复执行。解法:APScheduler 只在
+`GEO_SCHEDULER_LEADER=1`(舆情,`sentiment_scheduler.py`)/ `GEO_CONTENT_SCHEDULER_LEADER=1`
+(内容,`content_scheduler.py`)的进程启动。部署约定:给**一个**独立 systemd 进程设该 env 当
+leader,web worker 都不设 → 流量进程与定时任务进程隔离。
+
+⚠️ 这是**静态约定式 leader**,非动态选举:多机时必须保证全局仅一个进程设 leader env;leader
+挂了不自动故障转移(靠 systemd `Restart` 拉起)。要真正 HA,需换成 PG advisory lock / Redis 锁。
+
+### 9.4 Agent / 微服务 — 独立伸缩单元(详细)
+
+主后端、Agent、sentinel 是**三个互不依赖的伸缩单元**:各自有独立进程/端口/部署单元,可以
+**分别按各自负载横扩**(Agent 吃 LLM 长连接,sentinel 吃爬虫/搜索 I/O,主后端吃 Web 流量),
+互不拖累。下面分别说清楚「现状无状态到什么程度 → 怎么扩 → 扩之前必须先解的卡点」。
+
+#### 9.4.1 Agent service(`:8010`)
+
+**为什么能扩 —— 会话态已落库,进程本身近乎无状态:**
+
+- **多轮对话历史存 DB**,不在内存。`api.py` 每轮 `load_message_history(deps)` 从
+  `agent_conversations` 表(按 `account_id` 唯一)读历史,跑完 `save_message_history()` 写回
+  (`geo/agent/methods.py`)。→ **会话单位 = 账号**,任意进程/节点都能接续同一账号的对话,
+  **无需会话粘性(session affinity)**,普通轮询 LB 即可。
+- 进程内仅有的"状态"是 `@lru_cache(maxsize=4)` 缓存的 agent/model 对象(`agent.py`)——
+  纯只读、每进程独立重建、代价极小,不影响横扩。
+- **并发模型**:每次对话用 `agent.iter()` 以 **async 流式**跑(模型→工具→模型,SSE 边生成边推)。
+  这条链路是 **I/O 密集**(大部分时间在等 DeepSeek/OpenRouter),所以**单 worker 的一个事件循环
+  就能并发扛很多路 SSE**。
+
+**怎么扩(从便宜到彻底):**
+
+1. **加进程**:`geo-agent.service` 目前 `ExecStart=… uvicorn … --port 8010` **未带 `--workers`**
+   (单进程)。第一步直接加 `--workers N` → 单机多进程吃满 CPU。
+2. **加实例 + nginx upstream**:起多个 geo-agent(不同端口/机器),nginx 把 `/api/agent/*`
+   反代到一个 upstream 池(多 target + 健康检查)。因无会话粘性,轮询即可。
+3. **容器化**:Agent 进 docker-compose / k8s,`--scale` 或 replicas 拉副本,共享同一 PG。
+
+**⚠️ 多实例前必须先解的卡点 —— IM 去重是进程内 dict:**
+
+飞书/企微/钉钉的 webhook 去重用的是**进程内全局 dict**(`im_feishu.py` 的 `_seen_events`、
+`im_wecom.py` 的 `_seen`,`event_id/msg_id -> ts`,600s 过期)。IM 平台**会重投**事件:
+
+- 单进程:重投命中同一个 dict → 正确去重。
+- **多 worker / 多实例:重投可能落到另一个进程 → 各自的 dict 都没见过 → 同一条消息被处理两次
+  → 用户收到重复回复。**
+
+所以 **IM 链路在横扩前,必须把 `_seen_events` 外置到 Redis**(`SET event_id … NX EX 600`
+做跨进程原子去重)。纯 Web 对话链路没有这个问题(去重不依赖内存,历史在 DB)。
+
+**另一处要注意 —— IM 后台任务不持久:** webhook 收到后立即 ack(返回 `challenge`/`code:0`),
+真正跑 agent 放进 FastAPI `BackgroundTasks`(`im_feishu.py:393`)。该后台任务**绑在当前进程**,
+进程中途挂掉则这条回复丢失(无durable queue 重试)。要强一致,得把 IM 处理改投**外置任务队列**
+(与 §9.5 第 2 点同源)。
+
+#### 9.4.2 sentinel-service(`:8090`)
+
+**为什么能安全多副本 —— 多租户隔离做在连接层,且连接不复用串租户:**
+
+- **PG schema 多租户**:每个 `account_id` 对应一个 schema `tenant_{N}`。请求入口
+  `_account_context()` 把 `account_id` 绑到 contextvar `current_account`(`service.py`),
+  storage 层 `connect(account_id)` **新开一条 psycopg 连接**并在该连接上
+  `CREATE SCHEMA IF NOT EXISTS` + `SET search_path TO tenant_{N}, public`(`storage/db.py:132`)。
+- 关键安全性:**connect 是「每次调用新建连接 + 当场绑 search_path」,不是从池里捞复用连接**
+  → 即使多副本高并发,也**不会出现连接残留旧 search_path 把 A 租户数据写进 B 租户**的串库问题。
+  contextvar 又是 per-async-task 隔离的 → 单 worker 内并发也安全。
+
+**怎么扩:**
+
+- sentinel 是**无状态 HTTP 服务**,backend 经 **service name** 访问
+  (`SENTINEL_SERVICE_URL=http://sentinel-service:8090`,docker DNS 轮询)。
+  → docker-compose `--scale sentinel-service=N` 或 k8s replicas **直接拉副本**,backend 无需改动。
+- 爬虫/搜索是长任务,多副本可把 **采集吞吐**摊开。
+
+**扩 sentinel 的两个真实约束:**
+
+1. **连接无池化**:`connect()` 每请求开新 PG 连接,高并发/多副本下**连接建立开销 + PG
+   连接数**会先到顶(呼应 §9.2 的 `max_connections=100` 硬上限)。规模上来要在 sentinel 与 PG
+   之间加 **pgbouncer** 或给 storage 层引入连接池。
+2. **schema 初始化有全局串行点**:`init_schema()` 用 `pg_advisory_xact_lock(727274)` 事务级
+   咨询锁串行化并发建表(避免多爬虫并行 DDL 死锁,`storage/db.py:156`)。这是**全局锁**,
+   多副本同时首次触达新租户时会排队——只在租户首次建表时有竞争,日常读写不受影响,可接受。
+3. 真正的吞吐天花板往往不在 sentinel 自己,而在**上游源站/搜索引擎的限流**(newsnow、百度、
+   微博 cookie 等)——副本加再多,也绕不过源站 rate limit。
+
+### 9.5 当前短板与演进路线
+
+| # | 短板 | 演进方向 |
+|---|---|---|
+| 1 | **PG 单主库**,无读副本/分片,是唯一有状态瓶颈 | 加读副本(读写分离)→ 按 account 分片 |
+| 2 | **进程内 daemon 线程**跑长任务(`solution_generator.py`、`geo_checker.py` 的 `Thread(daemon=True)`),绑定单 worker,重启即丢(靠 `reset_stale_generating` 兜底) | 抽成 Celery/RQ 外置任务队列 |
+| 3 | **leader 静态约定**,无自动故障转移 | PG advisory lock / Redis 锁做动态选举 |
+| 4 | **nginx/ALB upstream 单机硬编码** | 回源改多 target + 健康检查 |
+
+## 10. 关键架构张力与注意点
 
 1. **pydantic 版本债 —— 最大耦合代价**:主后端锁 pydantic 2.5,导致 Agent 必须拆独立进程/venv。彻底解法是把 FastAPI 升到 ≥0.115 后合并回主后端。
 2. **三份同源 geo_checker**:极易改错文件。任何检测改动**只进 `backend/geo_checker/`**,根文件与 archive 永不动。
