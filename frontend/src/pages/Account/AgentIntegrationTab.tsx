@@ -77,6 +77,13 @@ export function AgentIntegrationTab() {
   const [imMsg, setImMsg] = useState('');
   const [bindCode, setBindCode] = useState('');
 
+  // 快捷按钮/菜单配置编辑器(按连接器)
+  const [cfgFor, setCfgFor] = useState<number | null>(null);
+  const [qa, setQa] = useState<string[][]>([]);            // [[label, query], ...]
+  const [mm, setMm] = useState<string[][]>([]);            // [[event_key, query], ...]
+  const [cfgBusy, setCfgBusy] = useState(false);
+  const [cfgMsg, setCfgMsg] = useState('');
+
   const origin = window.location.origin;
   const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
   const curPlatform = IM_PLATFORMS.find((p) => p.key === imPlatform)!;
@@ -95,6 +102,30 @@ export function AgentIntegrationTab() {
   }, []);
 
   useEffect(() => { void reload(); }, [reload]);
+
+  const openCfg = async (cid: number) => {
+    if (cfgFor === cid) { setCfgFor(null); return; }
+    setCfgFor(cid); setCfgMsg(''); setQa([]); setMm([]);
+    try {
+      const r = await fetch(`${API_BASE}/account/im-connector/${cid}/quick-config`, { headers: authHeaders() });
+      const d = await r.json();
+      setQa((d.quick_actions || []).map((x: string[]) => [x[0] || '', x[1] || '']));
+      setMm(Object.entries(d.menu_map || {}).map(([k, v]) => [k, String(v)]));
+    } catch { setCfgMsg('加载失败'); }
+  };
+  const saveCfg = async (cid: number) => {
+    setCfgBusy(true); setCfgMsg('');
+    try {
+      const menu_map: Record<string, string> = {};
+      mm.forEach(([k, v]) => { if (k.trim() && v.trim()) menu_map[k.trim()] = v.trim(); });
+      const quick_actions = qa.filter(([l, q]) => l.trim() && q.trim()).map(([l, q]) => [l.trim(), q.trim()]);
+      const r = await fetch(`${API_BASE}/account/im-connector/${cid}/quick-config`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ quick_actions, menu_map }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setCfgMsg('✅ 已保存,下次回复/菜单点击即生效');
+    } catch { setCfgMsg('保存失败'); } finally { setCfgBusy(false); }
+  };
 
   const saveIm = async () => {
     setImBusy(true); setImMsg('');
@@ -257,11 +288,57 @@ export function AgentIntegrationTab() {
 
         {/* 现有连接(当前平台) */}
         {imConns.filter((c) => c.platform === imPlatform).map((c) => (
-          <div key={c.id} className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg mb-3" style={{ background: 'var(--bg-surface)' }}>
-            <div className="text-sm text-primary min-w-0">
-              已连接 · {curPlatform.idLabel} <span className="text-secondary">{c.app_id}</span> · 密钥 {c.app_secret_masked}
+          <div key={c.id} className="mb-3">
+            <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
+              <div className="text-sm text-primary min-w-0">
+                已连接 · {curPlatform.idLabel} <span className="text-secondary">{c.app_id}</span> · 密钥 {c.app_secret_masked}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => void openCfg(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--accent-primary)', border: '1px solid var(--border-color)', background: 'transparent' }}>
+                  {cfgFor === c.id ? '收起' : '配置按钮/菜单'}
+                </button>
+                <button onClick={() => void deleteIm(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: '#f43f5e', border: '1px solid rgba(244,63,94,0.35)', background: 'transparent' }}>删除</button>
+              </div>
             </div>
-            <button onClick={() => void deleteIm(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: '#f43f5e', border: '1px solid rgba(244,63,94,0.35)', background: 'transparent' }}>删除</button>
+
+            {cfgFor === c.id && (
+              <div className="mt-2 p-4 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
+                {/* 回复底部快捷按钮 */}
+                <div className="text-sm font-semibold text-primary mb-1">回复底部快捷按钮(最多 6 个)</div>
+                <p className="text-xs text-secondary mb-2">每条回复底部展示这些按钮,点击即把对应问句发给 AI 营销官。</p>
+                {qa.map((row, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-2">
+                    <input value={row[0]} onChange={(e) => setQa(qa.map((r, j) => j === i ? [e.target.value, r[1]] : r))} placeholder="按钮文字 如 📰 今日舆情" className="flex-1 px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                    <input value={row[1]} onChange={(e) => setQa(qa.map((r, j) => j === i ? [r[0], e.target.value] : r))} placeholder="点击发送的问句" className="flex-[2] px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                    <button onClick={() => setQa(qa.filter((_, j) => j !== i))} className="px-2 py-1 rounded-md text-xs" style={{ color: '#f43f5e' }}>移除</button>
+                  </div>
+                ))}
+                {qa.length < 6 && (
+                  <button onClick={() => setQa([...qa, ['', '']])} className="text-xs font-semibold mb-3" style={{ color: 'var(--accent-primary)' }}>+ 添加按钮</button>
+                )}
+
+                {/* 飞书菜单映射(仅飞书) */}
+                {imPlatform === 'feishu' && (
+                  <>
+                    <div className="text-sm font-semibold text-primary mt-3 mb-1">飞书底部菜单映射(event_key → 问句)</div>
+                    <p className="text-xs text-secondary mb-2">在飞书后台配机器人菜单时,每个菜单项设一个 event_key,这里把 key 映射成问句(也可直接把菜单 key 填成问句、此处不配)。</p>
+                    {mm.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2 mb-2">
+                        <input value={row[0]} onChange={(e) => setMm(mm.map((r, j) => j === i ? [e.target.value, r[1]] : r))} placeholder="event_key 如 today" className="flex-1 px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                        <input value={row[1]} onChange={(e) => setMm(mm.map((r, j) => j === i ? [r[0], e.target.value] : r))} placeholder="对应问句(填 __help__ 弹功能清单)" className="flex-[2] px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                        <button onClick={() => setMm(mm.filter((_, j) => j !== i))} className="px-2 py-1 rounded-md text-xs" style={{ color: '#f43f5e' }}>移除</button>
+                      </div>
+                    ))}
+                    <button onClick={() => setMm([...mm, ['', '']])} className="text-xs font-semibold mb-3" style={{ color: 'var(--accent-primary)' }}>+ 添加菜单项</button>
+                  </>
+                )}
+
+                <div className="mt-3 flex items-center gap-3">
+                  <button onClick={() => void saveCfg(c.id)} disabled={cfgBusy} className="px-4 py-1.5 rounded-lg text-sm font-semibold" style={{ background: 'var(--accent-primary)', color: '#fff', opacity: cfgBusy ? 0.5 : 1 }}>{cfgBusy ? '保存中…' : '保存配置'}</button>
+                  {cfgMsg && <span className="text-xs" style={{ color: cfgMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{cfgMsg}</span>}
+                </div>
+              </div>
+            )}
           </div>
         ))}
 
