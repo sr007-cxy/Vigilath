@@ -63,10 +63,23 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
-)
+_is_sqlite = "sqlite" in settings.DATABASE_URL
+# 连接池按 env 配(geo-agent 多 worker 时每 worker 小池,避免撑爆 PG max_connections=100):
+#   DB_POOL_SIZE / DB_MAX_OVERFLOW 默认 5 / 10(主后端不设 env → 维持原行为)。
+#   geo-agent.service 设 DB_POOL_SIZE=3 / DB_MAX_OVERFLOW=5 → 每 worker 上限 8,8 worker 共 64。
+if _is_sqlite:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_size=int(os.environ.get("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "10")),
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
 
 
 # ---------------------------------------------------------------------------
