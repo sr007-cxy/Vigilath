@@ -46,12 +46,17 @@ def _tables_to_lines(text: str) -> str:
 
 
 def _clean_md(text: str) -> str:
-    """清洗飞书卡片不渲染的 markdown 记号:# 标题→加粗;去掉 ---/***/___ 分隔线;***粗斜体***→**粗体**。"""
+    """清洗飞书不可靠渲染的 markdown 记号 → 纯文本(飞书表格单元格/部分卡片不渲染 **,会裸露)。
+
+    # 标题→去井号;---/***/___ 分隔线→删;**粗**/*斜*→去星号(网页端 react-markdown 不走此函数,照常加粗)。
+    """
     t = text or ""
-    t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"**\1**", t)   # 标题→加粗
-    t = re.sub(r"(?m)^[ \t]{0,3}([*\-_])(?:[ \t]*\1){2,}[ \t]*$", "", t)      # 分隔线 ***/---/___ 整行→删
-    t = re.sub(r"\*\*\*([^*\n]+)\*\*\*", r"**\1**", t)                         # ***x***→**x**
-    t = re.sub(r"\*{3,}", "", t)                                               # 残留 3+ 连续星号(孤立 ***)→删,不碰**粗体**
+    t = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*$", r"\1", t)        # 标题:去 # 留文字
+    t = re.sub(r"(?m)^[ \t]{0,3}([*\-_])(?:[ \t]*\1){2,}[ \t]*$", "", t)      # 分隔线整行→删
+    t = re.sub(r"\*\*\*([^*\n]+)\*\*\*", r"\1", t)                            # ***x***→x
+    t = re.sub(r"\*\*([^*\n]+)\*\*", r"\1", t)                                # **x**→x
+    t = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", t)                       # *x*→x
+    t = re.sub(r"\*{2,}", "", t)                                              # 残留连续星号→删
     return t
 
 
@@ -106,9 +111,10 @@ def _build_card_v2(text: str) -> dict:
             _, header, rows = blk
             ncols = max([len(header)] + [len(r) for r in rows]) if rows else len(header)
             cols = [{"name": f"c{j}",
-                     "display_name": (header[j] if j < len(header) and header[j] else f"列{j + 1}"),
+                     "display_name": (_clean_md(header[j]) if j < len(header) and header[j] else f"列{j + 1}"),
                      "data_type": "text"} for j in range(ncols)]
-            trows = [{f"c{j}": (r[j] if j < len(r) else "") for j in range(ncols)} for r in rows]
+            # 单元格也去 markdown 记号(表格组件按纯文本显示,** 会裸露)
+            trows = [{f"c{j}": (_clean_md(r[j]) if j < len(r) else "") for j in range(ncols)} for r in rows]
             elements.append({"tag": "table", "page_size": min(max(len(trows), 1), 10),
                              "row_height": "low", "columns": cols, "rows": trows})
     if not elements:
