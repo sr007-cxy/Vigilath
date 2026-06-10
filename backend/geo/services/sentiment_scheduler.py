@@ -31,6 +31,10 @@ log = logging.getLogger(__name__)
 INTERVAL_HOURS = int(os.environ.get("SENTINEL_CRON_INTERVAL_HOURS", "1"))
 # 起始偏移(分钟):避开整点峰值 — 默认 5 分(每小时 :05 跑)
 START_MINUTE = int(os.environ.get("SENTINEL_CRON_START_MINUTE", "5"))
+# 固定每天某点跑一次(0-23);设置后优先于 INTERVAL_HOURS。
+# 例:SENTINEL_CRON_HOUR=10 + START_MINUTE=0 → 每天 10:00 跑一次。
+_cron_hour_raw = os.environ.get("SENTINEL_CRON_HOUR", "").strip()
+CRON_HOUR = int(_cron_hour_raw) if _cron_hour_raw else None
 TIMEZONE = os.environ.get("SENTINEL_CRON_TZ", "Asia/Shanghai")
 # 僵尸超时:任务间隔 1h,所以 60 分钟没动静才算挂了
 ZOMBIE_TIMEOUT_MIN = int(os.environ.get("SENTINEL_ZOMBIE_TIMEOUT_MIN", "60"))
@@ -134,7 +138,10 @@ def start() -> None:
 
     # 每 INTERVAL_HOURS 小时跑一次,在每小时 START_MINUTE 分触发
     # (默认每小时 :05 — 避开整点高峰,且数据更新到点后稍迟)
-    if INTERVAL_HOURS == 1:
+    if CRON_HOUR is not None:
+        # 每天固定 CRON_HOUR:START_MINUTE 跑一次
+        trigger_kwargs = dict(trigger="cron", hour=CRON_HOUR, minute=START_MINUTE)
+    elif INTERVAL_HOURS == 1:
         # 每小时 :MM 触发
         trigger_kwargs = dict(trigger="cron", minute=START_MINUTE)
     else:
@@ -164,9 +171,11 @@ def start() -> None:
     )
 
     _scheduler.start()
+    _sched_desc = (f"daily at {CRON_HOUR:02d}:{START_MINUTE:02d}" if CRON_HOUR is not None
+                   else f"every {INTERVAL_HOURS}h at :{START_MINUTE:02d}")
     log.info(
-        "[sentinel-scheduler] started: every %dh at :%02d %s, zombie_timeout=%dmin, cleanup=10min",
-        INTERVAL_HOURS, START_MINUTE, TIMEZONE, ZOMBIE_TIMEOUT_MIN,
+        "[sentinel-scheduler] started: %s %s, zombie_timeout=%dmin, cleanup=10min",
+        _sched_desc, TIMEZONE, ZOMBIE_TIMEOUT_MIN,
     )
 
 
