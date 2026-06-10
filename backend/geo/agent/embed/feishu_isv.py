@@ -171,7 +171,7 @@ def _try_bind(db: Session, tenant_key: str, open_id: str, text: str) -> int | No
 
 
 async def _handle_message(tenant_key: str, chat_id: str, open_id: str, text: str) -> None:
-    from geo.agent.agent import build_embed_agent
+    from geo.agent.agent import build_embed_agent, route_line
     from geo.agent.methods import load_message_history, save_message_history
 
     db = SessionLocal()
@@ -188,7 +188,7 @@ async def _handle_message(tenant_key: str, chat_id: str, open_id: str, text: str
             return
         await _send_card(db, tenant_key, chat_id, "⏳ 正在查询,请稍候…")    # 即时回执
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
-        agent = build_embed_agent(True)
+        agent = build_embed_agent(True, line=route_line(text))
         history = load_message_history(deps)
         result = await agent.run(text, deps=deps, message_history=history)
         try:

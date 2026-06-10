@@ -71,9 +71,9 @@ class _FakeCtx:
 @router.post("/chat")
 async def chat(body: ChatIn, claims: EmbedClaims = Depends(embed_claims), db: Session = Depends(get_db)):
     """对话(SSE)。复用内部 agent.run() 全工具循环,工具集按 caps 收敛、永不含 publish。"""
-    from geo.agent.agent import build_embed_agent
+    from geo.agent.agent import build_embed_agent, route_line
 
-    agent = build_embed_agent("write" in claims.caps)
+    agent = build_embed_agent("write" in claims.caps, line=route_line(body.message))
     deps = _deps(claims, db)
     history = load_message_history(deps)
 

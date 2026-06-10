@@ -59,14 +59,14 @@ async def _reply(session_webhook: str, text: str) -> None:
 
 
 async def _handle(account_id: int, session_webhook: str, text: str) -> None:
-    from geo.agent.agent import build_embed_agent
+    from geo.agent.agent import build_embed_agent, route_line
     from geo.agent.methods import load_message_history, save_message_history
 
     await _reply(session_webhook, "⏳ 正在查询,请稍候…")    # 即时回执(sessionWebhook 一次发送)
     db = SessionLocal()
     try:
         deps = AgentDeps(account_id=account_id, user_id=account_id, db=db, caps=["read", "write"])
-        result = await build_embed_agent(True).run(text, deps=deps, message_history=load_message_history(deps))
+        result = await build_embed_agent(True, line=route_line(text)).run(text, deps=deps, message_history=load_message_history(deps))
         try:
             save_message_history(deps, result.all_messages_json())
         except Exception:  # noqa: BLE001
