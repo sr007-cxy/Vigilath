@@ -2436,6 +2436,7 @@ const en = {
                 "manualAddSeedEmpty": "No seeds yet",
                 "manualAddNeedSeed": "Add a seed prompt in step 2 first",
                 "manualAddSeedTitle": "Link this query to a seed prompt",
+                "manualAddSceneTitle": "Scene tag for this query",
                 "queriesFilterPlaceholder": "Filter candidates by text…",
                 "queriesFilterCount": "{{shown}} of {{total}}",
                 "sortByScoreOn": "By score",

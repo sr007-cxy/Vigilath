@@ -2442,6 +2442,7 @@ const zh = {
                 "manualAddSeedEmpty": "无可用种子",
                 "manualAddNeedSeed": "请先在第二步添加种子提示词",
                 "manualAddSeedTitle": "关联到种子提示词",
+                "manualAddSceneTitle": "该问题的场景标签",
                 "queriesFilterPlaceholder": "按文本过滤候选…",
                 "queriesFilterCount": "显示 {{shown}} / {{total}}",
                 "sortByScoreOn": "按评分",

@@ -147,6 +147,8 @@ export interface TopicPayload {
   // 2026-05-20 — 与 queries 同长,每条 query 来自哪个种子提示词。
   // picker 按种子分组,保存时把映射一并传后端,持久化到 queries_json[].seed。
   query_seeds?: string[];
+  // 2026-06-11 — 与 queries 同长,4 维场景标签;保存时持久化到 queries_json[].scene_type。
+  query_scene_types?: SceneType[];
   engines: EngineId[];
   enabled: boolean;
   // Phase C — 创建 / 更新时把当前种子词附带提交,后端追加进 seed_prompts_json (pending);

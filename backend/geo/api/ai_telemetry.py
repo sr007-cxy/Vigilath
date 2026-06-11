@@ -78,12 +78,14 @@ def _validate_payload(payload: TopicPayload) -> None:
     bad = [e for e in payload.engines if e not in VALID_ENGINES]
     if bad:
         raise HTTPException(400, f"unknown engines: {bad}")
-    # de-dup + strip — 同步把 query_cluster_ids / query_seeds 按位置剔除/对齐
+    # de-dup + strip — 同步把 query_cluster_ids / query_seeds / query_scene_types 按位置剔除/对齐
     cluster_ids_in = payload.query_cluster_ids if payload.query_cluster_ids else []
     seeds_in = payload.query_seeds if payload.query_seeds else []
+    scenes_in = payload.query_scene_types if payload.query_scene_types else []
     cleaned_queries: list[str] = []
     cleaned_clusters: list[int] = []
     cleaned_seeds: list[str] = []
+    cleaned_scenes: list[str] = []
     seen: set[str] = set()
     for i, q in enumerate(payload.queries):
         q = q.strip()
@@ -94,6 +96,9 @@ def _validate_payload(payload: TopicPayload) -> None:
                 cleaned_clusters.append(int(cluster_ids_in[i]))
             if i < len(seeds_in):
                 cleaned_seeds.append((seeds_in[i] or "").strip()[:200])
+            if i < len(scenes_in):
+                sc = (scenes_in[i] or "").strip()
+                cleaned_scenes.append(sc if sc in ALL_SCENES else "")
     if not cleaned_queries:
         raise HTTPException(400, "queries cannot be empty")
     payload.queries = cleaned_queries
@@ -102,6 +107,9 @@ def _validate_payload(payload: TopicPayload) -> None:
     )
     payload.query_seeds = (
         cleaned_seeds if len(cleaned_seeds) == len(cleaned_queries) else None
+    )
+    payload.query_scene_types = (
+        cleaned_scenes if len(cleaned_scenes) == len(cleaned_queries) else None
     )
     payload.engines = list(dict.fromkeys(payload.engines))
     # target / aliases cleanup
@@ -119,6 +127,7 @@ def _validate_payload(payload: TopicPayload) -> None:
 def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
                        cluster_ids: list[int] | None = None,
                        seeds: list[str] | None = None,
+                       scene_types: list[str] | None = None,
                        *, new_status: str = "pending",
                        reviewer_id: int | None = None) -> str:
     """把 query 列表升级为 [{text, created_at, cluster_id?, status, ...}] 形态.
@@ -145,6 +154,7 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
         pass
     cluster_ok = isinstance(cluster_ids, list) and len(cluster_ids) == len(payload_queries)
     seeds_ok = isinstance(seeds, list) and len(seeds) == len(payload_queries)
+    scenes_ok = isinstance(scene_types, list) and len(scene_types) == len(payload_queries)
     out = []
     seen_text: set[str] = set()
     for i, q in enumerate(payload_queries):
@@ -180,6 +190,14 @@ def _queries_with_meta(payload_queries: list[str], existing_raw: str | None,
             new_seed = (seeds[i] or "").strip()
             if new_seed and not item.get("seed"):
                 item["seed"] = new_seed
+        # scene_type:payload 带有效值就回填;已有非 search 标签不覆盖
+        # (legacy 默认 search 不是用户真选的,允许被非 search 覆盖 — 与 selected-queries 同规则)。
+        if scenes_ok:
+            new_scene = (scene_types[i] or "").strip()
+            if new_scene in ALL_SCENES:
+                existing_scene = item.get("scene_type")
+                if not existing_scene or existing_scene == "search":
+                    item["scene_type"] = new_scene
         out.append(item)
     return json.dumps(out, ensure_ascii=False)
 
@@ -539,6 +557,7 @@ def admin_create_topic_for_user(
         seed_prompts_json=seed_prompts_init,
         queries_json=_queries_with_meta(
             payload.queries, None, payload.query_cluster_ids, payload.query_seeds,
+            payload.query_scene_types,
             new_status="approved", reviewer_id=current_user.id,
         ),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
@@ -609,6 +628,7 @@ def create_topic(
         seed_prompts_json=seed_prompts_init,
         queries_json=_queries_with_meta(
             payload.queries, None, payload.query_cluster_ids, payload.query_seeds,
+            payload.query_scene_types,
         ),
         clusters_json=json.dumps(clusters_dump, ensure_ascii=False),
         engines_json=json.dumps(payload.engines, ensure_ascii=False),
@@ -724,6 +744,7 @@ def update_topic(
     )
     t.queries_json = _queries_with_meta(
         payload.queries, t.queries_json, payload.query_cluster_ids, payload.query_seeds,
+        payload.query_scene_types,
         new_status=new_status, reviewer_id=reviewer_id,
     )
     # clusters 只在 payload 显式传时才覆盖,避免 PUT 不带 clusters 时把旧簇清掉

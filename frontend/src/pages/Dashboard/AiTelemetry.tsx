@@ -2204,11 +2204,16 @@ export function TopicEditor({
     // 按 queries 顺序回填 seed — suggestions 里 q.seed 是这条候选当时被哪条种子词扩展出来的。
     // backend `_queries_with_meta` 会把 seed 持久化进 queries_json[].seed。
     const textToSeed = new Map<string, string>();
+    const textToScene = new Map<string, SceneType>();
     for (const q of suggestions) {
       if (q.seed && !textToSeed.has(q.text)) textToSeed.set(q.text, q.seed);
+      if (q.scene && !textToScene.has(q.text)) textToScene.set(q.text, q.scene);
     }
     const query_seeds = queries.map(q => textToSeed.get(q) || '');
     const hasAnySeed = query_seeds.some(s => s);
+    // 2026-06-11 — 场景标签同 seed 一样按 queries 顺序回填;缺省条目空串(后端忽略,沿用已有标签)
+    const query_scene_types = queries.map(q => textToScene.get(q) || ('' as SceneType));
+    const hasAnyScene = query_scene_types.some(s => s);
     // Phase C — 把所有种子词附带提交;后端去重 + 自动追加为 pending
     const seedTexts = seeds.map(s => s.trim()).filter(Boolean);
     return {
@@ -2218,6 +2223,7 @@ export function TopicEditor({
       industry: industry.trim(),
       queries,
       ...(hasAnySeed ? { query_seeds } : {}),
+      ...(hasAnyScene ? { query_scene_types } : {}),
       engines: Array.from(engines),
       enabled,
       ...(seedTexts.length > 0 ? { seed_drafts: seedTexts } : {}),
@@ -2717,12 +2723,12 @@ export function TopicEditor({
                 disabled={readOnly}
                 pickedCap={pickedCap}
                 seeds={allSeedTexts}
-                addQuery={(text, seed) => {
+                addQuery={(text, seed, scene) => {
                   const v = text.trim();
                   if (!v) return false;
                   if (suggestions.some(q => q.text === v) || picked.has(v)) return false;
                   if (picked.size >= QUERY_MAX_PICK) return false;
-                  setSuggestions(prev => [...prev, { text: v, score: 0, sources: [], seed }]);
+                  setSuggestions(prev => [...prev, { text: v, score: 0, sources: [], seed, scene }]);
                   setPicked(prev => new Set(prev).add(v));
                   return true;
                 }}
@@ -3064,11 +3070,13 @@ function ManualQueryAdder({
   disabled: boolean;
   pickedCap: boolean;
   seeds: string[];
-  addQuery: (text: string, seed: string) => boolean;
+  addQuery: (text: string, seed: string, scene: SceneType) => boolean;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const [chosenSeed, setChosenSeed] = useState<string>(seeds[0] || '');
+  // 2026-06-11 — 手动添加也必须归属一个场景标签(搜索/问答/意图/品牌),默认搜索
+  const [chosenScene, setChosenScene] = useState<SceneType>('search');
   const [hint, setHint] = useState<string | null>(null);
 
   // seeds 列表变化(用户在 step 2 新加/删除种子)时,若当前选中的不在了就重置
@@ -3087,7 +3095,7 @@ function ManualQueryAdder({
     }
     const v = draft.trim();
     if (!v) return;
-    const ok = addQuery(v, chosenSeed);
+    const ok = addQuery(v, chosenSeed, chosenScene);
     if (ok) {
       setDraft('');
       setHint(null);
@@ -3125,6 +3133,24 @@ function ManualQueryAdder({
         ) : (
           seeds.map(s => <option key={s} value={s}>{s}</option>)
         )}
+      </select>
+      <select
+        value={chosenScene}
+        onChange={e => { setChosenScene(e.target.value as SceneType); if (hint) setHint(null); }}
+        disabled={disabled || pickedCap || noSeeds}
+        className="px-2 py-1.5 rounded-md text-xs shrink-0"
+        style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-color)',
+          color: SCENE_COLORS[chosenScene],
+          minWidth: 84,
+          opacity: (disabled || pickedCap || noSeeds) ? 0.5 : 1,
+        }}
+        title={t('dashboard.aiTelemetry.form.manualAddSceneTitle') || '场景标签'}
+      >
+        {SCENE_KEYS.map(s => (
+          <option key={s} value={s}>{t(`topic.profile.monitor.scene.${s}.label`)}</option>
+        ))}
       </select>
       <div className="flex-1">
         <input
