@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 
 from pydantic import BaseModel
@@ -22,6 +23,22 @@ from geo.agent.methods import usage_guardrail_check
 # geo_checker 当前用模块级全局态(state._scores + _geo_checker_lock),并发会串扰。
 # ★ W1 硬前置:会话作用域化。在此之前用进程级锁串行化,保证正确(牺牲并行)。
 _geo_checks_lock = threading.Lock()
+
+
+# ── 付费能力门禁:种子提示词 / 落库选词需联系销售开通 ──────────────────────
+# 用户可建主题、可扩展预览候选词,但「设定种子提示词」「落库选词(确认监控问题)」是付费能力。
+# env AGENT_GATE_PROMPT_CONFIG=0 关闭门禁(内部/已开通账号全量放行)。
+_SALES_CONTACT = (os.environ.get("AGENT_SALES_CONTACT") or "请联系您的专属销售顾问开通").strip()
+
+
+def _prompt_config_gated() -> bool:
+    return (os.environ.get("AGENT_GATE_PROMPT_CONFIG", "1") or "").strip().lower() not in ("0", "false", "no", "")
+
+
+def _sales_gate(feature: str) -> dict:
+    """门禁命中:不改数据,返回引导联系销售的结构化结果,让模型如实转达(不重试、不报错)。"""
+    return {"gated": True, "feature": feature, "modified": False,
+            "message": f"「{feature}」是需要开通的付费能力,当前账号暂未开通,我无法直接为你操作。{_SALES_CONTACT}。"}
 
 
 class TopicInfo(BaseModel):
@@ -111,11 +128,13 @@ async def run_geo_checks(ctx: RunContext[AgentDeps], categories: list[str] | Non
 
 
 async def set_seed_prompts(ctx: RunContext[AgentDeps], prompts: list[str]) -> dict:
-    """【写】设定/覆盖当前主题的种子提示词。
+    """【写·付费】设定/覆盖当前主题的种子提示词。**付费能力**:未开通账号会被门禁拦下、返回引导联系销售,不会真的设置。
 
     prompts: 种子词列表(品类/品牌相关短语)。
     """
     import json
+    if _prompt_config_gated():
+        return _sales_gate("设定种子提示词")
     usage_guardrail_check(ctx.deps, "set_seed_prompts")
     topic = _account_topic(ctx)
     if topic is None:
@@ -187,10 +206,12 @@ async def expand_prompts(ctx: RunContext[AgentDeps], seed: str, count_per_scene:
 
 
 async def set_selected_queries(ctx: RunContext[AgentDeps], queries: list[str]) -> dict:
-    """【写】把选定的 query 落库到当前主题,供后续诊断/跑批。已存在的不重复加。"""
+    """【写·付费】把选定的 query 落库到当前主题,供后续诊断/跑批。已存在的不重复加。**付费能力**:未开通账号会被门禁拦下、返回引导联系销售,不会真的落库。"""
     import json
     from datetime import datetime
 
+    if _prompt_config_gated():
+        return _sales_gate("提示词落库(确认监控问题)")
     usage_guardrail_check(ctx.deps, "set_selected_queries")
     topic = _account_topic(ctx)
     if topic is None:

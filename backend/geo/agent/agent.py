@@ -35,6 +35,13 @@ sentiment_score 用百分比表述,stance/intent/factuality 等枚举用中文�
 **即使本轮对话的上文里你已经这么建议过,也不要再重复**——那是错的建议,别延续。舆情查到的负面直接陈述事实即可,
 结尾不要加「要不要存到知识库/方便后续追踪」这类话;真要给后续动作建议,只提真实有用的(如配置监测词 configure_sentiment、或创作对冲文章)。
 
+付费能力门禁(必须遵守):
+- 用户**可以建主题(create_topic)**、可以**扩展预览候选提示词(expand_prompts,只生成候选不落库)**。
+- 但**设定种子提示词(set_seed_prompts)**和**提示词落库 / 确认监控问题(set_selected_queries)**是**需开通的付费能力**:
+  用户要求"设种子词 / 加种子提示词 / 把这些词落库 / 确认监控问题"时,你**可以照常调用对应工具**——
+  工具会返回 `gated: true` 表示该账号未开通。此时**如实、礼貌地转达**:这是需开通的付费能力,请联系销售开通;
+  **绝不要**谎称已设置成功、也不要假装数据已落库。你仍可继续帮他建主题、扩展预览候选词、看数据等未门禁的事。
+
 边界(必须遵守):
 - **写操作必须有用户明确意图**:工具 docstring 以 **【写】/【动作】** 开头的(create_topic / set_seed_prompts /
   expand_prompts / set_selected_queries / run_geo_checks / trigger_diagnosis / draft_articles / confirm_template / publish_drafts / configure_sentiment)
@@ -45,6 +52,11 @@ sentiment_score 用百分比表述,stance/intent/factuality 等枚举用中文�
 - **特别注意「查看 vs 生成」别搞反**:用户问「**今天发了哪些文章**」「发布了什么」「看看文章」「文章进度/发布进度」
   都是**查看意图 → 调 get_publish_status(只读)**;**只有**用户明确说「生成/写/帮我产稿/创作文章」时才调 draft_articles。
   「发了哪些」是问过去已发布的,绝不是让你去生成新文章。拿不准就先问,别擅自生成。
+- **绝不要编造平台操作、绝不要向用户暴露内部机制**:平台**没有**「切换模块/切换板块/切到 GEO 可见性模块」这类开关。
+  「业务线隔离」「工具按线加载」纯属**内部实现**,**绝不要**对用户说「当前会话只加载了舆情/GEO 模块」「某工具不在可用范围内」
+  「请切换到 X 模块」这类话——用户不该知道也无需关心这些。
+  万一本轮确实缺少完成请求所需的工具(够不到),就**直说**「请把需求说清楚些再问一次」或如实说明现在能帮什么,
+  **绝不要**虚构一个不存在的平台步骤让用户去点、更不要把锅甩给"模块没切换"。
 - 引擎选择、查询调度、频率由平台固定,你和用户都不能指定;用户只看结果。
 - 提示词一旦确认即锁定,不可再改。
 - 只服务当前账号,绝不跨账号。
@@ -119,11 +131,34 @@ _SENTIMENT_KW = (
     "看跌", "看涨", "bearish", "bullish",
 )
 
+# GEO 强信号词:出现这些基本可断定是 GEO 业务线(动作 / 专有名词)。
+# 用途:混合意图(同时含舆情词,如"做 GEO 提升正面声量")时,GEO 信号优先,避免被舆情词劫持到舆情线、
+# 导致这一轮没加载 GEO 工具、模型只能瞎编(如编出"切换 GEO 模块"这种不存在的平台操作)。
+# 只收**强 GEO 专有词**,不收 报告/效果 这类两条线都可能用的歧义词,以免把"舆情报告"误判成 GEO。
+_GEO_KW = (
+    "geo", "aeo", "可见性", "被引用", "引用率", "建主题", "创建主题", "新建主题", "主题",
+    "提示词", "种子词", "扩词", "扩展词", "落库", "命中", "未命中", "诊断", "发文", "发布文章",
+    "产稿", "生成文章", "投放", "复测", "优化文章", "query", "覆盖率",
+)
+
 
 def route_line(text: str) -> str:
-    """把一条用户消息路由到业务线:sentiment / geo。命中舆情关键词→舆情线,否则→GEO 线。"""
-    t = text or ""
-    return "sentiment" if any(k in t for k in _SENTIMENT_KW) else "geo"
+    """把一条用户消息路由到业务线工具集:geo / sentiment / both。
+
+    两个业务、一个 agent:用户在同一对话里既能问 GEO 又能问舆情,**绝不因分线而阻塞**。
+    隔离只为单一意图时不串 CTA;一旦两条线都被问到,就两条线工具都给,答全。
+      1. 同时含 GEO 与舆情信号 → both(两条线工具都给,如"看下舆情顺便跑 GEO 诊断");
+      2. 只含舆情信号 → sentiment(单线,答得干净、不掺 GEO CTA);
+      3. 只含 GEO 信号 / 都不含 → geo(默认线)。
+    """
+    t = (text or "").lower()
+    geo = any(k in t for k in _GEO_KW)
+    sent = any(k in t for k in _SENTIMENT_KW)
+    if geo and sent:
+        return "both"
+    if sent:
+        return "sentiment"
+    return "geo"
 
 
 def _line_tools(line: str, can_write: bool, include_publish: bool = False):
