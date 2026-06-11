@@ -93,6 +93,8 @@ export function PublishingPlanEditor({
   );
   const [templates, setTemplates] = useState<ContentTemplate[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 2026-06-11 — 监测问题多选弹窗:记录正在编辑哪一行(localKey)
+  const [queryPickerKey, setQueryPickerKey] = useState<string | null>(null);
   const [drawerTarget, setDrawerTarget] = useState<string | null>(null); // localKey of row
   const [savingDraft, setSavingDraft] = useState(false);
   const [savingConfirm, setSavingConfirm] = useState(false);
@@ -377,39 +379,16 @@ export function PublishingPlanEditor({
                              onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
                     </td>
                     <td className="py-1.5 px-1">
-                      {/* 多选监测问题:已选 tag 列表 + 追加下拉;生成正文时要求自然覆盖这组问题 */}
-                      <div className="flex flex-col gap-1 w-[220px]" onClick={e => e.stopPropagation()}>
-                        {r.queries.map(q => (
-                          <span key={q}
-                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
-                                style={{ background: 'var(--bg-tertiary)',
-                                         border: '1px solid var(--border-color)',
-                                         color: 'var(--text-primary)' }}
-                                title={q}>
-                            <button type="button"
-                                    onClick={() => updateRow(r.localKey, {
-                                      queries: r.queries.filter(x => x !== q),
-                                    })}
-                                    style={{ color: 'var(--text-secondary)' }}>×</button>
-                            <span className="truncate max-w-[180px]">{q}</span>
-                          </span>
-                        ))}
-                        <select className="rounded-md px-1.5 py-1 w-full"
-                                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
-                                         border: '1px dashed var(--border-color)' }}
-                                value=""
-                                onChange={e => {
-                                  const v = e.target.value;
-                                  if (v && !r.queries.includes(v)) {
-                                    updateRow(r.localKey, { queries: [...r.queries, v] });
-                                  }
-                                }}>
-                          <option value="">＋ 添加监测问题…</option>
-                          {monitored.filter(q => !r.queries.includes(q)).map(q => (
-                            <option key={q} value={q}>{q}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {/* 多选监测问题:点开弹窗勾选;生成正文时要求自然覆盖这组问题 */}
+                      <button type="button"
+                              className="rounded-md px-2 py-1 text-xs whitespace-nowrap"
+                              style={{ background: 'var(--bg-tertiary)',
+                                       border: '1px solid var(--border-color)',
+                                       color: r.queries.length ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                              title={r.queries.join('\n')}
+                              onClick={e => { e.stopPropagation(); setQueryPickerKey(r.localKey); }}>
+                        {r.queries.length ? `${r.queries.length} 条监测问题` : '选择监测问题…'}
+                      </button>
                     </td>
                     <td className="py-1.5 px-1 tabular-nums">
                       <span style={{ color: cov === 0 ? '#ef4444' : cov < 50 ? '#eab308' : '#10b981' }}>
@@ -629,6 +608,101 @@ export function PublishingPlanEditor({
                         setDrawerTarget(null);
                         refreshTemplates();
                       } : undefined} />
+
+      {queryPickerKey && (() => {
+        const row = rows.find(x => x.localKey === queryPickerKey);
+        if (!row) return null;
+        return (
+          <QueryPickerModal
+            monitored={monitored}
+            picked={row.queries}
+            seed={row.seed}
+            onChange={qs => updateRow(queryPickerKey, { queries: qs })}
+            onClose={() => setQueryPickerKey(null)}
+          />
+        );
+      })()}
+    </div>
+  );
+}
+
+
+// 2026-06-11 — 监测问题多选弹窗:搜索 + 勾选,即勾即生效,关掉即完成.
+function QueryPickerModal({
+  monitored, picked, seed, onChange, onClose,
+}: {
+  monitored: string[];
+  picked: string[];
+  seed: string;
+  onChange: (qs: string[]) => void;
+  onClose: () => void;
+}) {
+  const [filter, setFilter] = useState('');
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const shown = useMemo(() => {
+    const f = filter.trim().toLowerCase();
+    return f ? monitored.filter(q => q.toLowerCase().includes(f)) : monitored;
+  }, [monitored, filter]);
+
+  const toggle = (q: string) => {
+    onChange(pickedSet.has(q) ? picked.filter(x => x !== q) : [...picked, q]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+         style={{ background: 'rgba(0,0,0,0.45)' }}
+         onClick={onClose}>
+      <div className="w-[560px] max-w-full rounded-md p-4 flex flex-col"
+           style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                    maxHeight: '80vh' }}
+           onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-primary">
+            选择监测问题
+            {seed && <span className="text-xs text-muted ml-2">种子:{seed}</span>}
+          </h3>
+          <button type="button" onClick={onClose}
+                  className="text-muted hover:text-primary text-lg leading-none">×</button>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
+                 placeholder="按文本过滤…"
+                 className="flex-1 rounded-md px-2 py-1.5 text-xs"
+                 style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)' }} />
+          <span className="text-xs text-muted whitespace-nowrap">已选 {picked.length}</span>
+          {picked.length > 0 && (
+            <button type="button" onClick={() => onChange([])}
+                    className="text-xs px-2 py-1 rounded-md"
+                    style={{ color: 'var(--text-secondary)',
+                             border: '1px solid var(--border-color)' }}>
+              清空
+            </button>
+          )}
+        </div>
+        <div className="overflow-y-auto rounded-md"
+             style={{ border: '1px solid var(--border-color)' }}>
+          {shown.length === 0 ? (
+            <div className="p-4 text-center text-xs text-muted">无匹配的监测问题</div>
+          ) : shown.map(q => (
+            <label key={q}
+                   className="flex items-start gap-2 px-3 py-1.5 text-xs cursor-pointer"
+                   style={{ borderBottom: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)' }}>
+              <input type="checkbox" checked={pickedSet.has(q)}
+                     onChange={() => toggle(q)} className="mt-0.5 shrink-0" />
+              <span>{q}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end mt-3">
+          <button type="button" onClick={onClose}
+                  className="px-4 py-1.5 text-xs rounded-md text-white"
+                  style={{ background: 'var(--accent-primary)' }}>
+            完成
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
