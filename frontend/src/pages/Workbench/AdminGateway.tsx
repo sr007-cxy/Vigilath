@@ -260,7 +260,14 @@ export function AdminGateway() {
                         <span style={{ color: j.status === 'done' ? '#22c55e' : j.status === 'failed' ? '#ef4444' : 'var(--text-muted)' }}>{j.status}</span>
                       </td>
                       <td className="px-3 py-2 text-muted">{(j.created_at || '').replace('T', ' ').slice(0, 19)}</td>
-                      <td className="px-3 py-2 text-right text-muted">{openJob === j.id ? '▾' : '▸'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button className="px-2 py-0.5 rounded text-xs" style={card}
+                                onClick={(e) => { e.stopPropagation(); setOpenJob(openJob === j.id ? null : j.id); }}>
+                          {openJob === j.id
+                            ? t('workbench.adminGateway.collapse', { defaultValue: '收起' })
+                            : t('workbench.adminGateway.view', { defaultValue: '查看' })}
+                        </button>
+                      </td>
                     </tr>
                     {openJob === j.id && (
                       <tr style={{ background: 'var(--bg-page, rgba(0,0,0,0.02))' }}>
