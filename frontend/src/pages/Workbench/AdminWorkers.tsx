@@ -4,17 +4,21 @@ import {
   aiTelemetryApi,
   type BrowserWorker,
   type WorkerQueueStats,
-  type EngineSessionRow,
+  type EngineSessionPage,
 } from '../../services/aiTelemetryApi';
 
 const REFRESH_MS = 10000;
+const SESSION_PAGE_SIZE = 20;
 
 export function AdminWorkers() {
   const token = localStorage.getItem('token') || '';
   const { t } = useTranslation();
   const [workers, setWorkers] = useState<BrowserWorker[]>([]);
   const [stats, setStats] = useState<WorkerQueueStats | null>(null);
-  const [sessions, setSessions] = useState<EngineSessionRow[]>([]);
+  const [sessions, setSessions] = useState<EngineSessionPage | null>(null);
+  const [sessPage, setSessPage] = useState(1);
+  const [sessEngine, setSessEngine] = useState('');
+  const [sessStatus, setSessStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
@@ -23,12 +27,16 @@ export function AdminWorkers() {
     Promise.all([
       aiTelemetryApi.adminListWorkers(token),
       aiTelemetryApi.adminWorkersQueueStats(token),
-      aiTelemetryApi.adminListEngineSessions(token),
+      aiTelemetryApi.adminListEngineSessions(token, sessPage, SESSION_PAGE_SIZE, sessEngine, sessStatus),
     ])
-      .then(([ws, st, ss]) => { setWorkers(ws); setStats(st); setSessions(ss); setErr(null); })
+      .then(([ws, st, ss]) => {
+        setWorkers(ws); setStats(st); setSessions(ss); setErr(null);
+        // 行被清理后页码可能越界(空页),回第一页
+        if (ss.items.length === 0 && ss.page > 1) setSessPage(1);
+      })
       .catch(e => setErr(e?.message || 'failed'))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, sessPage, sessEngine, sessStatus]);
 
   useEffect(() => {
     reload();
@@ -207,15 +215,33 @@ export function AdminWorkers() {
           {/* ── 账号池(登录态)── */}
           <div className="rounded-lg overflow-hidden mt-5"
                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-            <div className="px-3 py-2 text-xs text-secondary font-medium border-b"
+            <div className="flex items-center px-3 py-2 text-xs text-secondary font-medium border-b"
                  style={{ borderColor: 'var(--border-color)' }}>
               {t('workbench.adminWorkers.poolTitle', { defaultValue: '账号池(登录态)' })}
               <span className="text-muted ml-2">
                 {t('workbench.adminWorkers.poolActive', {
                   defaultValue: '可用 {{n}} / 共 {{total}}',
-                  n: sessions.filter(s => s.status === 'active').length,
-                  total: sessions.length,
+                  n: sessions?.active_total ?? 0,
+                  total: sessions?.grand_total ?? 0,
                 })}
+              </span>
+              <span className="ml-auto flex items-center gap-2 font-normal">
+                <select value={sessEngine}
+                        onChange={e => { setSessEngine(e.target.value); setSessPage(1); }}
+                        className="px-2 py-1 rounded-md text-xs"
+                        style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                  <option value="">{t('workbench.adminWorkers.filterAllEngines', { defaultValue: '全部引擎' })}</option>
+                  {(sessions?.engines ?? []).map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+                <select value={sessStatus}
+                        onChange={e => { setSessStatus(e.target.value); setSessPage(1); }}
+                        className="px-2 py-1 rounded-md text-xs"
+                        style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                  <option value="">{t('workbench.adminWorkers.filterAllStatus', { defaultValue: '全部状态' })}</option>
+                  <option value="active">{t('workbench.adminWorkers.statusActive', { defaultValue: '可用' })}</option>
+                  <option value="expired">{t('workbench.adminWorkers.statusExpired', { defaultValue: '已过期' })}</option>
+                  <option value="quarantined">{t('workbench.adminWorkers.statusQuarantined', { defaultValue: '已隔离' })}</option>
+                </select>
               </span>
             </div>
             <table className="w-full text-xs">
@@ -231,16 +257,28 @@ export function AdminWorkers() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map(s => {
+                {(sessions?.items ?? []).map(s => {
                   const color = s.status === 'active' ? 'text-emerald-500'
                     : s.status === 'quarantined' ? 'text-red-400' : 'text-muted';
+                  const statusText = s.status === 'active'
+                    ? t('workbench.adminWorkers.statusActive', { defaultValue: '可用' })
+                    : s.status === 'expired'
+                      ? t('workbench.adminWorkers.statusExpired', { defaultValue: '已过期' })
+                      : s.status === 'quarantined'
+                        ? t('workbench.adminWorkers.statusQuarantined', { defaultValue: '已隔离' })
+                        : s.status;
                   const fmt = (d: string | null) => d ? d.slice(0, 16).replace('T', ' ') : '—';
                   return (
                     <tr key={s.id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                       <td className="px-3 py-2 text-primary">{s.engine}</td>
-                      <td className="px-3 py-2 text-secondary">{s.label || `#${s.id}`}</td>
+                      <td className="px-3 py-2 text-secondary">
+                        {s.account_handle || s.label || `#${s.id}`}
+                        {s.account_handle && s.label && (
+                          <span className="text-[10px] text-muted ml-1">({s.label})</span>
+                        )}
+                      </td>
                       <td className={`px-3 py-2 ${color}`}>
-                        {s.status}
+                        {statusText}
                         {s.last_fail_type && s.status !== 'active' && (
                           <span className="text-[10px] text-muted ml-1">({s.last_fail_type})</span>
                         )}
@@ -252,13 +290,36 @@ export function AdminWorkers() {
                     </tr>
                   );
                 })}
-                {sessions.length === 0 && (
+                {(sessions?.total ?? 0) === 0 && (
                   <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">
-                    {t('workbench.adminWorkers.noSessions', { defaultValue: '账号池为空,用浏览器扩展上传登录态' })}
+                    {(sessEngine || sessStatus)
+                      ? t('workbench.adminWorkers.noFilterMatch', { defaultValue: '没有匹配当前筛选的账号' })
+                      : t('workbench.adminWorkers.noSessions', { defaultValue: '账号池为空,用浏览器扩展上传登录态' })}
                   </td></tr>
                 )}
               </tbody>
             </table>
+            {(sessions?.total ?? 0) > SESSION_PAGE_SIZE && (
+              <div className="flex items-center justify-end gap-2 px-3 py-2 text-xs border-t"
+                   style={{ borderColor: 'var(--border-color)' }}>
+                <button type="button" disabled={sessPage <= 1}
+                        onClick={() => setSessPage(p => p - 1)}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminWorkers.prevPage', { defaultValue: '上一页' })}
+                </button>
+                <span className="text-muted tabular-nums">
+                  {sessPage} / {Math.max(1, Math.ceil((sessions?.total ?? 0) / SESSION_PAGE_SIZE))}
+                </span>
+                <button type="button"
+                        disabled={sessPage >= Math.ceil((sessions?.total ?? 0) / SESSION_PAGE_SIZE)}
+                        onClick={() => setSessPage(p => p + 1)}
+                        className="px-2 py-1 rounded-md disabled:opacity-40"
+                        style={{ background: 'var(--bg-tertiary)' }}>
+                  {t('workbench.adminWorkers.nextPage', { defaultValue: '下一页' })}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
