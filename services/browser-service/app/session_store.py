@@ -202,6 +202,13 @@ def report_session_outcome(
         _log.warning("[session-pool] engine=%s: check-in failed: %s", engine_name, e)
 
 
+def get_last_checkout_id(engine_name: str):
+    """返回当前线程上次 check-out 的 session id;按账号粘定代理(sticky)时用作 session 标识。
+    没从池子 check-out(走本地文件兜底)时返回 None。"""
+    slots = getattr(_last_checkout, "by_engine", None) or {}
+    return slots.get(engine_name)
+
+
 def save_storage_state(engine_name: str, storage_state: dict) -> None:
     """Persist full storage_state (cookies + localStorage) to disk."""
     _ensure_dir()

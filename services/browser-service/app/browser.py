@@ -138,6 +138,50 @@ async def create_stealth_page(
     return page, context
 
 
+def _sticky_id_from_state(state: dict | None) -> str | None:
+    """从 storage_state 算一个稳定的账号标识(用于 proxy sticky session)。
+    取 cookie 集合里最长的那个值(通常是登录 token)做 hash —— 跨重新加载稳定,
+    不依赖 check-out 时机。"""
+    if not state:
+        return None
+    cookies = state.get("cookies") or []
+    if not cookies:
+        return None
+    longest = max((c.get("value", "") or "") for c in cookies)
+    if not longest:
+        return None
+    import hashlib
+    return hashlib.md5(longest.encode("utf-8")).hexdigest()[:10]
+
+
+def _engine_proxy(engine_name: str, state: dict | None = None) -> dict | None:
+    """按账号粘定的出口代理。仅对 PROXY_ENGINES 列出的引擎启用(如 deepseek)。
+
+    sticky:proxy 用户名追加 `-session-acct<id>`,同一账号永远走同一出口 IP,避免
+    "异地登录"风控。id 优先取刚 check-out 的会话 id,取不到则从 storage_state 算稳定 hash。
+
+    ENV: PROXY_ENGINES(逗号分隔) / ENGINE_PROXY_SERVER / ENGINE_PROXY_USER / ENGINE_PROXY_PASS
+    """
+    engines = [e.strip() for e in os.environ.get("PROXY_ENGINES", "").split(",") if e.strip()]
+    if engine_name not in engines:
+        return None
+    server = os.environ.get("ENGINE_PROXY_SERVER", "").strip()
+    user = os.environ.get("ENGINE_PROXY_USER", "").strip()
+    pw = os.environ.get("ENGINE_PROXY_PASS", "").strip()
+    if not (server and user and pw):
+        return None
+    sid = None
+    try:
+        from .session_store import get_last_checkout_id
+        sid = get_last_checkout_id(engine_name)
+    except Exception:  # noqa: BLE001
+        sid = None
+    if sid is None:
+        sid = _sticky_id_from_state(state)
+    username = f"{user}-session-acct{sid}" if sid else user
+    return {"server": server, "username": username, "password": pw}
+
+
 async def create_headed_page(
     engine_name: str,
     *,
@@ -188,6 +232,15 @@ async def create_headed_page(
     state = load_storage_state(engine_name)
     if state:
         ctx_opts["storage_state"] = state
+
+    # 按账号粘定出口代理(仅 PROXY_ENGINES,如 deepseek)。必须在 load_storage_state
+    # 之后取,sticky session id 来自刚 check-out 的会话。
+    proxy = _engine_proxy(engine_name, state)
+    if proxy:
+        ctx_opts["proxy"] = proxy
+        import sys
+        sys.__stdout__.write(f"[proxy] {engine_name} via {proxy['username'].rsplit('-session-',1)[-1]}\n")
+        sys.__stdout__.flush()
 
     if record_video:
         from .video_store import get_snapshot_dir
