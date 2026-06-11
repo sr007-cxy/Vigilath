@@ -104,6 +104,8 @@ export interface PublishPlanItem {
   // seed-based 新流程:seed 非空,query 留空;legacy:seed 为 null,query 非空.
   seed?: string | null;
   query: string;
+  // 2026-06-11 — 多选监测 query;生成正文时要求自然覆盖这组问题。与 query 单值并存,queries 优先。
+  queries?: string[];
   template_id?: number | null;
   platform?: string | null;
   note?: string | null;
@@ -127,6 +129,7 @@ export interface PlanItemDraft {
   publish_date: string;
   seed?: string | null;                 // seed-based 新行非空;legacy 留空 (二选一)
   query: string;                        // legacy 行 ∈ monitored;seed-based 行允许 ""
+  queries?: string[];                   // 2026-06-11 — 多选监测 query,每条必 ∈ monitored
   template_id: number;
   platform: string;
   note?: string | null;

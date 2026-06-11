@@ -648,7 +648,10 @@ class PublishPlanItem(BaseModel):
     seq: int = 0                          # 显示顺序
     publish_date: str                     # YYYY-MM-DD
     seed: Optional[str] = None            # 种子提示词文本(seed-based 行;legacy 行为 None)
-    query: str = ""                       # 监测 query(legacy 行非空;seed-based 行可空)
+    query: str = ""                       # 监测 query(legacy 单选行;新行用 queries 多选)
+    # 2026-06-11 — 一篇文章可挂多条监测 query(多选);生成正文时要求自然覆盖这组问题。
+    # legacy 行只有 query 单值;两者同时有时 queries 优先。
+    queries: list[str] = Field(default_factory=list)
     template_id: Optional[int] = None     # 旧数据 fallback 时为 None
     platform: Optional[str] = None
     note: Optional[str] = None
@@ -678,6 +681,8 @@ class PlanItemDraft(BaseModel):
     publish_date: str                     # YYYY-MM-DD
     seed: Optional[str] = None
     query: str = ""
+    # 2026-06-11 — 多选监测 query;每条必 ∈ monitored。与 query 单值并存,queries 优先。
+    queries: list[str] = Field(default_factory=list, max_length=50)
     template_id: int
     platform: str
     note: Optional[str] = None

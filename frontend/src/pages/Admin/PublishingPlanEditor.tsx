@@ -19,6 +19,8 @@ type RowDraft = {
   // 二选一,至少有一个非空.
   seed: string;
   query: string;
+  // 2026-06-11 — 多选监测 query(legacy 单 query 行加载时并入这里)
+  queries: string[];
   template_id: number | null;
   platform: string;
   note: string;
@@ -61,6 +63,8 @@ const fromPlanItem = (it: PublishPlanItem): RowDraft => ({
   publish_date: it.publish_date,
   seed: it.seed || '',
   query: it.query,
+  // legacy 单 query 行并入 queries 多选;两者都有时 queries 优先
+  queries: (it.queries && it.queries.length > 0) ? it.queries : (it.query ? [it.query] : []),
   template_id: it.template_id ?? null,
   platform: it.platform || '',
   note: it.note || '',
@@ -160,6 +164,7 @@ export function PublishingPlanEditor({
       publish_date: date,
       seed: last?.seed || '',
       query: '',
+      queries: [],
       template_id: defaultTmpl ? defaultTmpl.id : null,
       platform: defaultPlat,
       note: '',
@@ -197,14 +202,14 @@ export function PublishingPlanEditor({
     const drafts: PlanItemDraft[] = [];
     for (const r of rows) {
       const seed = r.seed.trim();
-      const query = r.query.trim();
-      if (!seed && !query) {
-        setErr(`第 ${r.seq + 1} 行种子和 query 至少要填一个`);
+      const queries = r.queries.map(q => q.trim()).filter(Boolean);
+      if (!seed && queries.length === 0) {
+        setErr(`第 ${r.seq + 1} 行种子和监测问题至少要填一个`);
         return null;
       }
-      // legacy 行(只填 query)仍要求在监测列表里;seed-based 行(seed 非空)跳过该校验.
-      if (!seed && query && !monSet.has(query)) {
-        setErr(`第 ${r.seq + 1} 行 query 不在监测列表里`);
+      const badQ = queries.find(q => !monSet.has(q));
+      if (badQ) {
+        setErr(`第 ${r.seq + 1} 行监测问题不在监测列表里:${badQ}`);
         return null;
       }
       if (!r.template_id) {
@@ -220,7 +225,9 @@ export function PublishingPlanEditor({
         seq: r.seq,
         publish_date: r.publish_date,
         seed: seed || null,
-        query,
+        // legacy 单值字段:无 seed 的纯 query 行回填第一条,保老后端/老数据兼容
+        query: (!seed && queries.length > 0) ? queries[0] : '',
+        queries,
         template_id: r.template_id,
         platform: r.platform,
         note: r.note || null,
@@ -370,15 +377,39 @@ export function PublishingPlanEditor({
                              onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
                     </td>
                     <td className="py-1.5 px-1">
-                      <select className="rounded-md px-1.5 py-1 w-[160px]"
-                              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                       border: '1px solid var(--border-color)' }}
-                              value={r.query}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => updateRow(r.localKey, { query: e.target.value })}>
-                        <option value="">— 留空(seed-based)—</option>
-                        {monitored.map(q => <option key={q} value={q}>{q}</option>)}
-                      </select>
+                      {/* 多选监测问题:已选 tag 列表 + 追加下拉;生成正文时要求自然覆盖这组问题 */}
+                      <div className="flex flex-col gap-1 w-[220px]" onClick={e => e.stopPropagation()}>
+                        {r.queries.map(q => (
+                          <span key={q}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]"
+                                style={{ background: 'var(--bg-tertiary)',
+                                         border: '1px solid var(--border-color)',
+                                         color: 'var(--text-primary)' }}
+                                title={q}>
+                            <button type="button"
+                                    onClick={() => updateRow(r.localKey, {
+                                      queries: r.queries.filter(x => x !== q),
+                                    })}
+                                    style={{ color: 'var(--text-secondary)' }}>×</button>
+                            <span className="truncate max-w-[180px]">{q}</span>
+                          </span>
+                        ))}
+                        <select className="rounded-md px-1.5 py-1 w-full"
+                                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                                         border: '1px dashed var(--border-color)' }}
+                                value=""
+                                onChange={e => {
+                                  const v = e.target.value;
+                                  if (v && !r.queries.includes(v)) {
+                                    updateRow(r.localKey, { queries: [...r.queries, v] });
+                                  }
+                                }}>
+                          <option value="">＋ 添加监测问题…</option>
+                          {monitored.filter(q => !r.queries.includes(q)).map(q => (
+                            <option key={q} value={q}>{q}</option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
                     <td className="py-1.5 px-1 tabular-nums">
                       <span style={{ color: cov === 0 ? '#ef4444' : cov < 50 ? '#eab308' : '#10b981' }}>

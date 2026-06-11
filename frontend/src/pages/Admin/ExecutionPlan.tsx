@@ -455,16 +455,27 @@ function PublishingPlanSection({
                     {it.publish_date}
                     <span className="text-muted ml-1">(#{it.seq + 1})</span>
                   </td>
-                  <td className="py-2 px-2 max-w-[280px] truncate cursor-pointer"
-                      title={it.seed || it.query}
+                  <td className="py-2 px-2 max-w-[280px] cursor-pointer"
+                      title={[it.seed, ...(it.queries?.length ? it.queries : [it.query])]
+                        .filter(Boolean).join('\n')}
                       onClick={() => navigate(`/workbench/topics/${plan.topic_id}/edit?step=6`)}>
                     {it.seed ? (
-                      <>
+                      <div className="truncate">
                         <span className="text-primary">{it.seed}</span>
                         <span className="text-[10px] text-muted ml-1">种子</span>
-                      </>
+                      </div>
                     ) : (
-                      <span className="text-primary">{it.query}</span>
+                      <div className="truncate">
+                        <span className="text-primary">
+                          {(it.queries?.length ? it.queries[0] : it.query)}
+                        </span>
+                      </div>
+                    )}
+                    {/* 多选监测问题:种子行/单 query 行都可能挂一组,展示条数角标 */}
+                    {(it.queries?.length ?? 0) > (it.seed ? 0 : 1) && (
+                      <div className="text-[10px] text-muted truncate">
+                        覆盖 {it.queries!.length} 条监测问题
+                      </div>
                     )}
                   </td>
                   <td className="py-2 px-2 text-center tabular-nums">

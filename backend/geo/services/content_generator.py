@@ -299,8 +299,12 @@ def _run_per_item(
         item_id = str(it.get("id") or "")
         q = str(it.get("query") or "").strip()
         seed = str(it.get("seed") or "").strip()
+        # 2026-06-11 — 多选 queries 行:这组监测问题要被正文自然覆盖;legacy 单 query 行兼容.
+        cover_queries = [str(x).strip() for x in (it.get("queries") or []) if str(x).strip()]
+        if not cover_queries and q:
+            cover_queries = [q]
         # seed-based 行用 seed 当主题;legacy 行 fallback 到 query.
-        topic_text = seed or q
+        topic_text = seed or q or (cover_queries[0] if cover_queries else "")
         platform = str(it.get("platform") or "") or None
         tmpl_id = it.get("template_id")
         tmpl = tmpl_by_id.get(tmpl_id) if tmpl_id else None
@@ -364,6 +368,7 @@ def _run_per_item(
                     title, body, summary = _generate_with_template(
                         profile, tmpl, topic_text, platform or "", provider, api_key,
                         seed=seed or None, style_refs=style_refs,
+                        cover_queries=cover_queries,
                     )
                 else:
                     medias = _match_topic_media(db, topic_id, topic_text)
@@ -371,6 +376,7 @@ def _run_per_item(
                         profile, topic_text, provider, api_key,
                         direction=direction, copywriting_type=copywriting_type,
                         medias=medias, topic_id=topic_id, style_refs=style_refs,
+                        cover_queries=cover_queries,
                     )
                 doc.title = title
                 allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
@@ -557,17 +563,34 @@ def _build_brand_block(profile: BrandProfile) -> str:
     return "\n".join(parts)
 
 
+def _build_cover_queries_block(cover_queries: Optional[list[str]], topic_text: str = "") -> str:
+    """多选 queries 行的覆盖要求段 — 追加到 user prompt 末尾.
+
+    单条且与主题相同(legacy 单 query 行)时返回空串,不重复啰嗦。
+    """
+    qs = [q for q in (cover_queries or []) if q and q != topic_text]
+    if not qs:
+        return ""
+    bullets = "\n".join(f"  - {q}" for q in qs[:20])
+    return (
+        f"\n\n本文必须自然覆盖以下用户真实搜索问题(围绕它们组织内容,"
+        f"在正文中逐一给出解答或信息;融进行文,不要把问题原文罗列成清单):\n{bullets}"
+    )
+
+
 def _generate_with_template(
     profile: BrandProfile, tmpl: ContentTemplateORM,
     query: str, platform: str,
     provider: str, api_key: str,
     seed: Optional[str] = None,
     style_refs: Optional[list] = None,
+    cover_queries: Optional[list[str]] = None,
 ) -> tuple[str, str, str]:
     """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染.
 
     seed 非空时(seed-based plan),模板里 {seed} 拿到种子文本,{query} 拿到 seed 副本以兼容
     旧模板;legacy plan 行 seed 为 None,两个变量都拿 query.
+    cover_queries 非空时在渲染结果后追加「需自然覆盖的问题组」段(多选 query 行)。
     """
     system_prompt = _build_system_prompt(profile, style_refs=style_refs)
     brand_block = _build_brand_block(profile)
@@ -581,6 +604,7 @@ def _generate_with_template(
         "length_max": tmpl.length_max,
         "brand_block": brand_block,
     })
+    user_prompt += _build_cover_queries_block(cover_queries, topic_text=query)
     return _call_llm(system_prompt, user_prompt, provider, api_key)
 
 
@@ -639,6 +663,7 @@ def _generate_one(
     medias: Optional[list] = None,
     topic_id: Optional[int] = None,
     style_refs: Optional[list] = None,
+    cover_queries: Optional[list[str]] = None,
 ) -> tuple[str, str, str]:
     """单条 query → (title, body_markdown, summary).
 
@@ -677,9 +702,11 @@ def _generate_one(
             f"  5. 所有标点用中文全角(,。!?:;「」),英文术语 / 数字保留原样即可。"
         )
 
+    cover_block = _build_cover_queries_block(cover_queries, topic_text=query)
     user_prompt = (
-        f"针对下面这个问题,写一篇符合资料调性、可以直接复制发布的文章。\n"
-        f"问题:{query}\n\n"
+        f"针对下面这个{'主题' if cover_block else '问题'},写一篇符合资料调性、可以直接复制发布的文章。\n"
+        f"{'主题' if cover_block else '问题'}:{query}"
+        f"{cover_block}\n\n"
         f"输出严格 JSON,字段:\n"
         f'  "title": 文案标题(吸睛,≤30 字,纯文本不要带任何符号修饰),\n'
         f'  "summary": 200 字内的摘要(纯文本,用于卡片预览),\n'

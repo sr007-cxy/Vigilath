@@ -862,6 +862,21 @@ def _build_plan_window(
         return _legacy_query_window(
             db, topic_id, monitored, start_date=start_date, days=days, start_seq=start_seq)
 
+    # 2026-06-11 — 种子 → 该种子下被选监测 query 列表(每天的 N 篇文章把这组 query 轮流分组,
+    # 一篇文章挂多条 query,生成正文时要求自然覆盖这组问题)。
+    monitored_set = set(monitored)
+    seed_to_queries: dict[str, list[str]] = {}
+    try:
+        qarr = json.loads(topic.queries_json or "[]")
+    except Exception:  # noqa: BLE001
+        qarr = []
+    for qd in qarr:
+        if not (isinstance(qd, dict) and qd.get("text")):
+            continue
+        if qd["text"] not in monitored_set:
+            continue
+        seed_to_queries.setdefault(str(qd.get("seed") or ""), []).append(str(qd["text"]))
+
     # 默认 platform — 走模板自带的 target_platforms 第一个,空则 fallback.
     def _default_platform(tmpl: ContentTemplateORM) -> str:
         try:
@@ -874,15 +889,19 @@ def _build_plan_window(
 
     items: list[dict] = []
     seq = start_seq
+    n_tmpl = len(picked_templates)
     for day_offset in range(days):
         seed_text = approved_seeds[day_offset % len(approved_seeds)]
-        for tmpl in picked_templates:
+        # 该种子下的 query 轮流分给当天的 N 篇(第 i 篇拿 i, i+N, i+2N…条)
+        day_queries = seed_to_queries.get(seed_text) or []
+        for ti, tmpl in enumerate(picked_templates):
             items.append({
                 "id": str(_uuid.uuid4()),
                 "seq": seq,
                 "publish_date": (start_date + timedelta(days=day_offset)).isoformat(),
                 "seed": seed_text,
                 "query": "",
+                "queries": day_queries[ti::n_tmpl],
                 "template_id": tmpl.id,
                 "platform": _default_platform(tmpl),
                 "note": None,
@@ -999,8 +1018,12 @@ def _enrich_publishing_items(
     for it in sorted(items, key=lambda x: (x.get("seq") or 0, x.get("publish_date") or "")):
         q = str(it.get("query") or "")
         seed = str(it.get("seed") or "")
-        # 覆盖率:legacy 行用 query 反查;seed-based 行用「种子下所有 query」的聚合.
-        if seed:
+        row_queries = [str(x) for x in (it.get("queries") or []) if str(x).strip()]
+        # 覆盖率:多选行按这组 query 聚合;legacy 行用 query 反查;seed-based 行用「种子下所有 query」的聚合.
+        if row_queries:
+            runs = sum(by_query.get(k, {"runs": 0})["runs"] for k in row_queries)
+            hits = sum(by_query.get(k, {"hits": 0})["hits"] for k in row_queries)
+        elif seed:
             runs = sum(v["runs"] for k, v in by_query.items()
                        if k in monitored and _query_seed_of(monitored, k) == seed)
             hits = sum(v["hits"] for k, v in by_query.items()
@@ -1036,6 +1059,7 @@ def _enrich_publishing_items(
             publish_date=str(it.get("publish_date") or ""),
             seed=seed or None,
             query=q,
+            queries=row_queries,
             template_id=it.get("template_id"),
             platform=it.get("platform"),
             note=it.get("note"),
@@ -1203,7 +1227,11 @@ def _validate_plan_items(
     for it in items:
         q = (it.query or "").strip()
         seed = (it.seed or "").strip()
-        if not q and not seed:
+        # 2026-06-11 — 多选 queries:去空去重保序,每条必 ∈ monitored
+        queries = list(dict.fromkeys(
+            str(x).strip() for x in (it.queries or []) if str(x).strip()
+        ))
+        if not q and not seed and not queries:
             raise HTTPException(422, {
                 "code": "MISSING_TOPIC", "field": "seed",
                 "message": "seed 与 query 至少要填一个",
@@ -1212,6 +1240,12 @@ def _validate_plan_items(
             raise HTTPException(422, {
                 "code": "INVALID_QUERY", "field": "query",
                 "message": f"query 不在监测列表里:{q}",
+            })
+        bad_q = [x for x in queries if x not in monitored_set]
+        if bad_q:
+            raise HTTPException(422, {
+                "code": "INVALID_QUERY", "field": "queries",
+                "message": f"query 不在监测列表里:{bad_q[0]}",
             })
         tmpl = db.get(ContentTemplateORM, it.template_id)
         if not tmpl:
@@ -1234,6 +1268,7 @@ def _validate_plan_items(
             "publish_date": it.publish_date,
             "seed": seed or None,
             "query": q,
+            "queries": queries,
             "template_id": it.template_id,
             "platform": it.platform,
             "note": (it.note or None),
