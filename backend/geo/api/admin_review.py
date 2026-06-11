@@ -1408,6 +1408,37 @@ def rerun_topic(
     return _to_plan_out(db, plan)
 
 
+@router.post("/topic/{topic_id}/execution-plan/regenerate", response_model=TopicExecutionPlanOut)
+def regenerate_execution_plan(
+    topic_id: int,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """重新生成计划书快照 — 用 topic 当前的 资料 / 监测问题 / 日志 重建三份快照.
+
+    给「审核通过后又改了种子词 / 扩展词」的场景用:计划书展示的快照是
+    生成那一刻的冻结副本,topic 后续编辑不会自动同步,需要 admin 手动重建。
+    发文表(publishing_plan_json)与 status / run_id / confirmed_at 都保持不动,
+    只刷新快照与 generated_at / generated_by_reviewer_id。
+    """
+    t = _load_topic_or_404(db, topic_id)
+    plan = _latest_plan_or_404(db, topic_id)
+    snapshot = _build_execution_plan_snapshot(t, plan.run_id)
+    plan.overview_json = json.dumps(snapshot["overview"], ensure_ascii=False)
+    plan.topic_changelog_snapshot_json = json.dumps(snapshot["changelog"], ensure_ascii=False)
+    plan.expansion_log_snapshot_json = json.dumps(snapshot["expansion_log"], ensure_ascii=False)
+    plan.monitored_queries_snapshot_json = json.dumps(snapshot["monitored_queries"], ensure_ascii=False)
+    plan.generated_at = datetime.utcnow()
+    plan.generated_by_reviewer_id = admin.id
+    _append_changelog(t, actor_id=admin.id, actor_role="admin",
+                      field="execution_plan",
+                      after=f"queries={len(snapshot['monitored_queries'])}",
+                      note="admin 重新生成计划书快照")
+    db.commit()
+    db.refresh(plan)
+    return _to_plan_out(db, plan)
+
+
 # ═════════════════ v3.3 — GEO 品牌增长战略方案 ═════════════════
 
 

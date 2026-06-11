@@ -32,6 +32,7 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
   // 不要把后端英文 raw 错误甩到红 banner 上.
   const [notStarted, setNotStarted] = useState(false);
   const [rerunBusy, setRerunBusy] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
   const [inlineEdit, setInlineEdit] = useState(false);  // confirmed 态下的「编辑发文表」开关
   const pollRef = useRef<number | null>(null);
@@ -101,6 +102,30 @@ export function ExecutionPlanView({ topicId }: { topicId: number }) {
 
   return (
     <div className="space-y-4">
+      {plan && (
+        <div className="flex justify-end">
+          {/* 重新生成计划书 — topic 改了种子词/扩展词后,把快照按当前状态重建;发文表不动 */}
+          <button type="button" disabled={regenBusy}
+                  onClick={async () => {
+                    if (regenBusy) return;
+                    if (!window.confirm(t('admin.executionPlan.regenConfirm'))) return;
+                    setRegenBusy(true); setErr(null);
+                    try {
+                      const p = await adminReviewApi.regenerateExecutionPlan(topicId, token);
+                      setPlan(p);
+                    } catch (e: unknown) {
+                      setErr(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setRegenBusy(false);
+                    }
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-md"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                           border: '1px solid var(--border-color)', opacity: regenBusy ? 0.5 : 1 }}>
+            {regenBusy ? '…' : t('admin.executionPlan.regenSnapshot')}
+          </button>
+        </div>
+      )}
       {plan && (plan.status === 'failed' || !plan.run_id) && (
         <div className="flex justify-end">
           <button type="button" disabled={rerunBusy}

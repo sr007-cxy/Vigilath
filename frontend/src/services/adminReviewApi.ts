@@ -282,6 +282,12 @@ export const adminReviewApi = {
   async getExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
     return request<ExecutionPlan>('GET', `/topic/${topicId}/execution-plan`, token);
   },
+  // 重新生成计划书快照(资料/监测问题/日志按 topic 当前状态重建;发文表与状态不动)
+  async regenerateExecutionPlan(topicId: number, token: string): Promise<ExecutionPlan> {
+    return request<ExecutionPlan>(
+      'POST', `/topic/${topicId}/execution-plan/regenerate`, token,
+    );
+  },
   // 整段替换发文表(draft / confirmed 都允许)
   async updateExecutionPlan(
     topicId: number, items: PlanItemDraft[], token: string,

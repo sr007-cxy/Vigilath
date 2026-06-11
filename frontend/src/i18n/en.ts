@@ -3161,6 +3161,8 @@ const en = {
               "subtitle": "Overview / Topic changelog / Expansion log / Run progress",
               "backToReview": "Back to review",
               "rerun": "Re-trigger run",
+              "regenSnapshot": "Regenerate plan",
+              "regenConfirm": "Rebuild the plan snapshot from the topic's current profile and monitored queries? Publishing schedule and run status stay unchanged.",
               "errorPrefix": "Error",
               "section": {
                 "overview": "Project overview",

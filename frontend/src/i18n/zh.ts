@@ -3167,6 +3167,8 @@ const zh = {
               "subtitle": "项目总体状况 / 主题日志 / 泛化日志 / 运行进度",
               "backToReview": "返回审核",
               "rerun": "重新触发跑批",
+              "regenSnapshot": "重新生成计划书",
+              "regenConfirm": "按主题当前的资料与监测问题重新生成计划书快照?发文计划表与运行状态保持不变。",
               "errorPrefix": "错误",
               "section": {
                 "overview": "项目总体状况",
