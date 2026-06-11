@@ -23,7 +23,10 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 你也能查/配**舆情监控**:用户问「今天舆情怎么样/有没有负面/风险」→ get_sentiment_today;
 问「**某日之前/某段时间/历史上**有没有负面、有哪些负面、以前的舆情」→ **get_sentiment_history**(按日期区间查已入库帖子,可追溯很久);
 问「今天有什么**热点/热榜/热搜/可蹭的热点**」→ get_hot_topics(NewsNow 实时热榜,大盘热点、不绑品牌);
-要改监测词时 → configure_sentiment。sentiment_score 用百分比表述,stance/intent/factuality 等枚举用中文。
+用户想**设置 / 调整监测词(也叫检测词、监控关键词)、别名、品牌名**时 → 用 **configure_sentiment**,你**能直接帮他在对话里设**,别让他自己跑去「舆情页」改。
+流程:先问清要设成哪些词(或在现有基础上**加**哪些),拿到具体词后调 `configure_sentiment(keywords=[...]/aliases=[...]/brand=...)`。
+注意 configure_sentiment 是**整组覆盖**(传入列表会替换旧值):用户说「在原有上加 X」时,要把**旧词 + X 一起**作为完整列表传入(不确定旧词就先问用户现有哪些、或让他给完整新列表)。改动下次跑批生效。
+sentiment_score 用百分比表述,stance/intent/factuality 等枚举用中文。
 **绝不要**在没调 get_sentiment_history 的情况下,凭空说「某日之前没数据/未保留/查不到」——历史数据通常都在,先查再答。
 **舆情数据是直接查库的**(get_sentiment_today / get_sentiment_history),和「知识库」是两套**互不相关**的系统:
 「知识库」(ingest_material / ask_knowledge)只装**用户自己上传的资料**(品牌资料/参考文档,供检索与产稿 grounding)。
@@ -34,7 +37,7 @@ SYSTEM_PROMPT = """你是 Vigilath 的 GEO/AEO 优化助手,帮品牌提升在 A
 
 边界(必须遵守):
 - **写操作必须有用户明确意图**:工具 docstring 以 **【写】/【动作】** 开头的(create_topic / set_seed_prompts /
-  expand_prompts / set_selected_queries / run_geo_checks / trigger_diagnosis / draft_articles / confirm_template / publish_drafts)
+  expand_prompts / set_selected_queries / run_geo_checks / trigger_diagnosis / draft_articles / confirm_template / publish_drafts / configure_sentiment)
   会**改数据/产稿/跑批/发布**,
   **只在用户明确要求时才调**。用户只是询问或查看(如「我有没有主题」「今天投放效果」)时,
   **只用只读工具(get_*)查清并如实回答,绝不擅自新建或修改**。当前没有主题时,要告诉用户并询问是否创建,
@@ -112,7 +115,8 @@ _WRITE_TOOLS = _GEO_WRITE + _SENTIMENT_WRITE
 # 关键词路由:判断这条消息属于哪条业务线(命中舆情词→sentiment,否则→geo)
 _SENTIMENT_KW = (
     "舆情", "舆论", "负面", "正面", "利空", "利好", "风险", "口碑", "声量", "情绪",
-    "监测词", "监控词", "热点", "热榜", "热搜", "newsnow", "看跌", "看涨", "bearish", "bullish",
+    "监测词", "监控词", "检测词", "监测关键词", "热点", "热榜", "热搜", "newsnow",
+    "看跌", "看涨", "bearish", "bullish",
 )
 
 
@@ -128,7 +132,12 @@ def _line_tools(line: str, can_write: bool, include_publish: bool = False):
     if line == "both":
         base = _READ_TOOLS + (_WRITE_TOOLS if can_write else [])
         return base + ([_t.publish_drafts] if (include_publish and can_write) else [])
+    # geo 线:额外带上 configure_sentiment(配监测词)。原因:路由按单条消息判断,
+    # 用户对"要不要调监测词?"回一句"需要"会被路由到 geo 线,若此处不带这个写工具,
+    # 模型就够不到、配不了监测词。它是无害的舆情写工具,跨线可用不影响 GEO 隔离。
     base = _GEO_READ + (_GEO_WRITE if can_write else [])      # geo
+    if can_write:
+        base = base + _SENTIMENT_WRITE
     return base + ([_t.publish_drafts] if (include_publish and can_write) else [])
 
 
