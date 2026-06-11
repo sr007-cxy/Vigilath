@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   aiTelemetryApi,
@@ -21,6 +21,7 @@ export function AdminGateway() {
   const [err, setErr] = useState<string | null>(null);
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [openJob, setOpenJob] = useState<number | null>(null);  // 展开看返回内容的 job id
 
   // 新建租户表单
   const [name, setName] = useState('');
@@ -243,21 +244,59 @@ export function AdminGateway() {
                   <th className="text-left px-3 py-2">{t('workbench.adminGateway.colQuery', { defaultValue: '问题' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminGateway.colStatus', { defaultValue: '状态' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminGateway.colTime', { defaultValue: '时间' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminGateway.colReturn', { defaultValue: '返回' })}</th>
                 </tr>
               </thead>
               <tbody>
                 {jobs.map(j => (
-                  <tr key={j.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                    <td className="px-3 py-2 text-muted">{j.id}</td>
-                    <td className="px-3 py-2 text-muted">{j.tenant_id ?? '-'}</td>
-                    <td className="px-3 py-2 text-primary">{j.engine}</td>
-                    <td className="px-3 py-2 text-muted max-w-[320px] truncate">{j.query}</td>
-                    <td className="px-3 py-2">{j.status}</td>
-                    <td className="px-3 py-2 text-muted">{(j.created_at || '').replace('T', ' ').slice(0, 19)}</td>
-                  </tr>
+                  <Fragment key={j.id}>
+                    <tr style={{ borderTop: '1px solid var(--border-color)', cursor: 'pointer' }}
+                        onClick={() => setOpenJob(openJob === j.id ? null : j.id)}>
+                      <td className="px-3 py-2 text-muted">{j.id}</td>
+                      <td className="px-3 py-2 text-muted">{j.tenant_id ?? '-'}</td>
+                      <td className="px-3 py-2 text-primary">{j.engine}</td>
+                      <td className="px-3 py-2 text-muted max-w-[320px] truncate">{j.query}</td>
+                      <td className="px-3 py-2">
+                        <span style={{ color: j.status === 'done' ? '#22c55e' : j.status === 'failed' ? '#ef4444' : 'var(--text-muted)' }}>{j.status}</span>
+                      </td>
+                      <td className="px-3 py-2 text-muted">{(j.created_at || '').replace('T', ' ').slice(0, 19)}</td>
+                      <td className="px-3 py-2 text-right text-muted">{openJob === j.id ? '▾' : '▸'}</td>
+                    </tr>
+                    {openJob === j.id && (
+                      <tr style={{ background: 'var(--bg-page, rgba(0,0,0,0.02))' }}>
+                        <td colSpan={7} className="px-4 py-3">
+                          {j.error
+                            ? <div className="text-xs" style={{ color: '#ef4444' }}>
+                                {t('workbench.adminGateway.retError', { defaultValue: '错误' })}:{j.error}
+                              </div>
+                            : <>
+                                <div className="text-xs text-muted mb-1">{t('workbench.adminGateway.retAnswer', { defaultValue: '返回答案' })}:</div>
+                                <div className="text-xs text-primary whitespace-pre-wrap mb-2" style={{ maxHeight: 320, overflow: 'auto' }}>
+                                  {j.answer || t('workbench.adminGateway.retEmpty', { defaultValue: '(空)' })}
+                                </div>
+                                <div className="text-xs text-muted mb-1">
+                                  {t('workbench.adminGateway.retCitations', { defaultValue: '引用来源' })}（{j.citations?.length || 0}）:
+                                </div>
+                                {(j.citations && j.citations.length > 0)
+                                  ? <ul className="text-xs" style={{ listStyle: 'disc', paddingLeft: 18 }}>
+                                      {j.citations.map((c, i) => (
+                                        <li key={i}>
+                                          <a href={c.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent, #2563eb)' }}>
+                                            {c.title || c.domain || c.url}
+                                          </a>
+                                          {c.domain ? <span className="text-muted">（{c.domain}）</span> : null}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  : <div className="text-xs text-muted">{t('workbench.adminGateway.retNoCite', { defaultValue: '(无引用)' })}</div>}
+                              </>}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
                 {jobs.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-muted">{t('workbench.adminGateway.noJobs', { defaultValue: '暂无调用' })}</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">{t('workbench.adminGateway.noJobs', { defaultValue: '暂无调用' })}</td></tr>
                 )}
               </tbody>
             </table>

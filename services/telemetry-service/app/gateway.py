@@ -356,8 +356,12 @@ def admin_list_jobs(tenant_id: Optional[int] = None, limit: int = 50) -> dict:
         rows = q.limit(n).all()
         return {"jobs": [{
             "id": j.id, "tenant_id": j.tenant_id, "engine": j.engine,
-            "query": (j.query or "")[:120], "status": j.status,
+            "query": (j.query or "")[:200], "status": j.status,
             "error": j.error,
+            # 返回内容(运营页展开查看)— answer 截断防列表过大,citations 全带
+            "answer": (j.answer or "")[:3000],
+            "citations": json.loads(j.citations_json or "[]"),
+            "source_url": j.source_url, "video_url": j.video_url,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "finished_at": j.finished_at.isoformat() if j.finished_at else None,
         } for j in rows]}

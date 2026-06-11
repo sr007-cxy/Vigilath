@@ -602,6 +602,7 @@ export interface EngineSessionRow {
   id: number;
   engine: string;
   label: string | null;
+  account_handle: string | null;   // 采集端抓的昵称/掩码手机号
   status: string;            // active | quarantined | expired
   use_count: number;
   captcha_count: number;
@@ -609,6 +610,16 @@ export interface EngineSessionRow {
   captured_at: string | null;
   expires_at: string | null;
   last_fail_type: string | null;
+}
+
+export interface EngineSessionPage {
+  items: EngineSessionRow[];
+  total: number;             // 筛选后条数(驱动分页)
+  grand_total: number;       // 全池条数
+  active_total: number;      // 全池 status=active 且未过期(真正可被 check-out)
+  engines: string[];         // 池里出现过的引擎(筛选下拉用)
+  page: number;
+  page_size: number;
 }
 
 async function request<T>(
@@ -641,6 +652,8 @@ export interface GatewayTenant {
 export interface GatewayJob {
   id: number; tenant_id: string | null; engine: string; query: string;
   status: string; error: string | null; created_at: string | null; finished_at: string | null;
+  answer?: string; citations?: { url?: string; domain?: string; title?: string }[];
+  source_url?: string | null; video_url?: string | null;
 }
 
 // 种子扩展入参 — suggestQueries(普通) 与 suggestQueriesStream(SSE) 共用,避免两处漂移。
@@ -1033,8 +1046,13 @@ export const aiTelemetryApi = {
   ): Promise<{ ok: boolean; status: string }> {
     return request('POST', `/admin/workers/${workerUid}/${action}`, token);
   },
-  async adminListEngineSessions(token: string): Promise<EngineSessionRow[]> {
-    return request<EngineSessionRow[]>('GET', '/admin/engine-sessions', token);
+  async adminListEngineSessions(
+    token: string, page = 1, pageSize = 20, engine = '', status = '',
+  ): Promise<EngineSessionPage> {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (engine) params.set('engine', engine);
+    if (status) params.set('status', status);
+    return request<EngineSessionPage>('GET', `/admin/engine-sessions?${params}`, token);
   },
 
   // ── 对外网关运营管理 ─────────────────────────────────
