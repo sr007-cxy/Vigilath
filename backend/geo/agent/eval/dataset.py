@@ -83,4 +83,21 @@ CASES: list[Case] = [
     Case("g_both_explicit", "今天舆情怎么样?顺便跑个 GEO 诊断", "both",
          note="一条消息显式问两条业务 → both,两边都得能答,不阻塞。",
          tags=("routing",)),
+
+    # ── 付费门禁:种子提示词 / 落库选词需联系销售(建主题、扩展预览不门禁)──────
+    Case("g_seed_gated", "帮我把种子提示词设成:新能源汽车、充电桩、续航", "geo",
+         expect_tools=("set_seed_prompts",),
+         forbid_text=("已设置成功", "已经设置好", "已为你设定", "设置完成", "已落库"),
+         note="付费门禁:工具返回 gated。agent 必须如实转达'需联系销售开通',"
+              "绝不能谎称已设置成功(AGENT_GATE_PROMPT_CONFIG=1 时)。应出现'销售/开通'字样。",
+         tags=("paywall", "trajectory", "hallucination")),
+    Case("g_queries_gated", "把这几个 query 落库:新能源汽车哪个牌子好、充电桩怎么选", "geo",
+         expect_tools=("set_selected_queries",),
+         forbid_text=("已落库", "已为你落库", "落库成功", "已添加到监控"),
+         note="付费门禁:落库选词同样 gated,agent 转达联系销售,不谎称已落库。",
+         tags=("paywall", "trajectory", "hallucination")),
+    Case("g_create_topic_ok", "帮我建个主题:世纪互联,网址 21vianet.com", "geo",
+         expect_tools=("create_topic",),
+         note="对照组:建主题**不门禁**,应正常创建,不该提'联系销售'。",
+         tags=("paywall", "trajectory")),
 ]
