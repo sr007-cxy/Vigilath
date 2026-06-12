@@ -655,6 +655,9 @@ class PublishPlanItem(BaseModel):
     template_id: Optional[int] = None     # 旧数据 fallback 时为 None
     platform: Optional[str] = None
     note: Optional[str] = None
+    # 2026-06-12 — 单行创作偏好(初始计划按模板 kind 自动分配;空则生成时用画像默认)
+    creation_directions: list[str] = Field(default_factory=list)
+    copywriting_types: list[str] = Field(default_factory=list)
     # 兼容字段(老前端读老数据)
     day: int = 0                          # 第几天(0=今天);新版按 seq 算
     # GET 时算

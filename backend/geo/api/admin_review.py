@@ -824,6 +824,34 @@ def _legacy_query_window(
     return items
 
 
+# 2026-06-12 — 初始计划按模板 kind 自动分配单行创作偏好(创作方向 × 文案类型),
+# 不再留空靠画像默认(画像默认是笛卡尔积,一行会爆多篇变体)。
+# 取值与 content_generator 的 DIRECTION_HINTS / TYPE_HINTS key 对齐。
+_KIND_COMBO: dict[str, tuple[str, str]] = {
+    "榜单合辑": ("product_review", "long_form"),
+    "长文":     ("industry_insight", "long_form"),
+    "短文":     ("trend_forecast", "short_social"),
+    "FAQ":      ("faq", "faq_list"),
+    "问答":     ("faq", "faq_list"),
+    "案例":     ("case_story", "medium_post"),
+    "对比":     ("product_review", "medium_post"),
+    "测评":     ("product_review", "medium_post"),
+    "教程":     ("how_to_guide", "medium_post"),
+}
+_DIR_CYCLE = ["industry_insight", "case_story", "how_to_guide",
+              "trend_forecast", "product_review", "customer_story", "faq"]
+_TYPE_CYCLE = ["long_form", "medium_post", "short_social",
+               "video_script_short", "faq_list"]
+
+
+def _default_row_combo(kind: str, idx: int) -> tuple[str, str]:
+    """模板 kind → (创作方向, 文案类型);未知 kind 按 idx 轮换兜底."""
+    pair = _KIND_COMBO.get((kind or "").strip())
+    if pair:
+        return pair
+    return _DIR_CYCLE[idx % len(_DIR_CYCLE)], _TYPE_CYCLE[idx % len(_TYPE_CYCLE)]
+
+
 def _build_plan_window(
     db: Session, topic_id: int, monitored: list[str],
     *, start_date, days: int, start_seq: int = 0,
@@ -895,6 +923,7 @@ def _build_plan_window(
         # 该种子下的 query 轮流分给当天的 N 篇(第 i 篇拿 i, i+N, i+2N…条)
         day_queries = seed_to_queries.get(seed_text) or []
         for ti, tmpl in enumerate(picked_templates):
+            direction, ctype = _default_row_combo(tmpl.kind, day_offset + ti)
             items.append({
                 "id": str(_uuid.uuid4()),
                 "seq": seq,
@@ -905,6 +934,8 @@ def _build_plan_window(
                 "template_id": tmpl.id,
                 "platform": _default_platform(tmpl),
                 "note": None,
+                "creation_directions": [direction],
+                "copywriting_types": [ctype],
             })
             seq += 1
     return items
@@ -1063,6 +1094,8 @@ def _enrich_publishing_items(
             template_id=it.get("template_id"),
             platform=it.get("platform"),
             note=it.get("note"),
+            creation_directions=[s for s in (it.get("creation_directions") or []) if s],
+            copywriting_types=[s for s in (it.get("copywriting_types") or []) if s],
             day=int(it.get("seq") or 0),     # 兼容旧字段
             coverage_pct=cov,
             priority=priority,
@@ -1272,6 +1305,9 @@ def _validate_plan_items(
             "template_id": it.template_id,
             "platform": it.platform,
             "note": (it.note or None),
+            # 2026-06-12 — 之前这里把行级创作偏好丢了(编辑器勾了也不落库),补上
+            "creation_directions": [s for s in (it.creation_directions or []) if s],
+            "copywriting_types": [s for s in (it.copywriting_types or []) if s],
         })
     # 归一化 seq:按入参顺序 0..N
     out.sort(key=lambda x: (x.get("seq", 0)))
