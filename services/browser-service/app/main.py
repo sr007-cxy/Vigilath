@@ -309,8 +309,39 @@ async def _get_hot_session(engine: str) -> EngineSession:
     return sess
 
 
+def _deepseek_http_sync(query: str) -> dict:
+    """deepseek 纯 HTTP 路径(无浏览器):check-out 拿 token → HTTP 查询 → check-in。
+    check-out / check-in / HTTP 全在同一线程,保证 session_store 的 thread-local 一致。"""
+    from .session_store import load_storage_state, report_session_outcome
+    from .deepseek_http import run_deepseek_http
+    empty = {"engine": "deepseek", "query": query, "answer": "", "citations": [],
+             "source_url": None, "video_url": None, "error": None}
+    state = load_storage_state("deepseek")  # check-out(thread-local 记下 session id)
+    if not state:
+        return {**empty, "error": "no session available"}
+    res = run_deepseek_http(state, query)
+    err = res.get("error")
+    # 映射成池子的 check-in 结果:login_lost→隔离;pow_failed→crash(不怪账号);empty→empty_answer
+    if err == "login_lost":
+        report_session_outcome("deepseek", result="login_lost")
+    elif err == "empty_answer":
+        report_session_outcome("deepseek", result="empty_answer")
+    elif err:
+        report_session_outcome("deepseek", result="crash", error_msg=err)
+    else:
+        report_session_outcome("deepseek", result="success")
+    return {"engine": "deepseek", "query": query, "answer": res.get("answer", ""),
+            "citations": res.get("citations", []), "source_url": None, "video_url": None,
+            "error": err}
+
+
 async def run_hot_query(engine: str, query: str) -> dict:
     """跑一条 hot query,返回 dispatch /result 需要的 dict 形状(供 /search-hot 与 worker agent 共用)。"""
+    # deepseek 走纯 HTTP(无浏览器):DEEPSEEK_HTTP_MODE=1 时启用,结果与网页一致(含联网引用)
+    from .deepseek_http import deepseek_http_enabled
+    if engine == "deepseek" and deepseek_http_enabled():
+        return await asyncio.to_thread(_deepseek_http_sync, query)
+
     search_timeout = int(os.environ.get("ENGINE_SEARCH_TIMEOUT", "300"))
     try:
         sess = await _get_hot_session(engine)
@@ -350,6 +381,16 @@ async def search_hot(req: SearchRequest):
     adapter = _adapters.get(req.engine)
     if not adapter:
         raise HTTPException(status_code=400, detail=f"Unknown engine: {req.engine}")
+
+    # deepseek 纯 HTTP 分支(与 worker agent 的 run_hot_query 一致)
+    from .deepseek_http import deepseek_http_enabled
+    if req.engine == "deepseek" and deepseek_http_enabled():
+        d = await asyncio.to_thread(_deepseek_http_sync, req.query)
+        return SearchResponse(
+            engine="deepseek", query=req.query, answer=d.get("answer", ""),
+            citations=[CitationOut(**c) for c in d.get("citations", [])],
+            error=d.get("error"),
+        )
 
     # lazy 创建 + init EngineSession(线程/任务 safe)
     async with _hot_lock:
