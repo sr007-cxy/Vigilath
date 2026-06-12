@@ -93,13 +93,13 @@ export function PublishingPlanEditor({
   );
   const [templates, setTemplates] = useState<ContentTemplate[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // 2026-06-11 — 监测问题多选弹窗:记录正在编辑哪一行(localKey)
-  const [queryPickerKey, setQueryPickerKey] = useState<string | null>(null);
+  // 2026-06-12 — 行编辑统一弹窗(日期/种子/监测问题/模板/平台/备注/创作偏好都在里面),
+  // 表格本体只读紧凑展示。记录正在编辑哪一行(localKey)。
+  const [editKey, setEditKey] = useState<string | null>(null);
   const [drawerTarget, setDrawerTarget] = useState<string | null>(null); // localKey of row
   const [savingDraft, setSavingDraft] = useState(false);
   const [savingConfirm, setSavingConfirm] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   // 总页数随 rows 变化;在最后一页删行 / 切到非空 page 时回缩.
@@ -309,174 +309,104 @@ export function PublishingPlanEditor({
         <table className="w-full text-xs">
           <thead>
             <tr style={{ color: 'var(--text-muted)' }}>
-              <th className="py-2 px-1 text-left">#</th>
-              <th className="py-2 px-1 text-left">日期</th>
-              <th className="py-2 px-1 text-left">种子</th>
-              <th className="py-2 px-1 text-left">Query (legacy)</th>
-              <th className="py-2 px-1 text-left">命中%</th>
-              <th className="py-2 px-1 text-left">模板</th>
-              <th className="py-2 px-1 text-left">平台</th>
-              <th className="py-2 px-1 text-left">备注</th>
-              <th className="py-2 px-1 text-center">×</th>
+              <th className="py-2 px-2 text-left">#</th>
+              <th className="py-2 px-2 text-left">日期</th>
+              <th className="py-2 px-2 text-left">种子</th>
+              <th className="py-2 px-2 text-left">监测问题</th>
+              <th className="py-2 px-2 text-left">命中%</th>
+              <th className="py-2 px-2 text-left">模板</th>
+              <th className="py-2 px-2 text-left">平台</th>
+              <th className="py-2 px-2 text-left">备注</th>
+              <th className="py-2 px-2 text-center">操作</th>
             </tr>
           </thead>
           <tbody>
             {(() => {
-              // 2026-05-31 — 渲染单条 item 行;return 数组(包含可能的 combo override 折叠行).
+              // 2026-06-12 — 行=只读紧凑文本,点行(或 ✎)打开统一编辑弹窗;不再行内展开.
               const renderItem = (r: RowDraft, globalIdx: number): React.ReactNode[] => {
                 const tmpl = r.template_id ? tmplById.get(r.template_id) : null;
-                const platOpts = tmpl?.target_platforms?.length
-                  ? tmpl.target_platforms
-                  : ['公众号', '小红书', '抖音', '视频号'];
                 const orig = plan.publishing_plan.find(x => x.id === r.id);
                 const cov = orig?.coverage_pct ?? 0;
                 const tint = cov === 0 ? 'rgba(239,68,68,0.06)'
                   : cov < 50 ? 'rgba(234,179,8,0.06)' : 'rgba(16,185,129,0.06)';
-                const isSel = selected === r.localKey;
-                const out: React.ReactNode[] = [];
-                out.push(
+                const comboN = r.creation_directions.length + r.copywriting_types.length;
+                return [
                   <tr key={r.localKey}
-                      onClick={() => setSelected(r.localKey)}
+                      onClick={() => setEditKey(r.localKey)}
                       style={{
-                        background: isSel ? 'var(--bg-tertiary)' : tint,
+                        background: tint,
                         borderTop: '1px solid var(--border-color)',
                         cursor: 'pointer',
                       }}>
-                    <td className="py-1.5 px-1 tabular-nums text-muted">
-                      {globalIdx + 1}
-                      <div className="flex flex-col">
-                        <button type="button" onClick={(e) => {
-                          e.stopPropagation();
-                          moveRow(r.localKey, -1);
-                          if (!groupedMode && globalIdx % PAGE_SIZE === 0 && page > 1) setPage(p => p - 1);
-                        }}
-                                className="text-[9px] leading-none text-muted hover:text-primary">▲</button>
-                        <button type="button" onClick={(e) => {
-                          e.stopPropagation();
-                          moveRow(r.localKey, 1);
-                          if (!groupedMode && globalIdx % PAGE_SIZE === PAGE_SIZE - 1 && page < totalPages) setPage(p => p + 1);
-                        }}
-                                className="text-[9px] leading-none text-muted hover:text-primary">▼</button>
+                    <td className="py-2 px-2 tabular-nums text-muted whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1">
+                        {globalIdx + 1}
+                        <span className="inline-flex flex-col">
+                          <button type="button" onClick={(e) => {
+                            e.stopPropagation();
+                            moveRow(r.localKey, -1);
+                            if (!groupedMode && globalIdx % PAGE_SIZE === 0 && page > 1) setPage(p => p - 1);
+                          }}
+                                  className="text-[9px] leading-none text-muted hover:text-primary">▲</button>
+                          <button type="button" onClick={(e) => {
+                            e.stopPropagation();
+                            moveRow(r.localKey, 1);
+                            if (!groupedMode && globalIdx % PAGE_SIZE === PAGE_SIZE - 1 && page < totalPages) setPage(p => p + 1);
+                          }}
+                                  className="text-[9px] leading-none text-muted hover:text-primary">▼</button>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 tabular-nums text-primary whitespace-nowrap">
+                      {r.publish_date || <span className="text-muted">—</span>}
+                    </td>
+                    <td className="py-2 px-2 max-w-[220px]">
+                      <div className="truncate text-primary" title={r.seed}>
+                        {r.seed || <span className="text-muted">—</span>}
                       </div>
                     </td>
-                    <td className="py-1.5 px-1">
-                      <input type="date"
-                             className="rounded-md px-1.5 py-1 w-[130px]"
-                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                      border: '1px solid var(--border-color)' }}
-                             value={r.publish_date}
-                             onClick={e => e.stopPropagation()}
-                             onChange={e => updateRow(r.localKey, { publish_date: e.target.value })} />
+                    <td className="py-2 px-2 whitespace-nowrap"
+                        title={r.queries.join('\n')}>
+                      {r.queries.length > 0 ? (
+                        <span className="text-primary">{r.queries.length} 条</span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </td>
-                    <td className="py-1.5 px-1">
-                      <input type="text"
-                             className="rounded-md px-1.5 py-1 w-[200px]"
-                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                      border: '1px solid var(--border-color)' }}
-                             placeholder="种子提示词文本…"
-                             value={r.seed}
-                             onClick={e => e.stopPropagation()}
-                             onChange={e => updateRow(r.localKey, { seed: e.target.value })} />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      {/* 多选监测问题:点开弹窗勾选;生成正文时要求自然覆盖这组问题 */}
-                      <button type="button"
-                              className="rounded-md px-2 py-1 text-xs whitespace-nowrap"
-                              style={{ background: 'var(--bg-tertiary)',
-                                       border: '1px solid var(--border-color)',
-                                       color: r.queries.length ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                              title={r.queries.join('\n')}
-                              onClick={e => { e.stopPropagation(); setQueryPickerKey(r.localKey); }}>
-                        {r.queries.length ? `${r.queries.length} 条监测问题` : '选择监测问题…'}
-                      </button>
-                    </td>
-                    <td className="py-1.5 px-1 tabular-nums">
+                    <td className="py-2 px-2 tabular-nums whitespace-nowrap">
                       <span style={{ color: cov === 0 ? '#ef4444' : cov < 50 ? '#eab308' : '#10b981' }}>
                         {cov.toFixed(1)}%
                       </span>
                     </td>
-                    <td className="py-1.5 px-1">
-                      <div className="flex items-center gap-1">
-                        <select className="rounded-md px-1.5 py-1 max-w-[160px]"
-                                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                         border: '1px solid var(--border-color)' }}
-                                value={r.template_id || ''}
-                                onClick={e => e.stopPropagation()}
-                                onChange={e => {
-                                  const newId = Number(e.target.value) || null;
-                                  const nt = newId ? tmplById.get(newId) : null;
-                                  const newPlat = (nt && nt.target_platforms.length && !nt.target_platforms.includes(r.platform))
-                                    ? nt.target_platforms[0]
-                                    : r.platform;
-                                  updateRow(r.localKey, { template_id: newId, platform: newPlat });
-                                }}>
-                          <option value="">—</option>
-                          {templates.map(t => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
-                        <button type="button"
-                                onClick={(e) => { e.stopPropagation(); setDrawerTarget(r.localKey); setDrawerOpen(true); }}
-                                className="text-[10px] px-1 py-0.5 rounded-md"
-                                style={{ color: 'var(--text-secondary)' }}
-                                title="打开模板抽屉">
-                          📋
-                        </button>
+                    <td className="py-2 px-2 max-w-[140px]">
+                      <div className="truncate" style={{ color: 'var(--text-secondary)' }}
+                           title={tmpl?.name}>
+                        {tmpl?.name || <span className="text-muted">未选</span>}
                       </div>
                     </td>
-                    <td className="py-1.5 px-1">
-                      <select className="rounded-md px-1.5 py-1"
-                              style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                       border: '1px solid var(--border-color)' }}
-                              value={r.platform}
-                              onClick={e => e.stopPropagation()}
-                              onChange={e => updateRow(r.localKey, { platform: e.target.value })}>
-                        {platOpts.map(p => <option key={p}>{p}</option>)}
-                      </select>
+                    <td className="py-2 px-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                      {r.platform || <span className="text-muted">—</span>}
                     </td>
-                    <td className="py-1.5 px-1">
-                      <input className="rounded-md px-1.5 py-1 w-[140px]"
-                             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                                      border: '1px solid var(--border-color)' }}
-                             placeholder="备注…"
-                             value={r.note}
-                             onClick={e => e.stopPropagation()}
-                             onChange={e => updateRow(r.localKey, { note: e.target.value })} />
+                    <td className="py-2 px-2 max-w-[120px]">
+                      <div className="truncate text-muted" title={r.note}>
+                        {r.note}
+                        {comboN > 0 && (
+                          <span className="ml-1 text-[10px]" style={{ color: 'var(--accent-primary)' }}
+                                title="本行自定义了创作偏好">偏好×{comboN}</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-1.5 px-1 text-center">
+                    <td className="py-2 px-2 text-center whitespace-nowrap">
+                      <button type="button"
+                              onClick={(e) => { e.stopPropagation(); setEditKey(r.localKey); }}
+                              className="text-xs px-1.5 py-0.5 rounded-md mr-1"
+                              style={{ color: 'var(--text-secondary)' }}
+                              title="编辑本行">✎</button>
                       <button type="button" onClick={(e) => { e.stopPropagation(); removeRow(r.localKey); }}
-                              className="text-muted hover:text-primary">×</button>
+                              className="text-muted hover:text-primary" title="删除本行">×</button>
                     </td>
-                  </tr>
-                );
-                if (isSel) {
-                  out.push(
-                    <tr key={r.localKey + ':combo'}>
-                      <td colSpan={10} className="px-3 py-2"
-                          style={{ background: 'var(--bg-tertiary)',
-                                   borderBottom: '1px solid var(--border-color)' }}>
-                        <div className="text-[11px] text-muted mb-1.5">
-                          自定义本行创作偏好(多选,**空则用画像默认**;非空则只用本行勾的)
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <ChipMultiSelect
-                            label={`创作方向(${r.creation_directions.length})`}
-                            options={COMBO_DIRECTIONS}
-                            value={r.creation_directions}
-                            onChange={v => updateRow(r.localKey, { creation_directions: v })}
-                          />
-                          <ChipMultiSelect
-                            label={`文案类型(${r.copywriting_types.length})`}
-                            options={COMBO_TYPES}
-                            value={r.copywriting_types}
-                            onChange={v => updateRow(r.localKey, { copywriting_types: v })}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-                return out;
+                  </tr>,
+                ];
               };
 
               // 2026-05-31 — 多 seed 时按 seed 聚合;**保留分页**(按行分页),
@@ -609,16 +539,17 @@ export function PublishingPlanEditor({
                         refreshTemplates();
                       } : undefined} />
 
-      {queryPickerKey && (() => {
-        const row = rows.find(x => x.localKey === queryPickerKey);
+      {editKey && (() => {
+        const row = rows.find(x => x.localKey === editKey);
         if (!row) return null;
         return (
-          <QueryPickerModal
+          <RowEditModal
+            row={row}
             monitored={monitored}
-            picked={row.queries}
-            seed={row.seed}
-            onChange={qs => updateRow(queryPickerKey, { queries: qs })}
-            onClose={() => setQueryPickerKey(null)}
+            templates={templates}
+            tmplById={tmplById}
+            onPatch={patch => updateRow(editKey, patch)}
+            onClose={() => setEditKey(null)}
           />
         );
       })()}
@@ -627,75 +558,155 @@ export function PublishingPlanEditor({
 }
 
 
-// 2026-06-11 — 监测问题多选弹窗:搜索 + 勾选,即勾即生效,关掉即完成.
-function QueryPickerModal({
-  monitored, picked, seed, onChange, onClose,
+// 2026-06-12 — 行编辑统一弹窗:一行的所有字段都在这里改,即改即生效,关掉即完成.
+function RowEditModal({
+  row, monitored, templates, tmplById, onPatch, onClose,
 }: {
+  row: RowDraft;
   monitored: string[];
-  picked: string[];
-  seed: string;
-  onChange: (qs: string[]) => void;
+  templates: ContentTemplate[];
+  tmplById: Map<number, ContentTemplate>;
+  onPatch: (patch: Partial<RowDraft>) => void;
   onClose: () => void;
 }) {
   const [filter, setFilter] = useState('');
-  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const pickedSet = useMemo(() => new Set(row.queries), [row.queries]);
   const shown = useMemo(() => {
     const f = filter.trim().toLowerCase();
     return f ? monitored.filter(q => q.toLowerCase().includes(f)) : monitored;
   }, [monitored, filter]);
-
-  const toggle = (q: string) => {
-    onChange(pickedSet.has(q) ? picked.filter(x => x !== q) : [...picked, q]);
+  const toggleQuery = (q: string) => {
+    onPatch({
+      queries: pickedSet.has(q) ? row.queries.filter(x => x !== q) : [...row.queries, q],
+    });
   };
+  const tmpl = row.template_id ? tmplById.get(row.template_id) : null;
+  const platOpts = tmpl?.target_platforms?.length
+    ? tmpl.target_platforms
+    : ['公众号', '小红书', '抖音', '视频号'];
+
+  const inputStyle = {
+    background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+    border: '1px solid var(--border-color)',
+  } as const;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4"
          style={{ background: 'rgba(0,0,0,0.45)' }}
          onClick={onClose}>
-      <div className="w-[560px] max-w-full rounded-md p-4 flex flex-col"
+      <div className="w-[640px] max-w-full rounded-md p-4 flex flex-col gap-3"
            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                    maxHeight: '80vh' }}
+                    maxHeight: '85vh' }}
            onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-primary">
-            选择监测问题
-            {seed && <span className="text-xs text-muted ml-2">种子:{seed}</span>}
-          </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-primary">编辑发文行(#{row.seq + 1})</h3>
           <button type="button" onClick={onClose}
                   className="text-muted hover:text-primary text-lg leading-none">×</button>
         </div>
-        <div className="flex items-center gap-2 mb-2">
-          <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                 placeholder="按文本过滤…"
-                 className="flex-1 rounded-md px-2 py-1.5 text-xs"
-                 style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
-                          border: '1px solid var(--border-color)' }} />
-          <span className="text-xs text-muted whitespace-nowrap">已选 {picked.length}</span>
-          {picked.length > 0 && (
-            <button type="button" onClick={() => onChange([])}
-                    className="text-xs px-2 py-1 rounded-md"
-                    style={{ color: 'var(--text-secondary)',
-                             border: '1px solid var(--border-color)' }}>
-              清空
-            </button>
-          )}
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label className="block text-muted mb-1">发布日期</label>
+            <input type="date" className="w-full rounded-md px-2 py-1.5" style={inputStyle}
+                   value={row.publish_date}
+                   onChange={e => onPatch({ publish_date: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-muted mb-1">种子提示词</label>
+            <input type="text" className="w-full rounded-md px-2 py-1.5" style={inputStyle}
+                   placeholder="种子提示词文本…"
+                   value={row.seed}
+                   onChange={e => onPatch({ seed: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-muted mb-1">内容模板</label>
+            <select className="w-full rounded-md px-2 py-1.5" style={inputStyle}
+                    value={row.template_id || ''}
+                    onChange={e => {
+                      const newId = Number(e.target.value) || null;
+                      const nt = newId ? tmplById.get(newId) : null;
+                      const newPlat = (nt && nt.target_platforms.length && !nt.target_platforms.includes(row.platform))
+                        ? nt.target_platforms[0]
+                        : row.platform;
+                      onPatch({ template_id: newId, platform: newPlat });
+                    }}>
+              <option value="">—</option>
+              {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-muted mb-1">发布平台</label>
+            <select className="w-full rounded-md px-2 py-1.5" style={inputStyle}
+                    value={row.platform}
+                    onChange={e => onPatch({ platform: e.target.value })}>
+              {platOpts.map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
         </div>
-        <div className="overflow-y-auto rounded-md"
-             style={{ border: '1px solid var(--border-color)' }}>
-          {shown.length === 0 ? (
-            <div className="p-4 text-center text-xs text-muted">无匹配的监测问题</div>
-          ) : shown.map(q => (
-            <label key={q}
-                   className="flex items-start gap-2 px-3 py-1.5 text-xs cursor-pointer"
-                   style={{ borderBottom: '1px solid var(--border-color)',
-                            color: 'var(--text-primary)' }}>
-              <input type="checkbox" checked={pickedSet.has(q)}
-                     onChange={() => toggle(q)} className="mt-0.5 shrink-0" />
-              <span>{q}</span>
-            </label>
-          ))}
+
+        <div className="flex flex-col gap-1.5 min-h-0">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted">监测问题(本文需自然覆盖)</label>
+            <span className="text-xs text-muted">已选 {row.queries.length}</span>
+            {row.queries.length > 0 && (
+              <button type="button" onClick={() => onPatch({ queries: [] })}
+                      className="text-[11px] px-1.5 py-0.5 rounded-md"
+                      style={{ color: 'var(--text-secondary)',
+                               border: '1px solid var(--border-color)' }}>
+                清空
+              </button>
+            )}
+            <div className="flex-1" />
+            <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
+                   placeholder="过滤…"
+                   className="w-[160px] rounded-md px-2 py-1 text-xs" style={inputStyle} />
+          </div>
+          <div className="overflow-y-auto rounded-md"
+               style={{ border: '1px solid var(--border-color)', maxHeight: 200 }}>
+            {shown.length === 0 ? (
+              <div className="p-3 text-center text-xs text-muted">无匹配的监测问题</div>
+            ) : shown.map(q => (
+              <label key={q}
+                     className="flex items-start gap-2 px-3 py-1.5 text-xs cursor-pointer"
+                     style={{ borderBottom: '1px solid var(--border-color)',
+                              color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={pickedSet.has(q)}
+                       onChange={() => toggleQuery(q)} className="mt-0.5 shrink-0" />
+                <span>{q}</span>
+              </label>
+            ))}
+          </div>
         </div>
-        <div className="flex justify-end mt-3">
+
+        <div>
+          <label className="block text-xs text-muted mb-1">备注</label>
+          <input type="text" className="w-full rounded-md px-2 py-1.5 text-xs" style={inputStyle}
+                 placeholder="备注…"
+                 value={row.note}
+                 onChange={e => onPatch({ note: e.target.value })} />
+        </div>
+
+        <div>
+          <div className="text-[11px] text-muted mb-1.5">
+            自定义本行创作偏好(空则用画像默认;非空则只用本行勾的)
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <ChipMultiSelect
+              label={`创作方向(${row.creation_directions.length})`}
+              options={COMBO_DIRECTIONS}
+              value={row.creation_directions}
+              onChange={v => onPatch({ creation_directions: v })}
+            />
+            <ChipMultiSelect
+              label={`文案类型(${row.copywriting_types.length})`}
+              options={COMBO_TYPES}
+              value={row.copywriting_types}
+              onChange={v => onPatch({ copywriting_types: v })}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
           <button type="button" onClick={onClose}
                   className="px-4 py-1.5 text-xs rounded-md text-white"
                   style={{ background: 'var(--accent-primary)' }}>
