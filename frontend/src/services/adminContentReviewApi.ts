@@ -55,6 +55,9 @@ export interface GeneratedDoc {
   mediumsly_url?: string | null;
   mediumsly_pushed_at?: string | null;
   mediumsly_last_error?: string | null;
+  // 2026-06-12 — 平台审核结果回填(passed/rejected;rejected 原因是规则学习素材)
+  platform_review_status?: 'passed' | 'rejected' | null;
+  platform_reject_reason?: string | null;
 }
 
 async function request<T>(
@@ -127,5 +130,14 @@ export const adminContentReviewApi = {
       publish_targets: targets,
       push_to_mediumsly: pushToMediumsly,
     });
+  },
+  // 回填平台方审核结果(仅 published 稿);rejected 必带原因,供平台规则学习
+  async setPlatformReview(
+    docId: number,
+    status: 'passed' | 'rejected',
+    token: string,
+    reason?: string,
+  ): Promise<GeneratedDoc> {
+    return request('POST', `/docs/${docId}/platform-review`, token, { status, reason });
   },
 };

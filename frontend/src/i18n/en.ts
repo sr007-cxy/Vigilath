@@ -101,6 +101,7 @@ const en = {
             "adminCrawl": "AI Crawlers",
             "adminWorkers": "Dispatch Center",
             "adminGateway": "API Gateway",
+            "adminPlatformRules": "Platform Rules",
             "adminReview": "Topic Review",
             "adminContentReview": "Doc Review",
             "adminContentManagement": "Content Library",

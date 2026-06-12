@@ -101,6 +101,7 @@ const zh = {
             "adminCrawl": "AI 爬虫分析",
             "adminWorkers": "调度中心",
             "adminGateway": "对外网关",
+            "adminPlatformRules": "平台规则",
             "adminReview": "主题审核",
             "adminContentReview": "文案复审",
             "adminContentManagement": "内容库",

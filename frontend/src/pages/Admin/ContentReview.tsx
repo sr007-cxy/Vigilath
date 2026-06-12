@@ -582,6 +582,9 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showReject, setShowReject] = useState(false);
+  // 2026-06-12 — 平台审核结果回填(published 稿)
+  const [showPlatformReject, setShowPlatformReject] = useState(false);
+  const [platformRejectReason, setPlatformRejectReason] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [showPublish, setShowPublish] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -830,7 +833,72 @@ function DocDetailModal({ doc: initialDoc, token, onClose, onAnyChange, autoOpen
               {t('admin.contentReview.choosePublish')}
             </button>
           )}
+          {/* 2026-06-12 — 平台审核结果回填:被拒原因会进平台规则学习 */}
+          {doc.status === 'published' && (
+            <>
+              {doc.platform_review_status === 'passed' && (
+                <span className="text-xs px-2 py-1 rounded-md self-center"
+                      style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                  平台已过审
+                </span>
+              )}
+              {doc.platform_review_status === 'rejected' && (
+                <span className="text-xs px-2 py-1 rounded-md self-center"
+                      title={doc.platform_reject_reason || ''}
+                      style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>
+                  平台被拒:{(doc.platform_reject_reason || '').slice(0, 30)}
+                </span>
+              )}
+              <button type="button" disabled={busy}
+                      onClick={() => setShowPlatformReject(v => !v)}
+                      className="text-xs px-4 py-1.5 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: '#ef4444',
+                               border: '1px solid var(--border-color)' }}>
+                平台被拒…
+              </button>
+              <button type="button" disabled={busy}
+                      onClick={() => wrap(() =>
+                        adminContentReviewApi.setPlatformReview(doc.id, 'passed', token))}
+                      className="text-xs px-4 py-1.5 rounded-md text-white"
+                      style={{ background: '#10b981' }}>
+                ✓ 平台已过审
+              </button>
+            </>
+          )}
         </div>
+
+        {showPlatformReject && (
+          <div className="p-3 border-t"
+               style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
+            <p className="text-xs text-secondary mb-2">
+              平台拒稿原因(必填 — 会被「平台规则·从拒稿学习」提炼成该平台审核规则)
+            </p>
+            <textarea value={platformRejectReason}
+                      onChange={e => setPlatformRejectReason(e.target.value)} rows={2}
+                      placeholder="例:含绝对化用语「全网第一」被拒 / 文末二维码导流被拒…"
+                      className="w-full text-sm px-3 py-2 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
+                               border: '1px solid var(--border-color)' }} />
+            <div className="flex justify-end gap-2 mt-2">
+              <button type="button"
+                      onClick={() => { setShowPlatformReject(false); setPlatformRejectReason(''); }}
+                      className="text-xs px-3 py-1 rounded-md"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
+                {t('admin.contentReview.cancel')}
+              </button>
+              <button type="button" disabled={busy || !platformRejectReason.trim()}
+                      onClick={async () => {
+                        const ok = await wrap(() => adminContentReviewApi.setPlatformReview(
+                          doc.id, 'rejected', token, platformRejectReason.trim()));
+                        if (ok) { setShowPlatformReject(false); setPlatformRejectReason(''); }
+                      }}
+                      className="text-xs px-3 py-1 rounded-md text-white disabled:opacity-40"
+                      style={{ background: '#ef4444' }}>
+                {busy ? '…' : '确认回填'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {showReject && (
           <div className="p-3 border-t"

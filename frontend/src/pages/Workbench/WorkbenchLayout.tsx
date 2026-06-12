@@ -16,6 +16,7 @@ const sidebarItems = [
   { to: '/workbench/cockpit',        end: false, icon: 'cockpit',     labelKey: 'nav.adminCockpit' },
   { to: '/workbench/accounts',       end: false, icon: 'accounts',    labelKey: 'nav.adminAccounts' },
   { to: '/workbench/content-review', end: false, icon: 'docs',        labelKey: 'nav.adminContentReview' },
+  { to: '/workbench/platform-rules', end: false, icon: 'docs',        labelKey: 'nav.adminPlatformRules' },
   { to: '/workbench/insights',       end: false, icon: 'insights',    labelKey: 'nav.adminInsights' },
   { to: '/workbench/runs',           end: false, icon: 'runs',        labelKey: 'nav.adminRuns' },
   { to: '/workbench/crawl',          end: false, icon: 'crawl',       labelKey: 'nav.adminCrawl' },

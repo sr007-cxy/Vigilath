@@ -54,6 +54,7 @@ const BrandGrowthQueries = lazy(() => import('./pages/BrandGrowth/Queries').then
 const BrandGrowthResponses = lazy(() => import('./pages/BrandGrowth/Responses').then(m => ({ default: m.Responses })));
 const BrandGrowthPublished = lazy(() => import('./pages/BrandGrowth/Published').then(m => ({ default: m.Published })));
 const AdminContentReview = lazy(() => import('./pages/Admin/ContentReview').then(m => ({ default: m.AdminContentReview })));
+const AdminPlatformRules = lazy(() => import('./pages/Admin/PlatformRules').then(m => ({ default: m.AdminPlatformRules })));
 const AdminAccounts = lazy(() => import('./pages/Workbench/AdminAccounts').then(m => ({ default: m.AdminAccounts })));
 const AdminAccountTopics = lazy(() => import('./pages/Workbench/AdminAccountTopics').then(m => ({ default: m.AdminAccountTopics })));
 const AdminTopicEdit = lazy(() => import('./pages/Workbench/AdminTopicEdit').then(m => ({ default: m.AdminTopicEdit })));
@@ -178,6 +179,7 @@ function App() {
                 <Route path="runs/:runId" element={<AdminRunDetail />} />
                 {/* 详情页 / 非 sidebar 直达 */}
                 <Route path="content-review" element={<AdminContentReview />} />
+                <Route path="platform-rules" element={<AdminPlatformRules />} />
                 <Route path="content-management" element={<Content />} />
                 <Route path="topics/:topicId/edit" element={<AdminTopicEdit />} />
                 {/* 老的单主题详情路由全部并入「画像」主流程,只保留这一个 wizard */}
