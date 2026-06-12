@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from jose import JWTError
-from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates, admin_crawl
+from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates, admin_crawl, platform_rules
 from geo.utils.error_handler import global_exception_handler, AppException
 from geo.utils.request_log import configure_request_log
 
@@ -86,6 +86,7 @@ app.include_router(content_templates.router, prefix="/api", tags=["content-templ
 app.include_router(content.router, prefix="/api", tags=["content"])
 app.include_router(engine_sessions.router, prefix="/api", tags=["engine-sessions"])
 app.include_router(admin_crawl.router, prefix="/api", tags=["admin-crawl"])
+app.include_router(platform_rules.router, prefix="/api", tags=["platform-rules"])
 
 # GEO 优化 Agent(对话式)跑在**独立 service**(方案 B,geo.agent.service:app + 独立 venv),
 # nginx 把 /api/agent/* 反代到它。主后端不挂载 agent、不装 pydantic-ai —— 彻底隔离版本冲突。

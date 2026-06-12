@@ -362,6 +362,7 @@ def _run_per_item(
                 doc.title = f"[未生成] {topic_text}"
                 continue
             try:
+                rules_block = _platform_rules_block(db, platform)
                 if tmpl and direction is None and copywriting_type is None:
                     # 单变体老路径走 template;有 combo 时即使有 template 也走 _generate_one
                     # (template prompt 不接 combo 注入,直接走 profile combo)
@@ -369,6 +370,7 @@ def _run_per_item(
                         profile, tmpl, topic_text, platform or "", provider, api_key,
                         seed=seed or None, style_refs=style_refs,
                         cover_queries=cover_queries,
+                        platform_rules=rules_block,
                     )
                 else:
                     medias = _match_topic_media(db, topic_id, topic_text)
@@ -377,6 +379,7 @@ def _run_per_item(
                         direction=direction, copywriting_type=copywriting_type,
                         medias=medias, topic_id=topic_id, style_refs=style_refs,
                         cover_queries=cover_queries,
+                        platform_rules=rules_block,
                     )
                 doc.title = title
                 allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
@@ -437,11 +440,13 @@ def regenerate_doc(db, doc: TopicGeneratedDocORM) -> TopicGeneratedDocORM:
     tmpl = db.get(ContentTemplateORM, doc.template_id) if doc.template_id else None
     style_refs = _load_style_refs(db, topic_id)
 
+    rules_block = _platform_rules_block(db, doc.platform)
     if tmpl and direction is None and copywriting_type is None:
         # 单变体走模板;有 combo 时模板 prompt 不接注入,改走 _generate_one
         title, body, summary = _generate_with_template(
             profile, tmpl, query, doc.platform or "", provider, api_key,
             style_refs=style_refs,
+            platform_rules=rules_block,
         )
         doc.body_markdown = body
     else:
@@ -450,6 +455,7 @@ def regenerate_doc(db, doc: TopicGeneratedDocORM) -> TopicGeneratedDocORM:
             profile, query, provider, api_key,
             direction=direction, copywriting_type=copywriting_type,
             medias=medias, topic_id=topic_id, style_refs=style_refs,
+            platform_rules=rules_block,
         )
         allow_md = bool(TYPE_HINTS.get(copywriting_type or "", {}).get("allow_md", False))
         doc.body_markdown = body if allow_md else _append_media_to_body(db, topic_id, query, body)
@@ -563,6 +569,28 @@ def _build_brand_block(profile: BrandProfile) -> str:
     return "\n".join(parts)
 
 
+def _platform_rules_block(db, platform: Optional[str]) -> str:
+    """2026-06-12 — 按发布平台取审核红线(platform_rules 表),渲染成 prompt 注入段.
+
+    平台为空 / 没配规则 → 空串(生成行为不变)。
+    """
+    p = (platform or "").strip()
+    if not p:
+        return ""
+    try:
+        from geo.models.ai_telemetry import PlatformRuleORM
+        row = db.query(PlatformRuleORM).filter(PlatformRuleORM.platform == p).first()
+    except Exception:  # noqa: BLE001 — 表还没迁移时不阻塞生成
+        return ""
+    rules = (row.rules_text or "").strip() if row else ""
+    if not rules:
+        return ""
+    return (
+        f"\n\n【{p} 平台审核红线 — 违反任何一条稿件会被平台拒审,必须全部遵守】\n"
+        f"{rules[:4000]}"
+    )
+
+
 def _build_cover_queries_block(cover_queries: Optional[list[str]], topic_text: str = "") -> str:
     """多选 queries 行的覆盖要求段 — 追加到 user prompt 末尾.
 
@@ -585,6 +613,7 @@ def _generate_with_template(
     seed: Optional[str] = None,
     style_refs: Optional[list] = None,
     cover_queries: Optional[list[str]] = None,
+    platform_rules: str = "",
 ) -> tuple[str, str, str]:
     """模板路径 — system prompt 仍走品牌画像,user prompt 走模板渲染.
 
@@ -605,6 +634,7 @@ def _generate_with_template(
         "brand_block": brand_block,
     })
     user_prompt += _build_cover_queries_block(cover_queries, topic_text=query)
+    user_prompt += platform_rules
     return _call_llm(system_prompt, user_prompt, provider, api_key)
 
 
@@ -664,6 +694,7 @@ def _generate_one(
     topic_id: Optional[int] = None,
     style_refs: Optional[list] = None,
     cover_queries: Optional[list[str]] = None,
+    platform_rules: str = "",
 ) -> tuple[str, str, str]:
     """单条 query → (title, body_markdown, summary).
 
@@ -706,7 +737,7 @@ def _generate_one(
     user_prompt = (
         f"针对下面这个{'主题' if cover_block else '问题'},写一篇符合资料调性、可以直接复制发布的文章。\n"
         f"{'主题' if cover_block else '问题'}:{query}"
-        f"{cover_block}\n\n"
+        f"{cover_block}{platform_rules}\n\n"
         f"输出严格 JSON,字段:\n"
         f'  "title": 文案标题(吸睛,≤30 字,纯文本不要带任何符号修饰),\n'
         f'  "summary": 200 字内的摘要(纯文本,用于卡片预览),\n'

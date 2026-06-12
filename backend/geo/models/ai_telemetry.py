@@ -395,6 +395,12 @@ class TopicGeneratedDocORM(Base):
     # 形态:{"deepseek": [response_id, ...], "doubao": [...], ...}
     cited_by_json = Column(Text, nullable=False, default="{}")
 
+    # ─── 平台审核结果回填(2026-06-12)────────────────────────────────
+    # 运营把稿子发到平台后,把平台方审核结果填回来;rejected 的 reason 会被
+    # platform_rules 的「从拒稿学习」聚合提炼成该平台的审核规则增量。
+    platform_review_status = Column(String(length=16), nullable=True)   # passed / rejected
+    platform_reject_reason = Column(Text, nullable=True)
+
     # ─── Mediumsly 推送状态(2026-05-29)─────────────────────────────
     # 由 services/mediumsly_publisher.py 写,publish endpoint 读。与
     # publish_targets_json 解耦:后者是 admin 手动标注,这 4 列追踪自动外发结果。
@@ -406,6 +412,25 @@ class TopicGeneratedDocORM(Base):
     mediumsly_url        = Column(String(length=512), nullable=True)
     mediumsly_pushed_at  = Column(DateTime,           nullable=True)
     mediumsly_last_error = Column(Text,               nullable=True)
+
+
+class PlatformRuleORM(Base):
+    """2026-06-12 — 平台审核规则库:按发布平台存一份"审核红线"文本.
+
+    rules_text 在生成文章时按发文行的 platform 注入 prompt(违反任何一条稿件不可用);
+    pending_rules_text 是「从拒稿学习」(LLM 聚合该平台 platform_reject_reason 提炼的
+    规则增量),admin 采纳后并入 rules_text、清空 pending。
+    """
+    __tablename__ = "platform_rules"
+    __table_args__ = (Index("idx_platform_rules_platform", "platform", unique=True),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    platform = Column(String(length=32), nullable=False)
+    rules_text = Column(Text, nullable=False, default="")
+    pending_rules_text = Column(Text, nullable=False, default="")
+    learned_at = Column(DateTime, nullable=True)        # 最近一次「从拒稿学习」时刻
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_by_id = Column(Integer, nullable=True)
 
 
 class TopicMediaORM(Base):
@@ -801,6 +826,9 @@ class GeneratedDocOut(BaseModel):
     # 2026-05-28 — 多变体生成标识(同一 query 多份稿件按这俩字段区分)
     creation_direction: Optional[str] = None
     copywriting_type: Optional[str] = None
+    # 2026-06-12 — 平台审核结果回填(passed / rejected;rejected 带原因供规则学习)
+    platform_review_status: Optional[str] = None
+    platform_reject_reason: Optional[str] = None
 
     @classmethod
     def from_orm_row(cls, r: "TopicGeneratedDocORM") -> "GeneratedDocOut":
@@ -833,6 +861,8 @@ class GeneratedDocOut(BaseModel):
             mediumsly_pushed_at=getattr(r, "mediumsly_pushed_at", None),
             mediumsly_last_error=getattr(r, "mediumsly_last_error", None),
             creation_direction=getattr(r, "creation_direction", None),
+            platform_review_status=getattr(r, "platform_review_status", None),
+            platform_reject_reason=getattr(r, "platform_reject_reason", None),
             copywriting_type=getattr(r, "copywriting_type", None),
         )
 

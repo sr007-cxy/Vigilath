@@ -330,6 +330,41 @@ async def publish_doc(
     return GeneratedDocOut.from_orm_row(d)
 
 
+class PlatformReviewPayload(BaseModel):
+    status: str                       # passed / rejected
+    reason: Optional[str] = None      # rejected 时的平台拒稿原因(规则学习素材)
+
+
+@router.post("/docs/{doc_id}/platform-review", response_model=GeneratedDocOut)
+def set_platform_review(
+    doc_id: int,
+    payload: PlatformReviewPayload,
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """2026-06-12 — 回填平台方审核结果(发布后平台过审/被拒).
+
+    rejected 的 reason 会被 /admin/platform-rules/learn 聚合,LLM 提炼成
+    该平台审核规则增量。只允许对已 published 的稿子回填。
+    """
+    d = db.get(TopicGeneratedDocORM, doc_id)
+    if not d:
+        raise HTTPException(404, "doc not found")
+    if d.status != "published":
+        raise HTTPException(409, {"code": "NEED_PUBLISHED",
+                                  "message": "先标记发布,再回填平台审核结果"})
+    if payload.status not in ("passed", "rejected"):
+        raise HTTPException(422, "status must be passed / rejected")
+    if payload.status == "rejected" and not (payload.reason or "").strip():
+        raise HTTPException(422, {"code": "NEED_REASON",
+                                  "message": "平台被拒必须填写拒稿原因(规则学习的素材)"})
+    d.platform_review_status = payload.status
+    d.platform_reject_reason = (payload.reason or "").strip() or None
+    db.commit()
+    db.refresh(d)
+    return GeneratedDocOut.from_orm_row(d)
+
+
 def _notify_user(db: Session, background: BackgroundTasks, doc: TopicGeneratedDocORM,
                   *, decision: str, reject_reason: str | None = None,
                   publish_targets: list[dict] | None = None) -> None:
