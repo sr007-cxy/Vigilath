@@ -33,6 +33,8 @@ from geo.models.engine_sessions import (
     SessionCheckIn,
     SessionCheckedOut,
     SessionUploadIn,
+    extract_account_handle,
+    extract_account_id,
 )
 
 
@@ -82,6 +84,18 @@ _CAPTCHA_QUARANTINE_THRESHOLD = 3   # 累计被挑 CAPTCHA 3 次 → quarantine
 # 活跃 worker 每次 check-out 会续租,挂掉的 worker 租约到期后账号释放给别人。
 _LEASE_TTL_HOURS = int(os.environ.get("ENGINE_SESSION_LEASE_TTL_HOURS", "6"))
 
+
+def _local_today() -> str:
+    """本地(北京)日期字符串,用于单账号每日用量归零。"""
+    return (datetime.utcnow() + timedelta(hours=8)).date().isoformat()
+
+
+def _session_daily_cap(engine: str) -> int:
+    """单账号每日 check-out 硬上限;0 = 不限。
+    env ENGINE_SESSION_DAILY_CAP_<ENGINE>(如 ENGINE_SESSION_DAILY_CAP_DEEPSEEK=20)。"""
+    ov = os.environ.get(f"ENGINE_SESSION_DAILY_CAP_{engine.upper()}")
+    return int(ov) if ov and ov.isdigit() else 0
+
 # ── Quarantine policy(D2 — P1 失败信号 enum 化)──────────────────
 #
 # 各 FailureType 触发 quarantine 的政策:
@@ -112,8 +126,13 @@ def upload_session(
 ):
     """Harvester 上传一份新登录拿到的 storage_state。
 
-    简单 sanity check + 落库,不去 dedupe(同 source 多次上传也允许 ——
-    后传的更新鲜,check-out 时 use_count=0 + 最新 captured_at 会被优先选)。
+    账号识别两级:先按 storage_state 提取的稳定身份 account_id 匹配
+    (extract_account_id,不依赖人填),提不到/没匹配上再按
+    (engine, source_label) 匹配。认出老账号就原地续期(刷新
+    storage_state / captured_at / expires_at,状态回 active,清失败计数),
+    而不是落一条新行 —— 否则老账号永远挂着"过期",池子越积越多。
+    同账号的其他历史重复行(早期多次上传产生)顺手删掉。
+    两级都识别不了才插入新行。
     """
     if payload.engine not in _valid_engines():
         raise HTTPException(400, f"unsupported engine: {payload.engine!r}")
@@ -121,20 +140,73 @@ def upload_session(
     if not cookies:
         raise HTTPException(400, "storage_state has no cookies — likely not logged in")
 
-    row = EngineSessionORM(
-        engine=payload.engine,
-        source_label=payload.source_label,
-        storage_state=json.dumps(payload.storage_state, ensure_ascii=False),
-        user_agent=payload.user_agent,
-        platform=payload.platform,
-        captured_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(days=payload.ttl_days),
-        status="active",
-    )
-    db.add(row)
+    now = datetime.utcnow()
+    label = (payload.source_label or "").strip() or None
+    handle = ((payload.account_handle or "").strip()
+              or extract_account_handle(payload.engine, payload.storage_state))
+    account_id = extract_account_id(payload.engine, payload.storage_state)
+
+    matches: list[EngineSessionORM] = []
+    if account_id:
+        matches = (
+            db.query(EngineSessionORM)
+            .filter(EngineSessionORM.engine == payload.engine)
+            .filter(EngineSessionORM.account_id == account_id)
+            .order_by(EngineSessionORM.captured_at.desc(), EngineSessionORM.id.desc())
+            .all()
+        )
+    if not matches and label:
+        # 老行还没有 account_id(历史数据)/ 这家引擎提取不到 → 退回 label 匹配
+        matches = (
+            db.query(EngineSessionORM)
+            .filter(EngineSessionORM.engine == payload.engine)
+            .filter(EngineSessionORM.source_label == label)
+            .order_by(EngineSessionORM.captured_at.desc(), EngineSessionORM.id.desc())
+            .all()
+        )
+        if account_id:
+            # label 匹配出的行如果已绑了别的 account_id,说明同 label 换了账号 → 不算同账号
+            matches = [m for m in matches if not m.account_id or m.account_id == account_id]
+
+    row = matches[0] if matches else None
+    for stale in matches[1:]:
+        db.delete(stale)
+
+    renewed = row is not None
+    if renewed:
+        row.account_id = account_id or row.account_id
+        row.account_handle = handle or row.account_handle
+        row.source_label = label or row.source_label
+        row.storage_state = json.dumps(payload.storage_state, ensure_ascii=False)
+        row.user_agent = payload.user_agent
+        row.platform = payload.platform
+        row.captured_at = now
+        row.expires_at = now + timedelta(days=payload.ttl_days)
+        row.status = "active"
+        # 新登录 = 干净的开始:清验证码 / 失败累计;use_count 保留(跨账号负载均衡用)
+        row.captcha_count = 0
+        row.fail_counts_json = "{}"
+        row.last_fail_type = None
+        row.last_fail_at = None
+    else:
+        row = EngineSessionORM(
+            engine=payload.engine,
+            source_label=label,
+            account_id=account_id,
+            account_handle=handle,
+            storage_state=json.dumps(payload.storage_state, ensure_ascii=False),
+            user_agent=payload.user_agent,
+            platform=payload.platform,
+            captured_at=now,
+            expires_at=now + timedelta(days=payload.ttl_days),
+            status="active",
+        )
+        db.add(row)
     db.commit()
     db.refresh(row)
-    return {"id": row.id, "engine": row.engine, "expires_at": row.expires_at.isoformat()}
+    return {"id": row.id, "engine": row.engine,
+            "expires_at": row.expires_at.isoformat(), "renewed": renewed,
+            "account_id": row.account_id, "account_handle": row.account_handle}
 
 
 @router.post("/engine-sessions/check-out", response_model=SessionCheckedOut)
@@ -156,15 +228,25 @@ def check_out(
         raise HTTPException(400, f"unsupported engine: {engine!r}")
 
     now = datetime.utcnow()
+    today = _local_today()
+    cap = _session_daily_cap(engine)
 
     def _base():
-        return (
+        q = (
             db.query(EngineSessionORM)
             .filter(EngineSessionORM.engine == engine)
             .filter(EngineSessionORM.status == "active")
             .filter(EngineSessionORM.captcha_count < _CAPTCHA_QUARANTINE_THRESHOLD)
             .filter((EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now))  # noqa: E711
         )
+        # 单账号每日硬上限:排除"今天已达上限"的号(used_date!=今天 或 从没用过 → 视为未达上限)
+        if cap > 0:
+            q = q.filter(
+                (EngineSessionORM.used_date == None)              # noqa: E711
+                | (EngineSessionORM.used_date != today)
+                | (EngineSessionORM.used_today < cap)
+            )
+        return q
 
     _least = (EngineSessionORM.use_count.asc(), EngineSessionORM.last_used_at.asc().nullsfirst())
 
@@ -193,6 +275,12 @@ def check_out(
     # 即刻 +1 use_count + last_used_at,避免并发 check-out 同一条
     row.use_count = (row.use_count or 0) + 1
     row.last_used_at = now
+    # 单账号每日计数:跨天归零,否则 +1(精确控制每号每天用量)
+    if row.used_date != today:
+        row.used_date = today
+        row.used_today = 1
+    else:
+        row.used_today = (row.used_today or 0) + 1
     db.commit()
     db.refresh(row)
 
@@ -202,6 +290,7 @@ def check_out(
         source_label=row.source_label,
         storage_state=json.loads(row.storage_state),
         use_count=row.use_count,
+        egress=row.egress,
     )
 
 

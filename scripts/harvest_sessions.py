@@ -139,6 +139,14 @@ async def _harvest_one(engine: str, label: str, pw, api_base: str, token: str) -
     n_ls = sum(len(o.get("localStorage", [])) for o in state.get("origins", []))
     ua = await page.evaluate("() => navigator.userAgent")
     plat = await page.evaluate("() => navigator.platform")
+    # best-effort 抓页面上的掩码手机号当账号展示名;抓不到不影响上传
+    try:
+        handle = await page.evaluate(
+            "() => { const m = (document.body.innerText || '')"
+            ".match(/\\b1[3-9]\\d\\*{3,6}\\d{2,4}\\b/); return m ? m[0] : null; }"
+        )
+    except Exception:
+        handle = None
 
     print(f"  [{engine}] captured: cookies={n_cookies} localStorage={n_ls}")
 
@@ -159,6 +167,7 @@ async def _harvest_one(engine: str, label: str, pw, api_base: str, token: str) -
                     "engine": engine,
                     "storage_state": state,
                     "source_label": label,
+                    "account_handle": handle,
                     "user_agent": ua,
                     "platform": plat,
                     "ttl_days": 7,
@@ -166,7 +175,9 @@ async def _harvest_one(engine: str, label: str, pw, api_base: str, token: str) -
             )
         if r.status_code in (200, 201):
             data = r.json()
-            print(f"  [{engine}] ✓ uploaded id={data.get('id')} expires={data.get('expires_at')}")
+            verb = "renewed" if data.get("renewed") else "uploaded (new)"
+            print(f"  [{engine}] ✓ {verb} id={data.get('id')} "
+                  f"handle={data.get('account_handle') or '-'} expires={data.get('expires_at')}")
             ok = True
         else:
             print(f"  [{engine}] ✗ server returned {r.status_code}: {r.text[:300]}")

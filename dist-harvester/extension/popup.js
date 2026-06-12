@@ -117,7 +117,9 @@ async function collectCookies(domains) {
 }
 
 // 在 tab 里跑一段 JS 读 localStorage + sessionStorage(只读 localStorage,
-// Playwright storage_state 不含 sessionStorage)
+// Playwright storage_state 不含 sessionStorage)。
+// 顺手抓账号昵称(handle):页面上常见的掩码手机号(138****1234)——
+// 纯展示用,抓不到/抓错都不影响上传和账号识别(识别靠服务端解 storage_state)。
 async function readLocalStorage(tabId) {
   const results = await chrome.scripting.executeScript({
     target: { tabId, allFrames: false },
@@ -129,11 +131,16 @@ async function readLocalStorage(tabId) {
           items.push({ name: k, value: localStorage.getItem(k) });
         }
       } catch (e) { /* SecurityError on cross-origin frames, ignore */ }
-      return { items, origin: location.origin };
+      let handle = null;
+      try {
+        const m = (document.body.innerText || "").match(/\b1[3-9]\d\*{3,6}\d{2,4}\b/);
+        if (m) handle = m[0];
+      } catch (e) { /* ignore */ }
+      return { items, origin: location.origin, handle };
     },
   });
-  if (!results || !results.length) return { items: [], origin: null };
-  return results[0].result || { items: [], origin: null };
+  if (!results || !results.length) return { items: [], origin: null, handle: null };
+  return results[0].result || { items: [], origin: null, handle: null };
 }
 
 // ── Main: harvest + upload ───────────────────────────────────────────
@@ -161,10 +168,16 @@ async function harvestAndUpload(engine, tab) {
     setStatus("err", "没配置 API / token。点底下「设置」填一下。");
     return;
   }
+  // label 是服务端识别不出账号时的兜底匹配键,多人撞同一个默认值会被
+  // 当成同一账号互相覆盖 —— 所以必须每人设置自己的标识才能上传。
+  const label = (cfg.label || "").trim();
+  if (!label || /^(anon|user-(mac|win|linux|unknown))$/.test(label)) {
+    setStatus("err", "先在「设置」里填你自己的标识(如 alice-mac),不能用默认值。");
+    return;
+  }
 
   const ua = navigator.userAgent;
   const plat = navigator.platform;
-  const label = cfg.label || "anon";
 
   setStatus("info", `上传 → ${cfg.api} …`);
   try {
@@ -178,6 +191,7 @@ async function harvestAndUpload(engine, tab) {
         engine: engine.key,
         storage_state,
         source_label: label,
+        account_handle: ls.handle || null,
         user_agent: ua,
         platform: plat,
         ttl_days: 7,
@@ -185,9 +199,12 @@ async function harvestAndUpload(engine, tab) {
     });
     if (r.status === 200 || r.status === 201) {
       const data = await r.json();
+      const who = data.account_handle ? ` 账号 ${data.account_handle}` : "";
       setStatus("ok",
-        `✓ ${engine.name} 上传成功!cookies=${cookies.length} localStorage=${ls.items.length} ` +
-        `id=${data.id} 7 天后过期`);
+        (data.renewed
+          ? `✓ ${engine.name} 已续期老账号 #${data.id}${who}!`
+          : `✓ ${engine.name} 新增账号 #${data.id}${who}!`) +
+        ` cookies=${cookies.length} localStorage=${ls.items.length} 7 天后过期`);
     } else {
       const text = await r.text();
       setStatus("err", `✗ HTTP ${r.status}: ${text.slice(0, 200)}`);

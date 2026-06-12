@@ -12,6 +12,9 @@ D2(本文件)实现 P1 — 失败信号 enum 化 + 各类型对应的 quarantine
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -28,11 +31,16 @@ class EngineSessionORM(Base):
         Index("idx_engine_sessions_pool", "engine", "status", "captcha_count", "last_used_at"),
         Index("idx_sessions_lease", "engine", "status", "leased_until"),
         Index("idx_sessions_region", "engine", "status", "captured_from_region"),
+        Index("idx_sessions_account", "engine", "account_id"),
     )
 
     id = Column(Integer, primary_key=True)
     engine = Column(String, nullable=False, index=True)            # doubao/qwen/deepseek/wenxin/yuanbao
     source_label = Column(String, nullable=True)                   # "alice-mac", "bob-win-laptop", ...
+    # 账号身份(2026-06):从 storage_state 提取的稳定用户标识哈希
+    # (格式 "<字段名>:<sha256前16>",见 extract_account_id);upsert 优先按它匹配
+    account_id = Column(String, nullable=True)
+    account_handle = Column(String, nullable=True)                 # 昵称/掩码手机号,纯展示
     storage_state = Column(Text, nullable=False)                   # JSON 字符串
     user_agent = Column(String, nullable=True)
     platform = Column(String, nullable=True)                       # "MacIntel" / "Linux x86_64" / ...
@@ -54,6 +62,140 @@ class EngineSessionORM(Base):
     captured_from_region = Column(String, nullable=True)
     captured_from_ip = Column(String, nullable=True)
     preferred_worker_id = Column(Integer, nullable=True)
+
+    # 精确用量控制(2026-06):单账号每日 check-out 硬上限 + 出口 IP 绑定
+    used_today = Column(Integer, nullable=False, default=0)   # 当天 check-out 次数(跨 used_date 自动归零)
+    used_date = Column(String, nullable=True)                 # 'YYYY-MM-DD'(本地日);与 used_today 配套
+    egress = Column(String, nullable=True)                    # None=按引擎默认(PROXY_ENGINES) / 'proxy'=走代理 / 'host'=本机IP
+
+
+# ── 账号身份提取(2026-06)────────────────────────────────────────
+#
+# 目标:同一个真实账号重新登录/重新上传时,能认出"这是老账号"去续期,
+# 而不是落新行。靠 storage_state 里跨重新登录稳定的用户标识:
+#
+#   doubao   cookie uid_tt / uid_tt_ss(字节 passport 加密 uid)
+#   qwen     cookie login_aliyunid_pk(阿里账号 PK);chat.qwen.ai 的 JWT token
+#   yuanbao  cookie hy_user(腾讯混元用户 id)
+#   deepseek localStorage userToken(若为 JWT 取 payload 用户字段)
+#   wenxin   百度无明文 uid cookie(BDUSS 每次登录会变),走通用探测,
+#            探不到 → upload 退回按 source_label 匹配
+#
+# 候选字段未经全量验证(用 scripts/scan_session_identity.py 扫现库校准);
+# 提取错/提取不到的最坏结果只是退化回 label 匹配,不会把两个账号错并 ——
+# 因为 account_id 带字段名前缀 + 值哈希,不同来源/不同值永不相等。
+
+_IDENTITY_COOKIES: dict[str, tuple[str, ...]] = {
+    "doubao":  ("uid_tt", "uid_tt_ss"),
+    "qwen":    ("login_aliyunid_pk",),
+    "yuanbao": ("hy_user",),
+}
+
+# JWT 形态 token 的常见存放 key(cookie 或 localStorage)
+_TOKEN_KEYS = ("token", "userToken", "access_token")
+
+# 用户对象 / JWT payload 里认作"用户 id"的字段,按优先级
+_USER_ID_FIELDS = ("user_id", "userId", "uid", "sub", "openid", "open_id",
+                   "account_id", "accountId", "id")
+
+
+def _account_hash(field: str, value: str) -> str:
+    """account_id 格式:"<来源字段>:<sha256前16>" — 不落明文,带来源可追溯。"""
+    return f"{field}:{hashlib.sha256(value.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _jwt_user_claim(token: str) -> Optional[str]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        pad = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(pad))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for f in _USER_ID_FIELDS:
+        v = payload.get(f)
+        if isinstance(v, (str, int)) and str(v).strip():
+            return str(v)
+    return None
+
+
+def extract_account_id(engine: str, storage_state: dict) -> Optional[str]:
+    """从 storage_state 提取稳定账号标识;提不到返回 None(调用方退回 label)。"""
+    cookies = {c.get("name"): c.get("value")
+               for c in (storage_state.get("cookies") or [])
+               if c.get("name") and c.get("value")}
+    ls: dict[str, str] = {}
+    for o in storage_state.get("origins") or []:
+        for item in o.get("localStorage") or []:
+            if item.get("name") and item.get("value"):
+                ls.setdefault(item["name"], item["value"])
+
+    # 1) 引擎已知的稳定身份 cookie
+    for name in _IDENTITY_COOKIES.get(engine, ()):
+        v = cookies.get(name)
+        if v:
+            return _account_hash(f"cookie.{name}", v)
+
+    # 2) JWT 形态 token → payload 里的用户字段(跨登录稳定,token 本身会变)
+    for key in _TOKEN_KEYS:
+        for src, store in (("ls", ls), ("cookie", cookies)):
+            raw = store.get(key) or ""
+            if raw.lstrip().startswith("{"):
+                # localStorage 常见 {"value": "...", "__expires": ...} 包一层
+                try:
+                    raw = (json.loads(raw) or {}).get("value") or ""
+                except Exception:
+                    raw = ""
+            claim = _jwt_user_claim(raw) if raw else None
+            if claim:
+                return _account_hash(f"{src}.{key}.jwt", claim)
+
+    # 3) localStorage 里的用户信息 JSON({"userId": ...} 之类)
+    for key, obj in _user_objects(ls):
+        for f in _USER_ID_FIELDS:
+            v = obj.get(f)
+            if isinstance(v, (str, int)) and str(v).strip():
+                return _account_hash(f"ls.{key}.{f}", str(v))
+
+    return None
+
+
+_HANDLE_FIELDS = ("nickname", "nickName", "nick", "screen_name", "userName",
+                  "username", "name", "mobile", "phone", "email")
+
+
+def _user_objects(ls: dict[str, str]):
+    """localStorage 里 key 含 user/account 且值为 JSON object 的项,按 key 排序。"""
+    for key in sorted(ls):
+        if "user" not in key.lower() and "account" not in key.lower():
+            continue
+        raw = ls[key]
+        if not raw.lstrip().startswith("{"):
+            continue
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            yield key, obj
+
+
+def extract_account_handle(engine: str, storage_state: dict) -> Optional[str]:
+    """从 localStorage 用户信息里挖昵称/手机号当展示名;采集端没传 handle 时兜底。"""
+    ls: dict[str, str] = {}
+    for o in storage_state.get("origins") or []:
+        for item in o.get("localStorage") or []:
+            if item.get("name") and item.get("value"):
+                ls.setdefault(item["name"], item["value"])
+    for _key, obj in _user_objects(ls):
+        for f in _HANDLE_FIELDS:
+            v = obj.get(f)
+            if isinstance(v, (str, int)) and str(v).strip():
+                return str(v).strip()[:64]
+    return None
 
 
 class FailureType(str, Enum):
@@ -77,6 +219,7 @@ class SessionUploadIn(BaseModel):
     engine: str = Field(..., description="doubao/qwen/deepseek/wenxin/yuanbao")
     storage_state: dict = Field(..., description="Playwright storage_state full JSON")
     source_label: Optional[str] = Field(None, description="who+device, e.g. 'alice-mac'")
+    account_handle: Optional[str] = Field(None, description="采集端抓的昵称/掩码手机号,纯展示")
     user_agent: Optional[str] = None
     platform: Optional[str] = None
     ttl_days: int = Field(7, ge=1, le=30, description="过期天数,默认 7,最多 30")
@@ -89,6 +232,7 @@ class SessionCheckedOut(BaseModel):
     source_label: Optional[str]
     storage_state: dict
     use_count: int
+    egress: Optional[str] = None   # None=按引擎默认 / 'proxy'=走代理 / 'host'=本机IP;browser-service 据此决定出口
 
 
 class SessionCheckIn(BaseModel):

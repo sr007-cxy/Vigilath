@@ -129,8 +129,14 @@ def _pool_checkout(engine_name: str) -> Optional[dict]:
             slots = {}
             _last_checkout.by_engine = slots
         slots[engine_name] = sid
-        _log.info("[session-pool] engine=%s: checked out id=%s use_count=%s source=%r",
-                  engine_name, sid, data.get("use_count"), data.get("source_label"))
+        # 出口标记(egress):None=按引擎默认 / 'proxy'=走代理 / 'host'=本机IP
+        egslots = getattr(_last_checkout, "egress_by_engine", None)
+        if egslots is None:
+            egslots = {}
+            _last_checkout.egress_by_engine = egslots
+        egslots[engine_name] = data.get("egress")
+        _log.info("[session-pool] engine=%s: checked out id=%s use_count=%s egress=%s source=%r",
+                  engine_name, sid, data.get("use_count"), data.get("egress"), data.get("source_label"))
         return _normalize_storage_state(state)
     except Exception as e:
         _log.warning("[session-pool] engine=%s: check-out failed: %s", engine_name, e)
@@ -206,6 +212,12 @@ def get_last_checkout_id(engine_name: str):
     """返回当前线程上次 check-out 的 session id;按账号粘定代理(sticky)时用作 session 标识。
     没从池子 check-out(走本地文件兜底)时返回 None。"""
     slots = getattr(_last_checkout, "by_engine", None) or {}
+    return slots.get(engine_name)
+
+
+def get_last_egress(engine_name: str):
+    """返回当前线程上次 check-out 的出口标记:None=按引擎默认 / 'proxy' / 'host'。"""
+    slots = getattr(_last_checkout, "egress_by_engine", None) or {}
     return slots.get(engine_name)
 
 

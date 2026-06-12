@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GEO Session Harvester",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "把当前已登录的国内 AI 引擎(豆包 / 通义 / DeepSeek / 文心 / 元宝)session 上传到 GEO 中央 pool",
 
   "permissions": [

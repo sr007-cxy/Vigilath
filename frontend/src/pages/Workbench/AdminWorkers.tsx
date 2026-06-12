@@ -6,6 +6,7 @@ import {
   type WorkerQueueStats,
   type EngineSessionPage,
 } from '../../services/aiTelemetryApi';
+import { fmtTime } from '../../utils/datetime';
 
 const REFRESH_MS = 10000;
 const SESSION_PAGE_SIZE = 20;
@@ -267,7 +268,7 @@ export function AdminWorkers() {
                       : s.status === 'quarantined'
                         ? t('workbench.adminWorkers.statusQuarantined', { defaultValue: '已隔离' })
                         : s.status;
-                  const fmt = (d: string | null) => d ? d.slice(0, 16).replace('T', ' ') : '—';
+                  const fmt = (d: string | null) => d ? fmtTime(d, false) : '—';
                   return (
                     <tr key={s.id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                       <td className="px-3 py-2 text-primary">{s.engine}</td>

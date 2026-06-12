@@ -3367,21 +3367,55 @@ async def admin_worker_action(
 
 @router.get("/admin/engine-sessions")
 def admin_list_engine_sessions(
+    page: int = 1,
+    page_size: int = 20,
+    engine: Optional[str] = None,
+    status: Optional[str] = None,   # active | expired | quarantined
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """调度中心「账号池」列表 — 每条登录态(账号)的引擎/标识/状态/用量/过期。"""
+    """调度中心「账号池」列表 — 每条登录态(账号)的引擎/标识/状态/用量/过期。
+
+    分页 + 筛选(engine / status,status 按"有效状态"算:active 但已过
+    expires_at 的归 expired)。返回 {items, total, grand_total, active_total,
+    engines, page, page_size}:total 是筛选后的条数(驱动分页),
+    grand_total / active_total 是全池统计(供表头「可用 n / 共 m」),
+    engines 是池里出现过的引擎(供筛选下拉)。
+    """
     _require_admin(current_user)
     from geo.models.engine_sessions import EngineSessionORM
     now = datetime.utcnow()
-    rows = (db.query(EngineSessionORM)
-            .order_by(EngineSessionORM.engine, EngineSessionORM.id).all())
-    out = []
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    not_expired = (EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now)  # noqa: E711
+
+    base = db.query(EngineSessionORM)
+    grand_total = base.count()
+    active_total = (base.filter(EngineSessionORM.status == "active")
+                    .filter(not_expired).count())
+    engines = [r[0] for r in
+               db.query(EngineSessionORM.engine).distinct().order_by(EngineSessionORM.engine)]
+
+    q = base
+    if engine:
+        q = q.filter(EngineSessionORM.engine == engine)
+    if status == "active":
+        q = q.filter(EngineSessionORM.status == "active").filter(not_expired)
+    elif status == "expired":
+        # 有效状态 expired = 标记 active 但已过期(quarantined 即使过期仍算 quarantined)
+        q = q.filter(EngineSessionORM.status == "active").filter(~not_expired)
+    elif status == "quarantined":
+        q = q.filter(EngineSessionORM.status == "quarantined")
+    total = q.count()
+    rows = (q.order_by(EngineSessionORM.engine, EngineSessionORM.id)
+            .offset((page - 1) * page_size).limit(page_size).all())
+    items = []
     for r in rows:
         expired = r.expires_at is not None and r.expires_at <= now
         eff = "expired" if (expired and r.status == "active") else r.status
-        out.append({
+        items.append({
             "id": r.id, "engine": r.engine, "label": r.source_label,
+            "account_handle": r.account_handle,
             "status": eff,
             "use_count": r.use_count or 0, "captcha_count": r.captcha_count or 0,
             "last_used_at": r.last_used_at.isoformat() if r.last_used_at else None,
@@ -3389,7 +3423,9 @@ def admin_list_engine_sessions(
             "expires_at": r.expires_at.isoformat() if r.expires_at else None,
             "last_fail_type": r.last_fail_type,
         })
-    return out
+    return {"items": items, "total": total, "grand_total": grand_total,
+            "active_total": active_total, "engines": engines,
+            "page": page, "page_size": page_size}
 
 
 # ─────── 对外网关运营管理(/workbench/gateway,admin)────────

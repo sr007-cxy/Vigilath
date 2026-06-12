@@ -162,9 +162,21 @@ def _engine_proxy(engine_name: str, state: dict | None = None) -> dict | None:
 
     ENV: PROXY_ENGINES(逗号分隔) / ENGINE_PROXY_SERVER / ENGINE_PROXY_USER / ENGINE_PROXY_PASS
     """
-    engines = [e.strip() for e in os.environ.get("PROXY_ENGINES", "").split(",") if e.strip()]
-    if engine_name not in engines:
+    # 按账号出口标记(egress)优先:'host' 强制本机 IP(不走代理)、'proxy' 强制走代理;
+    # None 时回落到引擎级默认(PROXY_ENGINES 白名单)。这样同一引擎里部分账号走代理 IP、
+    # 部分走本机 IP,实现"每 IP 不同平台 + 1 账号/IP"的精确拓扑。
+    egress = None
+    try:
+        from .session_store import get_last_egress
+        egress = get_last_egress(engine_name)
+    except Exception:  # noqa: BLE001
+        egress = None
+    if egress == "host":
         return None
+    if egress != "proxy":
+        engines = [e.strip() for e in os.environ.get("PROXY_ENGINES", "").split(",") if e.strip()]
+        if engine_name not in engines:
+            return None
     server = os.environ.get("ENGINE_PROXY_SERVER", "").strip()
     user = os.environ.get("ENGINE_PROXY_USER", "").strip()
     pw = os.environ.get("ENGINE_PROXY_PASS", "").strip()
