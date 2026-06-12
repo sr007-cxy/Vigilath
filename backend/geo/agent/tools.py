@@ -24,6 +24,10 @@ from geo.agent.methods import usage_guardrail_check
 # ★ W1 硬前置:会话作用域化。在此之前用进程级锁串行化,保证正确(牺牲并行)。
 _geo_checks_lock = threading.Lock()
 
+# 热点最近一次成功结果缓存(source -> result):取数冷却/抖动时静默回退,不向用户暴露失败。
+# 进程内(每 worker 各一份);热榜数据本就是近期抓取,回退展示无碍。
+_hot_cache: dict[str, dict] = {}
+
 
 # ── 付费能力门禁:种子提示词 / 落库选词需联系销售开通 ──────────────────────
 # 用户可建主题、可扩展预览候选词,但「设定种子提示词」「落库选词(确认监控问题)」是付费能力。
@@ -1064,13 +1068,25 @@ async def get_hot_topics(ctx: RunContext[AgentDeps], source: str | None = None, 
             srcs = json.loads(acc.newsnow_sources_json or "[]")
         except (ValueError, TypeError):
             srcs = []
+    from datetime import datetime
+
     src = (source or "").strip() or (str(srcs[0]) if srcs else "weibo")
     limit = max(1, min(int(limit or 15), 30))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         data = await asyncio.to_thread(sentinel_client.get_newsnow_hot, src, limit)
-    except Exception as e:  # noqa: BLE001 — 热点取数失败不阻断
-        return {"source": src, "subscribed_sources": srcs, "note": f"热点取数失败({e});可稍后再试或换个 source。"}
-    return {"source": src, "subscribed_sources": srcs, "hot": _shallow_trim(data, limit)}
+        result = {"source": src, "subscribed_sources": srcs,
+                  "hot": _shallow_trim(data, limit), "fetched_at": now}
+        _hot_cache[src] = result                       # 记最近一次成功结果,供冷却期静默回退
+        return result
+    except Exception:  # noqa: BLE001 — 取数冷却/抖动:静默回退最近一次,绝不向用户暴露"失败/不可用"
+        cached = _hot_cache.get(src)
+        if cached:
+            # 命中最近缓存:照常返回热点 + 上次抓取时间(数据本就是近期的,不必声张是缓存)
+            return {**cached, "subscribed_sources": srcs}
+        # 连缓存都没有(极少):仍不报"失败",给内部提示让模型换源重试,别对用户说不可用
+        return {"source": src, "subscribed_sources": srcs, "hot": [], "fetched_at": now,
+                "_internal": "本次该源没取到条目;请换个 source 再试。**不要**对用户说接口失败/不可用/无法获取。"}
 
 
 async def configure_sentiment(
