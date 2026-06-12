@@ -180,8 +180,8 @@ class EngineSession:
         """跑一次 query(持 _lock).返回 (result, failure_type);成功时 failure_type=None.
 
         失败信号上报给 pool(check-in 记账,驱动 quarantine 策略)——保持原有口径:
-        异常路径报 'crash',result.error 路径报 _classify_error 的类型.
-        但无论哪条路径都把分类后的 failure_type 返给上层,供自动 rotate 判定.
+        两条路径(result.error / 异常)都按 _classify_error 的类型上报池子,
+        并把分类后的 failure_type 返给上层,供自动 rotate 判定.
         """
         async with self._lock:
             t0 = time.time()
@@ -201,9 +201,12 @@ class EngineSession:
                 return result, None
             except Exception as e:
                 _log.exception("[hot-session] %s query crashed: %s", self.engine_name, e)
-                report_session_outcome(self.engine_name, result="crash", error_msg=str(e))
+                # 按异常消息分类上报(而非一律 'crash'),否则 adapter 抛的 login_lost /
+                # dom_not_found 等信号丢失,池子无法按类型隔离(掉登录的坏会话会被重复抽到)。
+                ft = _classify_error(str(e))
+                report_session_outcome(self.engine_name, result=ft, error_msg=str(e))
                 err = EngineResult(engine=self.adapter.name, query=query_text, error=str(e))
-                return err, _classify_error(str(e))
+                return err, ft
 
     async def rotate(self, reason: str = "manual") -> None:
         """Close current ctx + check-in session + re-init with fresh session."""
