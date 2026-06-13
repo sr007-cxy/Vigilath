@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     MEDIUMSLY_INTERNAL_API_TOKEN: str = ""
     MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST: str = ""  # comma-separated
 
+    # 媒介星代理商发稿 API(docs/媒体API/产品文档-媒介星发文对接.md)。
+    # 密钥为空 = 渠道未开通,client 拒绝发任何请求。
+    MJX_API_BASE: str = "https://www.2016ruanwen.com"
+    MJX_SECRET_ID: str = ""
+    MJX_SECRET_KEY: str = ""
+    MJX_PUBLISH_ENABLED: bool = False  # 真实下单独立闸,与 AGENT_ALLOW_EXTERNAL_PUBLISH 双闸
+
     class Config:
         env_file = ".env"
         extra = "ignore"
