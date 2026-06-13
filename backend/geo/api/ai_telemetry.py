@@ -3365,6 +3365,72 @@ async def admin_worker_action(
         return r.json()
 
 
+@router.post("/admin/authorize-account")
+def admin_authorize_account(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """管理台「添加账号·密码授权」—— 代理到 browser-service 的 /authorize:
+    server 端用账号密码自动登录(走代理)→ 抓登录态入池。
+
+    body: {engine, identifier, password}。仅 admin。密码只透传到内网 worker,不落库于此。
+    """
+    _require_admin(current_user)
+    engine = (payload or {}).get("engine")
+    identifier = (payload or {}).get("identifier")
+    password = (payload or {}).get("password")
+    if not (engine and identifier and password):
+        raise HTTPException(status_code=400, detail="engine/identifier/password 必填")
+    import os
+    import httpx
+    url = os.environ.get("BROWSER_SERVICE_AUTHORIZE_URL", "http://127.0.0.1:8092").rstrip("/") + "/authorize"
+    try:
+        with httpx.Client(timeout=140) as c:
+            r = c.post(url, json={"engine": engine, "identifier": identifier, "password": password})
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
+        return r.json()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"authorize 代理失败: {e}")
+
+
+def _bs_authorize_url(path: str) -> str:
+    base = os.environ.get("BROWSER_SERVICE_AUTHORIZE_URL", "http://127.0.0.1:8092").rstrip("/")
+    return base + path
+
+
+@router.post("/admin/authorize-qr/start")
+def admin_authorize_qr_start(payload: dict, current_user: User = Depends(get_current_user)):
+    """扫码授权-开始:代理到 browser-service /authorize/qr/start。返回 {session_id, qr_image}。"""
+    _require_admin(current_user)
+    engine = (payload or {}).get("engine")
+    if not engine:
+        raise HTTPException(status_code=400, detail="engine 必填")
+    import httpx
+    try:
+        with httpx.Client(timeout=95) as c:
+            r = c.post(_bs_authorize_url("/authorize/qr/start"), json={"engine": engine})
+        return r.json() if r.status_code < 400 else {"error": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"qr start 代理失败: {e}")
+
+
+@router.post("/admin/authorize-qr/poll")
+def admin_authorize_qr_poll(payload: dict, current_user: User = Depends(get_current_user)):
+    """扫码授权-轮询:代理到 browser-service /authorize/qr/poll。"""
+    _require_admin(current_user)
+    sid = (payload or {}).get("session_id")
+    if not sid:
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    import httpx
+    try:
+        with httpx.Client(timeout=30) as c:
+            r = c.post(_bs_authorize_url("/authorize/qr/poll"), json={"session_id": sid})
+        return r.json() if r.status_code < 400 else {"status": "error", "error": f"HTTP {r.status_code}"}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"qr poll 代理失败: {e}")
+
+
 @router.get("/admin/engine-sessions")
 def admin_list_engine_sessions(
     page: int = 1,
@@ -3393,6 +3459,12 @@ def admin_list_engine_sessions(
     grand_total = base.count()
     active_total = (base.filter(EngineSessionORM.status == "active")
                     .filter(not_expired).count())
+    # 掉线(需处理):quarantined + 有密码可自愈的另算。这里给总掉线数 + 各引擎掉线数(看板告警用)
+    quarantined_total = base.filter(EngineSessionORM.status == "quarantined").count()
+    quar_rows = (db.query(EngineSessionORM.engine, func.count())
+                 .filter(EngineSessionORM.status == "quarantined")
+                 .group_by(EngineSessionORM.engine).all())
+    quarantined_by_engine = {e: c for e, c in quar_rows}
     engines = [r[0] for r in
                db.query(EngineSessionORM.engine).distinct().order_by(EngineSessionORM.engine)]
 
@@ -3422,9 +3494,14 @@ def admin_list_engine_sessions(
             "captured_at": r.captured_at.isoformat() if r.captured_at else None,
             "expires_at": r.expires_at.isoformat() if r.expires_at else None,
             "last_fail_type": r.last_fail_type,
+            "used_today": r.used_today or 0,
+            "auth_type": r.auth_type,
+            "egress": r.egress,
         })
     return {"items": items, "total": total, "grand_total": grand_total,
             "active_total": active_total, "engines": engines,
+            "quarantined_total": quarantined_total,
+            "quarantined_by_engine": quarantined_by_engine,
             "page": page, "page_size": page_size}
 
 

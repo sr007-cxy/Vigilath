@@ -23,6 +23,11 @@ export function AdminWorkers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
+  const [authForm, setAuthForm] = useState({ engine: 'deepseek', identifier: '', password: '' });
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMsg, setAuthMsg] = useState<string | null>(null);
+  const [qr, setQr] = useState<{ open: boolean; engine: string; sid: string | null; img: string | null; status: string }>(
+    { open: false, engine: 'wenxin', sid: null, img: null, status: '' });
 
   const reload = useCallback(() => {
     Promise.all([
@@ -38,6 +43,48 @@ export function AdminWorkers() {
       .catch(e => setErr(e?.message || 'failed'))
       .finally(() => setLoading(false));
   }, [token, sessPage, sessEngine, sessStatus]);
+
+  const startQr = useCallback(async () => {
+    setQr(s => ({ ...s, open: true, sid: null, img: null, status: 'starting' }));
+    try {
+      const r = await aiTelemetryApi.adminAuthorizeQrStart(token, qr.engine);
+      if (r.session_id && r.qr_image) setQr(s => ({ ...s, sid: r.session_id!, img: r.qr_image!, status: 'waiting' }));
+      else setQr(s => ({ ...s, status: 'error:' + (r.error || '抓码失败') }));
+    } catch (e) { setQr(s => ({ ...s, status: 'error:' + ((e as Error)?.message || '失败') })); }
+  }, [token, qr.engine]);
+
+  useEffect(() => {
+    if (!qr.open || !qr.sid || qr.status === 'done') return;
+    const id = setInterval(async () => {
+      try {
+        const r = await aiTelemetryApi.adminAuthorizeQrPoll(token, qr.sid!);
+        if (r.status === 'done') {
+          setQr(s => ({ ...s, status: 'done' }));
+          reload();
+          setTimeout(() => setQr(s => ({ ...s, open: false })), 1500);
+        } else if (r.status === 'expired') {
+          setQr(s => ({ ...s, status: 'expired' }));
+        } else if (r.qr_image) {
+          setQr(s => ({ ...s, img: r.qr_image! }));
+        }
+      } catch { /* 轮询失败忽略,下次再试 */ }
+    }, 2500);
+    return () => clearInterval(id);
+  }, [qr.open, qr.sid, qr.status, token, reload]);
+
+  const doAuthorize = useCallback(async () => {
+    if (!authForm.identifier || !authForm.password) return;
+    setAuthBusy(true); setAuthMsg(null);
+    try {
+      const r = await aiTelemetryApi.adminAuthorizeAccount(token, authForm.engine, authForm.identifier, authForm.password);
+      setAuthMsg(r.ok
+        ? `✅ 授权成功 ${r.account_handle || ''}${r.uploaded ? ' · 已入池' : ''}`
+        : `❌ ${r.error || '失败'}`);
+      if (r.ok) { setAuthForm(f => ({ ...f, identifier: '', password: '' })); reload(); }
+    } catch (e) {
+      setAuthMsg(`❌ ${(e as Error)?.message || '请求失败'}`);
+    } finally { setAuthBusy(false); }
+  }, [token, authForm, reload]);
 
   useEffect(() => {
     reload();
@@ -213,6 +260,80 @@ export function AdminWorkers() {
             </table>
           </div>
 
+          {/* ── 添加账号·密码授权 ── */}
+          <div className="rounded-lg overflow-hidden mt-5 px-3 py-3"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="text-xs text-secondary font-medium mb-2">
+              {t('workbench.adminWorkers.addAccount', { defaultValue: '添加账号 · 密码自动授权' })}
+              <span className="text-muted ml-2">{t('workbench.adminWorkers.addAccountHint', { defaultValue: '(填账号密码,服务端自动登录抓登录态入池;目前支持 deepseek)' })}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={authForm.engine}
+                      onChange={e => setAuthForm(f => ({ ...f, engine: e.target.value }))}
+                      className="px-2 py-1 rounded-md text-xs"
+                      style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                <option value="deepseek">deepseek</option>
+              </select>
+              <input value={authForm.identifier} placeholder="账号(邮箱/手机号)"
+                     onChange={e => setAuthForm(f => ({ ...f, identifier: e.target.value }))}
+                     className="px-2 py-1 rounded-md text-xs" style={{ width: 220, background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              <input value={authForm.password} type="password" placeholder="密码"
+                     onChange={e => setAuthForm(f => ({ ...f, password: e.target.value }))}
+                     className="px-2 py-1 rounded-md text-xs" style={{ width: 160, background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+              <button onClick={doAuthorize} disabled={authBusy || !authForm.identifier || !authForm.password}
+                      className="px-3 py-1 rounded-md text-xs"
+                      style={{ background: 'var(--accent-color, #2563eb)', color: '#fff', opacity: authBusy ? 0.6 : 1 }}>
+                {authBusy
+                  ? t('workbench.adminWorkers.authorizing', { defaultValue: '授权中…' })
+                  : t('workbench.adminWorkers.authorize', { defaultValue: '授权' })}
+              </button>
+              {authMsg && <span className="text-xs text-muted">{authMsg}</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="text-xs text-muted">{t('workbench.adminWorkers.qrAuth', { defaultValue: '扫码授权(qwen/文心/元宝):' })}</span>
+              <select value={qr.engine}
+                      onChange={e => setQr(s => ({ ...s, engine: e.target.value }))}
+                      className="px-2 py-1 rounded-md text-xs"
+                      style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                <option value="wenxin">wenxin</option>
+                <option value="yuanbao">yuanbao</option>
+                <option value="qwen">qwen</option>
+              </select>
+              <button onClick={startQr}
+                      className="px-3 py-1 rounded-md text-xs"
+                      style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                {t('workbench.adminWorkers.qrStart', { defaultValue: '扫码授权' })}
+              </button>
+            </div>
+          </div>
+
+          {/* ── 扫码授权弹窗 ── */}
+          {qr.open && (
+            <div onClick={() => setQr(s => ({ ...s, open: false }))}
+                 style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 50,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div onClick={e => e.stopPropagation()} className="rounded-lg p-5 text-center"
+                   style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', width: 300 }}>
+                <div className="text-sm text-primary mb-3">
+                  {t('workbench.adminWorkers.qrScanTip', { defaultValue: '{{engine}} 扫码登录', engine: qr.engine })}
+                </div>
+                {qr.status === 'starting' && <div className="text-xs text-muted py-10">{t('workbench.adminWorkers.qrLoading', { defaultValue: '打开登录页、抓二维码中…' })}</div>}
+                {qr.img && qr.status !== 'done' && qr.status !== 'expired' && (
+                  <img src={qr.img} alt="qr" style={{ width: 200, height: 200, objectFit: 'contain', margin: '0 auto', background: '#fff', borderRadius: 8 }} />
+                )}
+                {qr.status === 'waiting' && <div className="text-xs text-muted mt-3">{t('workbench.adminWorkers.qrWaiting', { defaultValue: '请用手机 App 扫码并确认登录…' })}</div>}
+                {qr.status === 'done' && <div className="text-emerald-500 py-10">✅ {t('workbench.adminWorkers.qrDone', { defaultValue: '授权成功,已入池' })}</div>}
+                {qr.status === 'expired' && <div className="text-red-400 py-10">{t('workbench.adminWorkers.qrExpired', { defaultValue: '二维码已过期,请重新点击授权' })}</div>}
+                {qr.status.startsWith('error') && <div className="text-red-400 py-10 text-xs">{qr.status}</div>}
+                <button onClick={() => setQr(s => ({ ...s, open: false }))}
+                        className="px-4 py-1 rounded-md text-xs mt-4"
+                        style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                  {t('workbench.adminWorkers.close', { defaultValue: '关闭' })}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── 账号池(登录态)── */}
           <div className="rounded-lg overflow-hidden mt-5"
                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
@@ -226,6 +347,14 @@ export function AdminWorkers() {
                   total: sessions?.grand_total ?? 0,
                 })}
               </span>
+              {(sessions?.quarantined_total ?? 0) > 0 && (
+                <span className="text-red-400 ml-2" title={Object.entries(sessions?.quarantined_by_engine ?? {}).map(([e, c]) => `${e}:${c}`).join(' ')}>
+                  {t('workbench.adminWorkers.poolQuarantined', {
+                    defaultValue: '⚠️ 掉线 {{n}} 需处理',
+                    n: sessions?.quarantined_total ?? 0,
+                  })}
+                </span>
+              )}
               <span className="ml-auto flex items-center gap-2 font-normal">
                 <select value={sessEngine}
                         onChange={e => { setSessEngine(e.target.value); setSessPage(1); }}
@@ -255,6 +384,9 @@ export function AdminWorkers() {
                   <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colCaptcha', { defaultValue: '验证码' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colLastUsed', { defaultValue: '最后使用' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colExpires', { defaultValue: '过期' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colUsedToday', { defaultValue: '今日' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colAuth', { defaultValue: '授权' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colEgress', { defaultValue: '出口' })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -288,11 +420,14 @@ export function AdminWorkers() {
                       <td className="px-3 py-2 text-right tabular-nums">{s.captcha_count}</td>
                       <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.last_used_at)}</td>
                       <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.expires_at)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-secondary">{s.used_today ?? 0}</td>
+                      <td className="px-3 py-2 text-secondary">{s.auth_type || '—'}</td>
+                      <td className="px-3 py-2 text-secondary">{s.egress || (s.engine === 'deepseek' ? '本机' : '—')}</td>
                     </tr>
                   );
                 })}
                 {(sessions?.total ?? 0) === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">
+                  <tr><td colSpan={10} className="px-3 py-6 text-center text-muted">
                     {(sessEngine || sessStatus)
                       ? t('workbench.adminWorkers.noFilterMatch', { defaultValue: '没有匹配当前筛选的账号' })
                       : t('workbench.adminWorkers.noSessions', { defaultValue: '账号池为空,用浏览器扩展上传登录态' })}

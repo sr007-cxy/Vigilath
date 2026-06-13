@@ -71,6 +71,20 @@ def _require_service_token(x_service_token: Optional[str] = Header(None)) -> Non
         raise HTTPException(401, "invalid X-Service-Token")
 
 
+def _require_upload_token(
+    x_harvest_token: Optional[str] = Header(None),
+    x_service_token: Optional[str] = Header(None),
+) -> None:
+    """upload 接受 harvest token(采集端)或 service token(内网 authorizer 自动登录)。"""
+    harvest = (os.environ.get("ENGINE_SESSION_HARVEST_TOKEN") or "").strip()
+    service = (os.environ.get("ENGINE_SESSION_SERVICE_TOKEN") or "").strip()
+    if harvest and x_harvest_token == harvest:
+        return
+    if service and x_service_token == service:
+        return
+    raise HTTPException(401, "invalid X-Harvest-Token / X-Service-Token")
+
+
 # ── Config ──────────────────────────────────────────────────────────
 
 
@@ -122,7 +136,7 @@ _QUARANTINE_POLICY: dict[FailureType, dict] = {
 def upload_session(
     payload: SessionUploadIn,
     db: Session = Depends(get_db),
-    _auth: None = Depends(_require_harvest_token),
+    _auth: None = Depends(_require_upload_token),
 ):
     """Harvester 上传一份新登录拿到的 storage_state。
 
@@ -188,6 +202,10 @@ def upload_session(
         row.fail_counts_json = "{}"
         row.last_fail_type = None
         row.last_fail_at = None
+        if payload.auth_type:
+            row.auth_type = payload.auth_type
+        if payload.credentials:                 # 只在带凭证时更新,避免清掉已存的
+            row.credentials = payload.credentials
     else:
         row = EngineSessionORM(
             engine=payload.engine,
@@ -200,6 +218,8 @@ def upload_session(
             captured_at=now,
             expires_at=now + timedelta(days=payload.ttl_days),
             status="active",
+            auth_type=payload.auth_type,
+            credentials=payload.credentials,
         )
         db.add(row)
     db.commit()
@@ -207,6 +227,26 @@ def upload_session(
     return {"id": row.id, "engine": row.engine,
             "expires_at": row.expires_at.isoformat(), "renewed": renewed,
             "account_id": row.account_id, "account_handle": row.account_handle}
+
+
+@router.get("/engine-sessions/refresh-candidates")
+def refresh_candidates(
+    engine: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(_require_service_token),
+):
+    """掉线(quarantined)且有加密凭证的密码型账号 —— 守护进程据此自动重登续期。
+    返回 [{id, engine, credentials(密文)}];browser-service 解密后重跑登录、re-upload 续期。"""
+    q = (db.query(EngineSessionORM)
+         .filter(EngineSessionORM.status == "quarantined")
+         .filter(EngineSessionORM.auth_type == "password")
+         .filter(EngineSessionORM.credentials != None))  # noqa: E711
+    if engine:
+        q = q.filter(EngineSessionORM.engine == engine)
+    rows = q.order_by(EngineSessionORM.last_fail_at.asc().nullsfirst()).limit(max(1, min(limit, 100))).all()
+    return [{"id": r.id, "engine": r.engine, "credentials": r.credentials,
+             "account_handle": r.account_handle} for r in rows]
 
 
 @router.post("/engine-sessions/check-out", response_model=SessionCheckedOut)
@@ -251,8 +291,11 @@ def check_out(
     _least = (EngineSessionORM.use_count.asc(), EngineSessionORM.last_used_at.asc().nullsfirst())
 
     if worker_id is not None:
+        # 0) 显式钉给本 worker 的账号(preferred_worker_id)优先 —— 落实"账号↔固定IP/平台"拓扑
+        row = _base().filter(EngineSessionORM.preferred_worker_id == worker_id).order_by(*_least).first()
         # 1) 我上次绑的账号(sticky)
-        row = _base().filter(EngineSessionORM.leased_by_worker_id == worker_id).order_by(*_least).first()
+        if row is None:
+            row = _base().filter(EngineSessionORM.leased_by_worker_id == worker_id).order_by(*_least).first()
         if row is None:
             # 2) 空闲 / 租约过期的 → 领来绑给我
             row = (_base()

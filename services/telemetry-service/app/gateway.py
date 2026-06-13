@@ -17,7 +17,7 @@ import hashlib
 import json
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -156,6 +156,16 @@ def create_job(body: CreateJobIn, t: dict = Depends(require_tenant)) -> dict:
                          .timestamp() + 86400) - now_utc.timestamp())
             raise HTTPException(429, f"daily quota reached for '{engine}' ({used}/{quota})",
                                 headers={"Retry-After": str(max(1, retry))})
+        # 每租户 RPM 限流(防突发滥用):最近 60s 该租户请求数 ≥ 上限 → 429
+        rpm = int(os.environ.get("GATEWAY_TENANT_RPM", "60"))
+        if rpm > 0:
+            recent = (s.query(JobORM)
+                      .filter(JobORM.tenant_id == str(t["tenant_id"]))
+                      .filter(JobORM.created_at >= datetime.utcnow() - timedelta(seconds=60))
+                      .count())
+            if recent >= rpm:
+                raise HTTPException(429, f"rate limit: {rpm}/min reached",
+                                    headers={"Retry-After": "60"})
         j = JobORM(tenant_id=str(t["tenant_id"]), engine=engine, query=query[:2048],
                    priority=priority, status="queued", max_attempts=2,
                    idempotency_key=idem, callback_url=body.callback_url)

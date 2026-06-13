@@ -113,7 +113,20 @@ async def lifespan(app: FastAPI):
             stop=_agent_stop,
         ))
         print(f"[START] dispatch worker agent → {os.environ['DISPATCH_CENTER_URL']}")
+    # 登录态自动续期守护(只在指定的一台 worker 上跑,避免多机重复续同一账号)
+    _refresh_stop = None
+    _refresh_task = None
+    if os.environ.get("ENGINE_REFRESH_ENABLED", "").strip() == "1":
+        from .refresh_daemon import refresh_loop
+        _refresh_stop = asyncio.Event()
+        _refresh_task = asyncio.create_task(refresh_loop(_refresh_stop))
+        print("[START] 登录态自动续期守护已启动")
+    app.state._refresh_stop = _refresh_stop
+    app.state._refresh_task = _refresh_task
     yield
+    # 停续期守护
+    if getattr(app.state, "_refresh_stop", None):
+        app.state._refresh_stop.set()
     # 停 agent loop
     if _agent_stop:
         _agent_stop.set()
@@ -185,6 +198,41 @@ async def debug_env():
 @app.get("/engines", response_model=EnginesResponse)
 async def engines():
     return EnginesResponse(region=REGION, engines=list(_adapters.keys()))
+
+
+@app.post("/authorize")
+async def authorize(req: dict):
+    """账号授权:密码自动登录 → 抓登录态入池。内网调用(管理台经后端代理)。
+    body: {engine, identifier, password}。返回 {ok, error, account_handle, uploaded}。"""
+    engine = (req or {}).get("engine")
+    identifier = (req or {}).get("identifier")
+    password = (req or {}).get("password")
+    if not (engine and identifier and password):
+        raise HTTPException(status_code=400, detail="engine/identifier/password required")
+    from .authorizer import authorize_password, supports_password
+    if not supports_password(engine):
+        raise HTTPException(status_code=400, detail=f"engine {engine} 不支持密码自动登录(走扫码/APIKey)")
+    return await authorize_password(engine, identifier, password)
+
+
+@app.post("/authorize/qr/start")
+async def authorize_qr_start(req: dict):
+    """扫码协助授权-开始:开浏览器到登录页抓二维码。body {engine} → {session_id, qr_image}。"""
+    engine = (req or {}).get("engine")
+    from .qr_authorize import qr_start, supports_qr
+    if not engine or not supports_qr(engine):
+        raise HTTPException(status_code=400, detail=f"engine {engine} 不支持扫码授权")
+    return await qr_start(engine)
+
+
+@app.post("/authorize/qr/poll")
+async def authorize_qr_poll(req: dict):
+    """扫码协助授权-轮询:done(已登录入池)/ pending(可能带新二维码)/ expired。"""
+    sid = (req or {}).get("session_id")
+    if not sid:
+        raise HTTPException(status_code=400, detail="session_id required")
+    from .qr_authorize import qr_poll
+    return await qr_poll(sid)
 
 
 @app.post("/search", response_model=SearchResponse)
@@ -309,27 +357,37 @@ async def _get_hot_session(engine: str) -> EngineSession:
     return sess
 
 
-def _deepseek_http_sync(query: str) -> dict:
+def _deepseek_http_sync(query: str, max_attempts: int = 3) -> dict:
     """deepseek 纯 HTTP 路径(无浏览器):check-out 拿 token → HTTP 查询 → check-in。
-    check-out / check-in / HTTP 全在同一线程,保证 session_store 的 thread-local 一致。"""
+    check-out / check-in / HTTP 全在同一线程,保证 session_store 的 thread-local 一致。
+
+    故障转移:login_lost / pow_failed 时隔离坏号并换新号重试(最多 max_attempts 次),
+    而不是整条失败 —— 单个账号掉登录不影响这条查询(换池里其它号)。
+    """
     from .session_store import load_storage_state, report_session_outcome
     from .deepseek_http import run_deepseek_http
     empty = {"engine": "deepseek", "query": query, "answer": "", "citations": [],
              "source_url": None, "video_url": None, "error": None}
-    state = load_storage_state("deepseek")  # check-out(thread-local 记下 session id)
-    if not state:
-        return {**empty, "error": "no session available"}
-    res = run_deepseek_http(state, query)
-    err = res.get("error")
-    # 映射成池子的 check-in 结果:login_lost→隔离;pow_failed→crash(不怪账号);empty→empty_answer
-    if err == "login_lost":
-        report_session_outcome("deepseek", result="login_lost")
-    elif err == "empty_answer":
-        report_session_outcome("deepseek", result="empty_answer")
-    elif err:
-        report_session_outcome("deepseek", result="crash", error_msg=err)
-    else:
-        report_session_outcome("deepseek", result="success")
+    err = None
+    res: dict = {}
+    for attempt in range(max_attempts):
+        state = load_storage_state("deepseek")  # 每次重新 check-out → 换到没被隔离的号
+        if not state:
+            return {**empty, "error": "no session available"}
+        res = run_deepseek_http(state, query)
+        err = res.get("error")
+        # 映射成池子的 check-in 结果:login_lost→隔离;pow_failed→crash(不怪账号);empty→empty_answer
+        if err == "login_lost":
+            report_session_outcome("deepseek", result="login_lost")
+        elif err == "empty_answer":
+            report_session_outcome("deepseek", result="empty_answer")
+        elif err:
+            report_session_outcome("deepseek", result="crash", error_msg=err)
+        else:
+            report_session_outcome("deepseek", result="success")
+        # 只对"账号/瞬时"类错误换号重试;empty_answer 是真实结果不重试
+        if err not in ("login_lost", "pow_failed"):
+            break
     return {"engine": "deepseek", "query": query, "answer": res.get("answer", ""),
             "citations": res.get("citations", []), "source_url": None, "video_url": None,
             "error": err}

@@ -612,6 +612,9 @@ export interface EngineSessionRow {
   captured_at: string | null;
   expires_at: string | null;
   last_fail_type: string | null;
+  used_today?: number;
+  auth_type?: string | null;       // password/apikey/qr/cookie
+  egress?: string | null;          // proxy/host
 }
 
 export interface EngineSessionPage {
@@ -620,6 +623,8 @@ export interface EngineSessionPage {
   grand_total: number;       // 全池条数
   active_total: number;      // 全池 status=active 且未过期(真正可被 check-out)
   engines: string[];         // 池里出现过的引擎(筛选下拉用)
+  quarantined_total?: number;             // 掉线(隔离)总数,需处理
+  quarantined_by_engine?: Record<string, number>;
   page: number;
   page_size: number;
 }
@@ -1048,6 +1053,25 @@ export const aiTelemetryApi = {
   ): Promise<{ ok: boolean; status: string }> {
     return request('POST', `/admin/workers/${workerUid}/${action}`, token);
   },
+  // 添加账号·密码授权:server 端自动登录(走代理)抓登录态入池
+  async adminAuthorizeAccount(
+    token: string, engine: string, identifier: string, password: string,
+  ): Promise<{ ok: boolean; error?: string | null; account_handle?: string; uploaded?: boolean }> {
+    return request('POST', '/admin/authorize-account', token, { engine, identifier, password });
+  },
+
+  // 扫码协助授权:开始(返回二维码)+ 轮询(登录成功入池)
+  async adminAuthorizeQrStart(
+    token: string, engine: string,
+  ): Promise<{ session_id?: string; qr_image?: string; error?: string | null }> {
+    return request('POST', '/admin/authorize-qr/start', token, { engine });
+  },
+  async adminAuthorizeQrPoll(
+    token: string, sessionId: string,
+  ): Promise<{ status: string; qr_image?: string; uploaded?: boolean; error?: string | null }> {
+    return request('POST', '/admin/authorize-qr/poll', token, { session_id: sessionId });
+  },
+
   async adminListEngineSessions(
     token: string, page = 1, pageSize = 20, engine = '', status = '',
   ): Promise<EngineSessionPage> {

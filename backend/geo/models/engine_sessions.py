@@ -68,6 +68,14 @@ class EngineSessionORM(Base):
     used_date = Column(String, nullable=True)                 # 'YYYY-MM-DD'(本地日);与 used_today 配套
     egress = Column(String, nullable=True)                    # None=按引擎默认(PROXY_ENGINES) / 'proxy'=走代理 / 'host'=本机IP
 
+    # 授权方式 + 调度状态机(2026-06,对标 Sub2API)
+    auth_type = Column(String, nullable=True)                 # password / apikey / qr / cookie;None=未知
+    credentials = Column(Text, nullable=True)                 # AES 加密的 JSON 凭证(密码/key),供掉线自动续期
+    rate_limited_until = Column(DateTime, nullable=True)      # 限流冷却到期(收到 429 后设)
+    unschedulable_until = Column(DateTime, nullable=True)     # 临时不可调度到期(换号/维护中)
+    priority = Column(Integer, nullable=False, default=50)    # 调度优先级,低值优先
+    concurrency = Column(Integer, nullable=False, default=1)  # 单账号最大并发
+
 
 # ── 账号身份提取(2026-06)────────────────────────────────────────
 #
@@ -223,6 +231,8 @@ class SessionUploadIn(BaseModel):
     user_agent: Optional[str] = None
     platform: Optional[str] = None
     ttl_days: int = Field(7, ge=1, le=30, description="过期天数,默认 7,最多 30")
+    auth_type: Optional[str] = Field(None, description="password/apikey/qr/cookie")
+    credentials: Optional[str] = Field(None, description="AES 加密的凭证 JSON(供自动续期),不解密只存")
 
 
 class SessionCheckedOut(BaseModel):
