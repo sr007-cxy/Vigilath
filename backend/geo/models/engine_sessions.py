@@ -67,6 +67,9 @@ class EngineSessionORM(Base):
     used_today = Column(Integer, nullable=False, default=0)   # 当天 check-out 次数(跨 used_date 自动归零)
     used_date = Column(String, nullable=True)                 # 'YYYY-MM-DD'(本地日);与 used_today 配套
     egress = Column(String, nullable=True)                    # None=按引擎默认(PROXY_ENGINES) / 'proxy'=走代理 / 'host'=本机IP
+    daily_cap = Column(Integer, nullable=True)               # 单账号日上限覆盖;None=用 env 默认,0=不限
+    exit_ip = Column(String, nullable=True)                  # 该账号实际出口 IP(check-in 时由 worker 解析回报)
+    exit_ip_at = Column(DateTime, nullable=True)             # 出口 IP 最近一次解析时间
 
     # 授权方式 + 调度状态机(2026-06,对标 Sub2API)
     auth_type = Column(String, nullable=True)                 # password / apikey / qr / cookie;None=未知
@@ -218,6 +221,7 @@ class FailureType(str, Enum):
     DOM_NOT_FOUND = "dom_not_found"    # 关键 selector 找不到,可能引擎改版
     TIMEOUT = "timeout"                # streaming 超过 max_wait
     CRASH = "crash"                    # 异常抛出,不计 session 账
+    RATE_LIMITED = "rate_limited"      # 被引擎风控限流/禁言(deepseek "user is muted")→ 冷却到 mute_until,不罚号
 
 
 # ── Pydantic schemas ───────────────────────────────────────────────
@@ -257,6 +261,8 @@ class SessionCheckIn(BaseModel):
     id: int
     result: FailureType = FailureType.SUCCESS
     error_msg: Optional[str] = None
+    exit_ip: Optional[str] = None   # worker 按 egress 代理解析到的实际出口 IP(best-effort)
+    rate_limited_until: Optional[float] = None  # RATE_LIMITED 时的冷却到期(unix 秒,如 deepseek mute_until)
     # 旧字段:不出现在新 API,只用于 deserialize 旧 worker payload
     captcha_triggered: Optional[bool] = None
 

@@ -104,6 +104,17 @@ export function AdminWorkers() {
     }
   };
 
+  const patchSession = async (
+    id: number, patch: { disabled?: boolean; daily_cap?: number; priority?: number },
+  ) => {
+    try {
+      await aiTelemetryApi.adminPatchEngineSession(token, id, patch);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const engines = stats ? Object.keys(stats.queue).sort() : [];
 
   return (
@@ -384,9 +395,11 @@ export function AdminWorkers() {
                   <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colCaptcha', { defaultValue: '验证码' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colLastUsed', { defaultValue: '最后使用' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colExpires', { defaultValue: '过期' })}</th>
-                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colUsedToday', { defaultValue: '今日' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colQuota', { defaultValue: '今日配额' })}</th>
                   <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colAuth', { defaultValue: '授权' })}</th>
-                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colEgress', { defaultValue: '出口' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colExitIp', { defaultValue: '出口 IP' })}</th>
+                  <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colPriority', { defaultValue: '优先级' })}</th>
+                  <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colActions', { defaultValue: '操作' })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,14 +433,66 @@ export function AdminWorkers() {
                       <td className="px-3 py-2 text-right tabular-nums">{s.captcha_count}</td>
                       <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.last_used_at)}</td>
                       <td className="px-3 py-2 text-secondary tabular-nums">{fmt(s.expires_at)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-secondary">{s.used_today ?? 0}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-secondary">
+                        {s.effective_cap === 0
+                          ? `${s.used_today ?? 0} / ${t('workbench.adminWorkers.unlimited', { defaultValue: '不限' })}`
+                          : `${s.remaining ?? 0} / ${s.effective_cap ?? 0}`}
+                        {s.daily_cap != null && (
+                          <span className="text-[10px] text-amber-500 ml-1">●</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-secondary">{s.auth_type || '—'}</td>
-                      <td className="px-3 py-2 text-secondary">{s.egress || (s.engine === 'deepseek' ? '本机' : '—')}</td>
+                      <td className="px-3 py-2 text-secondary tabular-nums">
+                        {s.exit_ip || '—'}
+                        {s.rate_limited && (
+                          <span className="text-[10px] text-amber-500 ml-1">
+                            {t('workbench.adminWorkers.cooling', { defaultValue: '冷却中' })}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-secondary">{s.priority ?? 50}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <button type="button"
+                            onClick={() => patchSession(s.id, { disabled: !s.disabled })}
+                            className="px-1.5 py-0.5 rounded text-[11px]"
+                            style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                            {s.disabled
+                              ? t('workbench.adminWorkers.actEnable', { defaultValue: '启用' })
+                              : t('workbench.adminWorkers.actDisable', { defaultValue: '停用' })}
+                          </button>
+                          <button type="button"
+                            onClick={() => {
+                              const cur = s.daily_cap != null ? String(s.daily_cap) : '';
+                              const v = window.prompt(
+                                t('workbench.adminWorkers.promptCap', { defaultValue: '单账号日上限(空=用引擎默认,0=不限)' }), cur);
+                              if (v === null) return;
+                              const n = v.trim() === '' ? -1 : parseInt(v, 10);
+                              if (!Number.isNaN(n)) patchSession(s.id, { daily_cap: n });
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[11px]"
+                            style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                            {t('workbench.adminWorkers.actCap', { defaultValue: '改上限' })}
+                          </button>
+                          <button type="button"
+                            onClick={() => {
+                              const v = window.prompt(
+                                t('workbench.adminWorkers.promptPriority', { defaultValue: '优先级(0-100,低值优先)' }), String(s.priority ?? 50));
+                              if (v === null) return;
+                              const n = parseInt(v, 10);
+                              if (!Number.isNaN(n)) patchSession(s.id, { priority: n });
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[11px]"
+                            style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                            {t('workbench.adminWorkers.actPriority', { defaultValue: '优先级' })}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
                 {(sessions?.total ?? 0) === 0 && (
-                  <tr><td colSpan={10} className="px-3 py-6 text-center text-muted">
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-muted">
                     {(sessEngine || sessStatus)
                       ? t('workbench.adminWorkers.noFilterMatch', { defaultValue: '没有匹配当前筛选的账号' })
                       : t('workbench.adminWorkers.noSessions', { defaultValue: '账号池为空,用浏览器扩展上传登录态' })}

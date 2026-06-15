@@ -210,6 +210,17 @@ def run_deepseek_http(
             if lines and lines[0].lstrip().startswith("{") and "INVALID_POW" in lines[0]:
                 result["error"] = "pow_failed"
                 return result
+            # 账号被 deepseek 风控禁言:completion 首行返回 biz_msg "user is muted"
+            # → 标 rate_limited,让上层 failover 换号(临时禁言,不是登录失效)
+            if lines and '"user is muted"' in lines[0]:
+                result["error"] = "rate_limited"
+                try:
+                    bd = json.loads(lines[0]).get("data", {}).get("biz_data", {})
+                    result["mute_until"] = bd.get("mute_until")
+                except Exception:  # noqa: BLE001
+                    pass
+                print(f"[deepseek-http][muted] mute_until={result.get('mute_until')}", flush=True)
+                return result
             text, cites = _parse_stream(lines)
             result["answer"] = text
             result["citations"] = cites

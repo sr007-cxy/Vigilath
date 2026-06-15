@@ -148,7 +148,7 @@ def _pool_checkout(engine_name: str) -> Optional[dict]:
 # 被翻译成 SUCCESS / CAPTCHA。新调用建议直接传 result 字符串。
 _VALID_RESULTS = {
     "success", "captcha", "empty_answer", "login_lost",
-    "dom_not_found", "timeout", "crash",
+    "dom_not_found", "timeout", "crash", "rate_limited",
 }
 
 
@@ -158,6 +158,8 @@ def report_session_outcome(
     *,
     result: str | None = None,
     error_msg: str | None = None,
+    rate_limited_until: float | None = None,
+    exit_ip: str | None = None,
 ) -> None:
     """Notify pool that the session we just checked out was used.
 
@@ -191,6 +193,10 @@ def report_session_outcome(
     body = {"id": sid, "result": result}
     if error_msg:
         body["error_msg"] = error_msg[:500]  # 截断防爆 log
+    if rate_limited_until is not None:
+        body["rate_limited_until"] = rate_limited_until  # 风控冷却到期(如 deepseek mute_until)
+    if exit_ip:
+        body["exit_ip"] = exit_ip  # 实际出口 IP(按 egress 代理解析)
     try:
         with httpx.Client(timeout=_POOL_HTTP_TIMEOUT) as client:
             r = client.post(

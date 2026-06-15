@@ -104,11 +104,20 @@ def _local_today() -> str:
     return (datetime.utcnow() + timedelta(hours=8)).date().isoformat()
 
 
+# 单账号每日 check-out 默认上限(0=不限)。env ENGINE_SESSION_DAILY_CAP_<ENGINE> 覆盖,
+# 每账号 daily_cap 列再覆盖 env。doubao 走 ARK API 无号限 → 0。
+_DEFAULT_DAILY_CAP = {
+    "deepseek": 30, "qwen": 30, "wenxin": 30, "yuanbao": 30, "doubao": 0,
+}
+
+
 def _session_daily_cap(engine: str) -> int:
-    """单账号每日 check-out 硬上限;0 = 不限。
-    env ENGINE_SESSION_DAILY_CAP_<ENGINE>(如 ENGINE_SESSION_DAILY_CAP_DEEPSEEK=20)。"""
+    """引擎级单账号每日 check-out 默认上限;0 = 不限。
+    env ENGINE_SESSION_DAILY_CAP_<ENGINE> 覆盖默认值;每账号 daily_cap 列再覆盖 env。"""
     ov = os.environ.get(f"ENGINE_SESSION_DAILY_CAP_{engine.upper()}")
-    return int(ov) if ov and ov.isdigit() else 0
+    if ov and ov.isdigit():
+        return int(ov)
+    return _DEFAULT_DAILY_CAP.get(engine.lower(), 0)
 
 # ── Quarantine policy(D2 — P1 失败信号 enum 化)──────────────────
 #
@@ -126,7 +135,11 @@ _QUARANTINE_POLICY: dict[FailureType, dict] = {
     FailureType.DOM_NOT_FOUND:  {"threshold": 3, "alert": True},  # alert: 可能引擎改版
     FailureType.TIMEOUT:        {"threshold": 5},
     FailureType.CRASH:          {"skip": True},
+    FailureType.RATE_LIMITED:   {"cooldown": True},   # 风控限流/禁言:冷却该号到 mute_until,不隔离不罚
 }
+
+# RATE_LIMITED 默认冷却(没带 rate_limited_until 时):env ENGINE_RATE_LIMIT_COOLDOWN_SEC,默认 6h
+_RATE_LIMIT_COOLDOWN_SEC = int(os.environ.get("ENGINE_RATE_LIMIT_COOLDOWN_SEC", str(6 * 3600)))
 
 
 # ── Endpoints ───────────────────────────────────────────────────────
@@ -279,13 +292,23 @@ def check_out(
             .filter(EngineSessionORM.captcha_count < _CAPTCHA_QUARANTINE_THRESHOLD)
             .filter((EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now))  # noqa: E711
         )
-        # 单账号每日硬上限:排除"今天已达上限"的号(used_date!=今天 或 从没用过 → 视为未达上限)
-        if cap > 0:
-            q = q.filter(
-                (EngineSessionORM.used_date == None)              # noqa: E711
-                | (EngineSessionORM.used_date != today)
-                | (EngineSessionORM.used_today < cap)
-            )
+        # 管理侧"停用"/ 限流冷却中的号排除 —— 让 unschedulable_until / rate_limited_until 真正生效
+        q = q.filter(
+            (EngineSessionORM.unschedulable_until == None)        # noqa: E711
+            | (EngineSessionORM.unschedulable_until <= now)
+        ).filter(
+            (EngineSessionORM.rate_limited_until == None)         # noqa: E711
+            | (EngineSessionORM.rate_limited_until <= now)
+        )
+        # 单账号每日硬上限:每账号 daily_cap 覆盖引擎默认 cap(coalesce);0=不限。
+        # 排除"今天已达上限"的号(used_date!=今天 或 从没用过 → 视为未达上限)。
+        eff_cap = func.coalesce(EngineSessionORM.daily_cap, cap)
+        q = q.filter(
+            (EngineSessionORM.used_date == None)                  # noqa: E711
+            | (EngineSessionORM.used_date != today)
+            | (eff_cap == 0)
+            | (EngineSessionORM.used_today < eff_cap)
+        )
         return q
 
     _least = (EngineSessionORM.use_count.asc(), EngineSessionORM.last_used_at.asc().nullsfirst())
@@ -371,6 +394,15 @@ def check_in(
     if policy.get("reset"):
         # SUCCESS:清空累积失败,但保留 captcha_count(captcha 是独立 counter)
         fc = {}
+    elif policy.get("cooldown"):
+        # RATE_LIMITED:被风控限流/禁言 → 冷却该号(rate_limited_until),不隔离、不罚 fail_counts。
+        # 带了 mute_until(unix 秒)就用它,否则用默认冷却。check_out 会跳过冷却中的号。
+        if payload.rate_limited_until:
+            row.rate_limited_until = datetime.utcfromtimestamp(payload.rate_limited_until)
+        else:
+            row.rate_limited_until = datetime.utcnow() + timedelta(seconds=_RATE_LIMIT_COOLDOWN_SEC)
+        row.last_fail_type = result.value
+        row.last_fail_at = datetime.utcnow()
     elif policy.get("skip"):
         # CRASH:认为是 worker 端问题,不动 session 账
         pass
@@ -396,6 +428,11 @@ def check_in(
             row.status = "quarantined"
 
     row.fail_counts_json = json.dumps(fc)
+
+    # 出口 IP 回报(best-effort):worker 按 egress 代理解析到的实际出口 IP
+    if payload.exit_ip:
+        row.exit_ip = payload.exit_ip
+        row.exit_ip_at = datetime.utcnow()
 
     # 身份绑定(2026-06):check-in 不清租约 —— 让账号继续粘在该 worker/IP 上,
     # 下次同 worker check-out 优先拿回它(sticky)。挂掉的 worker 由 leased_until

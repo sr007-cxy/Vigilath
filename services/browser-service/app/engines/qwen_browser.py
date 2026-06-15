@@ -66,6 +66,21 @@ _QWEN_BLOCK_HOSTS = (
     "googlesyndication.com", "doubleclick.net", "facebook.net", "analytics",
 )
 
+# 即时读取答案容器 innerText(不等元素稳定);candidates 按序取第一个有文本的最后一条。
+# locator.inner_text() 在流式重渲染元素上会因稳定性等待超时,故改用 evaluate。
+_QWEN_READ_JS = r"""
+(sels) => {
+  for (const sel of sels) {
+    const els = document.querySelectorAll(sel);
+    if (els.length) {
+      const t = els[els.length - 1].innerText || '';
+      if (t.trim()) return { sel, text: t };
+    }
+  }
+  return { sel: null, text: '' };
+}
+"""
+
 # 中文来源显示名 → 实际 domain(沿用,跟具体引擎无关)
 _CN_DISPLAY_TO_DOMAIN = {
     "百度": "baidu.com",
@@ -230,8 +245,39 @@ class QwenBrowserAdapter(EngineAdapter):
         await human_delay(0.8, 1.6)
         for ch in query:
             await page.keyboard.type(ch, delay=random.randint(60, 180))
+        # 校验输入是否真进了 contenteditable —— qwen 新版下逐字 type 常不进 →
+        # 提交空内容 → 不出答案(实测 last_len=0 真因)。没进就 fill() 兜底。
+        try:
+            typed = (await input_el.inner_text(timeout=2000)).strip()
+        except Exception:  # noqa: BLE001
+            typed = ""
+        if not typed or query[:6] not in typed:
+            try:
+                await input_el.fill(query)
+                _log("input via fill() fallback — char-type 未进")
+            except Exception:  # noqa: BLE001
+                try:
+                    await page.keyboard.insert_text(query)
+                except Exception:  # noqa: BLE001
+                    pass
         await human_delay(0.5, 1.2)
-        await page.keyboard.press("Enter")
+        # 提交:新版 www.qianwen.com 的 contenteditable 下 Enter 不再提交(只换行),
+        # 必须点"发送消息"按钮(aria-label 含"发送")。点不到再回落 Enter。
+        submitted = False
+        for sel in ("button[aria-label*='发送']", "button[aria-label*='Send']",
+                    "button[class*='send']"):
+            try:
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1500):
+                    await btn.click()
+                    submitted = True
+                    _log(f"submit via button: {sel}")
+                    break
+            except Exception:
+                continue
+        if not submitted:
+            await page.keyboard.press("Enter")
+            _log("submit via Enter (no send button)")
 
         await human_delay(2, 3)
         assistant_sel = await self._wait_for_stable_answer(
@@ -397,25 +443,24 @@ class QwenBrowserAdapter(EngineAdapter):
         """
         poll_interval = 0.6
         last_text = ""
+        last_len = 0
         stable_since = None
         elapsed = 0.0
         winning_sel: str | None = None
 
         while elapsed < max_wait:
-            # 找到当前命中的 assistant 容器(每轮重检 — 流式期间容器才出现)
+            # 用 page.evaluate 直接读 innerText:locator.inner_text() 在流式不断重渲染的
+            # 元素上会因"等待元素稳定"而超时 → cur 永远空(实测 last_len=0 真因)。
+            # evaluate 是即时快照,不等稳定,和能跑通的 probe 一致。
             cur = ""
             sel_hit = None
-            for sel in self.ASSISTANT_CANDIDATES:
-                try:
-                    els = await page.locator(sel).all()
-                    if not els:
-                        continue
-                    text = await els[-1].inner_text()
-                    if text and len(text.strip()) > len(cur.strip()):
-                        cur = text
-                        sel_hit = sel
-                except Exception:
-                    continue
+            try:
+                r = await page.evaluate(_QWEN_READ_JS, list(self.ASSISTANT_CANDIDATES))
+                cur = (r or {}).get("text") or ""
+                sel_hit = (r or {}).get("sel")
+            except Exception:  # noqa: BLE001
+                cur = ""
+                sel_hit = None
 
             # 检查 "停止生成" 按钮是否还在
             stop_visible = False
@@ -427,20 +472,26 @@ class QwenBrowserAdapter(EngineAdapter):
                 except Exception:
                     continue
 
+            # 稳定判定改为"长度不再增长"(qwen 新版答案尾部挂动态元素,精确文本比对
+            # 永不相等 → 卡满 max_wait)。文本停止变长 + 非状态占位 + 无停止按钮 = 生成完成。
+            cur_len = len(cur.strip())
             if (
                 cur
-                and len(cur.strip()) > 8
-                and cur == last_text
+                and cur_len > 8
+                and cur_len <= last_len
                 and not self._is_status_only(cur)
                 and not stop_visible
             ):
                 if stable_since is None:
                     stable_since = elapsed
                 elif elapsed - stable_since >= stable_secs:
-                    winning_sel = sel_hit
-                    _log(f"stable@{elapsed:.1f}s len={len(cur)} sel={sel_hit!r}")
+                    winning_sel = sel_hit or winning_sel
+                    _log(f"stable@{elapsed:.1f}s len={cur_len} sel={winning_sel!r}")
                     return winning_sel
             else:
+                if cur_len > last_len:
+                    last_len = cur_len
+                    winning_sel = sel_hit or winning_sel
                 last_text = cur
                 stable_since = None
 
@@ -451,22 +502,19 @@ class QwenBrowserAdapter(EngineAdapter):
         return winning_sel  # 即便超时也返回找到的 selector,extract 还能抢救
 
     async def _extract_answer(self, page, assistant_sel: str | None) -> str:
+        # 同样用 page.evaluate 即时读取(locator.inner_text 在流式元素上会超时)
         sels = [assistant_sel] if assistant_sel else []
         sels.extend(s for s in self.ASSISTANT_CANDIDATES if s != assistant_sel)
-        for sel in sels:
-            if not sel:
-                continue
-            try:
-                els = await page.locator(sel).all()
-                if not els:
-                    continue
-                raw = await els[-1].inner_text()
-                if raw and raw.strip():
-                    cleaned = self._scrub_status_noise(raw)
-                    if cleaned.strip():
-                        return cleaned
-            except Exception:
-                continue
+        sels = [s for s in sels if s]
+        try:
+            r = await page.evaluate(_QWEN_READ_JS, sels)
+            raw = (r or {}).get("text") or ""
+            if raw.strip():
+                cleaned = self._scrub_status_noise(raw)
+                if cleaned.strip():
+                    return cleaned
+        except Exception:  # noqa: BLE001
+            pass
         return ""
 
     def _scrub_status_noise(self, raw: str) -> str:

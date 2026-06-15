@@ -3450,7 +3450,9 @@ def admin_list_engine_sessions(
     """
     _require_admin(current_user)
     from geo.models.engine_sessions import EngineSessionORM
+    from geo.api.engine_sessions import _session_daily_cap, _local_today
     now = datetime.utcnow()
+    today_local = _local_today()
     page = max(1, page)
     page_size = max(1, min(page_size, 100))
     not_expired = (EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now)  # noqa: E711
@@ -3485,6 +3487,13 @@ def admin_list_engine_sessions(
     for r in rows:
         expired = r.expires_at is not None and r.expires_at <= now
         eff = "expired" if (expired and r.status == "active") else r.status
+        # 今日已用:仅当 used_date 为本地今天才算,否则视为 0(跨天归零)
+        used_today = (r.used_today or 0) if r.used_date == today_local else 0
+        # 生效单账号上限:每账号 daily_cap 覆盖引擎默认;None=用默认,0=不限
+        eff_cap = r.daily_cap if r.daily_cap is not None else _session_daily_cap(r.engine)
+        remaining = None if not eff_cap else max(0, eff_cap - used_today)
+        # 手动停用判定:unschedulable_until 在未来
+        disabled = r.unschedulable_until is not None and r.unschedulable_until > now
         items.append({
             "id": r.id, "engine": r.engine, "label": r.source_label,
             "account_handle": r.account_handle,
@@ -3494,15 +3503,58 @@ def admin_list_engine_sessions(
             "captured_at": r.captured_at.isoformat() if r.captured_at else None,
             "expires_at": r.expires_at.isoformat() if r.expires_at else None,
             "last_fail_type": r.last_fail_type,
-            "used_today": r.used_today or 0,
+            "used_today": used_today,
             "auth_type": r.auth_type,
             "egress": r.egress,
+            "exit_ip": r.exit_ip,
+            "exit_ip_at": r.exit_ip_at.isoformat() if r.exit_ip_at else None,
+            "daily_cap": r.daily_cap,           # 每账号覆盖值(None=用引擎默认)
+            "effective_cap": eff_cap,           # 实际生效上限(0=不限)
+            "remaining": remaining,             # 今日剩余配额(None=不限)
+            "priority": r.priority if r.priority is not None else 50,
+            "disabled": disabled,               # 是否被手动停用
+            "rate_limited": r.rate_limited_until is not None and r.rate_limited_until > now,
         })
     return {"items": items, "total": total, "grand_total": grand_total,
             "active_total": active_total, "engines": engines,
             "quarantined_total": quarantined_total,
             "quarantined_by_engine": quarantined_by_engine,
             "page": page, "page_size": page_size}
+
+
+class EngineSessionPatch(BaseModel):
+    """账号管理改动(Worker 管理页)。只改提供的字段。"""
+    disabled: Optional[bool] = None    # True=停用(不可调度) / False=恢复
+    daily_cap: Optional[int] = None    # 单账号日上限:-1=清除覆盖(回引擎默认) / 0=不限 / N=上限
+    priority: Optional[int] = None     # 调度优先级,低值优先
+
+
+@router.patch("/admin/engine-sessions/{session_id}")
+def admin_patch_engine_session(
+    session_id: int,
+    payload: EngineSessionPatch,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Worker 管理:启停账号 / 改单账号日上限 / 改优先级。"""
+    _require_admin(current_user)
+    from geo.models.engine_sessions import EngineSessionORM
+    now = datetime.utcnow()
+    row = db.query(EngineSessionORM).get(session_id)
+    if row is None:
+        raise HTTPException(404, f"session id={session_id} not found")
+    if payload.disabled is not None:
+        # 停用 = unschedulable_until 设远期;恢复 = 清空
+        row.unschedulable_until = (now + timedelta(days=3650)) if payload.disabled else None
+    if payload.daily_cap is not None:
+        row.daily_cap = None if payload.daily_cap < 0 else payload.daily_cap
+    if payload.priority is not None:
+        row.priority = max(0, min(100, payload.priority))
+    db.commit()
+    db.refresh(row)
+    disabled = row.unschedulable_until is not None and row.unschedulable_until > now
+    return {"id": row.id, "daily_cap": row.daily_cap,
+            "priority": row.priority, "disabled": disabled}
 
 
 # ─────── 对外网关运营管理(/workbench/gateway,admin)────────

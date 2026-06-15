@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import os
+import re
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -357,7 +360,53 @@ async def _get_hot_session(engine: str) -> EngineSession:
     return sess
 
 
-def _deepseek_http_sync(query: str, max_attempts: int = 3) -> dict:
+_exit_ip_cache: dict = {}          # proxy_key -> (ip, ts);按账号 sticky 代理键缓存出口 IP
+_EXIT_IP_TTL_SEC = 3600
+
+
+def _proxy_dict_to_url(p: dict | None) -> str | None:
+    """_engine_proxy() 的 {server,username,password} → httpx 代理 URL。"""
+    if not p:
+        return None
+    server = p.get("server", "")
+    scheme, sep, hostport = server.partition("://")
+    if not sep:
+        scheme, hostport = "http", server
+    return f"{scheme}://{p['username']}:{p['password']}@{hostport}"
+
+
+# 出口 IP 探测端点(多端点兜底):ipify 海外/JP 代理可达;ipip.net 国内可达。
+_IP_ECHO_URLS = ["https://api.ipify.org", "https://ipinfo.io/ip", "https://myip.ipip.net"]
+_IP_RE = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
+
+
+def _resolve_exit_ip(proxy_url: str | None) -> str | None:
+    """解析当前 egress 的出口 IP(经代理或本机),按 proxy_url 缓存 1h。best-effort。
+    多端点兜底:host(国内)走 ipify 不通时回落到 ipip.net。"""
+    key = proxy_url or "__host__"
+    now = time.time()
+    hit = _exit_ip_cache.get(key)
+    if hit and now - hit[1] < _EXIT_IP_TTL_SEC:
+        return hit[0]
+    import httpx
+    ip = None
+    for url in _IP_ECHO_URLS:
+        try:
+            with httpx.Client(timeout=8, proxy=proxy_url) as c:
+                m = _IP_RE.search(c.get(url).text)
+            if m:
+                ip = m.group(1)
+                break
+        except Exception:  # noqa: BLE001
+            continue
+    if not ip:
+        ip = hit[0] if hit else None
+    if ip:
+        _exit_ip_cache[key] = (ip, now)
+    return ip
+
+
+def _deepseek_http_sync(query: str, max_attempts: int = 6) -> dict:
     """deepseek 纯 HTTP 路径(无浏览器):check-out 拿 token → HTTP 查询 → check-in。
     check-out / check-in / HTTP 全在同一线程,保证 session_store 的 thread-local 一致。
 
@@ -366,6 +415,7 @@ def _deepseek_http_sync(query: str, max_attempts: int = 3) -> dict:
     """
     from .session_store import load_storage_state, report_session_outcome
     from .deepseek_http import run_deepseek_http
+    from .browser import _engine_proxy
     empty = {"engine": "deepseek", "query": query, "answer": "", "citations": [],
              "source_url": None, "video_url": None, "error": None}
     err = None
@@ -374,23 +424,79 @@ def _deepseek_http_sync(query: str, max_attempts: int = 3) -> dict:
         state = load_storage_state("deepseek")  # 每次重新 check-out → 换到没被隔离的号
         if not state:
             return {**empty, "error": "no session available"}
-        res = run_deepseek_http(state, query)
+        # 按账号 sticky 出口代理(honors PROXY_ENGINES);此前 HTTP 路径漏传 proxy,
+        # 导致所有号从本机单 IP 直出 → 被 deepseek 风控集中禁言。现按账号粘定出口。
+        proxy_url = _proxy_dict_to_url(_engine_proxy("deepseek", state))
+        res = run_deepseek_http(state, query, proxy=proxy_url)
         err = res.get("error")
+        exit_ip = _resolve_exit_ip(proxy_url)   # 该号实际出口 IP,随 check-in 回报落库
         # 映射成池子的 check-in 结果:login_lost→隔离;pow_failed→crash(不怪账号);empty→empty_answer
         if err == "login_lost":
-            report_session_outcome("deepseek", result="login_lost")
+            report_session_outcome("deepseek", result="login_lost", exit_ip=exit_ip)
+        elif err == "rate_limited":
+            # 账号被临时禁言(deepseek 风控)→ 冷却该号到 mute_until(不隔离不罚),换下一个号
+            report_session_outcome("deepseek", result="rate_limited",
+                                   error_msg="muted", rate_limited_until=res.get("mute_until"),
+                                   exit_ip=exit_ip)
         elif err == "empty_answer":
-            report_session_outcome("deepseek", result="empty_answer")
+            report_session_outcome("deepseek", result="empty_answer", exit_ip=exit_ip)
         elif err:
-            report_session_outcome("deepseek", result="crash", error_msg=err)
+            report_session_outcome("deepseek", result="crash", error_msg=err, exit_ip=exit_ip)
         else:
-            report_session_outcome("deepseek", result="success")
+            report_session_outcome("deepseek", result="success", exit_ip=exit_ip)
         # 只对"账号/瞬时"类错误换号重试;empty_answer 是真实结果不重试
-        if err not in ("login_lost", "pow_failed"):
+        if err not in ("login_lost", "pow_failed", "rate_limited"):
             break
     return {"engine": "deepseek", "query": query, "answer": res.get("answer", ""),
             "citations": res.get("citations", []), "source_url": None, "video_url": None,
             "error": err}
+
+
+_QWEN_QUERY_SCRIPT = os.path.join(os.path.dirname(__file__), "qwen_query.py")
+
+
+async def _run_qwen_subprocess(query: str) -> dict:
+    """spawn 一个干净 python 进程跑 app/qwen_query.py(进程内 create_stealth_page 与常驻
+    hot 浏览器 context 冲突,独立进程才稳)。继承本进程 env,取最后一行 JSON。"""
+    empty = {"engine": "qwen", "query": query, "answer": "", "citations": [],
+             "source_url": None, "video_url": None, "error": None}
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, _QWEN_QUERY_SCRIPT, query,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=dict(os.environ),
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+        lines = [ln for ln in out.decode("utf-8", "replace").splitlines() if ln.strip()]
+        if not lines:
+            return {**empty, "error": "qwen subprocess: no output"}
+        d = json.loads(lines[-1])
+        return {"engine": "qwen", "query": query, "answer": d.get("answer", ""),
+                "citations": d.get("citations", []), "source_url": None,
+                "video_url": None, "error": d.get("error")}
+    except asyncio.TimeoutError:
+        if proc:
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        return {**empty, "error": "qwen subprocess timeout"}
+    except Exception as e:  # noqa: BLE001
+        return {**empty, "error": f"qwen subprocess: {e}"[:200]}
+
+
+async def run_qwen_browser(query: str, max_attempts: int = 3) -> dict:
+    """qwen 浏览器查询(子进程跑 + 失败转移)。空答案/掉线 → 换号重试(每次子进程重新
+    check-out 账号),避开掉线的 qwen 号(扫码登录态常过期),与 deepseek failover 同理。"""
+    d = {"engine": "qwen", "query": query, "answer": "", "citations": [],
+         "source_url": None, "video_url": None, "error": "no attempt"}
+    for _ in range(max_attempts):
+        d = await _run_qwen_subprocess(query)
+        if d.get("answer"):
+            return d
+        # 空/掉线/超时 → 换号再试
+    return d
 
 
 async def run_hot_query(engine: str, query: str) -> dict:
@@ -399,6 +505,9 @@ async def run_hot_query(engine: str, query: str) -> dict:
     from .deepseek_http import deepseek_http_enabled
     if engine == "deepseek" and deepseek_http_enabled():
         return await asyncio.to_thread(_deepseek_http_sync, query)
+    # qwen 走 probe 实证的干净浏览器流程(绕开失配的 EngineSession 路径)
+    if engine == "qwen":
+        return await run_qwen_browser(query)
 
     search_timeout = int(os.environ.get("ENGINE_SEARCH_TIMEOUT", "300"))
     try:
@@ -446,6 +555,14 @@ async def search_hot(req: SearchRequest):
         d = await asyncio.to_thread(_deepseek_http_sync, req.query)
         return SearchResponse(
             engine="deepseek", query=req.query, answer=d.get("answer", ""),
+            citations=[CitationOut(**c) for c in d.get("citations", [])],
+            error=d.get("error"),
+        )
+    # qwen 走 probe 实证的干净浏览器流程(绕开失配的 EngineSession 路径)
+    if req.engine == "qwen":
+        d = await run_qwen_browser(req.query)
+        return SearchResponse(
+            engine="qwen", query=req.query, answer=d.get("answer", ""),
             citations=[CitationOut(**c) for c in d.get("citations", [])],
             error=d.get("error"),
         )

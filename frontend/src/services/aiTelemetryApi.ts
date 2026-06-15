@@ -615,6 +615,14 @@ export interface EngineSessionRow {
   used_today?: number;
   auth_type?: string | null;       // password/apikey/qr/cookie
   egress?: string | null;          // proxy/host
+  exit_ip?: string | null;         // 实际出口 IP(worker check-in 回报)
+  exit_ip_at?: string | null;
+  daily_cap?: number | null;       // 每账号覆盖值(null=用引擎默认)
+  effective_cap?: number;          // 实际生效上限(0=不限)
+  remaining?: number | null;       // 今日剩余配额(null=不限)
+  priority?: number;               // 调度优先级,低值优先
+  disabled?: boolean;              // 是否被手动停用
+  rate_limited?: boolean;          // 是否限流冷却中
 }
 
 export interface EngineSessionPage {
@@ -1079,6 +1087,14 @@ export const aiTelemetryApi = {
     if (engine) params.set('engine', engine);
     if (status) params.set('status', status);
     return request<EngineSessionPage>('GET', `/admin/engine-sessions?${params}`, token);
+  },
+
+  // Worker 管理:启停账号 / 改单账号日上限(-1=清除覆盖) / 改优先级
+  async adminPatchEngineSession(
+    token: string, sessionId: number,
+    patch: { disabled?: boolean; daily_cap?: number; priority?: number },
+  ): Promise<{ id: number; daily_cap: number | null; priority: number; disabled: boolean }> {
+    return request('PATCH', `/admin/engine-sessions/${sessionId}`, token, patch);
   },
 
   // ── 对外网关运营管理 ─────────────────────────────────

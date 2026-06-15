@@ -125,12 +125,50 @@ def _is_browser_engine(engine: str) -> bool:
     return engine in CN_ENGINES
 
 
+# 单账号每日上限(每IP/每账号模型);env ENGINE_SESSION_DAILY_CAP_<E> 覆盖,默认见 map。
+# 与 backend/geo/api/engine_sessions.py 的 _DEFAULT_DAILY_CAP 保持一致。
+_PER_ACCOUNT_CAP_DEFAULT = {"deepseek": 30, "qwen": 30, "wenxin": 30, "yuanbao": 30}
+_acct_count_cache: dict = {}          # engine -> (datetime, count)
+_ACCT_CACHE_TTL_SEC = 120
+
+
+def _per_account_cap(engine: str) -> int:
+    ov = os.environ.get(f"ENGINE_SESSION_DAILY_CAP_{engine.upper()}")
+    if ov and ov.isdigit():
+        return int(ov)
+    return _PER_ACCOUNT_CAP_DEFAULT.get(engine, 0)
+
+
+def _active_account_count(engine: str) -> int:
+    """当前可用(active 未过期、未限流冷却、未停用)账号数,带 120s 缓存。"""
+    now = datetime.utcnow()
+    hit = _acct_count_cache.get(engine)
+    if hit and (now - hit[0]).total_seconds() < _ACCT_CACHE_TTL_SEC:
+        return hit[1]
+    n = 0
+    try:
+        with db_session() as s:
+            n = s.execute(text(
+                "SELECT count(*) FROM engine_sessions WHERE engine=:e AND status='active' "
+                "AND (expires_at IS NULL OR expires_at > now()) "
+                "AND (rate_limited_until IS NULL OR rate_limited_until <= now()) "
+                "AND (unschedulable_until IS NULL OR unschedulable_until <= now())"
+            ), {"e": engine}).scalar() or 0
+    except Exception:  # noqa: BLE001
+        n = hit[1] if hit else 0
+    _acct_count_cache[engine] = (now, int(n))
+    return int(n)
+
+
 def _engine_daily_cap(engine: str) -> float:
-    """该引擎每日上限;不限流引擎返回 inf."""
+    """该引擎每日全局上限 = 可用账号数 × 单账号上限(每IP/每账号模型,加号自动扩容)。
+    不限流引擎(豆包/API)返回 inf;单账号上限=0 也视为不限。"""
     if engine in UNCAPPED_ENGINES:
         return math.inf
-    ov = os.environ.get(f"TELEMETRY_ENGINE_DAILY_CAP_{engine.upper()}")
-    return int(ov) if ov else ENGINE_DAILY_CAP
+    per = _per_account_cap(engine)
+    if per <= 0:
+        return math.inf
+    return float(per * _active_account_count(engine))
 
 
 # ── drip 主逻辑 ──────────────────────────────────────────────────
