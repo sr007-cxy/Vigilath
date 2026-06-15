@@ -36,6 +36,22 @@ ANSWER_SELS = list(_CFG.get("answer_sels") or [])
 _CHAT_API = _CFG.get("chat_api", "chat2.qianwen.com/api/v2/chat")
 
 
+def _resolve_host_ip() -> str:
+    """解析本机(worker)出口 IP —— qwen 不走代理,出口即所在 worker 的 IP。
+    ipify 国内不通 → 兜底 ipip.net / ipinfo。"""
+    import re as _re
+    import urllib.request as _u
+    for url in ("https://ipinfo.io/ip", "https://myip.ipip.net", "https://api.ipify.org"):
+        try:
+            with _u.urlopen(url, timeout=6) as r:
+                m = _re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", r.read().decode("utf-8", "replace"))
+            if m:
+                return m.group(1)
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
 def _parse_qwen_citations(body: str) -> list:
     """从 chat2 SSE 流里挖 web_source 引用(url/title)。每个 data: 行是完整 JSON 事件,
     递归找 type==web_source 的 dict。和 deepseek 解析 search_results 同思路。"""
@@ -160,7 +176,8 @@ async def run(query: str) -> dict:
                 cites = _parse_qwen_citations(best_body)
             except Exception:  # noqa: BLE001
                 cites = []
-        report_session_outcome("qwen", result="success" if answer else "empty_answer")
+        report_session_outcome("qwen", result="success" if answer else "empty_answer",
+                               exit_ip=_resolve_host_ip() or None)
         out["answer"] = answer
         out["citations"] = cites
         out["error"] = None if answer else "empty_answer"
