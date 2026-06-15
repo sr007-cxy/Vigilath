@@ -6,6 +6,7 @@ import {
   type WorkerQueueStats,
   type EngineSessionPage,
   type EngineIpGroup,
+  type EngineHealth,
 } from '../../services/aiTelemetryApi';
 import { fmtTime } from '../../utils/datetime';
 
@@ -19,6 +20,7 @@ export function AdminWorkers() {
   const [stats, setStats] = useState<WorkerQueueStats | null>(null);
   const [sessions, setSessions] = useState<EngineSessionPage | null>(null);
   const [ipGroups, setIpGroups] = useState<EngineIpGroup[]>([]);
+  const [health, setHealth] = useState<{ checked_at: string | null; engines: EngineHealth[] }>({ checked_at: null, engines: [] });
   const [sessPage, setSessPage] = useState(1);
   const [sessEngine, setSessEngine] = useState('');
   const [sessStatus, setSessStatus] = useState('');
@@ -37,9 +39,10 @@ export function AdminWorkers() {
       aiTelemetryApi.adminWorkersQueueStats(token),
       aiTelemetryApi.adminListEngineSessions(token, sessPage, SESSION_PAGE_SIZE, sessEngine, sessStatus),
       aiTelemetryApi.adminEngineSessionsByIp(token).catch(() => ({ groups: [], ip_count: 0 })),
+      aiTelemetryApi.adminEngineHealth(token).catch(() => ({ checked_at: null, engines: [] })),
     ])
-      .then(([ws, st, ss, byip]) => {
-        setWorkers(ws); setStats(st); setSessions(ss); setIpGroups(byip.groups || []); setErr(null);
+      .then(([ws, st, ss, byip, hl]) => {
+        setWorkers(ws); setStats(st); setSessions(ss); setIpGroups(byip.groups || []); setHealth(hl); setErr(null);
         // 行被清理后页码可能越界(空页),回第一页
         if (ss.items.length === 0 && ss.page > 1) setSessPage(1);
       })
@@ -132,6 +135,34 @@ export function AdminWorkers() {
           })}
         </p>
       </div>
+
+      {/* ── 引擎健康哨兵 ── */}
+      {health.engines.length > 0 && (
+        <div className="rounded-lg p-3 mb-4 flex flex-wrap items-center gap-2"
+             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+          <span className="text-xs text-secondary font-medium mr-1">
+            {t('workbench.adminWorkers.healthTitle', { defaultValue: '引擎健康' })}
+          </span>
+          {health.engines.map(e => (
+            <span key={e.engine}
+                  className={`px-2 py-1 rounded-md text-xs ${e.ok ? 'text-emerald-500' : 'text-red-400'}`}
+                  style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}
+                  title={e.error || ''}>
+              {e.ok ? '✅' : '❌'} {e.engine}
+              <span className="text-muted ml-1">
+                {e.ok
+                  ? t('workbench.adminWorkers.healthOk', { defaultValue: '答{{a}}/引{{c}}', a: e.ans_len, c: e.cites })
+                  : (e.error || t('workbench.adminWorkers.healthFail', { defaultValue: '异常' }))}
+              </span>
+            </span>
+          ))}
+          {health.checked_at && (
+            <span className="text-[10px] text-muted ml-auto">
+              {t('workbench.adminWorkers.healthCheckedAt', { defaultValue: '检测于' })} {fmtTime(health.checked_at, true)}
+            </span>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-xs text-muted text-center py-10">{t('common.loading')}</div>

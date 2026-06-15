@@ -625,6 +625,14 @@ export interface EngineSessionRow {
   rate_limited?: boolean;          // 是否限流冷却中
 }
 
+export interface EngineHealth {
+  engine: string;
+  ok: boolean;
+  ans_len: number;
+  cites: number;
+  error: string | null;
+}
+
 export interface EngineIpGroup {
   exit_ip: string;
   engine: string;
@@ -1095,6 +1103,13 @@ export const aiTelemetryApi = {
     if (engine) params.set('engine', engine);
     if (status) params.set('status', status);
     return request<EngineSessionPage>('GET', `/admin/engine-sessions?${params}`, token);
+  },
+
+  // Worker 管理:引擎健康哨兵最新结果
+  async adminEngineHealth(
+    token: string,
+  ): Promise<{ checked_at: string | null; engines: EngineHealth[] }> {
+    return request('GET', '/admin/engine-health', token);
   },
 
   // Worker 管理:按出口 IP 聚合(每 IP 挂几个号/今日用量/密度)
