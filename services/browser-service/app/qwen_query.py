@@ -12,29 +12,20 @@ import sys
 
 sys.path.insert(0, "/opt/browser-service")
 
+from app import engine_selectors  # noqa: E402
 from app.browser import create_stealth_page  # noqa: E402
 from app.session_store import report_session_outcome  # noqa: E402
 from app.engines.qwen_browser import (  # noqa: E402
     _QWEN_READ_JS, _QWEN_BLOCK_HOSTS, QwenBrowserAdapter,
 )
 
-_LINKS_JS = r"""
-() => {
-  const out = [];
-  document.querySelectorAll("a[href^='http']").forEach(a => {
-    out.push({url: a.href, text: (a.innerText || '').trim().slice(0, 80)});
-  });
-  return out;
-}
-"""
-
-INPUT_SELS = ("div[contenteditable='true'][role='textbox']",
-              "div[contenteditable='true']", "textarea")
-SEND_SELS = ("button[aria-label*='发送']", "button[aria-label*='Send']",
-             "button[class*='send']")
-
-# qwen 联网答案的 completion API(SSE),引用以 web_source 结构内嵌在流里
-_CHAT_API = "chat2.qianwen.com/api/v2/chat"
+# 选择器/API/URL 全从 engine_selectors 配置取(自愈 Phase 1:改版改配置不改代码)
+_CFG = engine_selectors.get("qwen")
+_URL = _CFG.get("url", "https://www.qianwen.com/")
+INPUT_SELS = tuple(_CFG.get("input_sels") or [])
+SEND_SELS = tuple(_CFG.get("send_sels") or [])
+ANSWER_SELS = list(_CFG.get("answer_sels") or [])
+_CHAT_API = _CFG.get("chat_api", "chat2.qianwen.com/api/v2/chat")
 
 
 def _parse_qwen_citations(body: str) -> list:
@@ -87,7 +78,7 @@ async def run(query: str) -> dict:
 
     page.on("response", _on_resp)
     try:
-        await page.goto("https://www.qianwen.com/", wait_until="domcontentloaded", timeout=30000)
+        await page.goto(_URL, wait_until="domcontentloaded", timeout=30000)
         await asyncio.sleep(4)
         target = None
         for sel in INPUT_SELS:
@@ -124,7 +115,7 @@ async def run(query: str) -> dict:
         # 而 break,拿到空/状态文本 —— probe 固定 sleep 45s 能出 568 字正因如此)。
         await asyncio.sleep(18)
         # 再轮询到长度稳定:要求答案够长(>60)+ 非状态占位 + 连续 4s 不再变长。
-        cands = list(adapter.ASSISTANT_CANDIDATES)
+        cands = ANSWER_SELS or list(adapter.ASSISTANT_CANDIDATES)
         last_len, stable_since, el, cur = 0, None, 18.0, ""
         while el < 95:
             try:
