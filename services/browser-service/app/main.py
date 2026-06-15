@@ -453,6 +453,34 @@ def _deepseek_http_sync(query: str, max_attempts: int = 6) -> dict:
 
 
 _QWEN_QUERY_SCRIPT = os.path.join(os.path.dirname(__file__), "qwen_query.py")
+_HEAL_PROBE_SCRIPT = os.path.join(os.path.dirname(__file__), "heal_probe.py")
+
+
+@app.post("/heal-probe")
+async def heal_probe(req: SearchRequest):
+    """自愈结构探针(browser-agent Phase 2):spawn heal_probe.py dump 引擎页面结构
+    (可交互元素/答案容器/网络API),供后端 LLM 提议选择器。只读探测。"""
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, _HEAL_PROBE_SCRIPT, req.engine,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            env=dict(os.environ),
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+        lines = [ln for ln in out.decode("utf-8", "replace").splitlines() if ln.strip()]
+        if not lines:
+            return {"engine": req.engine, "error": "heal-probe: no output"}
+        return json.loads(lines[-1])
+    except asyncio.TimeoutError:
+        if proc:
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"engine": req.engine, "error": "heal-probe timeout"}
+    except Exception as e:  # noqa: BLE001
+        return {"engine": req.engine, "error": f"heal-probe: {e}"[:200]}
 
 
 async def _run_qwen_subprocess(query: str) -> dict:

@@ -3590,6 +3590,52 @@ def admin_engine_sessions_by_ip(
     return {"groups": groups, "ip_count": len(ip_totals)}
 
 
+@router.post("/admin/heal-engine/{engine}")
+def admin_heal_engine(
+    engine: str,
+    current_user: User = Depends(get_current_user),
+):
+    """引擎自愈(browser-agent Phase 2):跑结构探针 → LLM 提议新选择器。
+    **只提议、不自动写**(人工审阅后再 apply,避免覆盖坏配置)。返回 {probe, proposal}。"""
+    _require_admin(current_user)
+    from geo.api.platform_rules import _llm_text
+    base = os.environ.get("BROWSER_SERVICE_AUTHORIZE_URL", "http://127.0.0.1:8092").rstrip("/")
+    # 1) 结构探针(browser-service 子进程,只读)
+    try:
+        with httpx.Client(timeout=140) as c:
+            probe = c.post(f"{base}/heal-probe", json={"engine": engine, "query": "canary"}).json()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"heal-probe 失败: {e}")
+    # 2) LLM 提议选择器
+    prompt = (
+        f"你是浏览器自动化专家。下面是 AI 搜索引擎「{engine}」网页(可能刚改版)的结构探针。\n"
+        "请定位并**只输出 JSON**(不要任何解释/markdown),字段:\n"
+        '{"input_sels":[...],"send_sels":[...],"answer_sels":[...],"chat_api":"<completion API url 子串>"}\n'
+        "- input_sels: 输入框 CSS 候选链(优先 contenteditable / textarea)\n"
+        "- send_sels: 发送按钮 CSS 候选(优先 aria-label 含 发送/Send)\n"
+        "- answer_sels: 答案容器 CSS 候选(从候选答案容器里挑最像正文外壳的 class/data 属性)\n"
+        "- chat_api: completion 流 API 的 url 子串(从网络 API 里挑含 web_source/messages/stream 的)\n\n"
+        f"可交互元素: {json.dumps((probe.get('interactive') or [])[:30], ensure_ascii=False)}\n"
+        f"候选答案容器: {json.dumps((probe.get('answer_candidates') or [])[:12], ensure_ascii=False)}\n"
+        f"网络API: {json.dumps((probe.get('apis') or [])[:8], ensure_ascii=False)}\n"
+    )
+    raw = _llm_text(prompt)
+    # 解析 LLM 返回的 JSON(剥 ```json 围栏)
+    proposal = None
+    s = raw.strip()
+    if "```" in s:
+        s = s.split("```")[1] if s.count("```") >= 2 else s
+        s = s.replace("json", "", 1).strip() if s.lstrip().startswith("json") else s
+    i, j = s.find("{"), s.rfind("}")
+    if i >= 0 and j > i:
+        try:
+            proposal = json.loads(s[i:j + 1])
+        except Exception:  # noqa: BLE001
+            proposal = None
+    return {"engine": engine, "probe_error": probe.get("error"),
+            "proposal": proposal, "llm_raw": raw[:800]}
+
+
 @router.get("/admin/engine-health")
 def admin_engine_health(current_user: User = Depends(get_current_user)):
     """引擎健康哨兵最新结果(engine_health_check.py 定时写的 JSON)。
