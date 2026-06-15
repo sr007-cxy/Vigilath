@@ -26,6 +26,8 @@ const Faq = lazy(() => import('./pages/Faq').then(m => ({ default: m.Faq })));
 const ProductsServices = lazy(() => import('./pages/ProductsServices').then(m => ({ default: m.ProductsServices })));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
+const Blog = lazy(() => import('./pages/Blog').then(m => ({ default: m.Blog })));
+const BlogPost = lazy(() => import('./pages/BlogPost').then(m => ({ default: m.BlogPost })));
 const Advanced = lazy(() => import('./pages/Advanced').then(m => ({ default: m.Advanced })));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess').then(m => ({ default: m.CheckoutSuccess })));
 const CheckoutCancel = lazy(() => import('./pages/CheckoutCancel').then(m => ({ default: m.CheckoutCancel })));
@@ -191,6 +193,8 @@ function App() {
               <Route path="/sentiment" element={<Sentiment />} />
               <Route path="/sentiment/settings" element={<SentimentSettings />} />
               <Route path="/about" element={<About />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
               <Route path="/process" element={<Landing />} />
               <Route path="/pricing" element={<Landing />} />
               <Route path="/data" element={<Landing />} />

@@ -75,12 +75,17 @@ const en = {
             "sentiment": {
               "title": "Sentinel · Vigilath",
               "description": "Real-time brand sentiment monitoring — detect and respond to public opinion risks."
+            },
+            "blog": {
+              "title": "Blog · Vigilath",
+              "description": "Practical writing on GEO, AEO, and AI visibility — how brands win in the age of AI search."
             }
           },
           "nav": {
             "home": "Home",
             "geoKnowledge": "Resources Center",
             "productsServices": "Products & Services",
+            "blog": "Blog",
             "faq": "FAQ",
             "aboutUs": "About Us",
             "about": "About GEO",
@@ -109,6 +114,13 @@ const en = {
             "sentiment": "Sentinel",
             "account": "Account",
             "logout": "Sign out"
+          },
+          "blog": {
+            "title": "Blog",
+            "subtitle": "Practical insights on GEO, AEO, and AI visibility — how brands get seen in the age of AI search.",
+            "readMore": "Read more",
+            "readingTime": "{{minutes}} min read",
+            "backToList": "Back to blog"
           },
           "common": {
             "error": "Error",

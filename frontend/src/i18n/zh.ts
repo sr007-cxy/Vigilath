@@ -75,12 +75,17 @@ const zh = {
             "sentiment": {
               "title": "舆情监控 · Vigilath",
               "description": "实时监测品牌舆论动态，及时发现和应对舆情风险。"
+            },
+            "blog": {
+              "title": "博客 · Vigilath",
+              "description": "关于 GEO、AEO 与 AI 可见性的实战文章 —— 看懂 AI 搜索时代的品牌打法。"
             }
           },
           "nav": {
             "home": "首页",
             "geoKnowledge": "资源中心",
             "productsServices": "产品与服务",
+            "blog": "博客",
             "faq": "常见问题",
             "aboutUs": "关于我们",
             "about": "关于 GEO",
@@ -109,6 +114,13 @@ const zh = {
             "sentiment": "舆情监控",
             "account": "账户中心",
             "logout": "退出登录"
+          },
+          "blog": {
+            "title": "博客",
+            "subtitle": "关于 GEO、AEO 与 AI 可见性的实战洞察 —— 看懂 AI 搜索时代,品牌该怎么被看见。",
+            "readMore": "阅读全文",
+            "readingTime": "{{minutes}} 分钟阅读",
+            "backToList": "返回博客"
           },
           "common": {
             "error": "错误",
