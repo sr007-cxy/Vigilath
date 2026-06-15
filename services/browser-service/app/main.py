@@ -456,6 +456,42 @@ _QWEN_QUERY_SCRIPT = os.path.join(os.path.dirname(__file__), "qwen_query.py")
 _HEAL_PROBE_SCRIPT = os.path.join(os.path.dirname(__file__), "heal_probe.py")
 
 
+class HealValidateIn(BaseModel):
+    engine: str
+    override: dict = {}
+    query: str = "2026年最新国产手机推荐"
+
+
+@app.post("/heal-validate")
+async def heal_validate(req: HealValidateIn):
+    """用提议的选择器临时覆盖跑一条 canary,验证是否真能出答案+引用(不落库)。
+    目前支持 qwen(子进程 + QWEN_SELECTOR_OVERRIDE env)。返回 {ans_len, cites, error}。"""
+    if req.engine != "qwen":
+        return {"engine": req.engine, "error": "validate: only qwen supported", "ans_len": 0, "cites": 0}
+    env = dict(os.environ)
+    env["QWEN_SELECTOR_OVERRIDE"] = json.dumps(req.override, ensure_ascii=False)
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, _QWEN_QUERY_SCRIPT, req.query,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, env=env,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=130)
+        lines = [ln for ln in out.decode("utf-8", "replace").splitlines() if ln.strip()]
+        d = json.loads(lines[-1]) if lines else {}
+        return {"engine": "qwen", "ans_len": len(d.get("answer") or ""),
+                "cites": len(d.get("citations") or []), "error": d.get("error")}
+    except asyncio.TimeoutError:
+        if proc:
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"engine": "qwen", "error": "validate timeout", "ans_len": 0, "cites": 0}
+    except Exception as e:  # noqa: BLE001
+        return {"engine": "qwen", "error": f"validate: {e}"[:200], "ans_len": 0, "cites": 0}
+
+
 @app.post("/heal-probe")
 async def heal_probe(req: SearchRequest):
     """自愈结构探针(browser-agent Phase 2):spawn heal_probe.py dump 引擎页面结构

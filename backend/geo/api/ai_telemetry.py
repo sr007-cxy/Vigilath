@@ -3632,8 +3632,19 @@ def admin_heal_engine(
             proposal = json.loads(s[i:j + 1])
         except Exception:  # noqa: BLE001
             proposal = None
+    # 3) 验证门:用提议的选择器跑一条 canary,确认真能出答案+引用(才值得应用)
+    validation = None
+    if proposal:
+        try:
+            with httpx.Client(timeout=150) as c:
+                validation = c.post(f"{base}/heal-validate",
+                                    json={"engine": engine, "override": proposal}).json()
+        except Exception as e:  # noqa: BLE001
+            validation = {"error": f"validate 调用失败: {e}"[:150], "ans_len": 0, "cites": 0}
+    validated = bool(validation and validation.get("ans_len", 0) > 0)
     return {"engine": engine, "probe_error": probe.get("error"),
-            "proposal": proposal, "llm_raw": raw[:800]}
+            "proposal": proposal, "validation": validation, "validated": validated,
+            "llm_raw": raw[:800]}
 
 
 _SELECTORS_OVERRIDE_FILE = os.environ.get(

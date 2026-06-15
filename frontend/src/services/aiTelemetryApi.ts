@@ -1116,7 +1116,11 @@ export const aiTelemetryApi = {
   // Worker 管理:引擎自愈 — 探针+LLM 提议选择器(只提议)
   async adminHealEngine(
     token: string, engine: string,
-  ): Promise<{ engine: string; probe_error: string | null; proposal: SelectorProposal | null; llm_raw: string }> {
+  ): Promise<{
+    engine: string; probe_error: string | null; proposal: SelectorProposal | null;
+    validation: { ans_len: number; cites: number; error: string | null } | null;
+    validated: boolean; llm_raw: string;
+  }> {
     return request('POST', `/admin/heal-engine/${engine}`, token);
   },
   // Worker 管理:把审阅过的提议写入中心配置(全队生效)

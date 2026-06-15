@@ -21,6 +21,14 @@ from app.engines.qwen_browser import (  # noqa: E402
 
 # 选择器/API/URL 全从 engine_selectors 配置取(自愈 Phase 1:改版改配置不改代码)
 _CFG = engine_selectors.get("qwen")
+# 自愈验证用:QWEN_SELECTOR_OVERRIDE(JSON)临时覆盖配置,不落库 —— 验证提议是否真能跑通
+import os as _os  # noqa: E402
+_ov = (_os.environ.get("QWEN_SELECTOR_OVERRIDE") or "").strip()
+if _ov:
+    try:
+        _CFG = {**_CFG, **{k: v for k, v in json.loads(_ov).items() if v}}
+    except Exception:  # noqa: BLE001
+        pass
 _URL = _CFG.get("url", "https://www.qianwen.com/")
 INPUT_SELS = tuple(_CFG.get("input_sels") or [])
 SEND_SELS = tuple(_CFG.get("send_sels") or [])

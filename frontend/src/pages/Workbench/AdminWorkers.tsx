@@ -33,8 +33,8 @@ export function AdminWorkers() {
   const [authMsg, setAuthMsg] = useState<string | null>(null);
   const [qr, setQr] = useState<{ open: boolean; engine: string; sid: string | null; img: string | null; status: string }>(
     { open: false, engine: 'wenxin', sid: null, img: null, status: '' });
-  const [heal, setHeal] = useState<{ open: boolean; engine: string; loading: boolean; proposal: SelectorProposal | null; raw: string; msg: string }>(
-    { open: false, engine: '', loading: false, proposal: null, raw: '', msg: '' });
+  const [heal, setHeal] = useState<{ open: boolean; engine: string; loading: boolean; proposal: SelectorProposal | null; raw: string; msg: string; validated: boolean; valText: string }>(
+    { open: false, engine: '', loading: false, proposal: null, raw: '', msg: '', validated: false, valText: '' });
 
   const reload = useCallback(() => {
     Promise.all([
@@ -125,10 +125,13 @@ export function AdminWorkers() {
   };
 
   const doHeal = async (engine: string) => {
-    setHeal({ open: true, engine, loading: true, proposal: null, raw: '', msg: '' });
+    setHeal({ open: true, engine, loading: true, proposal: null, raw: '', msg: '', validated: false, valText: '' });
     try {
       const r = await aiTelemetryApi.adminHealEngine(token, engine);
+      const v = r.validation;
       setHeal(h => ({ ...h, loading: false, proposal: r.proposal, raw: r.llm_raw || '',
+        validated: r.validated,
+        valText: v ? (r.validated ? `✅ 验证通过 答${v.ans_len}/引${v.cites}` : `❌ 验证失败 ${v.error || '无答案'}`) : '',
         msg: r.probe_error ? `探针异常: ${r.probe_error}` : '' }));
     } catch (e) {
       setHeal(h => ({ ...h, loading: false, msg: `失败: ${(e as Error)?.message || ''}` }));
@@ -642,13 +645,21 @@ export function AdminWorkers() {
             {heal.proposal && (
               <div className="text-xs">
                 <div className="text-muted mb-2">{t('workbench.adminWorkers.healProposalHint', { defaultValue: 'LLM 提议的新选择器(审阅后应用,将写入中心配置、全队生效):' })}</div>
-                <pre className="rounded-md p-3 overflow-auto max-h-[280px] text-secondary"
+                <pre className="rounded-md p-3 overflow-auto max-h-[240px] text-secondary"
                      style={{ background: 'var(--bg-tertiary)' }}>
                   {JSON.stringify(heal.proposal, null, 2)}
                 </pre>
+                {heal.valText && (
+                  <div className={`mt-2 ${heal.validated ? 'text-emerald-500' : 'text-red-400'}`}>{heal.valText}</div>
+                )}
+                {!heal.validated && (
+                  <div className="text-[10px] text-muted mt-1">
+                    {t('workbench.adminWorkers.healNotValidated', { defaultValue: '未通过验证(用提议选择器跑 canary 没出答案),不建议应用' })}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mt-3">
-                  <button type="button" onClick={doHealApply} disabled={heal.loading}
-                          className="px-3 py-1 rounded-md text-xs text-emerald-500"
+                  <button type="button" onClick={doHealApply} disabled={heal.loading || !heal.validated}
+                          className="px-3 py-1 rounded-md text-xs text-emerald-500 disabled:opacity-40"
                           style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
                     {t('workbench.adminWorkers.healApply', { defaultValue: '应用到中心配置' })}
                   </button>
