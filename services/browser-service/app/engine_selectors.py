@@ -37,18 +37,34 @@ _DEFAULTS: dict = {
 }
 
 _OVERRIDE_PATH = os.environ.get("ENGINE_SELECTORS_FILE", "").strip()
+# 中心配置(后端服务):自愈 apply 写到后端,各 worker 据此 URL 拉取 → 改版修复自动覆盖全队。
+_CENTRAL_URL = os.environ.get("ENGINE_SELECTORS_URL", "").strip()
+
+
+def _fetch_central() -> dict:
+    if not _CENTRAL_URL:
+        return {}
+    try:
+        import urllib.request
+        with urllib.request.urlopen(_CENTRAL_URL, timeout=5) as r:
+            return json.loads(r.read().decode("utf-8")) or {}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def get(engine: str) -> dict:
-    """取某引擎的选择器配置(默认 + 覆盖文件合并)。"""
+    """取某引擎的选择器配置:内置默认 ← 本地覆盖文件 ← 中心配置(后端,自愈写入)。"""
     cfg = {k: (list(v) if isinstance(v, list) else v)
            for k, v in _DEFAULTS.get(engine, {}).items()}
     if _OVERRIDE_PATH and os.path.exists(_OVERRIDE_PATH):
         try:
             with open(_OVERRIDE_PATH, encoding="utf-8") as f:
-                override = json.load(f)
-            if isinstance(override.get(engine), dict):
-                cfg.update(override[engine])
+                ov = json.load(f)
+            if isinstance(ov.get(engine), dict):
+                cfg.update(ov[engine])
         except Exception:  # noqa: BLE001
             pass
+    central = _fetch_central()
+    if isinstance(central.get(engine), dict):
+        cfg.update(central[engine])
     return cfg

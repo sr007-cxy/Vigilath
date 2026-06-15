@@ -3636,6 +3636,53 @@ def admin_heal_engine(
             "proposal": proposal, "llm_raw": raw[:800]}
 
 
+_SELECTORS_OVERRIDE_FILE = os.environ.get(
+    "ENGINE_SELECTORS_OVERRIDE_FILE", "/opt/geo/engine_selectors_override.json")
+
+
+@router.get("/engine-selectors-config")
+def engine_selectors_config():
+    """中心选择器覆盖配置(各 browser worker 拉取)。自愈 apply 写到这里 → 全队自动生效。
+    无鉴权(只是选择器、非敏感),只读。"""
+    try:
+        with open(_SELECTORS_OVERRIDE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+class HealApplyIn(BaseModel):
+    input_sels: Optional[list] = None
+    send_sels: Optional[list] = None
+    answer_sels: Optional[list] = None
+    chat_api: Optional[str] = None
+    url: Optional[str] = None
+
+
+@router.post("/admin/heal-engine/{engine}/apply")
+def admin_heal_engine_apply(
+    engine: str,
+    payload: HealApplyIn,
+    current_user: User = Depends(get_current_user),
+):
+    """把审阅过的选择器提议写入中心配置(覆盖该引擎),全队 worker 下次查询即生效。"""
+    _require_admin(current_user)
+    patch = {k: v for k, v in payload.dict().items() if v}
+    if not patch:
+        raise HTTPException(400, "空提议,无可写入")
+    try:
+        with open(_SELECTORS_OVERRIDE_FILE, encoding="utf-8") as f:
+            store = json.load(f)
+    except Exception:  # noqa: BLE001
+        store = {}
+    cur = store.get(engine) if isinstance(store.get(engine), dict) else {}
+    cur.update(patch)
+    store[engine] = cur
+    with open(_SELECTORS_OVERRIDE_FILE, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+    return {"engine": engine, "applied": cur}
+
+
 @router.get("/admin/engine-health")
 def admin_engine_health(current_user: User = Depends(get_current_user)):
     """引擎健康哨兵最新结果(engine_health_check.py 定时写的 JSON)。

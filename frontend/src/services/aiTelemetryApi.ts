@@ -625,6 +625,14 @@ export interface EngineSessionRow {
   rate_limited?: boolean;          // 是否限流冷却中
 }
 
+export interface SelectorProposal {
+  input_sels?: string[];
+  send_sels?: string[];
+  answer_sels?: string[];
+  chat_api?: string;
+  url?: string;
+}
+
 export interface EngineHealth {
   engine: string;
   ok: boolean;
@@ -1103,6 +1111,19 @@ export const aiTelemetryApi = {
     if (engine) params.set('engine', engine);
     if (status) params.set('status', status);
     return request<EngineSessionPage>('GET', `/admin/engine-sessions?${params}`, token);
+  },
+
+  // Worker 管理:引擎自愈 — 探针+LLM 提议选择器(只提议)
+  async adminHealEngine(
+    token: string, engine: string,
+  ): Promise<{ engine: string; probe_error: string | null; proposal: SelectorProposal | null; llm_raw: string }> {
+    return request('POST', `/admin/heal-engine/${engine}`, token);
+  },
+  // Worker 管理:把审阅过的提议写入中心配置(全队生效)
+  async adminHealEngineApply(
+    token: string, engine: string, patch: SelectorProposal,
+  ): Promise<{ engine: string; applied: SelectorProposal }> {
+    return request('POST', `/admin/heal-engine/${engine}/apply`, token, patch);
   },
 
   // Worker 管理:引擎健康哨兵最新结果

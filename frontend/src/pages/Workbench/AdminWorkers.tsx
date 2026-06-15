@@ -7,6 +7,7 @@ import {
   type EngineSessionPage,
   type EngineIpGroup,
   type EngineHealth,
+  type SelectorProposal,
 } from '../../services/aiTelemetryApi';
 import { fmtTime } from '../../utils/datetime';
 
@@ -32,6 +33,8 @@ export function AdminWorkers() {
   const [authMsg, setAuthMsg] = useState<string | null>(null);
   const [qr, setQr] = useState<{ open: boolean; engine: string; sid: string | null; img: string | null; status: string }>(
     { open: false, engine: 'wenxin', sid: null, img: null, status: '' });
+  const [heal, setHeal] = useState<{ open: boolean; engine: string; loading: boolean; proposal: SelectorProposal | null; raw: string; msg: string }>(
+    { open: false, engine: '', loading: false, proposal: null, raw: '', msg: '' });
 
   const reload = useCallback(() => {
     Promise.all([
@@ -121,6 +124,27 @@ export function AdminWorkers() {
     }
   };
 
+  const doHeal = async (engine: string) => {
+    setHeal({ open: true, engine, loading: true, proposal: null, raw: '', msg: '' });
+    try {
+      const r = await aiTelemetryApi.adminHealEngine(token, engine);
+      setHeal(h => ({ ...h, loading: false, proposal: r.proposal, raw: r.llm_raw || '',
+        msg: r.probe_error ? `探针异常: ${r.probe_error}` : '' }));
+    } catch (e) {
+      setHeal(h => ({ ...h, loading: false, msg: `失败: ${(e as Error)?.message || ''}` }));
+    }
+  };
+  const doHealApply = async () => {
+    if (!heal.proposal) return;
+    setHeal(h => ({ ...h, loading: true }));
+    try {
+      await aiTelemetryApi.adminHealEngineApply(token, heal.engine, heal.proposal);
+      setHeal(h => ({ ...h, loading: false, msg: '✅ 已应用到中心配置,全队下次查询生效' }));
+    } catch (e) {
+      setHeal(h => ({ ...h, loading: false, msg: `应用失败: ${(e as Error)?.message || ''}` }));
+    }
+  };
+
   const engines = stats ? Object.keys(stats.queue).sort() : [];
 
   return (
@@ -154,6 +178,13 @@ export function AdminWorkers() {
                   ? t('workbench.adminWorkers.healthOk', { defaultValue: '答{{a}}/引{{c}}', a: e.ans_len, c: e.cites })
                   : (e.error || t('workbench.adminWorkers.healthFail', { defaultValue: '异常' }))}
               </span>
+              {!e.ok && (
+                <button type="button" onClick={() => doHeal(e.engine)}
+                        className="ml-2 px-1.5 py-0.5 rounded text-[10px] text-amber-500"
+                        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+                  🔧 {t('workbench.adminWorkers.heal', { defaultValue: '自愈' })}
+                </button>
+              )}
             </span>
           ))}
           {health.checked_at && (
@@ -592,6 +623,45 @@ export function AdminWorkers() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── 自愈提议弹窗 ── */}
+      {heal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-lg p-5 max-w-[560px] w-full mx-4"
+               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="flex items-center mb-3">
+              <span className="text-sm font-medium text-primary">
+                🔧 {t('workbench.adminWorkers.healTitle', { defaultValue: '引擎自愈' })} — {heal.engine}
+              </span>
+              <button onClick={() => setHeal(h => ({ ...h, open: false }))}
+                      className="ml-auto text-muted text-xs">✕</button>
+            </div>
+            {heal.loading && <div className="text-xs text-muted py-6 text-center">{t('workbench.adminWorkers.healRunning', { defaultValue: '探测页面 + LLM 提议选择器中(约 1 分钟)…' })}</div>}
+            {heal.msg && <div className="text-xs text-amber-500 mb-2">{heal.msg}</div>}
+            {heal.proposal && (
+              <div className="text-xs">
+                <div className="text-muted mb-2">{t('workbench.adminWorkers.healProposalHint', { defaultValue: 'LLM 提议的新选择器(审阅后应用,将写入中心配置、全队生效):' })}</div>
+                <pre className="rounded-md p-3 overflow-auto max-h-[280px] text-secondary"
+                     style={{ background: 'var(--bg-tertiary)' }}>
+                  {JSON.stringify(heal.proposal, null, 2)}
+                </pre>
+                <div className="flex items-center gap-2 mt-3">
+                  <button type="button" onClick={doHealApply} disabled={heal.loading}
+                          className="px-3 py-1 rounded-md text-xs text-emerald-500"
+                          style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                    {t('workbench.adminWorkers.healApply', { defaultValue: '应用到中心配置' })}
+                  </button>
+                  <button type="button" onClick={() => setHeal(h => ({ ...h, open: false }))}
+                          className="px-3 py-1 rounded-md text-xs text-muted"
+                          style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }}>
+                    {t('workbench.adminWorkers.close', { defaultValue: '关闭' })}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
