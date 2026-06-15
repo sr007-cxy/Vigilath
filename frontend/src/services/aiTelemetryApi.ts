@@ -625,6 +625,14 @@ export interface EngineSessionRow {
   rate_limited?: boolean;          // 是否限流冷却中
 }
 
+export interface EngineIpGroup {
+  exit_ip: string;
+  engine: string;
+  accounts: number;
+  used_today: number;
+  ip_account_total: number;   // 该 IP 上跨引擎的总账号数(密度)
+}
+
 export interface EngineSessionPage {
   items: EngineSessionRow[];
   total: number;             // 筛选后条数(驱动分页)
@@ -1087,6 +1095,13 @@ export const aiTelemetryApi = {
     if (engine) params.set('engine', engine);
     if (status) params.set('status', status);
     return request<EngineSessionPage>('GET', `/admin/engine-sessions?${params}`, token);
+  },
+
+  // Worker 管理:按出口 IP 聚合(每 IP 挂几个号/今日用量/密度)
+  async adminEngineSessionsByIp(
+    token: string,
+  ): Promise<{ groups: EngineIpGroup[]; ip_count: number }> {
+    return request('GET', '/admin/engine-sessions/by-ip', token);
   },
 
   // Worker 管理:启停账号 / 改单账号日上限(-1=清除覆盖) / 改优先级

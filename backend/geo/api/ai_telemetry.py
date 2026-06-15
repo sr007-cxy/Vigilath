@@ -3557,6 +3557,52 @@ def admin_patch_engine_session(
             "priority": row.priority, "disabled": disabled}
 
 
+@router.get("/admin/engine-sessions/by-ip")
+def admin_engine_sessions_by_ip(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """按出口 IP 聚合账号池:每个 IP 上挂了几个号、各引擎、今日合计用量、密度。
+    用于「每 IP × 每账号」视图,看清哪个 IP 账号过密(易被风控)。"""
+    _require_admin(current_user)
+    from geo.models.engine_sessions import EngineSessionORM
+    from geo.api.engine_sessions import _local_today
+    now = datetime.utcnow()
+    today_local = _local_today()
+    not_expired = (EngineSessionORM.expires_at == None) | (EngineSessionORM.expires_at > now)  # noqa: E711
+    rows = (db.query(EngineSessionORM)
+            .filter(EngineSessionORM.status == "active").filter(not_expired).all())
+    agg: dict = {}
+    for r in rows:
+        ip = r.exit_ip or "(未探测)"
+        key = (ip, r.engine)
+        g = agg.setdefault(key, {"exit_ip": ip, "engine": r.engine,
+                                 "accounts": 0, "used_today": 0})
+        g["accounts"] += 1
+        g["used_today"] += (r.used_today or 0) if r.used_date == today_local else 0
+    groups = sorted(agg.values(), key=lambda x: (x["exit_ip"], x["engine"]))
+    # 每 IP 总账号数(跨引擎)— 看密度
+    ip_totals: dict = {}
+    for g in groups:
+        ip_totals[g["exit_ip"]] = ip_totals.get(g["exit_ip"], 0) + g["accounts"]
+    for g in groups:
+        g["ip_account_total"] = ip_totals[g["exit_ip"]]
+    return {"groups": groups, "ip_count": len(ip_totals)}
+
+
+@router.get("/admin/engine-health")
+def admin_engine_health(current_user: User = Depends(get_current_user)):
+    """引擎健康哨兵最新结果(engine_health_check.py 定时写的 JSON)。
+    {checked_at, engines:[{engine, ok, ans_len, cites, error}]}。文件不存在 → 空。"""
+    _require_admin(current_user)
+    path = os.environ.get("ENGINE_HEALTH_FILE", "/opt/geo/engine_health.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return {"checked_at": None, "engines": []}
+
+
 # ─────── 对外网关运营管理(/workbench/gateway,admin)────────
 # 转发到 telemetry-service 的 /v1/admin/*(校验 X-Admin-Token);前端鉴权由
 # _require_admin 负责。GATEWAY_ADMIN_TOKEN 只在服务端持有,绝不下发浏览器。

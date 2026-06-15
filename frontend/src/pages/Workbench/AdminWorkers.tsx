@@ -5,6 +5,7 @@ import {
   type BrowserWorker,
   type WorkerQueueStats,
   type EngineSessionPage,
+  type EngineIpGroup,
 } from '../../services/aiTelemetryApi';
 import { fmtTime } from '../../utils/datetime';
 
@@ -17,6 +18,7 @@ export function AdminWorkers() {
   const [workers, setWorkers] = useState<BrowserWorker[]>([]);
   const [stats, setStats] = useState<WorkerQueueStats | null>(null);
   const [sessions, setSessions] = useState<EngineSessionPage | null>(null);
+  const [ipGroups, setIpGroups] = useState<EngineIpGroup[]>([]);
   const [sessPage, setSessPage] = useState(1);
   const [sessEngine, setSessEngine] = useState('');
   const [sessStatus, setSessStatus] = useState('');
@@ -34,9 +36,10 @@ export function AdminWorkers() {
       aiTelemetryApi.adminListWorkers(token),
       aiTelemetryApi.adminWorkersQueueStats(token),
       aiTelemetryApi.adminListEngineSessions(token, sessPage, SESSION_PAGE_SIZE, sessEngine, sessStatus),
+      aiTelemetryApi.adminEngineSessionsByIp(token).catch(() => ({ groups: [], ip_count: 0 })),
     ])
-      .then(([ws, st, ss]) => {
-        setWorkers(ws); setStats(st); setSessions(ss); setErr(null);
+      .then(([ws, st, ss, byip]) => {
+        setWorkers(ws); setStats(st); setSessions(ss); setIpGroups(byip.groups || []); setErr(null);
         // 行被清理后页码可能越界(空页),回第一页
         if (ss.items.length === 0 && ss.page > 1) setSessPage(1);
       })
@@ -342,6 +345,41 @@ export function AdminWorkers() {
                   {t('workbench.adminWorkers.close', { defaultValue: '关闭' })}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ── 按出口 IP 分布 ── */}
+          {ipGroups.length > 0 && (
+            <div className="rounded-lg overflow-hidden mt-5"
+                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div className="px-3 py-2 text-xs text-secondary font-medium border-b"
+                   style={{ borderColor: 'var(--border-color)' }}>
+                {t('workbench.adminWorkers.byIpTitle', { defaultValue: '按出口 IP 分布(密度越高越易被风控)' })}
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted">
+                    <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colExitIp', { defaultValue: '出口 IP' })}</th>
+                    <th className="text-left px-3 py-2">{t('workbench.adminWorkers.colEngine', { defaultValue: '引擎' })}</th>
+                    <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colIpAccounts', { defaultValue: '该引擎账号数' })}</th>
+                    <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colUsedToday', { defaultValue: '今日' })}</th>
+                    <th className="text-right px-3 py-2">{t('workbench.adminWorkers.colIpTotal', { defaultValue: '该IP总账号(密度)' })}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ipGroups.map((g, i) => (
+                    <tr key={`${g.exit_ip}-${g.engine}-${i}`} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+                      <td className="px-3 py-2 text-primary tabular-nums">{g.exit_ip}</td>
+                      <td className="px-3 py-2 text-secondary">{g.engine}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-secondary">{g.accounts}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-secondary">{g.used_today}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${g.ip_account_total >= 6 ? 'text-amber-500' : 'text-secondary'}`}>
+                        {g.ip_account_total}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
