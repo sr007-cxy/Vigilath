@@ -12,7 +12,7 @@ export type BlogPost = {
   slug: string;
   /** ISO 日期,如 2026-05-20 */
   date: string;
-  /** 封面图(可选),本地 SVG:/image/blog/<slug>.svg,由 scripts/gen_blog_covers.py 生成 */
+  /** 封面图(可选),本地图片:/image/blog/<slug>.jpg,由 scripts/gen_blog_covers.py 生成 */
   cover?: string;
   /** 阅读时长(分钟) */
   readingMinutes: number;
@@ -25,7 +25,7 @@ export const blogPosts: BlogPost[] = [
     slug: 'what-is-geo',
     date: '2026-05-28',
     readingMinutes: 6,
-    cover: '/image/blog/what-is-geo.svg',
+    cover: '/image/blog/what-is-geo.jpg',
     zh: {
       title: '什么是 GEO?生成式引擎优化的底层逻辑',
       excerpt:
@@ -105,7 +105,7 @@ That full chain is exactly what Vigilath, an independent third-party AI visibili
     slug: 'how-ai-picks-sources',
     date: '2026-05-20',
     readingMinutes: 7,
-    cover: '/image/blog/how-ai-picks-sources.svg',
+    cover: '/image/blog/how-ai-picks-sources.jpg',
     zh: {
       title: 'AI 凭什么引用一个来源?五个可优化的信号',
       excerpt:
@@ -177,7 +177,7 @@ Vigilath breaks these five signals into quantifiable detection dimensions, turni
     slug: 'geo-for-global-brands',
     date: '2026-05-12',
     readingMinutes: 5,
-    cover: '/image/blog/geo-for-global-brands.svg',
+    cover: '/image/blog/geo-for-global-brands.jpg',
     zh: {
       title: '出海品牌的 AI 可见性:别只盯着一个引擎',
       excerpt:
@@ -237,7 +237,7 @@ Vigilath covers both overseas and domestic engines at once, placing "how your br
     slug: 'geo-vs-aeo',
     date: '2026-05-04',
     readingMinutes: 5,
-    cover: '/image/blog/geo-vs-aeo.svg',
+    cover: '/image/blog/geo-vs-aeo.jpg',
     zh: {
       title: 'GEO 与 AEO:一字之差,两件事',
       excerpt:
@@ -301,7 +301,7 @@ Vigilath places AEO ingestion-side detection and GEO recommendation-side auditin
     slug: 'monitor-brand-in-ai-answers',
     date: '2026-04-26',
     readingMinutes: 6,
-    cover: '/image/blog/monitor-brand-in-ai-answers.svg',
+    cover: '/image/blog/monitor-brand-in-ai-answers.jpg',
     zh: {
       title: '为什么 AI 可见性必须「持续监控」,而不是测一次',
       excerpt:
@@ -373,7 +373,7 @@ Vigilath turns detection into a repeatable, comparable monitoring view — takin
     slug: 'wikipedia-and-ai-visibility',
     date: '2026-04-18',
     readingMinutes: 6,
-    cover: '/image/blog/wikipedia-and-ai-visibility.svg',
+    cover: '/image/blog/wikipedia-and-ai-visibility.jpg',
     zh: {
       title: '百科词条:被低估的 AI 可见性地基',
       excerpt:
@@ -437,7 +437,7 @@ Encyclopedia entries are slow work, but they're the longest-lasting layer of AI 
     slug: 'make-content-ai-crawlable',
     date: '2026-04-10',
     readingMinutes: 5,
-    cover: '/image/blog/make-content-ai-crawlable.svg',
+    cover: '/image/blog/make-content-ai-crawlable.jpg',
     zh: {
       title: '让 AI 爬虫读得懂你:收录侧的四个基本功',
       excerpt:
@@ -499,7 +499,7 @@ Vigilath's ingestion-side checks cover AI crawler reachability, content structur
     slug: 'ai-hallucination-brand-risk',
     date: '2026-04-02',
     readingMinutes: 5,
-    cover: '/image/blog/ai-hallucination-brand-risk.svg',
+    cover: '/image/blog/ai-hallucination-brand-risk.jpg',
     zh: {
       title: '当 AI 说错你的品牌:幻觉是新的舆情风险',
       excerpt:
