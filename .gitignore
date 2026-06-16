@@ -140,3 +140,8 @@ backend/data/browser_sessions/*.json
 backend/data/browser_sessions/*_profile.json
 
 play_snapshot.sh
+
+# Browser engine session secrets + Chrome profiles — ANY location (含 services/),
+# 含 cookies/JWT/原始 Cookies 库。已 git rm --cached;永不提交(谁拿到谁能登录该账号)。
+**/data/browser_sessions/
+**/data/browser_profiles/
