@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="Vigilath blog cover">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0f1f"/>
+      <stop offset="1" stop-color="#141a35"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.62" cy="0.3" r="0.7">
+      <stop offset="0" stop-color="#fb7185" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#fb7185" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.2" cy="0.85" r="0.6">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.5" fill="#ffffff" opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <rect width="1200" height="675" fill="url(#dots)"/>
+  <rect width="1200" height="675" fill="url(#glow)"/>
+  <rect width="1200" height="675" fill="url(#glow2)"/>
+  
+        <path d="M 760 200 L 920 450 L 600 450 Z" stroke="#fb7185" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="760" y1="290" x2="760" y2="370" stroke="#f59e0b" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="760" cy="412" r="8" fill="#f59e0b" stroke="none"/>
+        
+  <!-- 品牌放大镜小标 -->
+  <g transform="translate(64,592)">
+    <circle cx="16" cy="14" r="15" fill="none" stroke="#fb7185" stroke-width="5"/>
+    <line x1="27" y1="25" x2="40" y2="38" stroke="#fb7185" stroke-width="5" stroke-linecap="round"/>
+    <text x="58" y="22" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="26" font-weight="800" fill="#f8fafc" letter-spacing="3">VIGILATH</text>
+  </g>
+  <!-- 角标 -->
+  <g transform="translate(64,72)">
+    <rect x="0" y="0" width="148" height="46" rx="23" fill="#fb7185" fill-opacity="0.14" stroke="#fb7185" stroke-opacity="0.5" stroke-width="2"/>
+    <text x="20" y="31" font-family="-apple-system,PingFang SC,Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#fb7185">舆情风险</text>
+  </g>
+</svg>

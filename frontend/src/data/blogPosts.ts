@@ -12,7 +12,7 @@ export type BlogPost = {
   slug: string;
   /** ISO 日期,如 2026-05-20 */
   date: string;
-  /** 封面图(可选),用项目已有的 text_to_image 占位或本地资源 */
+  /** 封面图(可选),本地 SVG:/image/blog/<slug>.svg,由 scripts/gen_blog_covers.py 生成 */
   cover?: string;
   /** 阅读时长(分钟) */
   readingMinutes: number;
@@ -25,8 +25,7 @@ export const blogPosts: BlogPost[] = [
     slug: 'what-is-geo',
     date: '2026-05-28',
     readingMinutes: 6,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=abstract%20visualization%20of%20AI%20search%20engine%20answering%20questions%2C%20blue%20and%20purple%20gradient%2C%20clean%20tech%20illustration&image_size=landscape_16_9',
+    cover: '/image/blog/what-is-geo.svg',
     zh: {
       title: '什么是 GEO?生成式引擎优化的底层逻辑',
       excerpt:
@@ -106,8 +105,7 @@ That full chain is exactly what Vigilath, an independent third-party AI visibili
     slug: 'how-ai-picks-sources',
     date: '2026-05-20',
     readingMinutes: 7,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=neural%20network%20selecting%20trusted%20documents%20from%20many%20web%20pages%2C%20glowing%20nodes%2C%20dark%20background%2C%20editorial%20tech%20art&image_size=landscape_16_9',
+    cover: '/image/blog/how-ai-picks-sources.svg',
     zh: {
       title: 'AI 凭什么引用一个来源?五个可优化的信号',
       excerpt:
@@ -179,8 +177,7 @@ Vigilath breaks these five signals into quantifiable detection dimensions, turni
     slug: 'geo-for-global-brands',
     date: '2026-05-12',
     readingMinutes: 5,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=global%20brand%20visibility%20across%20multiple%20AI%20search%20engines%2C%20world%20map%20with%20glowing%20connection%20lines%2C%20premium%20tech%20illustration&image_size=landscape_16_9',
+    cover: '/image/blog/geo-for-global-brands.svg',
     zh: {
       title: '出海品牌的 AI 可见性:别只盯着一个引擎',
       excerpt:
@@ -240,8 +237,7 @@ Vigilath covers both overseas and domestic engines at once, placing "how your br
     slug: 'geo-vs-aeo',
     date: '2026-05-04',
     readingMinutes: 5,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=two%20interlocking%20gears%20labeled%20with%20abstract%20AI%20symbols%2C%20minimalist%20diagram%2C%20purple%20and%20teal%2C%20clean%20editorial%20style&image_size=landscape_16_9',
+    cover: '/image/blog/geo-vs-aeo.svg',
     zh: {
       title: 'GEO 与 AEO:一字之差,两件事',
       excerpt:
@@ -305,8 +301,7 @@ Vigilath places AEO ingestion-side detection and GEO recommendation-side auditin
     slug: 'monitor-brand-in-ai-answers',
     date: '2026-04-26',
     readingMinutes: 6,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=dashboard%20monitoring%20brand%20mentions%20across%20AI%20engines%20over%20time%2C%20line%20charts%20and%20alerts%2C%20dark%20ui%2C%20premium%20tech&image_size=landscape_16_9',
+    cover: '/image/blog/monitor-brand-in-ai-answers.svg',
     zh: {
       title: '为什么 AI 可见性必须「持续监控」,而不是测一次',
       excerpt:
@@ -378,8 +373,7 @@ Vigilath turns detection into a repeatable, comparable monitoring view — takin
     slug: 'wikipedia-and-ai-visibility',
     date: '2026-04-18',
     readingMinutes: 6,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=knowledge%20encyclopedia%20entry%20feeding%20into%20AI%20brain%2C%20interconnected%20articles%2C%20blue%20glow%2C%20clean%20conceptual%20illustration&image_size=landscape_16_9',
+    cover: '/image/blog/wikipedia-and-ai-visibility.svg',
     zh: {
       title: '百科词条:被低估的 AI 可见性地基',
       excerpt:
@@ -443,8 +437,7 @@ Encyclopedia entries are slow work, but they're the longest-lasting layer of AI 
     slug: 'make-content-ai-crawlable',
     date: '2026-04-10',
     readingMinutes: 5,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=web%20crawler%20robot%20reading%20a%20website%20structure%2C%20clean%20wireframe%20pages%2C%20teal%20accents%2C%20minimalist%20tech%20diagram&image_size=landscape_16_9',
+    cover: '/image/blog/make-content-ai-crawlable.svg',
     zh: {
       title: '让 AI 爬虫读得懂你:收录侧的四个基本功',
       excerpt:
@@ -506,8 +499,7 @@ Vigilath's ingestion-side checks cover AI crawler reachability, content structur
     slug: 'ai-hallucination-brand-risk',
     date: '2026-04-02',
     readingMinutes: 5,
-    cover:
-      'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=AI%20generating%20a%20distorted%20incorrect%20fact%20about%20a%20brand%2C%20glitch%20effect%2C%20warning%20red%20accents%2C%20conceptual%20editorial%20art&image_size=landscape_16_9',
+    cover: '/image/blog/ai-hallucination-brand-risk.svg',
     zh: {
       title: '当 AI 说错你的品牌:幻觉是新的舆情风险',
       excerpt:
