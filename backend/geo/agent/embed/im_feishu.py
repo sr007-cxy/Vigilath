@@ -61,9 +61,21 @@ def _clean_md(text: str) -> str:
     return t
 
 
+# 裸 URL 自动转显式 markdown 链接。
+# Why:飞书 lark_md 对**裸** URL 会自动转链,但 href 在遇到 `,` `?` `&` `#` 等字符处被
+# 截断 —— 东财股吧 `…/news,VNET,123.html`(逗号)、带 `?query` 的 SERP 链接点开就是半截。
+# 包成 `[url](url)` 后,markdown 链接按 `)` 收尾,逗号/查询参数全保住,href 完整。
+# 负向 lookbehind 跳过已在 `[..](..)` 里的 URL(前面是 `(` 或 `[`),避免重复包。
+_BARE_URL_RE = re.compile(r"(?<![(\[])\bhttps?://[^\s<>()\[\]]+")
+
+
+def _autolink_urls(text: str) -> str:
+    return _BARE_URL_RE.sub(lambda m: f"[{m.group(0)}]({m.group(0)})", text or "")
+
+
 def _to_feishu_md(text: str) -> str:
-    """转成飞书卡片能渲染的 Markdown:标题→加粗、分隔线清理、表格→列表行;加粗/列表/代码飞书本就认。"""
-    return _tables_to_lines(_clean_md(text))
+    """转成飞书卡片能渲染的 Markdown:标题→加粗、分隔线清理、表格→列表行、裸链→显式链接;加粗/列表/代码飞书本就认。"""
+    return _autolink_urls(_tables_to_lines(_clean_md(text)))
 
 
 _SEP = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
@@ -105,7 +117,7 @@ def _build_card_v2(text: str) -> dict:
     elements: list = []
     for blk in _segment(text):
         if blk[0] == "md":
-            content = _clean_md(blk[1]).strip()
+            content = _autolink_urls(_clean_md(blk[1])).strip()
             if content:
                 elements.append({"tag": "markdown", "content": content})
         else:
@@ -294,6 +306,28 @@ async def _bot_open_id(app_id: str, app_secret: str) -> str:
         return oid
     except Exception:  # noqa: BLE001
         return ""
+
+
+async def list_bot_chats(tok: str) -> list[str]:
+    """列出机器人所在的**所有群** chat_id(分页)。供主动推送(简报/告警)群发,不再只发 last_chat_id。失败返回空。"""
+    out: list[str] = []
+    page_token = ""
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            for _ in range(10):                      # 最多 10 页 ×100 = 1000 群,足够
+                params = {"page_size": 100}
+                if page_token:
+                    params["page_token"] = page_token
+                r = await c.get(f"{FEISHU_BASE}/im/v1/chats", params=params,
+                                headers={"Authorization": f"Bearer {tok}"})
+                data = (r.json() or {}).get("data") or {}
+                out.extend(it["chat_id"] for it in (data.get("items") or []) if it.get("chat_id"))
+                page_token = data.get("page_token") or ""
+                if not data.get("has_more") or not page_token:
+                    break
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] 列群失败:%s", e)
+    return out
 
 
 async def _post_card(tok: str, receive_id: str, card: dict, rid_type: str = "chat_id") -> int | None:

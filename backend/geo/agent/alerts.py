@@ -39,15 +39,22 @@ async def _push_im(db, account_id: int, text: str) -> None:
     conns = (db.query(AgentIMConnectorORM)
              .filter(AgentIMConnectorORM.account_id == account_id, AgentIMConnectorORM.enabled == 1).all())
     for c in conns:
-        if not c.last_chat_id:
-            continue
         try:
             if c.platform == "feishu":
-                from geo.agent.embed.im_feishu import _tenant_token, send_reply
+                # 飞书:推到机器人**所在的全部群**(不再只发 last_chat_id 那一个),
+                # 再并上 last_chat_id 兜底(覆盖单聊/列群失败场景),去重后逐个发。
+                from geo.agent.embed.im_feishu import _tenant_token, list_bot_chats, send_reply
                 tok = await _tenant_token(c.app_id, c.app_secret)
-                if tok:
-                    await send_reply(tok, c.last_chat_id, text)
+                if not tok:
+                    continue
+                targets = set(await list_bot_chats(tok))
+                if c.last_chat_id:
+                    targets.add(c.last_chat_id)
+                for cid in targets:
+                    await send_reply(tok, cid, text)
             elif c.platform == "wecom":
+                if not c.last_chat_id:
+                    continue
                 from geo.agent.embed.im_wecom import _send_markdown
                 agentid = (json.loads(c.config_json or "{}") or {}).get("agentid")
                 await _send_markdown(c.app_id, c.app_secret, agentid, c.last_chat_id, text)
