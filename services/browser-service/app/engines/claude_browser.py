@@ -20,6 +20,7 @@ Requires: a valid Anthropic account session (login via browser first).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sys
@@ -78,15 +79,20 @@ class ClaudeBrowserAdapter(EngineAdapter):
             captured_bodies: List[str] = []
 
             def _on_response(response):
-                try:
-                    ct = (response.headers.get("content-type") or "").lower()
-                    if "json" not in ct and "text" not in ct:
-                        return
-                    body = response.text()
-                    if len(body) > 500:
-                        captured_bodies.append(body[:100000])
-                except Exception:
-                    pass
+                # response.text() 是 coroutine,同步 handler 里直接调会漏 await(body 成了
+                # coroutine 对象,引用永远捕不到)。调度成 task 在事件循环里 await 读取 ——
+                # 与 doubao/yuanbao 的 _capture_body 同思路。
+                async def _grab():
+                    try:
+                        ct = (response.headers.get("content-type") or "").lower()
+                        if "json" not in ct and "text" not in ct:
+                            return
+                        body = await response.text()
+                        if len(body) > 500:
+                            captured_bodies.append(body[:100000])
+                    except Exception:
+                        pass
+                asyncio.create_task(_grab())
 
             page.on("response", _on_response)
 
