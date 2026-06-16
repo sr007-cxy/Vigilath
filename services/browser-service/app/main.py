@@ -26,7 +26,7 @@ from .models import (
     FetchTitleRequest, FetchTitleResponse,
     SessionInfo, EnginesResponse, HealthResponse,
 )
-from .session_store import load_storage_state, save_storage_state, clear_session, _SESSION_DIR
+from .session_store import load_storage_state, save_storage_state, clear_session, peek_session_exists, _SESSION_DIR
 
 # ── ENV configuration ──────────────────────────────────────────
 
@@ -709,10 +709,9 @@ async def rotate_hot_session(engine: str, reason: str = "manual"):
 async def list_sessions():
     results = []
     for name in _adapters:
-        state = load_storage_state(name)
         results.append(SessionInfo(
             engine=name,
-            has_session=bool(state),
+            has_session=peek_session_exists(name),  # 只读,绝不 check-out(状态查询不烧配额/不泄漏租约)
             name=ENGINE_DISPLAY_NAMES.get(name, name),
         ))
     return results
@@ -722,10 +721,9 @@ async def list_sessions():
 async def get_session(engine: str):
     if engine not in _adapters:
         raise HTTPException(status_code=404, detail=f"Unknown engine: {engine}")
-    state = load_storage_state(engine)
     return SessionInfo(
         engine=engine,
-        has_session=bool(state),
+        has_session=peek_session_exists(engine),  # 只读,绝不 check-out
         name=ENGINE_DISPLAY_NAMES.get(engine, engine),
     )
 

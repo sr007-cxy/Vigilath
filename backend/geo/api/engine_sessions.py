@@ -287,6 +287,9 @@ def check_out(
     def _base():
         q = (
             db.query(EngineSessionORM)
+            # 行级锁 + 跳过已被其它并发 check-out 锁住的行:消除"两个 worker .first() 拿到
+            # 同一条、双重租用 + use_count 漏计"的竞态(Postgres 生效;SQLite 写串行下 no-op)。
+            .with_for_update(skip_locked=True)
             .filter(EngineSessionORM.engine == engine)
             .filter(EngineSessionORM.status == "active")
             .filter(EngineSessionORM.captcha_count < _CAPTCHA_QUARANTINE_THRESHOLD)

@@ -266,6 +266,19 @@ def load_storage_state(engine_name: str) -> Optional[dict]:
         return None
 
 
+def peek_session_exists(engine_name: str) -> bool:
+    """只读探测某引擎本地是否有登录态文件 —— **绝不 check-out**。
+
+    给 `/sessions` 这类状态/健康查询用:`load_storage_state` 在 pool 模式下第一步
+    就 `_pool_checkout`(租账号 + use_count++),而状态查询不会 check-in →
+    每次轮询都泄漏一个租约、白烧当日配额。状态查询只该读不该租,故走本函数。
+
+    返回的是"本机有无登录态文件"这个无副作用的存活信号;pool 模式下账号可用性的
+    权威视图在中心的 /admin/engine-sessions(那边才反映池子真实状态)。
+    """
+    return (_SESSION_DIR / f"{engine_name}.json").exists()
+
+
 def clear_session(engine_name: str) -> None:
     """Remove saved session for the given engine."""
     path = _SESSION_DIR / f"{engine_name}.json"
