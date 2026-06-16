@@ -83,14 +83,14 @@ def _today_risk_posts(db, acc) -> list[dict]:
     max_age = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
     rec = (date.today() - timedelta(days=max_age - 1)).isoformat()
     sql = text(f"""
-        SELECT p.title, p.url, a.sentiment_label, a.risk_level
+        SELECT p.title, p.url, a.sentiment_label, a.risk_level, p.publish_time
         FROM {schema}.posts p JOIN {schema}.analyses a
           ON p.source = a.source AND p.post_id = a.post_id
         WHERE p.symbol = :sym AND a.is_relevant = 1
           AND substr(p.ingested_at, 1, 10) = :today
           AND COALESCE(p.publish_time, p.ingested_at) >= :rec
           AND a.risk_level IN ('medium', 'high')
-        ORDER BY CASE a.risk_level WHEN 'high' THEN 0 ELSE 1 END, p.publish_time DESC
+        ORDER BY p.publish_time DESC NULLS LAST, CASE a.risk_level WHEN 'high' THEN 0 ELSE 1 END
         LIMIT 10
     """)
     try:
@@ -99,7 +99,8 @@ def _today_risk_posts(db, acc) -> list[dict]:
         return []
     return [{"title": (t or "(无标题)")[:60], "url": u or "",
              "label": _LABEL_ZH.get((lab or "").lower(), lab or ""),
-             "risk": _RISK_ZH.get((rk or "").lower(), rk or "")} for t, u, lab, rk in rows]
+             "risk": _RISK_ZH.get((rk or "").lower(), rk or ""),
+             "time": str(pt)[:10] if pt else ""} for t, u, lab, rk, pt in rows]
 
 
 async def scan_and_deliver() -> dict:
@@ -128,10 +129,11 @@ async def scan_and_deliver() -> dict:
             posts = _today_risk_posts(db, acc)
             lines = [f"⚠️ {acc.target} 今日出现 {high} 条中高风险负面(共 {kpi.get('total_today', 0)} 条提及):"]
             for i, p in enumerate(posts, 1):
-                tag = " / ".join(x for x in (p["label"], p["risk"]) if x)
-                lines.append(f"{i}. [{p['title']}]({p['url']}) — {tag}" if p["url"] else f"{i}. {p['title']} — {tag}")
+                meta = " / ".join(x for x in (p["label"], p["risk"], p["time"]) if x)
+                head = f"[{p['title']}]({p['url']})" if p["url"] else p["title"]
+                lines.append(f"{i}. {head} — {meta}")
             if not posts:
-                lines.append("(明细链接本次未取到,请到舆情页查看)")
+                lines.append("(暂无最新风险帖明细)")
             body = "\n".join(lines)
             if _insert_notification(db, acc.user_id, title, body, f"sent:{acc.user_id}:{today}"):
                 delivered += 1
