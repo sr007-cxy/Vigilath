@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime
 
 from geo.database import SessionLocal
 from geo.models.agent import AgentIMConnectorORM, AgentNotificationORM
 from geo.models.sentiment import SentimentAccountORM
 
-HIGH_RISK_THRESHOLD = int(__import__("os").environ.get("SENTIMENT_ALERT_THRESHOLD", "1"))
+HIGH_RISK_THRESHOLD = int(os.environ.get("SENTIMENT_ALERT_THRESHOLD", "1"))
+# 控制台地址(告警里给「查看舆情详情」链接用);各环境可用 env 覆盖,默认指向正式控制台。
+APP_BASE_URL = (os.environ.get("AGENT_APP_BASE_URL") or "https://www.vigilath.com").rstrip("/")
 
 
 def _insert_notification(db, account_id: int, title: str, body: str, dedup_key: str) -> bool:
@@ -82,9 +85,12 @@ async def scan_and_deliver() -> dict:
             high = int(kpi.get("high_risk") or 0)
             if high < HIGH_RISK_THRESHOLD:
                 continue
-            title = "舆情高风险提醒"
-            body = (f"⚠️ {acc.target} 今日出现 {high} 条高风险负面"
-                    f"(共 {kpi.get('total_today', 0)} 条提及)。建议尽快查看舆情详情并处置。")
+            # 注:此处 high = kpi.high_risk,口径是 risk_level IN ('medium','high'),即「中+高风险」之和,
+            # 故文案统一写「中高风险」,不夸大成「高风险」(见 sentinel service.py 的 high_risk 聚合)。
+            title = "舆情风险提醒"
+            body = (f"⚠️ {acc.target} 今日出现 {high} 条中高风险负面"
+                    f"(共 {kpi.get('total_today', 0)} 条提及)。建议尽快处置。\n"
+                    f"[点此查看舆情详情]({APP_BASE_URL}/sentiment)")
             if _insert_notification(db, acc.user_id, title, body, f"sent:{acc.user_id}:{today}"):
                 delivered += 1
                 await _push_im(db, acc.user_id, f"**{title}**\n{body}")
