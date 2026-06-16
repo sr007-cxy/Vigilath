@@ -72,35 +72,34 @@ _LABEL_ZH = {"bearish": "偏空", "看跌": "偏空", "利空": "偏空", "negat
 _RISK_ZH = {"high": "高风险", "medium": "中风险", "low": "低风险"}
 
 
-def _today_risk_posts(db, acc) -> list[dict]:
-    """取该账号今日「中/高风险」帖子(与 sentinel KPI 同口径:今日入库 + 相关 + 新鲜),带标题/链接/情感/风险。"""
-    from datetime import date, timedelta
+def _today_published_risk(db, acc):
+    """**只看当日发布**(publish_time = 今天)的相关帖,返回(中/高风险清单[最多10条], 当日发布相关总数)。
+
+    关键:按 publish_time 当天过滤,而非入库时间——旧文(2016/2021)今天被重爬不会算进来。
+    """
+    from datetime import date
 
     from sqlalchemy import text
 
     schema = f"tenant_{int(acc.id)}"
     today = date.today().isoformat()
-    max_age = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
-    rec = (date.today() - timedelta(days=max_age - 1)).isoformat()
-    sql = text(f"""
-        SELECT p.title, p.url, a.sentiment_label, a.risk_level, p.publish_time
-        FROM {schema}.posts p JOIN {schema}.analyses a
-          ON p.source = a.source AND p.post_id = a.post_id
-        WHERE p.symbol = :sym AND a.is_relevant = 1
-          AND substr(p.ingested_at, 1, 10) = :today
-          AND COALESCE(p.publish_time, p.ingested_at) >= :rec
-          AND a.risk_level IN ('medium', 'high')
-        ORDER BY p.publish_time DESC NULLS LAST, CASE a.risk_level WHEN 'high' THEN 0 ELSE 1 END
-        LIMIT 10
-    """)
+    base = (f"FROM {schema}.posts p JOIN {schema}.analyses a "
+            f"  ON p.source = a.source AND p.post_id = a.post_id "
+            f"WHERE p.symbol = :sym AND a.is_relevant = 1 "
+            f"  AND substr(CAST(p.publish_time AS text), 1, 10) = :today")
     try:
-        rows = db.execute(sql, {"sym": acc.ticker, "today": today, "rec": rec}).fetchall()
-    except Exception:  # noqa: BLE001 — schema 不存在/取数失败:返回空,让告警退化为仅计数
-        return []
-    return [{"title": (t or "(无标题)")[:60], "url": u or "",
-             "label": _LABEL_ZH.get((lab or "").lower(), lab or ""),
-             "risk": _RISK_ZH.get((rk or "").lower(), rk or ""),
-             "time": str(pt)[:10] if pt else ""} for t, u, lab, rk, pt in rows]
+        total = db.execute(text(f"SELECT count(*) {base}"), {"sym": acc.ticker, "today": today}).scalar() or 0
+        rows = db.execute(text(
+            f"SELECT p.title, p.url, a.sentiment_label, a.risk_level, p.publish_time {base} "
+            f"  AND a.risk_level IN ('medium', 'high') ORDER BY p.publish_time DESC NULLS LAST LIMIT 10"),
+            {"sym": acc.ticker, "today": today}).fetchall()
+    except Exception:  # noqa: BLE001 — schema 不存在/取数失败:不触发
+        return [], 0
+    posts = [{"title": (t or "(无标题)")[:60], "url": u or "",
+              "label": _LABEL_ZH.get((lab or "").lower(), lab or ""),
+              "risk": _RISK_ZH.get((rk or "").lower(), rk or ""),
+              "time": str(pt)[:10] if pt else ""} for t, u, lab, rk, pt in rows]
+    return posts, int(total)
 
 
 async def scan_and_deliver() -> dict:
@@ -108,32 +107,21 @@ async def scan_and_deliver() -> dict:
     delivered = 0
     scanned = 0
     try:
-        from geo.services import sentinel_client
-
         accounts = db.query(SentimentAccountORM).filter(SentimentAccountORM.active.is_(True)).all()
         today = datetime.utcnow().strftime("%Y-%m-%d")
         for acc in accounts:
             scanned += 1
-            try:
-                data = await asyncio.to_thread(sentinel_client.get_today, acc.id, acc.ticker, 1)
-            except Exception:  # noqa: BLE001 — 单账号取数失败不阻断其余
+            # 只看**当日发布**的中/高风险帖(旧文今天重爬不触发);风险数 ≥ 阈值才推
+            posts, total = _today_published_risk(db, acc)
+            if len(posts) < HIGH_RISK_THRESHOLD:
                 continue
-            kpi = (data or {}).get("kpi") or {}
-            high = int(kpi.get("high_risk") or 0)
-            if high < HIGH_RISK_THRESHOLD:
-                continue
-            # 注:此处 high = kpi.high_risk,口径是 risk_level IN ('medium','high'),即「中+高风险」之和,
-            # 故文案统一写「中高风险」,不夸大成「高风险」(见 sentinel service.py 的 high_risk 聚合)。
             title = "舆情风险提醒"
-            # 直接列出中/高风险帖子 + 各自来源链接(列表而非表格:飞书 lark_md 列表里的链接可点,表格单元格不可点)
-            posts = _today_risk_posts(db, acc)
-            lines = [f"⚠️ {acc.target} 今日出现 {high} 条中高风险负面(共 {kpi.get('total_today', 0)} 条提及):"]
+            # 列表(非表格)展示:飞书 lark_md 列表里的链接可点,表格单元格不可点
+            lines = [f"⚠️ {acc.target} 今日新增 {len(posts)} 条中高风险负面(当日共 {total} 条相关):"]
             for i, p in enumerate(posts, 1):
                 meta = " / ".join(x for x in (p["label"], p["risk"], p["time"]) if x)
                 head = f"[{p['title']}]({p['url']})" if p["url"] else p["title"]
                 lines.append(f"{i}. {head} — {meta}")
-            if not posts:
-                lines.append("(暂无最新风险帖明细)")
             body = "\n".join(lines)
             if _insert_notification(db, acc.user_id, title, body, f"sent:{acc.user_id}:{today}"):
                 delivered += 1
