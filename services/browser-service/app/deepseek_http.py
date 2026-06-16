@@ -115,6 +115,7 @@ def _parse_stream(lines) -> tuple[str, list]:
     """
     text = ""
     citations: list = []
+    seen_urls: set = set()
     current = None
     for line in lines:
         if not line or not line.startswith("data:"):
@@ -131,8 +132,15 @@ def _parse_stream(lines) -> tuple[str, list]:
         if "p" in ev:
             current = ev["p"]
         v = ev.get("v")
+        # 引用:累积 + 按 url 去重(deepseek 可能分多个 search_results 事件增量发,
+        # 早先版本 `citations = v` 覆盖会丢掉前面批次 → 引用数被压到最后一批的量)
         if ev.get("p") == "response/search_results" and isinstance(v, list):
-            citations = v
+            for c in v:
+                if isinstance(c, dict):
+                    u = c.get("url", "")
+                    if u and u not in seen_urls:
+                        seen_urls.add(u)
+                        citations.append(c)
         elif current == "response/content" and isinstance(v, str):
             text += v
     cites = []
