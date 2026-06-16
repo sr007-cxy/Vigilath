@@ -66,6 +66,41 @@ async def _push_im(db, account_id: int, text: str) -> None:
             pass
 
 
+# 情感 / 风险英文标签 → 中文(告警清单展示用,不混英文)
+_LABEL_ZH = {"bearish": "偏空", "看跌": "偏空", "利空": "偏空", "negative": "偏空",
+             "bullish": "偏多", "看涨": "偏多", "neutral": "中性", "mixed": "复杂"}
+_RISK_ZH = {"high": "高风险", "medium": "中风险", "low": "低风险"}
+
+
+def _today_risk_posts(db, acc) -> list[dict]:
+    """取该账号今日「中/高风险」帖子(与 sentinel KPI 同口径:今日入库 + 相关 + 新鲜),带标题/链接/情感/风险。"""
+    from datetime import date, timedelta
+
+    from sqlalchemy import text
+
+    schema = f"tenant_{int(acc.id)}"
+    today = date.today().isoformat()
+    max_age = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
+    rec = (date.today() - timedelta(days=max_age - 1)).isoformat()
+    sql = text(f"""
+        SELECT p.title, p.url, a.sentiment_label, a.risk_level
+        FROM {schema}.posts p JOIN {schema}.analyses a USING (source, post_id, symbol)
+        WHERE p.symbol = :sym AND a.is_relevant = 1
+          AND substr(p.ingested_at, 1, 10) = :today
+          AND COALESCE(p.publish_time, p.ingested_at) >= :rec
+          AND a.risk_level IN ('medium', 'high')
+        ORDER BY CASE a.risk_level WHEN 'high' THEN 0 ELSE 1 END, p.publish_time DESC
+        LIMIT 10
+    """)
+    try:
+        rows = db.execute(sql, {"sym": acc.ticker, "today": today, "rec": rec}).fetchall()
+    except Exception:  # noqa: BLE001 — schema 不存在/取数失败:返回空,让告警退化为仅计数
+        return []
+    return [{"title": (t or "(无标题)")[:60], "url": u or "",
+             "label": _LABEL_ZH.get((lab or "").lower(), lab or ""),
+             "risk": _RISK_ZH.get((rk or "").lower(), rk or "")} for t, u, lab, rk in rows]
+
+
 async def scan_and_deliver() -> dict:
     db = SessionLocal()
     delivered = 0
@@ -88,9 +123,15 @@ async def scan_and_deliver() -> dict:
             # 注:此处 high = kpi.high_risk,口径是 risk_level IN ('medium','high'),即「中+高风险」之和,
             # 故文案统一写「中高风险」,不夸大成「高风险」(见 sentinel service.py 的 high_risk 聚合)。
             title = "舆情风险提醒"
-            body = (f"⚠️ {acc.target} 今日出现 {high} 条中高风险负面"
-                    f"(共 {kpi.get('total_today', 0)} 条提及)。建议尽快处置。\n"
-                    f"[点此查看舆情详情]({APP_BASE_URL}/sentiment)")
+            # 直接列出中/高风险帖子 + 各自来源链接(列表而非表格:飞书 lark_md 列表里的链接可点,表格单元格不可点)
+            posts = _today_risk_posts(db, acc)
+            lines = [f"⚠️ {acc.target} 今日出现 {high} 条中高风险负面(共 {kpi.get('total_today', 0)} 条提及):"]
+            for i, p in enumerate(posts, 1):
+                tag = " / ".join(x for x in (p["label"], p["risk"]) if x)
+                lines.append(f"{i}. [{p['title']}]({p['url']}) — {tag}" if p["url"] else f"{i}. {p['title']} — {tag}")
+            if not posts:
+                lines.append("(明细链接本次未取到,请到舆情页查看)")
+            body = "\n".join(lines)
             if _insert_notification(db, acc.user_id, title, body, f"sent:{acc.user_id}:{today}"):
                 delivered += 1
                 await _push_im(db, acc.user_id, f"**{title}**\n{body}")

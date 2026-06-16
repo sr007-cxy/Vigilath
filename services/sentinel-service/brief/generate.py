@@ -81,7 +81,7 @@ REDUCE_SYSTEM = """你是一名舆情分析师，正在为公司公关 / 投关 
 若空：一句话说明"今日未见 medium 及以上风险信号"
 
 ## 四、值得关注的帖子（按 stats.noteworthy_top_ids 顺序，最多 5 条）
-每条：[标题](url) — 作者 — sentiment_label / risk_level — 一句话点评
+每条：[标题](url) — 作者 — 情感倾向 / 风险等级（都用中文） — 一句话点评
 
 ## 五、建议动作
 - 1-3 条具体建议
@@ -91,6 +91,9 @@ REDUCE_SYSTEM = """你是一名舆情分析师，正在为公司公关 / 投关 
 - 所有引用 post_id 必须能在 posts 中找到
 - 不编造帖子或链接；若数据为空，明确说"无数据"
 - 整篇控制在 600-1000 字
+- **情感倾向 / 风险等级一律用中文，绝不出现英文词或中英混写**（不要写 bearish/neutral/medium 这类，也不要"中性(neutral)"这种括号注释）。
+  情感映射:bullish→看多、bearish→看空、neutral→中性、mixed→复杂;风险映射:low→低风险、medium→中风险、high→高风险。
+  例:"情感分布:2 条看空、2 条中性"(不是"2 条偏空(bearish)、2 条中性(neutral)")。
 """
 
 
@@ -268,6 +271,17 @@ def generate_brief(symbol: str, date: str | None = None,
     if not rows:
         sys.exit(f"no analyses found for {symbol} on {date}. "
                  f"Run `python cli.py analyze --symbol {symbol}` first.")
+
+    # 新鲜度闸门:简报只讲最近 N 天的"内容"(按 publish_time),把"今天爬到但
+    # 发布于 2024 年"的旧帖排除掉。publish_time 已知且早于窗口的丢弃;无日期的
+    # (多为搜索结果未解析到发布时间)保留——它们都是今天入库,默认当作新内容。
+    # 极端情况(当天全是旧内容)回退原始 rows,避免简报直接报"无数据"。
+    from datetime import timedelta
+    max_age = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
+    _cutoff = (_date.today() - timedelta(days=max_age - 1)).isoformat()
+    _recent = [r for r in rows
+               if not (r.get("publish_time") and r["publish_time"][:10] < _cutoff)]
+    rows = _recent or rows
 
     stats = _summarize_analyses(rows)
     relevant = [r for r in rows if r["is_relevant"]]
