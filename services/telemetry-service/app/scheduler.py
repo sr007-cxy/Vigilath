@@ -372,16 +372,36 @@ async def _maybe_run_briefings(now_utc: datetime) -> None:
 
 
 def _reap_stale_claims() -> None:
-    """worker 崩溃/重启后认领的任务会一直 claimed 不交结果 → 超时退回 queued,别的 worker 接手."""
+    """worker 崩溃/重启后认领的任务会一直 claimed 不交结果 → 超时退回 queued,别的 worker 接手.
+
+    两个队列都要回收:
+      - dispatch_tasks(内部舆情)：无条件退回 queued(claim 时已 attempts++,周期收尾兜底)。
+      - browser_jobs(对外网关,有 max_attempts)：还有重试余量退回 queued;**重试耗尽落终态
+        failed** —— 否则 worker 反复崩溃的 job 永远卡 claimed,外部调用方 get_job 轮询不到终态。
+    """
     cutoff = datetime.utcnow() - timedelta(seconds=CLAIM_STALE_SEC)
+    now = datetime.utcnow()
     with db_session() as s:
         res = s.execute(text(
             "UPDATE dispatch_tasks SET status='queued', claimed_by=NULL, claimed_at=NULL "
             "WHERE status='claimed' AND claimed_at < :cutoff"
         ), {"cutoff": cutoff})
-    n = res.rowcount or 0
-    if n:
-        log.info("[dispatch] reaped %d stale claims → requeued", n)
+        n = res.rowcount or 0
+        # browser_jobs:有重试余量 → 退回队列
+        jr = s.execute(text(
+            "UPDATE browser_jobs SET status='queued', claimed_by=NULL, claimed_at=NULL "
+            "WHERE status='claimed' AND claimed_at < :cutoff AND attempts < max_attempts"
+        ), {"cutoff": cutoff})
+        # browser_jobs:重试耗尽 → 终态失败(外部调用方能拿到结果,不会无限轮询)
+        jf = s.execute(text(
+            "UPDATE browser_jobs SET status='failed', finished_at=:now, "
+            "error=COALESCE(error, 'worker lost (stale claim reaped)') "
+            "WHERE status='claimed' AND claimed_at < :cutoff AND attempts >= max_attempts"
+        ), {"cutoff": cutoff, "now": now})
+    nj_requeue, nj_fail = (jr.rowcount or 0), (jf.rowcount or 0)
+    if n or nj_requeue or nj_fail:
+        log.info("[dispatch] reaped stale claims → dispatch_tasks requeued=%d, "
+                 "browser_jobs requeued=%d failed=%d", n, nj_requeue, nj_fail)
 
 
 async def _tick() -> None:
