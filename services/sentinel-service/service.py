@@ -38,6 +38,11 @@ sys.path.insert(0, str(ROOT))
 DATA_DIR = Path(os.environ.get("SENTINEL_DATA_DIR", str(ROOT / "data"))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# 展示新鲜度窗口(天):today 聚合 / Top5 / 风险分布 / 简报只露最近 N 天的"内容"
+# (按 publish_time,不是入库时间),把"今天爬到但发布于 2024 年"的旧帖挡在展示外。
+# 抓取仍全量增量入库,只在展示层收口。默认 3 天;要"最近 24 小时"设为 1。
+DISPLAY_MAX_AGE_DAYS = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
+
 
 def _account_db_path(account_id: int) -> Path:
     """历史名:返回 `account_{N}/yuqing.db` 路径,**主库已切 PG**,这里只是
@@ -728,8 +733,12 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+        # 内容新鲜度下限:发布日期(publish_time)早于此的旧帖,即便今天才爬到也不展示。
+        recency_cutoff = (date.today() - timedelta(days=DISPLAY_MAX_AGE_DAYS - 1)).isoformat()
 
         # 当日 KPI:posts × analyses(仅 is_relevant=1,与下方趋势图/风险饼/文章列表保持一致)
+        # 追加新鲜度闸门:COALESCE(publish_time, ingested_at) >= recency_cutoff —— publish_time
+        # 已知且陈旧(如今天爬到的 2024 文章)被剔除;无日期的回退入库时间(都是今天入库,算新)。
         kpi_sql = """
             SELECT
                 count(*) AS total,
@@ -741,9 +750,10 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             WHERE p.symbol = %s
               AND a.is_relevant = 1
               AND substr(p.ingested_at, 1, 10) = %s
+              AND COALESCE(p.publish_time, p.ingested_at) >= %s
         """
-        kpi_row = conn.execute(kpi_sql, (ticker, today)).fetchone()
-        prev_row = conn.execute(kpi_sql, (ticker, yesterday)).fetchone()
+        kpi_row = conn.execute(kpi_sql, (ticker, today, recency_cutoff)).fetchone()
+        prev_row = conn.execute(kpi_sql, (ticker, yesterday, recency_cutoff)).fetchone()
 
         # N 天情感堆叠柱:严格按 publish_time 分桶(NULL 的丢弃).
         # Why: 爬虫单次能拉回半年历史内容,若按 ingested_at 分桶,所有历史都
@@ -786,14 +796,15 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             else:
                 trend.append({"date": d[5:], "bullish": 0, "neutral": 0, "bearish": 0, "mixed": 0})
 
-        # 风险分布(全量,所有时间):用于饼图
+        # 风险分布(新鲜度窗口内):用于饼图。同样按 publish_time 收口,不再算陈旧内容。
         risk_rows = list(conn.execute("""
             SELECT a.risk_level AS lvl, count(*) AS c
             FROM analyses a JOIN posts p
               ON a.source = p.source AND a.post_id = p.post_id
             WHERE a.symbol = %s AND a.is_relevant = 1
+              AND COALESCE(p.publish_time, p.ingested_at) >= %s
             GROUP BY lvl
-        """, (ticker,)))
+        """, (ticker, recency_cutoff)))
         RISK_COLORS = {"none": "#94a3b8", "low": "#fbbf24", "medium": "#fb923c", "high": "#ef4444"}
         risk_dist = []
         for lvl in ("none", "low", "medium", "high"):
@@ -819,11 +830,12 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             FROM analyses a JOIN posts p
               ON p.source = a.source AND p.post_id = a.post_id
             WHERE a.symbol = %s AND a.is_relevant = 1
+              AND COALESCE(p.publish_time, p.ingested_at) >= %s
             ORDER BY (coalesce(a.influence_potential,0)
                      * abs(coalesce(a.sentiment_score,0)) + 0.01) DESC,
                      coalesce(p.view_count,0) DESC
             LIMIT 5
-        """, (ticker,)))
+        """, (ticker, recency_cutoff)))
         top_posts = [_row_to_dict(r) for r in top_rows]
 
         total_today = kpi_row["total"] or 0

@@ -84,7 +84,8 @@ def _today_risk_posts(db, acc) -> list[dict]:
     rec = (date.today() - timedelta(days=max_age - 1)).isoformat()
     sql = text(f"""
         SELECT p.title, p.url, a.sentiment_label, a.risk_level
-        FROM {schema}.posts p JOIN {schema}.analyses a USING (source, post_id, symbol)
+        FROM {schema}.posts p JOIN {schema}.analyses a
+          ON p.source = a.source AND p.post_id = a.post_id
         WHERE p.symbol = :sym AND a.is_relevant = 1
           AND substr(p.ingested_at, 1, 10) = :today
           AND COALESCE(p.publish_time, p.ingested_at) >= :rec
