@@ -25,6 +25,7 @@ from .sogou import sogou_search
 from .searxng import searxng_search
 from .weibo import weibo_search
 from .zhihu import zhihu_search
+from .xueqiu import xueqiu_search
 
 
 # SearXNG 单引擎(server 端聚合多上游 + 处理反爬/IP池);自带引擎保留可回退。
@@ -285,6 +286,7 @@ _DIRECT_NEG = ("欠薪", "讨薪", "维权", "做空", "裁员", "爆雷", "亏�
 _DIRECT_SOURCES = (
     ("weibo", "WEIBO_COOKIE", weibo_search),
     ("zhihu", "ZHIHU_COOKIE", zhihu_search),
+    ("xueqiu", None, xueqiu_search),     # 无需 cookie(WAF 走 Scrapling 浏览器,较重)
 )
 
 
@@ -302,10 +304,12 @@ def collect_direct_sources(plan: dict, symbol: str, conn, seen: set[str],
     queries = [primary] + [f"{primary} {n}" for n in _DIRECT_NEG]
     per_source: dict[str, int] = {}
     for name, env_key, fn in _DIRECT_SOURCES:
-        if not os.environ.get(env_key):
+        if env_key and not os.environ.get(env_key):
             continue
+        # 雪球走浏览器较重,单次"世纪互联"查询已返回大量讨论;只用实体词,不跑负面词矩阵
+        qs = [primary] if name == "xueqiu" else queries
         got = 0
-        for q in queries:
+        for q in qs:
             try:
                 rows = fn(q, max_results=max_results)
             except Exception as e:
