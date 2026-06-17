@@ -44,9 +44,27 @@ async def _push_im(db, account_id: int, text: str) -> None:
     for c in conns:
         try:
             if c.platform == "feishu":
-                # 飞书:推到机器人**所在的全部群**(不再只发 last_chat_id 那一个),
-                # 再并上 last_chat_id 兜底(覆盖单聊/列群失败场景),去重后逐个发。
-                from geo.agent.embed.im_feishu import _tenant_token, list_bot_chats, send_reply
+                from geo.agent.embed.im_feishu import (
+                    _tenant_token, list_bot_chats, send_reply, send_webhook)
+                # 统一推送配置:连接器 config_json.push_targets = [{type,name,enabled,...}]
+                #   type=webhook → {url, secret};type=bot → {chat_id}
+                # 配了就**只发已启用的**(webhook + 指定群,可单独开关);没配则维持旧行为。
+                cfg = json.loads(c.config_json or "{}") or {}
+                push_targets = [t for t in (cfg.get("push_targets") or [])
+                                if t.get("enabled", True)]
+                if push_targets:
+                    tok = None
+                    for t in push_targets:
+                        typ = t.get("type")
+                        if typ == "webhook" and t.get("url"):
+                            await send_webhook(t["url"], text, t.get("secret", ""))
+                        elif typ == "bot" and t.get("chat_id"):
+                            if tok is None:
+                                tok = await _tenant_token(c.app_id, c.app_secret)
+                            if tok:
+                                await send_reply(tok, t["chat_id"], text)
+                    continue
+                # 兜底(未配 push_targets):推到机器人所在全部群 + last_chat_id
                 tok = await _tenant_token(c.app_id, c.app_secret)
                 if not tok:
                     continue

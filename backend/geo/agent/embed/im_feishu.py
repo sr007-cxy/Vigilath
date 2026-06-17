@@ -8,6 +8,9 @@
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -403,6 +406,31 @@ async def send_reply(tok: str, receive_id: str, text: str, rid_type: str = "chat
                          json={"receive_id": receive_id, "msg_type": "text", "content": json.dumps({"text": plain})})
     except Exception as e:  # noqa: BLE001
         log.warning("[im-feishu] 纯文本兜底也失败:%s", e)
+
+
+async def send_webhook(url: str, text: str, secret: str = "") -> bool:
+    """推到飞书**自定义机器人 webhook**(群里加的"自定义机器人",只需粘 URL,可选签名)。
+
+    与 send_reply 用同一张卡片;secret 非空时按飞书算法做 HMAC-SHA256 签名
+    (string_to_sign = f"{timestamp}\\n{secret}",空 body)。best-effort,返回是否成功。
+    """
+    payload: dict = {"msg_type": "interactive", "card": _result_card(text)}
+    if secret:
+        ts = str(int(time.time()))
+        digest = hmac.new(f"{ts}\n{secret}".encode("utf-8"), b"", hashlib.sha256).digest()
+        payload["timestamp"] = ts
+        payload["sign"] = base64.b64encode(digest).decode("utf-8")
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(url, json=payload)
+        d = r.json() or {}
+        ok = d.get("code", d.get("StatusCode", 0)) == 0
+        if not ok:
+            log.warning("[im-feishu] webhook 返回非0:%s", str(d)[:120])
+        return ok
+    except Exception as e:  # noqa: BLE001
+        log.warning("[im-feishu] webhook 推送异常:%s", e)
+        return False
 
 
 async def _send_text(app_id: str, app_secret: str, receive_id: str, text: str, rid_type: str = "chat_id",
