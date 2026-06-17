@@ -83,6 +83,10 @@ export function AgentIntegrationTab() {
   const [mm, setMm] = useState<string[][]>([]);            // [[event_key, query], ...]
   const [cfgBusy, setCfgBusy] = useState(false);
   const [cfgMsg, setCfgMsg] = useState('');
+  // 推送目标:webhook(可多个)+ bot 群,简报/告警群发
+  const [pt, setPt] = useState<Array<{ type: string; name: string; url: string; secret: string; chat_id: string; enabled: boolean }>>([]);
+  const [ptBusy, setPtBusy] = useState(false);
+  const [ptMsg, setPtMsg] = useState('');
 
   const origin = window.location.origin;
   const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
@@ -105,13 +109,21 @@ export function AgentIntegrationTab() {
 
   const openCfg = async (cid: number) => {
     if (cfgFor === cid) { setCfgFor(null); return; }
-    setCfgFor(cid); setCfgMsg(''); setQa([]); setMm([]);
+    setCfgFor(cid); setCfgMsg(''); setQa([]); setMm([]); setPt([]); setPtMsg('');
     try {
       const r = await fetch(`${API_BASE}/account/im-connector/${cid}/quick-config`, { headers: authHeaders() });
       const d = await r.json();
       setQa((d.quick_actions || []).map((x: string[]) => [x[0] || '', x[1] || '']));
       setMm(Object.entries(d.menu_map || {}).map(([k, v]) => [k, String(v)]));
     } catch { setCfgMsg('加载失败'); }
+    try {
+      const rp = await fetch(`${API_BASE}/account/im-connector/${cid}/push-targets`, { headers: authHeaders() });
+      const dp = await rp.json();
+      setPt((dp.push_targets || []).map((t: Record<string, unknown>) => ({
+        type: String(t.type || 'webhook'), name: String(t.name || ''), url: String(t.url || ''),
+        secret: String(t.secret || ''), chat_id: String(t.chat_id || ''), enabled: t.enabled !== false,
+      })));
+    } catch { /* 推送目标可选,加载失败不阻塞 */ }
   };
   const saveCfg = async (cid: number) => {
     setCfgBusy(true); setCfgMsg('');
@@ -125,6 +137,17 @@ export function AgentIntegrationTab() {
       if (!r.ok) throw new Error(await r.text());
       setCfgMsg('✅ 已保存,下次回复/菜单点击即生效');
     } catch { setCfgMsg('保存失败'); } finally { setCfgBusy(false); }
+  };
+  const savePt = async (cid: number) => {
+    setPtBusy(true); setPtMsg('');
+    try {
+      const push_targets = pt.filter((t) => (t.type === 'webhook' && t.url.trim()) || (t.type === 'bot' && t.chat_id.trim()));
+      const r = await fetch(`${API_BASE}/account/im-connector/${cid}/push-targets`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ push_targets }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setPtMsg('✅ 已保存,简报/告警将按此推送');
+    } catch { setPtMsg('保存失败'); } finally { setPtBusy(false); }
   };
 
   const saveIm = async () => {
@@ -336,6 +359,35 @@ export function AgentIntegrationTab() {
                 <div className="mt-3 flex items-center gap-3">
                   <button onClick={() => void saveCfg(c.id)} disabled={cfgBusy} className="px-4 py-1.5 rounded-lg text-sm font-semibold" style={{ background: 'var(--accent-primary)', color: '#fff', opacity: cfgBusy ? 0.5 : 1 }}>{cfgBusy ? '保存中…' : '保存配置'}</button>
                   {cfgMsg && <span className="text-xs" style={{ color: cfgMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{cfgMsg}</span>}
+                </div>
+
+                {/* 推送目标:webhook(可多个)+ bot 群,简报/告警群发 */}
+                <div className="text-sm font-semibold text-primary mt-5 mb-1">推送目标(简报/告警群发)</div>
+                <p className="text-xs text-secondary mb-2">支持多个飞书自定义机器人 webhook + 应用机器人群,每个可单独开关。webhook:飞书群「设置 → 群机器人 → 添加自定义机器人」复制 URL(有加签则填密钥);群机器人:填群 chat_id(oc_…)。</p>
+                {pt.map((t, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-2 flex-wrap">
+                    <select value={t.type} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, type: e.target.value } : r))} className="px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                      <option value="webhook">webhook</option>
+                      <option value="bot">群机器人</option>
+                    </select>
+                    <input value={t.name} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, name: e.target.value } : r))} placeholder="名称 如 测试群" className="px-2 py-1.5 rounded-md text-sm w-28" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                    {t.type === 'webhook' ? (
+                      <>
+                        <input value={t.url} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, url: e.target.value } : r))} placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" className="flex-1 px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', minWidth: '200px' }} />
+                        <input value={t.secret} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, secret: e.target.value } : r))} placeholder="加签密钥(可选)" className="px-2 py-1.5 rounded-md text-sm w-32" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+                      </>
+                    ) : (
+                      <input value={t.chat_id} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, chat_id: e.target.value } : r))} placeholder="群 chat_id (oc_…)" className="flex-1 px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', minWidth: '200px' }} />
+                    )}
+                    <label className="flex items-center gap-1 text-xs text-secondary"><input type="checkbox" checked={t.enabled} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, enabled: e.target.checked } : r))} />启用</label>
+                    <button onClick={() => setPt(pt.filter((_, j) => j !== i))} className="px-2 py-1 rounded-md text-xs" style={{ color: '#f43f5e' }}>移除</button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 mt-1">
+                  <button onClick={() => setPt([...pt, { type: 'webhook', name: '', url: '', secret: '', chat_id: '', enabled: true }])} className="text-xs font-semibold" style={{ color: 'var(--accent-primary)' }}>+ webhook</button>
+                  <button onClick={() => setPt([...pt, { type: 'bot', name: '', url: '', secret: '', chat_id: '', enabled: true }])} className="text-xs font-semibold" style={{ color: 'var(--accent-primary)' }}>+ 群机器人</button>
+                  <button onClick={() => void savePt(c.id)} disabled={ptBusy} className="px-4 py-1.5 rounded-lg text-sm font-semibold" style={{ background: 'var(--accent-secondary)', color: '#fff', opacity: ptBusy ? 0.5 : 1 }}>{ptBusy ? '保存中…' : '保存推送目标'}</button>
+                  {ptMsg && <span className="text-xs" style={{ color: ptMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{ptMsg}</span>}
                 </div>
               </div>
             )}

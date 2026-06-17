@@ -387,6 +387,20 @@ class QuickConfigRequest(BaseModel):
     menu_map: dict[str, str] = {}
 
 
+class PushTargetItem(BaseModel):
+    type: str = "webhook"          # webhook | bot
+    name: str = ""
+    url: str = ""                  # webhook 用:飞书自定义机器人 hook URL
+    secret: str = ""               # webhook 加签密钥(可选)
+    chat_id: str = ""              # bot 用:群 chat_id
+    enabled: bool = True
+
+
+class PushTargetsRequest(BaseModel):
+    # 简报/告警群发的推送目标:webhook(可多个)+ bot 群,可单独开关
+    push_targets: list[PushTargetItem] = []
+
+
 @router.get("/im-connector/{cid}/quick-config")
 async def get_im_quick_config(cid: int, current_user: UserORM = Depends(get_current_user)):
     """读某连接器的快捷按钮 + 菜单映射(未配返回默认,供控制台编辑)。"""
@@ -440,5 +454,63 @@ async def set_im_quick_config(
         row.config_json = _json.dumps(cfg, ensure_ascii=False)
         db.commit()
         return {"success": True, "quick_actions": qa, "menu_map": mm}
+    finally:
+        db.close()
+
+
+@router.get("/im-connector/{cid}/push-targets")
+async def get_im_push_targets(cid: int, current_user: UserORM = Depends(get_current_user)):
+    """读连接器的推送目标(webhook + bot 群,简报/告警群发用)。"""
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        row = (db.query(AgentIMConnectorORM)
+               .filter(AgentIMConnectorORM.id == cid, AgentIMConnectorORM.account_id == current_user.id).first())
+        if row is None:
+            raise AppException(status_code=404, message="connector not found")
+        try:
+            cfg = json.loads(row.config_json) if row.config_json else {}
+        except (ValueError, TypeError):
+            cfg = {}
+        targets = cfg.get("push_targets") if isinstance(cfg, dict) else None
+        return {"push_targets": targets or [], "last_chat_id": row.last_chat_id}
+    finally:
+        db.close()
+
+
+@router.post("/im-connector/{cid}/push-targets")
+async def set_im_push_targets(
+    cid: int, payload: PushTargetsRequest, current_user: UserORM = Depends(get_current_user),
+):
+    """保存推送目标(合并进 config_json.push_targets,不动凭证/快捷按钮)。"""
+    from geo.models.agent import AgentIMConnectorORM
+
+    db = SessionLocal()
+    try:
+        row = (db.query(AgentIMConnectorORM)
+               .filter(AgentIMConnectorORM.id == cid, AgentIMConnectorORM.account_id == current_user.id).first())
+        if row is None:
+            raise AppException(status_code=404, message="connector not found")
+        try:
+            cfg = json.loads(row.config_json) if row.config_json else {}
+            if not isinstance(cfg, dict):
+                cfg = {}
+        except (ValueError, TypeError):
+            cfg = {}
+        clean: list[dict] = []
+        for t in payload.push_targets:
+            typ = (t.type or "").strip()
+            if typ == "webhook" and t.url.strip():
+                clean.append({"type": "webhook", "name": t.name.strip(),
+                              "url": t.url.strip(), "secret": t.secret.strip(),
+                              "enabled": bool(t.enabled)})
+            elif typ == "bot" and t.chat_id.strip():
+                clean.append({"type": "bot", "name": t.name.strip(),
+                              "chat_id": t.chat_id.strip(), "enabled": bool(t.enabled)})
+        cfg["push_targets"] = clean
+        row.config_json = json.dumps(cfg, ensure_ascii=False)
+        db.commit()
+        return {"success": True, "push_targets": clean}
     finally:
         db.close()
