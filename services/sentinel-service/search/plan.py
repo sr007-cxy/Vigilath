@@ -272,12 +272,16 @@ def add_general_queries(plan: dict, targets: list[str],
         extra.append({"platform": "general",
                       "query": f"{ticker} (news OR earnings OR stock OR revenue)",
                       "intent": "通用召回:英文新闻(海外标的)"})
-    # `"目标" 关键词` 配对(引号锁目标 + 空格 AND 修饰词)。
-    for k in (keywords or []):
-        k = k.strip()
-        if k:
-            extra.append({"platform": "general", "query": f'"{primary}" {k}',
-                          "intent": f"通用召回:{k}(不限平台)"})
+    # 关键词召回:OR 分批(每批 ~12 个)。避免"每词一条查询"在词表扩到 ~70 时
+    # 让 monitor 跑 70 条 × 各引擎(百度 Web Unlocker ~30s/条)而超时;OR 分批把
+    # 70 词压成 ~6 条查询,配合相关性闸门过滤跑题。
+    kws = [k.strip() for k in (keywords or []) if k and k.strip()]
+    _BATCH = 12
+    for i in range(0, len(kws), _BATCH):
+        grp = kws[i:i + _BATCH]
+        extra.append({"platform": "general",
+                      "query": f'"{primary}" (' + " OR ".join(grp) + ")",
+                      "intent": f"通用召回:话题词批{i // _BATCH + 1}"})
 
     for q in extra:
         if q["query"] not in existing:
