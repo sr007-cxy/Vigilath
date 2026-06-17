@@ -330,7 +330,7 @@ def collect_direct_sources(plan: dict, symbol: str, conn, seen: set[str],
                     per_source[name] = per_source.get(name, 0) + 1
             throttle(sleep_s)
         if verbose:
-            print(f"  [direct:{name}] {got} new · {len(queries)} queries")
+            print(f"  [direct:{name}] {got} new · {len(qs)} queries")
     return per_source
 
 
