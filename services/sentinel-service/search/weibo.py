@@ -86,6 +86,8 @@ def _fetch(query: str, realtime: bool) -> str:
 def _parse(html: str, today: date) -> list[dict]:
     out: list[dict] = []
     for card in _CARD_SPLIT.split(html)[1:]:
+        if "wb-ad-tile" in card:          # 跳过广告卡(无真实发帖时间)
+            continue
         cm = _CONTENT_RE.search(card)
         if not cm:
             continue
@@ -112,11 +114,14 @@ def weibo_search(query: str, max_results: int = 20,
     """综合 + 实时双路召回,按帖子 URL 去重;返回 [{title,href,body,publish_time,author}]。
 
     任何传输 / cookie 失效 → 返回已收集到的部分(打 stderr),不抛出。
+
+    实时(xsort=time)优先、综合次之,**每路各自配额 max_results** —— 否则综合
+    的旧爆款帖会先填满名额,导致最新的实时 UGC 永远轮不到(舆情最在意的就是最新)。
     """
     today = date.today()
     seen: set[str] = set()
     out: list[dict] = []
-    for realtime in (False, True):
+    for realtime in (True, False):       # 实时优先(抓最新),再综合(热度)
         try:
             html = _fetch(query, realtime)
         except Exception as e:
@@ -125,14 +130,16 @@ def weibo_search(query: str, max_results: int = 20,
         if "passport.weibo.com" in html and len(html) < 5000:
             print("  [weibo] cookie 失效(被跳登录页)—— 请更新 WEIBO_COOKIE", file=sys.stderr)
             return out
+        cnt = 0
         for it in _parse(html, today):
             key = it["href"] or it["body"][:40]
-            if key in seen:
+            if not key or key in seen:
                 continue
             seen.add(key)
             out.append(it)
-            if len(out) >= max_results:
-                return out
+            cnt += 1
+            if cnt >= max_results:        # 每路独立配额,保证实时也能进
+                break
     return out
 
 
