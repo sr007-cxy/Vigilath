@@ -328,11 +328,11 @@ def posts_missing_analysis(conn: psycopg.Connection, symbol: str,
 
 # sort_by 白名单 → SQL ORDER BY 子句.
 # 全部在 SQL 层排,前端不再客户端排,避免跨 page 顺序错乱.
-# NULL 用 COALESCE 兜底为最小值,放最后.
+# 时间排序只认 publish_time;undated(NULL)放最后,不再用 ingested_at 兜底.
 # cluster 用 topics_json 第一个 topic;PG 下要 cast 成 jsonb,空串/NULL 兜底.
 _SORT_SQL: dict[str, str] = {
-    "newest":         "COALESCE(p.publish_time, p.ingested_at) DESC",
-    "oldest":         "COALESCE(p.publish_time, p.ingested_at) ASC",
+    "newest":         "p.publish_time DESC NULLS LAST",
+    "oldest":         "p.publish_time ASC NULLS LAST",
     "engagement":     ("(COALESCE(p.view_count,0) + COALESCE(p.reply_count,0) "
                        "+ COALESCE(p.like_count,0) + COALESCE(p.share_count,0)) DESC"),
     "shares":         "COALESCE(p.share_count, -1) DESC",
@@ -373,15 +373,15 @@ def analyses_for_symbol(conn: psycopg.Connection, symbol: str,
 
     if start or end:
         if start:
-            where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
+            where.append("p.publish_time >= %s")
             params.append(start)
         if end:
-            where.append("COALESCE(p.publish_time, p.ingested_at) <= %s")
+            where.append("p.publish_time <= %s")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
+        where.append("p.publish_time >= %s")
         params.append(cutoff)
 
     order = _SORT_SQL.get(sort_by) or _SORT_SQL["newest"]
@@ -414,15 +414,15 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
 
     if start or end:
         if start:
-            where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
+            where.append("p.publish_time >= %s")
             params.append(start)
         if end:
-            where.append("COALESCE(p.publish_time, p.ingested_at) <= %s")
+            where.append("p.publish_time <= %s")
             params.append(end)
     elif days and days > 0:
         from datetime import date, timedelta
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        where.append("COALESCE(p.publish_time, p.ingested_at) >= %s")
+        where.append("p.publish_time >= %s")
         params.append(cutoff)
 
     sql = f"""
@@ -438,7 +438,18 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
 
 
 def analyses_for_day(conn: psycopg.Connection, symbol: str,
-                     date: str) -> list[dict]:
+                     date: str, window_days: int = 3) -> list[dict]:
+    """日报取帖 —— 只认**发布时间** publish_time。
+
+    取发布日落在 [date-(window_days-1), date] 窗口内的帖子(默认近 3 天);
+    publish_time 为 NULL(undated)的一律**排除**:留库但不进时效简报,
+    **绝不退回 ingested_at**——按入库时间算正是"老闻当新闻"的根源。
+    window_days 是时效窗口旋钮:24h=1 / 近3天=3 / 近一周=7。
+    """
+    from datetime import date as _date, timedelta
+    end_day = date
+    start_day = (_date.fromisoformat(date)
+                 - timedelta(days=max(window_days, 1) - 1)).isoformat()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -447,10 +458,12 @@ def analyses_for_day(conn: psycopg.Connection, symbol: str,
             FROM analyses a
             JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
             WHERE a.symbol = %s
-              AND substr(p.ingested_at, 1, 10) = %s
-            ORDER BY COALESCE(p.publish_time, p.ingested_at) DESC
+              AND p.publish_time IS NOT NULL
+              AND substr(p.publish_time, 1, 10) >= %s
+              AND substr(p.publish_time, 1, 10) <= %s
+            ORDER BY p.publish_time DESC
             """,
-            (symbol, date),
+            (symbol, start_day, end_day),
         )
         return list(cur.fetchall())
 

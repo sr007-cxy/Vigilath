@@ -125,12 +125,38 @@ def extract_publish_date(text: str | None) -> str | None:
     return None
 
 
+# URL 内嵌日期抽取(②级,高可靠):多数中文新闻站把发布日期写进 URL —
+#   sina   finance.sina.com.cn/.../2026-04-05/...        →  /20YY-MM-DD/
+#   eastmoney  /news/20260616150020...   /a/202605173739...  →  8 位 20YYMMDD 连号
+#   qq  /rain/a/20260514A00FU400    10jqka  /20260409/c...  →  8 位连号
+# 比从摘要里猜可靠得多;校验月/日合法、年份 2000-2099,取第一个命中。
+_URL_DATE_RES = [
+    re.compile(r"/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[-/_.]|$)"),  # /2026-06-15/  /2026/6/15
+    re.compile(r"[/_-](20\d{2})(\d{2})(\d{2})\d*"),                   # /20260616...  8 位连号
+]
+
+
+def extract_date_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    for rx in _URL_DATE_RES:
+        m = rx.search(url)
+        if m:
+            y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if 2000 <= y <= 2099 and 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+    return None
+
+
 def normalize_result(r: dict, symbol: str) -> dict:
     url = r.get("href") or r.get("url") or ""
     title = _clean(r.get("title"))
     body = _clean(r.get("body"))  # SERP snippet — short but usually enough
-    # SearXNG 透传 publishedDate;没有则从标题 / 摘要里尽力抽一个绝对日期回填。
-    pub = r.get("publish_time") or extract_publish_date(f"{title or ''} {body or ''}")
+    # 发布时间解析(逐级兜底,缺则下一级;都没有 → None=undated,绝不退回入库时间):
+    #   ① 召回自带 publishedDate  →  ② URL 内嵌日期(高可靠)  →  ④ 标题/摘要抽取(低置信)
+    pub = (r.get("publish_time")
+           or extract_date_from_url(url)
+           or extract_publish_date(f"{title or ''} {body or ''}"))
     return {
         "post_id": url_to_post_id(url),
         "source": domain_to_source(url),
