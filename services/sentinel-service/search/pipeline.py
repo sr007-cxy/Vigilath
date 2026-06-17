@@ -91,20 +91,92 @@ def domain_to_source(url: str) -> str:
     return host or "unknown"
 
 
+# 发布日期抽取:SearXNG 上游不给 publishedDate 时,从标题 / 摘要里尽力抽一个
+# **绝对**日期(必须带 4 位年份),让前端时间轴 / "最近 N 天" 不至于全空。
+# 只认绝对日期 — 相对时间("3 天前")缺锚点容易猜错,宁可留 None。
+_DATE_PATTERNS = [
+    (re.compile(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})"), (1, 2, 3)),       # 2026-06-15 / 2026/6/15
+    (re.compile(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"), (1, 2, 3)),  # 2026年6月15日
+]
+_EN_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun",
+     "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+_EN_DATE_RE = re.compile(
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d{2})",
+    re.IGNORECASE,
+)
+
+
+def extract_publish_date(text: str | None) -> str | None:
+    if not text:
+        return None
+    for rx, (yi, mi, di) in _DATE_PATTERNS:
+        m = rx.search(text)
+        if m:
+            y, mo, d = int(m.group(yi)), int(m.group(mi)), int(m.group(di))
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+    m = _EN_DATE_RE.search(text)
+    if m:
+        mo = _EN_MONTHS.get(m.group(1).lower()[:3])
+        d, y = int(m.group(2)), int(m.group(3))
+        if mo and 1 <= d <= 31:
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+    return None
+
+
 def normalize_result(r: dict, symbol: str) -> dict:
     url = r.get("href") or r.get("url") or ""
+    title = _clean(r.get("title"))
+    body = _clean(r.get("body"))  # SERP snippet — short but usually enough
+    # SearXNG 透传 publishedDate;没有则从标题 / 摘要里尽力抽一个绝对日期回填。
+    pub = r.get("publish_time") or extract_publish_date(f"{title or ''} {body or ''}")
     return {
         "post_id": url_to_post_id(url),
         "source": domain_to_source(url),
         "symbol": symbol,
         "author": None,
-        "title": _clean(r.get("title")),
-        "content": _clean(r.get("body")),  # SERP snippet — short but usually enough
-        "publish_time": r.get("publish_time"),  # SearXNG 透传 publishedDate（自带引擎不给则 None）
+        "title": title,
+        "content": body,
+        "publish_time": pub,
         "view_count": None,
         "reply_count": None,
         "url": url,
     }
+
+
+def build_match_terms(plan: dict, symbol: str) -> list[str]:
+    """监测目标的"必含词"集合:目标名 / 别名 / ticker / 同集团 targets。
+
+    入库前用它做相关性闸门:命中结果的标题 / 摘要 / URL 至少要含其中一个,
+    否则视为搜索噪声(同名实体、词典释义、泛词扩散,如「世纪互联」搜成「世纪」
+    捞回的百度知道词条、同名酒店)丢弃。
+    """
+    raw = [plan.get("target"), symbol, plan.get("ticker"),
+           *(plan.get("targets") or []), *(plan.get("aliases") or [])]
+    terms: list[str] = []
+    seen: set[str] = set()
+    for t in raw:
+        if not isinstance(t, str):
+            continue
+        t = t.strip()
+        # 太短的纯拉丁词(<3)做子串匹配易误命中;中文 2 字即可。
+        if len(t) < 2 or (t.isascii() and len(t) < 3):
+            continue
+        k = t.lower()
+        if k not in seen:
+            seen.add(k)
+            terms.append(t)
+    return terms
+
+
+def is_relevant(rec: dict, terms: list[str]) -> bool:
+    if not terms:
+        return True
+    hay = " ".join(
+        x for x in (rec.get("title"), rec.get("content"), rec.get("url")) if x
+    ).lower()
+    return any(t.lower() in hay for t in terms)
 
 
 def _gap_to_timelimit(last_run_at: str | None, floor: str = "d") -> str:
@@ -202,7 +274,9 @@ def run_plan(plan: dict, symbol: str,
     conn = connect()
     init_schema(conn)
 
-    inserted = total = 0
+    match_terms = build_match_terms(plan, symbol)
+
+    inserted = total = irrelevant = 0
     seen: set[str] = set()
     per_source: dict[str, int] = {}
     per_engine_total: dict[str, int] = {e: 0 for e in eng_tuple}
@@ -230,6 +304,11 @@ def run_plan(plan: dict, symbol: str,
                 continue
             seen.add(url)
             rec = normalize_result(r, symbol)
+            # 相关性闸门:标题 / 摘要 / URL 不含目标 / 别名 / ticker 即丢弃,
+            # 拦掉同名实体、词典释义等搜索噪声(也省下后续 LLM 分析开销)。
+            if not is_relevant(rec, match_terms):
+                irrelevant += 1
+                continue
             if upsert_post(conn, rec):
                 inserted += 1
                 added += 1
@@ -251,6 +330,7 @@ def run_plan(plan: dict, symbol: str,
         "queries": len(queries),
         "inserted": inserted,
         "total": total,
+        "irrelevant": irrelevant,
         "by_source": per_source,
         "by_engine": per_engine_total,
         "engines": list(eng_tuple),

@@ -362,8 +362,13 @@ def analyses_for_symbol(conn: psycopg.Connection, symbol: str,
                         offset: int = 0,
                         sort_by: str = "newest",
                         ) -> list[dict]:
-    """文章列表(舆情 Tab 用).参见 sqlite 版本的 docstring,语义一致."""
-    where = ["a.symbol = %s"]
+    """文章列表(舆情 Tab 用).参见 sqlite 版本的 docstring,语义一致.
+
+    只返回 is_relevant=1 的帖子 — 与 today_aggregation 的 KPI / 趋势 / 风险饼 /
+    Top5 及简报口径一致(它们早已过滤),避免文章列表把分析判定无关的搜索噪声
+    (同名实体、词典释义)露给用户.
+    """
+    where = ["a.symbol = %s", "a.is_relevant = 1"]
     params: list = [symbol]
 
     if start or end:
@@ -403,7 +408,8 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
                               start: str | None = None,
                               end: str | None = None,
                               ) -> int:
-    where = ["a.symbol = %s"]
+    # 与 analyses_for_symbol 口径一致:只数 is_relevant=1,分页总数才对得上。
+    where = ["a.symbol = %s", "a.is_relevant = 1"]
     params: list = [symbol]
 
     if start or end:

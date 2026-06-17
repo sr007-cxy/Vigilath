@@ -61,10 +61,12 @@ def searxng_search(query: str, max_results: int = 10,
         "categories": categories,
         "safesearch": 0,
     }
-    # 不发 time_range:上游引擎(尤其 bing)对慢更新页面的日期过滤过于激进,
-    # d/w/m 常返 0 条,严重杀召回。改为每次全量搜,增量靠 posts 表 URL 去重保证。
-    # (timelimit 入参保留仅为兼容 _call_engine 签名,不再使用)
-    _ = timelimit
+    # time_range:限定时间窗,只搜最近内容(要"最新舆情"用)。
+    # 早期只有 bing 时 d/w/m 常返 0;现在有 baidu(Web Unlocker,带 publishedDate)+
+    # 360search 支持时间过滤,可正常工作。bing 对时间过滤无结果时自动退出,不影响其它引擎。
+    tr = _TIME_RANGE.get(timelimit) if timelimit else None
+    if tr:
+        params["time_range"] = tr
     if engines:
         params["engines"] = ",".join(engines)
 

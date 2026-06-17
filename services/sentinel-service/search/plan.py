@@ -22,6 +22,18 @@ from llm_client import chat_create, has_openai, has_qwen
 PLAN_MODEL = os.environ.get("YUQING_PLAN_MODEL", "gpt-4o-mini")
 MAX_TOKENS = 2000
 
+# 内置负面 / 风险词库:用于在通用查询里主动召回负面舆情(用户诉求:多扩负面词,
+# 数据越多越好)。拆两组避免单条 query 的 OR 项过长稀释命中。抓回的旧负面内容
+# 仍全量入库,但展示层按 publish_time 新鲜度窗口收口,只露最新。
+RISK_LEXICON_FINANCE = [
+    "暴跌", "亏损", "做空", "退市", "违约", "停牌", "债务", "爆仓",
+    "财务造假", "业绩暴雷", "下调评级", "监管处罚",
+]
+RISK_LEXICON_OPS = [
+    "欠薪", "裁员", "跑路", "维权", "诉讼", "投诉", "丑闻", "黑幕",
+    "停产", "破产", "违规", "罚款", "调查", "数据泄露",
+]
+
 # Legacy fallback catalog — used by `ensure_all_platforms()` only when the
 # backend pipeline does NOT pass `allowed_domains` explicitly. As of
 # migration 010, the GEO backend reads `sentiment_platforms` from its own DB
@@ -239,14 +251,32 @@ def add_general_queries(plan: dict, targets: list[str],
     queries = plan.get("queries") or []
     existing = {q.get("query") for q in queries}
 
-    # 简单 `目标 关键词` 配对(空格=AND),不用 OR 组、不带泛词别名(如 VNET):
-    # 实测百度对 `世纪互联 欠薪` 这种简单查询命中最好,OR 组反而把目标新闻挤出前列。
-    extra = [{"platform": "general", "query": primary,
+    # 用引号锁定完整目标名:避免搜索引擎按中文分词把「世纪互联」拆成「世纪」,
+    # 召回词典释义 / 同名实体等噪声。配合 pipeline 的相关性闸门双保险。
+    extra = [{"platform": "general", "query": f'"{primary}"',
               "intent": "通用召回:全网提及(覆盖百度/新闻/自媒体)"}]
+    # 新闻向召回:偏向有时效的报道 / 财报 / 公告,压低词典 / 百科类常青页占比。
+    extra.append({"platform": "general",
+                  "query": f'"{primary}" (新闻 OR 财报 OR 业绩 OR 公告 OR 股价)',
+                  "intent": "通用召回:新闻/财经动态"})
+    # 负面 / 风险信号召回:内置词库分两组拼成 OR 查询,主动扩大负面舆情覆盖。
+    extra.append({"platform": "general",
+                  "query": f'"{primary}" (' + " OR ".join(RISK_LEXICON_FINANCE) + ")",
+                  "intent": "通用召回:财务/市场风险信号"})
+    extra.append({"platform": "general",
+                  "query": f'"{primary}" (' + " OR ".join(RISK_LEXICON_OPS) + ")",
+                  "intent": "通用召回:经营/声誉风险信号"})
+    # 海外标的(美股 ADR / 港股等)中文源覆盖薄,有 ticker 时补一条英文新闻向查询。
+    ticker = (plan.get("ticker") or "").strip()
+    if ticker:
+        extra.append({"platform": "general",
+                      "query": f"{ticker} (news OR earnings OR stock OR revenue)",
+                      "intent": "通用召回:英文新闻(海外标的)"})
+    # `"目标" 关键词` 配对(引号锁目标 + 空格 AND 修饰词)。
     for k in (keywords or []):
         k = k.strip()
         if k:
-            extra.append({"platform": "general", "query": f"{primary} {k}",
+            extra.append({"platform": "general", "query": f'"{primary}" {k}',
                           "intent": f"通用召回:{k}(不限平台)"})
 
     for q in extra:
