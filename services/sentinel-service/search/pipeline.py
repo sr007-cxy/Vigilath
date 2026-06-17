@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
 import re
 import sys
 from datetime import datetime
@@ -22,6 +23,8 @@ from .cnbing import cnbing_search
 from .ddg import ddg_search, throttle
 from .sogou import sogou_search
 from .searxng import searxng_search
+from .weibo import weibo_search
+from .zhihu import zhihu_search
 
 
 # SearXNG 单引擎(server 端聚合多上游 + 处理反爬/IP池);自带引擎保留可回退。
@@ -276,6 +279,57 @@ def _search_engines(query: str, engines: tuple[str, ...],
     return out, counts
 
 
+# 登录墙 UGC 直采源:搜索引擎进不去(微博/知乎登录墙),用 cookie 直采。
+# 一小撮"目标名 + 负面词"定向查询,不混进 SearXNG plan(避免对平台高频请求被风控)。
+_DIRECT_NEG = ("欠薪", "讨薪", "维权", "做空", "裁员", "爆雷", "亏损", "诉讼")
+_DIRECT_SOURCES = (
+    ("weibo", "WEIBO_COOKIE", weibo_search),
+    ("zhihu", "ZHIHU_COOKIE", zhihu_search),
+)
+
+
+def collect_direct_sources(plan: dict, symbol: str, conn, seen: set[str],
+                           match_terms: list[str], max_results: int = 15,
+                           sleep_s: float = 1.5, verbose: bool = True) -> dict:
+    """微博 / 知乎等登录墙平台直采(搜索引擎盲区)。cookie(env)未配的源自动跳过。
+
+    复用相同的相关性闸门 + dedup(seen)+ upsert;发布时间由各 adapter 结构化提供,
+    天然带准确 publish_time。任一源 / 查询失败仅跳过,不影响其它。
+    """
+    primary = (plan.get("target") or symbol or "").strip()
+    if not primary:
+        return {}
+    queries = [primary] + [f"{primary} {n}" for n in _DIRECT_NEG]
+    per_source: dict[str, int] = {}
+    for name, env_key, fn in _DIRECT_SOURCES:
+        if not os.environ.get(env_key):
+            continue
+        got = 0
+        for q in queries:
+            try:
+                rows = fn(q, max_results=max_results)
+            except Exception as e:
+                print(f"  [{name}] {q!r} error: {e}", file=sys.stderr)
+                rows = []
+            for r in rows:
+                url = (r.get("href") or "").strip()
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                rec = normalize_result(r, symbol)
+                rec["source"] = name             # 统一来源名(weibo/zhihu)
+                rec["author"] = r.get("author")  # 保留作者(normalize 默认置 None)
+                if not is_relevant(rec, match_terms):
+                    continue
+                if upsert_post(conn, rec):
+                    got += 1
+                    per_source[name] = per_source.get(name, 0) + 1
+            throttle(sleep_s)
+        if verbose:
+            print(f"  [direct:{name}] {got} new · {len(queries)} queries")
+    return per_source
+
+
 def run_plan(plan: dict, symbol: str,
              max_results_per_query: int = 10,
              timelimit: str | None = None,
@@ -350,6 +404,14 @@ def run_plan(plan: dict, symbol: str,
             print(f"  [{i:>2}/{len(queries)}] {len(results):>2} results "
                   f"({eng_breakdown}){tl_note} · {added:>2} new · {short}")
         throttle(sleep_s)
+
+    # 登录墙 UGC 直采(微博/知乎),与 SearXNG 召回合并入库
+    direct = collect_direct_sources(plan, symbol, conn, seen, match_terms,
+                                    sleep_s=sleep_s, verbose=verbose)
+    for s, n in direct.items():
+        per_source[s] = per_source.get(s, 0) + n
+        inserted += n
+        total += n
 
     conn.commit()
     return {
