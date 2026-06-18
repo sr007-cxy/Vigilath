@@ -438,18 +438,25 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
 
 
 def analyses_for_day(conn: psycopg.Connection, symbol: str,
-                     date: str, window_days: int = 3) -> list[dict]:
-    """日报取帖 —— 只认**发布时间** publish_time。
+                     date: str, hours: int | None = None) -> list[dict]:
+    """日报取帖 —— 只认**发布时间** publish_time,**滚动近 N 小时**窗口(默认 24h)。
 
-    取发布日落在 [date-(window_days-1), date] 窗口内的帖子(默认近 3 天);
-    publish_time 为 NULL(undated)的一律**排除**:留库但不进时效简报,
-    **绝不退回 ingested_at**——按入库时间算正是"老闻当新闻"的根源。
-    window_days 是时效窗口旋钮:24h=1 / 近3天=3 / 近一周=7。
+    窗口 = publish_time 在 [now - hours, now]:
+      · 带时分的(如 2026-06-18T09:07)→ 精确比 now-hours;
+      · 纯日期的(如 2026-06-18,只到天)→ 按"发布日 >= 截止当天"宽松纳入(不知具体时分)。
+    undated(publish_time 为 NULL)一律**排除**,绝不退回 ingested_at。
+    hours 可用环境变量 SENTINEL_BRIEF_HOURS 调:24=近24小时 / 72=近3天 / 168=近一周。
     """
-    from datetime import date as _date, timedelta
-    end_day = date
-    start_day = (_date.fromisoformat(date)
-                 - timedelta(days=max(window_days, 1) - 1)).isoformat()
+    import os
+    from datetime import datetime, timedelta
+    if hours is None:
+        try:
+            hours = int(os.environ.get("SENTINEL_BRIEF_HOURS", "24"))
+        except ValueError:
+            hours = 24
+    cutoff = datetime.now() - timedelta(hours=max(hours, 1))
+    cutoff_iso = cutoff.strftime("%Y-%m-%dT%H:%M")
+    cutoff_date = cutoff.strftime("%Y-%m-%d")
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -459,11 +466,13 @@ def analyses_for_day(conn: psycopg.Connection, symbol: str,
             JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
             WHERE a.symbol = %s
               AND p.publish_time IS NOT NULL
-              AND substr(p.publish_time, 1, 10) >= %s
-              AND substr(p.publish_time, 1, 10) <= %s
+              AND (
+                (length(p.publish_time) > 10 AND p.publish_time >= %s)
+                OR (length(p.publish_time) <= 10 AND substr(p.publish_time, 1, 10) >= %s)
+              )
             ORDER BY p.publish_time DESC
             """,
-            (symbol, start_day, end_day),
+            (symbol, cutoff_iso, cutoff_date),
         )
         return list(cur.fetchall())
 

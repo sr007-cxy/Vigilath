@@ -139,7 +139,7 @@ def extract_publish_date(text: str | None) -> str | None:
 _URL_DATE_RES = [
     re.compile(r"/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[-/_.]|$)"),  # /2026-06-15/  /2026/6/15
     re.compile(r"/(20\d{2})/(\d{2})(\d{2})(?:/|[?#]|$)"),             # /2026/0527/ (年/月日,如 eeo)
-    re.compile(r"[/_-](20\d{2})(\d{2})(\d{2})\d*"),                   # /20260616...  8 位连号
+    re.compile(r"[/_a-zA-Z-](20\d{2})(\d{2})(\d{2})\d*"),             # /20260616 或 t20260618(字母/分隔前缀)
 ]
 
 
@@ -166,13 +166,15 @@ _JUNK_DOMAINS = {
     "www.office.com", "account.microsoft.com", "www.onlinedown.net",
 }
 _JUNK_URL_RE = re.compile(
-    r"(quote\.eastmoney|/quote/|/company_|/wiki/|wikipedia\.org|/tashuo/|"
-    r"360kuai\.com|/baiqi/|19lou\.com|book118|doc88|woc88|onlinedown)", re.I)
+    r"(quote\.eastmoney|/quote/|/quotes/|/list,|/tags/|guba\.eastmoney\.com/list|"
+    r"weibo\.com/u/|/company_|/wiki/|wikipedia\.org|/tashuo/|360kuai\.com|/baiqi/|"
+    r"19lou\.com|book118|doc88|woc88|onlinedown)", re.I)
 # SEO 采集农场:杂牌 教育/企业/地方站把新闻洗一遍蹭排名(非财经媒体)
 _FARM_RE = re.compile(r"(sdzhedu|xbanche|wfshengda|hfteng|shengda\.|zhedu\.)", re.I)
 _JUNK_TITLE_RE = re.compile(
     r"(百科|词条|行情中心|股票价格_|股价行情|股价_|资产负债表|财务分析|数据报告-雪球|"
-    r"招聘|工资待遇|工商信息|爱企查|注册.{0,4}指南|开通指南|品牌排行|十大品牌)")
+    r"招聘|工资待遇|工商信息|爱企查|注册.{0,4}指南|开通指南|品牌排行|十大品牌|"
+    r"的微博_微博|_相关报道|相关报道/新闻)")
 
 
 def is_junk_page(url: str, title: str | None) -> bool:
