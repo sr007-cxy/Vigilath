@@ -141,7 +141,8 @@ export function AgentIntegrationTab() {
   const savePt = async (cid: number) => {
     setPtBusy(true); setPtMsg('');
     try {
-      const push_targets = pt.filter((t) => (t.type === 'webhook' && t.url.trim()) || (t.type === 'bot' && t.chat_id.trim()));
+      // webhook 全部保留(含空 URL 占位,后端会把空 URL 的强制不启用);bot 需有 chat_id
+      const push_targets = pt.filter((t) => t.type === 'webhook' || (t.type === 'bot' && t.chat_id.trim()));
       const r = await fetch(`${API_BASE}/account/im-connector/${cid}/push-targets`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ push_targets }),
       });

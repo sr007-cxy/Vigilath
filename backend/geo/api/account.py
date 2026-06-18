@@ -501,10 +501,12 @@ async def set_im_push_targets(
         clean: list[dict] = []
         for t in payload.push_targets:
             typ = (t.type or "").strip()
-            if typ == "webhook" and t.url.strip():
+            if typ == "webhook":
+                url = t.url.strip()
+                # 空 URL 的 webhook 作为占位**保留并展示**,但强制不启用(不会误发)
                 clean.append({"type": "webhook", "name": t.name.strip(),
-                              "url": t.url.strip(), "secret": t.secret.strip(),
-                              "enabled": bool(t.enabled)})
+                              "url": url, "secret": t.secret.strip(),
+                              "enabled": bool(t.enabled) and bool(url)})
             elif typ == "bot" and t.chat_id.strip():
                 clean.append({"type": "bot", "name": t.name.strip(),
                               "chat_id": t.chat_id.strip(), "enabled": bool(t.enabled)})
