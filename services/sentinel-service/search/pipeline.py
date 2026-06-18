@@ -13,6 +13,8 @@ import sys
 from datetime import datetime
 from urllib.parse import urlparse
 
+import requests
+
 from storage import (
     connect, init_schema, upsert_post,
     get_query_last_run, upsert_query_last_run,
@@ -136,6 +138,7 @@ def extract_publish_date(text: str | None) -> str | None:
 # 比从摘要里猜可靠得多;校验月/日合法、年份 2000-2099,取第一个命中。
 _URL_DATE_RES = [
     re.compile(r"/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[-/_.]|$)"),  # /2026-06-15/  /2026/6/15
+    re.compile(r"/(20\d{2})/(\d{2})(\d{2})(?:/|[?#]|$)"),             # /2026/0527/ (年/月日,如 eeo)
     re.compile(r"[/_-](20\d{2})(\d{2})(\d{2})\d*"),                   # /20260616...  8 位连号
 ]
 
@@ -150,6 +153,117 @@ def extract_date_from_url(url: str | None) -> str | None:
             if 2000 <= y <= 2099 and 1 <= mo <= 12 and 1 <= d <= 31:
                 return f"{y:04d}-{mo:02d}-{d:02d}"
     return None
+
+
+# ── #2 垃圾/非舆情页过滤(百科/行情/股吧列表/招聘/工商/采集农场)──────────────
+# 这些页面会提及目标名却不是舆情,被打上近期时间戳就污染窗口。入库前在相关性闸门挡掉。
+_JUNK_DOMAINS = {
+    "baike.baidu.com", "baike.so.com", "wenku.baidu.com", "wen.baidu.com",
+    "wenku.so.com", "aiqicha.baidu.com", "ai.so.com", "zh.wikipedia.org",
+    "en.wikipedia.org", "www.qcc.com", "www.jobui.com", "m.jobui.com",
+    "www.199it.com", "www.catl.com", "www.microsoft.com", "azure.microsoft.com",
+    "www.azure.cn", "docs.azure.cn", "docs.microsoft.com", "learn.microsoft.com",
+    "www.office.com", "account.microsoft.com", "www.onlinedown.net",
+}
+_JUNK_URL_RE = re.compile(
+    r"(quote\.eastmoney|/quote/|/company_|/wiki/|wikipedia\.org|/tashuo/|"
+    r"360kuai\.com|/baiqi/|19lou\.com|book118|doc88|woc88|onlinedown)", re.I)
+# SEO 采集农场:杂牌 教育/企业/地方站把新闻洗一遍蹭排名(非财经媒体)
+_FARM_RE = re.compile(r"(sdzhedu|xbanche|wfshengda|hfteng|shengda\.|zhedu\.)", re.I)
+_JUNK_TITLE_RE = re.compile(
+    r"(百科|词条|行情中心|股票价格_|股价行情|股价_|资产负债表|财务分析|数据报告-雪球|"
+    r"招聘|工资待遇|工商信息|爱企查|注册.{0,4}指南|开通指南|品牌排行|十大品牌)")
+
+
+def is_junk_page(url: str, title: str | None) -> bool:
+    """非舆情结构页(百科/行情/列表/招聘/工商/采集农场)→ True,入库前丢弃。"""
+    host = (urlparse(url or "").hostname or "").lower()
+    if host in _JUNK_DOMAINS:
+        return True
+    if _JUNK_URL_RE.search(url or "") or _FARM_RE.search(url or ""):
+        return True
+    if title and _JUNK_TITLE_RE.search(title):
+        return True
+    return False
+
+
+# ── ③ 抓全文 meta 补真实发布时间(给"引擎+URL 都没日期"的 undated 帖)──────────
+_META_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+_META_RES = [
+    re.compile(r'<meta[^>]+(?:property|name|itemprop)=["\'](?:article:published_time|'
+               r'og:published_time|og:release_time|publishdate|pubdate|pubtime|'
+               r'weibo:\s*article:create_at|datePublished|date|apub:time)["\'][^>]*?'
+               r'content=["\']([^"\']+)["\']', re.I),
+    re.compile(r'content=["\']([^"\']+)["\'][^>]*(?:property|name|itemprop)=["\']'
+               r'(?:article:published_time|og:published_time|datePublished|pubdate)["\']', re.I),
+    re.compile(r'"datePublished"\s*:\s*"([^"]+)"', re.I),
+    re.compile(r'<time[^>]+datetime=["\']([^"\']+)["\']', re.I),
+]
+
+
+def _date_from_text(s: str) -> str | None:
+    m = re.search(r'(20\d{2})[-/年.](\d{1,2})[-/月.](\d{1,2})', s or "")
+    if not m:
+        return None
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (1 <= mo <= 12 and 1 <= d <= 31):
+        return None
+    tm = re.search(r'(\d{1,2}):(\d{2})', s)
+    return f"{y:04d}-{mo:02d}-{d:02d}" + (f"T{int(tm.group(1)):02d}:{tm.group(2)}" if tm else "")
+
+
+def fetch_meta_date(url: str) -> str | None:
+    """GET 文章页,从 meta / JSON-LD / <time> 抽真实发布时间。失败/无 → None。"""
+    if not url:
+        return None
+    try:
+        r = requests.get(url, timeout=10, allow_redirects=True,
+                         headers={"User-Agent": _META_UA, "Accept-Language": "zh-CN,zh"})
+        html_txt = r.text[:300000]
+    except Exception:
+        return None
+    for rx in _META_RES:
+        m = rx.search(html_txt)
+        if m:
+            d = _date_from_text(m.group(1))
+            if d:
+                return d
+    return None
+
+
+def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
+                          workers: int = 8, verbose: bool = True) -> int:
+    """对当日入库、引擎+URL 都没日期的相关帖,并发抓 meta 补真实发布时间。返回回填数。"""
+    import concurrent.futures as _cf
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT source, post_id, url FROM posts "
+            "WHERE symbol = %s AND publish_time IS NULL "
+            "AND substr(ingested_at, 1, 10) = %s AND url <> '' LIMIT %s",
+            (symbol, day, cap),
+        )
+        rows = [(r["source"], r["post_id"], r["url"]) for r in cur.fetchall()]
+    if not rows:
+        return 0
+    got: dict[tuple, str] = {}
+    with _cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(fetch_meta_date, u): (s, p) for s, p, u in rows}
+        for fut in _cf.as_completed(futs):
+            try:
+                d = fut.result()
+            except Exception:
+                d = None
+            if d:
+                got[futs[fut]] = d
+    with conn.cursor() as cur:
+        for (s, p), d in got.items():
+            cur.execute("UPDATE posts SET publish_time = %s "
+                        "WHERE source = %s AND post_id = %s AND publish_time IS NULL",
+                        (d, s, p))
+    if verbose:
+        print(f"  [meta-date] 扫 {len(rows)} 条 undated → 抓到真实日期 {len(got)} 条")
+    return len(got)
 
 
 def normalize_result(r: dict, symbol: str) -> dict:
@@ -200,6 +314,9 @@ def build_match_terms(plan: dict, symbol: str) -> list[str]:
 
 
 def is_relevant(rec: dict, terms: list[str]) -> bool:
+    # #2:百科/行情/列表/招聘/工商/采集农场等非舆情结构页,直接判不相关(入库前丢弃)
+    if is_junk_page(rec.get("url") or "", rec.get("title")):
+        return False
     if not terms:
         return True
     hay = " ".join(
@@ -415,6 +532,13 @@ def run_plan(plan: dict, symbol: str,
         per_source[s] = per_source.get(s, 0) + n
         inserted += n
         total += n
+
+    # ③ 给"引擎+URL 都没日期"的当日帖,抓全文 meta 补真实发布时间(救近期、不救老闻/静态页)
+    try:
+        from datetime import date as _date
+        resolve_undated_dates(conn, symbol, _date.today().isoformat(), verbose=verbose)
+    except Exception as e:
+        print(f"  [meta-date] 跳过(异常):{e}", file=sys.stderr)
 
     conn.commit()
     return {
