@@ -215,13 +215,40 @@ def _date_from_text(s: str) -> str | None:
     return f"{y:04d}-{mo:02d}-{d:02d}" + (f"T{int(tm.group(1)):02d}:{tm.group(2)}" if tm else "")
 
 
+def _visible_publish_date(html: str) -> str | None:
+    """页头可见中文发布时间:'2026年05月19日 16:35'(带年)/ '05月15日 12:35'(无年,带时分)。
+
+    只取页头(前 ~8000 字,发布时间通常紧跟标题),避免抓到正文里提到的日期。
+    无年份的按当年算,若落到未来则算去年。存的还是 ISO(YYYY-MM-DDTHH:MM)。
+    """
+    head = html[:8000]
+    # **必须带"时:分"** —— 发布头有时分(2026年05月19日 16:35),正文提到的日期(截至2026年3月31日)
+    # 没时分,以此区分,避免抓到正文里的日期。
+    m = re.search(r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s+(\d{1,2}):(\d{2})', head)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{mo:02d}-{d:02d}T{int(m.group(4)):02d}:{m.group(5)}"
+    # 无年份但带时分(每经:05月15日 12:35)→ 当年,落到未来则去年
+    m = re.search(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*日\s+(\d{1,2}):(\d{2})', head)
+    if m:
+        from datetime import date as _d
+        mo, d = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            today = _d.today()
+            y = today.year - (1 if (mo, d) > (today.month, today.day) else 0)
+            return f"{y:04d}-{mo:02d}-{d:02d}T{int(m.group(3)):02d}:{m.group(4)}"
+    return None
+
+
 def fetch_meta_date(url: str) -> str | None:
-    """GET 文章页,从 meta / JSON-LD / <time> 抽真实发布时间。失败/无 → None。"""
+    """GET 文章页,从 meta / JSON-LD / <time> / 页头可见时间抽真实发布时间。失败/无 → None。"""
     if not url:
         return None
     try:
         r = requests.get(url, timeout=10, allow_redirects=True,
                          headers={"User-Agent": _META_UA, "Accept-Language": "zh-CN,zh"})
+        r.encoding = r.apparent_encoding or r.encoding   # 中文页正确解码,年月日才匹配得上
         html_txt = r.text[:300000]
     except Exception:
         return None
@@ -231,7 +258,8 @@ def fetch_meta_date(url: str) -> str | None:
             d = _date_from_text(m.group(1))
             if d:
                 return d
-    return None
+    # 兜底:财联社/每经等把发布时间放在页头可见文本(年月日 / 月日 时:分)
+    return _visible_publish_date(html_txt)
 
 
 def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
