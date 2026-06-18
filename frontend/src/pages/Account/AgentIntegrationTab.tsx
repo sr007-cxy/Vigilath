@@ -319,7 +319,7 @@ export function AgentIntegrationTab() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => void openCfg(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--accent-primary)', border: '1px solid var(--border-color)', background: 'transparent' }}>
-                  {cfgFor === c.id ? '收起' : '配置按钮/菜单'}
+                  {cfgFor === c.id ? '收起' : '配置(推送目标/按钮)'}
                 </button>
                 <button onClick={() => void deleteIm(c.id)} className="px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap" style={{ color: '#f43f5e', border: '1px solid rgba(244,63,94,0.35)', background: 'transparent' }}>删除</button>
               </div>
