@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime
 from urllib.parse import urlparse
@@ -262,6 +264,31 @@ def fetch_meta_date(url: str) -> str | None:
     return _visible_publish_date(html_txt)
 
 
+# 需浏览器过验证码/JS 才能拿到日期的站(纯 HTTP 只到验证码页,如 ZAKER 的长亭 WAF)
+_SCRAPLING_PY = os.environ.get("SCRAPLING_PYTHON", "/opt/geo/scrapling-venv/bin/python")
+_META_FETCH_PY = os.path.join(os.path.dirname(__file__), "meta_fetch.py")
+_BROWSER_DATE_DOMAINS = {"www.myzaker.com", "myzaker.com", "m.myzaker.com"}
+_BROWSER_CAP = 8   # 浏览器很慢(~15-30s/条),每轮限量
+
+
+def fetch_meta_date_browser(url: str) -> str | None:
+    """对验证码/JS 站用独立 scrapling-venv 浏览器(过验证码,wait~12s)后抽发布时间。"""
+    if not url or not os.path.exists(_SCRAPLING_PY):
+        return None
+    try:
+        p = subprocess.run([_SCRAPLING_PY, _META_FETCH_PY, url],
+                           capture_output=True, text=True, timeout=160)
+    except Exception:
+        return None
+    lines = (p.stdout or "").strip().splitlines()
+    if p.returncode != 0 or not lines:
+        return None
+    try:
+        return json.loads(lines[-1]).get("date")
+    except Exception:
+        return None
+
+
 def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
                           workers: int = 8, verbose: bool = True) -> int:
     """对当日入库、引擎+URL 都没日期的相关帖,并发抓 meta 补真实发布时间。返回回填数。"""
@@ -286,13 +313,24 @@ def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
                 d = None
             if d:
                 got[futs[fut]] = d
+    # 浏览器兜底:仍 undated 且属验证码/JS 站(ZAKER 等)的,用 Scrapling 过验证码补日期(慢,限量)
+    browser_n = 0
+    for s, p, u in rows:
+        if (s, p) in got or browser_n >= _BROWSER_CAP:
+            continue
+        if (urlparse(u).hostname or "").lower() in _BROWSER_DATE_DOMAINS:
+            browser_n += 1
+            d = fetch_meta_date_browser(u)
+            if d:
+                got[(s, p)] = d
     with conn.cursor() as cur:
         for (s, p), d in got.items():
             cur.execute("UPDATE posts SET publish_time = %s "
                         "WHERE source = %s AND post_id = %s AND publish_time IS NULL",
                         (d, s, p))
     if verbose:
-        print(f"  [meta-date] 扫 {len(rows)} 条 undated → 抓到真实日期 {len(got)} 条")
+        print(f"  [meta-date] 扫 {len(rows)} 条 undated → 抓到 {len(got)} 条"
+              f"(其中浏览器 {browser_n} 次)")
     return len(got)
 
 
