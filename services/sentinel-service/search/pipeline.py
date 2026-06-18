@@ -267,7 +267,8 @@ def fetch_meta_date(url: str) -> str | None:
 # 需浏览器过验证码/JS 才能拿到日期的站(纯 HTTP 只到验证码页,如 ZAKER 的长亭 WAF)
 _SCRAPLING_PY = os.environ.get("SCRAPLING_PYTHON", "/opt/geo/scrapling-venv/bin/python")
 _META_FETCH_PY = os.path.join(os.path.dirname(__file__), "meta_fetch.py")
-_BROWSER_DATE_DOMAINS = {"www.myzaker.com", "myzaker.com", "m.myzaker.com"}
+_BROWSER_DATE_DOMAINS = {"www.myzaker.com", "myzaker.com", "m.myzaker.com",
+                         "www.toutiao.com", "toutiao.com", "m.toutiao.com"}
 _BROWSER_CAP = 8   # 浏览器很慢(~15-30s/条),每轮限量
 
 
