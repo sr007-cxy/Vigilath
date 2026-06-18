@@ -156,11 +156,10 @@ def normalize_result(r: dict, symbol: str) -> dict:
     url = r.get("href") or r.get("url") or ""
     title = _clean(r.get("title"))
     body = _clean(r.get("body"))  # SERP snippet — short but usually enough
-    # 发布时间解析(逐级兜底,缺则下一级;都没有 → None=undated,绝不退回入库时间):
-    #   ① 召回自带 publishedDate  →  ② URL 内嵌日期(高可靠)  →  ④ 标题/摘要抽取(低置信)
-    pub = (r.get("publish_time")
-           or extract_date_from_url(url)
-           or extract_publish_date(f"{title or ''} {body or ''}"))
+    # 发布时间解析(**只信可靠源**):① 召回自带 publishedDate → ② URL 内嵌日期(高可靠)。
+    # 不再用"从标题/摘要文本猜日期"——它会把正文里提到的近期日期误当成发布日,导致老文
+    # (如5月的公众号文)被算进近24h。拿不到 → None=undated,留库但不进时效窗口。
+    pub = r.get("publish_time") or extract_date_from_url(url)
     return {
         "post_id": url_to_post_id(url),
         "source": domain_to_source(url),
