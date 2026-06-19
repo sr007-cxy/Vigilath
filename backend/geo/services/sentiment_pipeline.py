@@ -219,7 +219,8 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
 
             # 飞书 / 企微推送:账户接入了 IM(有绑定会话)就把当天简报推过去
             # 注意:IM connector 按 user_id 绑定(同 alerts._push_im),不是 SentimentAccount.id
-            _push_brief_im(db, acc.user_id, acc.target, r3.get("body", ""))
+            # 防护:推送结果记进 stats["push"](写入 run 日志),失败可在 sentiment_run_logs 查到
+            stats["push"] = _push_brief_im(db, acc.user_id, acc.target, r3.get("body", ""))
 
             _mark_success(db, acc, log_row, stats)
             log.info("run_pipeline[%s]: done", account_id)
@@ -236,24 +237,32 @@ def run_pipeline_for_account(account_id: int, trigger: str = "manual") -> dict:
         db.close()
 
 
-def _push_brief_im(db, user_id: int, target: str, body_md: str) -> None:
+def _push_brief_im(db, user_id: int, target: str, body_md: str) -> dict:
     """跑完把当天简报推到该 user 绑定的飞书 / 企微会话(接入的人或群)。
 
-    复用 agent.alerts._push_im:它按 AgentIMConnectorORM.account_id == user_id 查
-    (platform=feishu/wecom,last_chat_id=最近会话)→ 飞书 send_reply / 企微 markdown。
-    无绑定或无会话则静默跳过。best-effort:推送失败不影响 pipeline 成功状态。
+    复用 agent.alerts._push_im。**防护**:返回推送结果 {"ok","sent","errors"} 并写进 run 日志的
+    stats["push"],推送失败(含 import/语法错)显式打 ERROR —— 不再静默,"今天没推"一查 run_logs 即知。
+    best-effort:推送失败不影响 pipeline 成功状态。
     """
     if not body_md:
-        return
+        return {"ok": False, "reason": "empty_brief"}
     try:
         import asyncio
         from geo.agent.alerts import _push_im
         date = datetime.utcnow().strftime("%Y-%m-%d")
         text = f"📊 **{target} · 今日舆情简报 {date}**\n\n{body_md}"
-        asyncio.run(_push_im(db, user_id, text))
-        log.info("run_pipeline: brief pushed to IM (user=%s)", user_id)
-    except Exception as e:  # noqa: BLE001
-        log.warning("run_pipeline: IM push failed (user=%s): %s", user_id, e)
+        res = asyncio.run(_push_im(db, user_id, text))
+        ok = (res.get("sent", 0) > 0)
+        if ok:
+            log.info("run_pipeline: brief pushed to IM (user=%s, sent=%s, errors=%s)",
+                     user_id, res.get("sent"), res.get("errors"))
+        else:
+            log.error("run_pipeline: brief IM push 发送数为 0!(user=%s) errors=%s",
+                      user_id, res.get("errors"))
+        return {"ok": ok, **res}
+    except Exception as e:  # noqa: BLE001 — import/语法错等也要显式记下来,绝不静默
+        log.exception("run_pipeline: IM push 崩溃 (user=%s): %s", user_id, e)
+        return {"ok": False, "error": str(e)[:200]}
 
 
 def _push_brief_email(acc: SentimentAccountORM, body_md: str, recipients: list[str]) -> None:

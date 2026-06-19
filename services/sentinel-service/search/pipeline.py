@@ -170,7 +170,11 @@ _JUNK_DOMAINS = {
 _JUNK_URL_RE = re.compile(
     r"(quote\.eastmoney|/quote/|/quotes/|/list,|/tags/|guba\.eastmoney\.com/list|"
     r"weibo\.com/u/|/company_|/wiki/|wikipedia\.org|/tashuo/|360kuai\.com|/baiqi/|"
-    r"19lou\.com|book118|doc88|woc88|onlinedown)", re.I)
+    r"19lou\.com|book118|doc88|woc88|onlinedown|"
+    # 自家官网静态营销/产品页(不是舆情;还会被动态生成的"当前时间"误标成今日)。
+    # 仅挡根级 .html 公司页 + solution/sustainability 等目录;保留 /portal/article 新闻。
+    r"vnet\.com/[a-z_-]+\.html|vnet\.com/(?:solution|sustainability|product|about|culture|partner|honor|service)\b)",
+    re.I)
 # SEO 采集农场:杂牌 教育/企业/地方站把新闻洗一遍蹭排名(非财经媒体)
 _FARM_RE = re.compile(r"(sdzhedu|xbanche|wfshengda|hfteng|shengda\.|zhedu\.)", re.I)
 _JUNK_TITLE_RE = re.compile(
