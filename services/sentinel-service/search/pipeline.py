@@ -12,7 +12,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import requests
@@ -247,8 +247,25 @@ def _visible_publish_date(html: str) -> str | None:
     return None
 
 
+def _looks_like_now(date_str: str | None) -> bool:
+    """抓到的"发布时间"是否约等于**现在**(抓取时刻)。
+
+    有些站(36氪老 /p/ 页、vnet 官网)把动态生成的当前时间塞进 article:published_time,
+    每次抓都是 now —— 那不是发布时间,是渲染时间。带时分的若落在 [now-10min, now+1h] 判为伪造。
+    """
+    m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})', date_str or "")
+    if not m:
+        return False          # 纯日期不算 now 伪造
+    try:
+        dt = datetime(*(int(x) for x in m.groups()))
+    except ValueError:
+        return False
+    now = datetime.now()
+    return now - timedelta(minutes=10) <= dt <= now + timedelta(hours=1)
+
+
 def fetch_meta_date(url: str) -> str | None:
-    """GET 文章页,从 meta / JSON-LD / <time> / 页头可见时间抽真实发布时间。失败/无 → None。"""
+    """GET 文章页,从 meta / JSON-LD / <time> / 页头可见时间抽真实发布时间。失败/无/疑似渲染时间 → None。"""
     if not url:
         return None
     try:
@@ -262,10 +279,11 @@ def fetch_meta_date(url: str) -> str | None:
         m = rx.search(html_txt)
         if m:
             d = _date_from_text(m.group(1))
-            if d:
+            if d and not _looks_like_now(d):      # 弃用"当前时间"伪造的发布时间
                 return d
     # 兜底:财联社/每经等把发布时间放在页头可见文本(年月日 / 月日 时:分)
-    return _visible_publish_date(html_txt)
+    v = _visible_publish_date(html_txt)
+    return v if v and not _looks_like_now(v) else None
 
 
 # 需浏览器过验证码/JS 才能拿到日期的站(纯 HTTP 只到验证码页,如 ZAKER 的长亭 WAF)

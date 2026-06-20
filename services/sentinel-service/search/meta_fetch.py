@@ -10,9 +10,22 @@ import json
 import logging
 import re
 import sys
-from datetime import date as _date
+from datetime import date as _date, datetime, timedelta
 
 logging.disable(logging.INFO)
+
+
+def _looks_like_now(s):
+    """带时分的日期若约等于现在(抓取时刻)→ 渲染时间伪造,弃用。"""
+    m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})', s or "")
+    if not m:
+        return False
+    try:
+        dt = datetime(*(int(x) for x in m.groups()))
+    except ValueError:
+        return False
+    now = datetime.now()
+    return now - timedelta(minutes=10) <= dt <= now + timedelta(hours=1)
 
 from scrapling.fetchers import StealthyFetcher
 
@@ -58,10 +71,10 @@ def _extract(html):
         m = rx.search(html)
         if m:
             d = _dft(m.group(1))
-            if d:
+            if d and not _looks_like_now(d):   # 弃用"当前时间"伪造的发布时间
                 return d
     v = _visible(html)
-    if v:
+    if v and not _looks_like_now(v):
         return v
     # ZAKER 等:发布日在 <span class="time">05-16</span>(MM-DD,锚定 class="time" 避开
     # 相关文章的 article-time 相对时间)。无年→当年,落未来则去年。
