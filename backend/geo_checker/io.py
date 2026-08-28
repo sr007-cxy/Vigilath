@@ -5,7 +5,7 @@ get_text_content) and line 1048 (flesch_kincaid_grade).
 
 fetch() caches responses in state._page_cache so repeated calls for the
 same URL within a single request return the stored response. Cache is per
-process; see issue_list #8 for cross-worker sharing via Redis.
+process. Cross-worker sharing belongs in the backend cache service.
 """
 
 import re

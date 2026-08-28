@@ -1,4 +1,5 @@
-// See docs/url-validation-cases.md for the shared pass/reject test list.
+// See docs/contracts/url-and-outbound-fetch-security.md for the shared syntax
+// contract. The backend must separately authorize resolved network addresses.
 // Must stay in sync with backend/geo/utils/validator.py::validate_url —
 // identical rule, identical cases.
 //

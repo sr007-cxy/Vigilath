@@ -1,5 +1,9 @@
 # AI 引用追踪(Mention Tracking)产品文档 · v1
 
+> **Status: historical phase plan.** Current maintained behavior and KPI
+> contracts are documented in
+> [docs/product/ai-telemetry.md](../../../docs/product/ai-telemetry.md).
+
 > 状态:**Draft / 待评审**
 > 创建日期:2026-05-13
 > 模块:`ai-telemetry`(GEO 第二支产品线)

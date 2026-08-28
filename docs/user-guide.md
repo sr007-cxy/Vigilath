@@ -1,75 +1,58 @@
-# GEO Readiness Checker - User Guide
+# Vigilath User Guide
 
-## What is GEO?
+Owner: frontend product experience
+Last reviewed: 2026-08-28
 
-GEO (Generative Engine Optimization) is the practice of optimizing website content so it performs better in AI-powered search engines and assistants such as ChatGPT, Google AI Overviews, Perplexity, and Copilot.
+Vigilath measures how websites, brands, and content are prepared for and appear
+in generative search engines and AI assistants.
 
-## How to Use GEO Readiness Checker
+## Run a website audit
 
-### 1. Open the website
+1. Open the Vigilath website and enter an HTTP or HTTPS website URL.
+2. Start the GEO readiness check.
+3. Keep the page open while the request is running.
+4. Review the score, grade, summary counts, evidence, and recommendations.
 
-Open a browser and visit the GEO Readiness Checker website.
+A default audit often completes in tens of seconds, but slow target sites and
+external probes can take several minutes. Advanced browser- and AI-assisted
+modes can take up to roughly 15 minutes under the current request budget.
 
-### 2. Enter a URL
+## Understand a default result
 
-Enter the website URL you want to test in the home-page field. Make sure it uses a valid format, for example: `https://example.com`.
+- **AI Visibility Score**: normalized website readiness score from 0 to 100.
+- **Grade**: A+ for 90–100, A for 80–89, B for 70–79, C for 60–69, D for
+  50–59, and F below 50.
+- **PASS**: the tested signal met the current rule.
+- **WARN**: the signal was present but can be improved.
+- **FAIL**: the signal was missing or did not meet the rule.
+- **INFO**: evidence that does not directly change the score.
 
-### 3. Run the check
+Scores are a time-bound measurement, not a permanent property. Pages, search
+indexes, provider responses, and network availability can change between runs.
+Use the evidence and recommendations rather than relying only on the total.
 
-Click "Check GEO Readiness" to start. The check may take a few seconds to several dozen seconds, depending on site size and response time.
+## Advanced analysis
 
-### 4. Review the results
+Depending on account permissions and configured providers, advanced modes can
+include comparison, crawl testing, authority auditing, AEO visibility, citation
+checking, AI visibility, and entity analysis. These modes may use external AI
+providers or browser workers and can return partial results when an upstream
+service is unavailable.
 
-After completion, you are redirected to a results page showing:
+## Brand Growth
 
-- **AI Visibility Score** : the GEO readiness score for your site (0-100) and grade (A+ to F)
-- **Check summary**: counts of passed, warning, failed, and informational checks
-- **Details**: all checks grouped by category, with status and recommendations
+Authenticated users can use Brand Growth to inspect sources, engine
+performance, competitors, monitored queries, query-engine matrices, original
+responses, insights, and published outcomes. Missing or failed observations
+should be treated as unknown rather than as a zero result.
 
-### 5. Get optimization help
+## Privacy and responsible use
 
-For professional GEO optimization help, click "Get Optimization Help" or open the contact page and submit the form.
+The checker reads public pages and does not modify the target website. Do not
+submit private URLs, credentials, session-bearing URLs, or customer data.
 
-## Understanding the results
+## When to rerun
 
-### Status meanings
-
-- **PASS** (green): good and aligned with GEO standards
-- **WARN** (yellow): can be improved
-- **FAIL** (red): missing or broken and needs attention
-- **INFO** (blue): informational and optional
-
-### Scoring system
-
-- **A+**: 90-100 - excellent
-- **A**: 80-89 - good
-- **B**: 70-79 - average
-- **C**: 60-69 - fair
-- **D**: 50-59 - poor
-- **F**: 0-49 - weak
-
-## Optimization recommendations
-
-The results page provides concrete recommendations for every check, especially WARN and FAIL items, to help improve your GEO readiness.
-
-## Frequently asked questions
-
-### How long does a check take?
-
-A check usually takes 5-30 seconds, depending on site size and response time.
-
-### Does checking affect my website?
-
-No. The checker only reads website content and does not modify your site.
-
-### Why is my score low?
-
-A low score can result from missing structured data, poor technical crawlability, weak content quality, and other factors. The results page provides specific recommendations.
-
-### How often should I check?
-
-Check after major website changes, or at least quarterly, to keep your GEO readiness current.
-
-## Contact us
-
-For questions or professional GEO optimization services, visit the contact page.
+Rerun after material content, structured-data, crawl policy, canonical-host, or
+site-architecture changes. For ongoing monitoring, compare runs taken under
+similar conditions and retain their timestamps and evidence.

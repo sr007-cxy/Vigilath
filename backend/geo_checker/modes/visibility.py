@@ -189,7 +189,8 @@ def ai_visibility(url, custom_queries=None, return_data=False):
     # - 耗时 120-180s → ~40-60s
     # - 分数方差 ±2-3 → ±5-8 分(用户无感;单次 snapshot 已足够)
     # - 单次 /visibility 成本 $0.84 → ~$0.28
-    # 详见 docs/ai-cost-analysis.md 的收敛分析。
+    # Cost and convergence guidance:
+    # docs/engineering/checker-reliability-and-performance.md
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
@@ -835,4 +836,3 @@ def ai_visibility(url, custom_queries=None, return_data=False):
 # ---------------------------------------------------------------------------
 # Entity GEO Audit  (--entity)
 # ---------------------------------------------------------------------------
-

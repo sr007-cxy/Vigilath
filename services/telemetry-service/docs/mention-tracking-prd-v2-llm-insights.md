@@ -1,5 +1,9 @@
 # AI 引用追踪 · v2 增量:LLM 诊断与优化建议
 
+> **Status: historical phase plan.** Current maintained behavior and KPI
+> contracts are documented in
+> [docs/product/ai-telemetry.md](../../../docs/product/ai-telemetry.md).
+
 > 状态:**Draft / 待评审**
 > 创建日期:2026-05-13
 > 上一版:[`mention-tracking-prd.md`](./mention-tracking-prd.md)(v1,**保持不变**,作为命中追踪基线)

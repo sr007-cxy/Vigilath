@@ -3,7 +3,7 @@
 // 6 步:① 画像 ② 诊断与方案预评估 ③ GEO策略优化方案 ④ 计划书 ⑤ 文案 ⑥ 效果查验与更新
 // 状态符号:✓ done / ⋯ running / ─ idle / ✗ failed
 //
-// 设计文档:docs/no-audit-flow-design.md §4.4
+// Maintained workflow: docs/product/content-workflow.md
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';

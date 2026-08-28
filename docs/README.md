@@ -1,63 +1,68 @@
 # Documentation index
 
-This directory contains architecture, operations, product, implementation, and
-historical planning documents.
+This directory contains the maintained architecture, operations, product, and
+engineering documentation for Vigilath. Source code and automated tests remain
+authoritative when a document and the implementation disagree.
 
-Status markers used in this index:
+## Status definitions
 
-- **Maintained / English** — reviewed against the current codebase.
-- **Needs translation** — retained reference material that still contains non-English prose.
-- **Historical / planning** — useful context, but not an operational source of truth.
+- **Normative** — a contract or operational procedure that must be kept in sync
+  with implementation changes.
+- **Maintained** — reviewed overview or guidance, but not an API contract.
+- **Historical** — retained only for context and never an operational source of
+  truth.
 
-A star marks the maintained entry point when multiple documents cover the same subject.
-
-## Architecture and engineering
-
-| Document | Purpose | Status |
-| --- | --- | --- |
-| [architecture.md](architecture.md) | Star: system topology, services, data, deployment, and scaling constraints | Maintained / English |
-| [url-validation-cases.md](url-validation-cases.md) | Shared frontend/backend URL validation cases | Maintained / English* |
-| [i18n-status.md](i18n-status.md) | Frontend internationalization status | Maintained / English |
-| [content-type-templates.md](content-type-templates.md) | Content template design | Maintained / English |
-| [non-determinism-analysis.md](non-determinism-analysis.md) | Analysis of non-deterministic behavior | Maintained / English |
-
-## Deployment and operations
+## Start here
 
 | Document | Purpose | Status |
 | --- | --- | --- |
-| [deployment-guide.md](deployment-guide.md) | Star: production deployment, rollback, systemd, and nginx | Maintained / English |
-| [performance-guide.md](performance-guide.md) | Performance diagnosis and optimization | Maintained / English |
+| [architecture.md](architecture.md) | Runtime topology, component ownership, data stores, and scaling boundaries | Maintained |
+| [deployment-guide.md](deployment-guide.md) | Local Compose constraints and production release, backup, and rollback procedures | Normative |
+| [user-guide.md](user-guide.md) | End-user audit workflow and result interpretation | Maintained |
 
-## Product and UX
-
-| Document | Purpose | Status |
-| --- | --- | --- |
-| [user-guide.md](user-guide.md) | User guide | Maintained / English |
-| [self-geo-optimization.md](self-geo-optimization.md) | Vigilath self-optimization backlog | Maintained / English |
-
-## Integrations
+## Contracts and engineering
 
 | Document | Purpose | Status |
 | --- | --- | --- |
-| [AI-telemetry](AI-telemetry/) | AI telemetry design and operations | Maintained / English |
+| [contracts/url-and-outbound-fetch-security.md](contracts/url-and-outbound-fetch-security.md) | Shared URL syntax contract and required server-side outbound-fetch controls | Normative |
+| [engineering/checker-reliability-and-performance.md](engineering/checker-reliability-and-performance.md) | Timeouts, variability, retries, performance, and AI cost controls | Maintained |
+| [i18n-status.md](i18n-status.md) | Frontend locale loading behavior and translation review checklist | Normative |
 
-## Reference and analysis
+## Product workflows
 
 | Document | Purpose | Status |
 | --- | --- | --- |
-| [ai-cost-analysis.md](ai-cost-analysis.md) | AI provider cost and request-volume analysis | Maintained / English |
-| [issue_list.md](issue_list.md) | Historical issue register and acceptance notes | Maintained / English |
-| [non-determinism-analysis.md](non-determinism-analysis.md) | Sources of score variability | Maintained / English |
-| [sentiment-gap-analysis-vs-wisersone.md](sentiment-gap-analysis-vs-wisersone.md) | Sentinel capability-gap analysis | Maintained / English |
+| [product/content-workflow.md](product/content-workflow.md) | Brand profile, query, content generation, review, publication, and measurement workflow | Maintained |
+| [product/ai-telemetry.md](product/ai-telemetry.md) | Brand Growth information architecture, KPI contracts, and implementation map | Maintained |
+
+## Integrations and runbooks
+
+| Document | Purpose | Status |
+| --- | --- | --- |
+| [integrations/sentinel.md](integrations/sentinel.md) | Current Sentinel architecture, capability boundaries, and detailed service references | Maintained |
+| [runbooks/public-site-geo-checklist.md](runbooks/public-site-geo-checklist.md) | Public-site identity and discovery-file verification | Normative |
+
+## Documentation outside this directory
+
+Component-specific operational details should stay next to the component:
+
+- `services/sentinel-service/README.md` is the current Sentinel service entry
+  point.
+- `services/*/docs/` may contain implementation PRDs and historical designs;
+  each such document must state whether it describes current or target state.
+- `backend/deploy/` contains deployable systemd and nginx assets.
+- `skills/vigilath-geo/README.md` documents the installable agent skill.
+
+Root-level `COMPARISON.md`, `ENHANCEMENT.md`, and `OPTIMIZATION.md` are planning
+or analysis records. They are not operational sources of truth.
 
 ## Maintenance policy
 
-- Write new and actively maintained documentation in English.
-- Never place real credentials, host passwords, tokens, cookies, or private
-  infrastructure secrets in documentation.
-- Add new documents to the relevant section instead of creating a flat index.
-- Mark superseded documents as historical and link to the replacement.
-- Translate or retire legacy Chinese documents when they next receive
-  substantive updates.
-
-\* Chinese domain names and example inputs are intentionally preserved in validation test cases.
+- Write maintained documentation in English.
+- Add an owner or owning component and a last-reviewed date to documents whose
+  facts can drift.
+- Update a normative document in the same change as its implementation.
+- Prefer one maintained entry point per subject. Mark superseded designs as
+  historical and link to their replacement.
+- Never store credentials, browser sessions, cookies, customer data, or private
+  infrastructure details in documentation.

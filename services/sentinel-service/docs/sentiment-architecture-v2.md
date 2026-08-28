@@ -1,9 +1,15 @@
 # 舆情系统架构 v2(重构目标 · sentinel 自治 + MySQL 一统)
 
+> **Status: historical target design, not current architecture.** The current
+> implementation uses PostgreSQL with one schema per account. See
+> [docs/integrations/sentinel.md](../../../docs/integrations/sentinel.md) and
+> [the service README](../README.md).
+
 > 状态:方向已确认,细节待重构期落地
 > 创建日期:2026-05-08
 > 上一版:[`sentiment-architecture.md`](./sentiment-architecture.md)(描述重构前现状,**不要原地覆盖**)
-> 配套文档:[`../../docs/sentiment-gap-analysis-vs-wisersone.md`](../../docs/sentiment-gap-analysis-vs-wisersone.md)
+> 当前能力边界见
+> [`docs/integrations/sentinel.md`](../../../docs/integrations/sentinel.md)。
 >
 > **核心切面**:
 > 1. **sentinel-service 自治**:自跑 cron + 自管 DAG runner;backend 退化为账号 / FE 网关

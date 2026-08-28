@@ -82,7 +82,8 @@ for fn in _query_perplexity _query_openai _query_anthropic _query_deepseek _quer
 done
 ```
 
-详见 `docs/performance-report-2026-04-17.md` 与本次 commit 的 issue_list 更新。
+相关历史性能报告和 issue register 已在文档整合中移除；当前维护入口见
+`docs/engineering/checker-reliability-and-performance.md`。
 
 ## 归档规则
 

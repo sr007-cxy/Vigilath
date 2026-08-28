@@ -34,7 +34,7 @@ For a detailed map of the documentation set, see [`docs/README.md`](docs/README.
 ### Prerequisites
 
 - Python 3.12 recommended for the backend; Python 3.9+ for the standalone CLI.
-- Node.js 18+ and npm.
+- Node.js `^20.19.0 || >=22.12.0` and npm (required by the current Vite 8 frontend).
 - Git. Docker and Docker Compose are optional for local service orchestration.
 
 ### CLI installation

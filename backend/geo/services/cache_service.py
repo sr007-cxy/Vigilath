@@ -45,8 +45,9 @@ _log = logging.getLogger(__name__)
 # 默认 TTL 24 小时
 DEFAULT_TTL_S = 24 * 60 * 60
 
-# Redis 连接 URL。约定用 db=7(db 0/1 是其他应用的,详见 docs/issue_list.md 和
-# 本次切换时的讨论)。可通过 REDIS_URL 环境变量覆盖,方便开发/测试切库。
+# Redis 连接 URL。约定用 db=7(db 0/1 是其他应用的)。可通过 REDIS_URL
+# 环境变量覆盖,方便开发/测试切库。运维约束见
+# docs/engineering/checker-reliability-and-performance.md。
 _REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/7")
 
 # 全局单例 Redis client。redis-py 的 Redis 对象自带连接池,线程安全。

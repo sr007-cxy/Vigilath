@@ -1,5 +1,8 @@
 # Vigilath Architecture
 
+Owner: application architecture
+Last reviewed: 2026-08-28
+
 This document describes the current runtime architecture of Vigilath, a GEO and AI-visibility platform.
 
 ## System overview
@@ -33,7 +36,11 @@ Supporting services:
   browser-service, telemetry-service, openrouter-proxy, ddg-proxy, newsnow (:4444)
 ```
 
-The root `docker-compose.yml` starts the frontend, backend, Sentinel, NewsNow, and a persistent Sentinel volume. Browser, telemetry, proxy, and agent services use their own deployment configurations.
+The root `docker-compose.yml` starts the frontend, backend, Sentinel, and
+NewsNow. It is a development convenience, not a complete production topology:
+it does not provision PostgreSQL, does not pass Sentinel's required
+`DATABASE_URL`, and does not persist the backend's default SQLite database.
+Browser, telemetry, proxy, and agent services use separate configurations.
 
 ## Frontend
 
@@ -50,7 +57,9 @@ The backend follows an API/service/model layout:
 - `models/`: SQLAlchemy models and Pydantic schemas.
 - `alembic/` and `migrations/`: database migrations.
 
-Production deployments use PostgreSQL. Local development defaults to SQLite and should use `backend/.env.example` for configuration.
+The recommended production data store is PostgreSQL. Local development defaults
+to SQLite and should use `backend/.env.example` for configuration. Legacy
+single-host SQLite deployments require an explicit backup and migration plan.
 
 ## GEO audit engine
 
@@ -78,8 +87,21 @@ Secrets, browser sessions, cookies, database credentials, and payment keys are r
 
 For local development, install the component dependencies, copy the relevant `.env.example` files, and start the backend and frontend separately. For a containerized development stack, run `docker compose up --build`.
 
-Production deployment details, rollback procedures, systemd units, and nginx configuration are documented in `docs/deployment-guide.md` and `backend/deploy/`.
+Deployment profiles, rollback procedures, systemd units, and nginx
+configuration are documented in `docs/deployment-guide.md` and
+`backend/deploy/`.
 
 ## Scaling constraints
 
-The web layer is designed for stateless workers backed by shared PostgreSQL and Redis. The current deployment may run multiple Uvicorn workers on one host. Background schedulers use a leader guard; a durable external task queue and database read/write separation are still required for a multi-node deployment.
+The web layer is intended to use stateless workers backed by shared PostgreSQL
+and optional Redis. Background schedulers use a leader guard; a durable external
+task queue, distributed scheduler coordination, and database capacity planning
+are still required for a multi-node deployment.
+
+## Related maintained documentation
+
+- [Deployment and operations](deployment-guide.md)
+- [Checker reliability and performance](engineering/checker-reliability-and-performance.md)
+- [Sentinel integration](integrations/sentinel.md)
+- [Content workflow](product/content-workflow.md)
+- [AI telemetry](product/ai-telemetry.md)

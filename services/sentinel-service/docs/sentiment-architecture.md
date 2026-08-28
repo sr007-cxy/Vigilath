@@ -1,8 +1,14 @@
 # 舆情系统架构 (Sentinel)
 
+> **Status: historical.** This describes the pre-PostgreSQL implementation.
+> Current behavior is documented in
+> [docs/integrations/sentinel.md](../../../docs/integrations/sentinel.md) and
+> [the service README](../README.md).
+
 > 状态:活跃,最后更新 2026-05-08
 > 范围:`services/sentinel-service/` + `backend/geo/services/sentiment_*` + `frontend/src/pages/Dashboard/sentiment/`
-> 配套文档:[`sentiment-gap-analysis-vs-wisersone.md`](./sentiment-gap-analysis-vs-wisersone.md)(对标慧科)
+> 当前能力边界见
+> [`docs/integrations/sentinel.md`](../../../docs/integrations/sentinel.md)。
 
 ---
 
@@ -231,7 +237,8 @@ sentinel-service 是从单租户 `yuqin` 包改造而来,`storage.connect()` 路
 1. **"今日"语义 = ingested_at,不是 publish_time**。历史帖被新 query 拉回来时算"今日讨论",符合"我们今天看到了什么"的产品语义。
 2. **KPI 仅入 `is_relevant=1`**。LLM 当过滤器,跨主体噪声(同名公司、谐音梗)被过滤后再统计。
 3. **15 平台 catalog 是真值,FE 的固定列表必须跟上**。最近一次提交(`e422f89`)就是把 FE 的"抖音/Twitter"老列表换成对齐 catalog 的 15 项。
-4. **引擎顺序按实测排**(cnbing > baidu > ddg)。详细对比表见 `sentiment-gap-analysis-vs-wisersone.md` 末尾。
+4. **引擎顺序按实测排**(cnbing > baidu > ddg)。当前能力边界见
+   [Sentinel 集成说明](../../../docs/integrations/sentinel.md)。
 5. **14 爬虫并行 + 单点失败容忍**。多数老爬虫(xueqiu/sina/yicai 等)因为 WAF/API 变更经常 502,但保留着,失败被吞,新加的 eastmoney 系 + sina_stock_news 是稳定主力。
 6. **状态机有两层**:scheduler 的 `max_instances=1` 防同进程重叠,pipeline 内部的 `last_run_status='running'` 防跨进程/跨触发源(cron + 手动)重叠,僵尸清理兜底进程崩溃。
 7. **LLM provider 默认 GLM**(`glm-4.5-flash`),便宜但 RPM 低 → analyze 可能 20–30 分钟。这就是 backend 给 1800s 超时的原因。

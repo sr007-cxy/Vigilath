@@ -2,7 +2,8 @@
 
 > 文档日期:2026-05-17
 > 范围:本轮新接的两个数据源(微信公众号合集枚举、newsnow 热榜聚合)及其在 sentinel-service 中的能力定位
-> 相关文档:[sentiment-architecture-v2.md](./sentiment-architecture-v2.md)、[sentiment-gap-analysis-vs-wisersone.md](../../../docs/sentiment-gap-analysis-vs-wisersone.md)
+> 相关文档:[Sentinel 当前集成说明](../../../docs/integrations/sentinel.md)、
+> [sentiment-architecture-v2.md](./sentiment-architecture-v2.md)(历史目标设计)
 
 ---
 
@@ -176,7 +177,7 @@ WEIBO_COOKIE=SUB=<你浏览器 weibo.com 登录后从 DevTools 抠出来的 SUB 
 | 微信全网按品牌词实时搜 | 中等 | sogou 仅 24h 窗口,无替代 | **行业天花板**,只能接受 |
 | 阅读量 / 转发 / 点赞 | 高 | 微博/知乎要登录态,微信无接口 | **要互动数据就买 SaaS**(WiseHub / 知微) |
 | 抖音 / B 站短视频字幕 | 高 | OCR + ASR 流水线 | **重投入**,放到长期路线图 |
-| 海外源(V2EX/HN/Reddit/GitHub) | 低-中 | 独立 EC2 代理 | **已评估暂缓**(参考 [deploy-test-env.md §四点五](../../../.claude/deploy-test-env.md)) |
+| 海外源(V2EX/HN/Reddit/GitHub) | 低-中 | 独立出口代理 | **已评估暂缓** |
 | 小红书 | 中 | 反爬严,sogou 索引浅,需专门 client | **未做**,P2 |
 | 微信非合集文章 | 中 | 公众号文章列表接口已加密 | sogou 兜底,**行业天花板** |
 
@@ -229,4 +230,4 @@ WEIBO_COOKIE=SUB=<你浏览器 weibo.com 登录后从 DevTools 抠出来的 SUB 
 
 ### 测试环境部署
 
-详见 [`.claude/deploy-test-env.md §四点五`](../../../.claude/deploy-test-env.md)(本地 gitignore,不进 git)
+测试环境细节不属于版本库文档；部署时从受保护的运维配置获取。

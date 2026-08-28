@@ -1,8 +1,9 @@
 from urllib.parse import urlparse
 import re
 
-# See docs/url-validation-cases.md for the shared pass/reject test list that
-# this regex must match (frontend validateUrl has to give identical results).
+# See docs/contracts/url-and-outbound-fetch-security.md for the shared syntax
+# contract. Syntax validation is not outbound-fetch authorization; server-side
+# callers still need the network-address controls specified there.
 # ASCII LDH host with at least one dot; each label starts/ends with alnum,
 # may contain hyphens internally; no non-ASCII (IDN not supported yet).
 _HOST_RE = re.compile(
