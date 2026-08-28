@@ -2,7 +2,7 @@
 name = "geo-checker-backend"
 version = "0.1.0"
 description = "GEO Readiness Checker Backend API"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Vigilath contributors"]
 packages = [{ include = "geo" }]
 
 [tool.poetry.dependencies]
@@ -15,7 +15,7 @@ python-multipart = "^0.0.6"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.2"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
-python-jose = "^3.3.0"
+pyjwt = {extras = ["crypto"], version = "^2.10.1"}
 sqlalchemy = "^2.0.23"
 alembic = "^1.13.0"
 pydantic-sqlalchemy = "^0.0.10"

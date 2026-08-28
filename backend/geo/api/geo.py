@@ -24,7 +24,8 @@ from geo.utils.error_handler import AppException
 from geo.utils.request_log import request_log
 from geo.api.auth import SECRET_KEY, ALGORITHM
 from geo.services.user_service import user_service
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 import asyncio
 import json
 import uuid

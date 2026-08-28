@@ -1,7 +1,7 @@
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from jose import JWTError
+from jwt import PyJWTError as JWTError
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 

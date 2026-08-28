@@ -7,7 +7,7 @@
 >
 > **核心切面**:
 > 1. **sentinel-service 自治**:自跑 cron + 自管 DAG runner;backend 退化为账号 / FE 网关
-> 2. **MySQL 8.0 一统**:废弃 per-account SQLite + 主库 SQLite/Postgres + sentinel runner.db,**全部进同一 MySQL 库**(`vigilath` @ `123.125.194.100:53306`,8.0.35,utf8mb4)
+> 2. **MySQL 8.0 一统**:废弃 per-account SQLite + 主库 SQLite/Postgres + sentinel runner.db,**全部进同一 MySQL 库**(`vigilath` @ `test.example.com:53306`,8.0.35,utf8mb4)
 >
 > 预计工作量 12-20 工作日,**分 phase 灰度上线**。
 

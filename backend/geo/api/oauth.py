@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from geo.models.user import Token, UserCreate
 from geo.services.user_service import user_service
-from jose import jwt
+import jwt
 from datetime import datetime, timedelta
 import requests
 from geo.database import settings

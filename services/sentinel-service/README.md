@@ -1,66 +1,53 @@
 # Sentinel Service
 
-LLM-native 舆情监测微服务 — 把 [yuqin](https://github.com/.../yuqin) 包成 FastAPI HTTP 接口,
-供 GEO backend 的定时任务和 API 路由调用。
+Sentinel is the brand-monitoring microservice used by the Vigilath backend. It
+collects posts from multiple sources, performs LLM-assisted analysis, creates
+briefs, and drafts responses.
 
-## 核心接口
+## API
 
-| 方法 | 路径 | 用途 | 是否需 OPENAI_KEY |
-|---|---|---|---|
-| POST | `/run-monitor`  | LLM 生成 plan + 多引擎抓取 + 写 posts | ✓ |
-| POST | `/run-analyze`  | 对未分析帖子做结构化分析 | ✓ |
-| POST | `/run-brief`    | 生成日度简报 Markdown | ✓ |
-| POST | `/run-respond`  | 生成三档响应草稿 | ✓ |
-| POST | `/run-crawl-eastmoney` | 直爬东财股吧(免 LLM)| × |
-| GET  | `/accounts/{id}/posts?ticker=` | 取帖子+分析 | × |
-| GET  | `/accounts/{id}/briefs?ticker=` | 简报列表 | × |
-| GET  | `/accounts/{id}/briefs/{brief_id}` | 简报详情 | × |
-| GET  | `/accounts/{id}/drafts?ticker=` | 草稿列表 | × |
-| GET  | `/health` | 健康检查 | × |
+| Method | Path | Purpose | LLM key required |
+| --- | --- | --- | --- |
+| POST | `/run-monitor` | Plan, collect, and persist posts | Yes |
+| POST | `/run-analyze` | Analyze unprocessed posts | Yes |
+| POST | `/run-brief` | Generate a Markdown brief | Yes |
+| POST | `/run-respond` | Generate response variants | Yes |
+| POST | `/run-crawl-eastmoney` | Crawl Eastmoney directly | No |
+| GET | `/accounts/{id}/posts` | List posts and analyses | No |
+| GET | `/accounts/{id}/briefs` | List briefs | No |
+| GET | `/accounts/{id}/briefs/{brief_id}` | Get a brief | No |
+| GET | `/accounts/{id}/drafts` | List drafts | No |
+| GET | `/health` | Health check | No |
 
-OpenAI API Key 通过 `X-OpenAI-Key` header 传递,优先级高于容器 env。
+An `X-OpenAI-Key` request header overrides the service-level
+`OPENAI_API_KEY` environment variable.
 
-## 多租户隔离
+## Tenant isolation
 
-每个 `account_id` 一个独立 SQLite:
-```
-data/account_42/yuqing.db
-data/account_42/briefs/brief_VNET_2026-05-06.md
-data/account_42/knowledge/brand_voice.md
-```
+Tenant data is stored in PostgreSQL. Each account receives a schema named
+`tenant_<account_id>`; the storage layer sets `search_path` for every
+tenant-bound connection.
 
-不修改 yuqin 源 schema,通过 monkey-patch `storage.connect()` 实现。
+Set `DATABASE_URL` before starting the service.
 
-## 开发
+## Development
 
 ```bash
 cd services/sentinel-service
-pip install -e .
-export OPENAI_API_KEY=sk-...
-uvicorn service:app --reload --port 8090
+python -m venv .venv
+.venv/bin/pip install -e .
+export DATABASE_URL='postgresql://USER:PASSWORD@HOST:PORT/DB'
+export OPENAI_API_KEY='replace-with-a-secret-from-your-secret-manager'
+.venv/bin/uvicorn service:app --reload --port 8090
 ```
 
-测试一发:
-```bash
-curl -X POST http://localhost:8090/run-monitor \
-  -H "Content-Type: application/json" \
-  -H "X-OpenAI-Key: $OPENAI_API_KEY" \
-  -d '{"account_id":1,"target":"世纪互联","ticker":"VNET","intent":"做空报告"}'
-```
+Do not commit either value.
 
-## 容器化
+## Container
 
 ```bash
 docker compose up sentinel-service
 ```
 
-## 调用方
-
-GEO backend 通过 `backend/geo/services/sentinel_client.py` 调本服务。
-APScheduler 在 backend 内每日 07:00 (Asia/Shanghai) 遍历所有 active 账号触发 monitor → analyze → brief 全流程。
-
-## 待办
-
-- 关键词 `excludes` yuqin 当前没原生支持,后续在 plan 生成时加 NOT 修饰
-- 把 plan 生成与 run_plan 拆成两步,允许 GEO backend 在中间持久化 plan 并支持人工编辑
-- chat 端 — P2
+The main backend calls this service through
+`backend/geo/services/sentinel_client.py`.

@@ -58,7 +58,7 @@ ARK_BOT_URL = "https://ark.cn-beijing.volces.com/api/v3/bots/chat/completions"
 
 def _browser_url(engine: str) -> str:
     # per-engine 覆盖优先:把单个引擎指到独立 worker(不同出口 IP),绕开站点对某 IP
-    # 的风控/封禁,而不影响其它引擎。如 BROWSER_SERVICE_DEEPSEEK=http://172.80.40.102:8092
+    # 的风控/封禁,而不影响其它引擎。如 BROWSER_SERVICE_DEEPSEEK=http://browser-worker.example.com:8092
     override = os.environ.get(f"BROWSER_SERVICE_{engine.upper()}")
     if override:
         return override

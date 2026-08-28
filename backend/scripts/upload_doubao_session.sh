@@ -1,45 +1,36 @@
-#!/bin/bash
-# Upload local doubao session to vm03's browser-service.
+#!/usr/bin/env bash
+# Upload a local Doubao browser session using SSH key authentication.
 #
-# Usage:
-#   bash backend/scripts/upload_doubao_session.sh
+# Required:
+#   export VM_HOST="browser.example.com"
 #
-# Assumes ~/.ssh/config has `21v-bastion` host configured, and that
-# the user has already run `python backend/scripts/doubao_login.py`
-# locally to produce backend/data/browser_sessions/doubao.json.
+# Optional:
+#   export VM_USER="ubuntu"
+#   export PROXY_JUMP="bastion.example.com"
+#   export REMOTE_PATH="/opt/browser-service/data/browser_sessions/doubao.json"
 
 set -euo pipefail
 
-SESSION_FILE="backend/data/browser_sessions/doubao.json"
-REMOTE_PATH="/opt/browser-service/data/browser_sessions/doubao.json"
-VM_IP="172.80.40.103"
-VM_PASS="REDACTED_VM_PASSWORD"
+SESSION_FILE="${SESSION_FILE:-backend/data/browser_sessions/doubao.json}"
+VM_HOST="${VM_HOST:?Set VM_HOST to the destination hostname}"
+VM_USER="${VM_USER:-ubuntu}"
+PROXY_JUMP="${PROXY_JUMP:-}"
+REMOTE_PATH="${REMOTE_PATH:-/opt/browser-service/data/browser_sessions/doubao.json}"
 
 if [[ ! -f "$SESSION_FILE" ]]; then
     echo "Missing $SESSION_FILE."
-    echo "Run first: .venv/bin/python backend/scripts/doubao_login.py"
+    echo "Run the local Doubao login script first."
     exit 1
 fi
 
-echo "Local session size: $(wc -c < "$SESSION_FILE") bytes"
-echo "Cookies in session:  $(jq '.cookies | length' "$SESSION_FILE")"
-echo "Origins in session:  $(jq '.origins | length' "$SESSION_FILE")"
-echo
+ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=yes)
+if [[ -n "$PROXY_JUMP" ]]; then
+    ssh_options+=(-o "ProxyJump=$PROXY_JUMP")
+fi
 
-echo "Uploading to vm03 via 21v-bastion..."
-SSHPASS="$VM_PASS" sshpass -e scp \
-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o LogLevel=ERROR -o PreferredAuthentications=password -o PubkeyAuthentication=no \
-    -o ProxyJump=21v-bastion \
-    "$SESSION_FILE" "root@${VM_IP}:${REMOTE_PATH}"
+echo "Uploading browser session to $VM_HOST..."
+scp "${ssh_options[@]}" "$SESSION_FILE" "$VM_USER@$VM_HOST:$REMOTE_PATH"
 
-echo
-echo "Verifying on vm03..."
-SSHPASS="$VM_PASS" sshpass -e ssh \
-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o LogLevel=ERROR -o PreferredAuthentications=password -o PubkeyAuthentication=no \
-    -J 21v-bastion "root@${VM_IP}" \
-    "ls -la ${REMOTE_PATH}; curl -s http://127.0.0.1:8092/sessions/doubao"
-echo
-echo "Done. Now test with:"
-echo "  curl -X POST http://172.80.40.103:8092/search -H 'Content-Type: application/json' -d '{\"engine\":\"doubao\",\"query\":\"小米汽车\"}'"
+echo "Verifying remote file..."
+ssh "${ssh_options[@]}" "$VM_USER@$VM_HOST" "test -s '$REMOTE_PATH'"
+echo "Upload complete."

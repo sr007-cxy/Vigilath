@@ -7,7 +7,7 @@ DATABASE_URL 从环境读;每个 yuqing.db → PG schema tenant_{account_id}.
 幂等:每张表先 TRUNCATE 再批插.
 
 执行(在 vm02 sentinel 工作目录下):
-    DATABASE_URL='postgresql://appuser:***@172.80.40.5:9000/appdb' \
+    DATABASE_URL='postgresql://appuser:***@database.example.com:9000/appdb' \
     /opt/geo/backend/venv/bin/python -m scripts.migrate_sentinel_data
 """
 from __future__ import annotations

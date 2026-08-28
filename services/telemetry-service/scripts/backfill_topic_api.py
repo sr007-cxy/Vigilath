@@ -13,7 +13,7 @@ Usage (on vm02):
     cd /opt/geo/services/telemetry-service
     DATABASE_URL=sqlite:////opt/geo/backend/data/geo_checker.db \\
       ARK_API_KEY=ark-xxx DOUBAO_BOT_ID=bot-xxxx \\
-      BROWSER_SERVICE_CN=http://172.80.40.103:8092 \\
+      BROWSER_SERVICE_CN=http://localhost:8092 \\
       /opt/geo/backend/venv/bin/python -u -m scripts.backfill_topic_api \\
       --topic-id 2 --engines doubao,deepseek --concurrent 2
 """
@@ -90,7 +90,7 @@ async def call_doubao_bot(client: httpx.AsyncClient, query: str, prompt_ext: str
 
 async def call_deepseek_browser(client: httpx.AsyncClient, query: str, prompt_ext: str) -> dict:
     """vm03 browser-service /search — Playwright 真浏览器跑 chat.deepseek.com."""
-    base = os.environ.get("BROWSER_SERVICE_CN", "http://172.80.40.103:8092").rstrip("/")
+    base = os.environ.get("BROWSER_SERVICE_CN", "http://localhost:8092").rstrip("/")
     content = f"{query}\n\n{prompt_ext}" if prompt_ext else query
     payload = {"engine": "deepseek", "query": content}
     try:
@@ -150,7 +150,7 @@ async def run_backfill(topic_id: int, engines: list[str], concurrent: int) -> No
         f"[backfill] engines={engines} queries={len(queries)} total_cells={total} concurrent={concurrent}\n"
         f"[backfill] run_id={run_id} prompt_ext_len={len(prompt_ext)}\n"
         f"[backfill] doubao_bot={os.environ.get('DOUBAO_BOT_ID')} "
-        f"vm03_browser={os.environ.get('BROWSER_SERVICE_CN', 'http://172.80.40.103:8092')}",
+        f"vm03_browser={os.environ.get('BROWSER_SERVICE_CN', 'http://localhost:8092')}",
         flush=True,
     )
 

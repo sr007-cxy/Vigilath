@@ -69,14 +69,14 @@ export interface BriefMock {
 export const mockAccount: SentimentAccountMock = {
   id: 1,
   user_id: 1,
-  target: '世纪互联',
-  ticker: 'VNET',
-  aliases: ['VNET世纪互联', '蓝云'],
+  target: 'Acme Cloud',
+  ticker: 'ACME',
+  aliases: ['ACMEAcme Cloud', '蓝云'],
   intent: '关注做空报告 / 业绩传闻 / 海外业务 / 数据中心需求',
   keywords: ['业绩', '做空', '管理层', '财报', '数据中心'],
   excludes: ['招聘', '实习'],
   media_allowlist: [],
-  notify_emails: ['ir@vnet.com', 'pr@vnet.com'],
+  notify_emails: ['alerts@example.com', 'security@example.com'],
   weixin_album_urls: [],
   newsnow_sources: [],
   active: true,
@@ -89,126 +89,13 @@ export const mockAccount: SentimentAccountMock = {
 // 切换 onboarding 演示用:URL 加 ?demo=onboarding 时主页用 null
 export const mockEmptyAccount: SentimentAccountMock | null = null;
 
-// ───── 真实客户配置规模演示(数据来自 20260408 版 VNET 关键词表)─────
+// ───── 真实客户配置规模演示(数据来自 20260408 版 ACME 关键词表)─────
 // 6 大类、~85 个关键词条目,模拟客户实际复杂度.
 
 export const mockKeywordGroups: KeywordGroup[] = [
-  {
-    name: '公司主体',
-    kind: 'entity',
-    items: [
-      { term: '世纪互联' },
-      { term: 'NEOLINK' },
-      { term: '世纪互联蓝云' },
-      { term: '第一线DYX' },
-      { term: '时速云' },
-      { term: '云思畅想' },
-      { term: '北京云思畅想科技有限公司' },
-      { term: '北京世纪互联宽带数据中心有限公司' },
-      { term: '算粒互联(北京)科技有限公司' },
-      { term: '互联云界' },
-      { term: '世纪互联 IDC' },
-      { term: '世纪互联 数据中心' },
-      { term: '世纪互联 机房' },
-      { term: '世纪互联 机柜大定制' },
-      { term: '世纪互联 ESG' },
-      { term: '世纪互联 双碳' },
-      { term: '世纪互联 零碳' },
-      { term: '世纪互联 储能' },
-      { term: '世纪互联 数字孪生' },
-      { term: 'NEOLINK LABS' },
-      { term: 'NEOLINKLABS' },
-      { term: '互联科技实验室' },
-      { term: '世纪互联+山高控股' },
-      { term: '世纪互联+山东高速' },
-      { term: 'VNET', is_new: true },
-      { term: '21Vianet', is_new: true },
-    ],
-  },
-  {
-    name: '法院诉讼',
-    kind: 'legal',
-    items: [
-      { term: '世纪互联 法院' },
-      { term: '世纪互联 诉讼' },
-      { term: '世纪互联 官司' },
-      { term: '世纪互联蓝云 法院' },
-      { term: '世纪互联蓝云 诉讼' },
-      { term: '世纪互联蓝云 官司' },
-      { term: '第一线DYX 法院' },
-      { term: '第一线DYX 诉讼' },
-      { term: '第一线DYX 官司' },
-      { term: 'NEOLINKLABS 法院' },
-      { term: 'NEOLINKLABS 诉讼' },
-      { term: 'NEOLINKLABS 官司' },
-    ],
-  },
-  {
-    name: '高管',
-    kind: 'exec',
-    items: [
-      { term: '世纪互联董事长 陈升' },
-      { term: '世纪互联 陈升' },
-      { term: '世纪互联 元道' },
-      { term: '世纪互联创始人 陈升' },
-      { term: '中关村超互联新基建产业创新联盟理事长 陈升' },
-      { term: '世纪互联 CFO 王琪宇' },
-      { term: '世纪互联 集团高级副总裁 张志华' },
-      { term: '世纪互联集团轮值总裁 刘晓' },
-      { term: '世纪互联集团轮值总裁、AIDC战略事业群总经理 马炬' },
-      { term: '世纪互联集团执行副总裁、IDC战略事业群总经理 申成钢' },
-      { term: '世纪互联集团执行副总裁 闫昆' },
-      { term: '世纪互联集团执行副总裁兼总法律顾问 李志德' },
-      { term: '世纪互联集团高级副总裁 滕文' },
-      { term: '蓝云CEO 滕文' },
-      { term: '世纪互联蓝云 CEO 滕文' },
-      { term: '世纪互联集团高级副总裁、第一线 CEO 李晓芒' },
-      { term: '世纪互联副总裁 鲍益' },
-      { term: '世纪互联能源创新事业部总经理 鲍益' },
-      { term: '世纪互联副总裁 杜华锐' },
-      { term: '世纪互联研发负责人 杜华锐' },
-      { term: '世纪互联副总裁 黄益晓' },
-      { term: '世纪互联副总裁 袁旬' },
-      { term: '时速云 黄启功' },
-      { term: '云思畅想 黄启功' },
-      { term: '北京云思畅想科技有限公司 黄启功' },
-      { term: '世纪互联 黄启功' },
-      { term: '时速云 王磊' },
-      { term: '云思畅想 王磊' },
-      { term: '北京云思畅想科技有限公司 王磊' },
-      { term: '世纪互联 王磊' },
-      { term: '互联科技实验室首席科学家 叶晓舟' },
-      { term: '世纪互联 白涛', is_new: true },
-      { term: '世纪互联 戚野白', is_new: true },
-    ],
-  },
-  {
-    name: '项目',
-    kind: 'project',
-    items: [
-      { term: '世纪互联 Reits' },
-      { term: '世纪互联 REITs' },
-      { term: '超互联' },
-      { term: '超互联新算力' },
-      { term: '中关村超互联新基建产业创新联盟' },
-      { term: '超互联HC4' },
-      { term: '智能体超互联' },
-      { term: '超互联联盟' },
-      { term: '世纪互联 乌兰察布' },
-      { term: '世纪互联 三河铭泰' },
-      { term: '世纪互联 AIDC' },
-      { term: '世纪互联 智算中心' },
-    ],
-  },
-  {
-    name: '友商',
-    kind: 'competitor',
-    items: [
-      { term: '秦淮数据' },
-      { term: '万国数据' },
-      { term: '润泽科技' },
-    ],
-  },
+  { name: "Brand", kind: "entity", items: [{ term: "Acme Cloud" }, { term: "Acme Infrastructure" }] },
+  { name: "Products", kind: "project", items: [{ term: "Acme Edge" }, { term: "Acme Compute" }] },
+  { name: "Risk", kind: "legal", items: [{ term: "Acme Cloud outage" }, { term: "Acme Cloud incident" }] },
 ];
 
 // ───── Tab 1 KPI ─────
@@ -244,19 +131,19 @@ export const mockRiskDist: Array<{ level: RiskLevel; count: number; color: strin
 // ───── Tab 2 帖子(20 条覆盖各情感/风险/媒体)─────
 export const mockPosts: SentimentPost[] = [
   {
-    source: 'xueqiu', post_id: 'a1b2c3d4', symbol: 'VNET',
-    title: '【独家】浑水做空报告深度解读:VNET 的债务结构有何隐忧',
+    source: 'xueqiu', post_id: 'a1b2c3d4', symbol: 'ACME',
+    title: '【独家】浑水做空报告深度解读:ACME 的债务结构有何隐忧',
     author: '@浑水中文',
     publish_time: '2026-05-06T03:14:00+08:00',
     url: 'https://xueqiu.com/post/a1b2c3d4',
-    content: '今早浑水(Muddy Waters)发布了对世纪互联(VNET)的做空报告。报告指出,Q3 营收下滑 12%,而其披露的现金流与债务结构存在重大疑问。债务/EBITDA 比超 6,远高于行业均值。我们对该公司的财务披露持高度怀疑态度,建议投资者谨慎。',
+    content: '今早浑水(Muddy Waters)发布了对Acme Cloud(ACME)的做空报告。报告指出,Q3 营收下滑 12%,而其披露的现金流与债务结构存在重大疑问。债务/EBITDA 比超 6,远高于行业均值。我们对该公司的财务披露持高度怀疑态度,建议投资者谨慎。',
     view_count: 12340, reply_count: 487,
     is_relevant: true, filter_reason: null,
-    summary: '浑水发布做空报告,质疑 VNET 债务结构与现金流',
+    summary: '浑水发布做空报告,质疑 ACME 债务结构与现金流',
     sentiment_label: 'bearish', sentiment_score: -0.78,
     emotions: ['愤怒', '嘲讽'],
     topics: ['做空报告', '债务', '管理层'],
-    entities: ['浑水', 'VNET 管理层', '审计师'],
+    entities: ['浑水', 'ACME 管理层', '审计师'],
     stance: 'hostile', intent: 'rumor', factuality: 'mixed',
     risk_level: 'high',
     risk_signals: [
@@ -270,19 +157,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T07:02:14+08:00',
   },
   {
-    source: 'eastmoney', post_id: 'e5f6g7h8', symbol: 'VNET',
-    title: 'VNET Q3 业绩说明会要点:数据中心需求强劲',
+    source: 'eastmoney', post_id: 'e5f6g7h8', symbol: 'ACME',
+    title: 'ACME Q3 业绩说明会要点:数据中心需求强劲',
     author: '股民老王',
     publish_time: '2026-05-06T08:30:00+08:00',
     url: 'https://guba.eastmoney.com/post/e5f6g7h8',
-    content: 'VNET 昨日业绩说明会披露 Q3 营收同比 +18%,数据中心订单饱满到 2027 年。管理层表示,海外扩张节奏稳健,新加坡数据中心已签订长期合同。',
+    content: 'ACME 昨日业绩说明会披露 Q3 营收同比 +18%,数据中心订单饱满到 2027 年。管理层表示,海外扩张节奏稳健,新加坡数据中心已签订长期合同。',
     view_count: 8520, reply_count: 156,
     is_relevant: true, filter_reason: null,
     summary: '业绩会披露:Q3 营收同比 +18%,数据中心订单饱满',
     sentiment_label: 'bullish', sentiment_score: 0.65,
     emotions: ['乐观'],
     topics: ['业绩', '数据中心', '海外扩张'],
-    entities: ['VNET', '管理层', '新加坡数据中心'],
+    entities: ['ACME', '管理层', '新加坡数据中心'],
     stance: 'supportive', intent: 'fact-share', factuality: 'factual_claim',
     risk_level: 'none',
     risk_signals: [],
@@ -293,19 +180,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T08:45:00+08:00',
   },
   {
-    source: '36kr', post_id: 'i9j0k1l2', symbol: 'VNET',
-    title: 'IDC 行业景气度延续,VNET 等头部厂商订单充裕',
+    source: '36kr', post_id: 'i9j0k1l2', symbol: 'ACME',
+    title: 'IDC 行业景气度延续,ACME 等头部厂商订单充裕',
     author: '36氪',
     publish_time: '2026-05-06T10:15:00+08:00',
     url: 'https://36kr.com/post/i9j0k1l2',
-    content: '受 AI 算力需求驱动,IDC 行业 Q3 整体增速达 22%。头部厂商如 VNET、世纪华通等均披露订单饱满。但报告也指出,行业资本开支高企,毛利率承压。',
+    content: '受 AI 算力需求驱动,IDC 行业 Q3 整体增速达 22%。头部厂商如 ACME、世纪华通等均披露订单饱满。但报告也指出,行业资本开支高企,毛利率承压。',
     view_count: 5230, reply_count: 38,
     is_relevant: true, filter_reason: null,
     summary: 'IDC 行业景气延续,但毛利率承压',
     sentiment_label: 'mixed', sentiment_score: 0.15,
     emotions: ['谨慎乐观'],
     topics: ['行业', '数据中心', '资本开支'],
-    entities: ['VNET', '世纪华通', 'AI 算力'],
+    entities: ['ACME', '世纪华通', 'AI 算力'],
     stance: 'neutral', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'low',
     risk_signals: [{ type: '毛利率承压', reason: '行业资本开支高企' }],
@@ -316,19 +203,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T10:30:00+08:00',
   },
   {
-    source: 'caixin', post_id: 'm3n4o5p6', symbol: 'VNET',
-    title: '深度:VNET 海外扩张观察 — 机遇与不确定性并存',
+    source: 'caixin', post_id: 'm3n4o5p6', symbol: 'ACME',
+    title: '深度:ACME 海外扩张观察 — 机遇与不确定性并存',
     author: '财新记者',
     publish_time: '2026-05-05T16:00:00+08:00',
     url: 'https://caixin.com/article/m3n4o5p6',
-    content: '财新记者实地走访 VNET 新加坡和马来西亚数据中心。客户来自欧美的 SaaS 厂商占比超 60%。地缘政治影响下,中资海外 IDC 业务面临审查压力。',
+    content: '财新记者实地走访 ACME 新加坡和马来西亚数据中心。客户来自欧美的 SaaS 厂商占比超 60%。地缘政治影响下,中资海外 IDC 业务面临审查压力。',
     view_count: 7140, reply_count: 22,
     is_relevant: true, filter_reason: null,
-    summary: 'VNET 海外业务面临地缘审查不确定性',
+    summary: 'ACME 海外业务面临地缘审查不确定性',
     sentiment_label: 'mixed', sentiment_score: -0.22,
     emotions: ['谨慎'],
     topics: ['海外扩张', '地缘政治', '业务结构'],
-    entities: ['VNET', '新加坡', '马来西亚'],
+    entities: ['ACME', '新加坡', '马来西亚'],
     stance: 'neutral', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'low',
     risk_signals: [{ type: '地缘风险', reason: '海外业务面临审查' }],
@@ -339,8 +226,8 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-05T16:30:00+08:00',
   },
   {
-    source: 'eastmoney', post_id: 'q7r8s9t0', symbol: 'VNET',
-    title: '散户:VNET 还能拿吗?今天又跌了',
+    source: 'eastmoney', post_id: 'q7r8s9t0', symbol: 'ACME',
+    title: '散户:ACME 还能拿吗?今天又跌了',
     author: '散户老李',
     publish_time: '2026-05-06T11:42:00+08:00',
     url: 'https://guba.eastmoney.com/post/q7r8s9t0',
@@ -351,7 +238,7 @@ export const mockPosts: SentimentPost[] = [
     sentiment_label: 'bearish', sentiment_score: -0.42,
     emotions: ['焦虑', '恐慌'],
     topics: ['做空报告', '止损'],
-    entities: ['VNET', '浑水报告'],
+    entities: ['ACME', '浑水报告'],
     stance: 'skeptical', intent: 'question', factuality: 'opinion',
     risk_level: 'low',
     risk_signals: [],
@@ -362,8 +249,8 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T11:55:00+08:00',
   },
   {
-    source: 'weibo', post_id: 'u1v2w3x4', symbol: 'VNET',
-    title: '#VNET# 浑水又来恶心人了,中概的命',
+    source: 'weibo', post_id: 'u1v2w3x4', symbol: 'ACME',
+    title: '#ACME# 浑水又来恶心人了,中概的命',
     author: '@老张投资',
     publish_time: '2026-05-06T09:20:00+08:00',
     url: 'https://weibo.com/post/u1v2w3x4',
@@ -385,19 +272,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T09:45:00+08:00',
   },
   {
-    source: 'zhihu', post_id: 'y5z6a7b8', symbol: 'VNET',
-    title: '如何看待浑水做空 VNET 的报告?',
+    source: 'zhihu', post_id: 'y5z6a7b8', symbol: 'ACME',
+    title: '如何看待浑水做空 ACME 的报告?',
     author: '匿名用户',
     publish_time: '2026-05-06T07:55:00+08:00',
     url: 'https://zhihu.com/question/y5z6a7b8',
-    content: '从报告内容看,有几处财务数据的解读存在硬伤。但 VNET 的债务结构确实需要关注,尤其是海外子公司的对外担保部分。建议看完原始公告再下结论。',
+    content: '从报告内容看,有几处财务数据的解读存在硬伤。但 ACME 的债务结构确实需要关注,尤其是海外子公司的对外担保部分。建议看完原始公告再下结论。',
     view_count: 6890, reply_count: 142,
     is_relevant: true, filter_reason: null,
     summary: '知乎深度回答:做空报告有硬伤,但债务确需关注',
     sentiment_label: 'mixed', sentiment_score: 0.05,
     emotions: ['理性'],
     topics: ['做空报告', '债务', '财务分析'],
-    entities: ['VNET', '浑水', '海外子公司'],
+    entities: ['ACME', '浑水', '海外子公司'],
     stance: 'neutral', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'medium',
     risk_signals: [{ type: '海外子公司担保', reason: '债务结构关注点' }],
@@ -408,19 +295,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T08:10:00+08:00',
   },
   {
-    source: 'reddit', post_id: 'c9d0e1f2', symbol: 'VNET',
-    title: 'Muddy Waters short report on $VNET — your thoughts?',
+    source: 'reddit', post_id: 'c9d0e1f2', symbol: 'ACME',
+    title: 'Muddy Waters short report on $ACME — your thoughts?',
     author: 'u/dataops_pro',
     publish_time: '2026-05-06T01:30:00+08:00',
     url: 'https://reddit.com/r/investing/post/c9d0e1f2',
-    content: 'Muddy Waters dropped a short report on VNET this morning. The data center thesis seems intact but the debt structure questions are real. What\'s the consensus from people who follow Asian data center plays?',
+    content: 'Muddy Waters dropped a short report on ACME this morning. The data center thesis seems intact but the debt structure questions are real. What\'s the consensus from people who follow Asian data center plays?',
     view_count: 2100, reply_count: 47,
     is_relevant: true, filter_reason: null,
     summary: 'Reddit 用户讨论浑水报告,理性求证',
     sentiment_label: 'neutral', sentiment_score: -0.05,
     emotions: ['理性'],
     topics: ['做空报告', '债务'],
-    entities: ['Muddy Waters', 'VNET'],
+    entities: ['Muddy Waters', 'ACME'],
     stance: 'neutral', intent: 'question', factuality: 'opinion',
     risk_level: 'low',
     risk_signals: [],
@@ -431,19 +318,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T02:00:00+08:00',
   },
   {
-    source: 'xueqiu', post_id: 'g3h4i5j6', symbol: 'VNET',
-    title: 'VNET 现金流分析:浑水的指控站不住脚',
+    source: 'xueqiu', post_id: 'g3h4i5j6', symbol: 'ACME',
+    title: 'ACME 现金流分析:浑水的指控站不住脚',
     author: '@雪球财报派',
     publish_time: '2026-05-06T13:20:00+08:00',
     url: 'https://xueqiu.com/post/g3h4i5j6',
-    content: '我对照 VNET 最近 4 个季度的财报,做了详细的现金流拆分。浑水报告中所谓的"现金流可疑"其实是把自由现金流和经营现金流混淆了。详细 Excel 见下载链接。',
+    content: '我对照 ACME 最近 4 个季度的财报,做了详细的现金流拆分。浑水报告中所谓的"现金流可疑"其实是把自由现金流和经营现金流混淆了。详细 Excel 见下载链接。',
     view_count: 9870, reply_count: 215,
     is_relevant: true, filter_reason: null,
     summary: '雪球分析师驳斥浑水现金流指控',
     sentiment_label: 'bullish', sentiment_score: 0.58,
     emotions: ['专业', '坚定'],
     topics: ['做空报告', '现金流', '财报'],
-    entities: ['浑水', 'VNET', '自由现金流'],
+    entities: ['浑水', 'ACME', '自由现金流'],
     stance: 'supportive', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'none',
     risk_signals: [],
@@ -454,19 +341,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T13:50:00+08:00',
   },
   {
-    source: 'eastmoney', post_id: 'k7l8m9n0', symbol: 'VNET',
-    title: '今天加仓 VNET,逆向投资就这一锤子',
+    source: 'eastmoney', post_id: 'k7l8m9n0', symbol: 'ACME',
+    title: '今天加仓 ACME,逆向投资就这一锤子',
     author: '价值投资者2020',
     publish_time: '2026-05-06T14:30:00+08:00',
     url: 'https://guba.eastmoney.com/post/k7l8m9n0',
-    content: '今天 VNET 跌了 5%,我加了 30%。做空报告其实把基本面利空都释放出来了,反而是机会。',
+    content: '今天 ACME 跌了 5%,我加了 30%。做空报告其实把基本面利空都释放出来了,反而是机会。',
     view_count: 3210, reply_count: 78,
     is_relevant: true, filter_reason: null,
-    summary: '逆向投资者加仓 VNET',
+    summary: '逆向投资者加仓 ACME',
     sentiment_label: 'bullish', sentiment_score: 0.45,
     emotions: ['坚定', '反向'],
     topics: ['加仓', '做空报告'],
-    entities: ['VNET'],
+    entities: ['ACME'],
     stance: 'supportive', intent: 'opinion', factuality: 'opinion',
     risk_level: 'none',
     risk_signals: [],
@@ -477,19 +364,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T14:55:00+08:00',
   },
   {
-    source: 'weibo', post_id: 'o1p2q3r4', symbol: 'VNET',
-    title: 'VNET 高管减持公告,这是要跑?',
+    source: 'weibo', post_id: 'o1p2q3r4', symbol: 'ACME',
+    title: 'ACME 高管减持公告,这是要跑?',
     author: '@小道消息官博',
     publish_time: '2026-05-05T20:15:00+08:00',
     url: 'https://weibo.com/post/o1p2q3r4',
-    content: '昨晚 VNET 公告高管减持 0.5%,虽然量不大,但是和浑水报告的时间点对得上,有点诡异。',
+    content: '昨晚 ACME 公告高管减持 0.5%,虽然量不大,但是和浑水报告的时间点对得上,有点诡异。',
     view_count: 5680, reply_count: 134,
     is_relevant: true, filter_reason: null,
     summary: '微博质疑高管减持时间点',
     sentiment_label: 'bearish', sentiment_score: -0.55,
     emotions: ['怀疑'],
     topics: ['高管减持', '做空报告'],
-    entities: ['VNET', '高管'],
+    entities: ['ACME', '高管'],
     stance: 'skeptical', intent: 'rumor', factuality: 'mixed',
     risk_level: 'medium',
     risk_signals: [
@@ -502,19 +389,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-05T20:40:00+08:00',
   },
   {
-    source: 'caixin', post_id: 's5t6u7v8', symbol: 'VNET',
+    source: 'caixin', post_id: 's5t6u7v8', symbol: 'ACME',
     title: '财新评论:中概股做空攻防进入新阶段',
     author: '财新评论员',
     publish_time: '2026-05-05T18:00:00+08:00',
     url: 'https://caixin.com/article/s5t6u7v8',
-    content: '近年中概股频繁遭遇做空机构狙击,VNET 案例显示,海外做空机构与国内监管的博弈进入新阶段。建议监管层加强对做空报告的事实核查机制。',
+    content: '近年中概股频繁遭遇做空机构狙击,ACME 案例显示,海外做空机构与国内监管的博弈进入新阶段。建议监管层加强对做空报告的事实核查机制。',
     view_count: 4520, reply_count: 18,
     is_relevant: true, filter_reason: null,
     summary: '财新评论中概做空攻防',
     sentiment_label: 'neutral', sentiment_score: -0.10,
     emotions: ['理性'],
     topics: ['做空报告', '监管'],
-    entities: ['中概股', 'VNET', '监管'],
+    entities: ['中概股', 'ACME', '监管'],
     stance: 'neutral', intent: 'analysis', factuality: 'opinion',
     risk_level: 'low',
     risk_signals: [],
@@ -525,19 +412,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-05T18:30:00+08:00',
   },
   {
-    source: 'bilibili', post_id: 'w9x0y1z2', symbol: 'VNET',
+    source: 'bilibili', post_id: 'w9x0y1z2', symbol: 'ACME',
     title: '【深度】3 分钟看懂浑水做空报告全文',
     author: 'B 站财经 UP',
     publish_time: '2026-05-06T15:00:00+08:00',
     url: 'https://bilibili.com/video/w9x0y1z2',
-    content: '我把浑水做空 VNET 的报告全文翻译并图文解析,3 分钟告诉你真相。视频中演示了债务/EBITDA 的算法,以及为什么浑水的算法存在偏颇。',
+    content: '我把浑水做空 ACME 的报告全文翻译并图文解析,3 分钟告诉你真相。视频中演示了债务/EBITDA 的算法,以及为什么浑水的算法存在偏颇。',
     view_count: 18500, reply_count: 320,
     is_relevant: true, filter_reason: null,
     summary: 'B 站 UP 主深度解读做空报告',
     sentiment_label: 'mixed', sentiment_score: 0.10,
     emotions: ['专业'],
     topics: ['做空报告', '财务解析'],
-    entities: ['浑水', 'VNET'],
+    entities: ['浑水', 'ACME'],
     stance: 'neutral', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'low',
     risk_signals: [],
@@ -548,19 +435,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T15:30:00+08:00',
   },
   {
-    source: 'xueqiu', post_id: 'a3b4c5d6', symbol: 'VNET',
-    title: 'VNET 海外业务结构图(独家整理)',
+    source: 'xueqiu', post_id: 'a3b4c5d6', symbol: 'ACME',
+    title: 'ACME 海外业务结构图(独家整理)',
     author: '@基本面研究',
     publish_time: '2026-05-04T11:00:00+08:00',
     url: 'https://xueqiu.com/post/a3b4c5d6',
-    content: '整理了 VNET 截至 2026 Q1 的海外业务结构图,包括新加坡、马来、印尼三地子公司的持股比例和担保关系。',
+    content: '整理了 ACME 截至 2026 Q1 的海外业务结构图,包括新加坡、马来、印尼三地子公司的持股比例和担保关系。',
     view_count: 6700, reply_count: 95,
     is_relevant: true, filter_reason: null,
-    summary: '雪球用户整理 VNET 海外业务结构',
+    summary: '雪球用户整理 ACME 海外业务结构',
     sentiment_label: 'neutral', sentiment_score: 0.12,
     emotions: ['专业'],
     topics: ['海外业务', '子公司'],
-    entities: ['VNET', '新加坡', '马来', '印尼'],
+    entities: ['ACME', '新加坡', '马来', '印尼'],
     stance: 'neutral', intent: 'fact-share', factuality: 'factual_claim',
     risk_level: 'none',
     risk_signals: [],
@@ -571,19 +458,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-04T11:30:00+08:00',
   },
   {
-    source: 'toutiao', post_id: 'e7f8g9h0', symbol: 'VNET',
-    title: '惊!VNET 一夜跌 5%,这家公司还能买吗?',
+    source: 'toutiao', post_id: 'e7f8g9h0', symbol: 'ACME',
+    title: '惊!ACME 一夜跌 5%,这家公司还能买吗?',
     author: '财经爆料',
     publish_time: '2026-05-06T16:00:00+08:00',
     url: 'https://toutiao.com/article/e7f8g9h0',
-    content: '今天 VNET 一夜暴跌 5%,创年内新低。受浑水做空报告影响,加上高管减持,投资者情绪极度悲观。',
+    content: '今天 ACME 一夜暴跌 5%,创年内新低。受浑水做空报告影响,加上高管减持,投资者情绪极度悲观。',
     view_count: 12100, reply_count: 287,
     is_relevant: true, filter_reason: null,
-    summary: '今日头条标题党报道 VNET 暴跌',
+    summary: '今日头条标题党报道 ACME 暴跌',
     sentiment_label: 'bearish', sentiment_score: -0.65,
     emotions: ['恐慌', '夸张'],
     topics: ['股价', '做空报告', '高管减持'],
-    entities: ['VNET'],
+    entities: ['ACME'],
     stance: 'hostile', intent: 'rumor', factuality: 'mixed',
     risk_level: 'medium',
     risk_signals: [{ type: '情绪夸大', reason: '标题党用"惊"夸大跌幅' }],
@@ -594,19 +481,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T16:20:00+08:00',
   },
   {
-    source: 'weixin', post_id: 'i1j2k3l4', symbol: 'VNET',
-    title: 'IDC 行业月报:VNET 仍是首选标的',
+    source: 'weixin', post_id: 'i1j2k3l4', symbol: 'ACME',
+    title: 'IDC 行业月报:ACME 仍是首选标的',
     author: '某券商研究',
     publish_time: '2026-05-04T09:00:00+08:00',
     url: 'https://mp.weixin.qq.com/article/i1j2k3l4',
-    content: '券商 IDC 行业月报维持 VNET "买入"评级,目标价 $X。理由:订单饱满、海外业务增长、估值已反映短期不确定性。',
+    content: '券商 IDC 行业月报维持 ACME "买入"评级,目标价 $X。理由:订单饱满、海外业务增长、估值已反映短期不确定性。',
     view_count: 3450, reply_count: 24,
     is_relevant: true, filter_reason: null,
-    summary: '某券商月报维持 VNET 买入评级',
+    summary: '某券商月报维持 ACME 买入评级',
     sentiment_label: 'bullish', sentiment_score: 0.70,
     emotions: ['信心'],
     topics: ['券商评级', '行业'],
-    entities: ['VNET'],
+    entities: ['ACME'],
     stance: 'supportive', intent: 'recommendation', factuality: 'factual_claim',
     risk_level: 'none',
     risk_signals: [],
@@ -617,19 +504,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-04T09:30:00+08:00',
   },
   {
-    source: 'zhihu', post_id: 'm5n6o7p8', symbol: 'VNET',
-    title: 'VNET 投资逻辑还在吗?',
+    source: 'zhihu', post_id: 'm5n6o7p8', symbol: 'ACME',
+    title: 'ACME 投资逻辑还在吗?',
     author: '价值守望者',
     publish_time: '2026-05-06T17:30:00+08:00',
     url: 'https://zhihu.com/question/m5n6o7p8',
-    content: '业绩、估值、行业地位都还在,但短期面临做空报告冲击。中长期看,数据中心需求是确定性的,VNET 仍是优质标的。',
+    content: '业绩、估值、行业地位都还在,但短期面临做空报告冲击。中长期看,数据中心需求是确定性的,ACME 仍是优质标的。',
     view_count: 4180, reply_count: 56,
     is_relevant: true, filter_reason: null,
-    summary: '知乎理性回答 VNET 投资逻辑',
+    summary: '知乎理性回答 ACME 投资逻辑',
     sentiment_label: 'bullish', sentiment_score: 0.40,
     emotions: ['理性'],
     topics: ['投资逻辑', '估值'],
-    entities: ['VNET'],
+    entities: ['ACME'],
     stance: 'supportive', intent: 'analysis', factuality: 'opinion',
     risk_level: 'none',
     risk_signals: [],
@@ -640,19 +527,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T18:00:00+08:00',
   },
   {
-    source: 'eastmoney', post_id: 'q9r0s1t2', symbol: 'VNET',
-    title: 'VNET 跌停了!浑水赢了',
+    source: 'eastmoney', post_id: 'q9r0s1t2', symbol: 'ACME',
+    title: 'ACME 跌停了!浑水赢了',
     author: '股海老兵',
     publish_time: '2026-05-06T15:30:00+08:00',
     url: 'https://guba.eastmoney.com/post/q9r0s1t2',
-    content: '今天 VNET 美股盘前跌了 8%,基本就是跌停状态了。浑水这次赢麻了。还能拿吗?',
+    content: '今天 ACME 美股盘前跌了 8%,基本就是跌停状态了。浑水这次赢麻了。还能拿吗?',
     view_count: 7800, reply_count: 198,
     is_relevant: true, filter_reason: null,
-    summary: '股民惊呼 VNET 接近跌停',
+    summary: '股民惊呼 ACME 接近跌停',
     sentiment_label: 'bearish', sentiment_score: -0.72,
     emotions: ['沮丧', '恐慌'],
     topics: ['股价', '做空报告'],
-    entities: ['VNET', '浑水'],
+    entities: ['ACME', '浑水'],
     stance: 'hostile', intent: 'opinion', factuality: 'mixed',
     risk_level: 'medium',
     risk_signals: [{ type: '股价恐慌', reason: '夸大盘前跌幅' }],
@@ -663,19 +550,19 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T15:55:00+08:00',
   },
   {
-    source: 'xueqiu', post_id: 'u3v4w5x6', symbol: 'VNET',
-    title: 'VNET 公司紧急回应:浑水报告失实',
-    author: '@VNET 投资者关系',
+    source: 'xueqiu', post_id: 'u3v4w5x6', symbol: 'ACME',
+    title: 'ACME 公司紧急回应:浑水报告失实',
+    author: '@ACME 投资者关系',
     publish_time: '2026-05-06T18:45:00+08:00',
     url: 'https://xueqiu.com/post/u3v4w5x6',
-    content: 'VNET 投资者关系部门发布声明:浑水做空报告中关于债务结构和现金流的描述存在重大失实。公司将于明日召开电话会议向投资者澄清。',
+    content: 'ACME 投资者关系部门发布声明:浑水做空报告中关于债务结构和现金流的描述存在重大失实。公司将于明日召开电话会议向投资者澄清。',
     view_count: 15600, reply_count: 423,
     is_relevant: true, filter_reason: null,
-    summary: 'VNET 官方紧急回应做空报告',
+    summary: 'ACME 官方紧急回应做空报告',
     sentiment_label: 'bullish', sentiment_score: 0.55,
     emotions: ['坚定', '严肃'],
     topics: ['官方回应', '做空报告'],
-    entities: ['VNET', '投资者关系部门', '浑水'],
+    entities: ['ACME', '投资者关系部门', '浑水'],
     stance: 'supportive', intent: 'fact-share', factuality: 'factual_claim',
     risk_level: 'none',
     risk_signals: [],
@@ -686,12 +573,12 @@ export const mockPosts: SentimentPost[] = [
     model: 'gpt-4o-mini', analyzed_at: '2026-05-06T19:00:00+08:00',
   },
   {
-    source: 'eastmoney', post_id: 'y7z8a9b0', symbol: 'VNET',
-    title: 'VNET 招聘:数据中心运维工程师 (北京)',
+    source: 'eastmoney', post_id: 'y7z8a9b0', symbol: 'ACME',
+    title: 'ACME 招聘:数据中心运维工程师 (北京)',
     author: 'HR 小姐姐',
     publish_time: '2026-05-05T14:00:00+08:00',
     url: 'https://guba.eastmoney.com/post/y7z8a9b0',
-    content: '世纪互联北京数据中心招聘,要求 3 年以上经验,薪资面议。',
+    content: 'Acme Cloud北京数据中心招聘,要求 3 年以上经验,薪资面议。',
     view_count: 320, reply_count: 5,
     is_relevant: false,
     filter_reason: '招聘信息,与舆情监测无关',
@@ -708,11 +595,11 @@ export const mockPosts: SentimentPost[] = [
 ];
 
 // ───── Tab 3 简报(7 天)─────
-const briefBody1 = `# VNET 舆情简报 · 2026-05-06
+const briefBody1 = `# ACME 舆情简报 · 2026-05-06
 
 ## 一、概览
 
-今日讨论量 245 条,负面占比 32%,出现高风险信号 12 个。浑水做空报告引发集中讨论,情绪偏负面但无系统性风险。VNET 投资者关系部门已于晚间发布声明回应,预期次日有官方电话会议。
+今日讨论量 245 条,负面占比 32%,出现高风险信号 12 个。浑水做空报告引发集中讨论,情绪偏负面但无系统性风险。ACME 投资者关系部门已于晚间发布声明回应,预期次日有官方电话会议。
 
 - 总声量:**245 帖**(较昨日 +12%)
 - 情感分布:看多 86 / 中性 100 / 看空 50 / 复杂 9
@@ -726,7 +613,7 @@ const briefBody1 = `# VNET 舆情简报 · 2026-05-06
 
 2. **Q3 业绩公告**(56 帖,主导情感:正面)
    营收 +18% 数据强劲,数据中心订单饱满到 2027,但被做空报告稀释关注度。
-   引用:[VNET Q3 业绩说明会要点](https://guba.eastmoney.com/post/e5f6g7h8)
+   引用:[ACME Q3 业绩说明会要点](https://guba.eastmoney.com/post/e5f6g7h8)
 
 3. **数据中心需求**(34 帖,主导情感:正面)
    行业景气度延续,AI 算力驱动 IDC 行业 Q3 增速 22%,但毛利率承压。
@@ -746,10 +633,10 @@ const briefBody1 = `# VNET 舆情简报 · 2026-05-06
 ## 四、值得关注的帖子
 
 1. [浑水做空报告深度解读](https://xueqiu.com/post/a1b2c3d4) — @浑水中文 — bearish/HIGH — 综合影响 0.87
-2. [VNET 公司紧急回应:浑水报告失实](https://xueqiu.com/post/u3v4w5x6) — @VNET 投资者关系 — bullish/none — 0.78
-3. [VNET 现金流分析:浑水的指控站不住脚](https://xueqiu.com/post/g3h4i5j6) — @雪球财报派 — bullish/none — 0.62
+2. [ACME 公司紧急回应:浑水报告失实](https://xueqiu.com/post/u3v4w5x6) — @ACME 投资者关系 — bullish/none — 0.78
+3. [ACME 现金流分析:浑水的指控站不住脚](https://xueqiu.com/post/g3h4i5j6) — @雪球财报派 — bullish/none — 0.62
 4. [3 分钟看懂浑水做空报告全文](https://bilibili.com/video/w9x0y1z2) — B 站财经 UP — mixed/low — 0.65
-5. [VNET 高管减持公告,这是要跑?](https://weibo.com/post/o1p2q3r4) — @小道消息官博 — bearish/medium — 0.58
+5. [ACME 高管减持公告,这是要跑?](https://weibo.com/post/o1p2q3r4) — @小道消息官博 — bearish/medium — 0.58
 
 ## 五、建议动作
 
@@ -759,7 +646,7 @@ const briefBody1 = `# VNET 舆情简报 · 2026-05-06
 4. **持续**:监测做空报告二次发酵,设置高风险预警阈值;关注高管减持解读演变
 `;
 
-const briefBody2 = `# VNET 舆情简报 · 2026-05-05
+const briefBody2 = `# ACME 舆情简报 · 2026-05-05
 
 ## 一、概览
 今日讨论量 198 条,情绪偏中性,无重大事件。Q3 业绩说明会预热为主要话题。
@@ -778,8 +665,8 @@ const briefBody2 = `# VNET 舆情简报 · 2026-05-05
 - ⚠️ MEDIUM 海外业务地缘风险 — 财新深度报道,需关注后续监管动向
 
 ## 四、值得关注的帖子
-1. [深度:VNET 海外扩张观察](https://caixin.com/article/m3n4o5p6) — 财新记者 — mixed/low — 0.35
-2. [IDC 行业月报:VNET 仍是首选标的](https://mp.weixin.qq.com/article/i1j2k3l4) — 某券商研究 — bullish/none — 0.40
+1. [深度:ACME 海外扩张观察](https://caixin.com/article/m3n4o5p6) — 财新记者 — mixed/low — 0.35
+2. [IDC 行业月报:ACME 仍是首选标的](https://mp.weixin.qq.com/article/i1j2k3l4) — 某券商研究 — bullish/none — 0.40
 
 ## 五、建议动作
 1. 准备业绩会要点
@@ -787,19 +674,19 @@ const briefBody2 = `# VNET 舆情简报 · 2026-05-05
 `;
 
 export const mockBriefs: BriefMock[] = [
-  { id: 1, symbol: 'VNET', date: '2026-05-06', body: briefBody1, model: 'gpt-4o-mini', generated_at: '2026-05-06T07:02:18+08:00' },
-  { id: 2, symbol: 'VNET', date: '2026-05-05', body: briefBody2, model: 'gpt-4o-mini', generated_at: '2026-05-05T07:01:55+08:00' },
-  { id: 3, symbol: 'VNET', date: '2026-05-04', body: '# VNET 舆情简报 · 2026-05-04\n\n## 一、概览\n讨论平稳,164 帖,情绪偏正。\n\n## 二、关键主题\n业绩预期为主。\n\n## 三、风险信号\n无 medium+ 风险。\n\n## 四、值得关注的帖子\n暂无突出帖。\n\n## 五、建议动作\n维持监测频次。', model: 'gpt-4o-mini', generated_at: '2026-05-04T07:00:33+08:00' },
-  { id: 4, symbol: 'VNET', date: '2026-05-03', body: '# VNET 舆情简报 · 2026-05-03\n\n## 一、概览\n讨论 142 帖,周末低活跃度。', model: 'gpt-4o-mini', generated_at: '2026-05-03T07:00:00+08:00' },
-  { id: 5, symbol: 'VNET', date: '2026-05-02', body: '# VNET 舆情简报 · 2026-05-02\n\n## 一、概览\n讨论 178 帖。', model: 'gpt-4o-mini', generated_at: '2026-05-02T07:00:00+08:00' },
-  { id: 6, symbol: 'VNET', date: '2026-04-W18', body: '# VNET 舆情周报 · 2026-W18\n\n## 一、本周概览\n本周累计 1245 帖,关键事件:浑水做空报告。', model: 'gpt-4o-mini', generated_at: '2026-05-04T08:00:00+08:00' },
-  { id: 7, symbol: 'VNET', date: '2026-04', body: '# VNET 舆情月报 · 2026-04\n\n## 一、月度概览\n4 月累计 5872 帖,情绪整体偏正。', model: 'gpt-4o-mini', generated_at: '2026-05-01T09:00:00+08:00' },
+  { id: 1, symbol: 'ACME', date: '2026-05-06', body: briefBody1, model: 'gpt-4o-mini', generated_at: '2026-05-06T07:02:18+08:00' },
+  { id: 2, symbol: 'ACME', date: '2026-05-05', body: briefBody2, model: 'gpt-4o-mini', generated_at: '2026-05-05T07:01:55+08:00' },
+  { id: 3, symbol: 'ACME', date: '2026-05-04', body: '# ACME 舆情简报 · 2026-05-04\n\n## 一、概览\n讨论平稳,164 帖,情绪偏正。\n\n## 二、关键主题\n业绩预期为主。\n\n## 三、风险信号\n无 medium+ 风险。\n\n## 四、值得关注的帖子\n暂无突出帖。\n\n## 五、建议动作\n维持监测频次。', model: 'gpt-4o-mini', generated_at: '2026-05-04T07:00:33+08:00' },
+  { id: 4, symbol: 'ACME', date: '2026-05-03', body: '# ACME 舆情简报 · 2026-05-03\n\n## 一、概览\n讨论 142 帖,周末低活跃度。', model: 'gpt-4o-mini', generated_at: '2026-05-03T07:00:00+08:00' },
+  { id: 5, symbol: 'ACME', date: '2026-05-02', body: '# ACME 舆情简报 · 2026-05-02\n\n## 一、概览\n讨论 178 帖。', model: 'gpt-4o-mini', generated_at: '2026-05-02T07:00:00+08:00' },
+  { id: 6, symbol: 'ACME', date: '2026-04-W18', body: '# ACME 舆情周报 · 2026-W18\n\n## 一、本周概览\n本周累计 1245 帖,关键事件:浑水做空报告。', model: 'gpt-4o-mini', generated_at: '2026-05-04T08:00:00+08:00' },
+  { id: 7, symbol: 'ACME', date: '2026-04', body: '# ACME 舆情月报 · 2026-04\n\n## 一、月度概览\n4 月累计 5872 帖,情绪整体偏正。', model: 'gpt-4o-mini', generated_at: '2026-05-01T09:00:00+08:00' },
 ];
 
 // ───── Tab 4 草稿 ─────
 export const mockDrafts: DraftMock[] = [
   {
-    id: 1, symbol: 'VNET',
+    id: 1, symbol: 'ACME',
     source: 'xueqiu', post_id: 'a1b2c3d4', topic: null,
     title: '回应浑水做空报告',
     summary: '需要法务+IR审核,不引用未公布数据',
@@ -816,14 +703,14 @@ export const mockDrafts: DraftMock[] = [
       },
       {
         variant: 'standard',
-        body: '世纪互联(VNET)已第一时间核实近期市场上传播的相关报告。经核实,该报告中关于本公司债务结构和现金流的描述存在重大失实。本公司将于明日上午 9:00 召开电话会议,逐项回应相关质疑。所有财务数据以本公司公告为准,我们承诺以最透明的方式回应市场关切。',
+        body: 'Acme Cloud(ACME)已第一时间核实近期市场上传播的相关报告。经核实,该报告中关于本公司债务结构和现金流的描述存在重大失实。本公司将于明日上午 9:00 召开电话会议,逐项回应相关质疑。所有财务数据以本公司公告为准,我们承诺以最透明的方式回应市场关切。',
         rationale: '平衡透明度与法律边界,既给出明确否认,又预告后续动作,符合标准 IR 实践',
         predicted_effect: '偏正 +0.20,主流投资者认可,做空报告热度可下降',
         cautions: '不可引用未在公告中披露的具体数字;电话会议时间承诺务必落实',
       },
       {
         variant: 'proactive',
-        body: '为消除市场疑虑,世纪互联(VNET)宣布以下举措:(1) 于明日召开 IR 电话会议,CEO 和 CFO 共同出席,逐项回应做空报告中的所有质疑;(2) 邀请第三方独立审计机构对 Q3 财报关键科目进行专项核查并公开结果;(3) 启动股票回购计划,展示对公司长期价值的信心。我们对市场承诺,以最高标准的透明度和负责任的态度回应每一位投资者的关切。',
+        body: '为消除市场疑虑,Acme Cloud(ACME)宣布以下举措:(1) 于明日召开 IR 电话会议,CEO 和 CFO 共同出席,逐项回应做空报告中的所有质疑;(2) 邀请第三方独立审计机构对 Q3 财报关键科目进行专项核查并公开结果;(3) 启动股票回购计划,展示对公司长期价值的信心。我们对市场承诺,以最高标准的透明度和负责任的态度回应每一位投资者的关切。',
         rationale: '主动姿态强势挽回情绪,符合"用行动回应"的最佳 IR 实践',
         predicted_effect: '+0.45,显著但有风险。回购计划可能强化"市场认可"信号',
         cautions: '⚠ 法务必审任何新承诺;CEO/CFO 行程必须可保证;回购计划需董事会通过;独立审计耗时不可承诺过紧时间表',
@@ -834,7 +721,7 @@ export const mockDrafts: DraftMock[] = [
     status: 'pending_review',
   },
   {
-    id: 2, symbol: 'VNET',
+    id: 2, symbol: 'ACME',
     source: null, post_id: null, topic: '高管减持时间点说明',
     title: '主题草稿:高管减持背景说明',
     summary: '为消除阴谋论,主动公开减持背景',
@@ -851,14 +738,14 @@ export const mockDrafts: DraftMock[] = [
       },
       {
         variant: 'standard',
-        body: '世纪互联董秘办说明:近期公告的高管减持系基于 2025 年 12 月签署的预设股票交易计划(10b5-1)的常规执行,该计划在做空报告发布前数月即已制定,与近期市场报告无关。本公司高管对公司长期价值保持充分信心。',
+        body: 'Acme Cloud董秘办说明:近期公告的高管减持系基于 2025 年 12 月签署的预设股票交易计划(10b5-1)的常规执行,该计划在做空报告发布前数月即已制定,与近期市场报告无关。本公司高管对公司长期价值保持充分信心。',
         rationale: '提供具体时间锚点,有效消解阴谋论',
         predicted_effect: '+0.30',
         cautions: '具体日期需董秘办核实',
       },
       {
         variant: 'proactive',
-        body: '世纪互联董秘办说明:此次高管减持系基于 2025 年 12 月签署的 10b5-1 预设交易计划的执行,与近期市场报告完全无关。同时,我们披露:该高管同期持有公司股票期权行权后所需的纳税资金来源,通过此次减持解决,符合常规高管薪酬激励安排。本公司管理层对长期发展信念坚定。',
+        body: 'Acme Cloud董秘办说明:此次高管减持系基于 2025 年 12 月签署的 10b5-1 预设交易计划的执行,与近期市场报告完全无关。同时,我们披露:该高管同期持有公司股票期权行权后所需的纳税资金来源,通过此次减持解决,符合常规高管薪酬激励安排。本公司管理层对长期发展信念坚定。',
         rationale: '完全透明披露细节,彻底消除疑虑',
         predicted_effect: '+0.45',
         cautions: '⚠ 期权行权 + 纳税资金来源属于个人信息,需高管本人同意披露',
@@ -872,7 +759,7 @@ export const mockDrafts: DraftMock[] = [
 
 // ───── 知识库 ─────
 export const mockKnowledge = {
-  brand_voice: `# VNET 品牌语调
+  brand_voice: `# ACME 品牌语调
 
 ## 核心调性
 - **专业、克制、可信赖** — 我们是基础设施服务商,不做情绪化表达

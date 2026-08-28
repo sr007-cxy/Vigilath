@@ -30,8 +30,8 @@ classifiers = [
 geo-checker = "geo_checker.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/geo-checker"
-Issues = "https://github.com/yourusername/geo-checker/issues"
+Homepage = "https://github.com/sr007-cxy/Vigilath"
+Issues = "https://github.com/sr007-cxy/Vigilath/issues"
 
 [tool.setuptools.packages.find]
 # The package now lives under backend/geo_checker/, so the package root for

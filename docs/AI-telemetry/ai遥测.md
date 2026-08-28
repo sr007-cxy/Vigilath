@@ -220,7 +220,7 @@ ai_telemetry_responses   (id, run_id, topic_id, engine, query, answer,
 
 ```
 DATABASE_URL=sqlite:////opt/geo/backend/data/geo_checker.db
-BROWSER_SERVICE_CN=http://172.80.40.103:8092
+BROWSER_SERVICE_CN=http://browser-cn.example.com:8092
 BROWSER_SERVICE_GLOBAL=http://127.0.0.1:9999     # 占位,海外引擎未部署
 TELEMETRY_PER_QUERY_TIMEOUT=180
 TELEMETRY_MAX_CONCURRENT=3

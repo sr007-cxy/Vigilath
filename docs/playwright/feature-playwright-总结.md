@@ -28,7 +28,7 @@
 ### 产物
 - `services/browser-service/` —— 独立 FastAPI 微服务,跑 Playwright + Chromium
 - `backend/browser_engine/client.py` —— 后端 HTTP 客户端,通过 `/api/browser-{region}/*` 调用微服务
-- 生产部署在 `123.125.194.100:12080`,nginx 反向代理 `/api/browser-cn/*` → cn 实例
+- 生产部署在 `test.example.com:12080`,nginx 反向代理 `/api/browser-cn/*` → cn 实例
 
 ---
 
@@ -77,7 +77,7 @@
 
 ### 部署现状
 - 国际线在 develop 合回时**只接 cn 实例**
-- global 实例(`172.80.40.101:8091`)**未部署**
+- global 实例(`browser-global.example.com:8091`)**未部署**
 - `BROWSER_GLOBAL_URL` 留空
 
 ---

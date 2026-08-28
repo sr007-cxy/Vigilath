@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 
 from geo.database import settings
 from geo.services.user_service import user_service

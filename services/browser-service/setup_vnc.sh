@@ -2,20 +2,21 @@
 # Setup x11vnc on vm03 attached to the existing Xvfb :99 display
 # (the same display browser-service uses for headed Chrome).
 #
-# Usage (on vm03):
+# Usage (on the browser-service host):
+#   export VNC_PASSWORD="a-long-random-secret"
 #   bash /opt/browser-service/setup_vnc.sh
 #
 # After this:
 #   1. Open SSH tunnel from your Mac:
-#        ssh -J 21v-bastion -L 5900:127.0.0.1:5900 root@172.80.40.103
-#   2. On Mac, open VNC client to vnc://127.0.0.1:5900 (password: REDACTED_VNC_PASSWORD)
+#        ssh -L 5900:127.0.0.1:5900 user@browser-host
+#   2. On Mac, open VNC client to vnc://127.0.0.1:5900
 #      - macOS Finder: Cmd+K → vnc://127.0.0.1:5900
 #      - Or: open vnc://127.0.0.1:5900
 #   3. You'll see the same display browser-service runs Chrome on.
 
 set -euo pipefail
 
-VNC_PASSWORD="${VNC_PASSWORD:-REDACTED_VNC_PASSWORD}"
+VNC_PASSWORD="${VNC_PASSWORD:?Set VNC_PASSWORD to a strong secret before running this script}"
 VNC_PORT=5900
 DISPLAY_NUM=":99"
 
@@ -71,9 +72,9 @@ fi
 echo
 echo "============================================================"
 echo "  VNC ready on 127.0.0.1:$VNC_PORT (localhost-only)"
-echo "  Password: $VNC_PASSWORD"
+echo "  Password: use the value supplied through VNC_PASSWORD"
 echo
 echo "  From your Mac:"
-echo "    ssh -J 21v-bastion -L $VNC_PORT:127.0.0.1:$VNC_PORT root@172.80.40.103"
+echo "    ssh -L $VNC_PORT:127.0.0.1:$VNC_PORT user@browser-host"
 echo "    open vnc://127.0.0.1:$VNC_PORT"
 echo "============================================================"

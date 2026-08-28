@@ -16,7 +16,7 @@
 3. 右上角打开**「开发者模式」**(开关)
 4. 左上角点**「加载已解压的扩展程序」**,选刚才那个 `extension/` 文件夹
 5. 扩展安装完会自动弹出**「设置」**页:
-   - **API 地址**:默认 `http://123.125.194.100:12080`(测试环境),一般不用改
+   - **API 地址**:默认 `http://test.example.com:12080`(测试环境),一般不用改
    - **Harvest Token**:跟运维要(`ENGINE_SESSION_HARVEST_TOKEN`)
    - **你的标识**:`alice-mac`,`bob-win` 之类,**必填且每人唯一**。后台能看到谁贡献的;服务端识别不出账号时也用它判断"重新上传 = 续期老账号还是新账号",多人撞同一个标识会互相覆盖登录态
 6. 点**「保存」**
@@ -68,7 +68,7 @@ token 输错了。点扩展弹窗里的「设置」重新填一次,**注意别�
 ### Q: 服务器侧能看到我上传的吗?
 
 ```bash
-curl http://123.125.194.100:12080/api/engine-sessions/pool-status
+curl http://test.example.com:12080/api/engine-sessions/pool-status
 ```
 
 返回每个 engine 当前 active / quarantined / expired 数量。你上传的 row 会让对应 engine 的 active +1。

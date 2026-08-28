@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr
 from geo.models.user import User, UserCreate, UserLogin, Token

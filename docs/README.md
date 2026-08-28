@@ -1,72 +1,56 @@
-# docs/ 索引
+# Documentation index
 
-项目文档目录。**权威文档**标 ⭐;**历史文档**保留但不再维护。
+This directory contains architecture, operations, product, implementation, and
+historical planning documents.
 
-## 部署与运维
+A star marks the maintained entry point when multiple documents cover the same
+subject. Legacy documents are retained for context and may still be written in
+Chinese.
 
-| 文档 | 说明 |
-|---|---|
-| ⭐ [deployment-guide.md](./deployment-guide.md) | 线上真实部署指南(www.vigilath.com),含 systemd / nginx / 发布流程 / 回滚 |
-| [cloudflare-migration-plan.md](./cloudflare-migration-plan.md) | Cloudflare CDN 接入方案,分阶段迁移 + 回滚 + apex 301 降级 bug 修复 |
-| [部署文档.md](./部署文档.md) | 早期部署文档,被 `deployment-guide.md` 取代,仅作历史参考 |
+## Architecture and engineering
 
-## 架构与规范
+| Document | Purpose |
+| --- | --- |
+| [architecture.md](architecture.md) | Star: system topology, services, data, deployment, and scaling constraints |
+| [url-validation-cases.md](url-validation-cases.md) | Shared frontend/backend URL validation cases |
+| [i18n-status.md](i18n-status.md) | Frontend internationalization status |
+| [content-type-templates.md](content-type-templates.md) | Content template design |
+| [non-determinism-analysis.md](non-determinism-analysis.md) | Analysis of non-deterministic behavior |
 
-| 文档 | 说明 |
-|---|---|
-| ⭐ [architecture.md](./architecture.md) | 系统架构总览:服务拓扑(前端 / 主后端 / Agent / 微服务群)、数据层、部署、关键架构张力点 |
-| [url-validation-cases.md](./url-validation-cases.md) | 前后端 URL 校验规则的单一事实源,含 22 条 case |
-| [i18n-status.md](./i18n-status.md) | 前端中英双语覆盖现状与未完成项 |
-| [系统处理方案.md](./系统处理方案.md) | 系统级功能实现方案 |
+## Deployment and operations
 
-## 性能
+| Document | Purpose |
+| --- | --- |
+| [deployment-guide.md](deployment-guide.md) | Star: production deployment, rollback, systemd, and nginx |
+| [cloudflare-migration-plan.md](cloudflare-migration-plan.md) | Cloudflare migration and rollback plan |
+| [performance-guide.md](performance-guide.md) | Performance diagnosis and optimization |
+| [performance-report-2026-04-17.md](performance-report-2026-04-17.md) | Latest dated performance snapshot in this revision |
 
-| 文档 | 说明 |
-|---|---|
-| [performance-guide.md](./performance-guide.md) | 性能诊断与优化手册 |
-| [性能处理方案.md](./性能处理方案.md) | 性能改造方案 |
-| [performance-report-2026-04-16.md](./performance-report-2026-04-16.md) | 性能快照(2026-04-16) |
-| [performance-report-2026-04-17.md](./performance-report-2026-04-17.md) | 性能快照(2026-04-17) |
+## Product and UX
 
-## 需求与规划
+| Document | Purpose |
+| --- | --- |
+| [PRODUCT-implemented-features](PRODUCT-%E5%B7%B2%E5%AE%9E%E7%8E%B0%E5%8A%9F%E8%83%BD.md) | Implemented feature inventory |
+| [user-guide.md](user-guide.md) | User guide |
+| [SSR_PLAN.md](SSR_PLAN.md) | Server-side rendering plan |
+| [ssg-home-plan.md](ssg-home-plan.md) | Home-page static generation plan |
+| [self-geo-optimization.md](self-geo-optimization.md) | Vigilath self-optimization backlog |
 
-| 文档 | 说明 |
-|---|---|
-| [需求文档.md](./需求文档.md) | 初版功能整理 |
-| [需求文档-付费解锁.md](./需求文档-付费解锁.md) | 付费解锁与权限控制需求 |
-| [需求文档-前端检测体验重构.md](./需求文档-前端检测体验重构.md) | 首页 + 结果页 + 会员分级重构需求 |
-| [用户权益处理方案.md](./用户权益处理方案.md) | 用户权益方案 |
-| [会员功能免费与付费功能项目列表.md](./会员功能免费与付费功能项目列表.md) | 会员免费 / 付费功能清单 |
-| [ssg-home-plan.md](./ssg-home-plan.md) | 首页 SSG 预渲染技术方案 |
+## Integrations
 
-## 支付集成
+| Document | Purpose |
+| --- | --- |
+| [moltspay-integration-plan.md](moltspay-integration-plan.md) | MoltsPay integration plan |
+| [moltspay-x402-browser-integration.md](moltspay-x402-browser-integration.md) | Browser-side x402 integration |
+| [AI-telemetry](AI-telemetry/) | AI telemetry design and operations |
+| [playwright](playwright/) | Browser-engine design and operational notes |
 
-| 文档 | 说明 |
-|---|---|
-| [moltspay-integration-plan.md](./moltspay-integration-plan.md) | MoltsPay 支付集成开发计划 |
-| [moltspay-x402-browser-integration.md](./moltspay-x402-browser-integration.md) | MoltsPay x402 浏览器集成方案 |
+## Maintenance policy
 
-## 商业化与品牌
-
-| 文档 | 说明 |
-|---|---|
-| [品牌定位升级方案.md](./品牌定位升级方案.md) | Vigilath 品牌定位升级 |
-| [商业化增长方案.md](./商业化增长方案.md) | Vigilath 商业化增长方案 |
-| [前端视觉重构方案.md](./前端视觉重构方案.md) | 前端视觉方向 A(深色霓虹赛博) |
-
-## 分析与杂项
-
-| 文档 | 说明 |
-|---|---|
-| [ai-cost-analysis.md](./ai-cost-analysis.md) | AI 调用成本分析 |
-| [self-geo-optimization.md](./self-geo-optimization.md) | Vigilath 自身 GEO 优化清单 |
-| [user-guide.md](./user-guide.md) | 面向用户的使用指南 |
-| [issue_list.md](./issue_list.md) | 问题 / 缺陷清单 |
-
----
-
-**维护约定:**
-
-- 新增文档时,在对应分组追加一行;若无合适分组则新开分组,不要把索引塞成平铺列表
-- 废弃文档不删,打 "历史" 标记并指向替代文档
-- 权威文档 ⭐ 标记仅用于同主题有多份时的消歧,避免读者看错版本
+- Write new and actively maintained documentation in English.
+- Never place real credentials, host passwords, tokens, cookies, or private
+  infrastructure secrets in documentation.
+- Add new documents to the relevant section instead of creating a flat index.
+- Mark superseded documents as historical and link to the replacement.
+- Translate or retire legacy Chinese documents when they next receive
+  substantive updates.

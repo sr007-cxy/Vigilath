@@ -1,69 +1,92 @@
-# GEO Readiness Checker
+# Vigilath Development Guide
 
-## Project Overview
-Python CLI tool that checks a website's GEO (Generative Engine Optimization) readiness — how well web content is optimized for AI-powered search engines (ChatGPT, Perplexity, Google AI Overviews, Copilot).
+## Project scope
 
-## Architecture
-- **Runtime package**(2026-04-17 重构后)**:`backend/geo_checker/` 是活跃代码,12 文件(`__init__.py` / `__main__.py` / `state.py` / `io.py` / `output.py` / `constants.py` / `checks.py` 2958 行 / `orchestrate.py` / `ai.py` / `reports.py` + `modes/` 下 8 个 mode)。**所有性能 / 功能改动都只进这个 package**
-- **Dependencies**: `requests`, `beautifulsoup4`, `sqlalchemy`(backend),`fastapi` / `uvicorn`(生产 runtime)
+Vigilath is a multi-service GEO/AEO and AI visibility platform. It includes a
+React frontend, a FastAPI backend, a reusable audit package and CLI, an
+isolated Pydantic AI agent, and browser, telemetry, monitoring, and proxy
+services.
 
-### `geo_checker` 的三份同源文件(只有一份活跃)
+## Audit-engine source of truth
 
-历史演进导致仓库里有三份字节相同 / 同源的 `geo_checker` 代码。**修改时注意不要动错**:
+There are three related audit-engine copies, but only one is active:
 
-| 位置 | 状态 | 加载时机 | 是否改 |
-|---|---|---|---|
-| `backend/geo_checker/`(package,12 文件) | **活跃** | uvicorn 从 `/backend` 启动,`import geo_checker` 命中这里;`pip install -e .` 后的 `geo-checker` CLI 也走这里 | **所有改动进这里** |
-| `geo_checker.py`(根,8065 行单体) | **冻结**,= pre-refactor tag | 只在用户显式 `python geo_checker.py <url>` 时运行,runtime 不加载 | **不要改**,上游合并基准 |
-| `archive/geo_checker_v1_baseline.py`(8065 行) | **冻结**,字节与根文件相同 | 从不加载 | **不要改**,只读历史归档 |
+| Location | Status | Modification policy |
+| --- | --- | --- |
+| `backend/geo_checker/` | Active package used by FastAPI and the installed CLI | Make all fixes and features here |
+| `geo_checker.py` | Frozen pre-refactor standalone baseline | Do not modify |
+| `archive/geo_checker_v1_baseline.py` | Frozen historical baseline | Do not modify |
 
-**为什么保留根文件 + archive 两份冻结**:
+When porting an upstream change, inspect the baseline diff and manually apply
+the relevant behavior to `backend/geo_checker/`.
 
-- 根文件:保留上游 `Yaqing2023/GEO` 的"原版 CLI"形态,方便 `git pull upstream main` 时肉眼对照
-- archive:独立的只读归档,未来若根文件被删或更新,archive 仍是 pre-refactor-package-2026-04-17 的字节级基准
-- 两份同源看似冗余,但职责不同:一个是"CLI 入口",一个是"历史基准"
+## Main components
 
-**改动原则**:
+- `frontend/`: React 19, TypeScript, Vite, TanStack Query, i18next.
+- `backend/geo/`: main FastAPI service on port 8070.
+- `backend/geo/agent/`: isolated agent service on port 8010.
+- `services/sentinel-service/`: PostgreSQL-backed, multi-tenant brand
+  monitoring on port 8090.
+- `services/browser-service/`: Playwright browser automation.
+- `services/telemetry-service/`: AI visibility telemetry and gateway.
+- `skills/vigilath-geo/`: standalone skill client.
 
-- 加 check / 修 bug / 性能优化 → 改 `backend/geo_checker/` 对应文件
-- 合上游 → 先 `git diff pre-refactor-package-2026-04-17 upstream/main -- geo_checker.py` 看 hunk,然后手动 porting 到 `backend/geo_checker/` 的对应模块;根文件 + archive 不动
-- 回归对比 → 跑 `python geo_checker.py <url>`(根文件)vs `POST /api/check/anonymous`(package),两边 category 分数应一致(近期验证过 moltspay.com 两边 80/A 完全相同)
+## Dependency boundary
 
-## CLI Modes
+The main backend pins FastAPI 0.104.1 and Pydantic 2.5.0. Pydantic AI requires
+newer Pydantic and FastAPI versions, so the agent must run in its own virtual
+environment using `backend/requirements-agent.txt`. Do not install agent
+requirements into the main backend environment.
 
-### Free (no API key required)
-All free modes work by fetching the target site and querying public APIs (Wikipedia, npm registry, GitHub search, etc.).
+## CLI modes
 
-- Default: 25-category site analysis with 0-100 AI Visibility Score
-- `--fix`: Show actionable fix recommendations
-- `--compare`: Side-by-side multi-site comparison
-- `--crawl-check`: Server log analysis for AI crawler activity
-- `--crawl-test`: AI crawler accessibility test (no logs needed)
-- `--authority-audit`: Off-page authority signals (GitHub, npm, PyPI, Wikipedia, etc.)
+Free modes:
 
-### Paid (require AI API keys)
-All paid modes call real AI engines to measure what they actually say about the target.
+- default 25-category audit
+- `--fix`
+- `--compare`
+- `--crawl-check`
+- `--crawl-test`
+- `--authority-audit`
+- `--aeo-visibility`
 
-- `--citation-check`: AI citation check via Perplexity. Requires `PERPLEXITY_API_KEY`.
-- `--ai-visibility`: Full multi-engine AI visibility audit. Requires at least one of `PERPLEXITY_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
-- `--entity`: Entity GEO audit for brand/product/person (8 dimensions, 2 of which are free Wikipedia/Wikidata/Baidu Baike/platform checks). Uses 3 engines via OpenRouter (GPT-4o-mini, DeepSeek V3, Qwen3). Requires `OPENROUTER_API_KEY`.
+Credential-backed modes:
 
-## Key Patterns
-- `track_score(category, earned, max_points)` accumulates per-category scores
-- `fetch(url)` caches HTTP responses in `_page_cache`
-- `PASS/WARN/FAIL/INFO/FIX` are ANSI-colored status labels
-- `SHOW_FIX` global toggles fix recommendation output
-- `_query_openai()`, `_query_perplexity()`, `_query_anthropic()` are the AI engine helpers
-- `_classify_framing(answer, brand)` classifies AI sentiment toward an entity
+- `--citation-check`
+- `--ai-visibility`
+- `--entity`
 
-## Running
+Use `geo-checker --help` as the source of truth for arguments and required
+credentials.
+
+## Development rules
+
+- Keep documentation and new code comments in English.
+- Never commit credentials, environment files, session exports, cookies,
+  private keys, or database passwords.
+- Use `backend/.env.example` only as a schema; put real values in ignored
+  environment files or a secret manager.
+- Keep user changes outside the task intact.
+- Add or update tests for behavior changes.
+- Treat `backend/geo_checker/orchestrate.py::CHECK_REGISTRY` as the source of
+  truth for default audit category names and order.
+
+## Running locally
+
 ```bash
-# With venv
-.venv/bin/python geo_checker.py https://example.com
+python -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/geo-checker https://example.com
 
-# Installed
-geo-checker https://example.com
+cd backend
+python -m venv venv
+venv/bin/pip install -r requirements.txt
+cp .env.example .env
+venv/bin/python -m uvicorn geo.main:app --port 8070 --reload
+
+cd ../frontend
+npm ci
+npm run dev
 ```
 
-## Enhancement Tracking
-See `ENHANCEMENT.md` for planned and completed features.
+The frontend listens on port 3000 and proxies `/api` to port 8070.

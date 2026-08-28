@@ -13,7 +13,7 @@ if os.path.isdir(_shared_pw) and not os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from jose import JWTError
+from jwt import PyJWTError as JWTError
 from geo.api import geo, auth, membership, oauth, contact, payment, moltspay_payment, wechat_payment, advanced, account, sentiment, ai_telemetry, admin_review, admin_content_review, content, engine_sessions, content_templates, admin_crawl, platform_rules
 from geo.utils.error_handler import global_exception_handler, AppException
 from geo.utils.request_log import configure_request_log
@@ -46,7 +46,6 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:8070",
-        "http://123.125.194.100:12080",
     ],
     allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.\d+\.\d+\.\d+):\d+$",
     allow_credentials=True,

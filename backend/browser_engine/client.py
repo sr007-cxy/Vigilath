@@ -1,7 +1,6 @@
 """Unified HTTP client for browser engine microservice.
 
-Routes engine queries to the correct browser-service instance
-(cn on 103, global on 101) based on engine name.
+Routes engine queries to the configured regional browser-service instance.
 """
 from __future__ import annotations
 
@@ -13,7 +12,7 @@ import httpx
 # ── Service URLs ───────────────────────────────────────────────
 
 BROWSER_CN_URL = os.environ.get("BROWSER_CN_URL", "http://localhost:8092")
-BROWSER_GLOBAL_URL = os.environ.get("BROWSER_GLOBAL_URL", "http://172.80.40.101:8091")
+BROWSER_GLOBAL_URL = os.environ.get("BROWSER_GLOBAL_URL", "http://localhost:8091")
 
 ENGINE_ROUTING = {
     # CN — domestic engines

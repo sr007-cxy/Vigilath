@@ -1,6 +1,6 @@
 // Options page: load + save API / token / label.
 
-const DEFAULT_API = "http://123.125.194.100:12080";
+const DEFAULT_API = "http://test.example.com:12080";
 
 function $(id) { return document.getElementById(id); }
 

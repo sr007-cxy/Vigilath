@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./data/geo_checker.db"
     GOOGLE_CLIENT_ID: str = "test-google-client-id"
-    SECRET_KEY: str = "your-secret-key-for-jwt"
+    SECRET_KEY: str
 
     # Resend transactional email (password reset, consultation ack, etc.)
     RESEND_API_KEY: str = ""
