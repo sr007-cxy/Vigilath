@@ -22,4 +22,4 @@ httpx>=0.25.0
 redis>=5.0
 aiohttp>=3.14.3
 email-validator
-cryptography>=42.0          # 飞书 IM 事件订阅 Encrypt Key(可选)解密
+cryptography>=50.0.0          # 飞书 IM 事件订阅 Encrypt Key(可选)解密
