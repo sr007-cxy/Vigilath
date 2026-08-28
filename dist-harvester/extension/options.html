@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>GEO Session Harvester — 设置</title>
+  <style>
+    body {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 24px;
+      color: #1f2937;
+      font-size: 14px;
+    }
+    h1 { font-size: 18px; margin-bottom: 24px; }
+    .form-row { margin-bottom: 16px; }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    input {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    input:focus { outline: 2px solid #2563eb; border-color: transparent; }
+    button {
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+    button:hover { background: #1d4ed8; }
+    #status {
+      margin-top: 16px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+    #status.ok { display: block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    #status.err { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    code {
+      background: #f3f4f6;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>GEO Session Harvester — 设置</h1>
+
+  <div class="form-row">
+    <label for="api">API 地址</label>
+    <input id="api" type="text" placeholder="http://test.example.com:12080">
+    <div class="hint">运维给你的地址,默认 <code>http://test.example.com:12080</code></div>
+  </div>
+
+  <div class="form-row">
+    <label for="token">Harvest Token</label>
+    <input id="token" type="password" placeholder="跟运维要">
+    <div class="hint">运维分发的 <code>ENGINE_SESSION_HARVEST_TOKEN</code></div>
+  </div>
+
+  <div class="form-row">
+    <label for="label">你的标识(Label)</label>
+    <input id="label" type="text" placeholder="alice-mac">
+    <div class="hint">用来区分"这条 session 是谁贡献的",在 pool dashboard 上能看到</div>
+  </div>
+
+  <button id="save">保存</button>
+  <div id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>GEO Session Harvester</title>
+  <style>
+    body {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      width: 380px;
+      margin: 0;
+      padding: 16px;
+      font-size: 13px;
+      color: #1f2937;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      color: #111827;
+    }
+    .engine-detected {
+      padding: 8px 12px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .engine-unknown {
+      padding: 8px 12px;
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      color: #92400e;
+    }
+    button {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      margin-bottom: 8px;
+    }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    button.secondary {
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+    button.secondary:hover { background: #e5e7eb; }
+    .status {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+    .status.ok    { display: block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    .status.err   { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .status.info  { display: block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .row .key { color: #374151; font-weight: 500; }
+    a {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 11px;
+    }
+    a:hover { text-decoration: underline; }
+    code {
+      background: #f3f4f6;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+    }
+    .footer {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <h1>GEO Session Harvester</h1>
+
+  <div id="engine-info"></div>
+
+  <button id="harvest-btn" disabled>检测引擎中…</button>
+
+  <div id="status" class="status"></div>
+
+  <div class="footer">
+    <a href="#" id="open-options">设置</a>
+    <a href="#" id="show-engines">支持的引擎</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

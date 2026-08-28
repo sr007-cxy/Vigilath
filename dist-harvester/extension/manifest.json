@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "GEO Session Harvester",
+  "version": "1.1.0",
+  "description": "把当前已登录的国内 AI 引擎(豆包 / 通义 / DeepSeek / 文心 / 元宝)session 上传到 GEO 中央 pool",
+
+  "permissions": [
+    "cookies",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://*.doubao.com/*",
+    "https://www.qianwen.com/*",
+    "https://*.qianwen.com/*",
+    "https://chat.deepseek.com/*",
+    "https://*.deepseek.com/*",
+    "https://yiyan.baidu.com/*",
+    "https://*.baidu.com/*",
+    "https://yuanbao.tencent.com/*",
+    "https://*.tencent.com/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "GEO Session Harvester"
+  },
+
+  "options_page": "options.html",
+
+  "background": {
+    "service_worker": "background.js"
+  }
+}
