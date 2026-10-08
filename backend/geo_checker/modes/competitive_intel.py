@@ -59,6 +59,7 @@ class _EngineResult:
 
 import re
 import requests
+from geo_checker.llm_ledger import post_chat
 
 _URL_RE = re.compile(r'https?://[\w\-\.]+\.[a-z]{2,}/\S*')
 
@@ -83,8 +84,9 @@ def _query_kimi(query: str, api_key: str) -> _EngineResult:
         "tools": [{"type": "builtin_function", "function": {"name": "web_search"}}],
     }
     try:
-        r = requests.post("https://api.moonshot.cn/v1/chat/completions",
-                          json=payload, headers=headers, timeout=60)
+        r = post_chat("https://api.moonshot.cn/v1/chat/completions", payload, headers,
+                      provider="moonshot", engine="compare.kimi",
+                      timeout=60, retry_status=())   # this function never retried originally
         if r.status_code == 401:
             return _EngineResult(engine="Kimi", query=query, error="invalid_key")
         if r.status_code != 200:
@@ -106,8 +108,9 @@ def _query_qwen(query: str, api_key: str) -> _EngineResult:
         "enable_search": True,
     }
     try:
-        r = requests.post("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-                          json=payload, headers=headers, timeout=60)
+        r = post_chat("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", payload, headers,
+                      provider="dashscope", engine="compare.qwen",
+                      timeout=60, retry_status=())   # this function never retried originally
         if r.status_code == 401:
             return _EngineResult(engine="通义千问", query=query, error="invalid_key")
         if r.status_code != 200:
@@ -140,8 +143,9 @@ def _query_zhipu(query: str, api_key: str) -> _EngineResult:
         "tools": [{"type": "web_search", "web_search": {"enable": True}}],
     }
     try:
-        r = requests.post("https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                          json=payload, headers=headers, timeout=60)
+        r = post_chat("https://open.bigmodel.cn/api/paas/v4/chat/completions", payload, headers,
+                      provider="glm", engine="compare.zhipu",
+                      timeout=60, retry_status=())   # this function never retried originally
         if r.status_code == 401:
             return _EngineResult(engine="智谱", query=query, error="invalid_key")
         if r.status_code != 200:
@@ -170,8 +174,9 @@ def _query_perplexity(query: str, api_key: str) -> _EngineResult:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {"model": "sonar", "messages": [{"role": "user", "content": query}]}
     try:
-        r = requests.post("https://api.perplexity.ai/chat/completions",
-                          json=payload, headers=headers, timeout=45)
+        r = post_chat("https://api.perplexity.ai/chat/completions", payload, headers,
+                      provider="perplexity", engine="compare.perplexity",
+                      timeout=45, retry_status=())   # this function never retried originally
         if r.status_code == 401:
             return _EngineResult(engine="Perplexity", query=query, error="invalid_key")
         if r.status_code != 200:
@@ -193,8 +198,11 @@ def _query_openrouter_perplexity(query: str, api_key: str) -> _EngineResult:
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                              json=payload, headers=headers, timeout=45)
+            # This function has its own 3-round backoff loop, so post_chat's built-in retry is disabled,
+            # and only the round is passed in so attempt_no in the ledger lines up
+            r = post_chat("https://openrouter.ai/api/v1/chat/completions", payload, headers,
+                          provider="openrouter", engine="compare.perplexity_or",
+                          timeout=45, retry_status=(), attempt_base=attempt)
             if r.status_code == 401:
                 return _EngineResult(engine="Perplexity", query=query, error="invalid_key")
             if r.status_code == 429:
@@ -225,8 +233,11 @@ def _query_openai(query: str, api_key: str) -> _EngineResult:
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            r = requests.post("https://api.openai.com/v1/responses",
-                              json=payload, headers=headers, timeout=60)
+            # This function has its own 3-round backoff loop, so post_chat's built-in retry is disabled,
+            # and only the round is passed in so attempt_no in the ledger lines up
+            r = post_chat("https://api.openai.com/v1/responses", payload, headers,
+                          provider="openai", engine="compare.openai",
+                          timeout=60, retry_status=(), attempt_base=attempt)
             if r.status_code == 401:
                 return _EngineResult(engine="OpenAI", query=query, error="invalid_key")
             if r.status_code == 429:

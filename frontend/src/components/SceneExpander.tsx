@@ -1,33 +1,40 @@
-// 2026-05-28 — 4 维场景扩展组件.
-// 单 seed 输入 + 4 个 scene 复选框(默认全勾)+ [拓词] 按钮.
-// 拓词后下面渲染 4 个 tab,各 tab 内列出该场景产出的候选 query.
-// 选词回调到外层(由外层决定送 probe / 入选监测问题).
+// 2026-05-28 -- 4-dimension scene expansion component.
+// Single seed input + 4 scene checkboxes (all checked by default) + [Expand] button.
+// After expanding, 4 tabs render below, each listing the candidate queries produced for that scene.
+// Selections call back to the outer layer (which decides whether to send to probe / add to selected prompts).
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SceneType } from '../services/aiTelemetryApi';
 import { ALL_SCENES } from '../services/aiTelemetryApi';
 import type { ExpandQueriesResp } from '../services/topicProfileApi';
+import type { BrandProduct } from '../services/aiTelemetryApi';
+import { MarkSeedAsProduct } from './MarkSeedAsProduct';
 
 interface Props {
-  /** 当前 topic 是否要求 target(品牌名)非空 —— brand 场景在 target 为空时灰显 */
+  /** Whether the current topic requires a non-empty target (brand name) -- the brand scene is grayed out when target is empty */
   brandSceneAvailable: boolean;
-  /** 拓词回调,由父组件决定调哪个 API client.返回 v2 response. */
+  /** Expansion callback; the parent decides which API client to call. Returns a v2 response. */
   onExpand: (seed: string, scenes: SceneType[], countPerScene: number) => Promise<ExpandQueriesResp>;
-  /** 用户在某 scene tab 内勾了一个 candidate query,父组件负责落库 */
+  /** The user checked a candidate query in some scene tab; the parent handles persisting to DB */
   onPickCandidate: (text: string, scene: SceneType, seed: string) => void;
-  /** 已勾选 set(用于在 candidate list 上回显勾选状态) */
+  /** Checked set (to echo checked state on the candidate list) */
   selectedSet: Set<string>;
-  /** 拓词后从外层透传 readonly,防止已提交审核状态下还能改 */
+  /** readonly passed through from the outer layer after expansion, to prevent edits once submitted for review */
   readOnly?: boolean;
-  /** 每场景默认产出条数,默认 50(后端上限) */
+  /** Default number of items per scene, default 30 (backend cap; from 2026-09-21, previously 50 -- 50 made all intent/brand scenes time out) */
   defaultCountPerScene?: number;
+  /** Product list from the profile + registration callback (2026-09-22): when expansion hits no product, offer "mark as this brand's product" next to the seed */
+  products?: BrandProduct[];
+  onAddProduct?: (p: BrandProduct) => void | Promise<void>;
 }
 
-// 当前一次拓词的产出 — 按 scene 分组
+// Output of the current expansion -- grouped by scene
 interface RunState {
   seed: string;
   results: Partial<Record<SceneType, { queries: string[]; error?: string | null }>>;
+  // Which product in the profile the seed matched (2026-09-22; backend find_product). null = expand as a regular category seed
+  matchedProduct?: ExpandQueriesResp['matched_product'];
 }
 
 export function SceneExpander({
@@ -36,7 +43,9 @@ export function SceneExpander({
   onPickCandidate,
   selectedSet,
   readOnly = false,
-  defaultCountPerScene = 50,
+  defaultCountPerScene = 30,
+  products,
+  onAddProduct,
 }: Props) {
   const { t } = useTranslation();
   const [seed, setSeed] = useState('');
@@ -68,7 +77,7 @@ export function SceneExpander({
     try {
       const resp = await onExpand(seedTrim, Array.from(enabledScenes), countPerScene);
       const sceneMap = resp.scenes || {};
-      // 老 schema fallback:如果只有 .queries 数组没有 .scenes,把它当 search 场景
+      // Old schema fallback: if there's only a .queries array and no .scenes, treat it as the search scene
       const compatScenes: RunState['results'] = {};
       if (Object.keys(sceneMap).length === 0 && Array.isArray(resp.queries)) {
         compatScenes.search = { queries: resp.queries };
@@ -78,8 +87,8 @@ export function SceneExpander({
           if (v) compatScenes[s] = { queries: v.queries || [], error: v.error || null };
         }
       }
-      setRun({ seed: seedTrim, results: compatScenes });
-      // 自动切到第一个有产出的 tab
+      setRun({ seed: seedTrim, results: compatScenes, matchedProduct: resp.matched_product ?? null });
+      // Automatically switch to the first tab with output
       const firstNonEmpty = ALL_SCENES.find(s => (compatScenes[s]?.queries.length || 0) > 0);
       if (firstNonEmpty) setActiveTab(firstNonEmpty);
     } catch (e: unknown) {
@@ -107,8 +116,8 @@ export function SceneExpander({
                    className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-md"
                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
                             border: '1px solid var(--border-color)' }} />
-            <input type="number" min={5} max={50} value={countPerScene}
-                   onChange={e => setCountPerScene(Math.min(50, Math.max(5, +e.target.value || 50)))}
+            <input type="number" min={5} max={30} value={countPerScene}
+                   onChange={e => setCountPerScene(Math.min(30, Math.max(5, +e.target.value || 30)))}
                    title={t('topic.profile.monitor.scene.countPerSceneHint')}
                    className="w-20 text-sm px-3 py-2 rounded-md"
                    style={{ background: 'var(--bg-input)', color: 'var(--text-primary)',
@@ -144,7 +153,20 @@ export function SceneExpander({
         </>
       )}
 
-      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+      {err && <div className="text-xs" style={{ color: 'var(--danger-fg)' }}>{err}</div>}
+
+      {run && !run.matchedProduct && onAddProduct && (
+        <MarkSeedAsProduct seed={run.seed} products={products} onAdd={onAddProduct} disabled={readOnly} />
+      )}
+      {run?.matchedProduct && (
+        <div className="text-xs rounded-md px-3 py-2"
+             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+          {t('topic.profile.monitor.scene.matchedProduct', {
+            name: run.matchedProduct.name,
+            category: run.matchedProduct.category || t('topic.profile.monitor.scene.matchedProductNoCategory'),
+          })}
+        </div>
+      )}
 
       {run && (
         <div className="space-y-2">
@@ -157,7 +179,7 @@ export function SceneExpander({
               const count = r?.queries.length || 0;
               const hasErr = !!r?.error;
               const isActive = s === activeTab;
-              const isAvailable = !!r; // 该 scene 这次有跑过(可能 count=0 + error)
+              const isAvailable = !!r; // this scene ran this time (may be count=0 + error)
               return (
                 <button key={s}
                         onClick={() => isAvailable && setActiveTab(s)}
@@ -165,7 +187,7 @@ export function SceneExpander({
                         className="text-xs px-3 py-1.5 rounded-t-md"
                         style={{
                           background: isActive ? 'var(--bg-tertiary)' : 'transparent',
-                          color: hasErr ? '#ef4444' : isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                          color: hasErr ? 'var(--danger-fg)' : isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
                           borderBottom: isActive ? '2px solid var(--accent-primary)' : 'none',
                           opacity: isAvailable ? 1 : 0.4,
                           cursor: isAvailable ? 'pointer' : 'not-allowed',
@@ -218,7 +240,7 @@ function SceneCandidateList({
   if (data.error) {
     return (
       <div className="text-xs py-4 px-3 rounded-md"
-           style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>
+           style={{ background: 'var(--danger-bg)', color: 'var(--danger-fg)' }}>
         {data.error}
       </div>
     );

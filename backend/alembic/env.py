@@ -58,6 +58,9 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         render_as_batch=url.startswith("sqlite"),
         compare_type=_compare_type,
+        # Keep one failed/slow revision from holding locks accumulated by all
+        # revisions selected by `upgrade heads`.
+        transaction_per_migration=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -75,6 +78,10 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             render_as_batch=settings.DATABASE_URL.startswith("sqlite"),
             compare_type=_compare_type,
+            # PostgreSQL DDL is transactional. Commit each revision on its
+            # own so a data-heavy revision does not extend earlier DDL locks
+            # across the entire upgrade path.
+            transaction_per_migration=True,
         )
         with context.begin_transaction():
             context.run_migrations()

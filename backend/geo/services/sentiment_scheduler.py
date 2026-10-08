@@ -1,16 +1,16 @@
-"""舆情定时任务 — APScheduler 集成.
+"""Sentiment monitoring scheduled jobs -- APScheduler integration.
 
-每小时执行一次(可通过 SENTINEL_CRON_INTERVAL_HOURS 调整),
-遍历所有有舆情服务权限的账号,触发 pipeline.
+Runs hourly (adjustable via SENTINEL_CRON_INTERVAL_HOURS),
+iterating all accounts with sentiment monitoring access and triggering the pipeline.
 
-部署要点:
-- 多 worker 时只让 leader 起 scheduler(读 GEO_SCHEDULER_LEADER 环境变量)
-- jobs 持久化用 SQLAlchemyJobStore,容器重启不丢
-- 每 10 分钟扫一次"僵尸任务"(running 但 last_run_at 超 60 分钟未更新)
-- 任务间隔 1 小时,所以僵尸阈值放宽到 60 分钟,给 LLM 调用充分时间
+Deployment notes:
+- With multiple workers only the leader starts the scheduler (reads the GEO_SCHEDULER_LEADER env var)
+- jobs persisted with SQLAlchemyJobStore, survive container restarts
+- Scan for "zombie jobs" every 10 minutes (running but last_run_at not updated for over 60 minutes)
+- Job interval is 1 hour, so the zombie threshold is relaxed to 60 minutes, giving LLM calls ample time
 
-启动:
-    在 backend/geo/main.py 的 startup hook 里,如果 GEO_SCHEDULER_LEADER=1 则调
+Startup:
+    In the startup hook of backend/geo/main.py, if GEO_SCHEDULER_LEADER=1 then call
     sentiment_scheduler.start()
 """
 from __future__ import annotations
@@ -23,48 +23,73 @@ from sqlalchemy.orm import Session
 
 from geo.database import SessionLocal, engine
 from geo.models.sentiment import SentimentAccountORM
-from geo.services.sentiment_pipeline import run_pipeline_for_account
+from geo.services.sentiment_pipeline import (
+    ZOMBIE_TIMEOUT_MIN, run_pipeline_for_account, zombie_started_at,
+)
 
 log = logging.getLogger(__name__)
 
-# 调度间隔(小时):默认 1 小时跑一次
+# Scheduling interval (hours): default once per hour
 INTERVAL_HOURS = int(os.environ.get("SENTINEL_CRON_INTERVAL_HOURS", "1"))
-# 起始偏移(分钟):避开整点峰值 — 默认 5 分(每小时 :05 跑)
+# Start offset (minutes): avoid the top-of-hour peak -- default 5 (runs at :05 every hour)
 START_MINUTE = int(os.environ.get("SENTINEL_CRON_START_MINUTE", "5"))
-# 固定每天某点跑一次(0-23);设置后优先于 INTERVAL_HOURS。
-# 例:SENTINEL_CRON_HOUR=10 + START_MINUTE=0 → 每天 10:00 跑一次。
+# Run once daily at a fixed hour (0-23); when set, takes precedence over INTERVAL_HOURS.
+# Example: SENTINEL_CRON_HOUR=10 + START_MINUTE=0 -> runs once a day at 10:00.
 _cron_hour_raw = os.environ.get("SENTINEL_CRON_HOUR", "").strip()
 CRON_HOUR = int(_cron_hour_raw) if _cron_hour_raw else None
 TIMEZONE = os.environ.get("SENTINEL_CRON_TZ", "Asia/Shanghai")
-# 僵尸超时:任务间隔 1h,所以 60 分钟没动静才算挂了
-ZOMBIE_TIMEOUT_MIN = int(os.environ.get("SENTINEL_ZOMBIE_TIMEOUT_MIN", "60"))
+# Zombie timeout (SENTINEL_ZOMBIE_TIMEOUT_MIN, default 60 minutes) is defined in sentiment_pipeline --
+# the re-entry guard criterion and zombie cleanup criterion must be the same; writing it in two places will drift sooner or later.
 
 _scheduler = None
 
 
 def _list_eligible_accounts(db: Session) -> list[int]:
-    """返回所有 active 且会员有舆情权限的账号 id.
+    """Return account ids due this round.
 
-    MVP 简化:只看 active 字段;后续接入 membership 表的 sentiment_enabled.
-    TODO: JOIN users → user_memberships → memberships WHERE sentiment_enabled=1
+    Since sentiment monitoring became per-run billing, "eligible" means two things: the account is active and the balance covers one run.
+    Tier no longer matters (there used to be a "JOIN memberships" TODO here, the same retired metric definition as the
+    pro hard gate on the API side).
+
+    The balance check lives in `sentiment_pipeline`, not here -- that side also has to check "was it already
+    charged today", and for consistency the criterion must live in one place. Here we only filter out obvious non-runners.
+
+    `run_hour` is the account's chosen "daily monitoring hour" (Beijing time). If set, the account is selected only at that hour;
+    unset (NULL) keeps the old run-every-round behavior. **It only moves the time, not the money** -- the billing idempotency key pins
+    "account x Beijing day", so it's still charged only once a day.
     """
     rows = (
-        db.query(SentimentAccountORM.id)
+        db.query(SentimentAccountORM.id, SentimentAccountORM.run_hour)
           .filter(SentimentAccountORM.active.is_(True))
           .all()
     )
-    return [r[0] for r in rows]
+    hour_now = _bj_hour()
+    return [r[0] for r in rows if r[1] is None or int(r[1]) == hour_now]
+
+
+def _bj_hour() -> int:
+    """Current Beijing hour. Same metric definition as billing's bj_date (UTC+8), independent of the machine timezone."""
+    return (datetime.utcnow() + timedelta(hours=8)).hour
 
 
 def run_hourly_job():
-    """cron 触发入口 — 每小时跑一次所有合格账号.
+    """cron trigger entry -- runs all eligible accounts hourly.
 
-    串行执行(避免 LLM 限流);P1 可加并发 + 限流.
+    Runs serially (avoids LLM rate limits); P1 can add concurrency + rate limiting.
 
-    逻辑兜底:如果上一轮还没跑完(running),APScheduler 的 max_instances=1
-    会自动跳过这次触发,避免重叠.
+    Logical fallback: if the previous round hasn't finished (running), APScheduler's max_instances=1
+    automatically skips this trigger to avoid overlap.
     """
     log.info("[sentinel-cron] hourly run start")
+    # **Reset zombies first**: a killed / crashed previous round leaves the account stuck at last_run_status='running' forever,
+    # skipped every round after -> briefs stop updating permanently (2026-07-19/20 incident: account 1 stuck at running from 07-18).
+    # cleanup_zombies used to run only inside geo-backend's APScheduler, unreachable by the standalone daily script,
+    # so it's called explicitly here to guarantee "stuck runs self-heal".
+    try:
+        cleanup_zombies()
+    except Exception as e:  # noqa: BLE001 — a failed reset shouldn't block this round
+        log.warning("[sentinel-cron] zombie cleanup failed: %s", e)
+
     db = SessionLocal()
     try:
         ids = _list_eligible_accounts(db)
@@ -89,35 +114,43 @@ def run_hourly_job():
 
 
 def cleanup_zombies():
-    """每 10 分钟跑一次,把超时未完成的 'running' 任务标记为 failed.
+    """Runs every 10 minutes, marking timed-out unfinished 'running' jobs as failed.
 
-    场景:服务进程被 kill / OOM / docker stop,任务状态机没机会写 'failed',
-    永远卡在 'running'.前端会一直显示"任务运行中".
+    Scenario: the service process is killed / OOM / docker stop; the job state machine never gets to write 'failed'
+    and stays stuck at 'running'. The frontend keeps showing "job running".
     """
     db: Session = SessionLocal()
     try:
-        cutoff = datetime.utcnow() - timedelta(minutes=ZOMBIE_TIMEOUT_MIN)
-        # 用 last_run_at 做判断:如果它在 30 分钟前还是 running,说明僵尸
-        zombies = (
+        # The criterion is delegated to zombie_started_at (reads the run log's started_at).
+        # This used to be `last_run_at < cutoff` -- last_run_at records "last finished",
+        # and _mark_running never writes it: an account that crashed on its first round has last_run_at NULL,
+        # `NULL < cutoff` is NULL in SQL and the row isn't selected, so **the kind most likely to get stuck
+        # was exactly the kind never cleaned up**. Now fetch all running first and judge each; there are only a handful of accounts, so it's cheap.
+        running = (
             db.query(SentimentAccountORM)
               .filter(SentimentAccountORM.last_run_status == "running")
-              .filter(SentimentAccountORM.last_run_at < cutoff)
               .all()
         )
-        for acc in zombies:
-            log.warning("[sentinel-cleanup] zombie account %s, marking failed", acc.id)
+        hit = 0
+        for acc in running:
+            started = zombie_started_at(db, acc.id)
+            if started is None:
+                continue
+            log.warning("[sentinel-cleanup] zombie account %s (started %s, over %d minutes), marking failed",
+                        acc.id, started, ZOMBIE_TIMEOUT_MIN)
             acc.last_run_status = "failed"
             acc.last_run_error = "task interrupted (zombie cleanup)"
-        if zombies:
+            hit += 1
+        if hit:
             db.commit()
     finally:
         db.close()
 
 
 def start() -> None:
-    """启动 APScheduler.只有 leader 进程应该调这个.
+    """Start APScheduler. Only the leader process should call this.
 
-    APScheduler 在 BackgroundScheduler 模式下用线程跑 jobs,与 FastAPI 主进程并行.
+    In BackgroundScheduler mode APScheduler runs jobs in threads, in parallel with the FastAPI main process.
     """
     global _scheduler
     if _scheduler is not None:
@@ -136,16 +169,16 @@ def start() -> None:
         timezone=TIMEZONE,
     )
 
-    # 每 INTERVAL_HOURS 小时跑一次,在每小时 START_MINUTE 分触发
-    # (默认每小时 :05 — 避开整点高峰,且数据更新到点后稍迟)
+    # Run every INTERVAL_HOURS hours, triggering at minute START_MINUTE of the hour
+    # (default :05 every hour -- avoids the top-of-hour peak, and runs slightly after data updates)
     if CRON_HOUR is not None:
-        # 每天固定 CRON_HOUR:START_MINUTE 跑一次
+        # Run once daily at CRON_HOUR:START_MINUTE
         trigger_kwargs = dict(trigger="cron", hour=CRON_HOUR, minute=START_MINUTE)
     elif INTERVAL_HOURS == 1:
-        # 每小时 :MM 触发
+        # Trigger hourly at :MM
         trigger_kwargs = dict(trigger="cron", minute=START_MINUTE)
     else:
-        # 每 N 小时一次,从 :MM 起算
+        # Once every N hours, starting from :MM
         trigger_kwargs = dict(
             trigger="cron",
             hour=f"*/{INTERVAL_HOURS}",
@@ -157,9 +190,9 @@ def start() -> None:
         **trigger_kwargs,
         id="sentinel_hourly",
         replace_existing=True,
-        coalesce=True,                  # 错过的多次合并成 1 次
-        misfire_grace_time=1800,        # 错过 30 分钟内还能补跑
-        max_instances=1,                # 关键:避免上一轮没跑完就开下一轮
+        coalesce=True,                  # merge multiple missed runs into 1
+        misfire_grace_time=1800,        # missed runs within 30 minutes can still catch up
+        max_instances=1,                # key: avoid starting the next round before the previous finishes
     )
     _scheduler.add_job(
         cleanup_zombies,
@@ -167,6 +200,33 @@ def start() -> None:
         id="sentinel_cleanup",
         replace_existing=True,
         coalesce=True,
+        max_instances=1,
+    )
+    # Post-paid batch run settlement (unrelated to sentiment monitoring, just riding this leader process -- in prod
+    # this is the only APScheduler guaranteed to run as a single instance; running twice hits the idempotency key but wastes a full table scan)
+    from geo.services.batch_billing import tick as _settle_batches
+
+    _scheduler.add_job(
+        _settle_batches,
+        trigger="cron", minute=25,
+        id="batch_billing_settle",
+        replace_existing=True,
+        coalesce=True,
+        misfire_grace_time=3600,
+        max_instances=1,
+    )
+    # Close-out for batch run prepay: finished runs refund the overcharged part based on cells actually completed
+    # (drip spreads one cycle over a week; words skipped mid-way by backlog protection / deterministic refusals can't be charged).
+    # **Mutually exclusive** with the post-paid settlement above -- see the batch_prepay module docs.
+    from geo.services.batch_prepay import tick as _refund_prepaid_runs
+
+    _scheduler.add_job(
+        _refund_prepaid_runs,
+        trigger="cron", minute=40,
+        id="batch_prepay_refund",
+        replace_existing=True,
+        coalesce=True,
+        misfire_grace_time=3600,
         max_instances=1,
     )
 
@@ -188,9 +248,21 @@ def shutdown() -> None:
 
 
 def maybe_start_from_env() -> None:
-    """在 main.py 启动钩子里调.根据 env 决定是否启动."""
+    """Called in the main.py startup hook. Decides whether to start based on env."""
     if os.environ.get("GEO_SCHEDULER_LEADER", "0") == "1":
         log.info("[sentinel-scheduler] leader mode, starting…")
         start()
     else:
         log.info("[sentinel-scheduler] not leader (GEO_SCHEDULER_LEADER!=1), skip")
+
+
+# ── crontab entry point ─────────────────────────────────────────────────────────
+# prod is multi-worker + containerized with no leader process (GEO_SCHEDULER_LEADER was never set,
+# APScheduler never starts); scheduled jobs all go through the host crontab's `run.sh` one-shot containers:
+#   5 * * * * .../run.sh sentiment_cron python -m geo.services.sentiment_scheduler
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    run_hourly_job()

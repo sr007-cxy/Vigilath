@@ -1,6 +1,6 @@
-"""DDG search proxy — 给 vm02(机房 IP 在国内,DDG 直连不可用)远程调用。
+"""DDG search proxy — 给 <app-host>(机房 IP 在国内,DDG 直连不可用)远程调用。
 
-vm02 → 本机 nginx :80 /ddg/ → proxy_pass http://127.0.0.1:8095/
+<app-host> → 本机 nginx :80 /ddg/ → proxy_pass http://127.0.0.1:8095/
                                         → 这个 FastAPI 服务调本机出口的 ddgs
 
 返回格式与 sentinel-service/search/ddg.py:ddg_search() 完全一致,

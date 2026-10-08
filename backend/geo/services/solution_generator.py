@@ -1,21 +1,21 @@
-"""GEO 品牌增长战略方案生成 service.
+"""GEO brand growth strategy solution generation service.
 
-入口 `schedule_solution_generation(topic_id, website_url, admin_id)` 在 admin 点
-"生成战略方案"时由 admin_review POST endpoint 通过 FastAPI BackgroundTasks 异步触发。
+Entry point `schedule_solution_generation(topic_id, website_url, admin_id)` is triggered asynchronously via FastAPI BackgroundTasks
+by the admin_review POST endpoint when admin clicks "生成战略方案" ("generate strategy solution").
 
-混合架构(硬数据 + LLM 文案):
-  1. 硬数据:跑 geo_checker.run_geo_check 拿 25 类诊断 + score + grade
-  2. 聚类:把 25 类按 5 大主题分簇(站内技术 5 大短板),每簇计算 severity
-  3. LLM:把 BrandProfile + diagnosis_summary + 模板骨架喂 DeepSeek
-     拿 JSON {diagnosis_summaries, seven_steps, keyword_tiers, vision}
-  4. 拼接:LLM 文案 + 硬数据 → SolutionORM 落库
+Hybrid architecture (hard data + LLM copy):
+  1. Hard data: run geo_checker.run_geo_check to get 25-category diagnosis + score + grade
+  2. Clustering: group the 25 categories into 5 major themes (5 on-site technical weaknesses), computing severity per cluster
+  3. LLM: feed BrandProfile + diagnosis_summary + template skeleton to DeepSeek
+     to get JSON {diagnosis_summaries, seven_steps, keyword_tiers, vision}
+  4. Assembly: LLM copy + hard data -> SolutionORM persisted to DB
 
-失败:任何步骤失败 → status=failed + error_text;前端轮询拿到错误 + 重试按钮。
+Failure: any step fails -> status=failed + error_text; frontend polling gets the error + a retry button.
 
 ENV:
-    DEEPSEEK_API_KEY      可选,优先 → 直连
-    OPENROUTER_API_KEY    可选,fallback → 通过 OpenRouter 调 DeepSeek
-    GEO_SOLUTION_TIMEOUT  可选,LLM 单次请求超时(秒),默认 180
+    DEEPSEEK_API_KEY      optional, preferred -> direct
+    OPENROUTER_API_KEY    optional, fallback -> DeepSeek via OpenRouter
+    GEO_SOLUTION_TIMEOUT  optional, per-LLM-request timeout (seconds), default 180
 """
 from __future__ import annotations
 
@@ -32,11 +32,14 @@ from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
     AiTelemetryTopicORM, AiTelemetryTopicSolutionORM, BrandProfile,
 )
+from geo.services.llm_gateway import post_and_record
+import uuid
+from geo.services.llm_usage import usage_ctx
 
 log = logging.getLogger(__name__)
 
-# 超过这个时间未更新的 generating 行视为僵尸 — 后台 thread 是 daemon,backend
-# restart 时会被 SIGTERM 杀死,DB 里 status 会卡在 generating,前端轮询永远等不到结果。
+# generating rows not updated for longer than this are treated as zombies -- the background thread is a daemon; on backend
+# restart it gets killed by SIGTERM, DB status stays stuck at generating, and frontend polling never gets a result.
 STALE_GENERATING_THRESHOLD = timedelta(minutes=10)
 
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
@@ -46,12 +49,12 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = int(os.environ.get("GEO_SOLUTION_TIMEOUT", "180"))
 
 
-# ─────────────── 25 类 → 5 大短板簇映射 ───────────────
-# 参照 SPARKOZ / BrainWM 两份 PDF 里站内技术诊断的分类骨架:
-#   1) AI 协议与抓取规则   2) 爬虫访问 & 性能   3) 结构化数据 & 语义化
-#   4) URL & 元标签        5) 内容 & 安全 & 媒体
+# ─────────────── 25 categories -> 5 weakness clusters mapping ───────────────
+# Based on the on-site technical diagnosis classification skeleton in two client PDFs:
+#   1) AI protocols & crawl rules   2) Crawler access & performance   3) Structured data & semantics
+#   4) URLs & meta tags             5) Content & security & media
 #
-# 25-类英文 label 直接来自 geo_checker.orchestrate.CHECK_REGISTRY,不要改。
+# The 25 English category labels come straight from geo_checker.orchestrate.CHECK_REGISTRY; don't change them.
 CLUSTER_DEFS: list[dict[str, Any]] = [
     {
         "key": "ai_protocol",
@@ -130,7 +133,7 @@ KEYWORD_TIERS_TEMPLATE = [
 ]
 
 
-# ─────────────── 入口 ───────────────
+# ─────────────── Entry point ───────────────
 
 
 def schedule_solution_generation(
@@ -138,20 +141,21 @@ def schedule_solution_generation(
     topic_id: int,
     website_url: str,
     admin_id: int,
+    operation_context_id: int | None = None,
 ) -> None:
-    """fire-and-forget thread.LLM 单次 30-90s,要避开 FastAPI 事件循环."""
+    """fire-and-forget thread. A single LLM call takes 30-90s; keep it off the FastAPI event loop."""
     thread = threading.Thread(
         target=_run_safe,
-        args=(topic_id, website_url, admin_id),
+        args=(topic_id, website_url, admin_id, operation_context_id),
         daemon=True,
     )
     thread.start()
 
 
 def reset_stale_generating() -> int:
-    """启动时调用 — 把超过 STALE_GENERATING_THRESHOLD 没更新的 generating 行
-    标成 failed。daemon thread 在 backend restart 时会被杀,这里兜底防止 UI 一直转圈。
-    返回被重置的行数。"""
+    """Called at startup -- marks generating rows not updated for over STALE_GENERATING_THRESHOLD
+    as failed. Daemon threads get killed on backend restart; this fallback keeps the UI from spinning forever.
+    Returns the number of rows reset."""
     cutoff = datetime.utcnow() - STALE_GENERATING_THRESHOLD
     db = SessionLocal()
     try:
@@ -174,23 +178,62 @@ def reset_stale_generating() -> int:
         db.close()
 
 
-def _run_safe(topic_id: int, website_url: str, admin_id: int) -> None:
-    try:
-        _run(topic_id, website_url, admin_id)
-    except Exception as e:  # noqa: BLE001
-        log.exception("solution generation crashed for topic %d: %s", topic_id, e)
-        _mark_failed(topic_id, str(e)[:1000])
+def _run_safe(
+    topic_id: int, website_url: str, admin_id: int,
+    operation_context_id: int | None = None,
+) -> None:
+    # Accounting context: all model calls in this generation share one trace_id, so the page can drill down per run
+    with usage_ctx(feature="solution", topic_id=topic_id, user_id=admin_id,
+                   trace_id=uuid.uuid4().hex, ref_type="topic", ref_id=str(topic_id)):
+        try:
+            _run(topic_id, website_url, admin_id, operation_context_id)
+        except Exception as e:  # noqa: BLE001
+            log.exception("solution generation crashed for topic %d: %s", topic_id, e)
+            _mark_failed(topic_id, str(e)[:1000])
 
 
-def _run(topic_id: int, website_url: str, admin_id: int) -> None:
+def _run(
+    topic_id: int, website_url: str, admin_id: int,
+    operation_context_id: int | None = None,
+) -> None:
     db = SessionLocal()
     try:
         t = db.get(AiTelemetryTopicORM, topic_id)
         if not t:
             log.warning("solution gen: topic %d not found", topic_id)
             return
+        if operation_context_id is not None:
+            from geo.models.organization import OperationContextORM
+            from geo.services.access_control import revalidate_operation_context
+            from geo.services.system_audit import append_event
 
-        # 1) 加载 brand profile
+            operation = db.get(OperationContextORM, operation_context_id)
+            sol = (
+                db.query(AiTelemetryTopicSolutionORM)
+                .filter(AiTelemetryTopicSolutionORM.topic_id == topic_id)
+                .one_or_none()
+            )
+            try:
+                revalidate_operation_context(db, operation_context_id)
+            except Exception as exc:  # noqa: BLE001
+                if sol is not None:
+                    sol.status = "failed"
+                    sol.error = "authorization revoked"
+                    sol.updated_at = datetime.utcnow()
+                append_event(
+                    db,
+                    operation_context=operation,
+                    event_type="authorization_denied",
+                    action="solution.generate.start",
+                    object_type="solution",
+                    object_id=(sol.id if sol is not None else None),
+                    result="denied",
+                    reason=str(exc),
+                )
+                db.commit()
+                return
+
+        # 1) Load brand profile
         try:
             profile_data = json.loads(t.profile_json or "{}")
         except Exception:  # noqa: BLE001
@@ -202,18 +245,18 @@ def _run(topic_id: int, website_url: str, admin_id: int) -> None:
         except Exception:  # noqa: BLE001
             profile = BrandProfile()
 
-        # 2) 跑 geo_checker — 硬数据(website 选填:空时跳过技术诊断,只生成基于品牌资料的 4 块)
+        # 2) Run geo_checker -- hard data (website optional: when empty skip technical diagnosis and generate only the 4 brand-profile sections)
         url = (website_url or "").strip()
         diagnosis = _run_diagnosis(url) if url else _empty_diagnosis()
 
-        # 3) 调 LLM — 拼方案文案
+        # 3) Call LLM -- assemble solution copy
         narrative, keywords, llm_model = _call_llm(profile, diagnosis, website_url)
 
-        # 3.5) 快照监测 Query — 直接取 topic.queries_json 里 selected=True 的项
-        #      + topic.clusters_json 的簇标签,不走 LLM.报告里"监测 Query 清单"节用.
+        # 3.5) Snapshot monitored queries -- take selected=True items from topic.queries_json
+        #      + cluster labels from topic.clusters_json, no LLM. Used by the "monitored query list" section of the report.
         queries_snapshot = _snapshot_selected_queries(t)
 
-        # 4) 落库 — upsert
+        # 4) Persist to DB -- upsert
         sol = (
             db.query(AiTelemetryTopicSolutionORM)
               .filter(AiTelemetryTopicSolutionORM.topic_id == topic_id)
@@ -257,18 +300,18 @@ def _mark_failed(topic_id: int, error: str) -> None:
         db.close()
 
 
-# ─────────────── 硬数据:topic 已选 Query 快照 ───────────────
+# ─────────────── Hard data: snapshot of the topic's selected queries ───────────────
 
 
 def _snapshot_selected_queries(topic: AiTelemetryTopicORM) -> dict[str, Any]:
-    """从 topic.queries_json 提取 selected=True 的项 + clusters_json 簇标签,落成快照.
+    """Extract selected=True items from topic.queries_json + cluster labels from clusters_json into a snapshot.
 
-    queries_json 兼容多形态(参 ai_telemetry.AiTelemetryTopicORM 注释):
-      - list[str](legacy):全部视为 selected=True,cluster_id=-1,seed=""
-      - list[dict]:取 selected(默认 True)/ text / cluster_id / seed
-    clusters_json 形态:list[{cluster_id, label, size}].
+    queries_json supports multiple shapes (see the ai_telemetry.AiTelemetryTopicORM comment):
+      - list[str] (legacy): all treated as selected=True, cluster_id=-1, seed=""
+      - list[dict]: take selected (default True) / text / cluster_id / seed
+    clusters_json shape: list[{cluster_id, label, size}].
 
-    返回 dict 与 SolutionQueriesSnapshot 同构,落 queries_snapshot_json 用.
+    The returned dict is isomorphic to SolutionQueriesSnapshot, persisted to queries_snapshot_json.
     """
     queries_out: list[dict[str, Any]] = []
     try:
@@ -284,8 +327,10 @@ def _snapshot_selected_queries(topic: AiTelemetryTopicORM) -> dict[str, Any]:
                 continue
             if not isinstance(item, dict):
                 continue
-            # legacy 无 selected 字段时默认 True(老话题的 query 默认都参与监测)
+            # legacy items without a selected field default to True (old topics' queries all take part in monitoring by default)
             if not bool(item.get("selected", True)):
+                continue
+            if item.get("deleted_at"):          # soft-deleted words don't enter the strategy solution's monitoring list (a forward-looking deliverable)
                 continue
             text = str(item.get("text") or "").strip()
             if not text:
@@ -320,12 +365,12 @@ def _snapshot_selected_queries(topic: AiTelemetryTopicORM) -> dict[str, Any]:
     return {"clusters": clusters_out, "queries": queries_out}
 
 
-# ─────────────── 硬数据:geo_checker 扫描 ───────────────
+# ─────────────── Hard data: geo_checker scan ───────────────
 
 
 def _empty_diagnosis() -> dict[str, Any]:
-    """website_url 为空时的占位 — 让 _call_llm 跳过技术诊断相关 prompt 段,
-    报告页前端也按 score=0 + 空 clusters 判断不渲染诊断 / 执行流程两节."""
+    """Placeholder when website_url is empty -- makes _call_llm skip the technical-diagnosis prompt sections,
+    and the report page frontend uses score=0 + empty clusters to skip rendering the diagnosis / execution flow sections."""
     return {
         "url": "",
         "score": 0,
@@ -341,7 +386,7 @@ def _empty_diagnosis() -> dict[str, Any]:
 
 
 def _run_diagnosis(url: str) -> dict[str, Any]:
-    """跑 run_geo_check 拿 25 类结果 → 转 SolutionDiagnosis dict."""
+    """Run run_geo_check for the 25-category results -> convert to a SolutionDiagnosis dict."""
     from geo.services.geo_checker import run_geo_check
 
     result = run_geo_check(url, include_fix=True, tier="growth")
@@ -353,6 +398,12 @@ def _run_diagnosis(url: str) -> dict[str, Any]:
             "status": c.status or "",
             "message": c.message or "",
             "fix": c.fix or None,
+            # Carry the i18n entry keys too: audit conclusions are mostly in English; the frontend prefers Chinese entries by key,
+            # falling back to message. Without these two fields the per-item checkup table is full of English.
+            "message_key": getattr(c, "message_key", None),
+            "message_params": getattr(c, "message_params", None),
+            "fix_key": getattr(c, "fix_key", None),
+            "fix_params": getattr(c, "fix_params", None),
         }
         checks_all.append(item)
         by_cat.setdefault(item["category"], []).append(item)
@@ -367,7 +418,7 @@ def _run_diagnosis(url: str) -> dict[str, Any]:
                 cluster_checks.append(it)
                 worst = max(worst, severity_rank.get(it["status"], 0))
         severity = "high" if worst >= 2 else ("med" if worst == 1 else "low")
-        # bullets:截 FAIL/WARN 的 message 前 60 字,最多 6 条
+        # bullets: first 60 chars of FAIL/WARN messages, at most 6
         bullets: list[str] = []
         for it in cluster_checks:
             if it["status"] in ("FAIL", "WARN"):
@@ -380,12 +431,12 @@ def _run_diagnosis(url: str) -> dict[str, Any]:
             "key": cdef["key"],
             "title_zh": cdef["title_zh"],
             "severity": severity,
-            "summary": "",   # 留给 LLM 填
+            "summary": "",   # left for the LLM to fill
             "bullets": bullets,
             "checks": cluster_checks,
         })
 
-    # 三层执行流程:基于 cluster severity 自动派生
+    # Three-tier execution flow: derived automatically from cluster severity
     layer_map = {
         "ai_protocol": "technical_base",
         "crawl_performance": "technical_base",
@@ -428,15 +479,15 @@ def _run_diagnosis(url: str) -> dict[str, Any]:
     }
 
 
-# ─────────────── LLM:文案 ───────────────
+# ─────────────── LLM: copy ───────────────
 
 
 def _call_llm(
     profile: BrandProfile, diagnosis: dict[str, Any], website_url: str,
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
-    """LLM 一次出方案文案:聚类摘要 + 七步定制 + 关键词 + 愿景.
+    """One LLM call produces the solution copy: cluster summaries + seven tailored steps + keywords + vision.
 
-    返回 (narrative, keywords, model_id);
+    Returns (narrative, keywords, model_id);
       narrative = {cluster_summaries: {key: text}, seven_steps: [...], vision: [...]}
       keywords  = {tiers: [SolutionKeywordTier]}
     """
@@ -475,7 +526,8 @@ def _call_llm(
         "temperature": 0.5,
         "response_format": {"type": "json_object"},
     }
-    r = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
+    r = post_and_record(url, payload, headers, provider=provider,
+                        feature="solution", timeout=DEFAULT_TIMEOUT, model=model_id)
     if r.status_code >= 400:
         raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
     data = r.json()
@@ -589,7 +641,7 @@ def _build_user_prompt(profile: BrandProfile, diagnosis: dict) -> str:
 def _normalize_llm_output(
     raw: dict, profile: BrandProfile, diagnosis: dict,
 ) -> tuple[dict, dict]:
-    """把 LLM 出的 JSON 校验 + 兜底 + 拆成 narrative / keywords 两块.
+    """Validate the LLM's JSON + apply fallbacks + split into narrative / keywords.
 
     narrative = {cluster_summaries, seven_steps, vision}
     keywords  = {tiers: [...]}
@@ -603,7 +655,7 @@ def _normalize_llm_output(
         v = cluster_summaries_raw.get(c["key"])
         cluster_summaries[c["key"]] = str(v).strip() if v else ""
 
-    # seven_steps — 必须 7 项,按模板对齐
+    # seven_steps -- must be exactly 7 items, aligned to the template
     seven_steps_raw = raw.get("seven_steps") or []
     if not isinstance(seven_steps_raw, list):
         seven_steps_raw = []
@@ -618,7 +670,7 @@ def _normalize_llm_output(
             "output_value": str(item.get("output_value") or "").strip(),
         })
 
-    # vision — 3 段
+    # vision -- 3 paragraphs
     vision_raw = raw.get("vision") or []
     if not isinstance(vision_raw, list):
         vision_raw = []
@@ -635,7 +687,7 @@ def _normalize_llm_output(
             "body": str(v.get("body") or "").strip(),
         })
 
-    # keyword_tiers — 6 层
+    # keyword_tiers -- 6 tiers
     tiers_raw = raw.get("keyword_tiers") or []
     if not isinstance(tiers_raw, list):
         tiers_raw = []
@@ -663,7 +715,7 @@ def _normalize_llm_output(
 
 
 def _parse_json_loose(text: str) -> dict:
-    """容忍 ``` 围栏的 JSON 解析."""
+    """JSON parsing that tolerates ``` fences."""
     s = (text or "").strip()
     if s.startswith("```"):
         s = s.lstrip("`").lstrip()

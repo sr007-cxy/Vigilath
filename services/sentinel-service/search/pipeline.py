@@ -25,19 +25,20 @@ from storage import (
 from .baidu import baidu_search
 from .cnbing import cnbing_search
 from .ddg import ddg_search, throttle
-from .sogou import sogou_search
+from .sogou import sogou_search, weixin_search
+from .mediacrawler import xhs_search, douyin_search
 from .searxng import searxng_search
 from .weibo import weibo_search
 from .zhihu import zhihu_search
 from .xueqiu import xueqiu_search
 
 
-# SearXNG 单引擎(server 端聚合多上游 + 处理反爬/IP池);自带引擎保留可回退。
+# SearXNG single engine (server side aggregates multiple upstreams + handles anti-bot/IP pool); built-in engines kept for fallback.
 DEFAULT_ENGINES = ("searxng",)
 
 
 # DDG occasionally returns titles where the `&` of an HTML numeric entity has
-# been replaced with `||`, e.g. `||#19990;纪互联`. Repair before persisting.
+# been replaced with `||`, e.g. `||#19990;...`. Repair before persisting.
 _BROKEN_ENTITY_RE = re.compile(r"\|\|(#\d+;)")
 
 
@@ -99,12 +100,12 @@ def domain_to_source(url: str) -> str:
     return host or "unknown"
 
 
-# 发布日期抽取:SearXNG 上游不给 publishedDate 时,从标题 / 摘要里尽力抽一个
-# **绝对**日期(必须带 4 位年份),让前端时间轴 / "最近 N 天" 不至于全空。
-# 只认绝对日期 — 相对时间("3 天前")缺锚点容易猜错,宁可留 None。
+# Publish date extraction: when the SearXNG upstream gives no publishedDate, try to extract an
+# **absolute** date (must include a 4-digit year) from the title / snippet so the frontend timeline / "last N days" is not all empty.
+# Only absolute dates count - relative times ("3 days ago") lack an anchor and are easy to get wrong; better to leave None.
 _DATE_PATTERNS = [
     (re.compile(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})"), (1, 2, 3)),       # 2026-06-15 / 2026/6/15
-    (re.compile(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"), (1, 2, 3)),  # 2026年6月15日
+    (re.compile(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日"), (1, 2, 3)),  # 2026年6月15日 (June 15, 2026)
 ]
 _EN_MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun",
@@ -133,15 +134,15 @@ def extract_publish_date(text: str | None) -> str | None:
     return None
 
 
-# URL 内嵌日期抽取(②级,高可靠):多数中文新闻站把发布日期写进 URL —
+# Date extraction from the URL (level 2, highly reliable): most Chinese news sites put the publish date in the URL -
 #   sina   finance.sina.com.cn/.../2026-04-05/...        →  /20YY-MM-DD/
-#   eastmoney  /news/20260616150020...   /a/202605173739...  →  8 位 20YYMMDD 连号
-#   qq  /rain/a/20260514A00FU400    10jqka  /20260409/c...  →  8 位连号
-# 比从摘要里猜可靠得多;校验月/日合法、年份 2000-2099,取第一个命中。
+#   eastmoney  /news/20260616150020...   /a/202605173739...  ->  8 consecutive digits 20YYMMDD
+#   qq  /rain/a/20260514A00FU400    10jqka  /20260409/c...  ->  8 consecutive digits
+# Far more reliable than guessing from the snippet; validate month/day, year 2000-2099, take the first match.
 _URL_DATE_RES = [
     re.compile(r"/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})(?:[-/_.]|$)"),  # /2026-06-15/  /2026/6/15
-    re.compile(r"/(20\d{2})/(\d{2})(\d{2})(?:/|[?#]|$)"),             # /2026/0527/ (年/月日,如 eeo)
-    re.compile(r"[/_a-zA-Z-](20\d{2})(\d{2})(\d{2})\d*"),             # /20260616 或 t20260618(字母/分隔前缀)
+    re.compile(r"/(20\d{2})/(\d{2})(\d{2})(?:/|[?#]|$)"),             # /2026/0527/ (year/monthday, e.g. eeo)
+    re.compile(r"[/_a-zA-Z-](20\d{2})(\d{2})(\d{2})\d*"),             # /20260616 or t20260618 (letter/separator prefix)
 ]
 
 
@@ -157,8 +158,8 @@ def extract_date_from_url(url: str | None) -> str | None:
     return None
 
 
-# ── #2 垃圾/非舆情页过滤(百科/行情/股吧列表/招聘/工商/采集农场)──────────────
-# 这些页面会提及目标名却不是舆情,被打上近期时间戳就污染窗口。入库前在相关性闸门挡掉。
+# ── #2 Junk/non-sentiment page filter (encyclopedias/quotes/stock forum lists/jobs/business registry/content farms) ──────────────
+# These pages mention the target name but are not sentiment content; stamped with a recent timestamp they pollute the window. Blocked at the relevance gate before persisting.
 _JUNK_DOMAINS = {
     "baike.baidu.com", "baike.so.com", "wenku.baidu.com", "wen.baidu.com",
     "wenku.so.com", "aiqicha.baidu.com", "ai.so.com", "zh.wikipedia.org",
@@ -171,21 +172,43 @@ _JUNK_URL_RE = re.compile(
     r"(quote\.eastmoney|/quote/|/quotes/|/list,|/tags/|guba\.eastmoney\.com/list|"
     r"weibo\.com/u/|/company_|/wiki/|wikipedia\.org|/tashuo/|360kuai\.com|/baiqi/|"
     r"19lou\.com|book118|doc88|woc88|onlinedown|"
-    # 自家官网静态营销/产品页(不是舆情;还会被动态生成的"当前时间"误标成今日)。
-    # 仅挡根级 .html 公司页 + solution/sustainability 等目录;保留 /portal/article 新闻。
-    r"vnet\.com/[a-z_-]+\.html|vnet\.com/(?:solution|sustainability|product|about|culture|partner|honor|service)\b)",
+    # Code hosting/doc sites (GitHub/Gitee/GitLab etc.): AI-daily/crawler repos often launder news into md files,
+    # which get recalled as negative sentiment (e.g. github.com/…/Daily News_AI Builders….md) - not a sentiment source at all
+    r"github\.(?:com|io)|githubusercontent|gist\.github|gitee\.com|gitlab\.com|bitbucket\.org|"
+    # Tiger community (laohu8): details are /post/<id>; /personal profile pages and /hq quote community lists are not single sentiment posts
+    r"laohu8\.com/(?:personal|m/hq|hq|stock|m/stock)|"
+    # The company's own static marketing/product pages (not sentiment; also mislabeled as today by a dynamically generated "current time").
+    # Only block root-level .html company pages + directories like solution/sustainability; keep /portal/article news.
+    r"acmecloud\.example/[a-z_-]+\.html|acmecloud\.example/(?:solution|sustainability|product|about|culture|partner|honor|service)\b)",
     re.I)
-# SEO 采集农场:杂牌 教育/企业/地方站把新闻洗一遍蹭排名(非财经媒体)
-_FARM_RE = re.compile(r"(sdzhedu|xbanche|wfshengda|hfteng|shengda\.|zhedu\.)", re.I)
+# SEO content farms / article-spinning sites: random no-name domains rewrite news to farm rankings (not financial media).
+# **Structural signature**: the same PHP article-spinning CMS generates `/mnews/…_article<digits>.htm|shtml` paths
+# (e.g. gongshan.liansenbz.com, wateraffair.net) - legitimate media do not use such paths, so we block on it generically.
+# These sites **often redirect mobile users to porn/malicious pages** (different content for PC/mobile UA); linking them in a brief is very harmful, so block them hard.
+_FARM_RE = re.compile(
+    r"(sdzhedu|xbanche|wfshengda|hfteng|shengda\.|zhedu\.|"
+    r"liansenbz|wateraffair|ipmanx|"
+    # Fixed path shapes of the article-spinning CMS, generalized on (legitimate media do not use these):
+    r"/mnews/[^/]*_article\d|"      # …/mnews/xxx_article<digits>.htm
+    r"/[a-z]+/blog/\d+_\d+)", re.I)  # …/march/blog/<digits>_<digits>.shtml (ipmanx style)
 _JUNK_TITLE_RE = re.compile(
     r"(百科|词条|行情中心|股票价格_|股价行情|股价_|资产负债表|财务分析|数据报告-雪球|"
     r"招聘|工资待遇|工商信息|爱企查|注册.{0,4}指南|开通指南|品牌排行|十大品牌|"
-    r"的微博_微博|_相关报道|相关报道/新闻)")
+    r"的微博_微博|_相关报道|相关报道/新闻|^最新资讯$|新闻中心|随时随地发现)")
 
 
 def is_junk_page(url: str, title: str | None) -> bool:
-    """非舆情结构页(百科/行情/列表/招聘/工商/采集农场)→ True,入库前丢弃。"""
-    host = (urlparse(url or "").hostname or "").lower()
+    """Non-sentiment structural page (home/encyclopedia/quotes/list/jobs/business registry/content farm) -> True, dropped before persisting."""
+    parsed = urlparse(url or "")
+    host = (parsed.hostname or "").lower()
+    # Bare domain/home page (empty path or only "/"): a navigation/index page, not an article, and the home page's "latest" time would be
+    # taken as the publish time and leak into the window (e.g. mt.sohu.com titled "latest news", various official/portal home pages).
+    if parsed.path in ("", "/"):
+        return True
+    # Filter out the Acme Cloud official site entirely (PR/product pages, not third-party sentiment), keeping only /portal/article news;
+    # ir.acmecloud.example (investor relations, a different host) is unaffected.
+    if host in ("www.acmecloud.example", "acmecloud.example", "m.acmecloud.example") and "/portal/article" not in parsed.path:
+        return True
     if host in _JUNK_DOMAINS:
         return True
     if _JUNK_URL_RE.search(url or "") or _FARM_RE.search(url or ""):
@@ -195,7 +218,7 @@ def is_junk_page(url: str, title: str | None) -> bool:
     return False
 
 
-# ── ③ 抓全文 meta 补真实发布时间(给"引擎+URL 都没日期"的 undated 帖)──────────
+# ── ③ Fetch full-page meta to fill in the real publish time (for undated posts where "neither engine nor URL has a date") ──────────
 _META_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 _META_RES = [
@@ -222,20 +245,20 @@ def _date_from_text(s: str) -> str | None:
 
 
 def _visible_publish_date(html: str) -> str | None:
-    """页头可见中文发布时间:'2026年05月19日 16:35'(带年)/ '05月15日 12:35'(无年,带时分)。
+    """Visible Chinese publish time in the page header: '2026年05月19日 16:35' (with year) / '05月15日 12:35' (no year, with hour:minute).
 
-    只取页头(前 ~8000 字,发布时间通常紧跟标题),避免抓到正文里提到的日期。
-    无年份的按当年算,若落到未来则算去年。存的还是 ISO(YYYY-MM-DDTHH:MM)。
+    Only looks at the page header (first ~8000 chars; the publish time usually follows the title) to avoid dates mentioned in the body.
+    Without a year, the current year is assumed; if that lands in the future, last year. Still stored as ISO (YYYY-MM-DDTHH:MM).
     """
     head = html[:8000]
-    # **必须带"时:分"** —— 发布头有时分(2026年05月19日 16:35),正文提到的日期(截至2026年3月31日)
-    # 没时分,以此区分,避免抓到正文里的日期。
+    # **Must include "hour:minute"** - the publish header has it (2026年05月19日 16:35), while dates mentioned in the body (截至2026年3月31日, "as of 2026-03-31")
+    # do not; this distinguishes them and avoids picking up dates from the body.
     m = re.search(r'(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s+(\d{1,2}):(\d{2})', head)
     if m:
         y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
         if 1 <= mo <= 12 and 1 <= d <= 31:
             return f"{y:04d}-{mo:02d}-{d:02d}T{int(m.group(4)):02d}:{m.group(5)}"
-    # 无年份但带时分(每经:05月15日 12:35)→ 当年,落到未来则去年
+    # No year but with hour:minute (NBD: 05月15日 12:35) -> current year, last year if it lands in the future
     m = re.search(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*日\s+(\d{1,2}):(\d{2})', head)
     if m:
         from datetime import date as _d
@@ -248,14 +271,14 @@ def _visible_publish_date(html: str) -> str | None:
 
 
 def _looks_like_now(date_str: str | None) -> bool:
-    """抓到的"发布时间"是否约等于**现在**(抓取时刻)。
+    """Whether the scraped "publish time" is approximately **now** (fetch time).
 
-    有些站(36氪老 /p/ 页、vnet 官网)把动态生成的当前时间塞进 article:published_time,
-    每次抓都是 now —— 那不是发布时间,是渲染时间。带时分的若落在 [now-10min, now+1h] 判为伪造。
+    Some sites (36Kr old /p/ pages, the Acme Cloud official site) put a dynamically generated current time in article:published_time,
+    so every fetch returns now - that is render time, not publish time. Values with hour:minute in [now-10min, now+1h] are treated as forged.
     """
     m = re.match(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})', date_str or "")
     if not m:
-        return False          # 纯日期不算 now 伪造
+        return False          # a pure date does not count as a forged now
     try:
         dt = datetime(*(int(x) for x in m.groups()))
     except ValueError:
@@ -265,13 +288,13 @@ def _looks_like_now(date_str: str | None) -> bool:
 
 
 def fetch_meta_date(url: str) -> str | None:
-    """GET 文章页,从 meta / JSON-LD / <time> / 页头可见时间抽真实发布时间。失败/无/疑似渲染时间 → None。"""
+    """GET the article page and extract the real publish time from meta / JSON-LD / <time> / visible header time. Failure/none/suspected render time -> None."""
     if not url:
         return None
     try:
         r = requests.get(url, timeout=10, allow_redirects=True,
                          headers={"User-Agent": _META_UA, "Accept-Language": "zh-CN,zh"})
-        r.encoding = r.apparent_encoding or r.encoding   # 中文页正确解码,年月日才匹配得上
+        r.encoding = r.apparent_encoding or r.encoding   # decode Chinese pages correctly so year/month/day patterns match
         html_txt = r.text[:300000]
     except Exception:
         return None
@@ -279,23 +302,23 @@ def fetch_meta_date(url: str) -> str | None:
         m = rx.search(html_txt)
         if m:
             d = _date_from_text(m.group(1))
-            if d and not _looks_like_now(d):      # 弃用"当前时间"伪造的发布时间
+            if d and not _looks_like_now(d):      # discard publish times forged from the "current time"
                 return d
-    # 兜底:财联社/每经等把发布时间放在页头可见文本(年月日 / 月日 时:分)
+    # Fallback: Cailian Press/NBD etc. put the publish time in visible header text (year-month-day / month-day hour:minute)
     v = _visible_publish_date(html_txt)
     return v if v and not _looks_like_now(v) else None
 
 
-# 需浏览器过验证码/JS 才能拿到日期的站(纯 HTTP 只到验证码页,如 ZAKER 的长亭 WAF)
+# Sites that need a browser to pass captcha/JS before the date is available (plain HTTP only reaches the captcha page, e.g. ZAKER's Chaitin WAF)
 _SCRAPLING_PY = os.environ.get("SCRAPLING_PYTHON", "/opt/geo/scrapling-venv/bin/python")
 _META_FETCH_PY = os.path.join(os.path.dirname(__file__), "meta_fetch.py")
 _BROWSER_DATE_DOMAINS = {"www.myzaker.com", "myzaker.com", "m.myzaker.com",
                          "www.toutiao.com", "toutiao.com", "m.toutiao.com"}
-_BROWSER_CAP = 8   # 浏览器很慢(~15-30s/条),每轮限量
+_BROWSER_CAP = 8   # the browser is slow (~15-30s each), cap per round
 
 
 def fetch_meta_date_browser(url: str) -> str | None:
-    """对验证码/JS 站用独立 scrapling-venv 浏览器(过验证码,wait~12s)后抽发布时间。"""
+    """For captcha/JS sites, use the separate scrapling-venv browser (passes captcha, wait ~12s) and then extract the publish time."""
     if not url or not os.path.exists(_SCRAPLING_PY):
         return None
     try:
@@ -314,14 +337,16 @@ def fetch_meta_date_browser(url: str) -> str | None:
 
 def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
                           workers: int = 8, verbose: bool = True) -> int:
-    """对当日入库、引擎+URL 都没日期的相关帖,并发抓 meta 补真实发布时间。返回回填数。"""
+    """For relevant posts ingested today with no date from engine or URL, fetch meta concurrently to fill in the real publish time. Returns the backfill count."""
     import concurrent.futures as _cf
+    from storage.db import _aid                      # tenant boundary: every SQL must include it
+    aid = _aid()
     with conn.cursor() as cur:
         cur.execute(
             "SELECT source, post_id, url FROM posts "
-            "WHERE symbol = %s AND publish_time IS NULL "
+            "WHERE account_id = %s AND symbol = %s AND publish_time IS NULL "
             "AND substr(ingested_at, 1, 10) = %s AND url <> '' LIMIT %s",
-            (symbol, day, cap),
+            (aid, symbol, day, cap),
         )
         rows = [(r["source"], r["post_id"], r["url"]) for r in cur.fetchall()]
     if not rows:
@@ -336,7 +361,7 @@ def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
                 d = None
             if d:
                 got[futs[fut]] = d
-    # 浏览器兜底:仍 undated 且属验证码/JS 站(ZAKER 等)的,用 Scrapling 过验证码补日期(慢,限量)
+    # Browser fallback: for posts still undated on captcha/JS sites (ZAKER etc.), use Scrapling to pass the captcha and fill the date (slow, capped)
     browser_n = 0
     for s, p, u in rows:
         if (s, p) in got or browser_n >= _BROWSER_CAP:
@@ -349,8 +374,9 @@ def resolve_undated_dates(conn, symbol: str, day: str, cap: int = 60,
     with conn.cursor() as cur:
         for (s, p), d in got.items():
             cur.execute("UPDATE posts SET publish_time = %s "
-                        "WHERE source = %s AND post_id = %s AND publish_time IS NULL",
-                        (d, s, p))
+                        "WHERE account_id = %s AND source = %s AND post_id = %s "
+                        "AND publish_time IS NULL",
+                        (d, aid, s, p))
     if verbose:
         print(f"  [meta-date] 扫 {len(rows)} 条 undated → 抓到 {len(got)} 条"
               f"(其中浏览器 {browser_n} 次)")
@@ -361,9 +387,9 @@ def normalize_result(r: dict, symbol: str) -> dict:
     url = r.get("href") or r.get("url") or ""
     title = _clean(r.get("title"))
     body = _clean(r.get("body"))  # SERP snippet — short but usually enough
-    # 发布时间解析(**只信可靠源**):① 召回自带 publishedDate → ② URL 内嵌日期(高可靠)。
-    # 不再用"从标题/摘要文本猜日期"——它会把正文里提到的近期日期误当成发布日,导致老文
-    # (如5月的公众号文)被算进近24h。拿不到 → None=undated,留库但不进时效窗口。
+    # Publish time resolution (**only reliable sources**): 1) publishedDate from recall -> 2) date embedded in URL (highly reliable).
+    # No longer "guess the date from title/snippet text" - it mistakes recent dates mentioned in the body for the publish date, so old articles
+    # (e.g. May WeChat articles) get counted into the last 24h. Not available -> None = undated, kept in DB but outside the freshness window.
     pub = r.get("publish_time") or extract_date_from_url(url)
     return {
         "post_id": url_to_post_id(url),
@@ -380,11 +406,11 @@ def normalize_result(r: dict, symbol: str) -> dict:
 
 
 def build_match_terms(plan: dict, symbol: str) -> list[str]:
-    """监测目标的"必含词"集合:目标名 / 别名 / ticker / 同集团 targets。
+    """The "must-contain" term set for the monitoring target: target name / aliases / ticker / same-group targets.
 
-    入库前用它做相关性闸门:命中结果的标题 / 摘要 / URL 至少要含其中一个,
-    否则视为搜索噪声(同名实体、词典释义、泛词扩散,如「世纪互联」搜成「世纪」
-    捞回的百度知道词条、同名酒店)丢弃。
+    Used as the relevance gate before persisting: the title / snippet / URL of a hit must contain at least one of them,
+    otherwise it is treated as search noise (same-name entities, dictionary definitions, generic term drift, e.g. 「Acme Cloud」 tokenized into 「世纪」 ("century")
+    pulling back Baidu Zhidao entries or same-name hotels) and dropped.
     """
     raw = [plan.get("target"), symbol, plan.get("ticker"),
            *(plan.get("targets") or []), *(plan.get("aliases") or [])]
@@ -394,7 +420,7 @@ def build_match_terms(plan: dict, symbol: str) -> list[str]:
         if not isinstance(t, str):
             continue
         t = t.strip()
-        # 太短的纯拉丁词(<3)做子串匹配易误命中;中文 2 字即可。
+        # Very short pure-Latin terms (<3) easily false-match as substrings; 2 Chinese chars are enough.
         if len(t) < 2 or (t.isascii() and len(t) < 3):
             continue
         k = t.lower()
@@ -405,13 +431,15 @@ def build_match_terms(plan: dict, symbol: str) -> list[str]:
 
 
 def is_relevant(rec: dict, terms: list[str]) -> bool:
-    # #2:百科/行情/列表/招聘/工商/采集农场等非舆情结构页,直接判不相关(入库前丢弃)
+    # #2: non-sentiment structural pages such as encyclopedias/quotes/lists/jobs/business registry/content farms are judged irrelevant (dropped before persisting)
     if is_junk_page(rec.get("url") or "", rec.get("title")):
         return False
     if not terms:
         return True
+    # Match only in title+body, **not the URL** - short terms like "acme" hit unrelated domain substrings
+    # (e.g. the steel-pipe live stream edostb.acme.weizan.cn), causing false relevance.
     hay = " ".join(
-        x for x in (rec.get("title"), rec.get("content"), rec.get("url")) if x
+        x for x in (rec.get("title"), rec.get("content")) if x
     ).lower()
     return any(t.lower() in hay for t in terms)
 
@@ -451,9 +479,9 @@ def _call_engine(eng: str, query: str, max_results: int,
             r = baidu_search(query, max_results=max_results,
                              timelimit=timelimit)
         elif eng == "sogou":
-            # 微信公众号专用通道:query 含 site:mp.weixin 自动走 weixin.sogou.com
-            # resolve_redirect=True: sogou /link?url=… → 真实目标 URL,
-            # 否则 normalize_result 会把所有 sogou 命中标成 "unknown"
+            # Dedicated WeChat Official Account channel: queries containing site:mp.weixin automatically go to weixin.sogou.com
+            # resolve_redirect=True: sogou /link?url=… -> real target URL,
+            # otherwise normalize_result would mark all sogou hits as "unknown"
             channel = "auto"
             r = sogou_search(query, max_results=max_results,
                              timelimit=timelimit, channel=channel,
@@ -487,34 +515,62 @@ def _search_engines(query: str, engines: tuple[str, ...],
     return out, counts
 
 
-# 登录墙 UGC 直采源:搜索引擎进不去(微博/知乎登录墙),用 cookie 直采。
-# 一小撮"目标名 + 负面词"定向查询,不混进 SearXNG plan(避免对平台高频请求被风控)。
+# Login-walled UGC direct-collection sources: search engines cannot get in (Weibo/Zhihu login walls), so collect directly with cookies.
+# A small set of targeted "target name + negative term" queries, not mixed into the SearXNG plan (avoids risk control from high-frequency requests).
 _DIRECT_NEG = ("欠薪", "讨薪", "维权", "做空", "裁员", "爆雷", "亏损", "诉讼")
 _DIRECT_SOURCES = (
     ("weibo", "WEIBO_COOKIE", weibo_search),
     ("zhihu", "ZHIHU_COOKIE", zhihu_search),
-    ("xueqiu", None, xueqiu_search),     # 无需 cookie(WAF 走 Scrapling 浏览器,较重)
+    ("xueqiu", None, xueqiu_search),     # no cookie needed (WAF handled by the Scrapling browser, heavier)
+    ("xhs", "XHS_COOKIE", xhs_search),       # Xiaohongshu (MediaCrawler browser, heavier)
+    ("douyin", "DOUYIN_COOKIE", douyin_search),  # Douyin (MediaCrawler browser, heavier)
+    ("weixin", None, weixin_search),         # WeChat Official Accounts (Sogou WeChat keyword search, HTTP, no cookie needed)
 )
+# Browser sources (60-120s per query, very slow) / Sogou WeChat (captcha-prone at high frequency): cap the number of alias queries
+_BROWSER_SOURCES = ("xueqiu", "xhs", "douyin")
+# Per-source alias cap for the "company entity group" (main name + aliases): browser sources are used sparingly, fast sources (Weibo/Zhihu) are opened up
+_ALIAS_CAP = {"xueqiu": 1, "xhs": 1, "douyin": 1, "weixin": 3}
+_ALIAS_CAP_DEFAULT = 5   # fast HTTP sources such as weibo / zhihu
+
+
+def _entity_queries(plan: dict, symbol: str) -> list[str]:
+    """Company entity query group = main name + aliases (Acme Blue/Acme Labs/Acme Matrix/ACME etc.).
+
+    Sentiment monitoring watches the whole picture of the company "Acme Cloud" (brand/products/subsidiaries), not just the main name -> direct sources also
+    search by alias, catching content that mentions the brand/products without the literal main name. Aliases come from plan.aliases (user-maintained,
+    same set as the relevance gate); hits still go through is_relevant + excludes, so same-name entities are blocked.
+    """
+    primary = (plan.get("target") or symbol or "").strip()
+    out = [primary] if primary else []
+    for a in (plan.get("aliases") or []):
+        a = (a or "").strip()
+        if a and len(a) >= 2 and a not in out:
+            out.append(a)
+    return out
 
 
 def collect_direct_sources(plan: dict, symbol: str, conn, seen: set[str],
                            match_terms: list[str], max_results: int = 15,
                            sleep_s: float = 1.5, verbose: bool = True) -> dict:
-    """微博 / 知乎等登录墙平台直采(搜索引擎盲区)。cookie(env)未配的源自动跳过。
+    """Direct collection from login-walled platforms such as Weibo / Zhihu (search engine blind spot). Sources without a configured cookie (env) are skipped.
 
-    复用相同的相关性闸门 + dedup(seen)+ upsert;发布时间由各 adapter 结构化提供,
-    天然带准确 publish_time。任一源 / 查询失败仅跳过,不影响其它。
+    Reuses the same relevance gate + dedup (seen) + upsert; the publish time is provided structurally by each adapter,
+    so publish_time is naturally accurate. Any failing source / query is just skipped without affecting the others.
     """
     primary = (plan.get("target") or symbol or "").strip()
     if not primary:
         return {}
-    queries = [primary] + [f"{primary} {n}" for n in _DIRECT_NEG]
+    entity_qs = _entity_queries(plan, symbol)   # main name + company aliases (whole-company view)
     per_source: dict[str, int] = {}
     for name, env_key, fn in _DIRECT_SOURCES:
         if env_key and not os.environ.get(env_key):
             continue
-        # 雪球走浏览器较重,单次"世纪互联"查询已返回大量讨论;只用实体词,不跑负面词矩阵
-        qs = [primary] if name == "xueqiu" else queries
+        # Entity group: main name + up to N aliases (sparing for browser/Sogou, opened up for fast sources)
+        cap = _ALIAS_CAP.get(name, _ALIAS_CAP_DEFAULT)
+        qs = entity_qs[:1 + cap]
+        # Fast HTTP sources (Weibo/Zhihu) additionally get a main name x negative term matrix to actively widen negative sentiment coverage
+        if name not in _BROWSER_SOURCES and name != "weixin":
+            qs = qs + [f"{primary} {n}" for n in _DIRECT_NEG]
         got = 0
         for q in qs:
             try:
@@ -528,8 +584,8 @@ def collect_direct_sources(plan: dict, symbol: str, conn, seen: set[str],
                     continue
                 seen.add(url)
                 rec = normalize_result(r, symbol)
-                rec["source"] = name             # 统一来源名(weibo/zhihu)
-                rec["author"] = r.get("author")  # 保留作者(normalize 默认置 None)
+                rec["source"] = name             # unified source name (weibo/zhihu)
+                rec["author"] = r.get("author")  # keep the author (normalize sets None by default)
                 if not is_relevant(rec, match_terms):
                     continue
                 if upsert_post(conn, rec):
@@ -595,8 +651,8 @@ def run_plan(plan: dict, symbol: str,
                 continue
             seen.add(url)
             rec = normalize_result(r, symbol)
-            # 相关性闸门:标题 / 摘要 / URL 不含目标 / 别名 / ticker 即丢弃,
-            # 拦掉同名实体、词典释义等搜索噪声(也省下后续 LLM 分析开销)。
+            # Relevance gate: drop if title / snippet / URL does not contain the target / alias / ticker,
+            # blocking search noise like same-name entities and dictionary definitions (also saves later LLM analysis cost).
             if not is_relevant(rec, match_terms):
                 irrelevant += 1
                 continue
@@ -616,7 +672,7 @@ def run_plan(plan: dict, symbol: str,
                   f"({eng_breakdown}){tl_note} · {added:>2} new · {short}")
         throttle(sleep_s)
 
-    # 登录墙 UGC 直采(微博/知乎),与 SearXNG 召回合并入库
+    # Login-walled UGC direct collection (Weibo/Zhihu), merged with SearXNG recall and persisted
     direct = collect_direct_sources(plan, symbol, conn, seen, match_terms,
                                     sleep_s=sleep_s, verbose=verbose)
     for s, n in direct.items():
@@ -624,7 +680,7 @@ def run_plan(plan: dict, symbol: str,
         inserted += n
         total += n
 
-    # ③ 给"引擎+URL 都没日期"的当日帖,抓全文 meta 补真实发布时间(救近期、不救老闻/静态页)
+    # ③ For today's posts where "neither engine nor URL has a date", fetch full-page meta for the real publish time (rescues recent posts, not old news/static pages)
     try:
         from datetime import date as _date
         resolve_undated_dates(conn, symbol, _date.today().isoformat(), verbose=verbose)

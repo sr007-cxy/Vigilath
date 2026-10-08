@@ -10,7 +10,7 @@ prod 与 test 共用同一个库.要求:数据值只用正式环境的 —— �
 crawl_snapshot 是缓存型产物(非核心域数据),这个取舍合理.
 
 cron(仅 prod):
-  5 3 * * * cd /home/ubuntu/Dev/geo/backend && ./.venv/bin/python -m geo.services.crawl_snapshot >> data/crawl_snapshot.log 2>&1
+  5 3 * * * cd /path/to/Vigilath/backend && ./.venv/bin/python -m geo.services.crawl_snapshot >> data/crawl_snapshot.log 2>&1
 """
 
 import json

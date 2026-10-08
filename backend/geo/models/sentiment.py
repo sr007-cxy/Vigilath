@@ -1,8 +1,8 @@
-"""SQLAlchemy ORM 模型 + Pydantic schemas — 舆情账号 / 知识库 / 任务日志.
+"""SQLAlchemy ORM models + Pydantic schemas -- sentiment monitoring accounts / knowledge base / task logs.
 
-数据库:走 GEO 主 SQLAlchemy DB(geo_checker.db).
-yuqin 自己的表(posts/analyses/briefs/drafts)由 sentinel-service 微服务管理,
-不在这里建模 — 前端取数走 sentinel-service GET 接口.
+Database: the main GEO SQLAlchemy DB (geo_checker.db).
+yuqin's own tables (posts/analyses/briefs/drafts) are managed by the sentinel-service microservice,
+not modeled here -- the frontend fetches via sentinel-service GET endpoints.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class KeywordGroup(BaseModel):
 
 
 def flatten_keyword_groups(groups: list[KeywordGroup]) -> list[str]:
-    """把分组展开成扁平 keyword 列表(发给 sentinel-service 用),enabled=False 的跳过."""
+    """Expand groups into a flat keyword list (sent to sentinel-service); groups with enabled=False are skipped."""
     seen: set[str] = set()
     out: list[str] = []
     for g in groups:
@@ -50,41 +50,69 @@ def flatten_keyword_groups(groups: list[KeywordGroup]) -> list[str]:
     return out
 
 
+def account_symbol(acc) -> str:
+    """The account's storage symbol on the sentinel-service side -- use the stock ticker if present, else the brand name.
+
+    The stock ticker is optional (most customers are not listed companies), but on the sentinel side posts /
+    analyses / briefs / drafts are all archived and fetched by symbol; an empty symbol
+    leaves the whole workspace blank. So the "ticker -> brand name" fallback must be **written once, used everywhere**:
+    if writes (monitor/analyze/brief) and reads (posts/briefs/today) are off by even one step in metric definition,
+    data is written under key A and read from key B.
+
+    sentinel-service `/run-monitor` internally also does `symbol = req.ticker or req.target`,
+    consistent with this -- remember to update that side when changing this.
+
+    The argument is duck-typed: ORM rows and the SimpleNamespace snapshot in full_diagnosis both work.
+    """
+    return (getattr(acc, "ticker", "") or "").strip() or (getattr(acc, "target", "") or "").strip()
+
+
 # ─────────────────────────── ORM ──────────────────────────────
 
 
 class SentimentAccountORM(Base):
-    """用户的舆情监测账号(配置 + 状态机)."""
+    """User's sentiment monitoring account (config + state machine)."""
     __tablename__ = "sentiment_accounts"
-    __table_args__ = (UniqueConstraint("user_id", "ticker", name="uq_user_ticker"),)
+    # Uniqueness metric definition = (user, brand name, stock ticker).
+    # Before 2026-09-07 it was (user_id, ticker): once the ticker became optional, a second unlisted brand
+    # also had an empty ticker, and the old constraint turned it straight into an IntegrityError (500).
+    __table_args__ = (
+        UniqueConstraint("user_id", "target", "ticker", name="uq_user_target_ticker"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    target = Column(String, nullable=False)             # 品牌名
-    ticker = Column(String, nullable=False)             # = sentinel-service 的 symbol
+    target = Column(String, nullable=False)             # Brand name
+    # Stock ticker -- **optional**; unlisted entities use an empty string (the column is NOT NULL, store "" not NULL).
+    # It only feeds the "fetch by ticker" crawlers (Eastmoney Guba/announcements/research/industry, Sina stocks, Xueqiu);
+    # persisting/fetching always uses the `symbol` property below; do not use this column as a key directly.
+    ticker = Column(String, nullable=False, default="", server_default="")
     aliases_json = Column(Text, default="[]")
     intent = Column(Text, nullable=True)
     keywords_json = Column(Text, default="[]")
-    # 结构化分组:list[KeywordGroup],用于 UI 分类管理 + 从 Excel 导入.
-    # 旧字段 keywords_json 保留为扁平回退;pipeline 优先用 keyword_groups_json 展平后的结果.
+    # Structured groups: list[KeywordGroup], for categorized management in the UI + Excel import.
+    # Legacy field keywords_json is kept as a flat fallback; the pipeline prefers the flattened keyword_groups_json.
     keyword_groups_json = Column(Text, default="[]")
     excludes_json = Column(Text, default="[]")
-    # 媒体白名单(平台 code 列表,例:["xueqiu","weibo"]).空 list = 全 15 个平台都跑.
-    # 与 services/sentinel-service/search/plan.py 的 PLATFORM_CATALOG 对齐.
+    # Media allowlist (list of platform codes, e.g. ["xueqiu","weibo"]). Empty list = run all 15 platforms.
+    # Aligned with PLATFORM_CATALOG in services/sentinel-service/search/plan.py.
     media_allowlist_json = Column(Text, default="[]")
     notify_emails_json = Column(Text, default="[]")
 
-    # 微信公众号合集 URL 列表 — 周级别盯防 KOL/竞品官号,getalbum 接口枚举.
-    # 空 list = 不启用 weixin_album crawler.
+    # WeChat official account album URL list -- weekly watch on KOL/competitor official accounts, enumerated via the getalbum API.
+    # Empty list = weixin_album crawler disabled.
     weixin_album_urls_json = Column(Text, nullable=False, default="[]", server_default="[]")
-    # newsnow source id 列表(如 ['weibo','zhihu','v2ex','toutiao'])— 走自托管
-    # newsnow 容器拉热榜,本地按 aliases+keywords 过滤标题.空 list = 不启用.
+    # newsnow source id list (e.g. ['weibo','zhihu','v2ex','toutiao']) -- pulls trending lists from the self-hosted
+    # newsnow container, filtering titles locally by aliases+keywords. Empty list = disabled.
     newsnow_sources_json = Column(Text, nullable=False, default="[]", server_default="[]")
 
     active = Column(Boolean, nullable=False, default=True)
+    # Hour of day to run in Beijing time (0-23). NULL = unspecified, follow the global cron cadence.
+    # Billing metric definition is "one charge per account per Beijing date", so this only shifts the time, not the cost.
+    run_hour = Column(Integer, nullable=True)
 
-    # 任务状态机
+    # Task state machine
     last_run_at = Column(DateTime, nullable=True)
     last_run_status = Column(String, nullable=True)     # pending / running / success / failed
     last_run_error = Column(Text, nullable=True)
@@ -93,6 +121,11 @@ class SentimentAccountORM(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def symbol(self) -> str:
+        """Storage symbol on the sentinel-service side (posts/analyses/briefs are all archived by it)."""
+        return account_symbol(self)
+
     knowledge = relationship("SentimentKnowledgeORM", back_populates="account",
                              cascade="all, delete-orphan")
     run_logs = relationship("SentimentRunLogORM", back_populates="account",
@@ -100,7 +133,7 @@ class SentimentAccountORM(Base):
 
 
 class SentimentKnowledgeORM(Base):
-    """知识库 3 文档(brand_voice / legal_redlines / response_playbook)."""
+    """Knowledge base, 3 documents (brand_voice / legal_redlines / response_playbook)."""
     __tablename__ = "sentiment_knowledge"
     __table_args__ = (UniqueConstraint("account_id", "key", name="uq_account_key"),)
 
@@ -115,46 +148,50 @@ class SentimentKnowledgeORM(Base):
 
 
 class SentimentRunLogORM(Base):
-    """任务执行日志(用于排障 + 历史展示)."""
+    """Task execution log (for troubleshooting + history display)."""
     __tablename__ = "sentiment_run_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey("sentiment_accounts.id", ondelete="CASCADE"),
                         nullable=False, index=True)
+    operation_context_id = Column(
+        Integer, ForeignKey("operation_contexts.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
     trigger = Column(String, nullable=False)            # first_run / cron / manual
     started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
     status = Column(String, nullable=False)             # running / success / failed
     error = Column(Text, nullable=True)
-    stats_json = Column(Text, nullable=True)            # 同 last_run_stats 形态
+    stats_json = Column(Text, nullable=True)            # Same shape as last_run_stats
     duration_s = Column(Integer, nullable=True)
 
     account = relationship("SentimentAccountORM", back_populates="run_logs")
 
 
 class SentimentPlatformORM(Base):
-    """媒体平台目录(全局配置,非用户私有).
-    取代之前散落在 3 处的硬编码:
+    """Media platform catalog (global config, not user-private).
+    Replaces the hardcoding previously scattered across 3 places:
       - frontend/src/constants/sentimentPlatforms.ts
       - services/sentinel-service/search/plan.py PLATFORM_CATALOG
       - backend/geo/services/sentinel_client.py _PLATFORM_CODE_TO_DOMAIN
-    新增平台 / 改 domain / 调地区分类只需 INSERT/UPDATE 此表 — 不用改代码、不用重启。
-    Seed 由 migrations/010_sentiment_platforms.py 注入。"""
+    Adding a platform / changing a domain / adjusting region categories only needs INSERT/UPDATE on this table -- no code change, no restart.
+    Seeded by migrations/010_sentiment_platforms.py."""
     __tablename__ = "sentiment_platforms"
 
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String, nullable=False, unique=True, index=True)  # 'xueqiu', 'eastmoney' …
-    domain = Column(String, nullable=False)                          # 'xueqiu.com',传给 sentinel `site:` 用
-    # category 是 010 的 legacy 单轴(finance/social/forum/video/news/overseas),
-    # 011 起拆为正交两维 media_type + industry — UI 只读后两个,category 仅作为
-    # legacy 列存在以避免破坏既有 INSERT 行;新代码不要依赖。
+    domain = Column(String, nullable=False)                          # 'xueqiu.com', passed to sentinel as `site:`
+    # category is the legacy single axis from 010 (finance/social/forum/video/news/overseas);
+    # from 011 it is split into two orthogonal dimensions media_type + industry -- the UI only reads those two; category exists only as a
+    # legacy column to avoid breaking existing INSERT rows; new code must not depend on it.
     category = Column(String, nullable=False)
     media_type = Column(String, nullable=False, default="")          # web/weibo/wechat/app/forum/short_video/long_video/...
     industry = Column(String, nullable=False, default="")            # finance/general/tech/science/party_media/health/overseas_en
     region = Column(String, nullable=False)                          # mainland / hk / overseas
     name_zh = Column(String, nullable=False, default="")
     name_en = Column(String, nullable=False, default="")
-    sort_order = Column(Integer, nullable=False, default=0)          # 同分类内排序
+    sort_order = Column(Integer, nullable=False, default=0)          # Sort order within a category
     enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -164,8 +201,11 @@ class SentimentPlatformORM(Base):
 
 
 class SentimentAccountCreate(BaseModel):
+    enterprise_user_id: Optional[int] = Field(default=None, ge=1)
     target: str = Field(..., min_length=1)
-    ticker: str = Field(..., min_length=1)
+    # Optional -- unlisted entities just leave it empty (the frontend label always said "选填" ("optional"), yet here it enforced min_length=1,
+    # so users without a ticker got a 422 right in onboarding).
+    ticker: str = ""
     aliases: list[str] = Field(default_factory=list)
     intent: Optional[str] = None
     keywords: list[str] = Field(default_factory=list)
@@ -175,11 +215,13 @@ class SentimentAccountCreate(BaseModel):
     notify_emails: list[EmailStr] = Field(default_factory=list, max_length=10)
     weixin_album_urls: list[str] = Field(default_factory=list)
     newsnow_sources: list[str] = Field(default_factory=list)
+    run_hour: Optional[int] = Field(default=None, ge=0, le=23)
     run_now: bool = True
 
 
 class SentimentAccountUpdate(BaseModel):
     target: Optional[str] = None
+    # None = leave this column alone; "" = explicitly clear the stock ticker (back to unlisted)
     ticker: Optional[str] = None
     aliases: Optional[list[str]] = None
     intent: Optional[str] = None
@@ -190,6 +232,7 @@ class SentimentAccountUpdate(BaseModel):
     notify_emails: Optional[list[EmailStr]] = None
     weixin_album_urls: Optional[list[str]] = None
     newsnow_sources: Optional[list[str]] = None
+    run_hour: Optional[int] = Field(default=None, ge=0, le=23)
     active: Optional[bool] = None
 
 
@@ -198,6 +241,9 @@ class SentimentAccountOut(BaseModel):
     user_id: int
     target: str
     ticker: str
+    # Storage symbol = ticker or target. The frontend always uses it to fetch posts/briefs/today;
+    # stop using ticker -- an account with an empty ticker would disable every fetch query in the workspace.
+    symbol: str
     aliases: list[str]
     intent: Optional[str]
     keywords: list[str]
@@ -207,6 +253,7 @@ class SentimentAccountOut(BaseModel):
     notify_emails: list[str]
     weixin_album_urls: list[str] = Field(default_factory=list)
     newsnow_sources: list[str] = Field(default_factory=list)
+    run_hour: Optional[int] = None
     active: bool
     last_run_at: Optional[datetime]
     last_run_status: Optional[str]
@@ -220,6 +267,7 @@ class SentimentAccountOut(BaseModel):
         return cls(
             id=row.id, user_id=row.user_id,
             target=row.target, ticker=row.ticker,
+            symbol=account_symbol(row),
             aliases=json.loads(row.aliases_json or "[]"),
             intent=row.intent,
             keywords=json.loads(row.keywords_json or "[]"),
@@ -229,6 +277,7 @@ class SentimentAccountOut(BaseModel):
             notify_emails=json.loads(row.notify_emails_json or "[]"),
             weixin_album_urls=json.loads(row.weixin_album_urls_json or "[]"),
             newsnow_sources=json.loads(row.newsnow_sources_json or "[]"),
+            run_hour=row.run_hour,
             active=row.active,
             last_run_at=_as_utc(row.last_run_at),
             last_run_status=row.last_run_status,
@@ -238,11 +287,11 @@ class SentimentAccountOut(BaseModel):
 
 
 def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    """把 SQLite 读出的 naive datetime(实际是 UTC,因 pipeline 用 datetime.utcnow()
-    写入)显式标注为 UTC tz-aware,这样 Pydantic 序列化时会输出 ISO 8601 带
-    '+00:00' 后缀,前端 new Date() 才能正确解析为 UTC.
+    """Explicitly mark naive datetimes read from SQLite (actually UTC, since the pipeline writes with datetime.utcnow())
+    as UTC tz-aware, so Pydantic serialization outputs ISO 8601 with a
+    '+00:00' suffix and the frontend new Date() parses it correctly as UTC.
 
-    否则前端 timeAgo() 会把无 tz 字符串当成本地时间(UTC+8),显示成"8 小时前"."""
+    Otherwise the frontend timeAgo() treats tz-less strings as local time (UTC+8), showing "8 hours ago"."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -265,9 +314,9 @@ class KnowledgeOut(BaseModel):
 class SentimentPlatformOut(BaseModel):
     code: str
     domain: str
-    # category 是 legacy 单轴,前端不再消费;保留输出供调试 / 旧客户端兼容。
+    # category is the legacy single axis, no longer consumed by the frontend; still output for debugging / old client compatibility.
     category: str
-    # 011 起的正交两维 — UI 渲染 filter 用这两个。空字符串表示后端未跑 011。
+    # Two orthogonal dimensions since 011 -- the UI renders filters from these two. Empty string means the backend has not run 011.
     media_type: str = ""
     industry: str = ""
     region: str

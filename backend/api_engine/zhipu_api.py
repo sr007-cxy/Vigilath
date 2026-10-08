@@ -14,6 +14,7 @@ import json
 import requests
 
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+from geo.services.llm_gateway import post_and_record
 
 
 class ZhipuAPIAdapter(EngineAdapter):
@@ -47,7 +48,8 @@ class ZhipuAPIAdapter(EngineAdapter):
         }
 
         try:
-            r = requests.post(self.API_URL, json=payload, headers=headers, timeout=60)
+            r = post_and_record(self.API_URL, payload, headers, provider="glm",
+                                feature="advanced.zhipu", timeout=60)
             if r.status_code == 401:
                 return EngineResult(engine=self.name, query=query, error="invalid_key")
             if r.status_code != 200:

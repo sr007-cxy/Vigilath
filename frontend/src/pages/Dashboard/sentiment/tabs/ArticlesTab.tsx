@@ -9,6 +9,7 @@ import { useInfinitePosts, useGenerateDraft, useSentimentPlatforms } from '../..
 import type {
   SentimentAccount, SentimentPost, SentimentLabel, RiskLevel, PostSortKey,
 } from '../../../../types/sentiment';
+import { accountSymbol } from '../../../../types/sentiment';
 
 import { PostCard } from '../components/PostCard';
 import { PostDetail } from '../components/PostDetail';
@@ -23,26 +24,26 @@ import {
 } from '../../../../constants/sentimentPlatforms';
 import type { SentimentPlatform } from '../../../../types/sentiment';
 
-// 排序键 = 后端 PostSortKey;影响力/情感强度走 scoreInfluence / scoreSentiment 子项
+// Sort key = backend PostSortKey; influence/sentiment intensity use the scoreInfluence / scoreSentiment sub-items
 type SortKey = PostSortKey;
 
-// 默认排序 — 对标图片"按最新文章 默认"
+// Default sort — matches "latest articles (default)" in the reference image
 const DEFAULT_SORT: SortKey = 'newest';
 
-// 评分子菜单(图里"按评分排序 ▸ 评分")— 展开后是这两项
+// Score submenu ("sort by score ▸ score" in the image) — expands to these two items
 const SCORE_SUBMENU: readonly SortKey[] = ['scoreSentiment', 'scoreInfluence'];
 
-// 主下拉的顺序(图里自上而下) — 评分子菜单单独渲染
+// Order of the main dropdown (top to bottom in the image) — the score submenu renders separately
 const SORT_ITEMS: readonly SortKey[] = [
   'newest', 'oldest',
   'engagement', 'shares', 'replies', 'likes', 'views',
   'cluster',
   'mediaAZ', 'mediaZA',
 ];
-// 时间筛选预设 — 与参考竞品对齐
+// Time filter presets — aligned with the reference competitor
 type TimePreset = 'today' | 'h24' | 'd3' | 'd7' | 'd14' | 'd30' | 'd90' | 'all' | 'custom';
 
-// preset → 显示文案的 i18n key 后缀
+// preset -> i18n key suffix for the display text
 const TIME_PRESETS: { key: TimePreset; labelKey: string }[] = [
   { key: 'today', labelKey: 'timeToday' },
   { key: 'h24',   labelKey: 'timeH24' },
@@ -55,27 +56,27 @@ const TIME_PRESETS: { key: TimePreset; labelKey: string }[] = [
   { key: 'custom', labelKey: 'timeCustom' },
 ];
 
-// 把本地 Date 格式化为 'YYYY-MM-DDTHH:MM:SS'(ISO 但不带时区)— 后端按 lex 比较
+// Format a local Date as 'YYYY-MM-DDTHH:MM:SS' (ISO without timezone) — the backend compares lexicographically
 function fmtLocal(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// ── 双月范围选择器辅助 ─────────────────────────────────────
-// dateKey: 'YYYY-MM-DD'(只取年月日,不带时间)
+// ── Dual-month range picker helpers ─────────────────────────────────────
+// dateKey: 'YYYY-MM-DD' (year-month-day only, no time)
 function dateKey(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-// 从 'YYYY-MM-DDTHH:MM[:SS]' 中拆 date / time
+// Split date / time from 'YYYY-MM-DDTHH:MM[:SS]'
 function splitDt(s: string): { date: string; time: string } {
   if (!s) return { date: '', time: '' };
   const m = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
   return m ? { date: m[1], time: m[2] } : { date: '', time: '' };
 }
 
-// 构造某月的 42 cell 网格(6 周 × 7 天,周一开头),含上下月填充
+// Build a month's 42-cell grid (6 weeks × 7 days, Monday first), including padding from adjacent months
 function buildMonth(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
   const startWeekday = (first.getDay() + 6) % 7;  // Mon=0, Sun=6
@@ -88,9 +89,9 @@ function buildMonth(year: number, month: number): Date[] {
 
 const WEEKDAYS_ZH = ['一', '二', '三', '四', '五', '六', '日'];
 
-// 计算预设对应的 (start, end) 或 days。
-// 'all' → days:0(后端约定:0 = 全部历史;不传 days 后端默认 1 = 仅今日,会显示空)
-// 'custom' → {} 由调用方处理
+// Compute the (start, end) or days for a preset.
+// 'all' -> days:0 (backend convention: 0 = full history; without days the backend defaults to 1 = today only, which shows empty)
+// 'custom' -> {} handled by the caller
 function presetRange(preset: TimePreset): { start?: string; end?: string; days?: number } {
   if (preset === 'all') return { days: 0 };
   if (preset === 'custom') return {};
@@ -113,9 +114,9 @@ function presetRange(preset: TimePreset): { start?: string; end?: string; days?:
 
 const PAGE_SIZE = 50;
 
-// 热门媒体段位的固定平台顺序(对标 WisersOne "热门媒体" 一栏的"高频露出"思路).
-// 取这 9 个是因为 A 股散户/机构舆情场景里它们 90% 命中率最高;
-// 全平台仍可从下方 媒体分类/媒体类型 段位下钻到。
+// Fixed platform order for the popular media section (modeled on the "high-frequency exposure" idea of WisersOne's "popular media" column).
+// These 9 were chosen because they have the highest hit rate (90%) in A-share retail/institutional sentiment scenarios;
+// all platforms can still be drilled into from the media category/media type sections below.
 const POPULAR_PLATFORMS: readonly string[] = [
   'weibo', 'weixin', 'xueqiu',
   'eastmoney', 'zhihu', 'toutiao',
@@ -151,14 +152,14 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return m;
   }, [platforms, i18n.language]);
 
-  // 时间触发器现在 inline 渲染到右栏 FilterRail 里(不再 portal 到 tab 工具条)
+  // The time trigger now renders inline in the right-column FilterRail (no longer portaled to the tab toolbar)
 
-  // 滚动到底部 sentinel — 用 IntersectionObserver 自动触发 fetchNextPage
+  // Scroll-to-bottom sentinel — IntersectionObserver auto-triggers fetchNextPage
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  // 时间选择器弹层 — 点外部关闭
-  // 弹层 portal 到 document.body 避免被 <nav overflow-x-auto> 等祖先裁掉,
-  // 用 position:fixed 跟随触发按钮 getBoundingClientRect 定位。
+  // Time picker popover — closes on outside click
+  // The popover is portaled to document.body to avoid being clipped by ancestors like <nav overflow-x-auto>,
+  // positioned with position:fixed following the trigger button's getBoundingClientRect.
   const [pickerOpen, setPickerOpen] = useState(false);
   const triggerBtnRef = useRef<HTMLButtonElement | null>(null);
   const popupContentRef = useRef<HTMLDivElement | null>(null);
@@ -177,7 +178,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     };
     updatePos();
     window.addEventListener('resize', updatePos);
-    window.addEventListener('scroll', updatePos, true);  // 捕获嵌套滚动
+    window.addEventListener('scroll', updatePos, true);  // Capture nested scrolling
     return () => {
       window.removeEventListener('resize', updatePos);
       window.removeEventListener('scroll', updatePos, true);
@@ -196,26 +197,26 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [pickerOpen]);
 
-  // ── 时间筛选 + 分页 状态 ─────────────────────────────────
+  // ── Time filter + pagination state ─────────────────────────────────
   const [timePreset, setTimePreset] = useState<TimePreset>('d90');
-  // datetime-local 格式:YYYY-MM-DDTHH:MM(无秒)
+  // datetime-local format: YYYY-MM-DDTHH:MM (no seconds)
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
   const [appliedStart, setAppliedStart] = useState<string>('');
   const [appliedEnd, setAppliedEnd] = useState<string>('');
   const [startOffset, setStartOffset] = useState<number>(0);
   const [jumpInput, setJumpInput] = useState<string>('');
-  // 排序 state 提前到这里,后面 effect 里要用作 dep;dropdown UI 相关 state 仍在原位
+  // Sort state moved up here since effects below use it as a dep; dropdown UI state stays where it was
   const [sortBy, setSortBy] = useState<SortKey>(DEFAULT_SORT);
 
-  // 时间筛选 / 排序改变 → 重置分页(否则切排序还停留在第 N 页,体验割裂)
+  // Time filter / sort change -> reset pagination (otherwise switching sort stays on page N, a jarring experience)
   useEffect(() => {
     setStartOffset(0);
     setJumpInput('');
   }, [timePreset, appliedStart, appliedEnd, sortBy]);
 
-  // 切到 custom 时自动填默认范围 = 今日 00:00 ~ 23:59
-  // (用户明确没改 customStart/customEnd 时才填,避免覆盖之前输入的值)
+  // When switching to custom, auto-fill the default range = today 00:00 ~ 23:59
+  // (only when the user clearly hasn't changed customStart/customEnd, to avoid overwriting earlier input)
   useEffect(() => {
     if (timePreset !== 'custom') return;
     if (customStart || customEnd) return;
@@ -229,37 +230,37 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const customRangeError = customStart && customEnd && customStart > customEnd;
 
-  // 双月日历的"左月"位置 — 默认聚焦到 customStart 那一月
+  // The "left month" of the dual-month calendar — focuses on customStart's month by default
   const [calNav, setCalNav] = useState<{ y: number; m: number }>(() => {
     const d = new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
   });
-  // 切到 custom 且已有起始日期 → 把日历滚到那一月
+  // Switched to custom with a start date already set -> scroll the calendar to that month
   useEffect(() => {
     if (timePreset !== 'custom') return;
     const { date } = splitDt(customStart);
     if (!date) return;
     const [y, m] = date.split('-').map(Number);
     setCalNav({ y, m: m - 1 });
-  }, [timePreset]);  // 只在切到 custom 时跑;手动翻月不会被覆盖
+  }, [timePreset]);  // Runs only when switching to custom; manual month paging isn't overwritten
 
   const startDt = splitDt(customStart);
   const endDt = splitDt(customEnd);
 
-  // 点日历某天:依次选 start / end,选完两个再点重置 start
+  // Clicking a calendar day: pick start / end in turn; after both are picked, the next click resets start
   const handlePickDay = (d: Date) => {
     const k = dateKey(d);
     const haveStart = !!customStart;
     const haveEnd = !!customEnd;
     if (!haveStart || (haveStart && haveEnd)) {
-      // 重置:仅有 start
+      // Reset: start only
       setCustomStart(`${k}T00:00`);
       setCustomEnd('');
       return;
     }
     // haveStart && !haveEnd
     if (k < startDt.date) {
-      // 倒选了 → 反过来:把原 start 当 end,新点的当 start
+      // Picked backwards -> swap: the old start becomes end, the newly clicked becomes start
       setCustomEnd(`${startDt.date}T${startDt.time || '23:59'}`);
       setCustomStart(`${k}T00:00`);
     } else {
@@ -278,7 +279,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const calNext = (m: number) => (m === 11 ? { y: calNav.y + 1, m: 0 } : { y: calNav.y, m: m + 1 });
 
-  // 把当前 preset / 自定义区间统一翻成 (start, end) 传给后端
+  // Convert the current preset / custom range uniformly into (start, end) for the backend
   const effectiveRange = useMemo(() => {
     if (timePreset === 'custom') {
       return {
@@ -291,7 +292,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
 
   const postsQuery = useInfinitePosts(
     usingMock ? null : account.id,
-    usingMock ? null : account.ticker,
+    usingMock ? null : accountSymbol(account),
     {
       pageSize: PAGE_SIZE,
       start: effectiveRange.start,
@@ -302,7 +303,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     },
   );
 
-  // 滚动到 sentinel 自动加载下一页 — 提前 200px 触发。mock 模式没分页,跳过。
+  // Auto-load the next page when scrolling to the sentinel — triggers 200px early. Mock mode has no pagination; skip.
   useEffect(() => {
     const el = loadMoreRef.current;
     if (!el || usingMock) return;
@@ -333,13 +334,13 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const isLoading = !usingMock && postsQuery.isLoading;
   const error = !usingMock ? postsQuery.error : null;
 
-  // ── 客户端筛选状态(在已加载页内做二次筛选)──────────────
+  // ── Client-side filter state (secondary filtering within loaded pages) ──────────────
   const [sentiments, setSentiments] = useState<Set<string>>(new Set());
   const [risks, setRisks] = useState<Set<string>>(new Set());
   const [mediaTypes, setMediaTypes] = useState<Set<string>>(new Set());
   const [industries, setIndustries] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
-  // topic 与 ?q URL 参数同步 — 侧栏 KeywordGroup 子项点击 → 写 ?q → 这里读出
+  // topic synced with the ?q URL param — clicking a sidebar KeywordGroup child -> writes ?q -> read here
   const [topic, setTopicState] = useState(() => params.get('q') ?? '');
   useEffect(() => {
     const q = params.get('q') ?? '';
@@ -353,9 +354,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
     else next.delete('q');
     setParams(next, { replace: true });
   };
-  // 相关性筛选 — 业务默认值,不暴露切换 UI(用户配过 keywords,LLM 判过相关性即可)
+  // Relevance filter — business default, no toggle UI exposed (users configured keywords, and the LLM has judged relevance)
   const onlyRelevant = true;
-  // 高级筛选 modal 才有的几个字段(rail 不暴露)
+  // Fields only in the advanced filter modal (not exposed in the rail)
   const [keywordScope, setKeywordScope] = useState<'' | 'title' | 'body'>('');
   const [authorRegion, setAuthorRegion] = useState<'' | 'domestic' | 'overseas'>('');
   const [articleType, setArticleType] = useState<'' | 'original' | 'reprint'>('');
@@ -367,10 +368,10 @@ export function ArticlesTab({ account, usingMock }: Props) {
   const sortPopupRef = useRef<HTMLDivElement | null>(null);
   const [sortPopupPos, setSortPopupPos] = useState<{ top: number; right: number } | null>(null);
 
-  // 评分子菜单 hover/click 展开
+  // Score submenu expands on hover/click
   const [sortScoreOpen, setSortScoreOpen] = useState(false);
 
-  // 下拉:跟随触发器定位 + 滚动/resize 重算
+  // Dropdown: positioned following the trigger + recomputed on scroll/resize
   useEffect(() => {
     if (!sortOpen) return;
     const update = () => {
@@ -391,7 +392,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     };
   }, [sortOpen]);
 
-  // 点外部关闭(包括子菜单)
+  // Close on outside click (including the submenu)
   useEffect(() => {
     if (!sortOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -405,7 +406,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [sortOpen]);
 
-  // source code → (media_type, industry, region) 查找表
+  // source code -> (media_type, industry, region) lookup table
   const platformAxes = useMemo(() => {
     const m = new Map<string, { media_type: string; industry: string; region: string }>();
     for (const p of platforms) {
@@ -414,9 +415,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return m;
   }, [platforms]);
 
-  // sources 经 mediaTypes/industries chip 收窄后的有效 source 白名单
+  // Effective source allowlist after sources are narrowed by the mediaTypes/industries chips
   const allowedSources = useMemo(() => {
-    if (!mediaTypes.size && !industries.size) return null;  // null = 不收窄
+    if (!mediaTypes.size && !industries.size) return null;  // null = no narrowing
     const allowed = new Set<string>();
     for (const p of platforms) {
       if (mediaTypes.size && !mediaTypes.has(p.media_type)) continue;
@@ -448,7 +449,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return counts;
   }, [posts, sentiments, risks, topic, onlyRelevant, platformCodes, allowedSources]);
 
-  // 双轴 chip 计数
+  // Dual-axis chip counts
   const axisCounts = useMemo(() => {
     const mt = new Map<string, number>();
     const ind = new Map<string, number>();
@@ -486,7 +487,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey]);
 
-  // posts 已由后端按 sortBy 排好序;这里只做客户端 chip 二次筛选,不再 sort。
+  // posts are already sorted by the backend per sortBy; only client-side chip filtering here, no more sorting.
   const filtered = useMemo(() => {
     return posts.filter(p => {
       const isRel = !!p.is_relevant;
@@ -502,7 +503,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
         const inTitle = (p.title ?? '').includes(tt);
         const inBody = (p.summary ?? '').includes(tt) || (p.content ?? '').includes(tt);
         const inTopics = (p.topics ?? []).some(x => x.includes(tt));
-        // keywordScope:'' = 全部 / 'title' = 仅标题 / 'body' = 仅正文(含摘要)
+        // keywordScope: '' = all / 'title' = title only / 'body' = body only (including summary)
         if (keywordScope === 'title') {
           if (!inTitle) return false;
         } else if (keywordScope === 'body') {
@@ -511,7 +512,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           if (!inTitle && !inBody && !inTopics) return false;
         }
       }
-      // 高级筛选「作者」子串匹配 — 多个用逗号或换行分割,任一命中即过
+      // Advanced filter "author" substring match — multiple separated by commas or newlines, any match passes
       if (authorInput.trim()) {
         const auth = (p.author ?? '').toLowerCase();
         const needles = authorInput
@@ -522,7 +523,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     });
   }, [posts, sentiments, risks, sources, topic, keywordScope, authorInput, onlyRelevant, allowedSources]);
 
-  // 当前 filtered 集合的 stance 分布(情感类型进度条用)
+  // Stance distribution of the current filtered set (for the sentiment type progress bar)
   const stanceDist = useMemo(() => {
     const dist: Record<string, number> = {
       supportive: 0, neutral: 0, skeptical: 0, hostile: 0, unknown: 0,
@@ -535,7 +536,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return dist;
   }, [filtered]);
 
-  // selected = null 时右栏显示筛选面板;明确点击文章后才显示详情
+  // When selected = null the right column shows the filter panel; details show only after explicitly clicking an article
   const selected: SentimentPost | null = useMemo(() => {
     if (!selectedKey) return null;
     const [src, ...rest] = selectedKey.split('-');
@@ -543,7 +544,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     return posts.find(p => p.source === src && p.post_id === pid) || null;
   }, [selectedKey, posts]);
 
-  // 清空 selected — PostDetail 的「← 返回」按钮调用
+  // Clear selected — called by PostDetail's "← Back" button
   const clearSelected = () => {
     setSelectedKey(null);
     const next = new URLSearchParams(params);
@@ -551,16 +552,16 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setParams(next, { replace: true });
   };
 
-  // 切换 Set 中某项 — 顶部 chip 行用
+  // Toggle an item in a Set — used by the top chip row
   const toggle = <T,>(s: Set<T>, v: T): Set<T> => {
     const n = new Set(s);
     if (n.has(v)) n.delete(v); else n.add(v);
     return n;
   };
 
-  // 高级筛选 modal 开关 — FilterRail 顶部按钮触发(modal 内容与 rail 一致)
+  // Advanced filter modal toggle — triggered by the FilterRail top button (modal content matches the rail)
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  // 活跃高级筛选数(rail 里现在全部摊开;角标仅作为"modal 内有改动"提醒)
+  // Active advanced filter count (everything is now laid out in the rail; the badge only reminds "there are changes in the modal")
   const advancedActive =
     mediaTypes.size + industries.size + sources.size;
 
@@ -580,16 +581,16 @@ export function ArticlesTab({ account, usingMock }: Props) {
     setStartOffset((target - 1) * PAGE_SIZE);
   };
 
-  // 把 ISO 'YYYY-MM-DDTHH:MM[:SS]' 缩成 'M/D HH:MM' 在按钮上展示。
-  // 注意:必须在所有 hooks 之后、early return 之前的 hook 调用都已结束 ——
-  // 这里是普通函数,不是 hook,可以在任意位置。
+  // Shorten ISO 'YYYY-MM-DDTHH:MM[:SS]' to 'M/D HH:MM' for display on the button.
+  // Note: hook calls must all be complete after all hooks and before early returns --
+  // this is a plain function, not a hook, so it can go anywhere.
   const shortFmt = (s: string): string => {
     const m = s.match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     return m ? `${parseInt(m[1])}/${parseInt(m[2])} ${m[3]}:${m[4]}` : s;
   };
 
-  // triggerLabel 是 hook,必须在 isLoading/error 早 return *之前* 调用,
-  // 否则不同渲染分支 hook 数量不一致 → React Rules of Hooks violation。
+  // triggerLabel is a hook and must be called *before* the isLoading/error early return,
+  // otherwise the hook count differs across render branches -> React Rules of Hooks violation.
   const triggerLabel = useMemo(() => {
     if (timePreset === 'custom' && (appliedStart || appliedEnd)) {
       return `${shortFmt(appliedStart)} → ${shortFmt(appliedEnd)}`;
@@ -604,7 +605,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>;
   }
   if (error) {
-    return <div className="rounded-xl py-6 px-4 text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
+    return <div className="rounded-xl py-6 px-4 text-sm" style={{ background: 'var(--danger-bg)', color: '#dc2626' }}>
       ⚠ {error instanceof Error ? error.message : 'Failed to load posts'}
     </div>;
   }
@@ -622,8 +623,8 @@ export function ArticlesTab({ account, usingMock }: Props) {
     if (key !== 'custom') setPickerOpen(false);
   };
 
-  // 时间筛选 — portal 到 Sentiment.tsx Tab 栏右侧
-  // 触发按钮在 toolbar slot;弹出面板再 portal 到 document.body 避免被裁
+  // Time filter — portaled to the right side of the Sentiment.tsx tab bar
+  // The trigger button is in the toolbar slot; the popover panel is portaled again to document.body to avoid clipping
   const timeTrigger = (
     <button
       ref={triggerBtnRef}
@@ -662,10 +663,10 @@ export function ArticlesTab({ account, usingMock }: Props) {
       }}
     >
       <div className="flex">
-        {/* 左:日历范围选择器(仅 custom 显示) */}
+        {/* Left: calendar range picker (shown only for custom) */}
         {showCustomPanel && (
           <div className="p-3 flex-1" style={{ borderRight: '1px solid var(--border-color)' }}>
-            {/* 头部:start/end 概览 + 翻月按钮 */}
+            {/* Header: start/end overview + month paging buttons */}
             <div className="flex items-center justify-between mb-2 text-xs">
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => setCalNav({ y: calNav.y - 1, m: calNav.m })}
@@ -684,7 +685,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
               </div>
             </div>
 
-            {/* 双月日历 */}
+            {/* Dual-month calendar */}
             <div className="grid grid-cols-2 gap-3">
               {[leftMonth, rightMonth].map(({ y, m }) => (
                 <CalendarMonth key={`${y}-${m}`}
@@ -694,7 +695,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
               ))}
             </div>
 
-            {/* 时间输入 */}
+            {/* Time inputs */}
             <div className="grid grid-cols-2 gap-3 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
               <div>
                 <label className="text-[11px] text-muted block mb-1">
@@ -725,7 +726,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </div>
         )}
 
-        {/* 右:preset 列表 */}
+        {/* Right: preset list */}
         <div className="p-2 space-y-0.5 max-h-[360px] overflow-y-auto" style={{ width: 160, flexShrink: 0 }}>
           {TIME_PRESETS.map(({ key, labelKey }) => {
             const active = timePreset === key;
@@ -746,7 +747,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
         </div>
       </div>
 
-      {/* 底部 取消 / 确定 */}
+      {/* Bottom: Cancel / OK */}
       <div className="flex justify-end gap-2 px-3 py-2"
         style={{ borderTop: '1px solid var(--border-color)' }}>
         <button type="button" onClick={() => setPickerOpen(false)}
@@ -764,7 +765,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>
   );
 
-  // 排序下拉 — 对标图片样式:主菜单 + 评分子菜单 + 灰掉的禁用项
+  // Sort dropdown — styled after the reference image: main menu + score submenu + grayed-out disabled items
   const sortPopup = sortOpen && sortPopupPos && (
     <div ref={sortPopupRef}
       className="rounded-lg shadow-2xl py-1"
@@ -783,7 +784,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           onPick={() => { setSortBy(k); setSortOpen(false); setSortScoreOpen(false); }} />
       ))}
 
-      {/* 按评分排序 — 可展开子菜单 */}
+      {/* Sort by score — expandable submenu */}
       <SortScoreParent
         t={t}
         open={sortScoreOpen}
@@ -793,7 +794,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
         onPick={(k) => { setSortBy(k); setSortOpen(false); setSortScoreOpen(false); }}
       />
 
-      {/* ── 灰掉:数据未采集 / 暂不支持 ─────────── */}
+      {/* ── Grayed out: data not collected / not yet supported ─────────── */}
       <div className="my-1" style={{ borderTop: '1px solid var(--border-color)' }} />
       {(['commentDetailCount', 'commentUpdatedAt'] as const).map(k => (
         <DisabledMenuItem key={k} t={t} sortKey={k} />
@@ -810,7 +811,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
     </div>
   );
 
-  // 右栏:无文章选中 → 280-320px 窄筛选条;选中后 → 1.2fr 宽承载正文
+  // Right column: no article selected -> 280-320px narrow filter strip; selected -> 1.2fr wide to hold the body
   const gridCls = selected
     ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]'
     : 'xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,340px)]';
@@ -834,7 +835,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
             topic,
             keywordScope, authorRegion, articleType,
             specificMedia, column: columnInput, authorInput,
-            // appliedStart/End 是 'YYYY-MM-DDTHH:MM:SS',modal 用 'YYYY-MM-DD'
+            // appliedStart/End are 'YYYY-MM-DDTHH:MM:SS', the modal uses 'YYYY-MM-DD'
             startDate: appliedStart.slice(0, 10),
             endDate: appliedEnd.slice(0, 10),
           }}
@@ -858,7 +859,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
             setSpecificMedia(v.specificMedia);
             setColumnInput(v.column);
             setAuthorInput(v.authorInput);
-            // 时间范围:有任一端就走 custom preset,否则清空回 d90
+            // Time range: if either end is set use the custom preset, otherwise clear back to d90
             if (v.startDate || v.endDate) {
               setTimePreset('custom');
               setAppliedStart(v.startDate ? `${v.startDate}T00:00:00` : '');
@@ -875,7 +876,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
         />
       )}
 
-      {/* ── 中:仅 排序/计数 header + 文章列表(筛选已搬到右栏)── */}
+      {/* ── Middle: only the sort/count header + article list (filters moved to the right column) ── */}
       <section className="space-y-2 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:scrollbar-hide">
         <div className="flex items-center gap-2 py-2 px-1 xl:sticky xl:top-0 xl:z-10"
           style={{
@@ -922,7 +923,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </div>
         )}
 
-        {/* ── 滚动到底自动加载的 sentinel + 状态指示 ── */}
+        {/* ── Sentinel that auto-loads on scrolling to the bottom + status indicator ── */}
         {!usingMock && filtered.length > 0 && (
           <div ref={loadMoreRef} className="py-3 text-center text-xs text-muted">
             {postsQuery.isFetchingNextPage
@@ -933,7 +934,7 @@ export function ArticlesTab({ account, usingMock }: Props) {
           </div>
         )}
 
-        {/* ── 跳到第 N 页(可选,精确定位用)── */}
+        {/* ── Jump to page N (optional, for precise positioning) ── */}
         {!usingMock && totalPages > 1 && (
           <div className="rounded-xl p-3 flex items-center justify-between flex-wrap gap-2"
             style={cardStyle}>
@@ -1000,9 +1001,9 @@ export function ArticlesTab({ account, usingMock }: Props) {
   );
 }
 
-/* ── 右栏筛选面板 ─────────────────────────────────────────
- * 顶行:时间 + 高级筛选 + 重置
- * 6 个筛选维度,顺序:风险 → 情感 → 热门媒体 → 媒体分类 → 媒体类型 → 情感类型 */
+/* ── Right-column filter panel ─────────────────────────────────────────
+ * Top row: time + advanced filter + reset
+ * 6 filter dimensions, in order: risk -> sentiment -> popular media -> media category -> media type -> sentiment type */
 interface FilterRailProps {
   timeTrigger: React.ReactNode;
   advancedActive: number;
@@ -1036,7 +1037,7 @@ function FilterRail({
 }: FilterRailProps) {
   return (
     <div className="p-3 space-y-3">
-      {/* 顶行:时间 + 高级筛选 + 重置 */}
+      {/* Top row: time + advanced filter + reset */}
       <div className="flex items-center gap-2 flex-wrap">
         {timeTrigger}
         <button type="button" onClick={onOpenAdvanced}
@@ -1061,13 +1062,13 @@ function FilterRail({
         </button>
       </div>
 
-      {/* 搜索 */}
+      {/* Search */}
       <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)}
         placeholder={t('dashboard.sentiment.articles.filters.search')}
         className="w-full px-2 py-1.5 text-xs rounded"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
 
-      {/* 1. 风险 */}
+      {/* 1. Risk */}
       <RailSectionChips title={t('dashboard.sentiment.articles.filters.risk')}>
         {ALL_RISKS.map(r => (
           <FilterChip key={r}
@@ -1077,7 +1078,7 @@ function FilterRail({
         ))}
       </RailSectionChips>
 
-      {/* 2. 情感 */}
+      {/* 2. Sentiment */}
       <RailSectionChips title={t('dashboard.sentiment.articles.filters.sentiment')}>
         {ALL_SENTIMENTS.map(s => (
           <FilterChip key={s}
@@ -1088,7 +1089,7 @@ function FilterRail({
         ))}
       </RailSectionChips>
 
-      {/* 3. 热门媒体(平台来源)— 2 列 grid GridChip */}
+      {/* 3. Popular media (platform source) — 2-column grid of GridChip */}
       <RailSectionGrid title={t('dashboard.sentiment.articles.filters.popular')}>
         <GridChip
           label={t('dashboard.sentiment.articles.filters.all')}
@@ -1105,7 +1106,7 @@ function FilterRail({
         ))}
       </RailSectionGrid>
 
-      {/* 4. 媒体分类(行业)— 2 列 grid + ExpandableGridChip */}
+      {/* 4. Media category (industry) — 2-column grid + ExpandableGridChip */}
       <RailSectionGrid title={t('dashboard.sentiment.articles.filters.industry')}>
         <GridChip
           label={t('dashboard.sentiment.articles.filters.all')}
@@ -1132,7 +1133,7 @@ function FilterRail({
         })}
       </RailSectionGrid>
 
-      {/* 5. 媒体类型 — 2 列 grid + ExpandableGridChip */}
+      {/* 5. Media type — 2-column grid + ExpandableGridChip */}
       <RailSectionGrid title={t('dashboard.sentiment.articles.filters.mediaType')}>
         <GridChip
           label={t('dashboard.sentiment.articles.filters.all')}
@@ -1162,7 +1163,7 @@ function FilterRail({
         })}
       </RailSectionGrid>
 
-      {/* 6. 情感类型 — stance 分布堆叠条(展示型,不参与 filter) */}
+      {/* 6. Sentiment type — stance distribution stacked bar (display only, not a filter) */}
       <div>
         <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5">
           {t('dashboard.sentiment.articles.filters.stance')}
@@ -1173,17 +1174,17 @@ function FilterRail({
   );
 }
 
-/** 情感类型(立场)分布堆叠条 ─────────────────────────────
- * 把当前 filtered posts 按 stance 分组,展示成横向百分比堆叠条 +
- * 下方 legend(标签+计数).空数据时显示占位文字. */
+/** Sentiment type (stance) distribution stacked bar ─────────────────────────────
+ * Groups the current filtered posts by stance, shown as a horizontal percentage stacked bar +
+ * a legend below (label + count). Shows placeholder text when there is no data. */
 function StanceDistBar({ dist, t }:
   { dist: Record<string, number>; t: (k: string) => string }) {
   const order: { key: string; color: string }[] = [
-    { key: 'supportive', color: '#22c55e' },  // 绿:支持
-    { key: 'neutral',    color: '#9ca3af' },  // 灰:中立
-    { key: 'skeptical',  color: '#f59e0b' },  // 黄:质疑
-    { key: 'hostile',    color: '#ef4444' },  // 红:敌对
-    { key: 'unknown',    color: '#d1d5db' },  // 浅灰:未知
+    { key: 'supportive', color: 'var(--success-fg)' },  // green: supportive
+    { key: 'neutral',    color: '#9ca3af' },  // gray: neutral
+    { key: 'skeptical',  color: 'var(--warn-fg)' },  // yellow: skeptical
+    { key: 'hostile',    color: 'var(--danger-fg)' },  // red: hostile
+    { key: 'unknown',    color: '#d1d5db' },  // light gray: unknown
   ];
   const total = order.reduce((s, x) => s + (dist[x.key] ?? 0), 0);
 
@@ -1193,7 +1194,7 @@ function StanceDistBar({ dist, t }:
 
   return (
     <div className="space-y-1.5">
-      {/* 堆叠条 */}
+      {/* Stacked bar */}
       <div className="flex rounded overflow-hidden h-2.5"
         style={{ background: 'var(--bg-tertiary)' }}>
         {order.map(({ key, color }) => {
@@ -1232,7 +1233,7 @@ function StanceDistBar({ dist, t }:
   );
 }
 
-/** 短列表段位 — flex-wrap chip 风格 */
+/** Short-list section — flex-wrap chip style */
 function RailSectionChips({ title, children }:
   { title: string; children: React.ReactNode }) {
   return (
@@ -1245,7 +1246,7 @@ function RailSectionChips({ title, children }:
   );
 }
 
-/** 多维度段位 — 2 列 grid 紧凑罗列(对齐之前折叠区视觉) */
+/** Multi-dimension section — compact 2-column grid listing (matching the earlier collapsed-area visuals) */
 function RailSectionGrid({ title, children }:
   { title: string; children: React.ReactNode }) {
   return (
@@ -1258,7 +1259,7 @@ function RailSectionGrid({ title, children }:
   );
 }
 
-// 单月日历(7×6 网格,周一开头)— 双月选择器中两次复用
+// Single-month calendar (7×6 grid, Monday first) — reused twice in the dual-month picker
 function CalendarMonth({
   year, month, startKey, endKey, onPick,
 }: {
@@ -1311,10 +1312,10 @@ function CalendarMonth({
   );
 }
 
-/* ── 排序下拉子组件 ─────────────────────────────────────────
- * SortMenuItem:普通选项,active 时左侧 ✓,默认项右侧蓝色"默认"chip
- * SortScoreParent:可展开的"按评分排序" — 右侧 ▸,展开后内联 submenu
- * DisabledMenuItem:灰掉的禁用项 — tooltip 说明原因 */
+/* ── Sort dropdown subcomponents ─────────────────────────────────────────
+ * SortMenuItem: regular option, ✓ on the left when active, blue "Default" chip on the right for the default item
+ * SortScoreParent: expandable "Sort by score" — ▸ on the right, inline submenu when expanded
+ * DisabledMenuItem: grayed-out disabled item — tooltip explains why */
 
 function SortMenuItem({ active, isDefault, t, sortKey, onPick }: {
   active: boolean;

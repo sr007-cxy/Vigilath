@@ -5,7 +5,7 @@ Usage
                         --media media.txt --keywords kw.txt                                                                  
                                                                                                                              
   # existing plan, post-filtered + augmented                                                                                 
-  python cli.py monitor --plan-in plan.json --ticker VNET \                                                                  
+  python cli.py monitor --plan-in plan.json --ticker BABA \
                         --media media.txt --keywords kw.txt                                                                  
                                                                                                                              
   File format — comma- and/or newline-separated:                                                                             

@@ -309,8 +309,11 @@ MODE_MIN_TIER: Dict[str, str] = {
     "authority": "pro",
     "citation": "pro",
     "visibility": "pro",
-    "entity": "free",  # TODO: restore to "pro" after testing
-    "competitiveIntel": "free",  # TODO: restore to "pro" after testing
+    # Taken back in 2026-08: both use heavy multi-engine calls and were run for free during the open period. Restored to pro,
+    # the same tier as compare/citation/visibility (keep ADVANCED_MODES in frontend Result.tsx in sync).
+    "entity": "pro",
+    "competitiveIntel": "pro",
+    "full": "pro",  # One-click full diagnosis (7 audits + combined report)
 }
 
 

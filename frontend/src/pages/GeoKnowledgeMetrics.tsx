@@ -114,7 +114,7 @@ export function GeoKnowledgeMetrics() {
         <div className="w-full max-w-5xl mx-auto animate-fade-in">
           <section className="hero mb-10">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight">
                 <span className="gradient-text">{t('geoKnowledge.metrics.title')}</span>
               </h1>
               <p

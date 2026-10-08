@@ -1,0 +1,22 @@
+# Slim the build context — venv 431M / data 35M must never enter the image
+venv/
+agent-venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Runtime artifacts; in containers they live on volumes
+logs/
+data/
+.files/
+
+# Secrets never go into image layers (images get pushed to a registry)
+.env
+.env.*
+*.pem
+
+# Local leftovers
+*.db
+*.sqlite3

@@ -1,16 +1,16 @@
-// 实时热点面板 — 自托管 newsnow 多站热榜的"全网在聊什么"仪表盘。
+// Real-time trending panel — a "what's the whole web talking about" dashboard over self-hosted newsnow multi-site trending lists.
 //
-// 设计:
-//   - 多源卡片网格(对齐 newsnow.busiyi.world):每卡 = 一个源 Top N
-//   - 每卡独立 React Query,失败 / 慢不互相影响
-//   - 类别 chip 多选过滤,localStorage 持久化用户偏好
-//   - 命中当前账户品牌词的条目高亮(🔥),帮用户在热榜里第一眼看到自家话题
+// Design:
+//   - Multi-source card grid (aligned with newsnow.busiyi.world): each card = one source's Top N
+//   - Each card has its own React Query, so failures / slowness don't affect each other
+//   - Category chips multi-select filter, user preference persisted in localStorage
+//   - Items matching the current account's brand terms are highlighted (🔥), helping users spot their own topics first in the trending lists
 //
-// 与 account.newsnow_sources 互补:
-//   - 后者:配在账号上,按 keywords 过滤入 posts 表 → 分析管线
-//   - 本面板:全量裸热榜,不入库,纯展示
+// Complementary to account.newsnow_sources:
+//   - The latter: configured on the account, filtered by keywords into the posts table -> analysis pipeline
+//   - This panel: the full raw trending lists, not persisted, display only
 //
-// 数据极薄(newsnow 接口天花板):title + url + 偶尔 hotness;无时间戳/正文/作者。
+// Data is very thin (the newsnow API ceiling): title + url + occasionally hotness; no timestamp/body/author.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +39,7 @@ const CATEGORY_BADGE_STYLE: Record<string, React.CSSProperties> = {
   social: { background: 'rgba(236,72,153,0.12)', color: '#db2777' },
   news: { background: 'rgba(59,130,246,0.12)', color: '#2563eb' },
   tech: { background: 'rgba(168,85,247,0.12)', color: '#9333ea' },
-  finance: { background: 'rgba(16,185,129,0.12)', color: '#059669' },
+  finance: { background: 'var(--success-bg)', color: '#059669' },
 };
 
 const FALLBACK_SOURCES: NewsnowSource[] = [
@@ -59,11 +59,11 @@ const FALLBACK_SOURCES: NewsnowSource[] = [
 ];
 
 interface Props {
-  /** mock 模式下跳过真实拉取 */
+  /** Skip real fetching in mock mode */
   usingMock?: boolean;
-  /** 单卡 Top N,默认 10 */
+  /** Top N per card, default 10 */
   limit?: number;
-  /** 当前账户(可选)— 用于品牌词命中高亮 */
+  /** Current account (optional) — used for brand term match highlighting */
   account?: SentimentAccount | null;
 }
 
@@ -74,7 +74,7 @@ export function HotTopicsPanel({ usingMock, limit = 10, account }: Props) {
   const { data: sourcesResp } = useNewsnowSources();
   const allSources: NewsnowSource[] = sourcesResp?.items ?? FALLBACK_SOURCES;
 
-  // 类别筛选(localStorage 持久化)
+  // Category filter (persisted in localStorage)
   const [enabledCategories, setEnabledCategories] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -86,7 +86,7 @@ export function HotTopicsPanel({ usingMock, limit = 10, account }: Props) {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(enabledCategories)));
-    } catch { /* quota,忽略 */ }
+    } catch { /* quota, ignore */ }
   }, [enabledCategories]);
 
   const toggleCategory = (cat: string) => {
@@ -94,13 +94,13 @@ export function HotTopicsPanel({ usingMock, limit = 10, account }: Props) {
       const next = new Set(prev);
       if (next.has(cat)) next.delete(cat);
       else next.add(cat);
-      // 至少保留一个类别,否则视为"全选"避免空白页
+      // Keep at least one category, otherwise treat as "select all" to avoid a blank page
       if (next.size === 0) return new Set(DEFAULT_CATEGORIES);
       return next;
     });
   };
 
-  // 品牌词集合(target + aliases + keyword_groups + keywords)— 全部小写化
+  // Brand term set (target + aliases + keyword_groups + keywords) — all lowercased
   const brandTerms = useMemo<string[]>(() => {
     if (!account) return [];
     const terms = new Set<string>();
@@ -148,7 +148,7 @@ export function HotTopicsPanel({ usingMock, limit = 10, account }: Props) {
         </button>
       </header>
 
-      {/* 类别筛选 — 多选 chip */}
+      {/* Category filter — multi-select chips */}
       <div className="flex items-center gap-1.5 flex-wrap mb-4">
         <span className="text-[10px] uppercase tracking-wider text-muted mr-1">
           {t('dashboard.sentiment.today.hotTopics.filterBy')}
@@ -219,7 +219,7 @@ function SourceCard({
   const fetchedAt = hot.data?.fetched_at;
   const palette = CATEGORY_BADGE_STYLE[source.category] ?? {};
 
-  // 命中数量(用于卡头显示)
+  // Match count (shown in the card header)
   const brandHits = useMemo(() => {
     if (!brandTerms.length || !items.length) return 0;
     return items.reduce((n, it) => (titleMatches(it.title, brandTerms) ? n + 1 : n), 0);
@@ -244,7 +244,7 @@ function SourceCard({
         {brandHits > 0 && (
           <span
             className="text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0"
-            style={{ background: 'rgba(239,68,68,0.12)', color: '#dc2626' }}
+            style={{ background: 'var(--danger-bg)', color: '#dc2626' }}
             title={t('dashboard.sentiment.today.hotTopics.brandHits', { count: brandHits }) as string}
           >
             🔥 {brandHits}
@@ -302,7 +302,7 @@ function HotItemRow({
   const href = item.url || item.mobileUrl;
   const hotness = item.extra?.info;
 
-  // Top 3 色阶 badge,4-10 灰色,11+ 更淡
+  // Top 3 get color-scaled badges, 4-10 gray, 11+ lighter
   const rankBadge = (() => {
     if (rank === 1) return { background: '#dc2626', color: '#fff' };
     if (rank === 2) return { background: '#ea580c', color: '#fff' };
@@ -354,7 +354,7 @@ function HotItemRow({
   );
 }
 
-// 不分大小写,title 含任一 brand term 即命中
+// Case-insensitive; a title containing any brand term is a match
 function titleMatches(title: string | undefined, terms: string[]): boolean {
   if (!title || terms.length === 0) return false;
   const t = title.toLowerCase();

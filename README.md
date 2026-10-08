@@ -111,7 +111,7 @@ Some integration tests require external services and credentials. Keep test fixt
   author    = {Zen7 Labs},
   title     = {Vigilath: GEO and AI Visibility Platform},
   publisher = {GitHub},
-  url       = {https://github.com/sr007-cxy/Vigilath}
+  url       = {https://github.com/<owner>/Vigilath}
 }
 ```
 

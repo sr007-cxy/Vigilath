@@ -9,6 +9,7 @@ from geo.models.membership import (
     UserMembershipORM,
 )
 from geo.database import SessionLocal
+from sqlalchemy.exc import OperationalError, ProgrammingError
 import json
 
 
@@ -87,6 +88,12 @@ SCALE_FEATURES = {
 }
 
 
+# "Membership audit on login" -- the tier logged-in users without a paid subscription get by default. Set to "free"
+# to turn off the grant and return to the original behavior. Changing this one constant is enough; the permission matrix (MODE_MIN_TIER)
+# need not change. See the get_effective_membership docstring.
+LOGIN_GRANTED_TIER = "pro"
+
+
 DEFAULT_MEMBERSHIPS = [
     {
         "slug": "free",
@@ -98,7 +105,7 @@ DEFAULT_MEMBERSHIPS = [
         "tier_type": "saas",
         "currency": "usd",
         "monthly_check_quota": 3,
-        "allowed_check_categories": None,  # 全部 23 项
+        "allowed_check_categories": None,  # All 23 items
         "display_order": 1,
         "features": [
             "注册即可使用",
@@ -124,13 +131,13 @@ DEFAULT_MEMBERSHIPS = [
         "popular": True,
         "tier_type": "saas",
         "currency": "usd",
-        "monthly_check_quota": 20,
-        "allowed_check_categories": None,  # 全部 23 项
+        "monthly_check_quota": 10,
+        "allowed_check_categories": None,  # All 23 items
         "display_order": 2,
         "features": [
             "需登录账号",
             "23 项完整检测（全部子项）",
-            "每月 20 次检测",
+            "每月 10 次检测(每日上限 10 次)",
             "检测项优先级排序",
             "完整 23 类报告（AI Visibility Score + 字母等级 + 可视化）",
             "检测历史记录（可回看）",
@@ -153,11 +160,11 @@ DEFAULT_MEMBERSHIPS = [
         "popular": False,
         "tier_type": "saas",
         "currency": "usd",
-        "monthly_check_quota": 0,  # 无限
+        "monthly_check_quota": 100,
         "allowed_check_categories": None,
         "display_order": 3,
         "features": [
-            "无限检测次数",
+            "每月 100 次检测(每日上限 10 次)",
             "23 项完整检测 + 详细优化建议",
             "基础 GEO 覆盖",
             "OpenAI / Gemini / Anthropic 收录规范",
@@ -184,11 +191,11 @@ DEFAULT_MEMBERSHIPS = [
         "popular": False,
         "tier_type": "saas",
         "currency": "usd",
-        "monthly_check_quota": 0,  # 无限
+        "monthly_check_quota": 0,  # Unlimited
         "allowed_check_categories": None,
         "display_order": 4,
         "features": [
-            "无限检测次数",
+            "不限月度检测次数(每日上限 10 次)",
             "23 项完整检测 + 详细优化建议",
             "海外主流 LLM 收录规范适配",
             "含使用场景级文案与合规配置",
@@ -214,7 +221,7 @@ DEFAULT_MEMBERSHIPS = [
         "popular": False,
         "tier_type": "service",
         "currency": "usd",
-        "monthly_check_quota": 0,  # 无限
+        "monthly_check_quota": 0,  # Unlimited
         "allowed_check_categories": None,
         "display_order": 5,
         "features": [
@@ -297,7 +304,20 @@ class MembershipService:
         """Seed 5-tier default memberships if table is empty."""
         db = SessionLocal()
         try:
-            if db.query(MembershipORM).count() > 0:
+            try:
+                if db.query(MembershipORM).count() > 0:
+                    return
+            except (OperationalError, ProgrammingError):
+                # A fresh database is imported while Alembic is still loading
+                # model metadata. Let migrations create the table first; the
+                # next application start will seed the default memberships.
+                #
+                # Both exceptions must be caught: when the table does not exist SQLite raises OperationalError, while
+                # PostgreSQL raises UndefinedTable (wrapped by SQLAlchemy as ProgrammingError).
+                # Catching only the former makes anything that does `import geo` against an empty PG DB crash --
+                # including `alembic upgrade head` itself (env.py imports geo),
+                # so an empty DB could never be built. First reproduced on local PG in 2026-08.
+                db.rollback()
                 return
             for data in DEFAULT_MEMBERSHIPS:
                 _seed_membership(db, data)
@@ -477,12 +497,30 @@ class MembershipService:
             db.close()
 
     def get_effective_membership(self, user_id: int) -> Membership:
-        """Return user's active paid membership, or fall back to the free tier."""
+        """Return user's active paid membership, or the login-granted tier when none.
+
+        "Membership audit on login": logged-in users without a paid subscription row fall back to pro instead of
+        free. This is the **single point** of the whole grant policy -- all backend `_ensure_tier`
+        checks (compare / crawlTest / authority / citation / visibility / full are all
+        min_tier="pro") pass accordingly, and the monthly quota automatically goes from 3 to 20, without touching
+        the MODE_MIN_TIER permission matrix (the matrix is an asset, do not use it as a switch: the two temporary downgrades
+        "TODO: restore to pro" for entity / competitiveIntel in advanced.py have still not been restored,
+        a cautionary tale). To revoke the grant, change this back to free.
+
+        Note the fix suggestion text is unaffected -- `_FIX_ALLOWED_TIERS` is starter and above,
+        and pro was never in it.
+
+        Anonymous callers do not come here (geo.py / seo.py each have their own free fallback), so
+        the grant only applies to logged-in users.
+        """
         user_membership = self.get_user_membership(user_id)
         if user_membership:
             membership = self.get_membership_by_id(user_membership.membership_id)
             if membership:
                 return membership
+        granted = self.get_membership_by_slug(LOGIN_GRANTED_TIER)
+        if granted is not None:
+            return granted
         free = self.get_membership_by_slug("free")
         if free is None:
             raise RuntimeError("Free membership tier not initialized")

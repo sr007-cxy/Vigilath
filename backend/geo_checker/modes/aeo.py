@@ -44,6 +44,11 @@ def aeo_visibility(url, return_data=False):
     if not soup:
         print(f"\n  [{FAIL}] Could not fetch {url}")
         print(f"{'='*60}\n")
+        # When return_data's caller (one-click diagnosis) gets None, _silent_call judges it as
+        # "function not patched" and shows developer debugging info to the user as an audit conclusion. Failing to fetch the page is
+        # an audit failure, not unpatched code -- state the reason explicitly and let the sub-item fault-tolerance shell mark it failed.
+        if return_data:
+            raise ValueError(f"无法抓取页面内容:{url}")
         return
 
     text = get_text_content(soup)

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useContactModal } from './ContactModalContext';
+import { submitContact } from '../utils/contactForm';
+import { isWorkbenchPath } from '../utils/workbenchPath';
 
 const HIDDEN_ROUTES = [
   '/login',
@@ -11,14 +13,6 @@ const HIDDEN_ROUTES = [
   '/checkout/success',
   '/checkout/cancel',
 ];
-
-const sanitizeInput = (input: string): string =>
-  input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 
 export function ContactModal() {
   const { t } = useTranslation();
@@ -30,6 +24,10 @@ export function ContactModal() {
   const [success, setSuccess] = useState('');
 
   const hidden = HIDDEN_ROUTES.some((p) => location.pathname.startsWith(p));
+  // The workbench is action-dense, and a large floating button covers tables/dialogs -- shrink to a small right-edge handle that expands on click
+  // Shrink to the edge handle inside the workbench (both customer /app and ops /ops count). It used to check only /ops,
+  // so the customer workbench always had a large pill button with text sitting on the bottom-right action area.
+  const docked = isWorkbenchPath(location.pathname);
   if (hidden) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -46,17 +44,12 @@ export function ContactModal() {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: sanitizeInput(formData.name),
-          email: sanitizeInput(formData.email),
-          website: sanitizeInput(formData.website),
-          message: formData.message.trim() ? sanitizeInput(formData.message) : undefined,
-        }),
+      await submitContact({
+        name: formData.name,
+        email: formData.email,
+        website: formData.website,
+        message: formData.message,
       });
-      if (!res.ok) throw new Error();
       setSuccess(t('contact.form.success'));
       setFormData({ name: '', email: '', website: '', message: '' });
     } catch {
@@ -77,6 +70,26 @@ export function ContactModal() {
 
   // Collapsed bubble
   if (!isOpen) {
+    // Workbench: small edge handle (hint expands on hover), doesn't block actions
+    if (docked) {
+      return (
+        <button
+          onClick={openContact}
+          aria-label={t('contact.fab.label') as string}
+          title={t('contact.fab.label') as string}
+          className="fixed right-0 bottom-24 z-40 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+          style={{
+            width: 30, height: 44, borderRadius: '10px 0 0 10px',
+            background: 'var(--accent-primary)', color: '#fff',
+            boxShadow: '0 2px 8px rgba(0,0,0,.2)',
+          }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </button>
+      );
+    }
     return (
       <button
         onClick={openContact}
@@ -173,7 +186,7 @@ export function ContactModal() {
           className="mt-4 pt-4 text-center text-xs text-secondary"
           style={{ borderTop: '1px solid var(--border-color)' }}
         >
-          Email: <a href="mailto:support@zen7.com" className="text-accent-primary hover:underline">support@zen7.com</a>
+          Email: <a href="mailto:<support-email>" className="text-accent-primary hover:underline">{'<support-email>'}</a>
         </div>
       </div>
     </div>

@@ -1,32 +1,32 @@
 /**
- * AuthContext — 全局唯一的 JWT token + 用户档案状态源。
+ * AuthContext -- the single global source of JWT token + user profile state.
  *
- * 背景(bug 修复):原来每个 `useMembership()` 消费者有自己的 React state,
- * 初始化时从 localStorage 读一次,之后不再同步。结果:
- *   - <TierModal /> 在 App 根节点常驻,从应用启动就 mount
- *   - 用户注册后 localStorage 写入新 token
- *   - Register.tsx 不调 refresh(甚至不用 useMembership)
- *   - TierModal 的 token state 永远卡在 null → isLoggedIn=false
- *   - 用户选套餐 → 再次弹登录框
+ * Background (bug fix): previously each `useMembership()` consumer had its own React state,
+ * read once from localStorage at init and never synced afterwards. The result:
+ *   - <TierModal /> stays mounted at the App root from app startup
+ *   - after registration, localStorage gets the new token
+ *   - Register.tsx doesn't call refresh (doesn't even use useMembership)
+ *   - TierModal's token state is stuck at null forever -> isLoggedIn=false
+ *   - the user picks a plan -> the login dialog pops up again
  *
- * 二次修复(2026-05-25):Header 的右上角登录状态在弹窗登录后不刷新。
- * 原因:Header 自己用 useState 维护 `user` / `isAdmin`,只靠
- * `useEffect([isLoggedIn])` 和 `storage` 事件做同步。但:
- *   - 同源 tab 内 `localStorage.setItem` 不会触发本 tab 的 `storage` 事件
- *   - 若 token 在 mount 时就已存在(刷新 / 残留 token),isLoggedIn 不变,
- *     `useEffect([isLoggedIn])` 不会重跑
- *   - persistUser 失败时(/me 抛错),catch 兜底写 {email},但 Header
- *     不接受 is_admin 缺失之外的别的失败路径
- * 现在把 user / isAdmin 一并搬进 AuthContext,作为单一真相;Header 直接
- * 消费,AuthModal / AccountLayout / DashboardLayout / WorkbenchLayout 改走
- * `setUser` 写入,Context 自动更新所有消费者。
+ * Second fix (2026-05-25): the Header's top-right login state didn't refresh after logging in via the dialog.
+ * Cause: Header maintained `user` / `isAdmin` with its own useState, syncing only via
+ * `useEffect([isLoggedIn])` and the `storage` event. But:
+ *   - `localStorage.setItem` within the same tab doesn't fire that tab's `storage` event
+ *   - if the token already existed at mount (refresh / leftover token), isLoggedIn doesn't change,
+ *     so `useEffect([isLoggedIn])` doesn't rerun
+ *   - when persistUser fails (/me throws), the catch falls back to writing {email}, but Header
+ *     doesn't handle failure paths other than missing is_admin
+ * Now user / isAdmin are moved into AuthContext too as the single source of truth; Header consumes it
+ * directly, and AuthModal / AccountLayout / DashboardLayout / WorkbenchLayout write via
+ * `setUser`, with the Context automatically updating all consumers.
  *
- * 新的设计:
- *   - token + user 都只在 AuthProvider 一个地方维护 React state
- *   - 所有 useAuth() 通过 Context 消费,单一真相
- *   - 写 token 一律走 `setToken(x)`,写 user 走 `setUser(u)`,Context
- *     负责同步 localStorage
- *   - AuthProvider 挂 `storage` 事件监听,跨 tab 登录/退出也能同步
+ * The new design:
+ *   - token + user are maintained as React state only in AuthProvider
+ *   - all useAuth() consume via Context, a single source of truth
+ *   - writing the token always goes through `setToken(x)`, writing user through `setUser(u)`, and the Context
+ *     handles syncing localStorage
+ *   - AuthProvider listens to the `storage` event, so cross-tab login/logout also syncs
  */
 
 import {
@@ -38,6 +38,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { prewarmPluginAccounts } from '../services/wechatSyncPlugin';
 
 export interface StoredUser {
   id?: number;
@@ -45,22 +46,48 @@ export interface StoredUser {
   name?: string | null;
   is_active?: boolean;
   is_admin?: boolean;
+  /** System role; includes agency_admin / agency_operator; may be missing in old caches. */
+  role?: string;
+  /** Set for accounts registered via WeChat/phone. Displayed identity always goes through displayName(); don't use email directly. */
+  phone?: string | null;
+  wechat_nickname?: string | null;
+}
+
+
+/** role is the single source of truth for permissions; when old localStorage has no role, fall back to is_admin. */
+export function resolveRole(u: StoredUser | null): string {
+  if (!u) return 'user';
+  if (u.role) return u.role;
+  return u.is_admin ? 'admin' : 'user';
 }
 
 interface AuthContextValue {
-  /** 当前 JWT,未登录时为 null。 */
+  /** Current JWT; null when not logged in. */
   token: string | null;
-  /** 为 !!token 的便捷别名。 */
+  /** Convenience alias for !!token. */
   isLoggedIn: boolean;
-  /** 当前用户 profile;未登录或 profile 缺失时为 null。 */
+  /** Current user profile; null when not logged in or profile missing. */
   user: StoredUser | null;
-  /** user?.is_admin 的便捷别名,默认 false。 */
+  /** Role convenience alias (falls back to is_admin when role is missing); 'user' when not logged in. */
+  role: string;
+  /** Convenience alias for role === 'admin' (old caches fall back to is_admin). */
   isAdmin: boolean;
-  /** 登录/注册成功后写入 token。传 null 表示退出。会同步 localStorage。 */
+  /** role === 'operator' (ops staff, the five workbench modules). */
+  isOperator: boolean;
+  /** Workbench staff: admin || operator. */
+  isStaff: boolean;
+  /** role === 'maintainer' (maintenance role: platform rules/crawlers/dispatch center/gateway). */
+  isMaintainer: boolean;
+  /** role === 'tenant' (gateway tenant, only has the tenant portal). */
+  isTenant: boolean;
+  isAgencyAdmin: boolean;
+  isAgencyOperator: boolean;
+  isAgency: boolean;
+  /** Write the token after successful login/registration. Pass null to log out. Syncs localStorage. */
   setToken: (t: string | null) => void;
-  /** 写入/清除 user profile,同步 localStorage 并立即通知所有消费者。 */
+  /** Write/clear the user profile, syncing localStorage and immediately notifying all consumers. */
   setUser: (u: StoredUser | null) => void;
-  /** 清空所有登录痕迹(token + user)。 */
+  /** Clear all login traces (token + user). */
   clearAuth: () => void;
 }
 
@@ -100,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(TOKEN_KEY);
       }
     } catch {
-      // 存储失败不能让业务挂掉,state 仍然更新
+      // A storage failure must not break the business flow; state is still updated
     }
     setTokenState(t);
   }, []);
@@ -129,9 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null);
   }, []);
 
-  // 跨 tab 同步:用户在 A tab 登录,B tab 也要看到。
-  // 浏览器 `storage` 事件只在**其他 tab**触发,所以不会和本 tab 的
-  // setToken/setUser 形成循环。
+  // Cross-tab sync: when the user logs in on tab A, tab B should see it too.
+  // The browser's `storage` event only fires in **other tabs**, so it won't form a loop with this tab's
+  // setToken/setUser.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === TOKEN_KEY) {
@@ -144,18 +171,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  // Once a Vigilath login session appears, proactively notify the browser plugin to warm up the third-party platform account cache.
+  // This way the publish center only reads the plugin cache and doesn't need to trigger account identification each time it opens.
+  useEffect(() => {
+    if (!token) return;
+    let stopped = false;
+    let attempts = 0;
+    const run = () => {
+      if (stopped) return;
+      attempts += 1;
+      prewarmPluginAccounts()
+        .then(ok => {
+          if (!ok && !stopped && attempts < 10) {
+            window.setTimeout(run, 1000);
+          }
+        })
+        .catch(() => {
+          if (!stopped && attempts < 10) window.setTimeout(run, 1000);
+        });
+    };
+    const timer = window.setTimeout(run, 500);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [token]);
+
+  const value = useMemo<AuthContextValue>(() => {
+    const role = resolveRole(user);
+    return {
       token,
       isLoggedIn: !!token,
       user,
-      isAdmin: !!user?.is_admin,
+      role,
+      isAdmin: role === 'admin',
+      isOperator: role === 'operator',
+      isStaff: role === 'admin' || role === 'operator',
+      isMaintainer: role === 'maintainer',
+      isTenant: role === 'tenant',
+      isAgencyAdmin: role === 'agency_admin',
+      isAgencyOperator: role === 'agency_operator',
+      isAgency: role === 'agency_admin' || role === 'agency_operator',
       setToken,
       setUser,
       clearAuth,
-    }),
-    [token, user, setToken, setUser, clearAuth],
-  );
+    };
+  }, [token, user, setToken, setUser, clearAuth]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

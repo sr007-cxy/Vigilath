@@ -1,59 +1,51 @@
-# Vigilath — GEO Readiness Checker
+# Vigilath GEO: AI Search Visibility Audit and Optimization Platform
 
-> Vigilath is the GEO (Generative Engine Optimization) readiness checker for the AI search era. It audits a website across 25 categories and 100+ signals to measure how visible, quotable, and citable the site is to ChatGPT, Perplexity, Google AI Overviews, Claude, and Copilot.
+> Vigilath is an independent, third-party AI visibility audit platform built for the age of AI search. It audits websites across 25 categories and 100+ signals, measuring how discoverable, extractable, and citable they are for generative AI engines, and outputs a 0–100 AI visibility score, a category breakdown, and a prioritized fix list.
 
-Vigilath helps product teams, marketers, and agencies understand whether their website is discoverable and correctly represented by large language models. A single audit returns an AI Visibility Score (0–100), a category breakdown, and actionable fix recommendations.
+Vigilath helps brands, marketing teams, and agencies answer: Does AI know me? Does it describe me accurately? Is it willing to recommend me? A single audit gives you a score, category details, and actionable optimization recommendations.
 
-## What Vigilath checks
+## What it audits
 
-- **Crawl access**: robots.txt, llms.txt, sitemap.xml, .well-known manifests, and explicit allow/deny rules for AI bots (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and 12 more).
-- **Content extractability**: server-side rendering vs. client-side JS, semantic HTML, heading structure, readable text ratio.
-- **Meta & structured data**: title, description, Open Graph, Twitter card, JSON-LD Organization/FAQ/HowTo, canonical.
-- **Authority signals**: HTTPS, security headers, author attribution, sameAs profile links, cross-platform presence.
-- **Answer-format readiness**: FAQ blocks, step-by-step instructions, comparison tables, TL;DR summaries, quotable statistics — content shapes AI models prefer to cite.
+- **Crawl access**: robots.txt, llms.txt, sitemap.xml, .well-known manifests, and allow/block rules for AI crawlers.
+- **Content extractability**: server-side vs. client-side rendering, semantic HTML, heading hierarchy, text-to-page ratio.
+- **Metadata and structured data**: title, description, canonical, Open Graph, and JSON-LD Organization / FAQPage / HowTo.
+- **Authority and trust signals**: HTTPS, security response headers, author bylines, entity profiles, cross-platform presence.
+- **Answer format fit**: definition sentences, step-by-step instructions, comparison tables, key-point summaries, citable data: the content formats LLMs prefer to cite.
 
-## Core pages
+## Key pages
 
-- [Home](https://www.vigilath.com/): overview and entry point
-- [Run a check](https://www.vigilath.com/checker): run a free audit on any URL
-- [GEO knowledge base](https://www.vigilath.com/geo-knowledge): guides on how LLMs discover and quote content
-- [Products & services](https://www.vigilath.com/products-services): SaaS tiers and managed GEO services
-- [Membership & pricing](https://www.vigilath.com/membership): Free / Pro / Starter / Growth / Scale plans
-- [About](https://www.vigilath.com/about): mission and background
-- [Contact](https://www.vigilath.com/contact): support and sales
+- [Home](https://www.vigilath.cn/): platform overview and entry point
+- [Free audit](https://www.vigilath.cn/checker): run a free audit on any URL
+- [GEO Knowledge Center](https://www.vigilath.cn/geo-knowledge): how LLMs discover and cite content
+- [Products and services](https://www.vigilath.cn/products-services): subscription plans and managed services
+- [About us](https://www.vigilath.cn/about): platform positioning and background
+- [Contact us](https://www.vigilath.cn/contact): pre-sales and technical support
 
-## Product Slogan
+## Product positioning
 
-Vigilath — Unified GEO+AEO for Global AI Visibility.
+Vigilath: an end-to-end AI search visibility solution (audit · review · optimization · monitoring).
 
 ## Machine-readable endpoints
 
-- [Sitemap](https://www.vigilath.com/sitemap.xml)
-- [robots.txt](https://www.vigilath.com/robots.txt)
-- [OpenAPI spec](https://www.vigilath.com/openapi.json): the audit engine's public API
+- [Sitemap](https://www.vigilath.cn/sitemap.xml)
+- [robots.txt](https://www.vigilath.cn/robots.txt)
 
 ## FAQ
 
 ### What is GEO?
-GEO (Generative Engine Optimization) is the practice of making a website discoverable and quotable by AI answer engines like ChatGPT, Perplexity, Claude, and Google AI Overviews.
+GEO (Generative Engine Optimization) is an optimization approach that makes brand and website content easier for generative AI engines to crawl, understand, cite, and recommend.
 
 ### How does Vigilath work?
-Vigilath runs 100+ checks across 25 categories to produce a 0–100 AI Visibility Score, a category breakdown, and actionable fix recommendations.
+The platform runs 100+ checks across 25 categories and produces a 0–100 AI visibility score, a category breakdown, and a prioritized fix list.
 
-### What AI engines does Vigilath cover?
-ChatGPT (GPTBot), Perplexity (PerplexityBot), Claude (ClaudeBot), Google AI Overviews (Google-Extended), Copilot, and more.
+### Which AI engines are covered?
+Major Chinese AI platforms including DeepSeek, Qwen (通义千问), Doubao (豆包), ERNIE Bot (文心一言), Tencent Yuanbao (腾讯元宝), and Kimi.
 
 ### Is there a free plan?
-Yes. Register and run 3 basic checks per month at no cost.
-
-## Community
-
-The Vigilath community is where GEO practitioners — product teams, SEO/AEO specialists, technical marketers, and independent operators — compare audit results, discuss AI-bot policy changes (GPTBot, ClaudeBot, PerplexityBot, Google-Extended), and request features.
-
-- [Discord](https://discord.gg/mJVEVXyxD5) — live chat with the Vigilath team and other users. Good place to share audit outputs, ask about specific check results, request features, and get help interpreting AI-visibility scores. English and Chinese channels.
-- [X / Twitter @zen7_labs](https://x.com/zen7_labs) — product announcements, weekly GEO tips, and notifications when AI crawler policies or algorithms change. Also mirrors new knowledge-base articles.
+Yes. After registering, you can run 3 basic audits free each month.
 
 ## Contact
 
-- Email: support@zen7.com
-- Website: https://www.vigilath.com/contact
+- Email: <support-email>
+- Support hotline: <support-phone>
+- Website: https://www.vigilath.cn/contact

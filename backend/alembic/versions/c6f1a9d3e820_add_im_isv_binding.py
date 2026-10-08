@@ -1,6 +1,6 @@
 """add IM ISV binding tables (user_bindings / bind_codes / isv_state)
 
-新建表,不动现有数据。见 agent integration API。
+New table, existing data untouched. See docs/03-系统设计/Agent/对外开放-契约.md §15 (ISV).
 
 Revision ID: c6f1a9d3e820
 Revises: b5d2e8c1a740

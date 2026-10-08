@@ -142,7 +142,52 @@ backend/data/browser_sessions/*_profile.json
 
 play_snapshot.sh
 
-# Browser engine session secrets + Chrome profiles — ANY location (含 services/),
-# 含 cookies/JWT/原始 Cookies 库。已 git rm --cached;永不提交(谁拿到谁能登录该账号)。
+# Browser engine session secrets + Chrome profiles — ANY location (including services/),
+# including cookies/JWT/raw Cookies DBs. Already git rm --cached; never commit (whoever gets them can log into the account).
 **/data/browser_sessions/
 **/data/browser_profiles/
+
+# ---- Merged from Vigilath.cn develop ----
+.env.*
+!.env.example
+.venv-test/
+# WAL-mode sidecar files. `*.db` does not cover `-shm`/`-wal`; missing them meant two of them
+# actually slipped into the repo (services/sentinel-service/data/account_2/yuqing.db-{shm,wal}).
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+# Sentinel per-tenant runtime data (customer briefs, SQLite databases)
+services/sentinel-service/data/
+# Ruanwenjiang login token cache (plaintext JWT, 0600)
+backend/data/rwj_tokens.json
+backend/logger/
+# Generated topic media; keep uploads out of the repository.
+backend/data/topic_media/
+# Browser verification screenshots of the step-8 unified publish drawer (produced by scripts/browser_verify_step8.py).
+# One-off verification evidence, not source; the screenshots also contain real account nicknames and admin UIs.
+backend/data/step8_shots/
+# Screenshots / recordings from the publish pipeline. dry_run and failure screenshots capture the **logged-in editor page** — avatar,
+# nickname, DM badges and draft content are all in there, so committing them leaks account identity and unpublished content.
+# During troubleshooting they are the only way to reconstruct "what the page looked like", so keep them locally but out of git.
+**/data/snapshots/
+**/data/videos/
+.agents
+.vscode
+.lark-slides
+.codex-build
+# Heavy runtime dependencies (installed under /opt/geo on the server, not source) — must be ignored,
+# otherwise `git clean -f` deletes their files (2026-07-19/20 incident: Xueqiu/Xiaohongshu direct collection all broke).
+scrapling-venv/
+mediacrawler-venv/
+mediacrawler/
+deliverables/
+# Token cache / test results written by scripts/kimi_client.mjs into its own directory at runtime.
+# The cache holds kimi.com access/refresh tokens, equivalent to account credentials; never commit.
+scripts/.kimi_token_cache
+scripts/.kimi_tokens.json
+scripts/kimi_test_results.md
+# Local git worktree directories
+.worktrees/

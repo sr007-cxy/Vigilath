@@ -1,5 +1,4 @@
-// See docs/contracts/url-and-outbound-fetch-security.md for the shared syntax
-// contract. The backend must separately authorize resolved network addresses.
+// See docs/05-测试验收/url-validation-cases.md for the shared pass/reject test list.
 // Must stay in sync with backend/geo/utils/validator.py::validate_url —
 // identical rule, identical cases.
 //
@@ -14,11 +13,18 @@ const HOST_RE =
 const ASCII_ONLY = /^[\x00-\x7F]+$/;
 
 export const normalizeUrl = (input: string): string => {
-  const trimmed = input.trim();
-  if (!trimmed) return trimmed;
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://')
-    ? trimmed
-    : `https://${trimmed}`;
+  let t = input.trim();
+  if (!t) return t;
+  if (!t.startsWith('http://') && !t.startsWith('https://')) t = `https://${t}`;
+  // Always strip trailing slash and hash: `example.com/` and `example.com` used to reach the backend in two forms
+  // (inconsistent cache keys/audit behavior, occasional failures with the slash); normalize to the no-slash form here
+  try {
+    const u = new URL(t);
+    const path = u.pathname.replace(/\/+$/, '');
+    return `${u.protocol}//${u.host}${path}${u.search}`;
+  } catch {
+    return t.replace(/\/+$/, '');
+  }
 };
 
 export const validateUrl = (input: string): boolean => {

@@ -1,12 +1,16 @@
 const zh = {
           "pageMeta": {
             "home": {
-              "title": "Vigilath —— 一体化 GEO+AEO 平台,赋能 AI 可见性",
-              "description": "Vigilath 是端到端 GEO+AEO 解决方案,帮你审计、修复、增长在 ChatGPT、Perplexity、Claude、Google AI Overviews 的品牌曝光。"
+              "title": "GEO优化｜AI搜索优化｜AI品牌可见性增长平台 - Vigilath GEO",
+              "description": "Vigilath GEO 是面向 AI 搜索时代的 GEO+AEO 优化平台，提供网站 GEO 检测、AI 搜索可见性评分、多引擎品牌监测、内容优化与品牌增长服务。"
             },
             "checker": {
               "title": "AI 可见性审计 · Vigilath",
               "description": "免费审计任意网址,获得 0–100 分、25 类别拆解和可执行修复清单。"
+            },
+            "cases": {
+              "title": "客户案例 · Vigilath",
+              "description": "真实客户前后对比:原来从 AI 一个客户都没有,现在每天都有客户从 AI 找上门。"
             },
             "about": {
               "title": "关于 Vigilath —— 你的 GEO+AEO 解决方案伙伴",
@@ -30,7 +34,7 @@ const zh = {
             },
             "pricing": {
               "title": "定价与方案 · Vigilath",
-              "description": "免费审计 / Pro ($9.99) / Starter ($999) / Growth ($2,500) / Scale (定制),按你对 AI 可见性的投入选档。"
+              "description": "免费审计 / 检测会员(¥39.9) / Starter(¥299) / Growth(¥999) / Scale(定制),按你对 AI 可见性的投入选档。"
             },
             "data": {
               "title": "洞察与数据 · Vigilath",
@@ -68,6 +72,10 @@ const zh = {
               "title": "Cookie 政策 · Vigilath",
               "description": "Vigilath 使用 cookie 及类似技术的说明。"
             },
+            "report": {
+              "title": "投诉与举报 · Vigilath",
+              "description": "向 Vigilath 举报违法违规、侵权或其他问题内容，无需注册登录，7 个自然日内反馈处理结果。"
+            },
             "dashboard": {
               "title": "工作台 · Vigilath",
               "description": "在一处管理你的多平台内容发布、监控和互动。"
@@ -83,8 +91,16 @@ const zh = {
           },
           "nav": {
             "home": "首页",
+            "overview": "能力总览",
+            "capabilities": "产品能力",
+            "capBrandGrowth": "品牌增长",
+            "capDetection": "高级检测",
+            "capEngines": "AI 引擎",
             "geoKnowledge": "资源中心",
             "productsServices": "产品与服务",
+            "solutions": "解决方案",
+            "viewAll": "查看全部",
+            "cases": "客户案例",
             "blog": "博客",
             "faq": "常见问题",
             "aboutUs": "关于我们",
@@ -99,21 +115,64 @@ const zh = {
             "signedInAs": "已登录为",
             "dashboard": "品牌增长",
             "adminCockpit": "项目进度",
-            "adminAccounts": "画像",
+            "adminSchedule": "跑批调度",
+            "adminAccounts": "客户账号",
             "adminApprovals": "待审批",
             "adminInsights": "监测报告",
+            "adminActionItems": "优化任务",
+            "customerTopics": "主题信息",
+            "customerContent": "内容库",
+            "customerActionItems": "优化任务",
+            "salesAgentWorkbench": "找客户",
+            "salesAgentEmailRecords": "邮件记录",
+            "salesAgentSmsRecords": "短信记录",
             "adminRuns": "跑批结果",
             "adminCrawl": "AI 爬虫分析",
+            "adminProbe": "引擎实测",
             "adminWorkers": "调度中心",
             "adminGateway": "对外网关",
+            "adminUsers": "用户角色",
+            "adminLlmUsage": "模型用量",
+            "adminCallPolicy": "调用管理",
+            "adminSalesAgentEmail": "邮件配置",
+            "adminSalesAgentSms": "短信配置",
+            "gatewayPortal": "租户门户",
             "adminPlatformRules": "平台规则",
             "adminReview": "主题审核",
-            "adminContentReview": "文案复审",
+            "adminContentReview": "文章审核",
+            "adminContentTrace": "生成溯源",
+            "adminMediaLibrary": "素材库",
+            "adminAccountCenter": "账号中心",
+            "adminAbuseReports": "举报处置",
             "adminContentManagement": "内容库",
             "adminWorkbench": "工作台",
             "sentiment": "舆情监控",
+            "reportCenter": "报告中心",
+            "taskMonitor": "任务监控",
             "account": "账户中心",
-            "logout": "退出登录"
+            "logout": "退出登录",
+            "opsTitle": "管理工作台",
+            "opsGroupDelivery": "交付",
+            "opsGroupContent": "内容治理",
+            "opsGroupRuntime": "运行",
+            "opsGroupPlatform": "平台",
+            "opsPublishAccounts": "发布账号池",
+            "appTitle": "工作台",
+            "appGroupProject": "项目",
+            "appGroupCheck": "检测",
+            "appGroupMonitor": "监控",
+            "appGroupOutreach": "触达",
+            "appTopics": "主题画像",
+            "appActionItems": "优化任务",
+            "appContentLibrary": "内容库",
+            "appPublishing": "投放与已发布",
+            "appDiagnosis": "一键全面诊断",
+            "appHistory": "检测记录",
+            "appSentiment": "舆情",
+            "appSentimentSettings": "舆情设置",
+            "appReports": "报告中心",
+            "appEnterprises": "我的企业",
+            "appMembers": "成员管理"
           },
           "blog": {
             "title": "博客",
@@ -122,8 +181,86 @@ const zh = {
             "readingTime": "{{minutes}} 分钟阅读",
             "backToList": "返回博客"
           },
+          "cases": {
+            "title": "AI 每天给他们带来多少客户",
+            "subtitle": "原来在 AI 的回答里一次都不出现,现在客户问 AI 就能看到他们。下面是真实客户的前后对比,每一个数字都来自平台监测。",
+            "caseN": "案例 {{n}}",
+            "readFull": "看完整案例",
+            "backToList": "全部案例",
+            "moreCases": "更多案例",
+            "cta": {
+              "title": "想知道 AI 现在怎么说你?",
+              "desc": "免费检测一次,看看客户问 AI 的时候,答案里有没有你。",
+              "button": "免费检测"
+            },
+            "filterAll": "全部",
+            "story": {
+              "statLeads": "个客户 / 天",
+              "statLeadsNote": "来自 AI 的客户",
+              "statHit": "个问题被 AI 命中",
+              "statHitNote": "共 {{max}} 条提示词",
+              "statCited": "篇被 AI 引用",
+              "statCitedNote": "累计发布 {{n}} 篇",
+              "statEngines": "个 AI 引擎全覆盖",
+              "statEnginesNote": "文心一言 · 豆包 · 通义千问 · 腾讯元宝 · DeepSeek",
+              "about": "关于客户",
+              "problem": "问题:AI 里搜不到",
+              "starting": "起点:0 个命中",
+              "fix": "做了什么",
+              "results": "结果",
+              "takeaway": "一句话",
+              "quoteLabel": "客户说"
+            },
+            "leads": {
+              "headline": "每天从 AI 带来 {{n}} 个客户",
+              "before": "优化前",
+              "beforeUnit": "个客户 / 天",
+              "after": "现在",
+              "afterUnit": "个客户 / 天",
+              "beforeNote": "AI 里搜不到,一个客户都没有",
+              "afterNote": "每天主动找上门",
+              "showTech": "看技术数据",
+              "hideTech": "收起技术数据",
+              "techHint": "以下是监测平台的原始数据,看不懂可以跳过"
+            },
+            "chart": {
+              "funnelTitle": "优化漏斗",
+              "funnelHint": "监测 → 收录 → 被 AI 引用",
+              "engineTitle": "各引擎命中分布",
+              "engineHint": "命中的提示词数(共 {{max}} 条)",
+              "engineTip": "命中问题数"
+            },
+            "change": {
+              "before": "优化前",
+              "beforeDesc": "AI 答案搜不到",
+              "after": "现在 · 持续监测",
+              "afterMentions": "个问题命中",
+              "afterCited": "篇被引用",
+              "afterEngines": "个引擎覆盖",
+              "trendTitle": "AI 可见性增长",
+              "trendHint": "命中的提示词数 · 累计",
+              "trendTip": "累计命中问题",
+              "trendStart": "优化前·搜不到",
+              "trendEnd": "现在 {{n}} 个问题命中"
+            },
+            "enginesLabel": "覆盖引擎",
+            "coverage": "AI 答案命中 {{hit}}/{{total}} 格",
+            "metrics": {
+              "seedKeywords": "种子词规模",
+              "indexed": "收录量(篇)",
+              "cited": "被 AI 引用(篇)"
+            },
+            "verticals": {
+              "law": "法律服务",
+              "tax": "财税服务",
+              "idc": "数据中心",
+              "robotics": "机器人"
+            },
+            "disclaimer": "注:数据来自平台真实监测,随监测持续更新。"
+          },
           "common": {
             "error": "错误",
+            "delete": "删除",
             "loading": "加载中...",
             "contact": "登录",
             "cancel": "退出",
@@ -147,7 +284,7 @@ const zh = {
             }
           },
           "hero": {
-            "title": "Vigilath・一体化 GEO+AEO 双擎平台，打造全球品牌 AI 可见性",
+            "title": "Vigilath・一体化 GEO+AEO 双擎平台，打造品牌 AI 可见性",
             "subtitle": "GEO + AEO, Unified at Apex",
             "description": "Vigilath・Unified GEO+AEO for Global AI Visibility",
             "cta": "了解更多",
@@ -156,9 +293,9 @@ const zh = {
           "about": {
             "sectionTag": "关于 GEO",
             "title": "什么是生成式引擎优化？",
-            "description": "GEO（Generative Engine Optimization）是让企业在生成式 AI 聊天机器人中获得推荐的过程。一种针对生成式人工智能搜索引擎（如 ChatGPT、Perplexity AI、Gemini、DeepSeek Search 以及未来百度、谷歌的 AI 搜索）进行内容优化的新兴技术。",
+            "description": "GEO（Generative Engine Optimization）是让企业在生成式 AI 聊天机器人中获得推荐的过程。一种针对生成式人工智能搜索引擎（如 DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 以及百度 AI 搜索）进行内容优化的新兴技术。",
             "definition": "GEO 定义",
-            "definitionText": "GEO 是让您的公司在潜在客户向生成式 AI 聊天机器人寻求产品或服务推荐时被建议的过程，这一过程可以针对特定的生成式 AI 搜索引擎进行定制，如 ChatGPT 优化和 Perplexity 优化。",
+            "definitionText": "GEO 是让您的公司在潜在客户向生成式 AI 聊天机器人寻求产品或服务推荐时被建议的过程，这一过程可以针对特定的生成式 AI 搜索引擎进行定制，如 DeepSeek 优化和豆包优化。",
             "combination": "三位一体",
             "combinationText": "GEO 服务是 SEO、PR 和声誉管理的结合。理想的 GEO 服务方案将以下活动作为核心策略：超级列表排名、网站 SEO 优化、评论声誉管理和公关传播。",
             "difference": "GEO vs 传统 SEO",
@@ -170,11 +307,11 @@ const zh = {
             "subtitle": "我们的 GEO 服务涵盖以下四个核心步骤，确保您的品牌在 AI 时代获得最大曝光。",
             "step1": {
               "title": "超级列表排名",
-              "description": "在 Google 排名靠前的超级列表中获取高排名位置。例如，对于车队管理软件公司，在「2025 年最佳车队管理软件」列表文章中获取顶级位置。可通过 PR、付费投放或自行发布超级列表文章并将公司排名第一来实现。"
+              "description": "在搜索引擎排名靠前的超级列表中获取高排名位置。例如，对于车队管理软件公司，在「2025 年最佳车队管理软件」列表文章中获取顶级位置。可通过 PR、付费投放或自行发布超级列表文章并将公司排名第一来实现。"
             },
             "step2": {
               "title": "网站 SEO 优化",
-              "description": "对您的网站进行 SEO 优化，使列表文章在搜索结果中排名靠前。如果您为每个产品或服务类别发布列表文章，且它们在搜索结果中排名前三，您被 ChatGPT、Gemini 和 Perplexity 推荐的可能性将大大增加。"
+              "description": "对您的网站进行 SEO 优化，使列表文章在搜索结果中排名靠前。如果您为每个产品或服务类别发布列表文章，且它们在搜索结果中排名前三，您被 DeepSeek、豆包和文心一言推荐的可能性将大大增加。"
             },
             "step3": {
               "title": "评论声誉管理",
@@ -254,7 +391,7 @@ const zh = {
               "label": "GEO 优化后品牌推荐率提升"
             },
             "stat3": {
-              "value": "5+",
+              "value": "6",
               "label": "覆盖主流 AI 平台"
             },
             "stat4": {
@@ -278,7 +415,7 @@ const zh = {
             "message": "留言",
             "submit": "提交咨询",
             "info": {
-              "email": "support@zen7.com"
+              "email": "<support-email>"
             },
             "form": {
               "name": "姓名",
@@ -314,19 +451,20 @@ const zh = {
                 "question5": "你们提供持续的GEO维护服务吗？"
               },
               "answers": {
-                "answer1": "GEO（生成式引擎优化）专注于让您的品牌被ChatGPT、Gemini和Perplexity等AI聊天机器人推荐，而传统SEO专注于在搜索引擎结果中排名靠前。GEO是专门为AI驱动搜索的新时代设计的。",
+                "answer1": "GEO（生成式引擎优化）专注于让您的品牌被 DeepSeek、豆包、文心一言等 AI 聊天机器人推荐，而传统 SEO 专注于在搜索引擎结果中排名靠前。GEO是专门为AI驱动搜索的新时代设计的。",
                 "answer2": "效果因行业和竞争而异，但大多数客户在1-3个月内开始看到改进。完全优化通常需要3-6个月才能看到最大效果。",
-                "answer3": "我们为所有主要AI平台进行优化，包括ChatGPT、Gemini、Perplexity、DeepSeek以及未来Google和百度的AI驱动搜索。",
+                "answer3": "我们为国内主要 AI 平台进行优化，包括 DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 以及百度的 AI 驱动搜索。",
                 "answer4": "我们的GEO服务根据项目范围和复杂性从每月¥14,000到¥84,000不等。我们提供定制计划以满足不同业务需求和预算。",
                 "answer5": "是的，我们提供持续的GEO维护服务，确保您的品牌在AI算法演变时继续表现良好。我们的维护计划包括定期监控、更新和策略调整。"
               }
             }
           },
           "footer": {
-            "description": "Zen7 是专业的生成式引擎优化（GEO）服务提供商，帮助企业在 AI 时代获得最大品牌曝光。",
+            "description": "威吉力 Vigilath 由 <company-name> 运营，提供生成式引擎优化（GEO）检测与内容优化服务。",
             "quickLinks": "快速链接",
             "contactInfo": "联系方式",
-            "copyright": "© 2026 Zen7. 保留所有权利。",
+            "hotline": "客服热线",
+            "copyright": "© 2026 <company-name>. 保留所有权利。",
             "links": {
               "privacy": "隐私政策",
               "terms": "使用条款",
@@ -352,7 +490,6 @@ const zh = {
               "quotaExceeded": "本月的免费检测次数已用完，升级会员方案后可继续检测。",
               "quotaCta": "查看会员方案"
             },
-            "poweredBy": "Powered by Zen7 Labs",
             "contactLink": "需要专家优化帮助？",
             "slogan": {
               "title": "让 AI 引擎看见、信任并推荐您的品牌",
@@ -363,24 +500,24 @@ const zh = {
                 "从检测到结果 — 从自助检测无缝衔接到全面人工优化、付费投放、声誉管理和公关支持",
                 "面向未来 — 在 AI 搜索成为默认的时代保持领先"
               ],
-              "cta": "被全球发现,被 AI 选择",
+              "cta": "被全球发现，被 AI 选择",
               "contactSales": "预约演示"
             },
             "brandGrowth": {
               "badge": "全流程工作台",
               "title": "品牌增长引擎",
-              "subtitle": "填一份品牌资料,AI 自动扩展监测问题、生成内容稿件、走完审核与发布全流程。",
+              "subtitle": "填一份品牌资料,AI 自动扩展提示词、生成内容稿件、走完审核与发布全流程。",
               "cta": "进入工作台",
               "ctaUnauth": "登录后进入",
-              "cardDesc": "填一份品牌资料,AI 帮你扩展监测问题、生成 50 篇文案稿,审核通过后选平台 + 媒体一键发布。",
+              "cardDesc": "填一份品牌资料,AI 帮你扩展提示词、生成 50 篇文案稿,审核通过后选平台 + 媒体一键发布。",
               "cards": {
                 "profile": {
                   "title": "品牌资料 + 一键 AI 智能填充",
                   "desc": "粘贴公司简介或拖入 .docx / .txt,AI 自动抽取 7 大模块品牌资料,免去逐项填写。"
                 },
                 "monitor": {
-                  "title": "种子词 → 监测问题扩展",
-                  "desc": "DeepSeek 扩展候选监测问题,勾选最多 200 条进入正式监测。"
+                  "title": "种子词 → 提示词扩展",
+                  "desc": "DeepSeek 扩展候选提示词,勾选最多 1000 条进入正式监测。"
                 },
                 "content": {
                   "title": "内容稿件生成与审核",
@@ -390,13 +527,9 @@ const zh = {
             },
             "engines": {
               "badge": "AI 引擎覆盖",
-              "title": "覆盖 10 大主流 AI 平台",
+              "title": "覆盖 6 大主流 AI 平台",
               "subtitle": "一次审计,横跨所有主流模型 —— 立刻看清你的品牌在每个引擎下的真实表现。",
               "items": [
-                { "name": "ChatGPT",    "sub": "OpenAI",     "slug": "chatgpt",    "ext": "png" },
-                { "name": "Gemini",     "sub": "Google",     "slug": "gemini",     "ext": "png" },
-                { "name": "Perplexity", "sub": "Perplexity", "slug": "perplexity", "ext": "png" },
-                { "name": "Claude",     "sub": "Anthropic",  "slug": "claude",     "ext": "png" },
                 { "name": "DeepSeek",   "sub": "DeepSeek",   "slug": "deepseek",   "ext": "png" },
                 { "name": "通义",       "sub": "Tongyi",     "slug": "tongyi",     "ext": "svg" },
                 { "name": "豆包",       "sub": "Doubao",     "slug": "doubao",     "ext": "png" },
@@ -408,39 +541,18 @@ const zh = {
             "partners": {
               "badge": "合作伙伴",
               "title": "与我们同行的品牌",
-              "subtitle": "来自律所、医疗、清洁科技与 AI 工具行业 — 共同探索 AI 时代的品牌增长。",
+              "subtitle": "泛科技、快消、汽车、美妆、公益、教育等领域的品牌与机构 — 与我们同行。",
               "items": [
-                {
-                  "name": "洁卫森",
-                  "sub": "JWVS",
-                  "logo": "/image/jwvs.jpg",
-                  "tagline": ""
-                },
-                {
-                  "name": "竞天公诚",
-                  "sub": "Jingtian & Gongcheng",
-                  "logo": "/image/jingtian.png",
-                  "tagline": ""
-                },
-                {
-                  "name": "未名脑脑",
-                  "sub": "WM Therapeutics",
-                  "logo": "/image/86-wm-therapeutics.svg",
-                  "tagline": "技术有爱，AI 有光",
-                  "scale": 1.85
-                },
-                {
-                  "name": "西普科技",
-                  "sub": "SimpleWare",
-                  "logo": "/image/xipu.png",
-                  "tagline": ""
-                },
-                {
-                  "name": "汤恩",
-                  "sub": "Sparkoz",
-                  "logo": "/image/sparkoz.png",
-                  "tagline": ""
-                }
+                { "name": "<partner-1>", "sub": "", "logo": "" },
+                { "name": "<partner-2>", "sub": "", "logo": "" },
+                { "name": "<partner-3>", "sub": "", "logo": "" },
+                { "name": "<partner-4>", "sub": "", "logo": "" },
+                { "name": "<partner-5>", "sub": "", "logo": "" },
+                { "name": "<partner-6>", "sub": "", "logo": "" },
+                { "name": "<partner-7>", "sub": "", "logo": "" },
+                { "name": "<partner-8>", "sub": "", "logo": "" },
+                { "name": "<partner-9>", "sub": "", "logo": "" },
+                { "name": "<partner-10>", "sub": "", "logo": "" },
               ]
             },
             "testimonials": {
@@ -449,18 +561,18 @@ const zh = {
               "subtitle": "来自律所、医疗、清洁科技与 AI 工具行业的真实反馈。",
               "items": [
                 {
-                  "name": "程律师",
-                  "role": "资深合伙人 · 竞天公诚",
+                  "name": "某律师",
+                  "role": "资深合伙人 · 示例律所",
                   "text": "客户问 AI「哪家律所更专业」,现在能稳定提到我们。上线一周就有三个新咨询是这么找来的。"
                 },
                 {
                   "name": "林总",
-                  "role": "创始人 · 洁卫森",
+                  "role": "创始人 · 示例清洁",
                   "text": "以前在 AI 回答里完全查不到我们,接入两个月后,主流模型都能说清我们的产品优势。"
                 },
                 {
                   "name": "王医生",
-                  "role": "市场负责人 · 未名脑脑",
+                  "role": "市场负责人 · 示例医疗",
                   "text": "AI 给患者推荐时把我们排到了前面,官网的自然流量涨了将近一半。"
                 },
                 {
@@ -475,7 +587,7 @@ const zh = {
                 },
                 {
                   "name": "李工",
-                  "role": "技术合伙人 · 西普科技",
+                  "role": "技术合伙人 · 示例科技",
                   "text": "信源分析帮我们找到了被 AI 引用最多的几个权威站点,补齐之后可见度肉眼可见地涨。"
                 },
                 {
@@ -485,7 +597,7 @@ const zh = {
                 },
                 {
                   "name": "吴总",
-                  "role": "CEO · 汤恩",
+                  "role": "CEO · 示例品牌",
                   "text": "原以为这事很玄,结果种子问题填一次,后面全程自动,月底报告直接发给董事会。"
                 },
                 {
@@ -496,7 +608,7 @@ const zh = {
                 {
                   "name": "黄经理",
                   "role": "市场总监 · 跨境电商",
-                  "text": "我们在 ChatGPT 和 Perplexity 的提及率三个月翻了一倍,带来的转化很真实。"
+                  "text": "我们在 DeepSeek 和豆包的提及率三个月翻了一倍,带来的转化很真实。"
                 }
               ]
             },
@@ -529,8 +641,8 @@ const zh = {
                   "id": "03",
                   "phase": "INGEST",
                   "title": "提示聚类",
-                  "desc": "聚类去重得到核心监测问题集合",
-                  "output": "输出：约 200 条监测问题"
+                  "desc": "聚类去重得到核心提示词集合",
+                  "output": "输出：约 200 条提示词"
                 },
                 {
                   "id": "04",
@@ -579,7 +691,7 @@ const zh = {
                   "items": [
                     {
                       "q": "什么是 GEO?什么是 AI 搜索可见性?",
-                      "a": "GEO(生成式引擎优化)指让品牌在 ChatGPT、Perplexity、Gemini、DeepSeek、豆包等 AI 引擎生成答案时,被主动提及、引用和推荐。AI 搜索可见性,衡量的就是你在这些 AI 回答里出现得有多频繁、被描述得有多准确、有没有拿到引用署名。Vigilath 提供的正是 AI搜索可见性全链路解决方案(检测·审计·优化·监控),帮品牌从「AI 里查无此人」走到「被 AI 反复推荐」。"
+                      "a": "GEO(生成式引擎优化)指让品牌在 DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 等 AI 引擎生成答案时,被主动提及、引用和推荐。AI 搜索可见性,衡量的就是你在这些 AI 回答里出现得有多频繁、被描述得有多准确、有没有拿到引用署名。Vigilath 提供的正是 AI搜索可见性全链路解决方案(检测·审计·优化·监控),帮品牌从「AI 里查无此人」走到「被 AI 反复推荐」。"
                     },
                     {
                       "q": "GEO 和 SEO 有什么区别？",
@@ -587,7 +699,7 @@ const zh = {
                     },
                     {
                       "q": "GEO 和 AEO 有什么区别？",
-                      "a": "AEO(答案引擎优化)瞄准的是「成为某个问题的标准答案」——精选摘要、语音助手、问答框,靠结构化内容把一句话直接喂给引擎。GEO(生成式引擎优化)更进一步:面向 ChatGPT / Perplexity 这类会综合多个来源、边生成边引用的生成式引擎,目标是让品牌被「写进」AI 的综合回答并拿到引用署名。AEO 争一个答案位,GEO 争的是整段生成内容里的提及与可信度。这两件事我们都做。"
+                      "a": "AEO(答案引擎优化)瞄准的是「成为某个问题的标准答案」——精选摘要、语音助手、问答框,靠结构化内容把一句话直接喂给引擎。GEO(生成式引擎优化)更进一步:面向 DeepSeek / 豆包 这类会综合多个来源、边生成边引用的生成式引擎,目标是让品牌被「写进」AI 的综合回答并拿到引用署名。AEO 争一个答案位,GEO 争的是整段生成内容里的提及与可信度。这两件事我们都做。"
                     },
                     {
                       "q": "为什么品牌现在必须重视 AI 搜索可见性?",
@@ -620,7 +732,7 @@ const zh = {
                     },
                     {
                       "q": "你们支持哪些 AI 引擎?",
-                      "a": "覆盖主流海外引擎(ChatGPT / Gemini / Perplexity / Claude / DeepSeek)与国内引擎(文心一言 / 通义 / 豆包 / 元宝 / Kimi)。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
+                      "a": "覆盖 DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 六个主流国产引擎。新引擎只要开放接口或可爬取,我们会在 2 周内接入。"
                     }
                   ]
                 },
@@ -654,11 +766,7 @@ const zh = {
                   "items": [
                     {
                       "q": "舆情监测是实时的吗?",
-                      "a": "目前是每日批量采集 + 即时告警双轨。我们每天扫描 42 个国内外热榜源(微博 / 知乎 / 抖音 / 头条 / Reddit / HN 等),发现品牌负面或关键词命中后,15 分钟内通过邮件 + 站内通知告警,并自动生成三档回应草稿。"
-                    },
-                    {
-                      "q": "出海品牌和国内企业做 GEO 有什么不同?",
-                      "a": "Vigilath 同时服务出海品牌和国内企业,两类客群的引擎重心不同。出海品牌更关注 ChatGPT / Gemini / Perplexity / Claude 等海外引擎,以及英文语料里的实体识别和第三方权威;国内企业更看重文心一言 / 通义 / 豆包 / 元宝 / Kimi 等国内引擎,以及中文问答社区和百科信号。我们的检测和优化会按你的目标市场配置对应的引擎矩阵和内容策略。"
+                      "a": "目前是每日批量采集 + 即时告警双轨。我们每天扫描数十个国内热榜源(微博 / 知乎 / 抖音 / 头条 / 雪球 等),发现品牌负面或关键词命中后,15 分钟内通过邮件 + 站内通知告警,并自动生成三档回应草稿。"
                     },
                     {
                       "q": "我可以自助跑,还是必须联系销售?",
@@ -666,11 +774,11 @@ const zh = {
                     },
                     {
                       "q": "价格大概是多少?",
-                      "a": "GEO 自助检测会员从 ¥299 / 月起。8 步增长服务按项目报价,典型区间 $2,000–$12,000 / 月,具体取决于品牌赛道、目标引擎数量与内容产能。联系销售可拿定制方案。"
+                      "a": "GEO 自助检测会员从 ¥299 / 月起。8 步增长服务按项目报价,典型区间 ¥14,000–¥84,000 / 月,具体取决于品牌赛道、目标引擎数量与内容产能。联系销售可拿定制方案。"
                     },
                     {
                       "q": "需要长期运维吗?",
-                      "a": "需要 — 因为 AI 引擎的算法、抓取偏好、排名规则在持续变化。我们提供月度运维:模型升级跟踪、监测问题刷新、内容策略调整、引用位防御。运维档默认包含原合作流水线 + 季度复盘报告。"
+                      "a": "需要 — 因为 AI 引擎的算法、抓取偏好、排名规则在持续变化。我们提供月度运维:模型升级跟踪、提示词刷新、内容策略调整、引用位防御。运维档默认包含原合作流水线 + 季度复盘报告。"
                     }
                   ]
                 },
@@ -679,7 +787,7 @@ const zh = {
                   "items": [
                     {
                       "q": "威吉力和传统 SEO 工具到底有什么区别?",
-                      "a": "传统 SEO 工具围绕「在 Google / 百度 结果页拿到更高排名」展开——盯关键词、堆外链、等爬虫收录;威吉力围绕「在 AI 引擎的生成答案里被选中」展开,让 ChatGPT、Perplexity、Gemini、DeepSeek、豆包在回答用户问题时主动提到你、给你引用署名。核心差别在四点:目标(SERP 排名 vs AI 提及与引用)、入口(传统搜索引擎 vs AI 引擎)、指标(关键词排名 / 流量 vs AI 提及率 / 引用位占有率 / 可见性评分)、数据基准(排名随算法波动、缺统一基准 vs 独立第三方 AI 可见性基准线、可量化追踪)。用户的决策入口正从「翻链接」转向「问 AI」,这正是威吉力补上的那一层。"
+                      "a": "传统 SEO 工具围绕「在百度结果页拿到更高排名」展开——盯关键词、堆外链、等爬虫收录;威吉力围绕「在 AI 引擎的生成答案里被选中」展开,让 DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 在回答用户问题时主动提到你、给你引用署名。核心差别在四点:目标(SERP 排名 vs AI 提及与引用)、入口(传统搜索引擎 vs AI 引擎)、指标(关键词排名 / 流量 vs AI 提及率 / 引用位占有率 / 可见性评分)、数据基准(排名随算法波动、缺统一基准 vs 独立第三方 AI 可见性基准线、可量化追踪)。用户的决策入口正从「翻链接」转向「问 AI」,这正是威吉力补上的那一层。"
                     },
                     {
                       "q": "什么时候该用威吉力,什么时候用传统 SEO 工具?",
@@ -687,7 +795,7 @@ const zh = {
                     },
                     {
                       "q": "为什么不直接用传统 SEO 工具做 AI 优化?",
-                      "a": "因为目标和打法不同。传统 SEO 工具优化的是爬虫和排名算法,产出的是关键词排名;AI 引擎「综合多源、边生成边引用」,看的是实体识别、权威信号和结构化内容,而且要跨海外 + 国内 10+ 个引擎统一布局。作为独立第三方AI可见性检测平台,Vigilath 提供品牌AI可见性基准线,并用 8 步自动化流水线把品牌真正推进各大 AI 引擎的推荐位和引用位——这是 AI搜索可见性全链路解决方案(检测·审计·优化·监控),不是给传统 SEO 工具打补丁能做到的。"
+                      "a": "因为目标和打法不同。传统 SEO 工具优化的是爬虫和排名算法,产出的是关键词排名;AI 引擎「综合多源、边生成边引用」,看的是实体识别、权威信号和结构化内容,而且要跨 6 个主流国产引擎统一布局。作为独立第三方AI可见性检测平台,Vigilath 提供品牌AI可见性基准线,并用 8 步自动化流水线把品牌真正推进各大 AI 引擎的推荐位和引用位——这是 AI搜索可见性全链路解决方案(检测·审计·优化·监控),不是给传统 SEO 工具打补丁能做到的。"
                     }
                   ]
                 }
@@ -710,6 +818,10 @@ const zh = {
                 "unexpected": "发生未知错误，请稍后重试"
               },
               "cards": {
+                "fullDiagnosis": {
+                  "title": "一键全面诊断",
+                  "desc": "一次填写品牌与行业词,八项检测全部跑一遍,生成九章综合诊断报告,可导出 PDF。"
+                },
                 "aeo": {
                   "title": "AEO 可见性审计",
                   "desc": "检测页面在 AI 生成答案中的优化程度 — 免费，无需 API Key。"
@@ -720,7 +832,7 @@ const zh = {
                 },
                 "crawlTest": {
                   "title": "AI 爬虫测试",
-                  "desc": "验证 GPTBot、ClaudeBot 等 AI 爬虫能否真正抓取你的页面。"
+                  "desc": "验证主流 AI 爬虫能否真正抓取你的页面。"
                 },
                 "authority": {
                   "title": "权威信号审计",
@@ -732,7 +844,7 @@ const zh = {
                 },
                 "visibility": {
                   "title": "AI 可见性审计",
-                  "desc": "跨 Perplexity、ChatGPT、Claude 的多引擎可见性全面报告。"
+                  "desc": "跨多个主流 AI 引擎的可见性全面报告。"
                 },
                 "entity": {
                   "title": "实体 GEO 审计",
@@ -819,7 +931,7 @@ const zh = {
                   "none": "无",
                   "awardsTitle": "奖项与信任信号",
                   "signalCount": "信号数量：",
-                  "googleTitle": "Google 权威度",
+                  "searchAuthorityTitle": "搜索权威度",
                   "indexedPages": "已索引页数：",
                   "unknown": "未知",
                   "orgSchemaFields": "Organization schema 字段：",
@@ -862,7 +974,7 @@ const zh = {
                   "sourceStats": "{{sources}} 个来源 · {{citations}} 次引用",
                   "kgWikipedia": "维基百科",
                   "kgWikidata": "Wikidata",
-                  "kgGoogleKg": "Google 知识图谱",
+                  "kgKnowledgeGraph": "知识图谱",
                   "kgBaiduBaike": "百度百科",
                   "sourceTrace": "引用源追溯",
                   "sourcePreference": "引用源偏好",
@@ -971,7 +1083,7 @@ const zh = {
                 "compare": "多站点并排打分对比",
                 "crawlTest": "测试 AI 爬虫可达性",
                 "authority": "审计外部权威信号",
-                "citation": "通过 Perplexity 检测 AI 引用",
+                "citation": "通过 AI 引擎检测引用情况",
                 "visibility": "跨引擎可见性审计",
                 "entity": "审计 AI 对该实体的认知"
               },
@@ -994,7 +1106,7 @@ const zh = {
                 },
                 "crawlTest": {
                   "robots": "读取 robots.txt 规则",
-                  "probe": "模拟 GPTBot / ClaudeBot / PerplexityBot 抓取",
+                  "probe": "模拟主流 AI 爬虫抓取",
                   "waf": "检测 WAF / CDN 可达性",
                   "commonCrawl": "查询 Common Crawl 索引",
                   "finalize": "汇总抓取测试结果"
@@ -1008,15 +1120,15 @@ const zh = {
                 },
                 "citation": {
                   "prepare": "生成品牌相关提问",
-                  "perplexity": "调用 Perplexity AI 查询（耗时较长）",
+                  "engineQuery": "调用 AI 引擎查询（耗时较长）",
                   "parseCites": "解析引用与来源域名",
                   "finalize": "计算引用覆盖率"
                 },
                 "visibility": {
                   "prepare": "生成可见性查询集",
-                  "chatgpt": "调用 ChatGPT 查询（耗时较长）",
-                  "perplexity": "调用 Perplexity 查询",
-                  "claude": "调用 Claude 查询",
+                  "engine1": "调用第 1 个 AI 引擎查询（耗时较长）",
+                  "engine2": "调用第 2 个 AI 引擎查询",
+                  "engine3": "调用第 3 个 AI 引擎查询",
                   "classify": "归类品牌情感框架",
                   "finalize": "汇总跨引擎可见性"
                 },
@@ -1042,9 +1154,9 @@ const zh = {
                 "sitemap_ref_present": "robots.txt 中引用了 sitemap",
                 "sitemap_ref_missing": "robots.txt 中没有引用 sitemap",
                 "wildcard_blocks_all": "通配符 user-agent 阻止了所有爬虫（Disallow: /）",
-                "bots_blocked": "以下 AI 爬虫被显式屏蔽：{{bots}}",
-                "bots_with_directives": "有显式规则（未屏蔽）的 AI 爬虫：{{bots}}",
-                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}"
+                "bots_blocked": "部分 AI 爬虫被 robots.txt 显式屏蔽",
+                "bots_with_directives": "部分 AI 爬虫有显式放行规则",
+                "bots_inherit_wildcard": "其余 AI 爬虫未单独列出，继承通配符规则"
               },
               "llms": {
                 "found": "找到 {{filename}}（{{lines}} 行，{{bytes}} 字节）",
@@ -1165,6 +1277,20 @@ const zh = {
                 "lists_few": "列表内容较少（{{items}} 项）——结构化列表有助于 AI 提取要点",
                 "lists_missing": "没有列表元素——结构化列表有助于 AI 引擎提取要点"
               },
+              "trust_safety": {
+                "privacy_found": "找到隐私政策页:{{path}}",
+                "privacy_missing": "没有检测到隐私政策页面",
+                "terms_found": "找到服务条款页:{{path}}",
+                "terms_missing": "没有检测到服务条款页面",
+                "contact_found": "找到联系方式页:{{path}}",
+                "contact_missing": "没有检测到联系方式页面",
+                "legal_found": "找到法律信息页:{{path}}",
+                "legal_missing": "没有检测到法律信息页面",
+                "identity_strong": "页脚/结构化数据里的主体信息完整:{{signals}}",
+                "identity_partial": "主体信息只有一部分:{{signals}}",
+                "identity_missing": "页脚与结构化数据里都没有可识别的主体信息",
+                "fetch_failed": "抓取失败,本项未能检测"
+              },
               "tech_crawl": {
                 "fetch_failed": "无法抓取首页",
                 "canonical_chain": "检测到 canonical 链：{{from}} -> {{via}} -> {{to}}",
@@ -1207,8 +1333,8 @@ const zh = {
               },
               "social": {
                 "fetch_failed": "无法抓取首页",
-                "twitter_found": "找到 Twitter/X card 标签：{{tags}}",
-                "twitter_missing": "没有 Twitter/X card meta 标签",
+                "twitter_found": "找到社交分享卡片标签",
+                "twitter_missing": "没有社交分享卡片 meta 标签",
                 "sameas_found": "JSON-LD 中有 {{count}} 条 sameAs 社交链接：",
                 "sameas_missing": "结构化数据中没有 sameAs 社交档案链接",
                 "html_links_found": "HTML 中找到 {{count}} 个社交档案链接——建议同时加到 JSON-LD 的 sameAs",
@@ -1230,18 +1356,17 @@ const zh = {
               },
               "platform_reg": {
                 "fetch_failed": "无法抓取首页",
-                "gsc_verified": "找到 Google Search Console 验证标签",
-                "gsc_missing": "没有 Google Search Console 验证标签",
-                "bing_verified": "找到 Bing Webmaster Tools 验证标签",
-                "bing_missing": "没有 Bing Webmaster Tools 验证标签",
-                "yandex_verified": "找到 Yandex Webmaster 验证标签",
-                "yandex_missing": "没有 Yandex Webmaster 验证标签——如面向国际 AI 平台可补充",
-                "indexnow_endpoint": "在 {{path}} 找到 IndexNow 端点——可即时通知索引更新",
-                "indexnow_meta": "找到 IndexNow meta 标签",
-                "indexnow_missing": "未检测到 IndexNow 集成",
-                "pinterest_verified": "找到 Pinterest 域名验证",
-                "summary_registered": "已注册：{{platforms}}",
-                "summary_missing": "未检测到：{{platforms}}"
+                "gsc_verified": "找到站长平台验证 meta 标签",
+                "gsc_missing": "没有找到站长平台验证 meta 标签",
+                "bing_verified": "找到另一站长平台的验证标签",
+                "bing_missing": "没有检测到另一站长平台的验证标签",
+                "yandex_verified": "找到国内搜索引擎站长平台的验证标签",
+                "yandex_missing": "未检测到国内搜索引擎站长平台的验证标签——建议补充",
+                "indexnow_endpoint": "在 {{path}} 找到主动推送端点——可即时通知索引更新",
+                "indexnow_meta": "找到主动推送 meta 标签",
+                "indexnow_missing": "未检测到索引主动推送集成",
+                "summary_registered": "部分站长平台渠道已完成注册与提交",
+                "summary_missing": "仍有站长平台渠道未检测到注册记录"
               },
               "schema_kg": {
                 "fetch_failed": "无法抓取首页",
@@ -1328,7 +1453,7 @@ const zh = {
                 "add_proscons": "为产品、服务或对比内容添加优缺点段落：\n  <h3>Pros</h3>\n  <ul><li>Fast performance</li><li>Easy to use</li></ul>\n  <h3>Cons</h3>\n  <ul><li>Limited free tier</li><li>No mobile app</li></ul>\nAI 引擎在推荐类回答中常引用平衡的优缺点。",
                 "add_steps": "在合适的位置加入编号步骤说明：\n  <h2>How to Set Up Your Account</h2>\n  <ol>\n    <li>Go to the signup page</li>\n    <li>Enter your email address</li>\n    <li>Verify your account</li>\n  </ol>\nAI 引擎在 'how to' 类查询中会优先呈现分步内容。",
                 "add_summary": "在页面靠前或靠后位置加入 'Key Takeaways' 或 'TL;DR' 区块：\n  <h2>Key Takeaways</h2>\n  <ul>\n    <li>Main point 1</li>\n    <li>Main point 2</li>\n  </ul>\nAI 引擎在生成快速回答时常引用摘要段落。",
-                "add_table_headers": "为表格补齐表头：\n  <table>\n    <thead><tr><th>Feature</th><th>Plan A</th><th>Plan B</th></tr></thead>\n    <tbody><tr><td>Price</td><td>$10</td><td>$20</td></tr></tbody>\n  </table>\nAI 引擎会从结构良好的表格中抽取对比答案。"
+                "add_table_headers": "为表格补齐表头：\n  <table>\n    <thead><tr><th>功能</th><th>方案 A</th><th>方案 B</th></tr></thead>\n    <tbody><tr><td>价格</td><td>¥100</td><td>¥200</td></tr></tbody>\n  </table>\nAI 引擎会从结构良好的表格中抽取对比答案。"
               },
               "authority": {
                 "add_author": "添加作者信息以增强 E-E-A-T 信号：\n  1. 添加 <meta name=\"author\" content=\"Author Name\">\n  2. 或在 JSON-LD 中添加 author 字段：\n     \"author\": {\"@type\": \"Person\", \"name\": \"Author Name\"}\n  3. 博客文章应在页面可见处展示作者姓名、简介与资历。",
@@ -1361,7 +1486,7 @@ const zh = {
                 "add_semantic_html5": "用语义化 HTML5 标签替换通用 <div>：\n  <header>：页头/导航\n  <main>：主体内容\n  <article>：独立成篇的内容\n  <section>：主题分组\n  <aside>：侧栏/相关内容\n  <footer>：页脚",
                 "critical_response_time": "响应时间极慢，AI 爬虫可能超时。立即处理：\n  1. 在源站前部署 CDN\n  2. 在服务器层启用页面缓存\n  3. 对服务端代码做性能剖析定位瓶颈\n  4. 内容页面可考虑改为静态生成",
                 "enable_ssr": "在前端框架中启用服务端渲染：\n  Next.js：使用 getServerSideProps() 或 generateStaticParams()\n  Nuxt.js：在 nuxt.config 中设置 ssr: true\n  纯 React：建议迁移到 Next.js 或 Remix",
-                "improve_response_time": "优化响应时间：\n  1. 启用服务端缓存（Redis、Varnish、CDN）\n  2. 优化数据库查询\n  3. 使用 CDN（Cloudflare、Fastly、CloudFront）\n  4. 开启 gzip/brotli 压缩",
+                "improve_response_time": "优化响应时间：\n  1. 启用服务端缓存（Redis、Varnish、CDN）\n  2. 优化数据库查询\n  3. 使用 CDN（阿里云 CDN、腾讯云 CDN 等）\n  4. 开启 gzip/brotli 压缩",
                 "paywall_workarounds": "AI 爬虫无法访问付费墙/登录墙后的内容。\n可考虑：\n  1. 在收费墙之前提供充分的免费预览或摘要\n  2. 采用计次访问，让爬虫首次访问时能看到全文\n  3. 在墙外提供包含核心事实的 JSON-LD 结构化数据",
                 "remove_noai": "'noai' / 'noimageai' 指令会让你的内容退出 AI 训练。\n如希望 AI 引擎在回答中引用你的内容，请将其移除。",
                 "remove_nofollow": "若希望 AI 爬虫发现页面中的链接，请移除 'nofollow'：\n  <meta name=\"robots\" content=\"index, follow\" />",
@@ -1370,7 +1495,7 @@ const zh = {
                 "replace_divs": "页面仅使用 <div> 标签。请替换为语义化 HTML5 元素：\n  <header>、<nav>、<main>、<article>、<section>、<aside>、<footer>\n这能帮助 AI 引擎理解每个内容块的角色。"
               },
               "cross_platform": {
-                "expand_presence": "在 AI 模型的训练数据来源平台上扩展品牌存在：{platforms}\nAI 引擎（ChatGPT、Perplexity、Claude、Gemini）会从这些平台获取训练数据。\n在更多平台上出现可以提高品牌被 AI 回答引用的概率，\n无论 AI 实际引用的是哪一个来源。"
+                "expand_presence": "在 AI 模型的训练数据来源平台上扩展品牌存在：{platforms}\nAI 引擎会从这些平台获取训练数据。\n在更多平台上出现可以提高品牌被 AI 回答引用的概率，\n无论 AI 实际引用的是哪一个来源。"
               },
               "https": {
                 "enable_https": "为站点安装 SSL/TLS 证书（可通过 Let's Encrypt 免费获取），并将全部 HTTP 流量 301 重定向到 HTTPS。\nNginx 示例：return 301 https://$host$request_uri;"
@@ -1402,7 +1527,7 @@ const zh = {
                 "set_viewport_responsive": "将 viewport 设置为响应式：\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
               },
               "multi_page": {
-                "boost_google_authority": "提升 Google 权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建 Wikipedia 词条\n  - 创建 Wikidata 实体并通过 sameAs 关联\n  - 认领 Google Business Profile\n  - 从权威域名获取高质量反向链接",
+                "boost_google_authority": "提升实体权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建权威百科词条\n  - 创建知识图谱实体并通过 sameAs 关联\n  - 认领各平台的官方企业主页\n  - 从权威域名获取高质量反向链接",
                 "common_crawl_inbound_links": "Common Crawl 尚未抓取你的站点。\n对新站或小站这是正常现象。可通过获取更多反向链接来提升被发现的概率。",
                 "duplicate_descriptions": "为每个页面撰写独立的 meta description。重复的描述会让\nAI 引擎在引用时无法判断哪一个页面与主题更相关。",
                 "increase_platform_presence": "扩大在权威平台上的存在感：\n  - 创建公司 Crunchbase 资料\n  - 维护活跃的 GitHub 组织\n  - 如适用，向 npm/PyPI 发布开源包\n  - 在 Hacker News 上发布 Show HN 帖\n  - 提交到创业公司目录（Product Hunt、AngelList/Wellfound）\n  - 争取出现在行业媒体和对比类文章中",
@@ -1415,11 +1540,11 @@ const zh = {
                 "missing_og": "为每个页面添加 Open Graph 标签（og:title、og:description、og:image）。",
                 "missing_structured_data": "为内容页面添加 JSON-LD 结构化数据（Article、Product、FAQPage 等）。",
                 "missing_title": "为每个页面添加唯一、具有描述性的 <title> 标签（不超过 60 字符）。",
-                "register_search_engines": "在 Google Search Console 和 Bing Webmaster Tools 注册以获得索引。\n在两个平台分别提交 sitemap.xml。\n确保 robots.txt 没有屏蔽 AI 爬虫。\n检查 CDN/WAF 设置——部分服务默认会拦截 bot 流量。",
+                "register_search_engines": "在搜索引擎站长平台（如百度搜索资源平台）注册以获得索引。\n在各平台分别提交 sitemap.xml。\n确保 robots.txt 没有屏蔽 AI 爬虫。\n检查 CDN/WAF 设置——部分服务默认会拦截 bot 流量。",
                 "strengthen_trust": "强化信任信号：\n  - 在显眼位置展示认证（SOC2、GDPR、ISO、PCI-DSS）\n  - 为奖项徽章添加 alt 文本：<img alt='2025 Best Fintech Award' ...>\n  - 展示合作伙伴/隶属机构 Logo（Y Combinator、加速器、行业组织）\n  - 在结构化数据中标注奖项：\n    {\"@type\": \"Organization\", \"award\": [\"Best Fintech 2025\", ...]}",
-                "unblock_core_bots": "这些是核心 AI 爬虫。若被屏蔽，你的内容可能无法出现在对应 AI 产品中。\n请确认已在对应搜索平台完成注册。\n检查 robots.txt 没有屏蔽这些 user agent。\n在 Google Search Console 和 Bing Webmaster Tools 提交 sitemap。",
+                "unblock_core_bots": "这些是核心 AI 爬虫。若被屏蔽，你的内容可能无法出现在对应 AI 产品中。\n请确认已在对应搜索平台完成注册。\n检查 robots.txt 没有屏蔽这些 user agent。\n在各搜索引擎站长平台提交 sitemap。",
                 "unblock_robots_bots": "以下 bot 被 robots.txt 屏蔽：{bots}\n如希望 AI 引擎索引你的内容，请移除或修改对应规则：\n  User-agent: BotName\n  Disallow: /\n将 'Disallow: /' 改为 'Allow: /' 或直接移除该规则。",
-                "unblock_waf_bots": "部分 AI bot 被你的服务器、CDN 或 WAF 拦截。\n检查 Cloudflare/AWS WAF/Nginx 规则，将这些 user agent 加入白名单。\n常见原因：\n  - Cloudflare Bot Fight Mode 拦截非浏览器 user agent\n  - 限速规则过于激进\n  - 安全插件（Wordfence、Sucuri）启用了严格的 bot 拦截"
+                "unblock_waf_bots": "部分 AI bot 被你的服务器、CDN 或 WAF 拦截。\n检查 CDN 防护、WAF 与 Nginx 规则，将这些 user agent 加入白名单。\n常见原因：\n  - CDN 的机器人防护模式拦截非浏览器 user agent\n  - 限速规则过于激进\n  - 安全插件启用了严格的 bot 拦截"
               },
               "multilingual": {
                 "expand_alt_pages": "其它语言页面内容过少。请确保翻译完整，而不是占位或机器翻译片段；\nAI 引擎可能会跳过内容过薄的多语言页面。",
@@ -1437,37 +1562,37 @@ const zh = {
               "robots": {
                 "add_sitemap_directive": "在 robots.txt 中添加 Sitemap 指令：\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "create": "在站点根目录创建 robots.txt 文件。\n最简示例：\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
-                "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行 GPTBot 示例：\n  User-agent: GPTBot\n  Allow: /",
+                "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行示例：\n  User-agent: <AI 爬虫名>\n  Allow: /",
                 "unblock_wildcard": "如果希望 AI 爬虫索引站点，请将 'User-agent: *' 下的 'Disallow: /' 改为 'Allow: /'。\n如需限制特定 bot，可以单独配置规则而不是整体禁用。"
               },
               "schema_kb": {
                 "add_breadcrumb_schema": "为 HTML 面包屑添加配套的 BreadcrumbList 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
                 "add_breadcrumbs": "添加面包屑导航，帮助 AI 引擎理解站点结构：\n  1. 在页面可见处加入面包屑：Home > Category > Page\n  2. 同步添加 BreadcrumbList JSON-LD",
                 "add_org_field": "在 Organization JSON-LD 中补充 \"{field}\" 字段，以提升知识面板入选概率。",
-                "add_org_fields": "补充更多字段，强化知识面板入选条件：\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]",
-                "add_organization": "添加 Organization 结构化数据，争取进入知识面板：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>"
+                "add_org_fields": "补充更多字段，强化知识面板入选条件：\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://weibo.com/...\", \"https://www.zhihu.com/org/...\"]",
+                "add_organization": "添加 Organization 结构化数据，争取进入知识面板：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://weibo.com/you\", \"https://www.zhihu.com/org/you\"]\n  }\n  </script>"
               },
               "search_reg": {
-                "bing_webmaster": "在 Bing Webmaster Tools 注册站点（https://www.bing.com/webmasters）：\n  1. 添加站点并完成所有权验证\n  2. 提交 sitemap.xml\n  3. 这一步必不可少——Bing 索引支撑 Microsoft Copilot、ChatGPT（基于 Bing 检索）\n     以及其他以 Bing 为搜索后端的 AI 助手。",
-                "google_console": "在 Google Search Console 注册站点（https://search.google.com/search-console）：\n  1. 添加资源（URL 前缀或域名）\n  2. 通过 meta 标签、DNS 或 HTML 文件完成所有权验证\n  3. 在 Sitemaps 一栏提交 sitemap.xml\n  4. 监控索引状态并修复抓取错误\n这一步非常关键——Google AI Overviews 与 SGE 都从 Google 索引中取数据。",
-                "indexnow": "配置 IndexNow，让 Bing、Yandex 等搜索引擎即时索引新内容：\n  1. 在 https://www.indexnow.org/ 申请 API key\n  2. 将密钥文件放在站点根目录：https://yoursite.com/{key}.txt\n  3. 内容变更时通知搜索引擎：\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. 许多 CMS 插件（例如 WordPress）已内置 IndexNow 支持。",
-                "submit_all": "仅有 sitemap.xml 和 robots.txt 文件是不够的。\n还需要在各平台注册并主动提交：\n  \n  Google Search Console → 提交 sitemap → 支撑 Google AI Overviews / SGE\n  Bing Webmaster Tools  → 提交 sitemap → 支撑 Copilot、ChatGPT（Bing 后端）\n  IndexNow              → 自动通知    → Bing、Yandex、Naver 即时索引\n  \n不主动提交也可能被搜索引擎自然发现 sitemap，\n但主动提交能显著提升索引速度与可靠性。"
+                "bing_webmaster": "在搜索引擎站长平台注册站点：\n  1. 添加站点并完成所有权验证\n  2. 提交 sitemap.xml\n  3. 这一步必不可少——搜索索引是多数 AI 助手的检索后端。",
+                "google_console": "在百度搜索资源平台注册站点（https://ziyuan.baidu.com）：\n  1. 添加站点并选择验证方式\n  2. 通过 meta 标签、DNS 或文件校验完成所有权验证\n  3. 在「普通收录」提交 sitemap.xml\n  4. 监控索引状态并修复抓取错误\n这一步非常关键——搜索索引是 AI 检索取数的重要来源。",
+                "indexnow": "配置索引主动推送，让搜索引擎即时收录新内容：\n  1. 在百度搜索资源平台获取推送接口的 token\n  2. 内容发布或更新后，把 URL 推送到接口\n  3. 也可同时配置站点地图与自动推送 JS\n  4. 常见 CMS 大多有现成插件可直接接入。",
+                "submit_all": "仅有 sitemap.xml 和 robots.txt 文件是不够的。\n还需要在各平台注册并主动提交：\n  \n  百度搜索资源平台 → 提交 sitemap → 支撑搜索与 AI 检索取数\n  主动推送接口     → 自动通知    → 新内容即时收录\n  \n不主动提交也可能被搜索引擎自然发现 sitemap，\n但主动提交能显著提升索引速度与可靠性。"
               },
               "sitemap": {
                 "add_lastmod": "为 sitemap 中每个 <url> 节点补充 <lastmod>：\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>",
                 "create_file": "在站点根目录创建 sitemap.xml，示例：\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\n大多数 CMS（WordPress、Next.js 等）可以自动生成 sitemap。"
               },
               "social": {
-                "add_sameas": "在 Organization JSON-LD 中通过 sameAs 关联各社交平台资料：\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\n这能帮助 AI 引擎跨平台确认你的实体身份。",
-                "add_twitter_card": "在 <head> 中添加 Twitter card 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
+                "add_sameas": "在 Organization JSON-LD 中通过 sameAs 关联各平台官方主页：\n  \"sameAs\": [\n    \"https://weibo.com/yourbrand\",\n    \"https://www.zhihu.com/org/yourbrand\",\n    \"https://space.bilibili.com/yourbrand\",\n    \"https://gitee.com/yourbrand\"\n  ]\n这能帮助 AI 引擎跨平台确认你的实体身份。",
+                "add_twitter_card": "在 <head> 中补齐社交分享卡片 meta 标签——卡片类型、账号、标题、描述、封面图，\n让链接被分享时显示完整预览。"
               },
               "structured": {
-                "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 Google Rich Results Test 校验：https://search.google.com/test/rich-results"
+                "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 schema.org 官方校验器校验结构化数据。"
               },
               "tech_crawl": {
                 "add_rss_feed": "为内容添加 RSS 或 Atom feed，并在 <head> 中引用：\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\n大多数 CMS 可自动生成 feed；静态站点可使用 eleventy-rss 等工具。",
                 "broken_canonical": "canonical URL {canonical_url} 已失效。请修复目标页面，或将 canonical 更新为可访问的 URL。",
-                "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 Cloudflare 等 CDN 自动启用 HTTP/2。",
+                "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 CDN 自动启用 HTTP/2。",
                 "fix_canonical_chain": "修复 canonical 链——每个页面的 canonical 应直接指向最终 URL，而不是经过中间跳转。\n将各页面的 canonical 设置为自身 URL 或最终目标。",
                 "reduce_redirects": "将重定向链压缩为单跳（A -> B，而不是 A -> B -> C -> D）。\n更新服务器配置，直接重定向到最终 URL。"
               },
@@ -1576,16 +1701,17 @@ const zh = {
             },
             "visuals": {
               "robots": {
-                "title": "AI 爬虫许可矩阵",
+                "title": "AI 爬虫许可概览",
                 "filePresent": "robots.txt · 文件存在",
                 "fileMissing": "robots.txt · 文件缺失",
                 "sitemapRef": "sitemap 引用 ✓",
                 "noSitemapRef": "缺少 sitemap 引用",
-                "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。下方标为「继承通配符」的机器人在你覆盖之前实际上都是被屏蔽的。",
+                "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。计入「继承通配符」的那批爬虫，在你单独放行之前实际上都是被屏蔽的。",
+                "countsNote": "统计口径为 robots.txt 中 AI 爬虫 user-agent 规则的条数。",
                 "legend": {
-                  "allowed": "已允许",
-                  "blocked": "已屏蔽",
-                  "inherited": "继承通配符",
+                  "allowed": "条已放行",
+                  "blocked": "条被屏蔽",
+                  "inherited": "条继承通配符",
                   "unknown": "未知"
                 }
               },
@@ -1647,7 +1773,7 @@ const zh = {
               "topFixesIntro": "下列是对得分影响最大的问题，按严重程度排序，优先处理这些项收益最高。",
               "detailSection": "检测详情",
               "appendixSection": "关于本报告",
-              "appendixBody": "本报告由 GEO Checker 生成，分数反映您的网站对 ChatGPT、Perplexity、Google AI Overviews、Copilot 等 AI 搜索引擎最佳实践的遵循程度。完成修复后可重新运行检测查看进展。",
+              "appendixBody": "本报告由 GEO Checker 生成，分数反映您的网站对主流 AI 搜索引擎最佳实践的遵循程度。完成修复后可重新运行检测查看进展。",
               "footer": "GEO Checker · © {{year}} · 保留所有权利",
               "fileName": "GEO就绪度报告",
               "fixLabel": "修复建议",
@@ -1688,6 +1814,58 @@ const zh = {
             "register": "立即注册",
             "failed": "登录失败，请检查您的邮箱和密码",
             "error": "邮箱或密码错误"
+          },
+          "phoneLogin": {
+            "tab": "手机号登录",
+            "modalSubtitle": "输入手机号获取验证码,未注册的号码将自动创建账号",
+            "phone": "手机号",
+            "phonePlaceholder": "请输入 11 位手机号",
+            "phonePlaceholderIntl": "请输入手机号(不含区号)",
+            "country": "国家/地区",
+            "code": "验证码",
+            "codePlaceholder": "6 位数字验证码",
+            "sendCode": "获取验证码",
+            "sending": "发送中…",
+            "resendIn": "{{seconds}} 秒后重发",
+            "sendFailed": "验证码发送失败,请稍后重试",
+            "sentHint": "验证码已发送,请查收短信",
+            "submit": "登录 / 注册",
+            "submitting": "登录中…",
+            "failed": "登录失败,请检查手机号和验证码",
+            "newUserHint": "未注册的手机号将自动创建账号,登录即表示同意服务条款与隐私政策",
+            "emailRegisterClosed": "新账号请使用手机号注册,邮箱仅支持已有账号登录",
+            "registerClosedSubtitle": "新用户请使用手机号 + 短信验证码完成注册"
+          },
+          "wechatLogin": {
+            "tab": "微信扫码",
+            "otherWays": "其他方式:",
+            "emailTab": "邮箱登录",
+            "modalSubtitle": "扫码关注公众号,绑定手机号后即可登录",
+            "scanTitle": "请用微信扫描二维码",
+            "scanHint": "扫码后需关注公众号,首次登录还要绑定手机号",
+            "qrAlt": "微信登录二维码",
+            "qrLoading": "二维码生成中…",
+            "qrFailed": "二维码获取失败",
+            "expired": "二维码已过期",
+            "refresh": "点击刷新",
+            "confirmed": "登录成功,正在跳转…",
+            "bindTitle": "绑定手机号",
+            "bindSubtitle": "首次登录需绑定手机号,用于账号安全与服务通知",
+            "phone": "手机号",
+            "phonePlaceholder": "请输入 11 位手机号",
+            "code": "验证码",
+            "codePlaceholder": "6 位数字验证码",
+            "sendCode": "获取验证码",
+            "sending": "发送中…",
+            "resendIn": "{{seconds}} 秒后重发",
+            "sendCodeFailed": "验证码发送失败,请稍后重试",
+            "bindButton": "完成绑定并登录",
+            "binding": "绑定中…",
+            "bindFailed": "绑定失败,请检查手机号和验证码",
+            "emailRegisterClosed": "新账号请使用微信扫码注册,邮箱仅支持已有账号登录",
+            "registerClosedTitle": "邮箱注册已关闭",
+            "registerClosedSubtitle": "新用户请扫码关注公众号并绑定手机号完成注册",
+            "registerClosedNoChannel": "注册通道维护中,请稍后再试或联系客服"
           },
           "register": {
             "title": "注册账户",
@@ -1735,6 +1913,26 @@ const zh = {
               "loading": "重置中..."
             }
           },
+          "checkout": {
+            "verifying": "正在确认支付结果…",
+            "verifyingHint": "通常只需要几秒钟。",
+            "successTitle": "会员已开通",
+            "successBody": "支付成功，会员权益已生效，现在就可以开始跑完整检测。",
+            "pointsCredited": "等额积分已到账，当前",
+            "viewPoints": "查看我的积分",
+            "viewMembership": "查看会员",
+            "runCheck": "去跑一次检测",
+            "pendingTitle": "已收到付款，正在开通…",
+            "pendingBody": "支付还在确认中，会员通常一分钟内开通。可以刷新本页，或到会员页查看。",
+            "errorTitle": "支付校验失败",
+            "backToPlans": "返回套餐列表",
+            "goHome": "回到首页",
+            "mustLogin": "请先登录后再发起支付",
+            "missingSession": "支付信息缺失，请从会员页重新发起支付。",
+            "wechatNotCompleted": "未检测到支付完成。如果你已经付款，请稍等几秒后刷新本页；如果取消了支付，可以返回重新发起。",
+            "cancelTitle": "支付已取消",
+            "cancelBody": "本次没有扣款。可以重新选择套餐，随时再来。",
+          },
           "checkoutPending": {
             "title": "待支付订单",
             "subtitle": "请确认订单信息后完成支付",
@@ -1747,37 +1945,28 @@ const zh = {
             "popular": "热门",
             "totalLabel": "应付金额",
             "methodLabel": "支付方式",
-            "methodStripe": "点击后将跳转到 Stripe 安全完成支付。",
-            "methodStripeLabel": "信用卡",
-            "methodUsdc": "使用 USDC 在 Base 链上支付。点击\"立即支付\"生成支付会话，然后用 MoltsPay CLI 或任何兼容 x402 的钱包完成支付。",
-            "usdcWaiting": "等待 USDC 支付中...",
-            "usdcAmount": "金额",
-            "usdcChain": "链",
-            "usdcWallet": "收款地址",
-            "usdcCopy": "复制",
-            "usdcStatus": "状态",
-            "usdcPending": "等待中",
-            "usdcHint": "请使用 MoltsPay CLI 或任何兼容 x402 的客户端完成支付。",
-            "methodDomestic": "点击\"立即支付\"后将为您创建订单，微信 / 支付宝渠道即将上线。",
-            "domesticPending": "微信 / 支付宝支付即将上线，请联系销售完成订阅。",
             "methodWechatLabel": "微信支付",
             "methodWechat": "点击\"立即支付\"后将生成微信支付二维码，请使用微信扫码完成支付。",
             "wechatScanQr": "请使用微信扫描下方二维码",
+            "wechatLongPressQr": "长按二维码，用微信识别后付款",
+            "wechatOpenApp": "打开微信完成支付",
+            "wechatJsapiCancelled": "支付未完成，可以重新发起。",
+            "methodWechatMobile": "点击「立即支付」后将打开微信 App 完成支付。若没能自动打开，页面会给出重试按钮和二维码备用。",
+            "methodWechatInApp": "点击「立即支付」后将生成支付二维码，长按识别即可完成支付。",
+            "wechatWakeFailedHint": "没能自动打开微信。可以再点一次上方按钮；若仍无反应，请长按二维码保存到相册，打开微信「扫一扫」右上角选择相册识别。",
+            "wechatInAppHint": "当前在微信内打开，请长按上方二维码并选择「识别图中二维码」完成支付。",
+            "wechatMobileHint": "请长按二维码保存到相册，再打开微信「扫一扫」从相册中选取识别。",
+            "wechatH5UnavailableHint": "手机浏览器直接跳转微信支付暂未开通。最省事的办法是复制本页链接、在微信里打开本页面，即可直接用微信支付付款；也可以长按二维码保存到相册，用微信「扫一扫」右上角的相册识别，或改用电脑端扫码。",
             "wechatAmount": "支付金额",
             "wechatStatus": "支付状态",
             "wechatWaiting": "等待扫码支付…",
             "wechatExpired": "二维码已过期，请重新发起支付",
             "reinitiate": "重新发起支付",
-            "usdcMobileHint": "移动端浏览器无法访问钱包扩展。请在钱包 App 内打开：",
-            "usdcOpenMetaMask": "在 MetaMask 中打开",
-            "usdcInsufficient": "Base 链上 USDC 余额不足：当前 ${{have}} USDC，需要 ${{need}} USDC。请给钱包充值后重试。",
-            "usdcRevert": "链上验证失败。最常见原因：Base 链上的 USDC 余额低于所需金额。请检查钱包余额后重试。",
             "wechatPayNow": "生成二维码并支付",
             "submitting": "正在跳转支付…",
             "payNow": "立即支付",
             "cancel": "取消",
             "payError": "支付发起失败",
-            "usdcServiceUnavailable": "USDC 支付服务暂时不可用，请尝试其他支付方式。"
           },
           "aboutUs": {
             "title": "关于我们",
@@ -1787,7 +1976,7 @@ const zh = {
               "subtitle": "从技术创新到行业领先",
               "paragraph1": "我们是一支真正痴迷于技术的 AI 与搜索引擎专家团队。当生成式 AI 在 2023 年爆发时，我们同时看到了网站优化的新机遇与新挑战。传统 SEO 已不再足够 — 网站需要被 AI 主动推荐。",
               "paragraph2": "正因如此，我们开始研发 GEO + AEO 技术。经过整整一年的专注研发，我们打造了 Vigilath：一个将 GEO 与 AEO 融为一体的完整检测与优化系统。",
-              "paragraph3": "如今，Vigilath 已成为领先的 AI 搜索服务提供商。我们已帮助全球众多企业和网站大幅提升可见度，在 AI 搜索时代赢得优先推荐。"
+              "paragraph3": "如今，Vigilath 已成为领先的 AI 搜索服务提供商。我们已帮助众多企业和网站大幅提升可见度，在 AI 搜索时代赢得优先推荐。"
             },
             "mission": {
               "title": "我们的使命",
@@ -1801,7 +1990,7 @@ const zh = {
               },
               "leadership": {
                 "title": "行业领先",
-                "description": "成为 AI 搜索时代的全球标杆，推动这些新标准成为每家企业的必备。"
+                "description": "成为 AI 搜索时代的行业标杆，推动这些新标准成为每家企业的必备。"
               }
             },
             "team": {
@@ -1809,7 +1998,7 @@ const zh = {
               "ceo": {
                 "name": "张明",
                 "title": "创始人 & CEO",
-                "description": "前Google工程师，拥有10年搜索引擎和AI技术经验，专注于GEO技术的研发和应用。"
+                "description": "资深搜索工程师，拥有 10 年搜索引擎和 AI 技术经验，专注于 GEO 技术的研发和应用。"
               },
               "cto": {
                 "name": "李婷",
@@ -1832,9 +2021,9 @@ const zh = {
               "info": {
                 "title": "联系方式",
                 "address": "地址",
-                "addressValue": "北京市海淀区中关村科技园区",
+                "addressValue": "<company-address>",
                 "email": "邮箱",
-                "emailValue": "support@zen7.com"
+                "emailValue": "<support-email>"
               },
               "form": {
                 "title": "发送消息",
@@ -1850,7 +2039,7 @@ const zh = {
           },
           "productsServices": {
             "title": "产品 & 服务",
-            "description": "我们提供全方位优化服务，帮助您的品牌在全球范围内实现最大可见度、引用率和 AI 推荐。",
+            "description": "我们提供全方位优化服务，帮助您的品牌实现最大可见度、引用率和 AI 推荐。",
             "sections": {
               "ourServices": "我们的服务",
               "contactConsultation": "联系咨询"
@@ -1859,15 +2048,17 @@ const zh = {
               "tryNow": "立即试用",
               "subscribeNow": "立即订阅",
               "contactSales": "预约演示",
-              "popular": "热门推荐"
+              "popular": "热门推荐",
+              "freeForNow": "限时免费送"
             },
             "cards": {
               "free": {
                 "name": "注册会员",
                 "period": "/月",
-                "description": "注册即可体验 GEO 基础检测，适合个人用户初步尝鲜",
+                "description": "注册即可使用；限时期间注册后直接升到检测会员，享完整检测权益",
                 "features": [
                   "注册即可使用",
+                  "限时:注册即赠检测会员",
                   "5 项基础检测（17 个子检测点）",
                   "每月 3 次检测",
                   "即时结果展示"
@@ -1876,12 +2067,12 @@ const zh = {
               "detector": {
                 "name": "检测会员",
                 "period": "/月",
-                "originalPrice": "$9.99",
+                "originalPrice": "¥39.9",
                 "description": "需要完整自助检测结果的网站管理员和个人开发者",
                 "features": [
                   "需登录账号",
                   "25 项完整检测（全部子项）",
-                  "每月 20 次检测",
+                  "每月 10 次检测（每日上限 10 次）",
                   "检测项优先级排序",
                   "完整 25 类报告（AI Visibility Score + 字母等级 + 可视化）",
                   "检测历史记录（可回看）",
@@ -1896,7 +2087,7 @@ const zh = {
                   "无限检测次数",
                   "25 项完整检测 + 详细优化建议",
                   "基础 GEO 覆盖",
-                  "OpenAI / Gemini / Anthropic 收录规范",
+                  "主流大模型收录规范",
                   "网站文案建设与优化",
                   "核心产品信息合规配置",
                   "按月持续交付"
@@ -1909,7 +2100,7 @@ const zh = {
                 "features": [
                   "无限检测次数",
                   "25 项完整检测 + 详细优化建议",
-                  "海外主流 LLM 收录规范适配",
+                  "主流大模型收录规范适配",
                   "含使用场景级文案与合规配置",
                   "付费榜单 SEO 低成本投放位",
                   "优先技术支持（< 24h 响应）",
@@ -1924,7 +2115,7 @@ const zh = {
                 "features": [
                   "无限检测次数 + 详细优化建议",
                   "全渠道定制化 GEO 覆盖",
-                  "全渠道海外 LLM 收录规则",
+                  "全渠道大模型收录规则",
                   "声誉管理：每月 3–5 篇榜单文章 + 反向链接",
                   "PR 支持（媒体报道对接）"
                 ]
@@ -1959,7 +2150,7 @@ const zh = {
                 "history": "检测历史记录",
                 "support": "技术支持",
                 "basicGeo": "基础 GEO 覆盖",
-                "llmStandards": "海外主流 LLM 收录规范",
+                "llmStandards": "主流大模型收录规范",
                 "websiteCopy": "网站文案建设与优化",
                 "productInfo": "核心产品信息合规配置",
                 "maintenance": "持续维护",
@@ -1970,7 +2161,7 @@ const zh = {
               },
               "values": {
                 "free": {
-                  "price": "$0/月",
+                  "price": "¥0/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "5 项",
@@ -1992,7 +2183,7 @@ const zh = {
                   "serviceCycle": "❌"
                 },
                 "detector": {
-                  "price": "$9.99/月",
+                  "price": "¥39.9/月",
                   "type": "自助 SaaS",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "25 项",
@@ -2014,7 +2205,7 @@ const zh = {
                   "serviceCycle": "❌"
                 },
                 "starter": {
-                  "price": "$999/月",
+                  "price": "¥299/月",
                   "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "25 项",
@@ -2036,7 +2227,7 @@ const zh = {
                   "serviceCycle": "按月订阅"
                 },
                 "growth": {
-                  "price": "$2,500/月",
+                  "price": "¥999/月",
                   "type": "SaaS 订阅",
                   "loginRequired": "✅ 需登录",
                   "checkItems": "25 项",
@@ -2084,11 +2275,11 @@ const zh = {
             "services": [
               {
                 "title": "基础版",
-                "description": "基础 GEO 覆盖: $2,000–$3,000\n付费榜单投放: 完成海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
-                "price": "$2,000–$3,000",
+                "description": "基础 GEO 覆盖: ¥14,000–¥21,000\n付费榜单投放: 完成主流大模型收录规范，网站文案的建设和优化，核心产品信息合规配置及持续维护\n最佳榜单 SEO: 无（不包含）\n声誉管理: 无（不包含）\n公关（PR）: 无（不包含）",
+                "price": "¥14,000–¥21,000",
                 "features": [
                   "基础 GEO 覆盖",
-                  "完成海外主流大模型收录规范",
+                  "完成主流大模型收录规范",
                   "网站文案建设和优化",
                   "核心产品信息合规配置及持续维护"
                 ],
@@ -2096,11 +2287,11 @@ const zh = {
               },
               {
                 "title": "进阶版",
-                "description": "基础 GEO 覆盖: $4,000–$7,000\n付费榜单投放: 适配海外主流大模型（OpenAI/Gemini/Anthropic）收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如“2026最佳XX平台”），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
-                "price": "$4,000–$7,000",
+                "description": "基础 GEO 覆盖: ¥28,000–¥49,000\n付费榜单投放: 适配主流大模型收录规范，网站文案的建设和优化，核心产品使用场景信息合规配置及持续维护\n最佳榜单 SEO: 在排名类网站采购低成本投放位\n声誉管理: 创建并发布1–2篇顶级榜单文章（例如“2026最佳XX平台”），在活动开始时发布，并针对大型语言模型的检索和引用进行优化\n公关（PR）: 无（不包含）",
+                "price": "¥28,000–¥49,000",
                 "features": [
                   "基础 GEO 覆盖",
-                  "适配海外主流大模型收录规范",
+                  "适配主流大模型收录规范",
                   "在排名类网站采购低成本投放位",
                   "创建并发布1–2篇顶级榜单文章"
                 ],
@@ -2108,10 +2299,10 @@ const zh = {
               },
               {
                 "title": "Scale",
-                "description": "基础 GEO 覆盖: $8,000–$12,000\n付费榜单投放: 全渠道海外大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
-                "price": "$8,000–$12,000",
+                "description": "基础 GEO 覆盖: ¥56,000–¥84,000\n付费榜单投放: 全渠道大模型 GEO 收录规则，定制化完成交易产品核心使用场景、信息校验及持续维护\n最佳榜单 SEO: 监测排名类网站的投放成本，确定性价比最高的投放预算\n声誉管理: 每月撰写并发布 3-5 篇最佳榜单类文章，配套数据类文章、反向链接和验证页面支持\n公关（PR）: 可配合企业内部团队或专属公关机构，助力获得媒体报道",
+                "price": "¥56,000–¥84,000",
                 "features": [
-                  "全渠道海外大模型 GEO 收录规则",
+                  "全渠道大模型 GEO 收录规则",
                   "监测排名类网站的投放成本",
                   "每月撰写并发布 3-5 篇最佳榜单类文章",
                   "可配合企业内部团队或专属公关机构"
@@ -2165,7 +2356,7 @@ const zh = {
               "attention": "待处理事项",
               "attentionReplies": "{{count}} 条回复等待审批",
               "attentionDrafts": "{{count}} 篇草稿待排期",
-              "attentionToken": "LinkedIn 令牌将于 3 天后过期",
+              "attentionToken": "平台授权令牌将于 3 天后过期",
               "review": "查看",
               "reconnect": "重新连接",
               "postsPublished": "已发布帖子",
@@ -2215,7 +2406,7 @@ const zh = {
                 "delete": "删除",
                 "view": "查看",
                 "profile": "资料",
-                "profileHint": "填写品牌资料 / 种子词 / 监测问题,提交平台审核",
+                "profileHint": "填写品牌资料 / 种子词 / 提示词,提交平台审核",
                 "run": "跑一次",
                 "running": "运行中",
                 "enabled": "已启用",
@@ -2325,6 +2516,7 @@ const zh = {
                 "responseCount": "结果数",
                 "viewDetail": "展开",
                 "noCitations": "无引用",
+                "reasoning": "思考过程",
                 "video": "录像",
                 "colEngine": "AI 引擎",
                 "colQuery": "问题",
@@ -2407,8 +2599,9 @@ const zh = {
                 "step4Hint": "项目已配置完成 — 在此查看 / 生成 GEO策略优化方案(基于品牌资料 + AI 引擎答复诊断)",
                 "step4NoTopic": "请先在前 3 步保存项目,然后回到此步查看 GEO策略优化方案",
                 "step4Idle": "项目还没生成过 GEO策略优化方案,点下方按钮触发(基于本项目的资料 + 官网)",
+                "step4IdleCustomer": "GEO策略优化方案尚未生成,生成后会在这里展示",
                 "step4Generate": "生成 GEO策略优化方案",
-                "step4Generating": "正在生成… 大约 1-2 分钟",
+                "step4Generating": "正在生成…官网扫描 + 大模型撰写,通常需 5-15 分钟",
                 "step4Ready": "GEO策略优化方案已就绪(更新于 {{at}})",
                 "step4Failed": "上次生成失败:{{err}}",
                 "step4OpenFull": "查看完整报告 →",
@@ -2418,40 +2611,79 @@ const zh = {
                 "seedPromptsLabel": "种子提示词(本次提交)",
                 "seedPromptsPlaceholder": "输入一条种子,回车添加(例如:云数据中心 / 律所服务 / 跨境电商)",
                 "seedPromptsListHint": "本次新增 {{count}} 条 — 保存时会一并提交审核;第三步会基于全部种子各扇出约 200 条候选",
+                "seedRecommendedHint": "推荐种子(默认选中)— 点一下置灰表示本次不提交,再点恢复;推荐的不会被删除",
+                "seedRecommendedOffTip": "点击置灰:本次不提交这条种子",
+                "seedRecommendedOnTip": "点击恢复选中:本次一并提交",
                 "suggestFromSeeds": "基于 {{count}} 个种子挖掘 ~200/条",
                 "seedPickerLabel": "种子提示词({{selected}} / {{total}} 选中)",
                 "seedPickerEmpty": "步骤 2 还没填种子提示词 — 回到上一步添加后,这里会列出来供你勾选",
                 "expandSectionTitle": "1. 选择关键词开始扩展",
-                "candidateSectionTitle": "2. 选择要监测的问题(最多 200 个)",
+                "candidateSectionTitle": "2. 选择要监测的问题(最多 {{max}} 个)",
                 "runResultsTitle": "试跑结果 · {{count}} 条",
-                "seedPromptsTitle": "已提交的种子词(审核状态)",
-                "seedPromptsHint": "甲方提交,平台审核后生效",
-                "seedPromptsEmpty": "暂无已提交的种子词。输入种子后点右侧「提交审核」即可入档。",
-                "submitSeed": "📝 提交审核",
-                "submitSeedRunning": "提交中…",
-                "submitSeedHint": "把当前种子词提交给平台审核,通过后正式生效为 topic 的官方种子(只增不改)",
+                "seedPromptsTitle": "已生效的种子词",
+                "seedPromptsHint": "加进来就生效,下一轮监测直接按它扩词、跑批",
+                "seedPromptsEmpty": "暂无种子词。输入种子后点右侧「添加」即可生效。",
+                "submitSeed": "📝 添加种子词",
+                "submitSeedRunning": "添加中…",
+                "submitSeedHint": "把当前种子词加进本主题(只增不改),加完立即生效",
                 "badgeApproved": "已生效",
-                "badgePending": "待审核",
-                "badgeRejected": "已拒绝",
-                "queryLockedHint": "该 Query 已审核生效,不可取消勾选",
+                "queryLockedHint": "该提示词已生效,不可取消勾选;要停止监测请点右侧「删除」",
+                "queryDelete": "删除",
+                "queryDeleting": "删除中…",
+                "queryDeleteHint": "不再监测这个问题;词与历史应答都保留,可在主题画像页恢复",
+                "queryDeleted": "「{{q}}」已停止监测",
+                "seedDelete": "删除",
+                "seedDeleting": "删除中…",
+                "seedDeleteHint": "删除这条种子词,由它扩展出来的提示词一起停止监测",
+                "seedDeleteConfirmTitle": "删除这条种子提示词?",
+                "seedDeleteConfirmBody": "「{{q}}」将从种子词列表移除,由它扩展出来的提示词会一起停止监测(不再检测、不进报告口径、不再用于发文选词);历史应答与已发文章都保留。注意:近几天的报告数字会跟着变(趋势图会标出口径变更),本主题正在进行中的智能选题动作也会作废。",
+                "seedDeleteConfirm": "确认删除",
+                "seedDeleted": "种子词「{{q}}」及其扩展提示词已删除",
                 "prev": "上一步",
                 "next": "下一步",
                 "done": "完成",
                 "name": "主题",
-                "namePlaceholder": "例如:VNET 品牌问询",
+                "namePlaceholder": "例如:ACME 品牌问询",
                 "target": "检索词(被检测的品牌 / 实体)",
-                "targetPlaceholder": "例如:金诚同达律所 / 世纪互联",
+                "targetPlaceholder": "例如:<law-firm-a> / Acme Cloud",
                 "targetHint": "AI 引擎答复里提到这个词就算「命中」,这是 GEO 衡量曝光的核心字段",
                 "aliases": "别名(可选)",
-                "aliasesPlaceholder": "KWM, King & Wood, 金诚 (逗号分隔)",
+                "aliasesPlaceholder": "Example LLP, Example & Partners, 示例律所 (逗号分隔)",
                 "aliasesHint": "别名 {{count}} / 10,任一在答复里出现即算命中",
+                "brandTagTitle": "品牌标签(报告对标)",
+                "brandTagHint": "给自己账号的品牌打上层级与行业标签,六项指标卡的目标会按同层级参考区间设置(达到区间下限即达标);未打标签时目标为基线 × 1.3。报告中心会按此标签展示对标口径。",
+                "tagUnset": "未设置",
+                "brandTierLabel": "品牌层级",
+                "industryClassLabel": "行业类型",
+                "tierNew": "新品牌",
+                "tierMid": "中等品牌",
+                "tierLeader": "行业头部",
+                "industryRegular": "常规行业",
+                "industrySpecial": "特殊行业(医疗/美容/金融)",
+                "fixedDenomTitle": "分母设定值(仅管理员)",
+                "fixedDenomHint": "填了就把分母钉死在该值上,与本期实跑覆盖多少个「问题 × 平台」组合无关 —— 期与期、平台与平台同尺可比。实跑长过该值时分子会顶穿,超出部分按 100% 显示。影响整体露出率、TOP1/TOP3、文章引用率;内容中正率、品牌声量度按应答条数算,不受影响。只在周报、月报生效,日报恒用真实分母。留空 = 全程用实际覆盖数。",
+                "fixedDenomPlaceholder": "留空 = 全程用实际覆盖数",
+                "fixedDenomRef": "参考:当前 {{q}} 个提示词 × {{e}} 个模型 = 满覆盖 {{full}} 个「问题 × 平台」组合",
+                "fixedDenomAboveFull": "设定值高于满覆盖组合数,当前词表跑满也到不了 100%",
+                "fixedDenomClear": "清除设定",
+                "mentionCatScope": "品牌声量度只算品类词命中(排除品牌词,与露出率同口径)",
+                "fixedDenomSaved": "已保存,报告口径立即生效",
                 "queriesPickerTitle": "Query 选择",
                 "queriesPickerHint": "从下面的候选问题中勾选你想监测的,最多 {{max}} 条。每次点上面的扩展按钮会再生成约 {{count}} 条候选,可多轮累积。",
                 "queriesPickerEmpty": "候选池为空 — 输入主题种子后点「主题挖掘」,一次产出约 200 条候选供你筛选。",
                 "manualAddPlaceholder": "手动输入想监测的问题(回车添加)",
                 "manualAddBtn": "添加",
+                "queriesImportCsv": "导入 CSV",
+                "queriesExportCsv": "导出 CSV",
+                "queriesImportHint": "CSV 列:提示词, 种子词, 场景, 是否监测(后三列可省);也可导 .txt 一行一条",
+                "queriesImportConfirmTitle": "导入这份提示词表?",
+                "queriesImportConfirmBody": "将新增 {{n}} 条候选(勾选 {{k}} 条);新增种子词 {{m}} 个 {{seeds}};重复跳过 {{dup}} 条;超出勾选上限未勾选 {{cap}} 条。新种子与新词都要点「保存」后才落库。",
+                "queriesImportDone": "已导入 {{n}} 条,勾选 {{k}} 条,新增种子词 {{m}} 个",
+                "queriesImportNothingNew": "文件里的 {{dup}} 条都已在候选池里,没有新增",
+                "queriesImportEmpty": "文件里没有可导入的提示词",
+                "queriesImportParseErr": "文件解析失败:{{err}}",
                 "manualAddDuplicate": "该问题已在候选 / 已勾选列表里",
-                "manualAddCap": "已达 200 条上限,先取消勾选再加",
+                "manualAddCap": "已达 {{max}} 条上限,先取消勾选再加",
                 "manualAddSeedEmpty": "无可用种子",
                 "manualAddNeedSeed": "请先在第二步添加种子提示词",
                 "manualAddSeedTitle": "关联到种子提示词",
@@ -2472,11 +2704,13 @@ const zh = {
                 "suggestIndustryPlaceholder": "行业 / 业务定位(可选,例如:IDC 数据中心 / 商事律所)",
                 "suggestContextOn": "已绑定 target「{{target}}」+ 别名,候选会避开点名,适合做真实 SOV 监测",
                 "suggestContextOff": "未填 target — 候选可能直接点名主题词(信号偏弱)",
+                "matchedProduct": "「{{seed}}」已识别为本品牌产品「{{name}}」:品类词按「{{category}}」扩展,产品评估问句归品牌词",
+                "matchedProductNoCategory": "AI 推断的品类",
+                "featuredSeedHint": "主推产品已加入推荐种子",
                 "suggestGenerateN": "主题挖掘",
                 "suggestRunningLong": "挖掘中…(预计 30-90s)",
                 "engines": "AI 引擎",
                 "enginesCN": "国内",
-                "enginesGlobal": "海外",
                 "enabled": "启用",
                 "scheduleNote": "※ 启用后每天自动跑一次,无需手动设置时间",
                 "runNow": "立即试跑一次",
@@ -2492,11 +2726,7 @@ const zh = {
                 "qwen": "通义千问",
                 "wenxin": "文心一言",
                 "yuanbao": "元宝",
-                "chatgpt": "ChatGPT",
-                "claude": "Claude",
-                "gemini": "Gemini",
-                "grok": "Grok",
-                "copilot": "Copilot"
+                "kimi": "Kimi"
               }
             },
             "compose": {
@@ -2548,7 +2778,7 @@ const zh = {
               "escalated": "已上报",
               "autoFixed": "已自动修复",
               "on": "来自",
-              "draftReplyLabel": "回复草稿（Claude Sonnet）",
+              "draftReplyLabel": "回复草稿（AI 生成）",
               "reasoning": "回复依据",
               "confidenceLabel": "置信度",
               "sendAsIs": "直接发送",
@@ -2602,13 +2832,29 @@ const zh = {
               "aiScheduleBtn": "AI 排程",
               "filterStatusLabel": "状态",
               "filterSourceLabel": "来源",
+              "filterTemplateLabel": "模板",
+              "searchPlaceholder": "搜索标题 / 摘要 / 提示词…",
+              "sortLabel": "排序",
+              "sortNewest": "生成时间 · 最新在前",
+              "sortOldest": "生成时间 · 最早在前",
+              "sortUpdated": "更新时间 · 最新在前",
+              "sortUpdatedOldest": "更新时间 · 最早在前",
+              "generatedAt": "生成时间",
+              "updatedAt": "更新时间",
+              "rewrittenHint": "这篇正文被重新生成过,创建时间仍是原来那天",
+              "planRow": "发文计划",
+              "planDate": "计划发布",
+              "templateFilterAll": "全部模板",
+              "templateFilterNone": "无模板",
               "statusFilter": {
+                "generating": "生成中",
                 "all": "全部",
                 "draft": "草稿",
                 "pending_review": "审核中",
                 "approved": "已通过",
                 "rejected": "已驳回",
-                "published": "已发布"
+                "published": "已发布",
+                "gen_failed": "生成失败"
               },
               "sourceFilter": {
                 "all": "全部",
@@ -2621,14 +2867,29 @@ const zh = {
                 "pending_review": "待审核",
                 "rejected": "待修改",
                 "draft": "草稿",
+                "gen_failed": "生成失败",
                 "aiSchedule": "AI 自动生成"
               },
               "aiOnAtTime": "每天 {{time}}",
               "aiOff": "未启用",
               "rejectReasonLabel": "驳回原因",
               "generationErrorLabel": "生成失败",
+              "genRetryQueued": "系统会自动重试(已试 {{done}}/{{max}} 次),也可以手动重新生成",
+              "genRetryStopped": "已停止自动重试,请手动重新生成",
               "publishedToLabel": "已发布到",
               "emptyBody": "(没有正文)",
+              "relationTitle": "创作关联",
+              "relationSeed": "种子提示词",
+              "relationQueries": "提示词",
+              "relationQueriesHint": "生成时要求正文自然覆盖这些问题",
+              "relationTemplate": "内容模板",
+              "relationPlan": "发文计划",
+              "copyHint": "复制正文粘贴到发布平台",
+              "copyMarkdown": "复制 Markdown",
+              "copyArticle": "复制文章",
+              "copyArticleHint": "带标题层级和加粗,可直接贴进公众号 / Word / 飞书文档",
+              "copyText": "复制纯文本",
+              "copied": "已复制 ✓",
               "editBtn": "编辑",
               "cancelBtn": "取消",
               "saveBtn": "保存",
@@ -2637,7 +2898,7 @@ const zh = {
               "submitDrawerTitle": "提交我的文章",
               "submitDrawerHint": "提交后会进入运营审核队列;审核通过后,运营会选择媒体与平台并发布",
               "submitTopicLabel": "归属主题",
-              "submitLinkedQueryLabel": "关联监测问题(可选 — 用于后续效果归因)",
+              "submitLinkedQueryLabel": "关联提示词(可选 — 用于后续效果归因)",
               "submitLinkedQueryNone": "不关联(自由稿)",
               "submitTitleLabel": "标题",
               "submitTitlePh": "如:反垄断合规要点 2026 深度解读",
@@ -2647,18 +2908,18 @@ const zh = {
               "submitBodyPh": "粘贴或输入 Markdown 文本",
               "submitErrEmpty": "标题和正文不能为空",
               "scheduleDrawerTitle": "AI 自动生成设置",
-              "scheduleDrawerHint": "启用后,系统会每天到点根据该主题的资料 + 种子词 + 监测问题,自动生成 N 篇文案进草稿队列",
+              "scheduleDrawerHint": "启用后,系统会每天到点根据该主题的资料 + 种子词 + 提示词,自动生成 N 篇文案进草稿队列",
               "scheduleEnableLabel": "启用每日自动生成",
               "schedulePublishLabel": "按发布日期自动发文",
-              "schedulePublishHint": "开启后,每天上午 11 点把发文计划里到了发布日期、且还没发的稿件自动发出去。随时关闭即停止后续自动发文,不影响已发内容。",
+              "schedulePublishHint": "开启后,每天到下面这个时间,把发文计划里到了发布日期、且还没发的稿件自动发出去。随时关闭即停止后续自动发文,不影响已发内容。",
               "scheduleTimeLabel": "生成时间",
               "scheduleCountLabel": "每次生成数量",
-              "scheduleTimeNote": "时区 Asia/Shanghai",
+              "scheduleTimeNote": "时区 Asia/Shanghai,精确到分钟",
               "scheduleSourcesTitle": "生成依据(只读)",
               "scheduleProfile": "主题资料",
               "scheduleFields": "字段已填",
               "scheduleSeeds": "种子词",
-              "scheduleMonitored": "已勾选监测问题",
+              "scheduleMonitored": "已勾选提示词",
               "scheduleLastRunAt": "上次自动跑批",
               "scheduleSaved": "已保存设置",
               "runNowBtn": "立即生成一批",
@@ -2761,6 +3022,16 @@ const zh = {
                 "viewFull": "完整查看 →",
                 "writeReply": "写回应",
                 "viewDetail": "查看",
+                "webSearch": {
+                  "title": "腾讯元宝 WebSearch 舆情快检",
+                  "subtitle": "基于元宝联网搜索结果生成的最新舆情摘要",
+                  "empty": "尚无元宝 WebSearch 快检结果，请点击刷新后稍候。",
+                  "sources": "关键来源",
+                  "positive": "正面要点",
+                  "negative": "负面要点",
+                  "risks": "风险点",
+                  "suggestions": "建议动作"
+                },
                 "hotTopics": {
                   "title": "实时热点 · 今日热榜",
                   "subtitle": "聚合主流平台热搜,命中品牌词的条目自动高亮 🔥",
@@ -2964,7 +3235,6 @@ const zh = {
                   "tieba": "百度贴吧",
                   "zhidao": "百度知道",
                   "baidu_news": "百度新闻",
-                  "reddit": "Reddit",
                   "sina_finance": "新浪财经",
                   "qq_finance": "腾讯财经",
                   "163_finance": "网易财经",
@@ -2984,7 +3254,7 @@ const zh = {
                   "forum": "论坛社区",
                   "video": "视频平台",
                   "news": "资讯门户",
-                  "overseas": "海外"
+                  "overseas": "其他地区"
                 },
                 "mediaTypes": {
                   "web": "网媒",
@@ -3008,12 +3278,12 @@ const zh = {
                   "science": "科普",
                   "party_media": "党政央媒",
                   "health": "医药健康",
-                  "overseas_en": "海外英文"
+                  "overseas_en": "外文媒体"
                 },
                 "regions": {
                   "mainland": "中国大陆",
                   "hk": "中国香港",
-                  "overseas": "海外"
+                  "overseas": "其他地区"
                 }
               },
               "briefs": {
@@ -3069,7 +3339,7 @@ const zh = {
                   "ticker": "股票代码",
                   "aliases": "别名(选填)",
                   "intent": "监测意图",
-                  "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
+                  "intentPlaceholder": "例:做空报告 / 业绩传闻 / 跨境业务",
                   "keywords": "重点关注词",
                   "excludes": "排除词(选填)",
                   "emails": "通知邮箱(≤10)",
@@ -3134,7 +3404,7 @@ const zh = {
           "admin": {
             "review": {
               "title": "审核",
-              "subtitle": "审核甲方提交的资料 + 种子 + 监测问题;通过即跑、生成执行计划书并触发内容生成",
+              "subtitle": "审核甲方提交的资料 + 种子 + 提示词;通过即跑、生成执行计划书并触发内容生成",
               "openDetail": "查看 / 编辑",
               "empty": "暂无符合条件的申请",
               "refresh": "刷新",
@@ -3156,13 +3426,13 @@ const zh = {
               },
               "card": {
                 "seedCount": "种子 {{n}}",
-                "selectedCount": "监测问题 {{n}}/{{max}}",
+                "selectedCount": "提示词 {{n}}/{{max}}",
                 "submittedAt": "提交于"
               },
               "section": {
                 "profile": "品牌资料",
                 "seeds": "种子提示词",
-                "monitored": "监测问题 ({{n}}/{{max}})",
+                "monitored": "提示词 ({{n}}/{{max}})",
                 "changelog": "主题日志"
               },
               "tab": { "seed": "种子提示词", "queries": "扩展 Query" },
@@ -3177,11 +3447,11 @@ const zh = {
             },
             "executionPlan": {
               "title": "执行策略与规划(执行计划书)",
-              "subtitle": "项目总体状况 / 主题日志 / 泛化日志 / 运行进度",
+              "subtitle": "发文计划 / 信源分析 / 投放策略",
               "backToReview": "返回审核",
               "rerun": "重新触发跑批",
               "regenSnapshot": "重新生成计划书",
-              "regenConfirm": "按主题当前的资料与监测问题重新生成计划书快照?发文计划表与运行状态保持不变。",
+              "regenConfirm": "按主题当前的资料与提示词重新生成计划书快照?发文计划表与运行状态保持不变。",
               "errorPrefix": "错误",
               "section": {
                 "overview": "项目总体状况",
@@ -3193,7 +3463,7 @@ const zh = {
               "publishingPlanHint": "根据 AI 引擎命中率排优先级 — 命中率越低代表 AI 越不知道你的品牌,越要补内容。计划按月滚动:一次排满一个月,临近末尾会自动续上下一个月,也可随时手动增删改行。点行跳到内容审核.",
               "col": {
                 "date": "发布日期",
-                "query": "监测问题",
+                "query": "提示词",
                 "coverage": "AI 命中率",
                 "priority": "优先级",
                 "platforms": "建议平台",
@@ -3205,6 +3475,7 @@ const zh = {
                 "low": "可选"
               },
               "docStatus": {
+                "generating": "生成中",
                 "draft": "草稿",
                 "pending_review": "审核中",
                 "approved": "已通过",
@@ -3213,14 +3484,31 @@ const zh = {
                 "notGenerated": "未生成"
               }
             },
+            "abuseReports": {
+              "title": "举报处置",
+              "subtitle": "公众提交的举报工单：受理、处置并向举报人反馈"
+            },
+            "contentTrace": {
+              "title": "生成溯源",
+              "subtitle": "按内容编号或粘贴正文,追回生成人、生成IP、生成时间与所调用的模型"
+            },
             "contentReview": {
               "title": "内容发布与审核",
               "subtitle": "选账号 + 主题查看 LLM 生成的文案稿;先审核内容,再为通过稿件选发布平台和媒体",
               "refresh": "刷新",
               "empty": "该筛选条件下没有文档",
               "topicLabel": "账号 / 主题",
+              "viewLabel": "视图",
+              "viewTime": "按时间",
+              "viewQuery": "按提示词",
+              "sortLabel": "排序",
+              "sortNewest": "生成时间 · 最新在前",
+              "sortOldest": "生成时间 · 最早在前",
+              "generatedAt": "生成时间",
+              "planRow": "计划",
               "statusLabel": "状态",
               "statusFilter": {
+                "generating": "生成中",
                 "all": "全部",
                 "to_review": "待审",
                 "draft": "草稿",
@@ -3250,6 +3538,9 @@ const zh = {
               "mediumslyPushedShort": "Mediumsly 已发",
               "mediumslyFailed": "Mediumsly 推送失败",
               "sourceLabel": "来源",
+              "templateLabel": "模板",
+              "templateAll": "全部模板",
+              "topicSearchPlaceholder": "搜项目 / 客户邮箱…",
               "sourceFilter": {
                 "all": "全部",
                 "ai": "AI 生成",
@@ -3266,8 +3557,9 @@ const zh = {
               "exporting": "导出中…",
               "regenerate": "重新生成",
               "generate": "生成 GEO策略优化方案",
-              "generating": "生成中,首次需 1-3 分钟,会自动刷新…",
-              "generatingHint": "已开始生成 — 后台正在扫描官网 + 调用大模型,本页 3 秒刷新一次",
+              "generating": "生成中 — 官网扫描 + 大模型撰写,通常需 5-15 分钟,视官网规模可能更久…",
+              "generatingHint": "后台正在逐项扫描官网并调用大模型撰写方案;可离开本页做别的,稍后回来查看,本页会自动刷新",
+              "generatingElapsed": "已进行约 {{n}} 分钟",
               "failed": "生成失败",
               "retry": "重试",
               "websiteLabel": "品牌官网网址(选填)",
@@ -3292,7 +3584,7 @@ const zh = {
                 "details": "诊断明细(25 类)"
               },
               "queries": {
-                "hint": "由「主题资料 → 监测问题」环节用户已勾选的 Query 清单(≤200),按种子提示词分组,展示每个种子词扩展出的监测问题,作为后续 AI 引擎实测与跑批的监测对象",
+                "hint": "由「主题资料 → 提示词」环节用户已勾选的 Query 清单(≤200),按种子提示词分组,展示每个种子词扩展出的提示词,作为后续 AI 引擎实测与跑批的监测对象",
                 "totalChip": "共 {{n}} 条",
                 "unseeded": "其它(未关联种子词)"
               },
@@ -3330,7 +3622,7 @@ const zh = {
           "topic": {
             "profile": {
               "title": "主题资料",
-              "subtitle": "提交品牌资料 + 种子词 + 监测问题(≤200),通过审核后会自动生成执行计划书和文案稿",
+              "subtitle": "提交品牌资料 + 种子词 + 提示词(≤200),通过审核后会自动生成执行计划书和文案稿",
               "backToDashboard": "返回主控台",
               "notFound": "主题不存在",
               "saved": "已保存",
@@ -3341,11 +3633,11 @@ const zh = {
               "submitForReview": "提交审核",
               "missing": "还有 {{n}} 个必填项未完成",
               "allFilled": "必填项已全部填写",
-              "selectedNow": "监测问题 {{n}}/{{max}}",
+              "selectedNow": "提示词 {{n}}/{{max}}",
               "tab": {
                 "profile": "品牌资料",
                 "seeds": "种子提示词",
-                "monitor": "监测问题"
+                "monitor": "提示词"
               },
               "status": {
                 "draft": "草稿",
@@ -3354,33 +3646,41 @@ const zh = {
                 "rejected": "已拒绝"
               },
               "statusHint": {
-                "draft": "完成资料并勾选监测问题后可提交审核",
+                "draft": "完成资料并勾选提示词后可提交审核",
                 "pending": "平台运营审核中,暂无法编辑",
                 "approved": "已通过审核,执行计划书已生成,文案稿正在异步生成",
                 "rejected": "未通过审核,请按邮件反馈调整后重新提交"
               },
               "seeds": {
-                "hint": "种子提示词用于扩展监测问题;新增的种子会默认进入待审状态",
+                "hint": "种子提示词用于扩展提示词;加进来就生效,不需要审核",
                 "placeholder": "输入种子提示词,如「遗产继承」",
                 "add": "添加种子",
                 "empty": "还没有种子提示词"
               },
               "monitor": {
-                "expandTitle": "用种子词扩展监测问题候选",
-                "expandHint": "LLM 会基于资料 + 种子词扩展候选,你勾选最多 200 条作为正式监测问题",
+                "expandTitle": "用种子词扩展提示词候选",
+                "expandHint": "LLM 会基于资料 + 种子词扩展候选,你勾选最多 1000 条作为正式提示词",
                 "seedPlaceholder": "种子词(如「遗产继承」)",
                 "expand": "扩展候选",
-                "selectedHint": "已勾选 {{n}}/{{max}} 个监测问题",
-                "cap": "最多勾选 {{max}} 个监测问题",
+                "selectedHint": "已勾选 {{n}}/{{max}} 个提示词",
+                "cap": "最多勾选 {{max}} 个提示词",
                 "empty": "暂无候选,先用上方扩展或在编辑器添加 query",
+                "showDeleted": "含已删除({{n}})",
+                "restore": "恢复",
+                "deleteHint": "不再监测这个问题(可恢复)",
+                "deleteConfirmTitle": "不再监测这个问题?",
+                "deleteConfirmBody": "「{{q}}」将不再检测、不进报告口径、也不再用于发文选词。历史应答与已发文章都保留,随时可以恢复。注意:近几天的报告数字会跟着变(趋势图会标出口径变更),本主题正在进行中的智能选题动作也会作废。",
+                "deleteConfirm": "确认删除",
                 "scene": {
                   "title": "4 维场景扩展",
-                  "hint": "输入一个种子词,系统会并行调 4 套提示词模板,产出搜索词 / 问答词 / 意图 / 品牌 4 类候选,从每个 tab 里勾选你要的监测问题。",
+                  "hint": "输入一个种子词,系统会并行调 4 套提示词模板,产出搜索词 / 问答词 / 意图 / 品牌 4 类候选,从每个 tab 里勾选你要的提示词。",
                   "dimensions": "扩展维度:",
-                  "countPerSceneHint": "每个场景产出条数(最多 50)",
+                  "countPerSceneHint": "每个场景产出条数(最多 30)",
                   "expand": "拓 词",
                   "expanding": "扩展中…",
                   "pickAtLeastOne": "至少勾选一个扩展维度",
+                  "matchedProduct": "已识别「{{name}}」为本品牌产品:搜索 / 问答 / 意图词按品类「{{category}}」扩展(不出现产品名),品牌词出产品评估问句",
+                  "matchedProductNoCategory": "由 AI 推断的品类",
                   "resultFor": "「{{seed}}」的扩展候选",
                   "notRun": "该场景这次未拓词",
                   "empty": "该场景未产出候选",
@@ -3415,8 +3715,14 @@ const zh = {
               "brand": "品牌与监控",
               "membership": "会员信息",
               "usage": "使用情况",
+              "salesAgentEmail": "邮件配置",
+              "salesAgentSms": "短信配置",
               "history": "检测记录",
-              "payments": "支付记录"
+              "payments": "支付记录",
+              "balance": "我的积分",
+              "integration": "对接集成",
+              "billing": "会员与计费",
+              "integrations": "集成与通知"
             },
             "common": {
               "needLogin": "请先登录"
@@ -3448,10 +3754,10 @@ const zh = {
               },
               "fields": {
                 "target": "品牌名",
-                "ticker": "股票代码",
+                "ticker": "股票代码(选填)",
                 "aliases": "别名(选填)",
                 "intent": "监测重点",
-                "intentPlaceholder": "例:做空报告 / 业绩传闻 / 海外业务",
+                "intentPlaceholder": "例:做空报告 / 业绩传闻 / 跨境业务",
                 "excludes": "排除词(选填)",
                 "mediaAllowlist": "媒体平台(选填)",
                 "mediaAllowlistHint": "按分类勾选要抓取的平台,留空 = 全部平台。改动会触发下次重新抓取。",
@@ -3512,6 +3818,7 @@ const zh = {
               "mode": "模式",
               "modeFree": "标准",
               "modeAdvanced": "高级",
+              "modeSeo": "SEO",
               "actions": "操作",
               "view": "查看",
               "loading": "加载中...",
@@ -3545,11 +3852,94 @@ const zh = {
               }
             }
           },
+          "portal": {
+            "heading": "租户门户",
+            "subtitle": "查看您的余额、各引擎今日用量与调用记录。每 15 秒自动刷新。",
+            "balance": "剩余额度",
+            "billableTotal": "累计计费调用",
+            "creditsSpent": "累计消耗额度",
+            "engineUsage": "各引擎今日用量",
+            "colEngine": "引擎",
+            "colQuota": "日配额",
+            "colUsedToday": "今日已用",
+            "colRemaining": "剩余次数",
+            "noEngines": "暂无可用引擎",
+            "records": "调用记录",
+            "engineAll": "全部引擎",
+            "statusAll": "全部状态",
+            "since": "起始日期",
+            "until": "结束日期",
+            "colQuery": "问题",
+            "colStatus": "状态",
+            "colCreatedAt": "发起时间",
+            "colFinishedAt": "完成时间",
+            "colReturn": "返回",
+            "view": "查看",
+            "collapse": "收起",
+            "retError": "错误",
+            "retAnswer": "返回答案",
+            "retEmpty": "(空)",
+            "retCitations": "引用来源",
+            "retNoCite": "(无引用)",
+            "noJobs": "暂无调用记录",
+            "total": "共 {{n}} 条",
+            "pageSize": "每页",
+            "prevPage": "上一页",
+            "nextPage": "下一页",
+            "pageInfo": "第 {{c}} / {{n}} 页"
+          },
           "workbench": {
+            "llmUsage": {
+              "pageTitle": "模型用量 · 工作台"
+            },
+            "users": {
+              "heading": "用户角色管理",
+              "subtitle": "指派角色:管理员看全部;运营可用工作台五个模块(项目进度、画像、文案复审、监测报告、跑批结果);网关租户登录后只进租户门户。",
+              "searchPlaceholder": "按邮箱或名称搜索",
+              "total": "共 {{n}} 个账号",
+              "colEmail": "邮箱",
+              "colName": "名称",
+              "colRole": "角色",
+              "colTenant": "绑定租户",
+              "colMembership": "会员等级",
+              "membershipUntil": "有效至 {{date}}",
+              "membershipConfirmSet": "确认将「{{email}}」的会员设为「{{name}}」?有效期按档位周期生成(月付 30 天),同档重复设置会顺延到期日。",
+              "membershipConfirmFree": "确认取消「{{email}}」的付费会员,回落到免费档?",
+              "colStatus": "状态",
+              "colActions": "操作",
+              "newUser": "新建用户",
+              "create": "创建",
+              "creating": "创建中…",
+              "cancel": "取消",
+              "optional": "选填",
+              "initialPwd": "初始密码",
+              "newPwd": "新密码",
+              "pwdOnce": "(仅本次显示,请立即转交用户)",
+              "pwdPlaceholder": "留空自动生成(至少 8 位)",
+              "createHint": "创建后可在下方列表里改角色、绑定网关租户、设会员等级。初始密码明文只显示一次。",
+              "resetPwd": "重置密码",
+              "copy": "复制",
+              "close": "关闭",
+              "filterAll": "全部",
+              "statusAll": "全部状态",
+              "clear": "清空",
+              "showing": "筛出 {{n}} / 共 {{total}}",
+              "selfTag": "我",
+              "roleAdmin": "管理员",
+              "roleOperator": "运营",
+              "roleMaintainer": "维护角色",
+              "roleUser": "普通用户",
+              "roleTenant": "网关租户",
+              "selfLocked": "不能修改自己的角色",
+              "noTenant": "未绑定",
+              "active": "正常",
+              "inactive": "已停用",
+              "empty": "没有匹配的账号"
+            },
             "adminCockpit": {
               "title": "项目进度",
               "heading": "项目进度",
-              "subtitle": "一屏看完每个主题在 GEO 管线上的进度;无需逐步点击 sidebar。",
+              "subtitle": "一屏掌握每个主题在 GEO 流程中的进度，无需逐页切换。",
               "newProject": "新建项目",
               "todo": {
                 "notStarted": "未启动项目",
@@ -3558,8 +3948,19 @@ const zh = {
               },
               "colTopic": "主题",
               "colCustomer": "客户",
-              "colGrowth": "品牌增长",
-              "viewGrowth": "查看",
+              "colProgress": "进度",
+              "colReports": "报告中心",
+              "searchPlaceholder": "搜索主题 / 品牌 / 行业 / 客户邮箱 / 编号",
+              "filterStage": "当前阶段",
+              "filterStageAll": "全部阶段",
+              "filterAllDone": "已全部完成",
+              "filterState": "状态",
+              "filterStateAll": "全部状态",
+              "clearFilters": "清空筛选",
+              "resultCount": "{{shown}} / {{total}} 个项目",
+              "noMatch": "没有匹配的项目",
+              "sortHint": "点击排序:升序 → 降序 → 取消",
+              "viewReports": "查看",
               "stage": {
                 "submit": "品牌与主题创建",
                 "review": "诊断与方案预评估",
@@ -3600,6 +4001,38 @@ const zh = {
               "next": "下一页",
               "pageRange": "{{from}}-{{to}} / 共 {{total}} 个"
             },
+            "adminProbe": {
+              "title": "监测数据",
+              "heading": "监测数据",
+              "subtitle": "输入一个问题、选择引擎,用真实浏览器自动化执行一次,返回回答与执行过程录像。使用实测专用账号,不占用检测账号。",
+              "engineLabel": "引擎",
+              "queryLabel": "提问内容",
+              "queryPlaceholder": "输入要向该引擎提出的问题…",
+              "execute": "执行",
+              "submitting": "提交中…",
+              "durationHint": "一次执行约需 1~5 分钟,请耐心等待",
+              "elapsed": "已执行 {{seconds}} 秒",
+              "runningHint": "正在用真实浏览器向引擎提问并录制执行过程,完成后自动展示结果。",
+              "questionLabel": "提问",
+              "answerLabel": "回答",
+              "citationsLabel": "引用来源",
+              "videoLabel": "执行录像",
+              "videoLoading": "录像加载中…",
+              "videoDownload": "下载录像",
+              "noVideo": "本次执行没有生成录像。",
+              "historyTitle": "最近执行记录",
+              "historyHint": "点击任意一行可查看该次执行的结果与录像。",
+              "colEngine": "引擎",
+              "colQuery": "提问",
+              "colStatus": "状态",
+              "colTime": "提交时间",
+              "status": {
+                "queued": "排队中",
+                "running": "执行中",
+                "done": "已完成",
+                "failed": "失败"
+              }
+            },
             "adminCrawl": {
               "title": "AI 爬虫分析",
               "heading": "AI 爬虫活动",
@@ -3631,14 +4064,40 @@ const zh = {
             "adminAccounts": {
               "title": "画像",
               "heading": "画像",
-              "subtitle": "替每个客户配置监测主题(资料 / 种子 / 监测问题等);管理员新增直接生效,跳过审核。",
+              "eyebrow": "客户管理",
+              "subtitle": "替每个客户配置监测主题(资料 / 种子 / 提示词等);管理员新增直接生效,跳过审核。",
               "colId": "ID",
               "colEmail": "邮箱",
               "colName": "客户名称",
+              "colStatus": "账号状态",
+              "colKind": "账号类型",
               "colTopicCount": "主题数",
               "adminBadge": "admin",
               "configureTopics": "配置主题",
               "newCustomer": "新建客户",
+              "searchLabel": "搜索客户",
+              "searchPlaceholder": "搜索邮箱 / 客户名称 / 品牌 / ID",
+              "filterStatus": "账号状态",
+              "filterStatusAll": "全部状态",
+              "active": "正常",
+              "inactive": "已停用",
+              "filterKind": "账号类型",
+              "filterKindAll": "全部类型",
+              "customer": "客户",
+              "admin": "管理员",
+              "filterTopics": "主题配置",
+              "filterTopicsAll": "全部主题",
+              "withTopics": "已有主题",
+              "withoutTopics": "暂无主题",
+              "sortLabel": "排序",
+              "sortNewest": "最新创建",
+              "sortOldest": "最早创建",
+              "sortName": "客户名称",
+              "sortTopics": "主题数最多",
+              "clearFilters": "清空筛选",
+              "resultCount": "{{shown}} / {{total}} 个客户",
+              "noMatch": "没有匹配的客户",
+              "noMatchHint": "尝试更换关键词或清空筛选条件。",
               "createForm": {
                 "title": "注册新客户账号",
                 "emailLabel": "邮箱",
@@ -3669,7 +4128,7 @@ const zh = {
               "newTopic": "新增主题",
               "editTopic": "编辑主题",
               "emptyHint": "该用户暂无主题 — 点右上「新增主题」替 ta 创建一个",
-              "metaSummary": "目标: {{target}} · {{queries}} 个监测问题 · {{engines}} 个引擎",
+              "metaSummary": "目标: {{target}} · {{queries}} 个提示词 · {{engines}} 个引擎",
               "industryLabel": "行业",
               "statusLabel": "状态",
               "neverRun": "尚未跑过",
@@ -3691,7 +4150,7 @@ const zh = {
                 "body": "主题资料已落库,可直接生成 GEO策略优化方案。",
                 "colName": "主题名",
                 "colIndustry": "行业",
-                "colQueries": "监测问题",
+                "colQueries": "提示词",
                 "queriesValue": "{{selected}} / {{total}} 条",
                 "colWebsite": "品牌官网",
                 "generateReport": "生成 GEO策略优化方案",
@@ -3699,6 +4158,375 @@ const zh = {
                 "generating": "提交中…",
                 "later": "稍后再说",
                 "nextHint": "下一步:方案生成后,可在 GEO策略优化方案页继续生成「执行计划书」。"
+              }
+            }
+          },
+          "diagnosis": {
+            "pageTitle": "一键全面诊断",
+            "form": {
+              "title": "一键全面诊断",
+              "subtitle": "一次填写品牌与行业词,八项检测全部跑一遍,生成九章综合诊断报告。",
+              "urlLabel": "官网地址(选填)",
+              "urlPlaceholder": "https://example.com,没有官网可留空",
+              "urlHint": "没有官网可以留空:将跳过官网体检、答案引擎优化、爬虫可达性、站外权威四项站点侧检测,AI 可见性、竞品情报、品牌实体、舆情四项照常跑。",
+              "noUrl": "未提供官网",
+              "brandLabel": "品牌名",
+              "brandPlaceholder": "官方品牌名,例如:威吉力",
+              "industryLabel": "行业词(必填,最多 5 个)",
+              "industryPlaceholder": "输入行业词后回车,例如:科学减脂",
+              "industryHint": "用于生成排名类检测问题,如「某行业词哪个品牌好」「某行业词排行榜推荐」。",
+              "brandTermsLabel": "品牌词(可选,最多 5 个)",
+              "brandTermsPlaceholder": "输入品牌词后回车,不填默认用品牌名",
+              "brandTermsHint": "用于生成口碑类检测问题,如「某品牌词怎么样」,并作为舆情监测关键词。",
+              "industryRequired": "请至少填写一个行业词",
+              "competitorsLabel": "竞品域名(可选,最多 5 个)",
+              "competitorsPlaceholder": "输入竞品域名后回车,例如 competitor.com",
+              "competitorsHint": "不填也可以:系统会从 AI 引擎回答中自动识别竞品。",
+              "submit": "生成诊断报告",
+              "submitting": "正在创建…",
+              "urlInvalid": "网址格式无效",
+              "brandRequired": "请输入品牌名",
+              "estimate": "整个诊断约需 五到十 分钟,期间可离开页面,稍后在历史列表查看。"
+            },
+            "history": {
+              "title": "历史诊断报告",
+              "empty": "还没有诊断记录,填写上方表单生成第一份报告。",
+              "view": "查看",
+              "prev": "上一页",
+              "next": "下一页",
+              "pageInfo": "第 {{page}} / {{pages}} 页 · 共 {{total}} 份",
+              "status": {
+                "generating": "生成中",
+                "ready": "已完成",
+                "failed": "失败"
+              }
+            },
+            "progress": {
+              "title": "诊断进行中",
+              "subtitle": "七项检测按序执行,重型检测约需数分钟,请耐心等待。",
+              "done": "已完成 {{done}}/{{total}} 项",
+              "llmStage": "检测完成,正在生成智能解读…",
+              "steps": {
+                "base": "官网基建体检(二十五类)",
+                "aeo": "答案引擎优化审计",
+                "crawlTest": "智能爬虫可达性",
+                "authority": "权威信号审计",
+                "visibility": "多引擎可见性实测",
+                "entity": "品牌实体认知审计",
+                "competitiveIntel": "竞品情报分析",
+                "sentiment": "舆情现场探测"
+              },
+              "stepStatus": {
+                "pending": "等待中",
+                "running": "进行中",
+                "ok": "完成",
+                "failed": "失败",
+                "skipped": "已跳过"
+              }
+            },
+            "failed": {
+              "title": "诊断失败",
+              "retry": "重新生成"
+            },
+            "report": {
+              "badge": "综合诊断报告",
+              "generatedAt": "生成时间",
+              "exportPdf": "导出 PDF",
+              "exporting": "导出中…",
+              "regenerate": "重新诊断",
+              "cacheNote": "部分检测复用二十四小时内的缓存结果。",
+              "totalScore": "综合评分",
+              "gradeLabel": "综合评级",
+              "estimated": "估算值",
+              "noData": "数据不足",
+              "noNarrative": "智能解读生成失败,以下为检测硬数据。",
+              "sourceAi": "智能推断",
+              "sourceMeasured": "实测",
+              "stepMissing": "「{{name}}」本次未取得数据",
+              "notSelected": "本次未检测",
+              "dims": {
+                "ai_visibility": "AI 搜索可见度",
+                "infrastructure": "基建完善度",
+                "authority": "权威背书",
+                "competitive": "竞品对比优势",
+                "sentiment": "舆情健康度"
+              },
+              "metricLabels": {
+                "exposure": "整体露出率",
+                "top1": "TOP1露出率",
+                "top3": "TOP3露出率",
+                "accuracy": "内容中正率",
+                "citation": "文章引用率",
+                "mention": "品牌声量度"
+              },
+              "metricHints": {
+                "exposure": "品类词有效应答中本品被**推荐或列入名单**的比例(仅作背景举例、顺带带过的提及不算)。分子为被推荐的应答数,分母为品类词有效应答数(剔除报错);**送分题不计入分母** —— 词类是品牌词/竞品对比词,或题面里直接点了品牌名(如「XX怎么样」),这种题答案必然提到本品。第 05 章的整体露出率与本列是同一个数。",
+                "top1": "品类词有效应答中,本品被排在推荐首位的比例。分母与整体露出率同尺,因此 TOP1 ≤ TOP3 ≤ 整体露出率 恒成立。",
+                "top3": "品类词有效应答中,本品进入前三位的比例(含首位)。分母与整体露出率同尺;送分题不计入。",
+                "accuracy": "**品牌名出现过的**应答中,表述无负面或偏差的比例,并按舆情中高风险占比折算。分母为提及数(含顺带提及与负面语境),不是被推荐数 —— 被推荐的文字按定义几乎不会是负面的。折算原因:AI 侧只看得见「答案里怎么说」,看不见还没被引用到的负面证据;折扣因子 =(1 − 中高风险证据数 ÷ 证据总数),与舆情健康度同一个扣分基数。本次没有任何提及时显示「—」,不显示 100%。",
+                "citation": "有效应答中引用了本品自有内容的比例。",
+                "mention": "本品提及量占本品与竞品提及总量的比例。"
+              },
+              "sceneLabels": {
+                "compare": "竞品对比词",
+                "brand": "品牌词",
+                "search": "搜索词",
+                "qa": "问答词",
+                "intent": "意图词",
+                "scenario": "场景词",
+                "unknown": "未分类"
+              },
+              "sections": {
+                "overview": {
+                  "title": "诊断概览",
+                  "subtitle": "核心发现与风险提示",
+                  "keyFindings": "关键发现",
+                  "risks": "风险提示",
+                  "collectStatus": "本次检测采集情况"
+                },
+                "scores": {
+                  "title": "五维评分",
+                  "subtitle": "五个维度加权合成综合评分",
+                  "weight": "权重",
+                  "breakdown": "维度拆解",
+                  "best": "最强项",
+                  "worst": "最短板",
+                  "missingDims": "本次未采集维度:{{names}}(雷达图以0占位展示,总分不按零分计入)",
+                  "formulaTitle": "总分怎么算",
+                  "totalFormula": "综合评分 = 各维度得分 × 权重之和 ÷ 有数据维度的权重之和",
+                  "weightRedistribute": "某维度未采集时,其权重按比例分摊给其余维度,不计零分,因此缺维度不会拉低总分。",
+                  "gradeScale": "评级分档"
+                },
+                "personas": {
+                  "title": "用户画像",
+                  "subtitle": "目标人群与其典型搜索问题",
+                  "intent": "搜索意图",
+                  "typicalQueries": "典型搜索问题",
+                  "coverageLegend": "问题覆盖情况:",
+                  "coverage": {
+                    "hit": "已实测且被提及",
+                    "miss": "已实测未被提及",
+                    "untested": "未纳入本次实测"
+                  }
+                },
+                "scenes": {
+                  "title": "搜索场景与意图",
+                  "subtitle": "我们测了哪些场景,用户在这些场景里想要什么",
+                  "sceneTitle": "搜索场景",
+                  "sceneHint": "按五类种子提示词统计本次提示词的结构分布",
+                  "sceneUnavailable": "本次提示词尚未标注词类,暂无法按场景拆分。",
+                  "intentTitle": "搜索意图",
+                  "intentHint": "用户在各场景下的决策诉求,以及智能引擎当前的叙述倾向",
+                  "wordCount": "{{n}} 条",
+                  "hitRate": "被提及比例",
+                  "aiSentiment": "引擎情感倾向",
+                  "aiFraming": "引擎叙述框架",
+                  "gaps": "覆盖缺口"
+                },
+                "visibility": {
+                  "title": "搜索可见性",
+                  "subtitle": "各智能引擎推荐本品牌的整体情况(与第 06 章同源同口径)",
+                  "overallRate": "整体露出率",
+                  "queryCount": "提示词数",
+                  "mentionCount": "被推荐次数",
+                  "totalAnswers": "有效应答数",
+                  "engineRates": "各引擎露出率",
+                  "failedEngines": "本次未取得数据的平台",
+                  "failedFiltered": "本次未调度该平台",
+                  "failedAllErrors": "{{n}} 条问题全部未返回",
+                  "topCompetitors": "应答中出现的竞对域名"
+                },
+                "sources": {
+                  "title": "信源分析",
+                  "subtitle": "AI 的答案是从哪些站点学来的",
+                  "totalSources": "被引站点数",
+                  "totalCitations": "引用总次数",
+                  "selfCitations": "引用自有内容",
+                  "engineCovered": "有引用的引擎",
+                  "topPlatforms": "被引最多的站点",
+                  "topPlatformsHint": "按引用次数排序;「篇数」是同站被引到的不同文章数",
+                  "cites": "次",
+                  "articles": "篇",
+                  "typeDist": "引用源类型分布",
+                  "typeDistHint": "这决定内容该往哪类渠道铺",
+                  "byEngine": "各引擎的引用偏好",
+                  "colEngine": "引擎",
+                  "colCites": "引用次数",
+                  "colTopDomains": "最常引用的站点",
+                  "recs": "信源结论",
+                  "noSelfCite": "本次 AI 回答中没有引用到任何自有内容 —— 站外内容资产是当前最大的缺口。",
+                  "type": {
+                    "news": "新闻媒体", "forum": "论坛社区", "ecommerce": "电商平台",
+                    "government": "政府/机构", "wikipedia": "百科", "blog": "博客",
+                    "education": "教育科研", "video": "视频", "other": "其他"
+                  }
+                },
+                "indexing": {
+                  "title": "收录效果",
+                  "subtitle": "分平台与分词类的六项指标现状",
+                  "stanceTitle": "AI 回答情感分布",
+                  "stanceHint": "仅统计提到本品牌的 {{n}} 条回答;「内容中正率」就是由它折算而来。与第 10 章的全网舆情不是同一口径。",
+                  "stance": { "positive": "正面", "neutral": "中性", "negative": "负面" },
+                  "byEngine": "分平台 × 六项指标",
+                  "byScene": "分词类 × 六项指标",
+                  "colEngine": "引擎",
+                  "colScene": "词类",
+                  "colQuery": "提示词",
+                  "queryDetail": "提示词逐条明细",
+                  "querySourceLlm": "本次 {{n}} 条提示词由 AI 规划,其中 {{m}} 条基于你填写的内容改写或拆分,原句标在问题下方。",
+                  "querySourceManual": "本次 {{n}} 条提示词为方案人工指定,系统未做改写或扩展。",
+                  "hitRuleNote": "露出口径 — 品牌名共在 {{mentioned}} 条回答里出现,其中 {{recommended}} 条是被推荐或列入名单;只有后者计入露出率。仅作背景举例、顺带带过的提及不算露出。",
+                  "querySourceTemplate": "本次提示词由内置模板生成。",
+                  "rewrittenFrom": "改写自:{{origin}}",
+                  "glossary": "指标口径说明",
+                  "recognitionRate": "智能引擎认知率",
+                  "excludedFromGlobal": "不计入整体露出率口径",
+                  "citationScopeNote": "本报告的文章引用率按「官网域名被引用」口径统计,与报告中心的自有文章口径不同。"
+                },
+                "website": {
+                  "title": "网站建设",
+                  "subtitle": "官网基建体检、答案引擎优化与智能爬虫可达性",
+                  "baseScore": "官网体检评分",
+                  "passCount": "通过项",
+                  "warnCount": "警告项",
+                  "failCount": "未通过项",
+                  "clusters": "五大短板簇",
+                  "allChecks": "二十五类逐项体检",
+                  "showAll": "展开全部 {{n}} 项",
+                  "showProblemsOnly": "只看有问题的项",
+                  "expandCluster": "展开本簇 {{n}} 项明细",
+                  "collapse": "收起",
+                  "allPassed": "本次体检全部通过,无需处理。",
+                  "colCategory": "检查类别",
+                  "colStatus": "状态",
+                  "colConclusion": "结论",
+                  "colFix": "修复建议",
+                  "checkStatus": {
+                    "PASS": "通过",
+                    "WARN": "警告",
+                    "FAIL": "未通过",
+                    "INFO": "提示"
+                  },
+                  "severity": { "high": "严重", "med": "中等", "low": "轻微" },
+                  "aeoTitle": "答案引擎优化",
+                  "aeoScore": "答案引擎优化评分",
+                  "aeoImprovements": "优先改进项",
+                  "crawlTitle": "智能爬虫可达性",
+                  "crawlAllOk": "主流智能爬虫均可正常抓取本站。",
+                  "crawlBlocked": "被拦截的爬虫",
+                  "topIssues": "重点问题与改法"
+                },
+                "authority": {
+                  "title": "权威背书",
+                  "subtitle": "站外权威信号与品牌实体认知",
+                  "formulaTitle": "本维度怎么算",
+                  "formulaBoth": "权威背书 = 站外权威得分 × 六成 + 实体认知得分 × 四成",
+                  "formulaOffsiteOnly": "本次仅采集到站外权威数据,本维度按站外权威单独计分。",
+                  "formulaEntityOnly": "本次仅采集到实体认知数据,本维度按实体认知单独计分。",
+                  "offsite": "站外权威",
+                  "entity": "实体认知",
+                  "offsiteTitle": "站外权威分项",
+                  "offsiteHint": "四项各五分,合计 {{got}}/{{max}} 分",
+                  "entityTitle": "实体认知分项",
+                  "entityHint": "八项各二十分,合计 {{got}}/{{max}} 分",
+                  "offsiteItems": {
+                    "reviews": "第三方评价平台",
+                    "awards": "奖项与资质",
+                    "google": "搜索引擎权威度",
+                    "mentions": "权威名录收录"
+                  },
+                  "entityItems": {
+                    "recognition": "实体识别度",
+                    "clarity": "实体清晰度",
+                    "category": "品类关联度",
+                    "competitive": "竞争位置",
+                    "sentiment": "情感与叙述",
+                    "gap": "内容缺口",
+                    "kg": "知识图谱",
+                    "footprint": "平台足迹"
+                  },
+                  "hasSignal": "已检出 {{n}} 项信号",
+                  "noSignal": "未检出信号",
+                  "indexedPages": "收录页面 {{n}} 个",
+                  "kgFields": "机构结构化字段 {{n}} 项",
+                  "kg": {
+                    "wikipedia": "维基百科",
+                    "wikidata": "维基数据",
+                    "google_kg": "知识图谱",
+                    "baidu_baike": "百度百科"
+                  },
+                  "footprint": "平台足迹",
+                  "kgTitle": "知识图谱命中",
+                  "missingSignals": "缺失的背书类型",
+                  "actions": "补齐动作"
+                },
+                "competitive": {
+                  "title": "竞品分析",
+                  "subtitle": "提及率对比与威胁评估",
+                  "yourBrand": "本品牌",
+                  "yourPick": "你指定",
+                  "threat": { "high": "高威胁", "mid": "中威胁", "low": "低威胁" },
+                  "autoDetected": "以下竞品由智能引擎应答自动识别。",
+                  "insufficient": "竞品数据不足:本次未取得有效的竞品对比数据。",
+                  "scopeNote": "提及率只统计行业词问题({{valid}}/{{total}} 条应答);问句里已经写了品牌名的那类问题（品牌词、对比词）不计入,否则本品牌会白拿一截提及率。",
+                  "scopeNoteAll": "本次问题全部含品牌名,提及率按全部 {{total}} 条应答统计,与竞品不是同一场景,仅供参考。",
+                  "scopeNoteLegacy": "本报告按旧口径统计:提及率的分母含「问句里已经写了品牌名」的问题,本品牌数值偏高,不能直接与竞品比较。重新生成一次即可换成新口径。",
+                  "advantageLogic": "优势逻辑",
+                  "aheadBy": "领先本品牌 {{gap}} 个百分点",
+                  "behindBy": "落后本品牌 {{gap}} 个百分点"
+                },
+                "sentiment": {
+                  "title": "舆情分析",
+                  "subtitle": "口碑评价与风险预警",
+                  "riskLevel": "风险等级",
+                  "totalPosts": "相关讨论",
+                  "negativeCount": "负面条数",
+                  "highRisk": "中高风险条数",
+                  "positiveRatio": "正面占比",
+                  "toneTitle": "整体情感倾向",
+                  "toneNote": "量程 -1~1:-1 极负面、0 中性、+1 极正面。由模型对全部检索结果整体判断得出,不参与舆情健康度计算。",
+                  "toneStrongPos": "明显正面",
+                  "tonePos": "偏正面",
+                  "toneNeutral": "基本中性",
+                  "toneNeg": "偏负面",
+                  "toneStrongNeg": "明显负面",
+                  "evidenceRange": "证据时间范围 {{from}} ~ {{to}};其中近 {{window}} 天内 {{recent}} 条、更早 {{historical}} 条、时间不详 {{undated}} 条。",
+                  "undatedTime": "时间未知",
+                  "historicalTag": "历史",
+                  "positivePoints": "正面口碑",
+                  "negativePoints": "负面口碑",
+                  "negativeList": "负面讨论明细",
+                  "suggestions": "应对建议"
+                },
+                "outlook": {
+                  "title": "综合评估与预期",
+                  "subtitle": "现状判定与执行优化后的预期提升",
+                  "stage": "所处阶段",
+                  "current": "当前",
+                  "after30": "三十天后",
+                  "after90": "九十天后",
+                  "currentVsTarget": "现状与目标对账",
+                  "colWeight": "权重",
+                  "colCurrent": "现状分",
+                  "colTarget": "目标分",
+                  "colGain": "提升点数",
+                  "colContribution": "对总分贡献",
+                  "projectedTotal": "预期综合评分",
+                  "metricProjection": "六项指标预期",
+                  "driver": "达成方式",
+                  "metricProjectionNote": "三项露出率均按品类词口径统计,品牌词与竞品对比词不计入,分母同尺(TOP1 ≤ TOP3 ≤ 整体露出率)。逐项口径见「指标口径说明」。",
+                  "mismatchNote": "智能解读给出的九十天总分为 {{model}},与逐维目标推算的 {{computed}} 不一致,表中以推算值为准。",
+                  "actionGainSum": "全部行动项的预计增益合计 {{n}} 分,与上表预期提升可相互印证。",
+                  "assumptions": "预测前提",
+                  "quickWins": "快速赢利点",
+                  "expectedImpact": "预期收益",
+                  "effort": { "low": "低成本", "mid": "中等投入" },
+                  "p1": "优先行动(第一优先级)",
+                  "p2": "后续行动(第二优先级)",
+                  "etaWeeks": "预计 {{weeks}} 周",
+                  "gainUnit": "分",
+                  "roadmap": "实施路线图"
+                }
               }
             }
           }

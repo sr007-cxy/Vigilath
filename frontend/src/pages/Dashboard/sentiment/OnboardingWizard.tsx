@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { TagInput } from './components/TagInput';
 import { isMockMode } from '../../../services/sentimentApi';
 import { useCreateAccount } from '../../../hooks/useSentiment';
+import { toast } from '../../../components/ui/toast';
 
 interface Props {
   onSubmit?: () => void;
@@ -25,7 +26,10 @@ export function OnboardingWizard({ onSubmit }: Props) {
   const [emails, setEmails] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = target.trim().length > 0 && ticker.trim().length > 0;
+  // Only the brand name is required -- the ticker field's label says "optional", yet it used to count here,
+  // so users without a ticker clicking "Save and start crawling now" got no response (button disabled + early return),
+  // with neither an error nor a hint.
+  const canSubmit = target.trim().length > 0;
   const submitting = createAccount.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,16 +38,16 @@ export function OnboardingWizard({ onSubmit }: Props) {
     setError(null);
 
     if (usingMock) {
-      // mock 模式:不调 API,直接通知父组件
+      // mock mode: don't call the API, notify the parent directly
       onSubmit?.();
-      alert(t('dashboard.sentiment.onboarding.running'));
+      toast.success(t('dashboard.sentiment.onboarding.running'));
       return;
     }
 
     try {
       await createAccount.mutateAsync({
         target: target.trim(),
-        ticker: ticker.trim(),
+        ticker: ticker.trim(),      // Empty string = non-listed entity; the backend files it by brand name
         intent: intents.length > 0 ? intents.join('、') : undefined,
         keywords,
         notify_emails: emails,
@@ -51,7 +55,9 @@ export function OnboardingWizard({ onSubmit }: Props) {
       });
       onSubmit?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      const msg = err instanceof Error ? err.message : '保存失败';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -73,7 +79,7 @@ export function OnboardingWizard({ onSubmit }: Props) {
             type="text"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
-            placeholder="世纪互联"
+            placeholder="Acme Cloud"
             className="w-full px-3 py-2 rounded text-sm"
             style={{
               background: 'var(--bg-surface)',
@@ -89,7 +95,7 @@ export function OnboardingWizard({ onSubmit }: Props) {
             type="text"
             value={ticker}
             onChange={(e) => setTicker(e.target.value)}
-            placeholder="VNET"
+            placeholder="ACME"
             className="w-full px-3 py-2 rounded text-sm font-mono"
             style={{
               background: 'var(--bg-surface)',
@@ -123,7 +129,7 @@ export function OnboardingWizard({ onSubmit }: Props) {
 
         {error && (
           <div className="rounded-md p-3 text-sm"
-               style={{ background: 'rgba(239,68,68,0.1)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)' }}>
+               style={{ background: 'var(--danger-bg)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)' }}>
             {error}
           </div>
         )}

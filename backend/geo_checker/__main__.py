@@ -32,7 +32,7 @@ from datetime import datetime
 from . import state as _state
 from .constants import FAIL
 from .output import print
-from .orchestrate import generate_score
+from .orchestrate import generate_score, generate_seo_score
 from .modes.compare import compare_urls
 from .modes.crawl_check import crawl_check_files, resolve_log_paths
 from .modes.crawl_test import crawl_test
@@ -80,6 +80,9 @@ def main():
     parser.add_argument("--entity-type", metavar="TYPE", default="brand",
                         choices=["brand", "product", "person"],
                         help="Entity type for --entity audit: brand, product, or person (default: brand)")
+    parser.add_argument("--seo", metavar="URL",
+                        help="Classic SEO audit (12 categories, separate 0-100 SEO score). "
+                             "Free — no API keys required. Independent of the GEO score.")
     parser.add_argument("--report", nargs="?", const="pdf", default=None,
                         choices=["pdf", "json", "html"],
                         metavar="FORMAT",
@@ -135,7 +138,9 @@ def main():
 
 
 def _dispatch(args, parser):
-    if args.entity:
+    if args.seo:
+        generate_seo_score(args.seo)
+    elif args.entity:
         entity_audit(args.entity, entity_type=args.entity_type)
     elif args.aeo_visibility:
         aeo_visibility(args.aeo_visibility)
@@ -169,7 +174,7 @@ def _dispatch(args, parser):
     elif args.url:
         generate_score(args.url)
     else:
-        parser.error("Provide a URL or a mode flag: --compare, --crawl-check, "
+        parser.error("Provide a URL or a mode flag: --seo, --compare, --crawl-check, "
                      "--crawl-test, --citation-check, --ai-visibility, "
                      "--aeo-visibility, --entity")
 

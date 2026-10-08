@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
-import { oauthApi } from '../services/oauthApi';
+import { wechatAuthApi } from '../services/wechatAuthApi';
+import { WechatQrLogin } from '../components/WechatQrLogin';
+import { PhoneLogin } from '../components/PhoneLogin';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAuth } from '../contexts/AuthContext';
 import { PageHead } from '../components/PageHead';
@@ -17,60 +19,34 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [paymentToken, setPaymentToken] = useState<string | null>(null);
+  // null = not probed yet; don't render the form yet, to avoid it flashing and being replaced
+  const [emailRegisterEnabled, setEmailRegisterEnabled] = useState<boolean | null>(null);
+  const [wechatEnabled, setWechatEnabled] = useState(false);
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { setToken, setUser } = useAuth();
 
-  // 加载 Google SDK
   useEffect(() => {
-    if (!document.getElementById('google-signin-sdk')) {
-      const script = document.createElement('script');
-      script.id = 'google-signin-sdk';
-      script.src = 'https://apis.google.com/js/platform.js';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        if ((window as any).gapi) {
-          (window as any).gapi.load('auth2', () => {
-            if ((window as any).gapi.auth2) {
-              (window as any).gapi.auth2.init({
-                client_id: 'test-client-id',
-                scope: 'profile email'
-              });
-            }
-          });
-        }
-      };
-      document.body.appendChild(script);
-    }
+    let alive = true;
+    void wechatAuthApi.config().then((cfg) => {
+      if (!alive) return;
+      setEmailRegisterEnabled(cfg.email_register_enabled);
+      setWechatEnabled(cfg.wechat_login_enabled);
+      setPhoneEnabled(cfg.phone_login_enabled);
+    });
+    return () => { alive = false; };
   }, []);
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError('');
+  const handleAuthenticated = useCallback(async (accessToken: string) => {
     try {
-      const gapi = (window as any).gapi;
-      if (!gapi || !gapi.auth2) {
-        throw new Error('Google SDK not loaded');
-      }
-      const auth2 = gapi.auth2.getAuthInstance();
-      const googleUser = await auth2.signIn();
-      const idToken = googleUser.getAuthResponse().id_token;
-      const response = await oauthApi.googleLogin(idToken);
-      try {
-        const me = await authApi.getCurrentUser(response.access_token);
-        setUser(me);
-      } catch {
-        setUser({ email: googleUser.getBasicProfile().getEmail() });
-      }
-      setToken(response.access_token);  // 走 AuthContext,所有监听组件同步
-      navigate('/');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google login failed');
-    } finally {
-      setIsLoading(false);
+      setUser(await authApi.getCurrentUser(accessToken));
+    } catch {
+      /* A /me failure doesn't block login */
     }
-  };
+    setToken(accessToken);
+    navigate('/');
+  }, [navigate, setToken, setUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +68,7 @@ export function Register() {
     try {
       await authApi.register(email, password);
       const loginRes = await authApi.login(email, password);
-      setToken(loginRes.access_token);  // 广播到所有 useAuth / useMembership
+      setToken(loginRes.access_token);  // Broadcast to all useAuth / useMembership
       setPaymentToken(loginRes.access_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('register.failed'));
@@ -111,10 +87,74 @@ export function Register() {
     navigate('/');
   };
 
+  // Still probing (null): render nothing. Falling through would flash an email form whose submit is bound to 403,
+  // and users might already be filling it in when the whole page gets replaced -- the comment above always promised this, it just wasn't implemented.
+  if (emailRegisterEnabled === null) {
+    return (
+      <div className="min-h-screen grid-background flex items-center justify-center">
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2"
+          style={{ borderColor: 'var(--accent-primary)' }}
+        />
+      </div>
+    );
+  }
+
+  // Email sign-up disabled: replace the whole page with WeChat QR sign-up instead of rendering a form whose submit is bound to 403
+  if (emailRegisterEnabled === false) {
+    return (
+      <div className="min-h-screen grid-background">
+        <PageHead titleKey="pageMeta.register.title" descriptionKey="pageMeta.register.description" />
+        <div className="bg-glow bg-glow-1"></div>
+        <div className="bg-glow bg-glow-2"></div>
+        <div className="bg-glow bg-glow-3"></div>
+        <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
+          <div className="w-full max-w-md mx-auto animate-fade-in">
+            <div className="bg-card border border-border rounded-2xl p-8">
+              <div className="text-center">
+                <h2 className="text-3xl font-bold text-primary">
+                  {t('wechatLogin.registerClosedTitle')}
+                </h2>
+                <p className="mt-2 text-sm text-secondary">
+                  {wechatEnabled
+                    ? t('wechatLogin.registerClosedSubtitle')
+                    : t('phoneLogin.registerClosedSubtitle')}
+                </p>
+              </div>
+
+              {wechatEnabled ? (
+                <div className="mt-8">
+                  <WechatQrLogin onAuthenticated={handleAuthenticated} />
+                </div>
+              ) : phoneEnabled ? (
+                <div className="mt-8">
+                  <PhoneLogin onAuthenticated={handleAuthenticated} />
+                </div>
+              ) : (
+                <p className="mt-8 text-center text-sm text-secondary">
+                  {t('wechatLogin.registerClosedNoChannel')}
+                </p>
+              )}
+
+              <p className="mt-8 text-center text-sm text-secondary">
+                <Link
+                  to="/login"
+                  className="font-medium text-accent-primary hover:text-primary transition-colors duration-200"
+                >
+                  {t('register.loginAccount')}
+                </Link>
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen grid-background">
       <PageHead titleKey="pageMeta.register.title" descriptionKey="pageMeta.register.description" />
-      {/* 背景发光效果 */}
+      {/* Background glow effect */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
@@ -262,40 +302,6 @@ export function Register() {
               </div>
             </form>
 
-            {/* Google login */}
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="px-3 bg-card text-secondary text-sm">
-                    {t('login.orUse', '或使用')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <button
-                  onClick={handleGoogleLogin}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                  </svg>
-                  <span>{t('login.googleLogin', 'Google 登录')}</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </main>

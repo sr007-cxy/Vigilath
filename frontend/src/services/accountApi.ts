@@ -71,6 +71,21 @@ class AccountApi {
     return response.json();
   }
 
+  /**
+   * Vector report PDF printed by backend Chrome. On failure (502 / not logged in / missing dependency) throws
+   * ApiError; the caller should fall back to the frontend html2canvas export.
+   */
+  async exportDetectionPdf(token: string, id: number, lang: string): Promise<Blob> {
+    const response = await fetch(
+      `${this.baseUrl}/detections/${id}/export-pdf?lang=${encodeURIComponent(lang)}`,
+      { method: 'POST', headers: localizedHeaders({ Authorization: `Bearer ${token}` }) },
+    );
+    if (!response.ok) {
+      throw new ApiError(response.status, await readApiError(response, 'Failed to export PDF'));
+    }
+    return response.blob();
+  }
+
   async deleteDetection(token: string, id: number): Promise<void> {
     const response = await fetch(`${this.baseUrl}/detections/${id}`, {
       method: 'DELETE',

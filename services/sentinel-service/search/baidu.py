@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from .cookie_pool import CookiePool
+
 
 _TIMELIMIT_SECONDS = {
     "d": 24 * 3600,
@@ -41,18 +43,18 @@ def _gpc_for_timelimit(timelimit: str | None) -> str | None:
     """
     if not timelimit:
         return None
-    # 绝对日期范围
+    # Absolute date range
     if ".." in timelimit:
         try:
             from datetime import datetime, timezone
             lo_str, hi_str = timelimit.split("..", 1)
             lo = int(datetime.fromisoformat(lo_str).replace(tzinfo=timezone.utc).timestamp())
             hi = int(datetime.fromisoformat(hi_str).replace(tzinfo=timezone.utc).timestamp())
-            # 加 86399 让 hi 包含到当天 23:59:59
+            # add 86399 so hi includes up to 23:59:59 of that day
             return f"stf={lo},{hi + 86399}|stftype=1"
         except (ValueError, TypeError):
             return None
-    # 相对窗口
+    # Relative window
     delta = _TIMELIMIT_SECONDS.get(timelimit)
     if not delta:
         return None
@@ -90,14 +92,13 @@ def _resolve(url: str, session: requests.Session) -> str | None:
         return None
 
 
-def _build_session() -> requests.Session:
+def _build_session(cookie: str | None = None) -> requests.Session:
     s = requests.Session()
     s.headers.update({
         "User-Agent": _UA,
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.5",
         "Referer": "https://www.baidu.com/",
     })
-    cookie = os.environ.get("BAIDU_COOKIE", "").strip()
     if cookie:
         s.headers["Cookie"] = cookie
     return s
@@ -123,29 +124,37 @@ def baidu_search(query: str, max_results: int = 10,
     gpc = _gpc_for_timelimit(timelimit)
     if gpc:
         params["gpc"] = gpc
-    session = _build_session()
-    try:
-        r = session.get("https://www.baidu.com/s", params=params, timeout=_TIMEOUT)
-        r.raise_for_status()
-    except requests.RequestException as e:
-        print(f"  [baidu] request failed: {e}", file=sys.stderr)
-        return []
-
-    # Baidu sometimes omits charset in Content-Type → requests falls back to
-    # ISO-8859-1 and mangles Chinese. Force UTF-8.
-    r.encoding = "utf-8"
-    html = r.text
-
-    if _is_blocked(html):
-        hint = "" if os.environ.get("BAIDU_COOKIE") else " (set BAIDU_COOKIE env var to bypass)"
-        print(f"  [baidu] verification page returned — IP likely blocked{hint}",
-              file=sys.stderr)
+    # Rotate the cookie pool per request; also try once without a cookie (bare IP). If a verification page is returned, mark it dead and move to the next.
+    cpool = CookiePool("baidu")
+    attempts = list(cpool.try_cookies()) or [(None, None)]
+    session = html = None
+    for idx, cookie in attempts:
+        session = _build_session(cookie)
+        try:
+            r = session.get("https://www.baidu.com/s", params=params, timeout=_TIMEOUT)
+            r.raise_for_status()
+        except requests.RequestException as e:
+            print(f"  [baidu] request failed: {e}", file=sys.stderr)
+            continue
+        # Baidu sometimes omits charset → requests falls back to ISO-8859-1. Force UTF-8.
+        r.encoding = "utf-8"
+        if _is_blocked(r.text):
+            if idx is not None:
+                cpool.mark_dead(idx, "验证/验证码页")
+            continue
+        if idx is not None:
+            cpool.mark_ok(idx)
+        html = r.text
+        break
+    if html is None:
+        hint = "" if cpool.count() else " (set BAIDU_COOKIE env var to bypass)"
+        print(f"  [baidu] verification page / IP blocked, no usable cookie{hint}", file=sys.stderr)
         return []
 
     soup = BeautifulSoup(html, "lxml")
     raw: list[dict] = []
     for div in soup.select("div.result.c-container, div.result-op.c-container"):
-        # Skip ads (Baidu marks them with "广告" badge near the title)
+        # Skip ads (Baidu marks them with "广告" ("Ad") badge near the title)
         if div.find(string=lambda s: s and "广告" in s and len(s) < 6):
             continue
         a = div.select_one("h3 a") or div.select_one("a.title-text") or div.select_one("a")

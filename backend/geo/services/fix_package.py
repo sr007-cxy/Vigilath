@@ -164,7 +164,7 @@ _ZH_FIX_TABLE: dict[str, str] = {
     "result.fixes.meta.add_description": "在 <head> 中添加 meta description 标签。",
     "result.fixes.meta.add_canonical": "在 <head> 中添加 canonical 链接。",
     "result.fixes.meta.add_og": "在 <head> 中添加 Open Graph meta 标签。",
-    "result.fixes.meta.add_twitter_cards": "在 <head> 中添加 Twitter Card meta 标签。",
+    "result.fixes.meta.add_twitter_cards": "在 <head> 中补齐社交分享卡片 meta 标签。",
     "result.fixes.meta.add_lang": "为 <html> 标签添加 lang 属性。",
     "result.fixes.meta.add_hreflang": "为多语言页面添加 hreflang 标签。",
     "result.fixes.authority.add_security_headers": "在服务器配置中添加安全响应头。",
@@ -208,7 +208,7 @@ _EN_FIX_TABLE: dict[str, str] = {
     "result.fixes.meta.add_description": "Add a meta description tag in your <head>.",
     "result.fixes.meta.add_canonical": "Add a canonical link in your <head>.",
     "result.fixes.meta.add_og": "Add Open Graph meta tags in your <head>.",
-    "result.fixes.meta.add_twitter_cards": "Add Twitter Card meta tags in your <head>.",
+    "result.fixes.meta.add_twitter_cards": "Add the social share card meta tags in your <head>.",
     "result.fixes.meta.add_lang": "Add a lang attribute to your <html> tag.",
     "result.fixes.meta.add_hreflang": "Add hreflang tags for multilingual pages.",
     "result.fixes.authority.add_security_headers": "Add security headers to your server.",
@@ -314,26 +314,32 @@ class FixPackageGenerator:
         )
         content = (
             f"{header}\n"
-            "# https://www.vigilath.com\n"
+            "# https://www.vigilath.cn\n"
             "#\n"
             f"{comment_allow}\n"
             "User-agent: *\n"
             "Allow: /\n"
             "\n"
             f"{comment_explicit}\n"
-            "User-agent: GPTBot\n"
+            "User-agent: DeepSeekBot\n"
             "Allow: /\n"
             "\n"
-            "User-agent: ChatGPT-User\n"
+            "User-agent: Baiduspider\n"
             "Allow: /\n"
             "\n"
-            "User-agent: ClaudeBot\n"
+            "User-agent: Sogou web spider\n"
             "Allow: /\n"
             "\n"
-            "User-agent: Google-Extended\n"
+            "User-agent: 360Spider\n"
             "Allow: /\n"
             "\n"
-            "User-agent: PerplexityBot\n"
+            "User-agent: Yisouspider\n"
+            "Allow: /\n"
+            "\n"
+            "User-agent: Bytespider\n"
+            "Allow: /\n"
+            "\n"
+            "User-agent: PetalBot\n"
             "Allow: /\n"
             "\n"
             "# Sitemap\n"
@@ -480,15 +486,6 @@ class FixPackageGenerator:
                 f'<meta property="og:url" content="{base}" />\n'
                 f'<meta property="og:site_name" content="{brand}" />\n'
                 f'<meta property="og:image" content="{base}/og-image.png" />\n'
-            )
-
-        has_twitter = any("twitter" in f.fix_key for f in items)
-        if has_twitter:
-            patches.append(
-                f'\n<meta name="twitter:card" content="summary_large_image" />\n'
-                f'<meta name="twitter:title" content="{title}" />\n'
-                f'<meta name="twitter:description" content="{self._t("Brief description of your page.", f"{brand} 的页面简介。")}" />\n'
-                f'<meta name="twitter:image" content="{base}/og-image.png" />\n'
             )
 
         has_lang = any("lang" in f.fix_key and "hreflang" not in f.fix_key for f in items)
@@ -977,12 +974,10 @@ class FixPackageGenerator:
                 lines.append(self._t(
                     "### sitemap.xml.example\n"
                     "Rename to `sitemap.xml`, customize the URLs, then submit at:\n"
-                    "- Google Search Console: https://search.google.com/search-console\n"
-                    "- Bing Webmaster: https://www.bing.com/webmasters\n\n",
+                    "- Baidu Search Resource Platform: https://ziyuan.baidu.com\n\n",
                     "### sitemap.xml.example\n"
                     "重命名为 `sitemap.xml`，自定义 URL 后提交至：\n"
-                    "- Google Search Console：https://search.google.com/search-console\n"
-                    "- Bing Webmaster：https://www.bing.com/webmasters\n\n",
+                    "- 百度搜索资源平台：https://ziyuan.baidu.com\n\n",
                 ))
                 break
 

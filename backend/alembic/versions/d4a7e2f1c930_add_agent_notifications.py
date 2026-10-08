@@ -1,6 +1,6 @@
-"""add agent_notifications + agent_im_connectors.last_chat_id(舆情主动推送)
+"""add agent_notifications + agent_im_connectors.last_chat_id (proactive sentiment monitoring push)
 
-新建表 + 加列,不动现有数据。见 agent integration API 主动触达。
+New table + new column, existing data untouched. See docs/03-系统设计/Agent/对外开放-契约.md / best approach §12 proactive outreach.
 
 Revision ID: d4a7e2f1c930
 Revises: e2c4f8a1b360
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4a7e2f1c930"
-down_revision: Union[str, None] = "e2c4f8a1b360"   # 接在 browser_jobs 链之后,避免双 head 分叉
+down_revision: Union[str, None] = "e2c4f8a1b360"   # Follows the browser_jobs chain to avoid a dual-head fork
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

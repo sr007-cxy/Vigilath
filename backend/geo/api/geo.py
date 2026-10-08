@@ -19,6 +19,13 @@ from geo.services.quota_service import check_and_increment_quota
 from geo.services.detection_service import save_detection
 from geo.models.geo import GeoTestRequest, GeoTestResult
 from geo.models.membership import Membership
+from geo.models.seo import CheckResultBundle, SeoTestResult
+from geo.services.seo_checker import (
+    LOCKED_FOR_FREE as LOCKED_SEO_FOR_FREE,
+    locked_seo_categories,
+    run_seo_check,
+    strip_locked_seo,
+)
 from geo.utils.validator import validate_url, sanitize_url
 from geo.utils.error_handler import AppException
 from geo.utils.request_log import request_log
@@ -128,6 +135,38 @@ def _strip_locked_checks(result: GeoTestResult, locked: List[str]) -> GeoTestRes
         "total_checks": len(stripped.checks),
     }
     return stripped
+
+
+async def _run_seo_half(
+    url: str,
+    include_fix: bool,
+    tier: str,
+    locked: List[str],
+    force_refresh: bool,
+) -> Optional[SeoTestResult]:
+    """Run the SEO suite for an `include_seo` request. Never raises.
+
+    The caller has already spent their quota unit on this request, so a broken
+    SEO suite must not cost them the GEO result they paid for. Any failure is
+    logged and swallowed; the response carries `seo: null` and the frontend
+    offers a retry against the standalone /api/seo/check endpoint.
+
+    Runs after the GEO half rather than concurrently: both suites call
+    `reset_state()` and share `_geo_checker_lock`, so they serialize inside the
+    checker anyway. Sequencing them here keeps one worker thread busy instead
+    of parking a second one on the lock. SEO is ~1/4 of GEO's wall-clock.
+    """
+    try:
+        result = await asyncio.to_thread(
+            run_seo_check, url, include_fix, None, tier, force_refresh
+        )
+    except Exception as exc:
+        print(f"[check] SEO half failed for {url}: {type(exc).__name__}: {exc}")
+        return None
+    result = strip_locked_seo(result, locked)
+    result.tier = tier
+    result.locked_categories = locked
+    return result
 
 
 # Fix recommendations are a paid perk: only starter / growth / scale tiers see
@@ -273,7 +312,7 @@ async def geo_check_task(
         else:
             print(f"Task {task_id} no longer exists, error: {str(e)}")
 
-@router.post("/check/anonymous", response_model=GeoTestResult)
+@router.post("/check/anonymous", response_model=CheckResultBundle)
 async def check_anonymous(body: GeoTestRequest, request: Request, response: Response):
     """Anonymous check — runs the full 25 categories but only exposes the
     free-tier 5 in the response.
@@ -311,10 +350,15 @@ async def check_anonymous(body: GeoTestRequest, request: Request, response: Resp
         result.locked_categories = locked
         rec["score"] = result.score
         rec["grade"] = result.grade
-        return result
+        if not body.include_seo:
+            return result
+        seo = await _run_seo_half(
+            sanitized_url, False, "free", list(LOCKED_SEO_FOR_FREE), body.force_refresh
+        )
+        return CheckResultBundle(**result.model_dump(), seo=seo)
 
 
-@router.post("/check", response_model=GeoTestResult)
+@router.post("/check", response_model=CheckResultBundle)
 async def check_authenticated(body: GeoTestRequest, request: Request, response: Response):
     """Tiered check: uses the caller's membership to decide quota + display
     gating. Always runs the full 25 categories so the score is tier-independent.
@@ -359,17 +403,34 @@ async def check_authenticated(body: GeoTestRequest, request: Request, response: 
         result.tier = membership.slug
         result.locked_categories = locked
 
+        # One request is one billable check: the SEO suite rides along on the
+        # single quota unit already charged above, and lands in the same
+        # history row rather than filing a second one under mode="seo".
+        seo = None
+        if body.include_seo:
+            seo = await _run_seo_half(
+                sanitized_url,
+                effective_include_fix,
+                membership.slug,
+                locked_seo_categories(membership),
+                body.force_refresh,
+            )
+        payload = CheckResultBundle(**result.model_dump(), seo=seo)
+
         # Persist history for logged-in users only — anonymous runs have no
         # owner to file them under. Best-effort; failures do not affect the
         # response.
         if user_id is not None:
             mode = "advanced" if effective_include_fix else "free"
-            save_detection(user_id=user_id, result=result, mode=mode)
+            # Backfill record_id: the result page uses it to export a vector PDF via backend Chrome printing.
+            # Written after save_detection, so the snapshot does not contain this field (it describes the snapshot itself).
+            payload.record_id = save_detection(user_id=user_id, result=payload, mode=mode)
 
         rec["score"] = result.score
         rec["grade"] = result.grade
         rec["fix"] = effective_include_fix
-        return result
+        rec["seo_score"] = seo.score if seo else None
+        return payload
 
 
 @router.post("/geo", response_model=GeoTestResult)

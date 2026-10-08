@@ -1,0 +1,6 @@
+{
+  "version": "2.0.14",
+  "downloadUrl": "https://vigilath.cn/downloads/plugin/vigilath-publish-plugin-latest.zip",
+  "releaseDate": "2026-09-02",
+  "releaseNotes": "扩展更名为「Vigilath 发布助手」（原上游名「文章同步助手」）；修复国内正式站离线安装包下载到的是网页而不是压缩包。"
+}

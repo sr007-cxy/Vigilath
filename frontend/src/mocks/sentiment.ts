@@ -1,7 +1,7 @@
-// 舆情模块静态 mock 数据 — VITE_USE_MOCK_SENTIMENT=1 时使用,
-// 否则 Sentiment.tsx + 各 Tab 走 sentimentApi(真实后端).
+// Static mock data for the sentiment monitoring module -- used when VITE_USE_MOCK_SENTIMENT=1,
+// otherwise Sentiment.tsx + each tab use sentimentApi (the real backend).
 //
-// 字段类型从 types/sentiment.ts 重导出,保持与后端契约一致.
+// Field types are re-exported from types/sentiment.ts, staying consistent with the backend contract.
 
 import type { KeywordGroup, RiskLevel, RunStatus, SentimentPost } from '../types/sentiment';
 
@@ -10,7 +10,7 @@ export type {
   KeywordGroup,
 } from '../types/sentiment';
 
-// Draft mock 形态 — 比真实 API 富一点(把 GenerateResult + DraftRow 揉一起方便 UI 测试).
+// Draft mock shape -- a bit richer than the real API (merging GenerateResult + DraftRow for convenient UI testing).
 export interface DraftMock {
   id: number;
   symbol: string;
@@ -34,12 +34,13 @@ export interface DraftMock {
   status: 'pending_review' | 'approved' | 'archived';
 }
 
-// Mock 账号字段比 API 多一个 last_run_status 缩写,与真实 SentimentAccount 兼容
+// The mock account has one more field than the API, the last_run_status shorthand, compatible with the real SentimentAccount
 export interface SentimentAccountMock {
   id: number;
   user_id: number;
   target: string;
   ticker: string;
+  symbol: string;
   aliases: string[];
   intent: string;
   keywords: string[];
@@ -49,6 +50,7 @@ export interface SentimentAccountMock {
   notify_emails: string[];
   weixin_album_urls: string[];
   newsnow_sources: string[];
+  run_hour: number | null;
   active: boolean;
   last_run_at: string | null;
   last_run_status: RunStatus;
@@ -65,20 +67,22 @@ export interface BriefMock {
   generated_at: string;
 }
 
-// ───── 账号 ─────
+// ───── Accounts ─────
 export const mockAccount: SentimentAccountMock = {
   id: 1,
   user_id: 1,
   target: 'Acme Cloud',
   ticker: 'ACME',
-  aliases: ['ACMEAcme Cloud', '蓝云'],
+  symbol: 'ACME',
+  aliases: ['VNETAcme Cloud', 'Acme Blue'],
   intent: '关注做空报告 / 业绩传闻 / 海外业务 / 数据中心需求',
   keywords: ['业绩', '做空', '管理层', '财报', '数据中心'],
   excludes: ['招聘', '实习'],
   media_allowlist: [],
-  notify_emails: ['alerts@example.com', 'security@example.com'],
+  notify_emails: ['ir@acmecloud.example', 'pr@acmecloud.example'],
   weixin_album_urls: [],
   newsnow_sources: [],
+  run_hour: null,
   active: true,
   last_run_at: '2026-05-06T05:00:00+08:00',
   last_run_status: 'success',
@@ -86,16 +90,129 @@ export const mockAccount: SentimentAccountMock = {
   created_at: '2026-04-12T10:00:00+08:00',
 };
 
-// 切换 onboarding 演示用:URL 加 ?demo=onboarding 时主页用 null
+// For the onboarding demo: when the URL has ?demo=onboarding the home page uses null
 export const mockEmptyAccount: SentimentAccountMock | null = null;
 
-// ───── 真实客户配置规模演示(数据来自 20260408 版 ACME 关键词表)─────
-// 6 大类、~85 个关键词条目,模拟客户实际复杂度.
+// ───── Real customer configuration scale demo (data from the 20260408 ACME keyword sheet) ─────
+// 6 categories, ~85 keyword entries, simulating real customer complexity.
 
 export const mockKeywordGroups: KeywordGroup[] = [
-  { name: "Brand", kind: "entity", items: [{ term: "Acme Cloud" }, { term: "Acme Infrastructure" }] },
-  { name: "Products", kind: "project", items: [{ term: "Acme Edge" }, { term: "Acme Compute" }] },
-  { name: "Risk", kind: "legal", items: [{ term: "Acme Cloud outage" }, { term: "Acme Cloud incident" }] },
+  {
+    name: '公司主体',
+    kind: 'entity',
+    items: [
+      { term: 'Acme Cloud' },
+      { term: 'Acme Labs' },
+      { term: 'Acme CloudAcme Blue' },
+      { term: '第一线DYX' },
+      { term: '时速云' },
+      { term: '云思畅想' },
+      { term: '北京云思畅想科技有限公司' },
+      { term: '北京Acme Cloud宽带数据中心有限公司' },
+      { term: '算粒互联(北京)科技有限公司' },
+      { term: '互联云界' },
+      { term: 'Acme Cloud IDC' },
+      { term: 'Acme Cloud 数据中心' },
+      { term: 'Acme Cloud 机房' },
+      { term: 'Acme Cloud 机柜大定制' },
+      { term: 'Acme Cloud ESG' },
+      { term: 'Acme Cloud 双碳' },
+      { term: 'Acme Cloud 零碳' },
+      { term: 'Acme Cloud 储能' },
+      { term: 'Acme Cloud 数字孪生' },
+      { term: 'Acme Labs LABS' },
+      { term: 'Acme LabsLABS' },
+      { term: '互联科技实验室' },
+      { term: 'Acme Cloud+山高控股' },
+      { term: 'Acme Cloud+山东高速' },
+      { term: 'ACME', is_new: true },
+      { term: 'Acme Cloud', is_new: true },
+    ],
+  },
+  {
+    name: '法院诉讼',
+    kind: 'legal',
+    items: [
+      { term: 'Acme Cloud 法院' },
+      { term: 'Acme Cloud 诉讼' },
+      { term: 'Acme Cloud 官司' },
+      { term: 'Acme CloudAcme Blue 法院' },
+      { term: 'Acme CloudAcme Blue 诉讼' },
+      { term: 'Acme CloudAcme Blue 官司' },
+      { term: '第一线DYX 法院' },
+      { term: '第一线DYX 诉讼' },
+      { term: '第一线DYX 官司' },
+      { term: 'Acme LabsLABS 法院' },
+      { term: 'Acme LabsLABS 诉讼' },
+      { term: 'Acme LabsLABS 官司' },
+    ],
+  },
+  {
+    name: '高管',
+    kind: 'exec',
+    items: [
+      { term: 'Acme Cloud董事长 王某' },
+      { term: 'Acme Cloud 王某' },
+      { term: 'Acme Cloud 元道' },
+      { term: 'Acme Cloud创始人 王某' },
+      { term: '示例产业创新联盟理事长 王某' },
+      { term: 'Acme Cloud CFO 王琪宇' },
+      { term: 'Acme Cloud 集团高级副总裁 张志华' },
+      { term: 'Acme Cloud集团轮值总裁 刘晓' },
+      { term: 'Acme Cloud集团轮值总裁、AIDC战略事业群总经理 马炬' },
+      { term: 'Acme Cloud集团执行副总裁、IDC战略事业群总经理 申成钢' },
+      { term: 'Acme Cloud集团执行副总裁 闫昆' },
+      { term: 'Acme Cloud集团执行副总裁兼总法律顾问 李志德' },
+      { term: 'Acme Cloud集团高级副总裁 滕文' },
+      { term: 'Acme BlueCEO 滕文' },
+      { term: 'Acme CloudAcme Blue CEO 滕文' },
+      { term: 'Acme Cloud集团高级副总裁、第一线 CEO 李晓芒' },
+      { term: 'Acme Cloud副总裁 鲍益' },
+      { term: 'Acme Cloud能源创新事业部总经理 鲍益' },
+      { term: 'Acme Cloud副总裁 杜华锐' },
+      { term: 'Acme Cloud研发负责人 杜华锐' },
+      { term: 'Acme Cloud副总裁 黄益晓' },
+      { term: 'Acme Cloud副总裁 袁旬' },
+      { term: '时速云 黄启功' },
+      { term: '云思畅想 黄启功' },
+      { term: '北京云思畅想科技有限公司 黄启功' },
+      { term: 'Acme Cloud 黄启功' },
+      { term: '时速云 王磊' },
+      { term: '云思畅想 王磊' },
+      { term: '北京云思畅想科技有限公司 王磊' },
+      { term: 'Acme Cloud 王磊' },
+      { term: '互联科技实验室首席科学家 叶晓舟' },
+      { term: 'Acme Cloud 白涛', is_new: true },
+      { term: 'Acme Cloud 戚野白', is_new: true },
+    ],
+  },
+  {
+    name: '项目',
+    kind: 'project',
+    items: [
+      { term: 'Acme Cloud Reits' },
+      { term: 'Acme Cloud REITs' },
+      { term: 'Acme互联' },
+      { term: 'Acme互联新算力' },
+      { term: '示例产业创新联盟' },
+      { term: 'Acme互联HC4' },
+      { term: '智能体Acme互联' },
+      { term: 'Acme互联联盟' },
+      { term: 'Acme Cloud 乌兰察布' },
+      { term: 'Acme Cloud 三河铭泰' },
+      { term: 'Acme Cloud AIDC' },
+      { term: 'Acme Cloud 智算中心' },
+    ],
+  },
+  {
+    name: '友商',
+    kind: 'competitor',
+    items: [
+      { term: '秦淮数据' },
+      { term: '<competitor-a>' },
+      { term: '润泽科技' },
+    ],
+  },
 ];
 
 // ───── Tab 1 KPI ─────
@@ -104,12 +221,12 @@ export const mockKpi = {
   high_risk: 12,
   avg_sentiment: -0.18,
   active_sources: 8,
-  trend_total_pct: 12,    // 比昨日 +12%
+  trend_total_pct: 12,    // +12% vs yesterday
   trend_risk_pct: 8,
   trend_sentiment_pct: -5,
 };
 
-// ───── Tab 1 7-day sentiment trend(堆叠柱) ─────
+// ───── Tab 1 7-day sentiment trend (stacked bars) ─────
 export const mockSentimentTrend = [
   { date: '04-30', bullish: 18, neutral: 42, bearish: 15, mixed: 5 },
   { date: '05-01', bullish: 22, neutral: 38, bearish: 12, mixed: 6 },
@@ -120,7 +237,7 @@ export const mockSentimentTrend = [
   { date: '05-06', bullish: 20, neutral: 52, bearish: 35, mixed: 8 },
 ];
 
-// ───── Tab 1 风险分布 ─────
+// ───── Tab 1 risk distribution ─────
 export const mockRiskDist: Array<{ level: RiskLevel; count: number; color: string }> = [
   { level: 'none', count: 198, color: '#94a3b8' },
   { level: 'low', count: 35, color: '#fbbf24' },
@@ -128,7 +245,7 @@ export const mockRiskDist: Array<{ level: RiskLevel; count: number; color: strin
   { level: 'high', count: 4, color: '#ef4444' },
 ];
 
-// ───── Tab 2 帖子(20 条覆盖各情感/风险/媒体)─────
+// ───── Tab 2 posts (20 covering each sentiment/risk/media) ─────
 export const mockPosts: SentimentPost[] = [
   {
     source: 'xueqiu', post_id: 'a1b2c3d4', symbol: 'ACME',
@@ -154,7 +271,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: '通过引用做空报告制造抛售情绪,带节奏意图明显',
     citations: ['Q3 营收下滑 12%', '债务/EBITDA 比超 6'],
     reasoning: '高浏览量(12K+)+ 知名做空账户 + 时间集中(凌晨发布抢早盘)→ 影响力 0.87',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T07:02:14+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T07:02:14+08:00',
   },
   {
     source: 'eastmoney', post_id: 'e5f6g7h8', symbol: 'ACME',
@@ -177,7 +294,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['Q3 营收同比 +18%', '订单饱满到 2027'],
     reasoning: '官方业绩会内容传播 + 中等浏览量(8K)',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T08:45:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T08:45:00+08:00',
   },
   {
     source: '36kr', post_id: 'i9j0k1l2', symbol: 'ACME',
@@ -185,14 +302,14 @@ export const mockPosts: SentimentPost[] = [
     author: '36氪',
     publish_time: '2026-05-06T10:15:00+08:00',
     url: 'https://36kr.com/post/i9j0k1l2',
-    content: '受 AI 算力需求驱动,IDC 行业 Q3 整体增速达 22%。头部厂商如 ACME、世纪华通等均披露订单饱满。但报告也指出,行业资本开支高企,毛利率承压。',
+    content: '受 AI 算力需求驱动,IDC 行业 Q3 整体增速达 22%。头部厂商如 ACME、<competitor-b>等均披露订单饱满。但报告也指出,行业资本开支高企,毛利率承压。',
     view_count: 5230, reply_count: 38,
     is_relevant: true, filter_reason: null,
     summary: 'IDC 行业景气延续,但毛利率承压',
     sentiment_label: 'mixed', sentiment_score: 0.15,
     emotions: ['谨慎乐观'],
     topics: ['行业', '数据中心', '资本开支'],
-    entities: ['ACME', '世纪华通', 'AI 算力'],
+    entities: ['ACME', '<competitor-b>', 'AI 算力'],
     stance: 'neutral', intent: 'analysis', factuality: 'factual_claim',
     risk_level: 'low',
     risk_signals: [{ type: '毛利率承压', reason: '行业资本开支高企' }],
@@ -200,7 +317,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['IDC 行业 Q3 增速 22%', '毛利率承压'],
     reasoning: '专业财经媒体 + 中等浏览,行业级影响力较稳定',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T10:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T10:30:00+08:00',
   },
   {
     source: 'caixin', post_id: 'm3n4o5p6', symbol: 'ACME',
@@ -223,7 +340,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['欧美 SaaS 客户占比 >60%', '审查压力'],
     reasoning: '财新深度报道,影响力受众面广',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-05T16:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-05T16:30:00+08:00',
   },
   {
     source: 'eastmoney', post_id: 'q7r8s9t0', symbol: 'ACME',
@@ -246,7 +363,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: '提问背后是情绪传染,可能引发更多散户跟风',
     citations: ['今天又跌了 3%'],
     reasoning: '散户提问类帖子,影响力中等',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T11:55:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T11:55:00+08:00',
   },
   {
     source: 'weibo', post_id: 'u1v2w3x4', symbol: 'ACME',
@@ -269,7 +386,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: '为公司辩护,可能是机构号或忠实投资者',
     citations: ['跟年报对得上吗'],
     reasoning: '中等粉丝量博主,反驳做空报告,正面情绪',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T09:45:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T09:45:00+08:00',
   },
   {
     source: 'zhihu', post_id: 'y5z6a7b8', symbol: 'ACME',
@@ -292,18 +409,18 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['财务数据硬伤', '海外子公司对外担保'],
     reasoning: '专业知乎回答,中高浏览,理性分析,影响力 0.55',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T08:10:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T08:10:00+08:00',
   },
   {
-    source: 'reddit', post_id: 'c9d0e1f2', symbol: 'ACME',
-    title: 'Muddy Waters short report on $ACME — your thoughts?',
-    author: 'u/dataops_pro',
+    source: 'xueqiu', post_id: 'c9d0e1f2', symbol: 'ACME',
+    title: '浑水这份 ACME 做空报告,大家怎么看?',
+    author: '数据中心老王',
     publish_time: '2026-05-06T01:30:00+08:00',
-    url: 'https://reddit.com/r/investing/post/c9d0e1f2',
-    content: 'Muddy Waters dropped a short report on ACME this morning. The data center thesis seems intact but the debt structure questions are real. What\'s the consensus from people who follow Asian data center plays?',
+    url: 'https://xueqiu.com/9876543210/c9d0e1f2',
+    content: '浑水今早发了 ACME 的做空报告。数据中心这块的基本面看着还稳,但债务结构的问题确实值得盯。长期跟 IDC 这条线的朋友怎么看?',
     view_count: 2100, reply_count: 47,
     is_relevant: true, filter_reason: null,
-    summary: 'Reddit 用户讨论浑水报告,理性求证',
+    summary: '雪球用户讨论浑水报告,理性求证',
     sentiment_label: 'neutral', sentiment_score: -0.05,
     emotions: ['理性'],
     topics: ['做空报告', '债务'],
@@ -313,9 +430,9 @@ export const mockPosts: SentimentPost[] = [
     risk_signals: [],
     influence_potential: 0.32,
     hidden_meaning: null,
-    citations: ['debt structure questions are real'],
-    reasoning: '海外英文论坛理性讨论,中等影响力',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T02:00:00+08:00',
+    citations: ['债务结构的问题确实值得盯'],
+    reasoning: '财经社区理性讨论,中等影响力',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T02:00:00+08:00',
   },
   {
     source: 'xueqiu', post_id: 'g3h4i5j6', symbol: 'ACME',
@@ -338,7 +455,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['自由现金流 vs 经营现金流', '4 个季度财报'],
     reasoning: '专业财报派 + 详细数据 + 高浏览量,反向情绪扛旗者',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T13:50:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T13:50:00+08:00',
   },
   {
     source: 'eastmoney', post_id: 'k7l8m9n0', symbol: 'ACME',
@@ -361,7 +478,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['加了 30%'],
     reasoning: '逆向操作,情绪正面,中等浏览',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T14:55:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T14:55:00+08:00',
   },
   {
     source: 'weibo', post_id: 'o1p2q3r4', symbol: 'ACME',
@@ -386,7 +503,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: '阴谋论倾向,可能进一步发酵',
     citations: ['高管减持 0.5%', '时间点对得上'],
     reasoning: '小道消息号 + 高浏览,容易引发恐慌情绪',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-05T20:40:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-05T20:40:00+08:00',
   },
   {
     source: 'caixin', post_id: 's5t6u7v8', symbol: 'ACME',
@@ -409,7 +526,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['监管层加强事实核查'],
     reasoning: '权威媒体评论,理性视角',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-05T18:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-05T18:30:00+08:00',
   },
   {
     source: 'bilibili', post_id: 'w9x0y1z2', symbol: 'ACME',
@@ -432,7 +549,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['债务/EBITDA 算法', '浑水算法偏颇'],
     reasoning: '高播放视频内容(18.5K)+ 中性立场,影响力较高',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T15:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T15:30:00+08:00',
   },
   {
     source: 'xueqiu', post_id: 'a3b4c5d6', symbol: 'ACME',
@@ -455,7 +572,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['持股比例', '担保关系'],
     reasoning: '专业研究内容,中高浏览',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-04T11:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-04T11:30:00+08:00',
   },
   {
     source: 'toutiao', post_id: 'e7f8g9h0', symbol: 'ACME',
@@ -478,7 +595,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: '通过夸张标题制造恐慌博取流量',
     citations: ['一夜跌 5%', '创年内新低'],
     reasoning: '今日头条流量 + 标题党风格,影响力中高',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T16:20:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T16:20:00+08:00',
   },
   {
     source: 'weixin', post_id: 'i1j2k3l4', symbol: 'ACME',
@@ -501,7 +618,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['维持"买入"评级'],
     reasoning: '券商研究背书,影响力 0.40',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-04T09:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-04T09:30:00+08:00',
   },
   {
     source: 'zhihu', post_id: 'm5n6o7p8', symbol: 'ACME',
@@ -524,7 +641,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['数据中心需求是确定性的'],
     reasoning: '知乎中等浏览理性回答',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T18:00:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T18:00:00+08:00',
   },
   {
     source: 'eastmoney', post_id: 'q9r0s1t2', symbol: 'ACME',
@@ -547,7 +664,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['美股盘前跌了 8%', '跌停'],
     reasoning: '高浏览股吧帖,情绪强烈',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T15:55:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T15:55:00+08:00',
   },
   {
     source: 'xueqiu', post_id: 'u3v4w5x6', symbol: 'ACME',
@@ -570,7 +687,7 @@ export const mockPosts: SentimentPost[] = [
     hidden_meaning: null,
     citations: ['描述存在重大失实', '明日召开电话会议'],
     reasoning: '官方账号 + 高浏览(15K),官方权威信号,影响力 0.78',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-06T19:00:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-06T19:00:00+08:00',
   },
   {
     source: 'eastmoney', post_id: 'y7z8a9b0', symbol: 'ACME',
@@ -590,11 +707,11 @@ export const mockPosts: SentimentPost[] = [
     influence_potential: 0.05,
     hidden_meaning: null, citations: [],
     reasoning: '匹配 excludes 关键词"招聘",过滤',
-    model: 'gpt-4o-mini', analyzed_at: '2026-05-05T14:30:00+08:00',
+    model: 'deepseek-chat', analyzed_at: '2026-05-05T14:30:00+08:00',
   },
 ];
 
-// ───── Tab 3 简报(7 天)─────
+// ───── Tab 3 briefs (7 days) ─────
 const briefBody1 = `# ACME 舆情简报 · 2026-05-06
 
 ## 一、概览
@@ -674,16 +791,16 @@ const briefBody2 = `# ACME 舆情简报 · 2026-05-05
 `;
 
 export const mockBriefs: BriefMock[] = [
-  { id: 1, symbol: 'ACME', date: '2026-05-06', body: briefBody1, model: 'gpt-4o-mini', generated_at: '2026-05-06T07:02:18+08:00' },
-  { id: 2, symbol: 'ACME', date: '2026-05-05', body: briefBody2, model: 'gpt-4o-mini', generated_at: '2026-05-05T07:01:55+08:00' },
-  { id: 3, symbol: 'ACME', date: '2026-05-04', body: '# ACME 舆情简报 · 2026-05-04\n\n## 一、概览\n讨论平稳,164 帖,情绪偏正。\n\n## 二、关键主题\n业绩预期为主。\n\n## 三、风险信号\n无 medium+ 风险。\n\n## 四、值得关注的帖子\n暂无突出帖。\n\n## 五、建议动作\n维持监测频次。', model: 'gpt-4o-mini', generated_at: '2026-05-04T07:00:33+08:00' },
-  { id: 4, symbol: 'ACME', date: '2026-05-03', body: '# ACME 舆情简报 · 2026-05-03\n\n## 一、概览\n讨论 142 帖,周末低活跃度。', model: 'gpt-4o-mini', generated_at: '2026-05-03T07:00:00+08:00' },
-  { id: 5, symbol: 'ACME', date: '2026-05-02', body: '# ACME 舆情简报 · 2026-05-02\n\n## 一、概览\n讨论 178 帖。', model: 'gpt-4o-mini', generated_at: '2026-05-02T07:00:00+08:00' },
-  { id: 6, symbol: 'ACME', date: '2026-04-W18', body: '# ACME 舆情周报 · 2026-W18\n\n## 一、本周概览\n本周累计 1245 帖,关键事件:浑水做空报告。', model: 'gpt-4o-mini', generated_at: '2026-05-04T08:00:00+08:00' },
-  { id: 7, symbol: 'ACME', date: '2026-04', body: '# ACME 舆情月报 · 2026-04\n\n## 一、月度概览\n4 月累计 5872 帖,情绪整体偏正。', model: 'gpt-4o-mini', generated_at: '2026-05-01T09:00:00+08:00' },
+  { id: 1, symbol: 'ACME', date: '2026-05-06', body: briefBody1, model: 'deepseek-chat', generated_at: '2026-05-06T07:02:18+08:00' },
+  { id: 2, symbol: 'ACME', date: '2026-05-05', body: briefBody2, model: 'deepseek-chat', generated_at: '2026-05-05T07:01:55+08:00' },
+  { id: 3, symbol: 'ACME', date: '2026-05-04', body: '# ACME 舆情简报 · 2026-05-04\n\n## 一、概览\n讨论平稳,164 帖,情绪偏正。\n\n## 二、关键主题\n业绩预期为主。\n\n## 三、风险信号\n无 medium+ 风险。\n\n## 四、值得关注的帖子\n暂无突出帖。\n\n## 五、建议动作\n维持监测频次。', model: 'deepseek-chat', generated_at: '2026-05-04T07:00:33+08:00' },
+  { id: 4, symbol: 'ACME', date: '2026-05-03', body: '# ACME 舆情简报 · 2026-05-03\n\n## 一、概览\n讨论 142 帖,周末低活跃度。', model: 'deepseek-chat', generated_at: '2026-05-03T07:00:00+08:00' },
+  { id: 5, symbol: 'ACME', date: '2026-05-02', body: '# ACME 舆情简报 · 2026-05-02\n\n## 一、概览\n讨论 178 帖。', model: 'deepseek-chat', generated_at: '2026-05-02T07:00:00+08:00' },
+  { id: 6, symbol: 'ACME', date: '2026-04-W18', body: '# ACME 舆情周报 · 2026-W18\n\n## 一、本周概览\n本周累计 1245 帖,关键事件:浑水做空报告。', model: 'deepseek-chat', generated_at: '2026-05-04T08:00:00+08:00' },
+  { id: 7, symbol: 'ACME', date: '2026-04', body: '# ACME 舆情月报 · 2026-04\n\n## 一、月度概览\n4 月累计 5872 帖,情绪整体偏正。', model: 'deepseek-chat', generated_at: '2026-05-01T09:00:00+08:00' },
 ];
 
-// ───── Tab 4 草稿 ─────
+// ───── Tab 4 drafts ─────
 export const mockDrafts: DraftMock[] = [
   {
     id: 1, symbol: 'ACME',
@@ -757,7 +874,7 @@ export const mockDrafts: DraftMock[] = [
   },
 ];
 
-// ───── 知识库 ─────
+// ───── Knowledge base ─────
 export const mockKnowledge = {
   brand_voice: `# ACME 品牌语调
 
@@ -810,9 +927,9 @@ export const mockKnowledge = {
 - **目标**:扭转情绪 + 建立信任`,
 };
 
-// ───── 辅助函数 ─────
+// ───── Helper functions ─────
 
-/** 影响力综合分(yuqin chat agent top_posts SQL 同款公式)*/
+/** Composite influence score (same formula as the yuqin chat agent top_posts SQL) */
 export function noteworthyScore(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
 }
@@ -824,7 +941,7 @@ export function topPostsByInfluence(posts: SentimentPost[], n = 5): SentimentPos
     .slice(0, n);
 }
 
-/** 距某 ISO 时间字符串的"X 小时前/X 分钟前"。*/
+/** "X hours ago/X minutes ago" relative to an ISO time string. */
 export function timeAgo(iso: string, now: Date = new Date()): string {
   const diff = (now.getTime() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return '刚刚';

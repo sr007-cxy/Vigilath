@@ -1,15 +1,15 @@
-"""LLM client — 单 provider 直连方案,通过 LLM_PROVIDER env 切换.
+"""LLM client - single-provider direct connection, switched via the LLM_PROVIDER env.
 
-设计:
-- 默认走 GLM(智谱 AI),OpenAI 兼容端点 https://open.bigmodel.cn/api/paas/v4/.
-- 切到其它后端只需 `export LLM_PROVIDER=deepseek` / `qwen` / `openai`,以及在 .env
-  配相应 *_API_KEY.
-- 不做 fallback / 兜底.失败抛原生 openai SDK 异常,上层(service.py 的 _wrap)
-  统一包成 sentinel "failed" + error category.
+Design:
+- Defaults to GLM (Zhipu AI), OpenAI-compatible endpoint https://open.bigmodel.cn/api/paas/v4/.
+- Switching to another backend only needs `export LLM_PROVIDER=deepseek` / `qwen` / `openai`, plus
+  the corresponding *_API_KEY in .env.
+- No fallback. Failures raise native openai SDK exceptions, and the upper layer (service.py's _wrap)
+  wraps them uniformly as sentinel "failed" + error category.
 
-为什么不用兜底:
-- 兜底链路放大故障表面(GLM 限速 → OpenAI 网络 → Qwen 欠费,任一坏了都误导排障).
-- 切 provider 是运维决策(账号充值 / 切换), runtime 不应该自作主张.
+Why no fallback:
+- A fallback chain amplifies the failure surface (GLM rate limit -> OpenAI network -> Qwen out of balance; any one breaking misleads troubleshooting).
+- Switching providers is an ops decision (account top-up / switch); the runtime should not decide on its own.
 """
 from __future__ import annotations
 
@@ -25,15 +25,15 @@ import openai
 
 log = logging.getLogger("sentinel.llm")
 
-# 同 provider 内的 RateLimit 退避策略(免费档 RPM 限速很常见,GLM 1302 / DashScope
-# Throttling 等都走这条路).不是跨 provider fallback — 单 provider 仍是单 provider.
+# RateLimit backoff within the same provider (free-tier RPM limits are common; GLM 1302 / DashScope
+# Throttling etc. all go this way). Not a cross-provider fallback - a single provider stays a single provider.
 _RATE_LIMIT_RETRIES = 5
-_RATE_LIMIT_BASE_WAIT = 6.0  # 秒,首次等待;之后指数退避 + jitter
+_RATE_LIMIT_BASE_WAIT = 6.0  # seconds, first wait; exponential backoff + jitter afterwards
 
 
 # ───────────────────── env bootstrap ─────────────────────
-# 启动 sentinel-service 的 shell 可能没把仓库 .env 的 key 暴露到 env 里;
-# 主动从仓库 root .env 读一份(只在 env 缺失时补,不覆盖外部已设值).
+# The shell that starts sentinel-service may not export the repo .env keys into env;
+# proactively read the repo root .env (only fills missing env, never overrides externally set values).
 def _bootstrap_env_from_dotenv() -> None:
     try:
         from dotenv import dotenv_values
@@ -54,7 +54,7 @@ def _bootstrap_env_from_dotenv() -> None:
             "QWEN_API_KEY", "QWEN_BASE_URL",
             "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL",
             "OPENAI_API_KEY", "OPENAI_BASE_URL",
-            # 搜索相关 env(国内机房 fallback / cookie)
+            # search-related env (CN data center fallback / cookie)
             "DDG_REMOTE_URL", "DDG_REMOTE_TOKEN",
             "DDGS_BACKENDS", "DDGS_TIMEOUT_S",
             "BAIDU_COOKIE",
@@ -66,9 +66,9 @@ def _bootstrap_env_from_dotenv() -> None:
         return
 
 
-# ───────────────────── provider 配置 ─────────────────────
-# 改默认 provider:export LLM_PROVIDER=deepseek (或 qwen / openai)
-# 改默认模型:export <PROVIDER>_MODEL=xxx 例如 GLM_MODEL=glm-4-plus
+# ───────────────────── provider configuration ─────────────────────
+# Change the default provider: export LLM_PROVIDER=deepseek (or qwen / openai)
+# Change the default model: export <PROVIDER>_MODEL=xxx e.g. GLM_MODEL=glm-4-plus
 _PROVIDERS: dict[str, dict[str, Any]] = {
     "glm": {
         "key_env":    "GLM_API_KEY",
@@ -81,7 +81,9 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "key_env":    "DEEPSEEK_API_KEY",
         "base_url":   "https://api.deepseek.com/v1",
         "model_env":  "DEEPSEEK_MODEL",
-        "default_model": "deepseek-chat",
+        # DeepSeek deprecated deepseek-chat in 2026-07; only deepseek-v4-pro / deepseek-v4-flash are supported now.
+        # At runtime the DEEPSEEK_MODEL env takes precedence (see the geo-sentinel drop-in); this default is only a fallback.
+        "default_model": "deepseek-v4-flash",
         "use_proxy":  False,
     },
     "qwen": {
@@ -93,10 +95,10 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
     },
     "openai": {
         "key_env":    "OPENAI_API_KEY",
-        "base_url":   None,  # SDK 默认 https://api.openai.com/v1
+        "base_url":   None,  # SDK default https://api.openai.com/v1
         "model_env":  "OPENAI_MODEL",
         "default_model": "gpt-4o-mini",
-        "use_proxy":  True,   # 国内直连不通,必须走 HTTPS_PROXY
+        "use_proxy":  True,   # direct connection from China does not work, must go through HTTPS_PROXY
     },
 }
 
@@ -111,15 +113,23 @@ def _provider() -> str:
 
 
 def _provider_cfg() -> dict[str, Any]:
-    return _PROVIDERS[_provider()]
+    cfg = dict(_PROVIDERS[_provider()])
+    # base_url can be overridden by the <PROVIDER>_BASE_URL env - DeepSeek direct access has fully moved to the neolink
+    # gateway; the key is only valid on the gateway, and calling api.deepseek.com always returns 401.
+    override = os.environ.get(cfg["key_env"].replace("_API_KEY", "_BASE_URL"))
+    if override:
+        cfg["base_url"] = override.rstrip("/")
+    return cfg
 
 
-# ───────────────────── http client(代理策略) ─────────────────────
-# 仓库环境 ALL_PROXY=socks5://...(httpx 默认会读)需要 socksio 包,我们不装;
-# 所以全部 trust_env=False.OpenAI 在国内连不通,因此 use_proxy=True 时显式
-# 注入 HTTP(S)_PROXY 给底层 httpx.
+# ───────────────────── http client (proxy strategy) ─────────────────────
+# The repo environment has ALL_PROXY=socks5://... (httpx reads it by default), which needs the socksio package that we do not install;
+# so trust_env=False everywhere. OpenAI is unreachable from China, so when use_proxy=True we explicitly
+# inject HTTP(S)_PROXY into the underlying httpx.
 def _http_client(use_proxy: bool) -> httpx.Client:
-    timeout = httpx.Timeout(60.0, connect=10.0)
+    # 60s is not enough for reasoning models - deepseek-v4-flash on neolink generating a monitoring plan
+    # (long JSON) often takes over a minute; with two SDK retries, one run-monitor waits three minutes for nothing and is marked failed.
+    timeout = httpx.Timeout(float(os.environ.get("LLM_TIMEOUT_S", "180")), connect=10.0)
     if not use_proxy:
         return httpx.Client(trust_env=False, timeout=timeout)
     proxy = (
@@ -132,7 +142,7 @@ def _http_client(use_proxy: bool) -> httpx.Client:
     return httpx.Client(trust_env=False, timeout=timeout)
 
 
-# ───────────────────── client 构造 ─────────────────────
+# ───────────────────── client construction ─────────────────────
 def make_client() -> openai.OpenAI:
     cfg = _provider_cfg()
     api_key = os.environ.get(cfg["key_env"])
@@ -151,24 +161,37 @@ def _model() -> str:
     return os.environ.get(cfg["model_env"]) or cfg["default_model"]
 
 
-# ───────────────────── 对外 API ─────────────────────
-def chat_create(_legacy_default_model: str = "", **kwargs: Any):
-    """chat.completions.create 的 thin wrapper.
+# ───────────────────── public API ─────────────────────
+def chat_create(_legacy_default_model: str = "", *, _usage_feature: str | None = None,
+                **kwargs: Any):
+    """Thin wrapper around chat.completions.create.
 
-    _legacy_default_model 仅为兼容现有调用点签名(plan / analyze / brief / draft
-    内部传的 'gpt-4o-mini' 之类),实际 model 由 LLM_PROVIDER + *_MODEL env 决定.
-    其余参数(messages / response_format / max_completion_tokens / ...) 透传.
+    _legacy_default_model only exists for signature compatibility with existing call sites (plan / analyze / brief / draft
+    pass things like 'gpt-4o-mini' internally); the actual model is decided by LLM_PROVIDER + the *_MODEL env.
+    Other parameters (messages / response_format / max_completion_tokens / ...) are passed through.
 
-    撞 RateLimit 时做有限次指数退避重试,再抛.batch 调用方(analyze 循环 N 篇)
-    应该额外在外层加节流,避免 burst 把每分钟 RPM 全打光.
+    On RateLimit, retries a limited number of times with exponential backoff, then raises. Batch callers (analyze looping over N posts)
+    should add extra throttling on the outside so a burst does not exhaust the per-minute RPM.
+
+    Usage accounting (storage/llm_usage.py -> main DB public.llm_call_log): this is the **only model
+    egress in the whole service**, so recording here covers all 10 call sites. The feature scenario is tagged by each call site's set_feature().
+    **Every failed rate-limit retry is also recorded as a row**, otherwise being rate-limited would be completely invisible on the usage page.
+
+    Accounting is skipped when _usage_feature="__external__" - telemetry-service soft-imports this
+    function to reuse its provider configuration (app/llm.py); those calls are recorded by telemetry itself with the real scenario,
+    so recording them here too would double count.
     """
     kwargs.pop("model", None)
+    external = _usage_feature == "__external__"
     client = make_client()
     last_exc: openai.RateLimitError | None = None
     for attempt in range(_RATE_LIMIT_RETRIES + 1):
+        t0 = time.perf_counter()
         try:
-            return client.chat.completions.create(model=_model(), **kwargs)
+            resp = client.chat.completions.create(model=_model(), **kwargs)
         except openai.RateLimitError as e:
+            if not external:
+                _record(status="http_error", error_kind="http_429", attempt=attempt, t0=t0)
             last_exc = e
             if attempt == _RATE_LIMIT_RETRIES:
                 break
@@ -178,12 +201,39 @@ def chat_create(_legacy_default_model: str = "", **kwargs: Any):
                 _provider(), _model(), e, wait, attempt + 1, _RATE_LIMIT_RETRIES,
             )
             time.sleep(wait)
+        except Exception as e:  # noqa: BLE001 - re-raise unchanged after recording, so the caller sees the same exception
+            if not external:
+                _record(status="http_error", error_kind=type(e).__name__[:24],
+                        attempt=attempt, t0=t0)
+            raise
+        else:
+            if not external:
+                _record(status="ok", usage=getattr(resp, "usage", None),
+                        attempt=attempt, t0=t0, feature=_usage_feature)
+            return resp
     assert last_exc is not None
     raise last_exc
 
 
-# 兼容性 — 现有调用点之前用 has_openai/has_qwen 做"key 是否就绪"判断,
-# 现在改成"当前选中的 provider 是否可用".
+def _record(*, status: str, usage: Any = None, error_kind: str = "",
+            attempt: int = 0, t0: float = 0.0, feature: str | None = None) -> None:
+    """Record one call in the model usage table. Soft import + full try - accounting must never affect sentiment monitoring batch runs."""
+    try:
+        from storage.llm_usage import record_llm_call
+
+        cfg = _provider_cfg()
+        record_llm_call(
+            provider=_provider(), model=_model(), usage=usage, status=status,
+            error_kind=error_kind, attempt_no=attempt,
+            latency_ms=int((time.perf_counter() - t0) * 1000) if t0 else 0,
+            base_url=cfg.get("base_url") or "", feature=feature,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# Compatibility - existing call sites used has_openai/has_qwen to check "is the key ready";
+# now it means "is the currently selected provider available".
 def has_llm() -> bool:
     try:
         cfg = _provider_cfg()
@@ -192,8 +242,8 @@ def has_llm() -> bool:
     return bool(os.environ.get(cfg["key_env"]))
 
 
-# 为兼容 search/plan.py 等地的 has_openai / has_qwen 调用,保留这两个名:
-# 二者现在都等价 has_llm()(单 provider 模式不区分).
+# For compatibility with has_openai / has_qwen calls in search/plan.py etc., keep these two names:
+# both are now equivalent to has_llm() (single-provider mode does not distinguish).
 has_openai = has_llm
 has_qwen = has_llm
 

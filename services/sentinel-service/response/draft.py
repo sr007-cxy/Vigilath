@@ -20,6 +20,7 @@ from storage import (
     connect, init_schema, brand_post_lookup, insert_draft,
 )
 from llm_client import chat_create, has_openai, has_qwen
+from storage.llm_usage import set_feature
 
 DRAFT_MODEL = os.environ.get("YUQING_DRAFT_MODEL", "gpt-4.1")
 MAX_TOKENS = 3000
@@ -121,6 +122,7 @@ def generate_drafts(symbol: str, source: str | None = None,
         "请按系统说明输出 JSON。"
     )
 
+    set_feature("sentinel.draft")   # for billing: tag which feature this call belongs to
     resp = chat_create(
         DRAFT_MODEL,
         max_completion_tokens=MAX_TOKENS,

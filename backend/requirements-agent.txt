@@ -1,17 +1,26 @@
-# GEO 优化 Agent 独立 service 的依赖(方案 B,独立 venv,与主后端隔离)。
-# 安装:python -m venv agent-venv && agent-venv/bin/pip install -r requirements-agent.txt
-# 本地已验证此版本组合能 import 整条 geo 服务/模型层 + 构造 Pydantic AI agent。
+# Dependencies for the standalone GEO optimization Agent service (plan B, separate venv, isolated from the main backend).
+# Install: python -m venv agent-venv && agent-venv/bin/pip install -r requirements-agent.txt
+# Verified locally that this version combination can import the whole geo service/model layer + construct the Pydantic AI agent.
 #
-# 关键:fastapi>=0.115 才兼容 pydantic>=2.11;pydantic-ai 需 pydantic>=2.11。
+# Key: fastapi>=0.115 is required for pydantic>=2.11 compatibility; pydantic-ai needs pydantic>=2.11.
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.11
 pydantic-settings>=2.6
 pydantic-ai-slim[openai]>=1.0,<2
+# ★ The transitive dependency openai must be pinned. The line above doesn't constrain it, so builds at different times resolve different versions:
+#   in 2026-08 the CN production container image resolved openai 3.3.1, while the test host and prod EC2 venvs had 2.41.0.
+#   openai>=3's built-in httpx_aiohttp references aiohttp.SocketTimeoutError at import, an attribute only in
+#   aiohttp >= 3.10; with the old aiohttp 3.9.1 pin this meant:
+#     import openai -> AttributeError -> build_agent raises -> /api/agent/chat always 503
+#   while /health doesn't import pydantic-ai, so the container still reports healthy -- same commit, two behaviors,
+#   depending only on which day the environment was installed. Without pinning, this kind of drift will happen again.
+#   aiohttp is now >=3.14.3, so openai>=3 is no longer blocked by that, but it is untested here: keep <3 until verified.
+openai>=2,<3
 
-# geo 服务/模型层(被 agent 工具复用)所需,与主后端版本对齐:
+# Needed by the geo service/model layer (reused by agent tools), versions aligned with the main backend:
 sqlalchemy==2.0.23
-psycopg[binary]>=3.1          # geo.database 用 postgresql+psycopg://(import 时即建 engine)
+psycopg[binary]>=3.1          # geo.database uses postgresql+psycopg:// (engine is created at import)
 requests>=2.32.4
 beautifulsoup4==4.12.2
 PyJWT[crypto]>=2.10.1
@@ -22,4 +31,4 @@ httpx>=0.25.0
 redis>=5.0
 aiohttp>=3.14.3
 email-validator
-cryptography>=42.0          # 飞书 IM 事件订阅 Encrypt Key(可选)解密
+cryptography>=42.0          # decrypting the Feishu IM event subscription Encrypt Key (optional)

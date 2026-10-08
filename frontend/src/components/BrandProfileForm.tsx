@@ -1,25 +1,26 @@
-// 品牌资料表单 — TopicEditor 和 /dashboard/topics/:id/profile 共用.
+// Brand profile form -- shared by TopicEditor and /dashboard/topics/:id/profile.
 //
-// 字段定义见 services/aiTelemetryApi.ts 的 BrandProfile.
-// 必填项校验在调用方传 requiredKeys 控制(因为 admin 编辑器 vs 用户提交审核要求不同).
+// Field definitions in BrandProfile in services/aiTelemetryApi.ts.
+// Required-field validation is controlled by the caller passing requiredKeys (admin editor vs user submission-for-review differ).
 //
 // 2026-05-18:
-//   - 5 节由竖排改为顶部 tab 切换,缩短单页长度
-//   - 别名(target_aliases)从外层独立 section 移入「基础标识」tab,
-//     调用方可选传 `aliases` + `onAliasesChange`(只有 TopicEditor 用)
+//   - The 5 sections changed from vertical stacking to top tabs, shortening the page
+//   - Aliases (target_aliases) moved from a separate outer section into the "Basic identity" tab;
+//     callers may optionally pass `aliases` + `onAliasesChange` (only TopicEditor does)
 
 import { useState } from 'react';
-import type { BrandProfile } from '../services/aiTelemetryApi';
+import type { BrandProduct, BrandProfile } from '../services/aiTelemetryApi';
+import { EMPTY_BRAND_PRODUCT } from '../services/aiTelemetryApi';
 
-// 用户提交审核时必填的核心字段(跟后端 PROFILE_REQUIRED_FIELDS 对齐)
-// 二、内容创作方向(creation_directions / copywriting_types / target_platforms /
-// content_tones / content_redlines)整节移除 — 这些由内容审核 / 投放策略阶段
-// 决定,不在资料表单里强制填。BrandProfile schema 字段保留(老数据不破),
-// content_generator 的 prompt 拼装如果读到空就跳过。
-// 2026-05-17 起 — 只把「一、基础标识」节的 6 个字段卡成必填.
-// 2026-05-27:core_business_lines 退出必填 — 实践里很多场景一句话讲清楚业务线
-// 写在 industry 里就够,空着也允许跑通.其余 5 个仍必填.
-// 其他模块都是「素材库」性质,鼓励多填但不卡死;LLM 拿到什么用什么.
+// Core fields required when the user submits for review (aligned with backend PROFILE_REQUIRED_FIELDS)
+// Section 2, content creation directions (creation_directions / copywriting_types / target_platforms /
+// content_tones / content_redlines), was removed entirely -- these are decided at the content review / placement strategy stage,
+// not forced in the profile form. BrandProfile schema fields are kept (old data stays intact),
+// and content_generator's prompt assembly skips them if empty.
+// From 2026-05-17 -- only the 6 fields in "Section 1, Basic identity" are required.
+// 2026-05-27: core_business_lines is no longer required -- in practice many cases describe the business line in one sentence
+// in industry, so leaving it empty is allowed to proceed. The other 5 remain required.
+// Other modules are "asset library" in nature: filling more is encouraged but not enforced; the LLM uses whatever it gets.
 export const PROFILE_REQUIRED_FIELDS: (keyof BrandProfile)[] = [
   'profile_name', 'company_full_name', 'company_short_name',
   'industry', 'service_geo',
@@ -35,13 +36,21 @@ export function profileMissingFields(profile: BrandProfile, required = PROFILE_R
   return required.filter(k => !isProfileFieldFilled(profile, k));
 }
 
-// 主体类型 — 单选,驱动扩展词风格(与后端 query_expander.ENTITY_TYPE_HINTS 同 key)。
-// 资料抽取时 AI 自动判,用户可改;空 = 未判定,扩展按通用模板跑。
+// Entity type -- single choice, drives query expansion style (same keys as backend query_expander.ENTITY_TYPE_HINTS).
+// Auto-detected by AI during profile extraction, user-editable; empty = undetermined, expansion uses the generic template.
 const ENTITY_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'service_tool',  label: '服务工具' },
-  { value: 'manufacturer',  label: '生产制造商' },
+  { value: 'service_tool',  label: '服务业' },
+  { value: 'manufacturer',  label: '制造业' },
   { value: 'brand_owner',   label: '品牌方' },
   { value: 'other',         label: '其他' },
+];
+
+const COMPANY_SIZE_OPTIONS: { value: string; label: string }[] = [
+  { value: '1-10 名员工', label: '1-10 名员工' },
+  { value: '11-100 名员工', label: '11-100 名员工' },
+  { value: '101-500 名员工', label: '101-500 名员工' },
+  { value: '501-1000 名员工', label: '501-1000 名员工' },
+  { value: '1001+ 名员工', label: '1001+ 名员工' },
 ];
 
 type SectionKey = 'basic' | 'subject' | 'service' | 'story' | 'extra' | 'creation';
@@ -55,8 +64,8 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'creation', label: '六、内容创作偏好' },
 ];
 
-// 2026-05-28 — 创作方向 / 文案类型 候选值(与后端 content_generator.DIRECTION_HINTS /
-// TYPE_HINTS 同 key).多选,选了几个 → 同一条 query 出几篇风格不同的稿件.
+// 2026-05-28 -- candidate values for creation direction / copywriting type (same keys as backend content_generator.DIRECTION_HINTS /
+// TYPE_HINTS). Multi-select: select several -> the same query produces that many drafts in different styles.
 const CREATION_DIRECTION_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'industry_insight',  label: '行业洞察',  desc: '趋势 / 市场数据 / 头部玩家' },
   { value: 'case_story',        label: '案例分享',  desc: '真实项目复盘' },
@@ -81,9 +90,9 @@ interface ProfileFormProps {
   onChange: (p: BrandProfile) => void;
   readOnly?: boolean;
   requiredKeys?: (keyof BrandProfile)[];
-  // 别名(可选)— 仅 TopicEditor 用;不传则不在「基础标识」里渲染别名输入。
-  // 用文本(逗号 / 换行分隔)是因为外层就是这么持久化的,直接复用语义,
-  // 父组件 split → string[] 自己负责。
+  // Aliases (optional) -- only used by TopicEditor; if not passed, the alias input isn't rendered in "Basic identity".
+  // Text (comma / newline separated) is used because that's how the outer layer persists it, reusing the semantics directly;
+  // the parent component handles split -> string[] itself.
   aliasesText?: string;
   onAliasesTextChange?: (v: string) => void;
   aliasesCount?: number;
@@ -151,6 +160,50 @@ export function BrandProfileForm({
                 <TextRow label="品牌官网(选填)" required={false} readOnly={readOnly}
                          value={profile.website || ''} onChange={v => setField('website', v)} />
               </Pair>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <TextRow label="地点" required={false} readOnly={readOnly}
+                         value={profile.ctrip_location?.name || ''}
+                         placeholder="例如：西湖风景名胜区"
+                         onChange={v => setField('ctrip_location', {
+                           ...profile.ctrip_location,
+                           name: v,
+                         })} />
+                <TextRow label="城市" required={false} readOnly={readOnly}
+                         value={profile.ctrip_location?.city || ''}
+                         placeholder="例如：杭州"
+                         onChange={v => setField('ctrip_location', {
+                           name: profile.ctrip_location?.name || '',
+                           ...profile.ctrip_location,
+                           city: v,
+                         })} />
+                <TextRow label="详细地址" required={false} readOnly={readOnly}
+                         value={profile.ctrip_location?.address || ''}
+                         placeholder="例如：西湖区龙井路 1 号"
+                         onChange={v => setField('ctrip_location', {
+                           name: profile.ctrip_location?.name || '',
+                           ...profile.ctrip_location,
+                           address: v,
+                         })} />
+              </div>
+              {/* Contact info: only allowed into articles if filled in. When all are empty, generation forces the entire text to contain no
+                  phone / URL / WeChat / email -- previously there were no fields here, so the model had to make one up. */}
+              <Pair>
+                <TextRow label="联系电话(选填)" required={false} readOnly={readOnly}
+                         value={profile.contact_phone || ''}
+                         onChange={v => setField('contact_phone', v)} />
+                <TextRow label="微信 / 公众号(选填)" required={false} readOnly={readOnly}
+                         value={profile.contact_wechat || ''}
+                         onChange={v => setField('contact_wechat', v)} />
+              </Pair>
+              <Pair>
+                <TextRow label="联系邮箱(选填)" required={false} readOnly={readOnly}
+                         value={profile.contact_email || ''}
+                         onChange={v => setField('contact_email', v)} />
+                <div className="text-[11px] text-muted self-end pb-2 leading-relaxed">
+                  填了的联系方式才允许出现在生成的文章里;全部留空时,文章中不会
+                  出现任何电话、网址、微信或邮箱。
+                </div>
+              </Pair>
               <ParagraphRow label="核心业务线" required={req.has('core_business_lines')} readOnly={readOnly}
                             value={profile.core_business_lines} onChange={v => setField('core_business_lines', v)} />
               {showAliases && (
@@ -178,9 +231,17 @@ export function BrandProfileForm({
 
           {tab === 'subject' && (
             <>
+              <CompanySizeRow
+                value={profile.team_size}
+                onChange={v => setField('team_size', v)}
+                readOnly={readOnly}
+              />
               <Pair>
-                <TextRow label="公司 / 团队规模(选填)" required={false} readOnly={readOnly}
-                         value={profile.team_size} onChange={v => setField('team_size', v)} />
+                <AgencyCheckboxRow
+                  checked={Boolean(profile.is_agency)}
+                  onChange={v => setField('is_agency', v)}
+                  readOnly={readOnly}
+                />
                 <TextRow label="成立时间 / 从业年限" required={req.has('founded_year')} readOnly={readOnly}
                          value={profile.founded_year} onChange={v => setField('founded_year', v)} />
               </Pair>
@@ -203,6 +264,8 @@ export function BrandProfileForm({
                             value={profile.target_scenarios} onChange={v => setField('target_scenarios', v)} />
               <TagsRow label="服务交付保障(选填)" required={false} readOnly={readOnly}
                        value={profile.service_guarantees} onChange={v => setField('service_guarantees', v)} />
+              <ProductsRow readOnly={readOnly}
+                           value={profile.products || []} onChange={v => setField('products', v)} />
             </>
           )}
 
@@ -239,7 +302,7 @@ export function BrandProfileForm({
               <div className="text-xs text-muted -mt-1 mb-2 leading-relaxed"
                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)',
                             padding: '8px 12px', borderRadius: 6 }}>
-                选了几个「创作方向」× 几个「文案类型」,系统就为每条监测问题
+                选了几个「创作方向」× 几个「文案类型」,系统就为每条提示词
                 <strong style={{ color: 'var(--accent-primary)' }}> 出几篇风格不同的稿件 </strong>。
                 例如:勾「案例分享 + 实操指南」× 「深度长文 + 短社媒」= 同一问题 4 篇稿。
                 上限 9 篇/问题(超过自动截断);两边都不选 → 沿用旧行为(每问题 1 篇)。
@@ -267,14 +330,14 @@ export function BrandProfileForm({
 }
 
 function Pair({ children }: { children: React.ReactNode }) {
-  // md+ 两列网格,sm 单列。空槽位塞 <span /> 占位即可
+  // Two-column grid at md+, single column at sm. Fill empty slots with a <span /> placeholder
   return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>;
 }
 
 function Label({ text, required }: { text: string; required: boolean }) {
   return (
     <label className="block text-xs text-secondary mb-1">
-      {text}{required && <span style={{ color: '#ef4444' }}> *</span>}
+      {text}{required && <span style={{ color: 'var(--danger-fg)' }}> *</span>}
     </label>
   );
 }
@@ -301,6 +364,79 @@ function TextRow({ label, required, readOnly, value, onChange, placeholder }: Te
   );
 }
 
+function CompanySizeRow({ value, onChange, readOnly }: { value: string; onChange: (v: string) => void; readOnly: boolean }) {
+  const isPreset = COMPANY_SIZE_OPTIONS.some(opt => opt.value === value);
+  return (
+    <div>
+      <Label text="公司 / 团队规模(选填)" required={false} />
+      <div className="flex flex-wrap gap-2">
+        {COMPANY_SIZE_OPTIONS.map(opt => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={readOnly}
+              onClick={() => onChange(active ? '' : opt.value)}
+              className="px-3 py-2 rounded-md text-sm border"
+              style={{
+                background: active ? 'var(--accent-primary)' : 'var(--bg-card)',
+                borderColor: active ? 'var(--accent-primary)' : 'var(--border-color)',
+                color: active ? '#fff' : 'var(--text-primary)',
+                fontWeight: active ? 600 : 400,
+                cursor: readOnly ? 'not-allowed' : 'pointer',
+                opacity: readOnly ? 0.6 : 1,
+              }}
+            >
+              {active && <span className="mr-1">●</span>}{opt.label}
+            </button>
+          );
+        })}
+      </div>
+      <input
+        type="text"
+        disabled={readOnly}
+        value={isPreset ? '' : value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="其他规模 / 专业能力说明(可选)"
+        className="w-full text-sm px-3 py-2 rounded-md mt-2"
+        style={{
+          background: 'var(--bg-input)', color: 'var(--text-primary)',
+          border: '1px solid var(--border-color)',
+          opacity: readOnly ? 0.6 : 1,
+        }}
+      />
+      <span className="block mt-1 text-xs text-muted">点击固定规模更快;已有自由文本会保留在下方自定义输入中。</span>
+    </div>
+  );
+}
+
+function AgencyCheckboxRow({ checked, onChange, readOnly }: { checked: boolean; onChange: (v: boolean) => void; readOnly: boolean }) {
+  return (
+    <div>
+      <Label text="您是代理机构吗?" required={false} />
+      <button
+        type="button"
+        disabled={readOnly}
+        onClick={() => onChange(!checked)}
+        className="w-full text-left px-3 py-2 rounded-md border"
+        style={{
+          background: checked ? 'var(--bg-tertiary)' : 'var(--bg-card)',
+          borderColor: checked ? 'var(--accent-primary)' : 'var(--border-color)',
+          color: 'var(--text-primary)',
+          cursor: readOnly ? 'not-allowed' : 'pointer',
+          opacity: readOnly ? 0.6 : 1,
+        }}
+      >
+        <div className="text-sm font-medium" style={{ color: checked ? 'var(--accent-primary)' : 'var(--text-primary)' }}>
+          {checked ? '☑' : '☐'} 是的,我是代理机构
+        </div>
+        <div className="text-[11px] text-muted mt-0.5">用于后续内容口径和客户场景判断,不会打断当前问答流程。</div>
+      </button>
+    </div>
+  );
+}
+
 function TextAreaRow({ label, required, readOnly, value, onChange }: TextProps) {
   return (
     <div>
@@ -319,11 +455,11 @@ function TextAreaRow({ label, required, readOnly, value, onChange }: TextProps) 
   );
 }
 
-// 整段文本编辑,底层仍存 string[](保持 schema 兼容).
-// 加载:多 item 数组用换行连起来展示;
-// 保存:整段文本 trim 后作为 string[] 的唯一元素回写,空则存 [].
-// 这样下游 LLM prompt 拼装(把数组按行拼)行为不变,只是把"用户手动维护多条"
-// 改成了"整段文本"输入体验.
+// Whole-text editing, still stored as string[] underneath (keeps schema compatibility).
+// On load: multi-item arrays are joined with newlines for display;
+// On save: the whole text is trimmed and written back as the sole element of string[], empty stores [].
+// This way downstream LLM prompt assembly (joining the array line by line) is unchanged; only the input experience changes
+// from "users manually maintain multiple items" to "one block of text".
 interface ParagraphProps {
   label: string; required: boolean; readOnly: boolean;
   value: string[]; onChange: (v: string[]) => void; rows?: number;
@@ -356,8 +492,8 @@ interface TagsProps {
   value: string[]; onChange: (v: string[]) => void; placeholder?: string;
 }
 
-// 2026-05-28 — 多选 chip 行,选项是固定枚举(创作方向 / 文案类型);跟 TagsRow 的
-// 自由输入不同,这里是「点 chip 切换勾选」.每个 chip 下方带简短描述.
+// 2026-05-28 -- multi-select chip row with a fixed enum of options (creation direction / copywriting type); unlike TagsRow's
+// free input, here you "click a chip to toggle". Each chip has a short description below.
 function OptionsMultiRow({
   label, options, value, onChange, readOnly,
 }: {
@@ -406,8 +542,8 @@ function OptionsMultiRow({
   );
 }
 
-// 单选分段按钮 — 选项固定枚举,只能选一个(再点同一项可取消回空)。
-// 带 ✨AI 判断 小标 + 动态提示:已选时说明当前判定可改,未选时说明它影响扩展词方向。
+// Single-choice segmented buttons -- fixed enum options, only one selectable (clicking the same one again clears it).
+// With a ✨AI-judged badge + dynamic hint: when selected, explains the current judgment can be changed; when not, explains it affects query expansion direction.
 function SegmentedRow({
   label, options, value, onChange, readOnly, aiBadge = false,
 }: {
@@ -421,7 +557,7 @@ function SegmentedRow({
   const current = options.find(o => o.value === value);
   const hint = current
     ? `已按资料自动判为「${current.label}」,不对可直接改`
-    : '按资料自动判断;影响扩展词方向(服务工具→功能/价格/集成 · 制造商→厂家/参数/OEM)';
+    : '按资料自动判断;影响扩展词方向(服务业→功能/价格/集成 · 制造业→厂家/参数/OEM)';
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
@@ -461,6 +597,83 @@ function SegmentedRow({
     </div>
   );
 }
+
+// Product / model list (added 2026-09-22). One product per row: name / aliases / category / selling points / audience / featured.
+// Featured is single-choice -- turning one on turns the others off (draft generation's "prioritize embedding" only honors one; multiple featured makes no sense).
+// Product names / aliases are treated by the backend as brand terms (hit detection + metric term exclusion + query expansion classification), so prompt users to enter model names,
+// not generic category words as product names.
+function ProductsRow({ readOnly, value, onChange }: {
+  readOnly: boolean; value: BrandProduct[]; onChange: (v: BrandProduct[]) => void;
+}) {
+  const update = (i: number, patch: Partial<BrandProduct>) =>
+    onChange(value.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const setFeatured = (i: number, on: boolean) =>
+    onChange(value.map((p, idx) => ({ ...p, is_featured: on ? idx === i : (idx === i ? false : p.is_featured) })));
+  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const add = () => onChange([...value, { ...EMPTY_BRAND_PRODUCT }]);
+  const inputStyle = {
+    background: 'var(--bg-input)', color: 'var(--text-primary)',
+    border: '1px solid var(--border-color)', opacity: readOnly ? 0.6 : 1,
+  } as const;
+  return (
+    <div>
+      <Label text="产品 / 型号清单(选填)" required={false} />
+      <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+        消费品牌按具体产品填:产品名填型号(如「{'<brand-e>'}手柄」),品类填通用名(如「游戏手柄」)。
+        产品名和别名会被当作品牌词识别命中;种子提示词是产品名时,扩词按其品类造词、不再把产品当成别家品牌。
+        标「主推」的产品生稿时优先植入,并在建主题时推荐作种子。
+      </p>
+      <div className="space-y-2">
+        {value.map((p, i) => (
+          <div key={i} className="rounded-md p-3 space-y-2"
+               style={{ border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)' }}>
+            <div className="flex items-center gap-2">
+              <input type="text" value={p.name} disabled={readOnly} placeholder="产品 / 型号名 *"
+                     onChange={e => update(i, { name: e.target.value })}
+                     className="flex-1 text-sm px-3 py-1.5 rounded-md" style={inputStyle} />
+              <input type="text" value={p.category} disabled={readOnly} placeholder="品类通用名(如 游戏手柄)"
+                     onChange={e => update(i, { category: e.target.value })}
+                     className="flex-1 text-sm px-3 py-1.5 rounded-md" style={inputStyle} />
+              <label className="flex items-center gap-1 text-xs whitespace-nowrap cursor-pointer"
+                     style={{ color: p.is_featured ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>
+                <input type="checkbox" checked={Boolean(p.is_featured)} disabled={readOnly}
+                       onChange={e => setFeatured(i, e.target.checked)} />
+                主推
+              </label>
+              {!readOnly && (
+                <button type="button" onClick={() => remove(i)}
+                        className="text-xs px-2 py-1 rounded-md"
+                        style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>删除</button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <TagsRow label="别名 / 型号变体" required={false} readOnly={readOnly}
+                       value={p.aliases || []} onChange={v => update(i, { aliases: v })} placeholder="如 <brand-e>、Nova" />
+              <TagsRow label="核心卖点" required={false} readOnly={readOnly}
+                       value={p.selling_points || []} onChange={v => update(i, { selling_points: v })} placeholder="如 霍尔扳机" />
+              <TagsRow label="目标人群 / 场景" required={false} readOnly={readOnly}
+                       value={p.target_users || []} onChange={v => update(i, { target_users: v })} placeholder="如 主机玩家" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input type="text" value={p.launch_date} disabled={readOnly} placeholder="上市时间(选填)"
+                     onChange={e => update(i, { launch_date: e.target.value })}
+                     className="text-sm px-3 py-1.5 rounded-md" style={inputStyle} />
+              <input type="text" value={p.price_range} disabled={readOnly} placeholder="价格带(选填)"
+                     onChange={e => update(i, { price_range: e.target.value })}
+                     className="text-sm px-3 py-1.5 rounded-md" style={inputStyle} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {!readOnly && value.length < 30 && (
+        <button type="button" onClick={add}
+                className="mt-2 text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'var(--accent-primary)', color: '#fff' }}>+ 添加产品</button>
+      )}
+    </div>
+  );
+}
+
 
 function TagsRow({ label, required, readOnly, value, onChange, placeholder }: TagsProps) {
   const [draft, setDraft] = useState('');

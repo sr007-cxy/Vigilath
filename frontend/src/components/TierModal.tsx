@@ -9,6 +9,7 @@ import {
   membershipApi,
   type Membership,
   formatTierPrice,
+  grantPoints,
 } from '../services/membershipApi';
 
 export function TierModal() {
@@ -141,7 +142,7 @@ export function TierModal() {
               </div>
             )}
             {tiersError && (
-              <div className="py-12 text-center" style={{ color: '#ef4444' }}>{tiersError}</div>
+              <div className="py-12 text-center" style={{ color: 'var(--danger-fg)' }}>{tiersError}</div>
             )}
 
             {!tiersLoading && !tiersError && memberships.length > 0 && (
@@ -187,6 +188,15 @@ export function TierModal() {
                           </span>
                         )}
                       </div>
+                      {/* Buying membership = tier + equal amount of credits. Without stating it here, the user sees
+                          not a single mention of "credits" along the entire purchase flow, and doesn't know they have them once credited. */}
+                      {grantPoints(tier) !== null && (
+                        <p className="text-xs font-medium mb-3" style={{ color: 'var(--accent-primary)' }}>
+                          {t('productsServices.grantPoints', '购买即赠 {{n}} 积分', {
+                            n: grantPoints(tier)!.toLocaleString('zh-CN'),
+                          })}
+                        </p>
+                      )}
                       <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
                         {text.description}
                       </p>

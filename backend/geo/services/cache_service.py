@@ -1,19 +1,19 @@
 """Redis-backed report cache service.
 
-设计目标:
-- 所有 check 报表(默认 + 高级)统一走 Redis db=7,TTL 24 小时
-- key 由 (url, mode, tier, include_fix, extra) SHA1 决定,同键 = 可共享
-- value 走 gzip 压缩(报表 JSON 约 27 KB,压缩后 5-10 KB)
-- Redis 不可用时静默降级(返回 None / set 时无操作),不让缓存层把业务打挂
+Design goals:
+- All check reports (default + advanced) go through Redis db=7, TTL 24 hours
+- Key is determined by SHA1 of (url, mode, tier, include_fix, extra); same key = shareable
+- Values are gzip-compressed (report JSON about 27 KB, 5-10 KB compressed)
+- Silently degrade when Redis is unavailable (return None / no-op on set), so the cache layer never takes down the business
 
-key 命名规范:
+Key naming convention:
     geo:report:<mode>:<sha1(url|tier|include_fix|extra)>
 
-其中 mode 作为可见的层级(`default` / `visibility` / `entity` / `citation` /
-`aeo` / `authority` / `crawl-test` / `compare`),便于运维用
-`SCAN 0 MATCH 'geo:report:visibility:*'` 逐类排查。
+where mode is a visible level (`default` / `visibility` / `entity` / `citation` /
+`aeo` / `authority` / `crawl-test` / `compare`), so ops can use
+`SCAN 0 MATCH 'geo:report:visibility:*'` to inspect by category.
 
-使用方式:
+Usage:
     from geo.services.cache_service import get_cached_report, set_cached_report
 
     key = make_cache_key("default", url, tier="free", include_fix=True)
@@ -24,9 +24,9 @@ key 命名规范:
     result = ...expensive check...
     set_cached_report(key, result, ttl_s=86400)
 
-降级策略:
-- Redis 连不上 / 超时 / 返回异常 → 日志 warn 一次,本次请求降级到"无缓存"
-- 不允许 exception 冒泡到业务层,即便 Redis 完全宕机,API 依然正常响应(只是慢)
+Degradation strategy:
+- Redis unreachable / timeout / error -> log a warning once, degrade this request to "no cache"
+- Exceptions must never bubble up to the business layer; even if Redis is fully down, the API still responds normally (just slower)
 """
 
 from __future__ import annotations
@@ -42,16 +42,15 @@ import redis
 
 _log = logging.getLogger(__name__)
 
-# 默认 TTL 24 小时
+# Default TTL 24 hours
 DEFAULT_TTL_S = 24 * 60 * 60
 
-# Redis 连接 URL。约定用 db=7(db 0/1 是其他应用的)。可通过 REDIS_URL
-# 环境变量覆盖,方便开发/测试切库。运维约束见
-# docs/engineering/checker-reliability-and-performance.md。
+# Redis connection URL. Convention is db=7 (db 0/1 belong to other apps, see docs/04-开发实现/issue_list.md and
+# the discussion during this switch). Overridable via the REDIS_URL env var, convenient for switching DBs in dev/test.
 _REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/7")
 
-# 全局单例 Redis client。redis-py 的 Redis 对象自带连接池,线程安全。
-# decode_responses=False 因为 value 是 gzipped bytes。
+# Global singleton Redis client. redis-py's Redis object has its own connection pool and is thread-safe.
+# decode_responses=False because values are gzipped bytes.
 _NO_CACHE = os.environ.get("GEO_NO_CACHE", "").strip().lower() in ("1", "true", "yes")
 
 if _NO_CACHE:
@@ -66,7 +65,7 @@ else:
             socket_timeout=1.0,
             health_check_interval=30,
         )
-        # 连通性探测,失败时保持 _client 但后续操作会 raise RedisError → 被我们吞掉
+        # Connectivity probe; on failure keep _client, but later operations will raise RedisError -> swallowed by us
         _client.ping()
         _log.info("cache_service: Redis connected at %s", _REDIS_URL)
     except redis.RedisError as e:
@@ -75,7 +74,7 @@ else:
 
 
 def _stable_str(v: Any) -> str:
-    """把任意 JSON-able 对象转成稳定字符串(排序 key)。"""
+    """Convert any JSON-able object into a stable string (sorted keys)."""
     if v is None:
         return ""
     if isinstance(v, (str, int, float, bool)):
@@ -91,7 +90,7 @@ def make_cache_key(
     include_fix: bool = True,
     extra: Any = None,
 ) -> str:
-    """构造缓存 key。同一 (mode, url, tier, include_fix, extra) = 同一 key。"""
+    """Build the cache key. Same (mode, url, tier, include_fix, extra) = same key."""
     payload = "|".join([
         url,
         tier,
@@ -103,7 +102,7 @@ def make_cache_key(
 
 
 def get_cached_report(key: str) -> Optional[dict]:
-    """命中返回 dict,未命中 / Redis 不可用返回 None。永远不 raise。"""
+    """Returns a dict on hit, None on miss / Redis unavailable. Never raises."""
     if _client is None:
         return None
     try:
@@ -113,14 +112,14 @@ def get_cached_report(key: str) -> Optional[dict]:
         try:
             payload = gzip.decompress(raw)
         except OSError:
-            # 历史遗留的非压缩值
+            # Legacy uncompressed value
             payload = raw
         return json.loads(payload)
     except redis.RedisError as e:
         _log.warning("cache_service.get: %s — treating as miss", e)
         return None
     except (ValueError, TypeError) as e:
-        # JSON 解析失败,说明 value 坏了,丢弃
+        # JSON parse failed, the value is corrupt; discard it
         _log.warning("cache_service.get: corrupt value for %s: %s", key, e)
         try:
             _client.delete(key)
@@ -130,7 +129,7 @@ def get_cached_report(key: str) -> Optional[dict]:
 
 
 def set_cached_report(key: str, value: dict, ttl_s: int = DEFAULT_TTL_S) -> bool:
-    """写入缓存。成功 True / 失败 / Redis 不可用 False。永远不 raise。"""
+    """Write to cache. True on success / False on failure or Redis unavailable. Never raises."""
     if _client is None:
         return False
     try:
@@ -147,7 +146,7 @@ def set_cached_report(key: str, value: dict, ttl_s: int = DEFAULT_TTL_S) -> bool
 
 
 def delete_cached_report(key: str) -> bool:
-    """显式驱逐一条 cache。返回 True 如果成功,False 如果 Redis 不可用。"""
+    """Explicitly evict one cache entry. Returns True on success, False if Redis is unavailable."""
     if _client is None:
         return False
     try:
@@ -159,7 +158,7 @@ def delete_cached_report(key: str) -> bool:
 
 
 def is_available() -> bool:
-    """检查 Redis 当前是否可用。API 层诊断用。"""
+    """Check whether Redis is currently available. For API-layer diagnostics."""
     if _client is None:
         return False
     try:

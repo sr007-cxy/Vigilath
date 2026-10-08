@@ -3,20 +3,14 @@ import { useTranslation } from 'react-i18next';
 import type { CISourceEntry, CISelfCitation } from '../../types/sourceAnalysis';
 
 export const ENGINE_COLORS: Record<string, string> = {
-  OpenAI: '#00A67E',
   DeepSeek: '#7C3AED',
   Kimi: '#3B82F6',
   '通义千问': '#F59E0B',
   '智谱': '#10B981',
-  Perplexity: '#8B5CF6',
   '文心一言': '#EC4899',
   '豆包': '#EF4444',
-  ChatGPT: '#6366F1',
-  Claude: '#06B6D4',
   Doubao: '#EF4444',
   '元宝': '#F97316',
-  Gemini: '#4285F4',
-  Mistral: '#FF7000',
 };
 
 const ENGINE_POPULARITY: Record<string, number> = {
@@ -28,19 +22,13 @@ const ENGINE_POPULARITY: Record<string, number> = {
   '文心一言': 5,
   Kimi: 6,
   '智谱': 7,
-  OpenAI: 8,
-  ChatGPT: 8,
-  Claude: 9,
-  Gemini: 10,
-  Perplexity: 11,
-  Mistral: 12,
 };
 
-const HIDDEN_ENGINES = new Set(['Copilot']);
-
+// ICP filing remediation: switched to a whitelist -- only the domestic engines listed in the table above are shown; anything outside the list (including
+// global engines left over in historical data) is never rendered, so a "hidden list" is no longer maintained here.
 export function orderEngines(engines: string[]): string[] {
   return engines
-    .filter((e) => !HIDDEN_ENGINES.has(e))
+    .filter((e) => e in ENGINE_POPULARITY)
     .slice()
     .sort((a, b) => (ENGINE_POPULARITY[a] ?? 99) - (ENGINE_POPULARITY[b] ?? 99));
 }

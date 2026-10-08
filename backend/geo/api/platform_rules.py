@@ -1,17 +1,24 @@
-"""2026-06-12 — 平台审核规则库 API(admin).
+"""2026-06-12 — Platform review rule library API (admin).
 
-每个发布平台一份"审核红线"文本,生成文章时按发文行 platform 注入 prompt。
-两步闭环:
-  1. 静态规则库:admin 手动编辑 / AI 按公开平台规范生成初稿(seed)
-  2. 从拒稿学习:聚合该平台 platform_reject_reason,LLM 提炼规则增量写入
-     pending_rules_text,admin 采纳(approve-pending)后并入 rules_text 生效
+Each publishing platform has one "review red lines" text, injected into the prompt by the publishing row's platform when generating articles.
+Two-step loop:
+  1. Static rule library: admin edits manually / AI generates a first draft from public platform guidelines (seed)
+  2. Learn from rejections: aggregate the platform's platform_reject_reason, the LLM distills rule increments into
+     pending_rules_text, and after admin adoption (approve-pending) they merge into rules_text and take effect
 
-端点(prefix /admin/platform-rules,require_admin):
-- GET    /                      — 全部平台规则(默认平台没行也返回空壳)
-- PUT    /{platform}            — upsert rules_text(可同时清 pending)
-- POST   /{platform}/seed       — LLM 生成该平台规则初稿(只返回草稿文本,不落库)
-- POST   /learn                 — 全平台:聚合拒稿原因 → LLM 提炼增量 → pending
-- POST   /{platform}/approve-pending — pending 并入 rules_text 并清空
+2026-08-04 — added auto-adaptation (services/platform_rules_auto.py): platforms in use but missing from the rule library
+automatically get a row + AI first draft (the first version takes effect directly, marked ai_draft pending proofreading); rejection increments for existing platforms still go to pending
+for manual adoption. The list therefore also includes platforms "actually in use" (missing-rule ones first), no longer only the hard-coded
+default platforms — otherwise new platforms added via multi-platform posting would have **zero guardrails** at generation time with nobody aware.
+
+Endpoints (prefix /admin/platform-rules, require_maintainer = admin | maintainer):
+- GET    /                      — platform rule list (default platforms ∪ existing rows ∪ actually in use)
+- PUT    /{platform}            — upsert rules_text (can also clear pending; manually adding a platform also uses this)
+- DELETE /{platform}            — delete a rule row (platforms in use will be rebuilt by auto-adaptation)
+- POST   /{platform}/seed       — LLM generates a first-draft rule set for the platform (returns draft text only, not persisted)
+- POST   /learn                 — all platforms: aggregate rejection reasons → LLM distills increments → pending
+- POST   /sync                  — one round of auto-adaptation (discover new platforms + first draft + learn increments), same source as cron
+- POST   /{platform}/approve-pending — merge pending into rules_text and clear it
 """
 import logging
 import os
@@ -23,15 +30,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from geo.api.auth import require_admin
+from geo.api.auth import require_maintainer
 from geo.api.ai_telemetry import get_db
 from geo.models.ai_telemetry import PlatformRuleORM, TopicGeneratedDocORM
+from geo.services.llm_gateway import post_and_record
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/platform-rules")
 
-# 与 admin_review.DEFAULT_PUBLISH_PLATFORMS 一致;没建行的默认平台也在列表里返回空壳
+# Consistent with admin_review.DEFAULT_PUBLISH_PLATFORMS; default platforms without rows are also returned as empty shells
 DEFAULT_PLATFORMS = ["公众号", "小红书", "抖音", "视频号", "搜狐号", "知乎"]
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -45,18 +53,37 @@ class PlatformRuleOut(BaseModel):
     pending_rules_text: str = ""
     learned_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    # 该平台已回填的拒稿数(学习素材量,前端展示用)
+    # Number of backfilled rejections for this platform (amount of learning material, shown in the frontend)
     rejected_count: int = 0
+    # 2026-08-04 — auto-adaptation related (services/platform_rules_auto.py):
+    # in_use   is this platform really in use (appeared in publishing plans / placement tasks / produced drafts)
+    # usage    source labels of use, e.g. ["发文计划","投放任务"] ("publishing plan", "placement task")
+    # ai_draft rules_text is an AI first draft not yet proofread by a human (updated_by_id empty)
+    in_use: bool = False
+    usage: list[str] = Field(default_factory=list)
+    ai_draft: bool = False
+
+
+class SyncResult(BaseModel):
+    """Result of one auto-adaptation round — for the frontend toast."""
+    in_use: int = 0
+    created: list[str] = Field(default_factory=list)
+    seeded: list[str] = Field(default_factory=list)
+    learned: list[str] = Field(default_factory=list)
+    seed_failed: list[str] = Field(default_factory=list)
+    learn_failed: list[str] = Field(default_factory=list)
+    skipped_seed: list[str] = Field(default_factory=list)
+    rules: list[PlatformRuleOut] = Field(default_factory=list)
 
 
 class RuleUpdatePayload(BaseModel):
     rules_text: str = Field("", max_length=20000)
-    # true 时同时清空 pending(admin 改完规则后不想要旧增量)
+    # When true, also clear pending (admin does not want old increments after editing rules)
     clear_pending: bool = False
 
 
 def _llm_text(prompt: str) -> str:
-    """单轮纯文本 LLM 调用(deepseek 优先,fallback openrouter)."""
+    """Single-turn plain-text LLM call (deepseek first, fallback openrouter)."""
     ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if ds_key:
@@ -71,11 +98,14 @@ def _llm_text(prompt: str) -> str:
                    "X-Title": "GEO Platform Rules"}
     else:
         raise HTTPException(503, "DEEPSEEK_API_KEY / OPENROUTER_API_KEY 都未配置")
-    r = requests.post(url, headers=headers, timeout=LLM_TIMEOUT, json={
+    # Note: the model here is **hard-coded** deepseek-chat and does not read the DEEPSEEK_MODEL env
+    # (inconsistent with other outlets). This is existing behavior left untouched by the accounting refactor — change it in a separate PR.
+    r = post_and_record(url, {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
-    })
+    }, headers, provider="deepseek" if ds_key else "openrouter",
+        feature="platform_rules", timeout=LLM_TIMEOUT, model=model)
     if r.status_code >= 400:
         raise HTTPException(502, f"LLM HTTP {r.status_code}: {r.text[:200]}")
     try:
@@ -95,9 +125,12 @@ def _rejected_counts(db: Session) -> dict[str, int]:
     return {str(p or ""): int(n) for p, n in rows}
 
 
-def _to_out(row: PlatformRuleORM | None, platform: str, rejected: int) -> PlatformRuleOut:
+def _to_out(row: PlatformRuleORM | None, platform: str, rejected: int,
+            usage: Optional[set[str]] = None) -> PlatformRuleOut:
+    usage_list = sorted(usage or set())
     if row is None:
-        return PlatformRuleOut(platform=platform, rejected_count=rejected)
+        return PlatformRuleOut(platform=platform, rejected_count=rejected,
+                              in_use=bool(usage_list), usage=usage_list)
     return PlatformRuleOut(
         platform=row.platform,
         rules_text=row.rules_text or "",
@@ -105,19 +138,78 @@ def _to_out(row: PlatformRuleORM | None, platform: str, rejected: int) -> Platfo
         learned_at=row.learned_at,
         updated_at=row.updated_at,
         rejected_count=rejected,
+        in_use=bool(usage_list),
+        usage=usage_list,
+        # Has rules but never edited by a human → system-generated first draft, not yet proofread
+        ai_draft=bool((row.rules_text or "").strip()) and row.updated_by_id is None,
     )
+
+
+def _list_rules(db: Session) -> list[PlatformRuleOut]:
+    """Rule list = default platforms ∪ existing rows ∪ **platforms actually in use** (those missing rules must show too)."""
+    rows = {r.platform: r for r in db.query(PlatformRuleORM).all()}
+    rejected = _rejected_counts(db)
+    try:
+        from geo.services.platform_rules_auto import discover_platforms
+        in_use = discover_platforms(db)
+    except Exception:  # noqa: BLE001
+        log.warning("discover platforms failed — list falls back to defaults + existing rows", exc_info=True)
+        in_use = {}
+    seen: list[str] = []
+    for p in list(DEFAULT_PLATFORMS) + sorted(in_use) + sorted(rows):
+        if p not in seen:
+            seen.append(p)
+    # In-use platforms first (especially "in use but no rules yet", the most urgent), then default platform order
+    def sort_key(p: str) -> tuple:
+        row = rows.get(p)
+        has_rules = bool((row.rules_text or "").strip()) if row else False
+        used = p in in_use
+        return (0 if used and not has_rules else 1 if used else 2,
+                DEFAULT_PLATFORMS.index(p) if p in DEFAULT_PLATFORMS else 99, p)
+    return [_to_out(rows.get(p), p, rejected.get(p, 0), in_use.get(p))
+            for p in sorted(seen, key=sort_key)]
 
 
 @router.get("", response_model=list[PlatformRuleOut])
 def list_platform_rules(
-    _admin = Depends(require_admin),
+    _admin = Depends(require_maintainer),
     db: Session = Depends(get_db),
 ):
-    rows = {r.platform: r for r in db.query(PlatformRuleORM).all()}
-    rejected = _rejected_counts(db)
-    # 默认平台 + 已建行的并集,默认平台顺序在前
-    platforms = list(DEFAULT_PLATFORMS) + [p for p in rows if p not in DEFAULT_PLATFORMS]
-    return [_to_out(rows.get(p), p, rejected.get(p, 0)) for p in platforms]
+    return _list_rules(db)
+
+
+@router.post("/sync", response_model=SyncResult)
+def sync_platform_rules(
+    _admin = Depends(require_maintainer),
+    db: Session = Depends(get_db),
+):
+    """One auto-adaptation round (manual-click version, same service as cron):
+
+    platforms in use but missing from the rule library → create row + AI first draft (first version takes effect directly, marked unproofread);
+    platforms with rejection reasons → distill rule increments into pending for adoption.
+    """
+    from geo.services import platform_rules_auto
+    stat = platform_rules_auto.sync_tick(db)
+    return SyncResult(**{**stat, "rules": _list_rules(db)})
+
+
+@router.delete("/{platform}", response_model=dict)
+def delete_platform_rule(
+    platform: str,
+    _admin = Depends(require_maintainer),
+    db: Session = Depends(get_db),
+):
+    """Delete a platform's rule row (cleanup for mistakenly created rows / platforms no longer used for placement).
+
+    A platform still in use will be rediscovered by auto-adaptation and get a new first draft — which is correct: in use means it needs guardrails.
+    """
+    row = db.query(PlatformRuleORM).filter(PlatformRuleORM.platform == platform.strip()).first()
+    if row is None:
+        raise HTTPException(404, "该平台没有规则行")
+    db.delete(row)
+    db.commit()
+    log.info("admin deleted platform rule: %s", platform)
+    return {"deleted": platform}
 
 
 def _get_or_create(db: Session, platform: str) -> PlatformRuleORM:
@@ -135,7 +227,7 @@ def _get_or_create(db: Session, platform: str) -> PlatformRuleORM:
 def update_platform_rule(
     platform: str,
     payload: RuleUpdatePayload,
-    admin = Depends(require_admin),
+    admin = Depends(require_maintainer),
     db: Session = Depends(get_db),
 ):
     row = _get_or_create(db, platform)
@@ -152,9 +244,9 @@ def update_platform_rule(
 @router.post("/{platform}/seed", response_model=dict)
 def seed_platform_rule(
     platform: str,
-    _admin = Depends(require_admin),
+    _admin = Depends(require_maintainer),
 ):
-    """LLM 按公开平台规范生成规则初稿 — 只返回草稿,前端填进编辑框由 admin 校对后保存."""
+    """LLM generates a first-draft rule set from public platform guidelines — returns the draft only; the frontend fills the editor for admin to proofread and save."""
     platform = platform.strip()
     if not platform:
         raise HTTPException(422, "invalid platform")
@@ -172,13 +264,13 @@ def seed_platform_rule(
 
 @router.post("/learn", response_model=list[PlatformRuleOut])
 def learn_from_rejections(
-    _admin = Depends(require_admin),
+    _admin = Depends(require_maintainer),
     db: Session = Depends(get_db),
 ):
-    """全平台:聚合已回填的平台拒稿原因 → LLM 提炼规则增量 → 写 pending 待采纳.
+    """All platforms: aggregate backfilled platform rejection reasons → LLM distills rule increments → write to pending for adoption.
 
-    只处理有拒稿原因的平台;增量与现有 rules_text 一起给 LLM,要求只输出
-    现有规则没覆盖的新条目,避免重复堆积。
+    Only platforms with rejection reasons are processed; increments are given to the LLM together with the existing rules_text, asking it to output only
+    new entries not covered by existing rules, to avoid duplicate buildup.
     """
     docs = (
         db.query(TopicGeneratedDocORM)
@@ -197,7 +289,7 @@ def learn_from_rejections(
     rejected = {p: len(v) for p, v in by_platform.items()}
     for platform, reasons in by_platform.items():
         row = _get_or_create(db, platform)
-        uniq = list(dict.fromkeys(reasons))[-50:]   # 去重,最多取最近 50 条
+        uniq = list(dict.fromkeys(reasons))[-50:]   # Dedupe, take at most the latest 50
         bullets = "\n".join(f"- {s[:300]}" for s in uniq)
         existing = (row.rules_text or "").strip() or "(暂无)"
         increment = _llm_text(
@@ -222,7 +314,7 @@ def learn_from_rejections(
 @router.post("/{platform}/approve-pending", response_model=PlatformRuleOut)
 def approve_pending(
     platform: str,
-    admin = Depends(require_admin),
+    admin = Depends(require_maintainer),
     db: Session = Depends(get_db),
 ):
     row = db.query(PlatformRuleORM).filter(PlatformRuleORM.platform == platform.strip()).first()

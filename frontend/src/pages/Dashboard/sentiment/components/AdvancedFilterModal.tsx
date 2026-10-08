@@ -1,15 +1,15 @@
-// 高级筛选 modal — 贴 WisersOne 原型图 image.png 的结构.
+// Advanced filter modal — follows the structure of the WisersOne prototype image.png.
 //
-// 布局:
-//   - 左主区(grow):filter 行,每行 = 标签 + 「全部 N」chip + 多个 checkbox 选项
-//                  组与组之间用虚线分隔
-//                  组 1:媒体类型 / 媒体分类 / 热门媒体
-//                  组 2:全文情感 / 风险等级
-//   - 右侧栏(280px):关键字 / 起始时间 / 结束时间 三个输入
-//   - 底部:重置 / 取消 / 保存(蓝)三个按钮
+// Layout:
+//   - Left main area (grow): filter rows, each row = label + "All N" chip + multiple checkbox options
+//                  groups separated by dashed lines
+//                  Group 1: media type / media category / popular media
+//                  Group 2: full-text sentiment / risk level
+//   - Right sidebar (280px): three inputs, keyword / start time / end time
+//   - Bottom: three buttons, reset / cancel / save (blue)
 //
-// 「全部」chip = 该维度清空(没有任何具体选项被勾时它处于"激活"状态).
-// modal 内全部用 draft state,确认后才 commit;关闭即卸载,draft 自然丢弃.
+// The "All" chip = clear that dimension (it is "active" when no specific option is checked).
+// Everything in the modal uses draft state, committed only on confirm; closing unmounts it and the draft is naturally discarded.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -20,11 +20,13 @@ import {
 import type {
   SentimentPlatform, RiskLevel, SentimentLabel,
 } from '../../../../types/sentiment';
+import { DateRangeFilter } from '../../../../components/ui/FilterBar';
+import { fromQueryRange, toQueryRange } from '../../../../components/ui/dateFilter';
 
 const ALL_RISKS: RiskLevel[] = ['none', 'low', 'medium', 'high'];
 const ALL_SENTIMENTS: SentimentLabel[] = ['bullish', 'bearish', 'neutral', 'mixed', 'unknown'];
 
-// 热门媒体段位的固定平台顺序(与 ArticlesTab 一致)
+// Fixed platform order for the popular media section (same as ArticlesTab)
 const POPULAR_PLATFORMS: readonly string[] = [
   'weibo', 'weixin', 'xueqiu',
   'eastmoney', 'zhihu', 'toutiao',
@@ -37,20 +39,20 @@ export interface AdvancedFilterValue {
   mediaTypes: Set<string>;
   industries: Set<string>;
   sources: Set<string>;
-  /** 关键词提及范围:'' = 全部,'title' = 仅标题,'body' = 仅正文 */
+  /** Keyword mention scope: '' = all, 'title' = title only, 'body' = body only */
   keywordScope: '' | 'title' | 'body';
-  /** 作者地区:'' = 全部,'domestic' = 境内,'overseas' = 境外(占位,等后端数据) */
+  /** Author region: '' = all, 'domestic' = domestic, 'overseas' = overseas (placeholder, awaiting backend data) */
   authorRegion: '' | 'domestic' | 'overseas';
-  /** 文章类型:'' = 全部,'original' = 原创,'reprint' = 转载(占位,等后端数据) */
+  /** Article type: '' = all, 'original' = original, 'reprint' = reprint (placeholder, awaiting backend data) */
   articleType: '' | 'original' | 'reprint';
   topic: string;
-  /** 指定媒体名称,逗号分隔(占位,后端缺字段时不参与过滤) */
+  /** Specified media names, comma-separated (placeholder; not used for filtering while the backend lacks the field) */
   specificMedia: string;
-  /** 版面名称(占位) */
+  /** Section name (placeholder) */
   column: string;
-  /** 指定作者名称(已生效:子串匹配 post.author) */
+  /** Specified author name (active: substring match on post.author) */
   authorInput: string;
-  startDate: string;  // 'YYYY-MM-DD',空表示不限
+  startDate: string;  // 'YYYY-MM-DD', empty means unbounded
   endDate: string;
 }
 
@@ -78,7 +80,7 @@ export function AdvancedFilterModal({
 }: Props) {
   const { t } = useTranslation();
 
-  // draft state — 挂载时从 props 初始化,卸载时丢弃
+  // draft state — initialized from props on mount, discarded on unmount
   const [draftRisks, setDraftRisks] = useState<Set<string>>(() => new Set(value.risks));
   const [draftSent, setDraftSent] = useState<Set<string>>(() => new Set(value.sentiments));
   const [draftSrc, setDraftSrc] = useState<Set<string>>(() => new Set(value.sources));
@@ -123,7 +125,7 @@ export function AdvancedFilterModal({
   };
 
   const handleResetDraft = () => {
-    // 本地重置 — 清空所有 draft;不直接 commit 到 parent(用户还可改后再保存)
+    // Local reset — clear all drafts; don't commit to the parent directly (the user can still edit before saving)
     setDraftRisks(new Set());
     setDraftSent(new Set());
     setDraftSrc(new Set());
@@ -138,13 +140,13 @@ export function AdvancedFilterModal({
     setDraftAuthorInput('');
     setDraftStart('');
     setDraftEnd('');
-    // 同时也调 parent reset 让 rail 状态归零,避免保存时只重置部分
+    // Also call the parent reset to zero the rail state, avoiding a partial reset on save
     onReset();
   };
 
   const node = (
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.45)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
@@ -163,12 +165,12 @@ export function AdvancedFilterModal({
           </button>
         </header>
 
-        {/* 主体:左 filter 行(grow)+ 右 280px 输入栏 */}
+        {/* Body: left filter rows (grow) + right 280px input column */}
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_280px] gap-6 px-5 py-4 overflow-y-auto">
 
-          {/* ── 左侧:filter 行 ─────────────────────────────────── */}
+          {/* ── Left: filter rows ─────────────────────────────────── */}
           <div className="space-y-3">
-            {/* 组 1:媒体维度 */}
+            {/* Group 1: media dimensions */}
             <FilterRow label={t('dashboard.sentiment.articles.filters.mediaType')}>
               <AllOption checked={!draftMt.size} count={totalCount}
                 onClick={() => setDraftMt(new Set())} t={t} />
@@ -215,10 +217,10 @@ export function AdvancedFilterModal({
                 ))}
             </FilterRow>
 
-            {/* 虚线分隔 */}
+            {/* Dashed divider */}
             <div style={{ borderTop: '1px dashed var(--border-color)' }} />
 
-            {/* 组 2:文章内容维度 */}
+            {/* Group 2: article content dimensions */}
             <FilterRow label={t('dashboard.sentiment.articles.filters.risk')}>
               <AllOption checked={!draftRisks.size}
                 onClick={() => setDraftRisks(new Set())} t={t} />
@@ -241,7 +243,7 @@ export function AdvancedFilterModal({
               ))}
             </FilterRow>
 
-            {/* 关键词提及 — 单选(全部 / 标题 / 正文) */}
+            {/* Keyword mention — single choice (all / title / body) */}
             <FilterRow label={t('dashboard.sentiment.articles.filters.keywordMention')}>
               <AllOption checked={!draftKwScope}
                 onClick={() => setDraftKwScope('')} t={t} />
@@ -255,7 +257,7 @@ export function AdvancedFilterModal({
                 onChange={() => setDraftKwScope(draftKwScope === 'body' ? '' : 'body')} />
             </FilterRow>
 
-            {/* 作者地区 */}
+            {/* Author region */}
             <FilterRow label={t('dashboard.sentiment.articles.filters.authorRegion')}>
               <AllOption checked={!draftAuthorRegion}
                 onClick={() => setDraftAuthorRegion('')} t={t} />
@@ -269,7 +271,7 @@ export function AdvancedFilterModal({
                 onChange={() => setDraftAuthorRegion(draftAuthorRegion === 'overseas' ? '' : 'overseas')} />
             </FilterRow>
 
-            {/* 文章类型 */}
+            {/* Article type */}
             <FilterRow label={t('dashboard.sentiment.articles.filters.articleType')}>
               <AllOption checked={!draftArticleType}
                 onClick={() => setDraftArticleType('')} t={t} />
@@ -284,7 +286,7 @@ export function AdvancedFilterModal({
             </FilterRow>
           </div>
 
-          {/* ── 右侧:关键字 + 指定媒体 + 版面 + 作者 + 时间 ──────────── */}
+          {/* ── Right: keyword + specified media + section + author + time ──────────── */}
           <div className="space-y-3"
             style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '1.25rem' }}>
             <TextInputRow label={t('dashboard.sentiment.articles.filters.topic')}
@@ -303,24 +305,20 @@ export function AdvancedFilterModal({
               value={draftAuthorInput} onChange={setDraftAuthorInput}
               placeholder={t('dashboard.sentiment.articles.filters.authorInputPlaceholder')} />
 
+            {/* The start and end date boxes merged into one range picker -- the same component as list pages site-wide */}
             <div>
               <label className="block text-xs font-semibold text-primary mb-1.5">
                 {t('dashboard.sentiment.articles.filters.timeStart')}
-              </label>
-              <input type="date" value={draftStart}
-                onChange={(e) => setDraftStart(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs rounded"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-primary mb-1.5">
+                {' ~ '}
                 {t('dashboard.sentiment.articles.filters.timeEnd')}
               </label>
-              <input type="date" value={draftEnd}
-                onChange={(e) => setDraftEnd(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs rounded"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
+              <DateRangeFilter
+                value={fromQueryRange(draftStart, draftEnd)}
+                onChange={(v) => {
+                  const q = toQueryRange(v);
+                  setDraftStart(q.since);
+                  setDraftEnd(q.until);
+                }} />
               {startEndError && (
                 <p className="text-[11px] mt-1" style={{ color: '#dc2626' }}>
                   {t('dashboard.sentiment.articles.filters.timeRangeError')}
@@ -356,7 +354,7 @@ export function AdvancedFilterModal({
   return createPortal(node, document.body);
 }
 
-/** 一行筛选 — 左标签 + 右一排 checkbox + AllOption(可换行).贴 image.png 视觉. */
+/** One filter row — label on the left + a row of checkboxes + AllOption on the right (wraps). Follows image.png visuals. */
 function FilterRow({ label, children }:
   { label: string; children: React.ReactNode }) {
   return (
@@ -371,7 +369,7 @@ function FilterRow({ label, children }:
   );
 }
 
-/** 「全部」chip — 该维度清空选项的快捷.checked = 没有具体勾选时它默认激活. */
+/** "All" chip — shortcut to clear that dimension's options. checked = active by default when nothing specific is checked. */
 function AllOption({ checked, count, onClick, t }:
   { checked: boolean; count?: number; onClick: () => void; t: (k: string) => string }) {
   return (
@@ -387,7 +385,7 @@ function AllOption({ checked, count, onClick, t }:
   );
 }
 
-/** 右栏常规 text 输入 — 标签上 / input 下 */
+/** Regular text input in the right column — label above / input below */
 function TextInputRow({ label, value, onChange, placeholder }:
   { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
@@ -401,7 +399,7 @@ function TextInputRow({ label, value, onChange, placeholder }:
   );
 }
 
-/** 单个 checkbox 选项 — 含可选计数 */
+/** Single checkbox option — with optional count */
 function CheckOption({ label, count, checked, onChange }:
   { label: string; count?: number; checked: boolean; onChange: () => void }) {
   return (

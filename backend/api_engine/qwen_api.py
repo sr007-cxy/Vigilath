@@ -1,4 +1,4 @@
-"""Qwen (通义千问 / DashScope) API adapter — enable_search=true.
+"""Qwen (Tongyi Qianwen / DashScope) API adapter — enable_search=true.
 
 The DashScope API supports `enable_search` which triggers Qwen to search the
 web and return structured `search_results` in the response.
@@ -13,6 +13,7 @@ import os
 import requests
 
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+from geo.services.llm_gateway import post_and_record
 
 
 class QwenAPIAdapter(EngineAdapter):
@@ -41,7 +42,8 @@ class QwenAPIAdapter(EngineAdapter):
         }
 
         try:
-            r = requests.post(self.API_URL, json=payload, headers=headers, timeout=60)
+            r = post_and_record(self.API_URL, payload, headers, provider="dashscope",
+                                feature="advanced.qwen", timeout=60)
             if r.status_code == 401:
                 return EngineResult(engine=self.name, query=query, error="invalid_key")
             if r.status_code != 200:

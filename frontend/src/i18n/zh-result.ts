@@ -8,11 +8,11 @@ const zhResult = {
               "hint": "请保持此页面打开",
               "almostDone": "即将完成…",
               "subtitle": {
-                "default": "正在运行 25 项 GEO 全量检测",
+                "default": "正在运行 25 项 GEO 检测 + 12 项 SEO 检测",
                 "compare": "多站点并排打分对比",
                 "crawlTest": "测试 AI 爬虫可达性",
                 "authority": "审计外部权威信号",
-                "citation": "通过 Perplexity 检测 AI 引用",
+                "citation": "通过 AI 引擎检测引用情况",
                 "visibility": "跨引擎可见性审计",
                 "entity": "审计 AI 对该实体的认知"
               },
@@ -24,6 +24,7 @@ const zhResult = {
                   "content": "分析 AI 内容质量",
                   "technical": "检测技术健壮性与媒体",
                   "authority": "汇总权威与信任信号",
+                  "seo": "检测传统 SEO 信号",
                   "finalize": "评分并生成报告"
                 },
                 "compare": {
@@ -35,7 +36,7 @@ const zhResult = {
                 },
                 "crawlTest": {
                   "robots": "读取 robots.txt 规则",
-                  "probe": "模拟 GPTBot / ClaudeBot / PerplexityBot 抓取",
+                  "probe": "模拟主流 AI 爬虫抓取",
                   "waf": "检测 WAF / CDN 可达性",
                   "commonCrawl": "查询 Common Crawl 索引",
                   "finalize": "汇总抓取测试结果"
@@ -49,15 +50,15 @@ const zhResult = {
                 },
                 "citation": {
                   "prepare": "生成品牌相关提问",
-                  "perplexity": "调用 Perplexity AI 查询（耗时较长）",
+                  "engineQuery": "调用 AI 引擎查询（耗时较长）",
                   "parseCites": "解析引用与来源域名",
                   "finalize": "计算引用覆盖率"
                 },
                 "visibility": {
                   "prepare": "生成可见性查询集",
-                  "chatgpt": "调用 ChatGPT 查询（耗时较长）",
-                  "perplexity": "调用 Perplexity 查询",
-                  "claude": "调用 Claude 查询",
+                  "engine1": "调用第 1 个 AI 引擎查询（耗时较长）",
+                  "engine2": "调用第 2 个 AI 引擎查询",
+                  "engine3": "调用第 3 个 AI 引擎查询",
                   "classify": "归类品牌情感框架",
                   "finalize": "汇总跨引擎可见性"
                 },
@@ -73,6 +74,191 @@ const zhResult = {
               }
             },
             "checks": {
+              "seo": {
+                "canonical": {
+                  "fetch_failed": "无法抓取首页",
+                  "missing": "没有 canonical 规范链接——重复网址会互相抢排名",
+                  "points_elsewhere": "首页的 canonical 指向了另一个网址：{{url}}",
+                  "present": "已声明 canonical：{{url}}",
+                  "self_referencing": "canonical 指向自身（首页的正确做法）"
+                },
+                "crawl": {
+                  "404_correct": "不存在的页面会返回真正的 404 状态码",
+                  "404_unexpected": "访问一个不存在的网址返回了 HTTP {{code}}",
+                  "404_unknown": "无法探测 404 处理方式",
+                  "410_correct": "不存在的页面会返回 410 已删除",
+                  "lastmod_missing": "只有 {{with}}/{{total}} 条记录带更新时间——爬虫无法判断哪些内容变了",
+                  "lastmod_ok": "{{with}}/{{total}} 条记录带更新时间",
+                  "robots_found": "robots.txt 可以正常访问",
+                  "robots_missing": "没有 robots.txt——抓取预算和私密路径都处于失控状态",
+                  "sitemap_declared": "robots.txt 声明了 {{count}} 个站点地图",
+                  "sitemap_invalid": "站点地图可以访问，但不是合法的 XML",
+                  "sitemap_missing": "{{url}} 没有站点地图",
+                  "sitemap_not_declared": "robots.txt 里没有 Sitemap 声明行",
+                  "sitemap_valid": "站点地图解析成功，共 {{count}} 条记录",
+                  "soft_404": "访问一个不存在的网址返回了 HTTP 200——软 404 会把垃圾网址放进索引"
+                },
+                "desc": {
+                  "distinct": "描述与标题内容不同",
+                  "fetch_failed": "无法抓取首页",
+                  "found": "找到了描述（{{chars}} 个字符）",
+                  "keyword_list": "描述更像关键词罗列，不像一句话",
+                  "length_bad": "描述长度 {{chars}} 个字符——远超出 120-160 的区间",
+                  "length_fair": "描述长度 {{chars}} 个字符——120-160 才能填满摘要又不被截断",
+                  "length_ok": "描述长度 {{chars}} 个字符（理想区间 120-160）",
+                  "missing": "缺少描述——搜索摘要会由系统自动生成，内容不可控",
+                  "readable": "描述是一句完整的话",
+                  "same_as_title": "描述与标题重复——摘要里给不出任何新增信息"
+                },
+                "headings": {
+                  "all_filled": "所有标题标签都有文字",
+                  "empty": "有 {{count}} 个空标题标签——通常是排版元素在滥用标题语义",
+                  "fetch_failed": "无法抓取首页",
+                  "h1_concise": "<h1> 共 {{chars}} 个字符",
+                  "h1_long": "<h1> 共 {{chars}} 个字符——标题过长会稀释主题",
+                  "h2_missing": "没有 <h2> 小标题——整页读起来是一大块没有分层的内容",
+                  "h2_ok": "{{count}} 个 <h2> 小标题把页面分好了层次",
+                  "h2_thin": "只有一个 <h2>——小标题既帮排名也帮答案抽取",
+                  "hierarchy_ok": "标题层级连续，没有断层",
+                  "level_skipped": "标题层级跳级了（h{{from}} → h{{to}}）——大纲结构断了",
+                  "multi_h1": "找到 {{count}} 个 <h1>——页面主题变得含混",
+                  "no_h1": "页面没有 <h1>——主题等于没声明",
+                  "none": "完全没有标题标签",
+                  "single_h1": "有且只有一个 <h1>：「{{text}}」"
+                },
+                "images": {
+                  "alt_low": "只有 {{with}}/{{total}} 张图片有替代文字",
+                  "alt_missing": "只有 {{with}}/{{total}} 张图片有替代文字——图片搜索的流量白白放弃了",
+                  "alt_ok": "{{with}}/{{total}} 张图片有替代文字",
+                  "alt_partial": "只有 {{with}}/{{total}} 张图片有替代文字",
+                  "dimensions_missing": "只有 {{with}}/{{total}} 张图片声明了宽高——版面跳动会拉低页面体验评分",
+                  "dimensions_ok": "{{with}}/{{total}} 张图片声明了宽高",
+                  "fetch_failed": "无法抓取首页",
+                  "lazy_missing": "没有用浏览器原生懒加载——首屏以下的图片仍在占用带宽",
+                  "lazy_ok": "{{count}} 张图片用了浏览器原生懒加载",
+                  "legacy_only": "图片全是老格式，也没有多尺寸图源",
+                  "modern_ok": "图片分发方式现代（{{modern}} 张次世代格式，{{responsive}} 处多尺寸图源）",
+                  "none": "首页没有 <img> 标签——本类检查不适用"
+                },
+                "index": {
+                  "fetch_failed": "无法抓取首页",
+                  "header_clean": "响应头里没有阻止收录的 X-Robots-Tag",
+                  "header_noindex": "X-Robots-Tag 响应头阻止了收录：{{value}}",
+                  "links_followable": "页面级别允许爬虫跟随链接",
+                  "meta_indexable": "robots 元标签里没有 noindex 指令",
+                  "meta_nofollow": "robots 元标签里有 nofollow——链接权重到此为止，站内发现也受影响",
+                  "meta_noindex": "<meta name=\"robots\"> 里有 noindex——这个页面根本无法参与排名",
+                  "robots_absent": "没有 robots.txt——默认全站可抓，但抓取预算处于失控状态",
+                  "robots_allows": "robots.txt 没有把搜索爬虫挡在站点根目录之外",
+                  "robots_blocks_all": "robots.txt 对搜索爬虫封禁了整站"
+                },
+                "intl": {
+                  "codes_invalid": "hreflang 的值格式不合法：{{codes}}",
+                  "codes_valid": "所有 hreflang 值格式都合法",
+                  "fetch_failed": "无法抓取首页",
+                  "hreflang_found": "已为这些语言声明 hreflang：{{langs}}",
+                  "lang_malformed": "lang=\"{{lang}}\" 不是合法的语言标记",
+                  "lang_missing": "<html> 上没有 lang 属性",
+                  "lang_ok": "已声明文档语言：{{lang}}",
+                  "no_self_reference": "hreflang 集合里没有包含本页——不完整的集合会被整组忽略",
+                  "self_referencing": "hreflang 集合里包含了本页自身",
+                  "single_language": "没有 hreflang 标签——按单语言站点处理，因此 hreflang 规则不适用",
+                  "xdefault_missing": "没有 x-default——已声明语言之外的用户拿不到确定的兜底页",
+                  "xdefault_ok": "已声明 x-default 兜底页"
+                },
+                "links": {
+                  "anchors_descriptive": "{{pct}}% 的站内锚文本有描述性",
+                  "anchors_generic": "只有 {{pct}}% 的站内锚文本有描述性（{{generic}} 处笼统，{{empty}} 处空白）",
+                  "breadcrumb_found": "有面包屑导航",
+                  "breadcrumb_missing": "没有面包屑导航——层级更难推断，面包屑富媒体结果也无法展示",
+                  "empty_anchors": "{{count}} 个链接既没有文字也没有图片替代文字",
+                  "external_count": "找到 {{count}} 个站外链接",
+                  "fetch_failed": "无法抓取首页",
+                  "internal_followed": "所有站内链接都允许爬虫跟随",
+                  "internal_nofollow": "{{count}} 个站内链接带了 rel=nofollow——站内链接权重被白白丢掉",
+                  "no_empty_anchors": "没有空锚文本（图片链接都带替代文字）",
+                  "volume_none": "站内链接几乎没有（{{count}} 个）——从首页出发爬不出任何结构",
+                  "volume_ok": "{{count}} 个站内链接给爬虫留出了进站路径",
+                  "volume_thin": "只有 {{count}} 个站内链接——深层页面会很久才被发现"
+                },
+                "mobile": {
+                  "fetch_failed": "无法抓取首页",
+                  "fixed_width": "有 {{count}} 个元素用了大于 480px 的固定宽度——手机上会出现横向滚动",
+                  "no_fixed_width": "没有比手机视口更宽的固定宽度元素",
+                  "no_responsive_images": "没有多尺寸图源——手机会下载按桌面尺寸出的图",
+                  "responsive_images": "已在用多尺寸图源",
+                  "viewport_missing": "没有 viewport 元标签——页面在手机上会缩得很小，且过不了移动优先索引",
+                  "viewport_ok": "viewport 元标签声明了 width=device-width",
+                  "viewport_partial": "有 viewport 元标签但写法不常规：{{value}}",
+                  "zoom_allowed": "没有禁止缩放",
+                  "zoom_blocked": "viewport 禁止了缩放——这是无障碍缺陷，也会体现在页面体验评估里"
+                },
+                "redirect": {
+                  "alt_host_absent": "{{host}} 解析不到——没有需要收敛的重复域名",
+                  "alt_host_consolidated": "{{alt}} 已跳转到 {{main}}",
+                  "alt_host_duplicate": "{{main}} 和 {{alt}} 都能打开内容——典型的重复内容分裂",
+                  "alt_host_no_content": "{{host}} 不提供内容（HTTP {{status}}）",
+                  "http_permanent": "HTTP 用永久跳转 {{code}} 转到了 HTTPS",
+                  "http_serves_200": "HTTP 版本直接提供内容——同一站点在两种协议下都可被收录",
+                  "http_temporary": "HTTP 用临时跳转 {{code}} 转到 HTTPS——链接权重没有收敛",
+                  "http_unreachable": "站点的 HTTP 版本访问不到（可以接受——没有需要收敛的地址）",
+                  "long_chain": "到最终网址前经过 {{hops}} 次跳转——每一跳都在漏抓取预算和权重",
+                  "no_chain": "网址直达，没有跳转",
+                  "not_https": "站点用 HTTP 提供服务——HTTPS 是排名的基本门槛",
+                  "single_hop": "到最终网址前有一次跳转——可以接受"
+                },
+                "schema": {
+                  "breadcrumb_found": "有 BreadcrumbList 面包屑结构化数据——结果里显示路径而不是原始网址",
+                  "breadcrumb_missing": "没有 BreadcrumbList 面包屑结构化数据",
+                  "content_found": "有内容级结构化数据：{{types}}",
+                  "content_missing": "没有内容级结构化数据（文章 / 商品 / 常见问题 / 操作指南等）",
+                  "fetch_failed": "无法抓取首页",
+                  "invalid_json": "有 {{count}} 段 JSON-LD 解析失败——写错的标记会被完全忽略",
+                  "none": "没有 JSON-LD 结构化数据——任何富媒体结果都无法展示",
+                  "org_found": "有 Organization / LocalBusiness 组织结构化数据——可供知识面板消费",
+                  "org_missing": "没有 Organization 组织结构化数据——品牌实体信息只能靠猜",
+                  "search_missing": "有 WebSite 结构化数据但没有 SearchAction 站内搜索动作",
+                  "sitelinks_search": "WebSite 结构化数据带 SearchAction——可以出站内搜索框",
+                  "website_missing": "没有 WebSite 站点结构化数据"
+                },
+                "speed": {
+                  "blocking_many": "<head> 里有 {{count}} 个阻塞渲染的脚本——首次绘制要等它们全部加载完",
+                  "blocking_ok": "<head> 里有 {{count}} 个阻塞渲染的脚本",
+                  "cache_header": "已设置 Cache-Control 缓存头：{{value}}",
+                  "cache_header_missing": "没有 Cache-Control 缓存头——每次访问、每次抓取都要重新下载全部内容",
+                  "compressed": "响应已压缩（{{encoding}}）",
+                  "fetch_failed": "无法抓取首页",
+                  "html_large": "HTML 文档 {{kb}} KB——单个文档太重了",
+                  "html_medium": "HTML 文档 {{kb}} KB——建议压到 150 KB 以内",
+                  "html_small": "HTML 文档 {{kb}} KB",
+                  "inline_heavy": "{{kb}} KB 的内联脚本与样式，每次打开页面都要重新下载",
+                  "inline_ok": "内联脚本与样式共 {{kb}} KB",
+                  "ttfb_fair": "服务器 {{seconds}} 秒响应——目标是 0.6 秒以内",
+                  "ttfb_fast": "服务器 {{seconds}} 秒响应",
+                  "ttfb_slow": "服务器 {{seconds}} 秒响应——慢到会同时拖累抓取频率和排名",
+                  "uncompressed": "响应没有压缩——最便宜的提速手段还没用上"
+                },
+                "title": {
+                  "brand_pattern": "标题用了「关键词 — 品牌」的分隔写法",
+                  "fetch_failed": "无法抓取首页",
+                  "generic": "标题过于笼统：「{{title}}」",
+                  "h1_aligned": "标题与 <h1> 主题一致（用词重合度 {{pct}}%）",
+                  "h1_diverged": "标题与 <h1> 讲的是两个主题——搜索引擎会因这种不一致而打折",
+                  "length_bad": "标题长度 {{chars}} 个字符——远超出 30-60 的区间",
+                  "length_fair": "标题长度 {{chars}} 个字符——超出 30-60 通常会在搜索结果里被截断",
+                  "length_ok": "标题长度 {{chars}} 个字符（理想区间 30-60）",
+                  "missing": "缺少 <title> 标签——这是页面上最强的单个排名要素",
+                  "no_brand_pattern": "标题没有品牌后缀——「关键词 — 品牌」能提升结果里的辨识度",
+                  "no_h1_to_compare": "页面没有 <h1>，无法核对标题与主标题是否同题",
+                  "no_stuffing": "标题没有关键词堆砌",
+                  "specific": "标题有描述性：「{{title}}」",
+                  "stuffing": "标题里有重复词：{{terms}}——读起来像关键词堆砌"
+                },
+                "url": {
+                  "clean": "网址全小写、层级浅、没有参数",
+                  "unclean": "网址存在这些卫生问题：{{issues}}"
+                }
+              },
               "https": {
                 "uses_https": "站点已启用 HTTPS",
                 "not_https": "站点未使用 HTTPS——AI 引擎更偏好安全站点"
@@ -83,9 +269,9 @@ const zhResult = {
                 "sitemap_ref_present": "robots.txt 中引用了 sitemap",
                 "sitemap_ref_missing": "robots.txt 中没有引用 sitemap",
                 "wildcard_blocks_all": "通配符 user-agent 阻止了所有爬虫（Disallow: /）",
-                "bots_blocked": "以下 AI 爬虫被显式屏蔽：{{bots}}",
-                "bots_with_directives": "有显式规则（未屏蔽）的 AI 爬虫：{{bots}}",
-                "bots_inherit_wildcard": "未显式列出（继承通配符规则）的 AI 爬虫：{{bots}}",
+                "bots_blocked": "部分 AI 爬虫被 robots.txt 显式屏蔽",
+                "bots_with_directives": "部分 AI 爬虫有显式放行规则",
+                "bots_inherit_wildcard": "其余 AI 爬虫未单独列出，继承通配符规则",
                 "ai_txt_found": "找到 {{path}} — 已声明 AI 爬虫策略",
                 "ai_txt_not_found": "未找到 ai.txt 或 .well-known/ai.txt — 这是一项新兴的 AI 专属策略标准"
               },
@@ -129,8 +315,8 @@ const zhResult = {
                 "lang_missing": "<html> 没有 lang 属性——有助于 AI 引擎判断内容语言",
                 "hreflang_found": "找到 hreflang 标签：{{langs}}",
                 "hreflang_missing": "没有 hreflang 标签——如果是多语言站点请补上",
-                "twitter_cards_found": "找到 Twitter Card 标签：{{tags}}",
-                "twitter_cards_missing": "缺少 Twitter Card 标签：{{missing}} — 有助于改善 X/Twitter 链接预览"
+                "twitter_cards_found": "已配置社交分享卡片标签",
+                "twitter_cards_missing": "社交分享卡片标签不完整——补齐后链接被分享时会显示标题、描述与封面图"
               },
               "mobile": {
                 "fetch_failed": "无法抓取首页",
@@ -277,8 +463,8 @@ const zhResult = {
               },
               "social": {
                 "fetch_failed": "无法抓取首页",
-                "twitter_found": "找到 Twitter/X card 标签：{{tags}}",
-                "twitter_missing": "没有 Twitter/X card meta 标签",
+                "twitter_found": "找到社交分享卡片标签",
+                "twitter_missing": "没有社交分享卡片 meta 标签",
                 "sameas_found": "JSON-LD 中有 {{count}} 条 sameAs 社交链接：",
                 "sameas_missing": "结构化数据中没有 sameAs 社交档案链接",
                 "html_links_found": "HTML 中找到 {{count}} 个社交档案链接——建议同时加到 JSON-LD 的 sameAs",
@@ -303,18 +489,19 @@ const zhResult = {
               },
               "platform_reg": {
                 "fetch_failed": "无法抓取首页",
-                "gsc_verified": "找到 Google Search Console 验证标签",
-                "gsc_missing": "没有 Google Search Console 验证标签",
-                "bing_verified": "找到 Bing Webmaster Tools 验证标签",
-                "bing_missing": "没有 Bing Webmaster Tools 验证标签",
-                "yandex_verified": "找到 Yandex Webmaster 验证标签",
-                "yandex_missing": "没有 Yandex Webmaster 验证标签——如面向国际 AI 平台可补充",
-                "indexnow_endpoint": "在 {{path}} 找到 IndexNow 端点——可即时通知索引更新",
-                "indexnow_meta": "找到 IndexNow meta 标签",
-                "indexnow_missing": "未检测到 IndexNow 集成",
-                "pinterest_verified": "找到 Pinterest 域名验证",
-                "summary_registered": "已注册：{{platforms}}",
-                "summary_missing": "未检测到：{{platforms}}"
+                "gsc_verified": "找到站长平台验证 meta 标签",
+                "gsc_verified_dns": "已通过 DNS TXT 记录完成站长平台验证",
+                "gsc_missing": "没有找到站长平台验证 meta 标签",
+                "bing_verified": "找到另一站长平台的验证标签",
+                "bing_verified_file": "已通过验证文件完成另一站长平台的验证",
+                "bing_missing": "没有检测到另一站长平台的验证标签",
+                "yandex_verified": "找到国内搜索引擎站长平台的验证标签",
+                "yandex_missing": "未检测到国内搜索引擎站长平台的验证标签——建议补充",
+                "indexnow_endpoint": "在 {{path}} 找到主动推送端点——可即时通知索引更新",
+                "indexnow_meta": "找到主动推送 meta 标签",
+                "indexnow_missing": "未检测到索引主动推送集成",
+                "summary_registered": "部分站长平台渠道已完成注册与提交",
+                "summary_missing": "仍有站长平台渠道未检测到注册记录"
               },
               "schema_kg": {
                 "fetch_failed": "无法抓取首页",
@@ -418,11 +605,106 @@ const zhResult = {
               }
             },
             "fixes": {
+              "seo": {
+                "canonical": {
+                  "add": "给每个可收录页面加一条指向自身的 canonical：\n  <link rel=\"canonical\" href=\"https://yoursite.com/page\" />\n用绝对路径，且每页只留一条。",
+                  "self_reference": "除非这页就是刻意做的副本，canonical 都应该指向自己。指错会让这页被去掉索引、把权重让给别的页面。"
+                },
+                "crawl": {
+                  "add_lastmod": "为每个网址输出准确的 <lastmod> 更新时间，只在内容真的变了时才更新它。",
+                  "add_robots": "在站点根目录发布 robots.txt，声明你的站点地图，并且只封禁真正需要保密的路径。",
+                  "add_sitemap": "发布一份 XML 站点地图，列出所有可收录网址，在 robots.txt 里声明它，并提交到搜索资源平台。",
+                  "declare_sitemap": "在 robots.txt 里加一行 Sitemap 声明：\n  Sitemap: https://yoursite.com/sitemap.xml",
+                  "fix_sitemap": "按 sitemaps.org 的规范重新生成合法 XML 的站点地图，发布后到搜索资源平台验证一次。",
+                  "fix_soft_404": "不存在的页面要返回真正的 404（或 410）状态码。错误页做得好看没问题，但状态码不能是 200。"
+                },
+                "desc": {
+                  "add": "在 <head> 里加上描述：\n  <meta name=\"description\" content=\"120-160 个字符，讲清这页的价值，带上主关键词和一句行动号召。\">",
+                  "differentiate": "让描述补充标题而不是重复标题：说清收益、覆盖范围，再给一个点进来的理由。",
+                  "retune_length": "把描述调整到 120-160 个字符，让摘要能完整展示。",
+                  "rewrite": "把描述重写到 120-160 个字符。少于 70 会浪费摘要位，超过 200 会在句子中间被切断。",
+                  "write_sentence": "把描述写成一两句给人看的完整句子，不要写成逗号分隔的关键词清单。"
+                },
+                "headings": {
+                  "add_h1": "加一个 <h1>，写清这页的主题。每页只用一次，其余标题都从 <h2> 往下排。",
+                  "add_h2": "把正文拆成若干段落，每段用一个 <h2> 点明它回答的问题或子主题。",
+                  "dedupe_h1": "只保留一个 <h1>，其余降为 <h2>。多个 <h1> 会把主题信号打散。",
+                  "fix_hierarchy": "不要跳级。按 h1 → h2 → h3 的顺序往下走；字号交给样式表控制，不要靠标题级别。",
+                  "remove_empty": "删掉空标题标签，或换成 <div>。纯为排版用的标题会误导爬虫。",
+                  "shorten_h1": "把 <h1> 缩到 70 个字符以内，补充细节挪到第一段正文里。"
+                },
+                "images": {
+                  "add_alt": "给每张内容图片写有描述性的替代文字。纯装饰图片应该写 alt=\"\"，好让读屏软件和爬虫跳过。",
+                  "add_dimensions": "给每张图片加上宽高属性（或用样式表的 aspect-ratio），让浏览器在图片加载前就把位置留出来。",
+                  "add_lazy": "给首屏以下的图片加 loading=\"lazy\"。首屏主图保持立即加载，别让最大内容绘制被拖慢。",
+                  "modernize": "用 WebP 或 AVIF 分发，并用 <picture> 做降级兜底；再提供 srcset 多尺寸，避免手机下载按桌面尺寸出的图。"
+                },
+                "index": {
+                  "open_robots": "去掉全站的 `Disallow: /`。只封禁真正需要保密的路径（后台、购物车、站内搜索）。",
+                  "remove_header_noindex": "把公开页面上的 `X-Robots-Tag: noindex` 响应头去掉。响应头级别的指令最容易被漏掉，因为看 HTML 一切正常。",
+                  "remove_nofollow": "去掉页面级的 `nofollow`。如果确实要控制个别链接，用链接自身的 rel 属性。",
+                  "remove_noindex": "把该参与排名的页面上的 robots 元标签里的 `noindex` 去掉。测试环境的指令被带上生产，是站点从搜索里消失的最常见原因。"
+                },
+                "intl": {
+                  "add_self_reference": "同一 hreflang 集合里的每个页面都要列出所有语言版本（包括自己），且每个版本都要反向链回来。",
+                  "add_xdefault": "加一个 x-default 版本，指向语言选择页或默认版本页。",
+                  "fix_codes": "hreflang 接受语言代码，后面可以再跟地区：zh-CN、en-GB、es。只写国家（比如「cn」）是不合法的。",
+                  "fix_lang": "在 <html> 上用合法的 BCP 47 标记，例如 lang=\"zh-CN\" 或 lang=\"en-US\"。"
+                },
+                "links": {
+                  "add_breadcrumb": "加上面包屑导航，再配 BreadcrumbList 的 JSON-LD，让搜索结果里显示路径而不是一串原始网址。",
+                  "add_internal": "让首页链到主要的分类页和成交页。首页上 10 到 30 个站内链接是个健康的区间。",
+                  "drop_internal_nofollow": "去掉站内链接上的 rel=nofollow。用 nofollow 来调配站内权重，十多年前就已经不起作用了。",
+                  "fill_anchors": "给每个链接配上可见文字，或者配一张带描述性替代文字的图片。",
+                  "rewrite_anchors": "把「点击这里」「了解更多」换成目标页的主题，比如「商用清洁机器人报价」。锚文本是你能完全掌控的少数相关性信号之一。"
+                },
+                "mobile": {
+                  "add_srcset": "提供 srcset/sizes 或用 <picture> 元素，让每种设备都下载尺寸合适的图片。",
+                  "allow_zoom": "把 viewport 标签里的 user-scalable=no 和 maximum-scale 去掉，让用户能够缩放。",
+                  "fix_viewport": "用标准写法：\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+                  "use_relative_width": "把固定像素宽度换成 max-width:100%、百分比，或栅格/弹性布局，让内容在窄屏上能重排。"
+                },
+                "redirect": {
+                  "consolidate_host": "选定一个域名，把另一个用 301 转过去：\n  server { server_name {{alt}}; return 301 {{scheme}}://{{main}}$request_uri; }\n然后让 canonical 跟选定的域名保持一致。",
+                  "enable_https": "装一张 TLS 证书，并把所有 HTTP 流量用 301 转到 HTTPS。",
+                  "flatten_chain": "把跳转链拉平，让每个源网址都用一次 301 直达最终地址。",
+                  "force_https": "用全站 301 强制走 HTTPS：\n  server { listen 80; server_name example.com; return 301 https://$host$request_uri; }",
+                  "make_permanent": "把 HTTP → HTTPS 的跳转从 302/307 改成 301。临时跳转不能稳定传递排名信号。"
+                },
+                "schema": {
+                  "add_base": "给首页加上 Organization 和 WebSite 的 JSON-LD，再全站加 BreadcrumbList。改完用富媒体结果测试工具验证一次。",
+                  "add_breadcrumb": "在所有非首页模板上加 BreadcrumbList 的 JSON-LD，内容要和页面上可见的面包屑一致。",
+                  "add_content_type": "按页面真实的内容类型来标注——文章用 Article，电商用带 offers 的 Product，问答块用 FAQPage。富媒体结果就是靠这个出的。",
+                  "add_org": "加上 Organization 的 JSON-LD，写全 name、url、logo、sameAs（社交与知识库主页）和 contactPoint。",
+                  "add_searchaction": "给 WebSite 结构化数据加上 potentialAction/SearchAction，站内搜索框才有机会出现。",
+                  "add_website": "加上 WebSite 的 JSON-LD，写明 url、name 和 potentialAction/SearchAction。",
+                  "fix_json": "修好写错的 JSON-LD。一个语法错误就会让整段作废；每次改完都用富媒体结果测试工具验证。"
+                },
+                "speed": {
+                  "add_cache_headers": "给 HTML 设置短时且需重新校验的 Cache-Control，给静态资源设置长期不变的（文件名里带内容哈希）。",
+                  "defer_scripts": "给 <head> 里的脚本加 defer（不在意执行顺序的可以用 async），或者把它们挪到 <body> 末尾。",
+                  "enable_compression": "在 Web 服务器或 CDN 边缘为 HTML、CSS、JS、SVG 开启 Brotli 压缩（至少也要开 gzip）。",
+                  "externalize_inline": "把体积大的内联样式和脚本挪到可缓存的外部文件；只保留首屏必需的关键样式内联。",
+                  "improve_ttfb": "用页面缓存、在源站前加一层 CDN、以及优化数据库查询来降低服务器响应时间。",
+                  "trim_html": "把 HTML 体积压下来：内联样式和脚本挪到可缓存的外部文件，去掉首屏并不需要的服务端状态数据块。"
+                },
+                "title": {
+                  "add": "在 <head> 里加上标题：\n  <title>主关键词 — 品牌</title>\n目标 30-60 个字符，主关键词前置，品牌放后缀。",
+                  "align_with_h1": "让标题和 <h1> 保持同一主题。措辞可以不同，但主关键词应该在两处都出现。",
+                  "make_specific": "把笼统的标题换成有描述性的，写清这页提供什么、给谁看。",
+                  "remove_stuffing": "去掉重复的关键词。现在的排名模型会惩罚重复，讲清楚一次就够了。",
+                  "retune_length": "把标题重写到 30-60 个字符，让它在结果页能完整展示。主关键词前置，去掉可有可无的词。",
+                  "rewrite": "把标题重写到 30-60 个字符。太短浪费排名位，太长会被截断还会稀释相关性。"
+                },
+                "url": {
+                  "clean": "路径用小写、连字符分隔、不带参数，层级不超过三层。改动时用 301 把旧地址转过来。"
+                }
+              },
               "ai_opt": {
                 "add_brand_meta": "通过以下方式让品牌名易于被发现：\n  <meta property=\"og:site_name\" content=\"Your Brand\" />\n并在 <title> 中统一使用 'Brand — Page Title' 格式。",
                 "add_freshness": "添加新鲜度信号，让 AI 引擎判断内容是否最新：\n  1. 在 JSON-LD 中加入 \"dateModified\": \"2025-01-15\"\n  2. 使用 <time> 标签：<time datetime=\"2025-01-15\">January 15, 2025</time>\n  3. 在服务器响应中设置 Last-Modified 头",
-                "unify_brand_name": "在所有位置使用同一个品牌名。确保 og:site_name、<title> 后缀、\nJSON-LD Organization 中的 name 完全一致。\n请从下列名称中选定一个：{names}",
-                "use_brand_consistently": "在页面内容中更稳定地使用品牌名 \"{name}\"。\n在标题、开头段落和结构化数据中提及该名称，以强化实体识别。",
+                "unify_brand_name": "在所有位置使用同一个品牌名。确保 og:site_name、<title> 后缀、\nJSON-LD Organization 中的 name 完全一致。\n请从下列名称中选定一个：{{names}}",
+                "use_brand_consistently": "在页面内容中更稳定地使用品牌名 \"{{name}}\"。\n在标题、开头段落和结构化数据中提及该名称，以强化实体识别。",
                 "increase_cadence": "提高内容更新频率。AI 引擎偏好定期更新的站点——\n长期不更新的页面会逐渐退出训练窗口和检索索引。",
                 "refresh_stale_content": "大部分内容已数月未更新。请定期刷新高价值页面\n（更新数据、补充新案例、更新 dateModified），让 AI 引擎看到持续维护。"
               },
@@ -442,7 +724,7 @@ const zhResult = {
                 "add_security_headers": "在服务器配置中补齐安全响应头：\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  Content-Security-Policy: default-src 'self'\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY",
                 "add_security_headers_nginx": "为响应添加安全头部，Nginx 示例：\n  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n  add_header Content-Security-Policy \"default-src 'self'\" always;\n  add_header X-Content-Type-Options \"nosniff\" always;\n  add_header X-Frame-Options \"DENY\" always;",
                 "strengthen_bio": "用显式的 E-E-A-T 信号强化个人介绍/关于页面：\n  • 学历与资质（博士、认证等）\n  • 工作年限与职位\n  • 知名前任雇主或合作方\n  • 外部署名文章、出版物或媒体报道",
-                "add_external_bylines": "在个人介绍/关于页面中链接外部署名（Medium、Substack、行业媒体、Google Scholar、ORCID）。\n独立第三方署名比自我声明具有更强的 E-E-A-T 权重。",
+                "add_external_bylines": "在个人介绍/关于页面中链接外部署名（知乎专栏、行业媒体、学术平台等）。\n独立第三方署名比自我声明具有更强的 E-E-A-T 权重。",
                 "create_about_page": "创建一个内容丰富的 /about 或 /team 页面（200 字以上），\n说明站点背后的团队：真实姓名、资质、照片、联系方式和外部资料链接。\nAI 引擎对匿名站点的 E-E-A-T 评分较低。",
                 "upgrade_author_jsonld": "用 JSON-LD 结构化数据完善作者信息：\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Author Name\",\n    \"url\": \"https://authorsite.com\"\n  }"
               },
@@ -473,7 +755,7 @@ const zhResult = {
                 "add_semantic_html5": "用语义化 HTML5 标签替换通用 <div>：\n  <header>：页头/导航\n  <main>：主体内容\n  <article>：独立成篇的内容\n  <section>：主题分组\n  <aside>：侧栏/相关内容\n  <footer>：页脚",
                 "critical_response_time": "响应时间极慢，AI 爬虫可能超时。立即处理：\n  1. 在源站前部署 CDN\n  2. 在服务器层启用页面缓存\n  3. 对服务端代码做性能剖析定位瓶颈\n  4. 内容页面可考虑改为静态生成",
                 "enable_ssr": "在前端框架中启用服务端渲染：\n  Next.js：使用 getServerSideProps() 或 generateStaticParams()\n  Nuxt.js：在 nuxt.config 中设置 ssr: true\n  纯 React：建议迁移到 Next.js 或 Remix",
-                "improve_response_time": "优化响应时间：\n  1. 启用服务端缓存（Redis、Varnish、CDN）\n  2. 优化数据库查询\n  3. 使用 CDN（Cloudflare、Fastly、CloudFront）\n  4. 开启 gzip/brotli 压缩",
+                "improve_response_time": "优化响应时间：\n  1. 启用服务端缓存（Redis、Varnish、CDN）\n  2. 优化数据库查询\n  3. 使用 CDN（阿里云 CDN、腾讯云 CDN 等）\n  4. 开启 gzip/brotli 压缩",
                 "paywall_workarounds": "AI 爬虫无法访问付费墙/登录墙后的内容。\n可考虑：\n  1. 在收费墙之前提供充分的免费预览或摘要\n  2. 采用计次访问，让爬虫首次访问时能看到全文\n  3. 在墙外提供包含核心事实的 JSON-LD 结构化数据",
                 "remove_noai": "'noai' / 'noimageai' 指令会让你的内容退出 AI 训练。\n如希望 AI 引擎在回答中引用你的内容，请将其移除。",
                 "remove_nofollow": "若希望 AI 爬虫发现页面中的链接，请移除 'nofollow'：\n  <meta name=\"robots\" content=\"index, follow\" />",
@@ -482,7 +764,7 @@ const zhResult = {
                 "replace_divs": "页面仅使用 <div> 标签。请替换为语义化 HTML5 元素：\n  <header>、<nav>、<main>、<article>、<section>、<aside>、<footer>\n这能帮助 AI 引擎理解每个内容块的角色。"
               },
               "cross_platform": {
-                "expand_presence": "在 AI 模型的训练数据来源平台上扩展品牌存在：{platforms}\nAI 引擎（ChatGPT、Perplexity、Claude、Gemini）会从这些平台获取训练数据。\n在更多平台上出现可以提高品牌被 AI 回答引用的概率，\n无论 AI 实际引用的是哪一个来源。"
+                "expand_presence": "在 AI 模型的训练数据来源平台上扩展品牌存在：{{platforms}}\nAI 引擎会从这些平台获取训练数据。\n在更多平台上出现可以提高品牌被 AI 回答引用的概率，\n无论 AI 实际引用的是哪一个来源。"
               },
               "https": {
                 "enable_https": "为站点安装 SSL/TLS 证书（可通过 Let's Encrypt 免费获取），并将全部 HTTP 流量 301 重定向到 HTTPS。\nNginx 示例：return 301 https://$host$request_uri;"
@@ -491,7 +773,7 @@ const zhResult = {
                 "add_description": "在标题下方添加一段说明，介绍站点或组织的业务：\n  # Your Site\n  A brief description of your site and what it offers.",
                 "add_links": "在 llms.txt 中以 markdown 链接列出关键页面：\n  - [Documentation](https://yoursite.com/docs)\n  - [API Reference](https://yoursite.com/api)",
                 "add_sections": "用分节组织 llms.txt 内容，例如：\n  ## Documentation\n  ## API Reference\n  ## Blog",
-                "add_title": "将标题作为 {filename} 的第一行：\n  # Your Site Name",
+                "add_title": "将标题作为 {{filename}} 的第一行：\n  # Your Site Name",
                 "create_file": "在站点根目录创建 llms.txt 文件，结构示例：\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)",
                 "create_full_file": "创建 llms-full.txt 提供扩展内容——它是 llms.txt 的详细版本，\n包含完整说明、完整资源清单以及为 AI 模型准备的更深层上下文。",
                 "expand_content": "扩充 llms.txt 的内容，加入站点定位、核心页面与重要资源等有实际价值的信息。"
@@ -504,7 +786,7 @@ const zhResult = {
                 "add_og": "在 <head> 中添加 Open Graph meta 标签：\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />",
                 "add_title": "在 <head> 中添加 <title> 标签：\n  <title>Your Page Title — Your Brand</title>\n建议控制在 60 字符内，并包含主要关键词。",
                 "expand_description": "将 meta description 扩展至 120–160 字符，包含明确的价值主张和主要关键词。",
-                "add_twitter_cards": "在 <head> 中添加 Twitter Card meta 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
+                "add_twitter_cards": "在 <head> 中补齐社交分享卡片 meta 标签——卡片类型、标题、描述、封面图，\n让链接被分享时显示完整预览，而不是一条光秃秃的网址。"
               },
               "mobile": {
                 "add_cache_headers": "添加缓存响应头以提升重复抓取效率：\n  Cache-Control: public, max-age=3600\n  ETag:（多数服务器会自动生成）\n这能让 AI 爬虫使用条件请求（If-None-Match），\n避免重复下载未变更页面。",
@@ -515,7 +797,7 @@ const zhResult = {
                 "set_viewport_responsive": "将 viewport 设置为响应式：\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
               },
               "multi_page": {
-                "boost_google_authority": "提升 Google 权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建 Wikipedia 词条\n  - 创建 Wikidata 实体并通过 sameAs 关联\n  - 认领 Google Business Profile\n  - 从权威域名获取高质量反向链接",
+                "boost_google_authority": "提升实体权威度：\n  - 完整填写 Organization 结构化数据（全部 9 个字段）\n  - 为品牌/产品创建权威百科词条\n  - 创建知识图谱实体并通过 sameAs 关联\n  - 认领各平台的官方企业主页\n  - 从权威域名获取高质量反向链接",
                 "common_crawl_inbound_links": "Common Crawl 尚未抓取你的站点。\n对新站或小站这是正常现象。可通过获取更多反向链接来提升被发现的概率。",
                 "duplicate_descriptions": "为每个页面撰写独立的 meta description。重复的描述会让\nAI 引擎在引用时无法判断哪一个页面与主题更相关。",
                 "duplicate_titles": "为每个页面撰写独立的 <title>。重复的标题会导致关键词蚕食——\nAI 引擎无法判断对于给定查询应该引用哪个页面。",
@@ -530,11 +812,11 @@ const zhResult = {
                 "missing_og": "为每个页面添加 Open Graph 标签（og:title、og:description、og:image）。",
                 "missing_structured_data": "为内容页面添加 JSON-LD 结构化数据（Article、Product、FAQPage 等）。",
                 "missing_title": "为每个页面添加唯一、具有描述性的 <title> 标签（不超过 60 字符）。",
-                "register_search_engines": "在 Google Search Console 和 Bing Webmaster Tools 注册以获得索引。\n在两个平台分别提交 sitemap.xml。\n确保 robots.txt 没有屏蔽 AI 爬虫。\n检查 CDN/WAF 设置——部分服务默认会拦截 bot 流量。",
+                "register_search_engines": "在搜索引擎站长平台（如百度搜索资源平台）注册以获得索引。\n在各平台分别提交 sitemap.xml。\n确保 robots.txt 没有屏蔽 AI 爬虫。\n检查 CDN/WAF 设置——部分服务默认会拦截 bot 流量。",
                 "strengthen_trust": "强化信任信号：\n  - 在显眼位置展示认证（SOC2、GDPR、ISO、PCI-DSS）\n  - 为奖项徽章添加 alt 文本：<img alt='2025 Best Fintech Award' ...>\n  - 展示合作伙伴/隶属机构 Logo（Y Combinator、加速器、行业组织）\n  - 在结构化数据中标注奖项：\n    {\"@type\": \"Organization\", \"award\": [\"Best Fintech 2025\", ...]}",
-                "unblock_core_bots": "这些是核心 AI 爬虫。若被屏蔽，你的内容可能无法出现在对应 AI 产品中。\n请确认已在对应搜索平台完成注册。\n检查 robots.txt 没有屏蔽这些 user agent。\n在 Google Search Console 和 Bing Webmaster Tools 提交 sitemap。",
-                "unblock_robots_bots": "以下 bot 被 robots.txt 屏蔽：{bots}\n如希望 AI 引擎索引你的内容，请移除或修改对应规则：\n  User-agent: BotName\n  Disallow: /\n将 'Disallow: /' 改为 'Allow: /' 或直接移除该规则。",
-                "unblock_waf_bots": "部分 AI bot 被你的服务器、CDN 或 WAF 拦截。\n检查 Cloudflare/AWS WAF/Nginx 规则，将这些 user agent 加入白名单。\n常见原因：\n  - Cloudflare Bot Fight Mode 拦截非浏览器 user agent\n  - 限速规则过于激进\n  - 安全插件（Wordfence、Sucuri）启用了严格的 bot 拦截"
+                "unblock_core_bots": "这些是核心 AI 爬虫。若被屏蔽，你的内容可能无法出现在对应 AI 产品中。\n请确认已在对应搜索平台完成注册。\n检查 robots.txt 没有屏蔽这些 user agent。\n在各搜索引擎站长平台提交 sitemap。",
+                "unblock_robots_bots": "以下 bot 被 robots.txt 屏蔽：{{bots}}\n如希望 AI 引擎索引你的内容，请移除或修改对应规则：\n  User-agent: BotName\n  Disallow: /\n将 'Disallow: /' 改为 'Allow: /' 或直接移除该规则。",
+                "unblock_waf_bots": "部分 AI bot 被你的服务器、CDN 或 WAF 拦截。\n检查 CDN 防护、WAF 与 Nginx 规则，将这些 user agent 加入白名单。\n常见原因：\n  - CDN 的机器人防护模式拦截非浏览器 user agent\n  - 限速规则过于激进\n  - 安全插件启用了严格的 bot 拦截"
               },
               "multilingual": {
                 "expand_alt_pages": "其它语言页面内容过少。请确保翻译完整，而不是占位或机器翻译片段；\nAI 引擎可能会跳过内容过薄的多语言页面。",
@@ -542,7 +824,7 @@ const zhResult = {
               },
               "brand_kg": {
                 "create_wikipedia": "Wikipedia 页面是 AI 引擎最强的实体信号之一。如果你的品牌具有足够知名度，\n请争取在新闻/行业媒体获得独立报道，然后按照 Wikipedia 的关注度指南提交。\n切勿自行编写——会被标记为利益冲突。",
-                "create_wikidata": "Wikidata 可免费编辑，AI 引擎（尤其是 Google 知识图谱）会大量引用。\n在 https://www.wikidata.org/wiki/Special:NewItem 创建条目，填写：\n  • 标签 + 描述\n  • instance of (P31) — 如 'business'\n  • official website (P856) — 你的域名\n  • sameAs 链接到社交资料"
+                "create_wikidata": "公开知识图谱条目可免费编辑，AI 引擎会大量引用。\n在权威百科/知识图谱平台创建条目，填写：\n  • 名称 + 描述\n  • 实体类型 — 如「企业」\n  • 官方网站 — 你的域名\n  • sameAs 关联到官方账号主页"
               },
               "trust_safety": {
                 "add_privacy": "在 /privacy（或 /privacy-policy）发布隐私政策。AI 引擎将缺少隐私政策\n视为信任红旗——GDPR、CCPA 和大多数广告网络均要求提供。",
@@ -560,46 +842,46 @@ const zhResult = {
                 "add_table_thead": "为所有数据表格添加 <thead> 与 <th>：\n  <table>\n    <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>\n    <tbody><tr><td>Data</td><td>Data</td></tr></tbody>\n  </table>",
                 "add_video_schema": "为视频内容添加 VideoObject 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"VideoObject\",\n    \"name\": \"Video Title\",\n    \"description\": \"Video description\",\n    \"thumbnailUrl\": \"https://yoursite.com/thumb.jpg\",\n    \"uploadDate\": \"2025-01-15\",\n    \"contentUrl\": \"https://yoursite.com/video.mp4\"\n  }\n  </script>",
                 "add_video_transcripts": "为视频内容添加文字转录，便于 AI 爬虫索引语音内容。\n将转录文本放在视频下方可见区域。",
-                "diversify_formats": "丰富内容格式，让 AI 引擎在更多场景接触到你的品牌：\n  • 播客（音频转���可被 ChatGPT、Perplexity 索引）\n  • PDF 白皮书（可被引用的文档）\n  • 信息图（配合描述�� alt 文本）\n  • SlideShare / Speaker Deck 上的演示文稿\n  • 配有转写的视频",
+                "diversify_formats": "丰富内容格式，让 AI 引擎在更多场景接触到你的品牌：\n  • 播客（音频转���可被 AI 引擎索引）\n  • PDF 白皮书（可被引用的文档）\n  • 信息图（配合描述�� alt 文本）\n  • 文档分享平台上的演示文稿\n  • 配有转写的视频",
                 "add_alt_format": "至少添加一种替代格式（配转写的视频、播客、PDF 或信息图）。\n每种格式为 AI 引擎开辟一条新的检索通道。"
               },
               "robots": {
                 "add_sitemap_directive": "在 robots.txt 中添加 Sitemap 指令：\n  Sitemap: https://yoursite.com/sitemap.xml",
                 "create": "在站点根目录创建 robots.txt 文件。\n最简示例：\n  User-agent: *\n  Allow: /\n  Sitemap: https://yoursite.com/sitemap.xml",
-                "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行 GPTBot 示例：\n  User-agent: GPTBot\n  Allow: /",
+                "unblock_bots": "如需放行这些 AI bot，请在 robots.txt 中移除或修改对应的 Disallow 规则。\n放行示例：\n  User-agent: <AI 爬虫名>\n  Allow: /",
                 "unblock_wildcard": "如果希望 AI 爬虫索引站点，请将 'User-agent: *' 下的 'Disallow: /' 改为 'Allow: /'。\n如需限制特定 bot，可以单独配置规则而不是整体禁用。",
                 "add_ai_txt": "建议在站点根目录添加 ai.txt 文件（规范：spawning.ai/ai-txt），\n独立于 robots.txt 声明 AI 爬虫策略。"
               },
               "schema_kb": {
                 "add_breadcrumb_schema": "为 HTML 面包屑添加配套的 BreadcrumbList 结构化数据：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"BreadcrumbList\",\n    \"itemListElement\": [\n      {\"@type\": \"ListItem\", \"position\": 1, \"name\": \"Home\", \"item\": \"https://yoursite.com\"},\n      {\"@type\": \"ListItem\", \"position\": 2, \"name\": \"Products\", \"item\": \"https://yoursite.com/products\"}\n    ]\n  }\n  </script>",
                 "add_breadcrumbs": "添加面包屑导航，帮助 AI 引擎理解站点结构：\n  1. 在页面可见处加入面包屑：Home > Category > Page\n  2. 同步添加 BreadcrumbList JSON-LD",
-                "add_org_field": "在 Organization JSON-LD 中补充 \"{field}\" 字段，以提升知识面板入选概率。",
-                "add_org_fields": "补充更多字段，强化知识面板入选条件：\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]",
-                "add_organization": "添加 Organization 结构化数据，争取进入知识面板：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>"
+                "add_org_field": "在 Organization JSON-LD 中补充 \"{{field}}\" 字段，以提升知识面板入选概率。",
+                "add_org_fields": "补充更多字段，强化知识面板入选条件：\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://weibo.com/...\", \"https://www.zhihu.com/org/...\"]",
+                "add_organization": "添加 Organization 结构化数据，争取进入知识面板：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://weibo.com/you\", \"https://www.zhihu.com/org/you\"]\n  }\n  </script>"
               },
               "search_reg": {
-                "bing_webmaster": "在 Bing Webmaster Tools 注册站点（https://www.bing.com/webmasters）：\n  1. 添加站点并完成所有权验证\n  2. 提交 sitemap.xml\n  3. 这一步必不可少——Bing 索引支撑 Microsoft Copilot、ChatGPT（基于 Bing 检索）\n     以及其他以 Bing 为搜索后端的 AI 助手。",
-                "google_console": "在 Google Search Console 注册站点（https://search.google.com/search-console）：\n  1. 添加资源（URL 前缀或域名）\n  2. 通过 meta 标签、DNS 或 HTML 文件完成所有权验证\n  3. 在 Sitemaps 一栏提交 sitemap.xml\n  4. 监控索引状态并修复抓取错误\n这一步非常关键——Google AI Overviews 与 SGE 都从 Google 索引中取数据。",
-                "indexnow": "配置 IndexNow，让 Bing、Yandex 等搜索引擎即时索引新内容：\n  1. 在 https://www.indexnow.org/ 申请 API key\n  2. 将密钥文件放在站点根目录：https://yoursite.com/{key}.txt\n  3. 内容变更时通知搜索引擎：\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. 许多 CMS 插件（例如 WordPress）已内置 IndexNow 支持。",
-                "submit_all": "仅有 sitemap.xml 和 robots.txt 文件是不够的。\n还需要在各平台注册并主动提交：\n  \n  Google Search Console → 提交 sitemap → 支撑 Google AI Overviews / SGE\n  Bing Webmaster Tools  → 提交 sitemap → 支撑 Copilot、ChatGPT（Bing 后端）\n  IndexNow              → 自动通知    → Bing、Yandex、Naver 即时索引\n  \n不主动提交也可能被搜索引擎自然发现 sitemap，\n但主动提交能显著提升索引速度与可靠性。"
+                "bing_webmaster": "在搜索引擎站长平台注册站点：\n  1. 添加站点并完成所有权验证\n  2. 提交 sitemap.xml\n  3. 这一步必不可少——搜索索引是多数 AI 助手的检索后端。",
+                "google_console": "在百度搜索资源平台注册站点（https://ziyuan.baidu.com）：\n  1. 添加站点并选择验证方式\n  2. 通过 meta 标签、DNS 或文件校验完成所有权验证\n  3. 在「普通收录」提交 sitemap.xml\n  4. 监控索引状态并修复抓取错误\n这一步非常关键——搜索索引是 AI 检索取数的重要来源。",
+                "indexnow": "配置索引主动推送，让搜索引擎即时收录新内容：\n  1. 在百度搜索资源平台获取推送接口的 token\n  2. 内容发布或更新后，把 URL 推送到接口\n  3. 也可同时配置站点地图与自动推送 JS\n  4. 常见 CMS 大多有现成插件可直接接入。",
+                "submit_all": "仅有 sitemap.xml 和 robots.txt 文件是不够的。\n还需要在各平台注册并主动提交：\n  \n  百度搜索资源平台 → 提交 sitemap → 支撑搜索与 AI 检索取数\n  主动推送接口     → 自动通知    → 新内容即时收录\n  \n不主动提交也可能被搜索引擎自然发现 sitemap，\n但主动提交能显著提升索引速度与可靠性。"
               },
               "sitemap": {
                 "add_lastmod": "为 sitemap 中每个 <url> 节点补充 <lastmod>：\n  <url>\n    <loc>https://yoursite.com/page</loc>\n    <lastmod>2025-01-15</lastmod>\n  </url>",
                 "create_file": "在站点根目录创建 sitemap.xml，示例：\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\n大多数 CMS（WordPress、Next.js 等）可以自动生成 sitemap。"
               },
               "social": {
-                "add_sameas": "在 Organization JSON-LD 中通过 sameAs 关联各社交平台资料：\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\n这能帮助 AI 引擎跨平台确认你的实体身份。",
-                "add_twitter_card": "在 <head> 中添加 Twitter card 标签：\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />"
+                "add_sameas": "在 Organization JSON-LD 中通过 sameAs 关联各平台官方主页：\n  \"sameAs\": [\n    \"https://weibo.com/yourbrand\",\n    \"https://www.zhihu.com/org/yourbrand\",\n    \"https://space.bilibili.com/yourbrand\",\n    \"https://gitee.com/yourbrand\"\n  ]\n这能帮助 AI 引擎跨平台确认你的实体身份。",
+                "add_twitter_card": "在 <head> 中补齐社交分享卡片 meta 标签——卡片类型、账号、标题、描述、封面图，\n让链接被分享时显示完整预览。"
               },
               "structured": {
                 "add_product_reviews": "为 Product schema 添加评论和综合评分：\n  \"aggregateRating\": {\"@type\": \"AggregateRating\", \"ratingValue\": \"4.6\", \"reviewCount\": \"128\"},\n  \"review\": [{\"@type\": \"Review\", \"author\": ..., \"reviewRating\": ...}]",
                 "upgrade_to_granular": "将通用的 WebPage/CreativeWork 升级为精细化类型：\n  • 教程内容 → HowTo + 步骤列表\n  • 问答页面 → FAQPage + Question/Answer 对\n  • 产品页面 → Product + offers + aggregateRating\n  • 文章页面 → NewsArticle 或 BlogPosting\n精细化类型让 AI 引擎能提取更丰富的信息。",
-                "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 Google Rich Results Test 校验：https://search.google.com/test/rich-results"
+                "add_organization_jsonld": "在 <head> 中添加 JSON-LD 结构化数据，Organization 示例：\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\n使用 schema.org 官方校验器校验结构化数据。"
               },
               "tech_crawl": {
                 "add_rss_feed": "为内容添加 RSS 或 Atom feed，并在 <head> 中引用：\n  <link rel=\"alternate\" type=\"application/rss+xml\" title=\"RSS\" href=\"/feed.xml\" />\n大多数 CMS 可自动生成 feed；静态站点可使用 eleventy-rss 等工具。",
-                "broken_canonical": "canonical URL {canonical_url} 已失效。请修复目标页面，或将 canonical 更新为可访问的 URL。",
-                "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 Cloudflare 等 CDN 自动启用 HTTP/2。",
+                "broken_canonical": "canonical URL {{canonical_url}} 已失效。请修复目标页面，或将 canonical 更新为可访问的 URL。",
+                "enable_http2": "在服务器启用 HTTP/2 以加快抓取：\n  Nginx：listen 443 ssl http2;\n  Apache：Protocols h2 http/1.1\n  也可以使用 CDN 自动启用 HTTP/2。",
                 "fix_canonical_chain": "修复 canonical 链——每个页面的 canonical 应直接指向最终 URL，而不是经过中间跳转。\n将各页面的 canonical 设置为自身 URL 或最终目标。",
                 "reduce_redirects": "将重定向链压缩为单跳（A -> B，而不是 A -> B -> C -> D）。\n更新服务器配置，直接重定向到最终 URL。",
                 "feed_full_content": "在 feed 中发布完整内容而非摘要。AI 代理更倾向直接提取完整文本，\n无需逐条跟随链接抓取。",
@@ -608,11 +890,11 @@ const zhResult = {
               },
               "url_norm": {
                 "lowercase_url": "确保服务器对 URL 大小写做归一化（统一为小写）。Nginx 示例：\n  location ~ [A-Z] { rewrite ^(.*)$ $scheme://$host$uri_lowercase permanent; }",
-                "www_redirect": "配置 301 重定向，让其中一个版本指向另一个：\n  # Nginx：将 www 重定向到非 www\n  server {{ server_name www.{host}; return 301 https://{host}$request_uri; }}\n然后将 canonical 设置为优选版本。"
+                "www_redirect": "配置 301 重定向，让其中一个版本指向另一个：\n  # Nginx：将 www 重定向到非 www\n  server { server_name www.{{host}}; return 301 https://{{host}}$request_uri; }\n然后将 canonical 设置为优选版本。"
               },
               "well_known": {
                 "add_security_txt": "建议添加 .well-known/security.txt（RFC 9116）作为信任信号：\n  Contact: mailto:security@yoursite.com\n  Preferred-Languages: en\n  Canonical: https://yoursite.com/.well-known/security.txt",
-                "fix_invalid_json": "用 JSON 校验工具检查并修复 {path} 中的语法错误。"
+                "fix_invalid_json": "用 JSON 校验工具检查并修复 {{path}} 中的语法错误。"
               }
             },
             "scoreCard": {
@@ -656,7 +938,33 @@ const zhResult = {
             "groupProgress": {
               "title": "分类进度"
             },
+            "dimensions": {
+              "geo": {
+                "tab": "AI 可见度",
+                "scoreLabel": "AI 可见度（GEO）"
+              },
+              "seo": {
+                "tab": "传统 SEO",
+                "scoreLabel": "传统 SEO",
+                "unavailable": "这次检测的 SEO 部分没有跑完，AI 可见度结果不受影响。",
+                "retry": "重跑 SEO 检测",
+                "retrying": "检测中…",
+                "scoreLevels": {
+                  "excellent": "优秀 — 搜索引擎收录与排序的基础都已到位，保持监控即可。",
+                  "good": "良好 — 主要信号基本齐全，再补齐几项就能拿到富媒体结果。",
+                  "average": "一般 — 有多项收录或页面信号缺失，建议先修下方的失败与警告项。",
+                  "poor": "待改进 — 标题、收录或速度上有明显短板，正在压制自然搜索表现。",
+                  "critical": "严重不足 — 站点在搜索引擎里几乎拿不到排名，建议做一次完整的 SEO 整改。"
+                }
+              }
+            },
             "categories": {
+
+              "seoPageBasics": "页面基础",
+              "seoIndexing": "收录与规范",
+              "seoLinksMedia": "链接与图像",
+              "seoRichIntl": "富媒体与国际化",
+              "seoSpeedMobile": "速度与移动端",
               "infraProtocols": "基础协议与可抓取性",
               "pageBasics": "页面基础与移动体验",
               "aiProtocols": "AI 专属协议与抓取",
@@ -667,6 +975,18 @@ const zhResult = {
               "other": "其它"
             },
             "categoryLabels": {
+              "SEO: Title Tag": "标题标签",
+              "SEO: Meta Description": "页面描述",
+              "SEO: Heading Structure": "标题层级",
+              "SEO: Indexability": "可收录性",
+              "SEO: URL, Canonical & Redirects": "网址、规范链接与跳转",
+              "SEO: Internal Linking": "站内链接",
+              "SEO: Image SEO": "图片 SEO",
+              "SEO: Rich Result Schema": "富媒体结果结构化数据",
+              "SEO: Page Speed Signals": "速度信号",
+              "SEO: Mobile Usability": "移动端可用性",
+              "SEO: Crawl Directives & Sitemap": "抓取指令与站点地图",
+              "SEO: International Targeting": "多语言与地区定向",
               "HTTPS": "HTTPS 安全协议",
               "robots.txt": "robots.txt",
               "llms.txt": "llms.txt",
@@ -714,16 +1034,17 @@ const zhResult = {
             },
             "visuals": {
               "robots": {
-                "title": "AI 爬虫许可矩阵",
+                "title": "AI 爬虫许可概览",
                 "filePresent": "robots.txt · 文件存在",
                 "fileMissing": "robots.txt · 文件缺失",
                 "sitemapRef": "sitemap 引用 ✓",
                 "noSitemapRef": "缺少 sitemap 引用",
-                "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。下方标为「继承通配符」的机器人在你覆盖之前实际上都是被屏蔽的。",
+                "wildcardWarning": "通配符规则 User-agent: * 禁止所有爬虫。计入「继承通配符」的那批爬虫，在你单独放行之前实际上都是被屏蔽的。",
+                "countsNote": "统计口径为 robots.txt 中 AI 爬虫 user-agent 规则的条数。",
                 "legend": {
-                  "allowed": "已允许",
-                  "blocked": "已屏蔽",
-                  "inherited": "继承通配符",
+                  "allowed": "条已放行",
+                  "blocked": "条被屏蔽",
+                  "inherited": "条继承通配符",
                   "unknown": "未知"
                 }
               },
@@ -767,13 +1088,20 @@ const zhResult = {
               "downloadReportLoading": "正在生成报告…"
             },
             "pdfReport": {
-              "title": "GEO 就绪度检测报告",
-              "subtitle": "衡量网站在 AI 搜索引擎中的可见度与优化程度",
+              "coverBrandLine": "独立第三方 AI 可见性检测平台",
+              "coverEyebrow": "AI 搜索可见性 · 全链路检测",
+              "coverTitleL1": "AI 搜索可见度",
+              "coverTitleL2": "与传统 SEO 检测报告",
+              "coverSubtitle": "一次检测，两套独立评分：AI 引擎里的可见度，搜索引擎里的收录与排序表现。",
+              "coverSeoMissing": "本次 SEO 检测未完成",
+              "coverFooter": "本报告由 Vigilath 自动生成，数据来自本次实时检测",
+              "gradeLabel": "{{grade}} 级",
+              "checksTotal": "检测项合计",
+              "itemsCount": "{{count}} 项",
+              "passRate": "通过率",
               "targetSite": "目标网站",
               "generatedAt": "生成时间",
               "tier": "报告等级",
-              "overallScore": "综合得分",
-              "scoreInterpretation": "得分解读",
               "scoreLevels": {
                 "excellent": "优秀 — 网站对 AI 搜索引擎已有良好优化，建议保持监控并持续微调。",
                 "good": "良好 — 基础要素基本到位，再修复几项重点问题即可进入顶级梯队。",
@@ -781,19 +1109,55 @@ const zhResult = {
                 "poor": "待改进 — AI 引擎对您网站内容的呈现度不足，建议尽快处理失败项。",
                 "critical": "严重不足 — 网站对 AI 引擎几乎不可见，建议进行一次完整的 GEO 优化。"
               },
+              "summarySection": "执行摘要",
+              "summaryNote": "两个维度的总体结论与关键指标",
+              "summaryLead": "本次共检测 {{total}} 项，其中通过 {{pass}} 项、警告 {{warn}} 项、失败 {{fail}} 项。AI 搜索可见度得 {{geoScore}} 分（{{geoGrade}} 级），传统 SEO 得 {{seoScore}} 分（{{seoGrade}} 级）。两个分数各自独立计算，不做加权合并。",
+              "summaryLeadGeoOnly": "本次共检测 {{total}} 项，其中通过 {{pass}} 项、警告 {{warn}} 项、失败 {{fail}} 项。AI 搜索可见度得 {{geoScore}} 分（{{geoGrade}} 级）。本次 SEO 检测未跑完，报告只包含 AI 可见度结果。",
+              "findingsTitle": "关键发现",
+              "findingPassRate": "整体通过率 {{rate}}%（{{pass}} / {{total}} 项）。",
+              "findingFailCount": "有 {{count}} 项未通过，主要集中在 {{cats}}。",
+              "findingNoFail": "本次没有出现失败项，基础面稳定，建议保持现有检测节奏。",
+              "findingWeakest": "得分最弱的是「{{dim}} · {{name}}」，通过率 {{rate}}%，建议优先补齐。",
+              "findingWarn": "另有 {{count}} 项处于警告状态，多数属于低成本就能改善的部分。",
               "groupSection": "分类得分概览",
-              "groupLabel": "分类",
-              "recommendationsSection": "优先修复建议",
-              "topFixesIntro": "下列是对得分影响最大的问题，按严重程度排序，优先处理这些项收益最高。",
-              "detailSection": "检测详情",
+              "groupNote": "按检测分组统计的通过情况",
+              "groupLabel": "分组",
+              "recommendationsSection": "优先修复清单",
+              "topFixesIntro": "按严重程度排序，优先处理收益最高",
+              "detailGeoSection": "AI 搜索可见度检测详情",
+              "detailSeoSection": "传统 SEO 检测详情",
+              "detailNote": "逐项检测结果与修复建议",
+              "legendSection": "附录：图例与评分说明",
+              "legendTitle": "状态图例",
+              "legend": {
+                "pass": "该项已满足最佳实践，无需处理。",
+                "warn": "已实现但不完整，或存在更优做法，建议改进。",
+                "fail": "关键项缺失或配置有误，直接拉低得分。",
+                "info": "现状说明，仅供参考，不计入通过率。"
+              },
+              "bandsTitle": "评分区间",
+              "scoreBandName": {
+                "excellent": "优秀",
+                "good": "良好",
+                "average": "一般",
+                "poor": "待改进",
+                "critical": "严重不足"
+              },
+              "scoreBandDesc": {
+                "excellent": "关键要素齐备，保持监控与小幅微调即可。",
+                "good": "基础到位，补齐少数重点项即可进入头部区间。",
+                "average": "多项重要信号缺失，建议按修复清单逐项处理。",
+                "poor": "存在明显短板，正在压制曝光与收录表现。",
+                "critical": "关键能力基本缺失，建议做一次完整整改。"
+              },
+              "disclaimer": "结论基于检测时刻抓取到的页面与公开数据，站点更新后结果会变化；涉及第三方平台的判定还受其接口可用性影响。",
               "appendixSection": "关于本报告",
-              "appendixBody": "本报告由 GEO Checker 生成，分数反映您的网站对 ChatGPT、Perplexity、Google AI Overviews、Copilot 等 AI 搜索引擎最佳实践的遵循程度。完成修复后可重新运行检测查看进展。",
-              "footer": "GEO Checker · © {{year}} · 保留所有权利",
-              "fileName": "GEO就绪度报告",
+              "appendixBody": "本报告由 Vigilath 检测引擎自动生成。AI 搜索可见度衡量站点对主流 AI 搜索引擎最佳实践的遵循程度，传统 SEO 衡量站点被搜索引擎收录、排序与展示富媒体结果的能力，两者各自独立评分。完成修复后重新运行检测，即可对比进展。",
+              "fileName": "AI可见度与SEO检测报告",
               "fixLabel": "修复建议",
               "noFix": "暂无具体修复建议。",
               "noFailItems": "未发现失败或警告项，状态良好！",
-              "lockedNotice": "本报告中有 {{count}} 个分类分组处于锁定状态，升级会员可解锁完整结果。",
+              "lockedNotice": "本报告有 {{count}} 个检测分类未解锁，升级会员可查看完整结果。",
               "statusLabels": {
                 "pass": "通过",
                 "warn": "警告",
@@ -808,7 +1172,7 @@ const zhResult = {
                 "scale": "旗舰版"
               },
               "pageOf": "第 {{current}} 页 / 共 {{total}} 页",
-              "coverBadge": "GEO 就绪度检测报告",
+              "coverBadge": "GEO + SEO 就绪度检测报告",
               "headerSite": "检测目标"
             }
           },

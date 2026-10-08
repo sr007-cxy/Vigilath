@@ -1,25 +1,29 @@
-"""IM 快捷菜单/按钮的默认值 + connector.config_json 解析。
+"""Defaults for IM quick menus/buttons + parsing of connector.config_json.
 
-**无 pydantic-ai / agent 依赖**,主后端(geo.api.account)与 agent 服务(geo.agent.embed.*)都可 import。
-config_json 结构:{"agentid": "...", "quick_actions": [["标签","问句"],...], "menu_map": {"event_key":"问句"}}
+**No pydantic-ai / agent dependency**; importable by both the main backend (geo.api.account) and the agent service (agents.geo.embed.*).
+config_json structure: {"agentid": "...", "quick_actions": [["label","query"],...], "menu_map": {"event_key":"query"}}
 """
 from __future__ import annotations
 
 import json
 
-# 回复底部快捷按钮默认值(label, 点击发送的问句)
+# Default quick buttons at the bottom of replies (label, query sent on click)
 DEFAULT_QUICK_ACTIONS: list[list[str]] = [
-    ["📈 投放进展", "今日投放进展和效果如何?"],
+    ["📈 最新数据", "报告中心最近的数据怎么样?"],
     ["📰 今日舆情", "今天舆情怎么样?"],
     ["🔍 舆情分析", "最近有哪些负面舆情?帮我分析一下趋势"],
     ["🎯 GEO 检测", "我最新的 GEO 诊断报告结果如何?"],
 ]
 
-# 飞书机器人底部菜单 event_key → 问句 默认值("__help__" = 弹全部功能清单)
+# Default Feishu bot bottom menu event_key → query ("__help__" = show the full feature list)
+# ★ Existing keys (today/coverage/unhit/...) **must not be deleted**: the live Feishu menu is configured by event_key,
+#   and deleting them breaks the corresponding buttons. Redesigns only change the mapped queries; new daily/weekly need menu items added in the Feishu console to take effect.
 DEFAULT_MENU_MAP: dict[str, str] = {
-    "today": "今日投放效果如何?",
+    "today": "报告中心最近的数据怎么样?",
+    "daily": "最近一期日报怎么样?",
+    "weekly": "本周周报怎么样?有没有达标?",
     "coverage": "我累计被搜到几个问题?",
-    "unhit": "哪些 query 没命中?",
+    "unhit": "哪些问题还没被搜到?",
     "sentiment": "今天舆情怎么样?",
     "articles": "文章发布进度如何?",
     "help": "__help__",
@@ -30,7 +34,7 @@ MAX_QUICK_ACTIONS = 6
 
 
 def parse_config(config_json) -> dict:
-    """把 config_json(str 或 dict 或 None)解析成 dict;坏数据返回 {}。"""
+    """Parse config_json (str, dict or None) into a dict; bad data returns {}."""
     if isinstance(config_json, dict):
         return config_json
     try:
@@ -41,7 +45,7 @@ def parse_config(config_json) -> dict:
 
 
 def quick_actions(config_json) -> list[tuple[str, str]]:
-    """取该连接器的快捷按钮 [(label, query), ...];未配则返回默认。"""
+    """Get the connector's quick buttons [(label, query), ...]; returns defaults when unconfigured."""
     cfg = parse_config(config_json)
     raw = cfg.get("quick_actions")
     out: list[tuple[str, str]] = []
@@ -56,7 +60,7 @@ def quick_actions(config_json) -> list[tuple[str, str]]:
 
 
 def menu_map(config_json) -> dict[str, str]:
-    """取该连接器的飞书菜单映射 {event_key: query};未配则返回默认。"""
+    """Get the connector's Feishu menu mapping {event_key: query}; returns defaults when unconfigured."""
     cfg = parse_config(config_json)
     raw = cfg.get("menu_map")
     out: dict[str, str] = {}

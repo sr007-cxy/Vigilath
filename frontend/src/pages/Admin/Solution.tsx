@@ -1,11 +1,12 @@
-// Admin GEO 体检报告 — 基于官网技术诊断 + 品牌资料生成报告,可导出 PDF.
-// 路由:/workbench/topics/:topicId/solution
+// Admin GEO health-check report — generated from the official-site technical diagnosis + brand materials, exportable as PDF.
+// Route: /ops/topics/:topicId/solution
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import { TopicStepper } from '../../components/TopicStepper';
+import { TopicKpiOverviewCard } from '../../components/TopicKpiOverviewCard';
 import {
   adminReviewApi,
   type TopicStrategicSolution,
@@ -20,9 +21,9 @@ import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
 import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
 
 const SEVERITY_STYLE: Record<string, { c: string; bg: string }> = {
-  high: { c: '#ef4444', bg: 'rgba(239,68,68,0.10)' },
+  high: { c: '#ef4444', bg: 'var(--danger-bg)' },
   med:  { c: '#eab308', bg: 'rgba(234,179,8,0.10)' },
-  low:  { c: '#10b981', bg: 'rgba(16,185,129,0.10)' },
+  low:  { c: '#10b981', bg: 'var(--success-bg)' },
 };
 
 export function AdminSolution() {
@@ -64,25 +65,25 @@ export function AdminSolution() {
     return stopPoll;
   }, [fetchOnce, stopPoll]);
 
-  // 生成开始或重试时,确保轮询在跑
+  // When generation starts or is retried, make sure polling is running
   const ensurePolling = useCallback(() => {
     if (!pollRef.current) {
       pollRef.current = window.setInterval(fetchOnce, 3000);
     }
   }, [fetchOnce]);
 
-  // sol.status 变 generating 时启动轮询
+  // Start polling when sol.status becomes generating
   useEffect(() => {
     if (sol?.status === 'generating') ensurePolling();
     else stopPoll();
   }, [sol?.status, ensurePolling, stopPoll]);
 
-  // 当 sol 有 website_url 时初始化输入框(已生成过一次的复用)
+  // Initialize the input when sol has website_url (reuse from a previous generation)
   useEffect(() => {
     if (sol?.website_url && !websiteUrl) setWebsiteUrl(sol.website_url);
   }, [sol?.website_url, websiteUrl]);
 
-  // 首次进入页面 — 从主题资料里读 website,自动填充输入框,admin 不用手填
+  // On first page load — read website from the topic materials and auto-fill the input so admins don't type it
   useEffect(() => {
     adminReviewApi.getTopicReview(tid, token)
       .then(d => {
@@ -175,11 +176,14 @@ export function AdminSolution() {
 
       {err && (
         <div className="rounded-md p-3 text-sm"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+             style={{ background: 'var(--danger-bg)', color: 'var(--danger-fg)',
                       border: '1px solid rgba(239,68,68,0.3)' }}>
           {err}
         </div>
       )}
+
+      {/* Audit result overview (six metrics, same metric definition as the report overview) — 2026-07-30 replaced the batch-run process display */}
+      <TopicKpiOverviewCard topicId={tid} />
 
       {!sol && !err && <div className="py-12 text-center text-sm text-muted">…</div>}
 
@@ -194,26 +198,57 @@ export function AdminSolution() {
         />
       )}
 
-      {isGenerating && (
-        <div className="rounded-md p-4 text-sm"
-             style={{ background: 'rgba(99,102,241,0.10)', color: 'var(--accent-primary)',
-                      border: '1px solid rgba(99,102,241,0.30)' }}>
-          <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent"
-                 style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
-            <div>{t('admin.solution.generating')}</div>
-          </div>
-          <p className="text-xs mt-1.5 opacity-70">{t('admin.solution.generatingHint')}</p>
-        </div>
-      )}
+      {isGenerating && sol && <SolutionGeneratingBanner sol={sol} />}
 
       {isReady && sol && <SolutionView sol={sol} />}
     </div>
   );
 }
 
-// 「健康诊断报告」完整内容渲染.AdminSolution 页 + TopicEditor step 4 内嵌共用,
-// 保证两个入口看到的内容/排版一致.
+// "Generating" banner — shared by the AdminSolution page and the embedded TopicEditor step 4.
+// Real duration = 25-category official-site scan + LLM writing, usually 5-15 minutes; showing elapsed time eases waiting anxiety.
+export function SolutionGeneratingBanner({ sol }: { sol: TopicStrategicSolution }) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  // updated_at is naive UTC from the backend (no timezone suffix); parsing as local time is off by 8 hours — append Z manually
+  let mins: number | null = null;
+  if (sol.updated_at) {
+    const raw = sol.updated_at;
+    const iso = /Z$|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : raw + 'Z';
+    const started = new Date(iso).getTime();
+    if (!Number.isNaN(started)) {
+      const m = Math.floor((now - started) / 60_000);
+      // Don't show on clock skew / abnormally old records, to avoid misleading
+      if (m >= 1 && m < 180) mins = m;
+    }
+  }
+  return (
+    <div className="rounded-md p-4 text-sm"
+         style={{ background: 'rgba(99,102,241,0.10)', color: 'var(--accent-primary)',
+                  border: '1px solid rgba(99,102,241,0.30)' }}>
+      <div className="flex items-center gap-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent"
+             style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
+        <div>
+          {t('admin.solution.generating')}
+          {mins !== null && (
+            <span className="ml-1 opacity-80">
+              ({t('admin.solution.generatingElapsed', { n: mins })})
+            </span>
+          )}
+        </div>
+      </div>
+      <p className="text-xs mt-1.5 opacity-70">{t('admin.solution.generatingHint')}</p>
+    </div>
+  );
+}
+
+// Full content rendering of the "Health diagnosis report". Shared by the AdminSolution page and the embedded TopicEditor step 4,
+// so both entry points show the same content/layout.
 export function SolutionView({ sol }: { sol: TopicStrategicSolution }) {
   return (
     <div className="space-y-4">
@@ -528,8 +563,8 @@ function KeywordsSection({ tiers }: { tiers: SolutionKeywordTier[] }) {
 
 function QueriesSection({ snapshot }: { snapshot: SolutionQueriesSnapshot }) {
   const { t } = useTranslation();
-  // 按种子提示词 (seed) 分组 — 与「七步模型」第 1-2 步语义对齐:种子词 → 扩展 query。
-  // 空 seed(legacy 数据 / 非种子路径补录)归入"其它"桶,按 seed 首次出现顺序排列。
+  // Group by seed prompt (seed) — aligned with steps 1-2 of the "seven-step model": seed -> expanded query.
+  // Empty seed (legacy data / backfilled outside the seed path) goes into the "Other" bucket, ordered by first appearance of seed.
   const grouped = new Map<string, string[]>();
   const order: string[] = [];
   const unseededKey = '__no_seed__';

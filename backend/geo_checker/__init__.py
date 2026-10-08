@@ -84,10 +84,19 @@ from .orchestrate import (
     CHECK_REGISTRY,
     ALL_CATEGORIES,
     FREE_CATEGORIES,
+    SEO_CHECK_REGISTRY,
+    ALL_SEO_CATEGORIES,
+    FREE_SEO_CATEGORIES,
     generate_score,
+    generate_seo_score,
     run_silent,
     _run_checks,
+    _run_seo_checks,
 )
+
+# SEO suite (separate score namespace — see seo_checks.py module docstring)
+from . import seo_checks as _seo_checks_module
+from .state import track_seo_score, get_seo_score
 
 # Advanced modes (each `return_data=True` path used by the FastAPI
 # backend — see backend/geo/services/advanced_runners.py)
@@ -132,6 +141,7 @@ from .ai import (
 __all__ = [
     # Public API
     "generate_score",
+    "generate_seo_score",
     "run_silent",
     "compare_urls",
     "crawl_check",
@@ -145,6 +155,9 @@ __all__ = [
     "CHECK_REGISTRY",
     "ALL_CATEGORIES",
     "FREE_CATEGORIES",
+    "SEO_CHECK_REGISTRY",
+    "ALL_SEO_CATEGORIES",
+    "FREE_SEO_CATEGORIES",
     "AI_BOTS",
     "AI_CRAWLERS",
     "PASS",
@@ -156,6 +169,8 @@ __all__ = [
     "SHOW_FIX",
     "reset_state",
     "track_score",
+    "track_seo_score",
+    "get_seo_score",
     "fetch",
     "get_soup",
     "emit_check",

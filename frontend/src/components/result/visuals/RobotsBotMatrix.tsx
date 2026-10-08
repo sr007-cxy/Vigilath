@@ -1,14 +1,28 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseRobotsTxt, type BotState } from '../lib/parseChecks';
+import { parseRobotsTxt } from '../lib/parseChecks';
 import type { CheckResult } from '../../../types/geo';
 
 interface Props {
   checks: CheckResult[];
 }
 
-const STATE_THEME: Record<BotState, { i18nKey: string; ring: string; text: string; bg: string; icon: ReactNode }> = {
-  allowed: {
+/**
+ * Summary card of AI crawler rules in robots.txt.
+ *
+ * Only shows three counts, "allowed / blocked / inherits wildcard", never any crawler user-agent names --
+ * the backend no longer sends names either (see checks.py:check_robots_txt).
+ */
+const TILES: {
+  key: 'allowedCount' | 'blockedCount' | 'inheritedCount';
+  i18nKey: string;
+  ring: string;
+  text: string;
+  bg: string;
+  icon: ReactNode;
+}[] = [
+  {
+    key: 'allowedCount',
     i18nKey: 'result.visuals.robots.legend.allowed',
     ring: 'ring-emerald-400/50 border-emerald-500/40',
     text: 'text-emerald-600',
@@ -19,7 +33,8 @@ const STATE_THEME: Record<BotState, { i18nKey: string; ring: string; text: strin
       </svg>
     ),
   },
-  blocked: {
+  {
+    key: 'blockedCount',
     i18nKey: 'result.visuals.robots.legend.blocked',
     ring: 'ring-rose-500/50 border-rose-500/40',
     text: 'text-rose-600',
@@ -30,7 +45,8 @@ const STATE_THEME: Record<BotState, { i18nKey: string; ring: string; text: strin
       </svg>
     ),
   },
-  inherited: {
+  {
+    key: 'inheritedCount',
     i18nKey: 'result.visuals.robots.legend.inherited',
     ring: 'ring-cyan-400/30 border-cyan-500/30',
     text: 'text-cyan-600',
@@ -41,27 +57,17 @@ const STATE_THEME: Record<BotState, { i18nKey: string; ring: string; text: strin
       </svg>
     ),
   },
-  unknown: {
-    i18nKey: 'result.visuals.robots.legend.unknown',
-    ring: 'border-border',
-    text: 'text-muted',
-    bg: 'bg-tertiary',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3.5 w-3.5" strokeWidth={2.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093M12 17h.01" />
-      </svg>
-    ),
-  },
-};
+];
 
 export function RobotsBotMatrix({ checks }: Props) {
   const { t } = useTranslation();
   const parsed = parseRobotsTxt(checks);
   if (!parsed) return null;
 
-  const allowedCount = parsed.bots.filter((b) => b.state === 'allowed').length;
-  const blockedCount = parsed.bots.filter((b) => b.state === 'blocked').length;
-  const totalCount = parsed.bots.length;
+  const { allowedCount, blockedCount, inheritedCount } = parsed;
+  const totalCount = allowedCount + blockedCount + inheritedCount;
+  // Those inheriting the wildcard count as blocked when the wildcard disallows the whole site
+  const effectiveAllowed = allowedCount + (parsed.wildcardBlocksAll ? 0 : inheritedCount);
 
   const subtitleParts = [
     parsed.fileFound
@@ -71,10 +77,9 @@ export function RobotsBotMatrix({ checks }: Props) {
   if (parsed.hasSitemapRef === true) subtitleParts.push(t('result.visuals.robots.sitemapRef'));
   if (parsed.hasSitemapRef === false) subtitleParts.push(t('result.visuals.robots.noSitemapRef'));
 
-  // When robots.txt is missing there is nothing to classify — the bot grid,
-  // counts, and legend would all be noise (all 15 bots as "unknown" is a
-  // misleading label). Render the header alone so the user sees the missing
-  // state clearly without the ambiguous downstream rows.
+  // When robots.txt is missing there is nothing to classify — the counts and
+  // legend would all be noise. Render the header alone so the user sees the
+  // missing state clearly without the ambiguous downstream rows.
   if (!parsed.fileFound) {
     return (
       <div className="bg-card border border-border rounded-xl p-4 sm:p-5 overflow-hidden relative">
@@ -121,10 +126,10 @@ export function RobotsBotMatrix({ checks }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="text-emerald-600">✓ {allowedCount}</span>
-          <span className="text-rose-600">✕ {blockedCount}</span>
+          <span className="text-emerald-600">✓ {effectiveAllowed}</span>
+          <span className="text-rose-600">✕ {totalCount - effectiveAllowed}</span>
           <span className="text-muted">
-            {allowedCount}/{totalCount}
+            {effectiveAllowed}/{totalCount}
           </span>
         </div>
       </div>
@@ -135,40 +140,25 @@ export function RobotsBotMatrix({ checks }: Props) {
         </div>
       )}
 
-      {/* Bot grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {parsed.bots.map((bot) => {
-          const theme = STATE_THEME[bot.state];
-          const label = t(theme.i18nKey);
-          return (
-            <div
-              key={bot.name}
-              className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border ${theme.ring} ${theme.bg} transition-colors`}
-              title={label}
-            >
-              <span className={`flex items-center justify-center w-5 h-5 rounded ${theme.bg} ${theme.text}`}>
-                {theme.icon}
-              </span>
-              <span className="text-[11px] font-medium text-primary truncate" title={bot.name}>
-                {bot.name}
-              </span>
-            </div>
-          );
-        })}
+      {/* AI crawler rule counts */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {TILES.map((tile) => (
+          <div
+            key={tile.key}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${tile.ring} ${tile.bg}`}
+          >
+            <span className={`flex items-center justify-center w-6 h-6 rounded ${tile.bg} ${tile.text}`}>
+              {tile.icon}
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className={`text-sm font-semibold font-mono ${tile.text}`}>{parsed[tile.key]}</span>
+              <span className="text-[10px] text-muted">{t(tile.i18nKey)}</span>
+            </span>
+          </div>
+        ))}
       </div>
 
-      {/* Legend */}
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {t('result.visuals.robots.legend.allowed')}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> {t('result.visuals.robots.legend.blocked')}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted" /> {t('result.visuals.robots.legend.unknown')}
-        </span>
-      </div>
+      <p className="mt-3 text-[10px] text-muted">{t('result.visuals.robots.countsNote')}</p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { GeoTestResult } from '../types/geo';
+import type { GeoTestResult, SeoTestResult } from '../types/geo';
 import type {
   AdvancedMode,
   AdvancedRequestBody,
@@ -14,8 +14,8 @@ const apiClient = axios.create({
   // 15 min. Entity audit runs 10 queries × ~85s/query on each browser engine
   // (Qwen/DeepSeek open a fresh stealth context per query and wait for the
   // full answer stream + source drawer expansion). Real runs we've observed:
-  // ~856s on 小米汽车. 300s used to cut off around q3. 默认 25 类全跑的慢站
-  // 也会触到这个边界,后端会写 L1 缓存兜底;后续切 SSE 后此值可降回。
+  // ~856s on Xiaomi Auto. 300s used to cut off around q3. Slow sites running the default full 25 categories
+  // also hit this limit; the backend writes an L1 cache as a fallback. This value can be lowered once we switch to SSE.
   timeout: 900000,
   headers: {
     'Content-Type': 'application/json',
@@ -184,6 +184,26 @@ export const geoApi = {
       return response.data;
     } catch (error) {
       throwApiError(error, 'Failed to run GEO check');
+    }
+  },
+
+  /**
+   * SEO suite on its own. Only used to retry the SEO half after a combined
+   * `include_seo` run came back with `seo: null` — the normal path gets SEO
+   * bundled into the GEO response so one click stays one billable check.
+   *
+   * Mirrors resolveCheckRequest's token-based routing: /api/seo/check with a
+   * Bearer token (quota applies), /api/seo/check/anonymous without.
+   */
+  async checkSeo(data: any, signal?: AbortSignal): Promise<SeoTestResult> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const path = token ? '/seo/check' : '/seo/check/anonymous';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      const response = await apiClient.post(path, data, { headers, signal });
+      return response.data;
+    } catch (error) {
+      throwApiError(error, 'Failed to run SEO check');
     }
   },
 

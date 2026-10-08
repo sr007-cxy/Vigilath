@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from geo_checker.llm_ledger import post_chat
+
 
 def _query_perplexity(query, api_key):
     """Send a query to Perplexity Sonar via OpenRouter. Returns (answer, citations, error)."""
@@ -25,14 +27,10 @@ def _query_perplexity(query, api_key):
         "messages": [{"role": "user", "content": query}],
     }
     try:
-        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                          json=payload, headers=headers, timeout=45)
+        r = post_chat("https://openrouter.ai/api/v1/chat/completions", payload, headers,
+                      provider="openrouter", engine="perplexity", timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                              json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
@@ -58,14 +56,10 @@ def _query_openai(query, api_key):
         ],
     }
     try:
-        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                          json=payload, headers=headers, timeout=45)
+        r = post_chat("https://openrouter.ai/api/v1/chat/completions", payload, headers,
+                      provider="openrouter", engine="openai", timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                              json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
@@ -105,14 +99,10 @@ def _query_anthropic(query, api_key):
         "messages": [{"role": "user", "content": query}],
     }
     try:
-        r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                          json=payload, headers=headers, timeout=45)
+        r = post_chat("https://openrouter.ai/api/v1/chat/completions", payload, headers,
+                      provider="openrouter", engine="anthropic", timeout=45)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                              json=payload, headers=headers, timeout=45)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
@@ -139,14 +129,10 @@ def _query_deepseek(query, api_key):
         "messages": [{"role": "user", "content": query}],
     }
     try:
-        r = requests.post("https://api.deepseek.com/chat/completions",
-                          json=payload, headers=headers, timeout=30)
+        r = post_chat("https://api.deepseek.com/chat/completions", payload, headers,
+                      provider="deepseek", engine="deepseek", timeout=30)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post("https://api.deepseek.com/chat/completions",
-                              json=payload, headers=headers, timeout=30)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
@@ -169,14 +155,10 @@ def _query_doubao(query, api_key, model_id):
         "messages": [{"role": "user", "content": query}],
     }
     try:
-        r = requests.post("https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-                          json=payload, headers=headers, timeout=30)
+        r = post_chat("https://ark.cn-beijing.volces.com/api/v3/chat/completions", payload, headers,
+                      provider="ark", engine="doubao", timeout=30)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post("https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-                              json=payload, headers=headers, timeout=30)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()
@@ -201,12 +183,10 @@ def _query_qwen(query, api_key):
     }
     url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        r = post_chat(url, payload, headers,
+                      provider="dashscope", engine="qwen", timeout=60)
         if r.status_code == 401:
             return "", [], "invalid_key"
-        if r.status_code == 429:
-            time.sleep(5)
-            r = requests.post(url, json=payload, headers=headers, timeout=60)
         if r.status_code != 200:
             return "", [], f"http_{r.status_code}"
         data = r.json()

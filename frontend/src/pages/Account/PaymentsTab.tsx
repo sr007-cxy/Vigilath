@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { fmtTime } from '../../utils/datetime';
 import { useTranslation } from 'react-i18next';
 import { accountApi, type PaymentRecord } from '../../services/accountApi';
 
@@ -19,20 +20,17 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 const statusColors: Record<string, { bg: string; border: string; color: string }> = {
-  paid: { bg: 'rgba(34, 197, 94, 0.1)', border: 'rgba(34, 197, 94, 0.3)', color: '#22c55e' },
-  pending: { bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.3)', color: '#eab308' },
+  paid: { bg: 'var(--success-bg)', border: 'var(--success-border)', color: 'var(--success-fg)' },
+  pending: { bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.3)', color: 'var(--warn-fg)' },
   expired: { bg: 'rgba(107, 114, 128, 0.1)', border: 'rgba(107, 114, 128, 0.3)', color: '#6b7280' },
-  failed: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', color: '#ef4444' },
+  failed: { bg: 'var(--danger-bg)', border: 'var(--danger-border)', color: 'var(--danger-fg)' },
 };
 
-// Build the "continue paying" URL for a pending row. Stripe has a hosted
-// checkout URL we jump to directly; WeChat / Moltspay route back to our
-// CheckoutPending page with the provider preselected, where the backend's
-// pending-session reuse logic (<90min for WeChat, <30min for Moltspay) kicks in.
+// The "continue payment" link on pending-payment rows: go back to the checkout page to regenerate the QR code; the backend's pending session reuse
+// (WeChat <90min) takes effect there.
 function pendingPayHref(row: PaymentRecord): string | null {
   if (row.status !== 'pending') return null;
-  if (row.provider === 'stripe') return row.checkout_url || null;
-  if (row.provider === 'wechat' || row.provider === 'moltspay') {
+  if (row.provider === 'wechat') {
     return `/checkout/pending?slug=${encodeURIComponent(row.membership_slug)}&provider=${row.provider}`;
   }
   return null;
@@ -125,13 +123,13 @@ export function PaymentsTab() {
                         {formatAmount(row.amount_cents, row.currency)}
                       </span>
                       <span className="text-xs text-secondary">
-                        {row.provider === 'moltspay' ? 'Base USDC' : row.provider === 'wechat' ? 'WeChat Pay' : 'Stripe'}
+                        {row.provider === 'wechat' ? '微信支付' : row.provider}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-secondary">
-                      <span>{new Date(row.created_at).toLocaleString()}</span>
+                      <span>{fmtTime(row.created_at)}</span>
                       {row.completed_at && (
-                        <span>{new Date(row.completed_at).toLocaleString()}</span>
+                        <span>{fmtTime(row.completed_at)}</span>
                       )}
                     </div>
                     {(() => {
@@ -190,7 +188,7 @@ export function PaymentsTab() {
                         className="transition-colors hover:bg-white/5"
                       >
                         <td className="px-4 py-3 text-secondary whitespace-nowrap">
-                          {new Date(row.created_at).toLocaleString()}
+                          {fmtTime(row.created_at)}
                         </td>
                         <td className="px-4 py-3 text-primary">
                           {t(`productsServices.cards.${row.membership_slug === 'pro' ? 'detector' : row.membership_slug}.name`, row.membership_slug)}
@@ -199,7 +197,7 @@ export function PaymentsTab() {
                           {formatAmount(row.amount_cents, row.currency)}
                         </td>
                         <td className="px-4 py-3 text-xs text-secondary">
-                          {row.provider === 'moltspay' ? 'Base USDC' : row.provider === 'wechat' ? 'WeChat Pay' : 'Stripe'}
+                          {row.provider === 'wechat' ? '微信支付' : row.provider}
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -211,7 +209,7 @@ export function PaymentsTab() {
                         </td>
                         <td className="px-4 py-3 text-secondary whitespace-nowrap">
                           {row.completed_at
-                            ? new Date(row.completed_at).toLocaleString()
+                            ? fmtTime(row.completed_at)
                             : '-'}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">

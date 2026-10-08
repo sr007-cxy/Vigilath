@@ -1,14 +1,14 @@
-"""LLM 抽取品牌资料 — 把用户拖入的原始文本(简介 / 官网文案 / PRD 等)
-结构化映射到 BrandProfile 字段。
+"""LLM extraction of brand materials -- maps raw text dropped in by the user (intro / website copy / PRD, etc.)
+into BrandProfile fields in a structured way.
 
-复用与 content_generator 相同的 DeepSeek 双通道(直连 + OpenRouter fallback);
-两个 key 都没配时调用方应给前端 503,而不是无声生成空资料。
+Reuses the same DeepSeek dual channel as content_generator (direct + OpenRouter fallback);
+when neither key is configured the caller should return 503 to the frontend rather than silently generating empty materials.
 
-入口:
+Entry points:
 - `extract_profile_from_text(text)` → (BrandProfile, model_id)
-- `file_bytes_to_text(filename, data)` → str(用于 PDF / DOCX / 纯文本上传)
+- `file_bytes_to_text(filename, data)` -> str (for PDF / DOCX / plain text uploads)
 
-model_id == "" 表示 provider 不可用,调用方据此返回 503
+model_id == "" means the provider is unavailable; the caller returns 503 accordingly
 """
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ import re
 
 import requests
 
-from geo.models.ai_telemetry import BrandProfile
+from geo.models.ai_telemetry import BrandProduct, BrandProfile
+from geo.services.llm_gateway import post_and_record
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +29,14 @@ DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.co
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 OPENROUTER_DEEPSEEK_MODEL = os.environ.get("OPENROUTER_DEEPSEEK_MODEL", "deepseek/deepseek-chat")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_TIMEOUT = int(os.environ.get("GEO_PROFILE_EXTRACT_TIMEOUT", "120"))
+# Per-call read timeout. Truncation retries make at most two calls, and the total must stay within nginx `proxy_read_timeout 300s`
+DEFAULT_TIMEOUT = int(os.environ.get("GEO_PROFILE_EXTRACT_TIMEOUT", "140"))
+# Chunked extraction (2026-09-17): parsed files keep at most MAX_EXTRACTED_TEXT (60k chars), split by paragraph into
+# chunks <= CHUNK_CHARS, each extracted into its own JSON, then merged. Feeding the whole thing to the reasoning model was the root cause of production
+# PDF upload 502s (neolink gateway 120s read timeout); later "truncate to 30k chars + halve on truncation" avoided timeouts,
+# but lost the tail half of the materials. With chunking each chunk's input / output is small, losing no content and not hitting max_tokens.
+CHUNK_CHARS = int(os.environ.get("GEO_PROFILE_EXTRACT_CHUNK_CHARS", "8000"))
+CHUNK_WORKERS = int(os.environ.get("GEO_PROFILE_EXTRACT_WORKERS", "4"))
 
 
 _SCHEMA_HINT = """\
@@ -42,6 +50,10 @@ _SCHEMA_HINT = """\
   "entity_type": "service_tool | manufacturer | brand_owner | other",
   "core_business_lines": ["..."],
   "service_geo": "...",
+  "website": "...",
+  "contact_phone": "...",
+  "contact_wechat": "...",
+  "contact_email": "...",
   "creation_directions": ["..."],
   "copywriting_types": ["..."],
   "target_platforms": ["..."],
@@ -56,6 +68,10 @@ _SCHEMA_HINT = """\
   "service_process": ["..."],
   "target_scenarios": ["..."],
   "service_guarantees": ["..."],
+  "products": [
+    {"name": "...", "aliases": ["..."], "category": "...", "selling_points": ["..."],
+     "target_users": ["..."], "is_featured": false, "launch_date": "...", "price_range": "..."}
+  ],
   "brand_story": "...",
   "key_person_story": "...",
   "case_stories": ["..."],
@@ -82,17 +98,32 @@ case_stories 典型案例 / service_features / service_process / target_scenario
    原文写「企业合规体系建设与刑事风险防控」,**不要**拆成
    「企业合规」+「刑事风险」两项,也**不要**简化成「合规建设」。
 
+website / contact_phone / contact_wechat / contact_email 是【联系方式】,只从原文里照抄:
+原文没写就留空字符串,**绝对不要推测、不要补全、不要生成示例号码或域名** ——
+这四项会被直接写进对外发布的文章,编一个出来就是对客户的事故。
+
 entity_type 是该主体的【业务主体类型】,据原文判断后**只输出下面四个英文 key 之一**:
-- service_tool   服务 / 工具类:SaaS、软件、在线平台、API、咨询 / 代运营等「提供服务或工具」的主体
-- manufacturer   生产制造商:工厂、代工、设备 / 零部件 / 硬件制造,核心是「生产实体产品」
+- service_tool   服务业:SaaS、软件、在线平台、API、咨询 / 代运营等「提供服务或工具」的主体
+- manufacturer   制造业:工厂、代工、设备 / 零部件 / 硬件制造,核心是「生产实体产品」
 - brand_owner    品牌方 / 零售商:消费品牌、渠道商、代理 / 贸易,核心是「拥有品牌或卖货」
 - other          不属于以上三类
-判断不出来就留空字符串,不要乱猜;它会影响后续监测词的措辞方向。
+判断不出来就留空字符串,不要乱猜;它会影响后续提示词的措辞方向。
+
+products 是【本品牌自己的产品 / 型号清单】(消费品牌、硬件、软件版本都算;纯服务型主体没有就留空数组):
+- 原文里每个有名字的具体产品 / 型号一条:name 填产品名或型号(如「<brand-e>手柄」「T4 Pro」),
+  aliases 填原文出现过的别名 / 缩写 / 代号;**品牌名本身不是产品**,不要放进来
+- category 填该产品的【通用品类名】(如「游戏手柄」「电动牙刷」「财税 SaaS」),不要填品牌名或型号
+- selling_points / target_users 只从原文照抄,没写就留空数组
+- 原文明确说是主推 / 旗舰 / 新品 / 重点推广的那一个 is_featured 填 true,其余 false;拿不准全 false
+- launch_date / price_range 原文没写就留空字符串,不要推测;有的话也用字符串(如 "2024年3月" / "299-399元")
+- 产品 / 型号的名称、卖点、参数**只**放进 products 对应的那一条,不要再复制到 core_business_lines /
+  service_features / core_service_overview 里(那几项写业务线与服务,不写具体型号)
 
 seed_suggestions 是给后续监测扩展用的「种子提示词」,要求:
 - 3-8 条,每条 4-12 字
 - 用真实用户会去问 AI 的口吻(短问 / 名词短语),不要写成长句
 - 围绕本品牌的核心业务 / 用户痛点 / 行业关键词;避开品牌名本身
+- 若 products 里有 is_featured 的主推产品,可以含 1 条它的 name 作种子(系统会按其品类扩词)
 - 例子:跨境并购 / 律所推荐 / 遗产继承 / 跨境支付
 
 只输出一个 JSON 对象,不要加 ``` 围栏,不要写解释文本。
@@ -109,7 +140,7 @@ SYSTEM_PROMPT = (
 
 
 def _resolve_provider() -> tuple[str | None, str, str]:
-    """returns (provider, model_id, api_key); provider=None 表示不可用."""
+    """returns (provider, model_id, api_key); provider=None means unavailable."""
     ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if ds_key:
@@ -119,8 +150,130 @@ def _resolve_provider() -> tuple[str | None, str, str]:
     return None, "", ""
 
 
+def _split_chunks(text: str, size: int) -> list[str]:
+    """Split by paragraph (blank lines / newlines) into chunks of <= size chars; hard-split single overlong paragraphs. Order preserved."""
+    text = (text or "").strip()
+    if len(text) <= size:
+        return [text] if text else []
+    paras = [p for p in re.split(r"\n\s*\n|\n", text) if p.strip()]
+    chunks: list[str] = []
+    buf = ""
+    for p in paras:
+        p = p.strip()
+        while len(p) > size:                      # A single paragraph is already too long (PDF pages without newlines)
+            if buf:
+                chunks.append(buf); buf = ""
+            chunks.append(p[:size]); p = p[size:]
+        if buf and len(buf) + 1 + len(p) > size:
+            chunks.append(buf); buf = p
+        else:
+            buf = f"{buf}\n{p}" if buf else p
+    if buf:
+        chunks.append(buf)
+    return chunks
+
+
+def _extract_chunk(text: str, *, idx: int, total: int, provider: str, model_id: str,
+                   url: str, headers: dict, _retry: bool = True) -> dict:
+    """One chunk of raw material -> parsed dict (not coerced).
+
+    _retry: when output is truncated by max_tokens (finish_reason=length), halve this chunk and try again, retrying only once.
+    With chunking this path is rarely taken; kept as insurance.
+    """
+    hint = ""
+    if total > 1:
+        hint = (f"(这是同一份资料的第 {idx + 1}/{total} 段,只抽本段里出现的内容,"
+                f"本段没有的字段留空字符串 / 空数组,不要根据前后文猜)\n\n")
+    payload = {
+        "model": model_id,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"以下是原始资料,请抽取为品牌资料 JSON:\n\n{hint}{text}"},
+        ],
+        "temperature": 0.2,
+        # Verbatim-style extraction; output is the same order of magnitude as input; 8k chars per chunk is plenty. The gateway accepts 16000 for v4-flash (measured)
+        "max_tokens": 12000,
+        "response_format": {"type": "json_object"},
+    }
+    if provider == "deepseek":
+        # In production DEEPSEEK_MODEL is a reasoning model (deepseek-v4-flash). Extracting fields is "copy and organize" and needs no reasoning;
+        # with thinking on, tens of thousands of input chars eat the whole read timeout (on 2026-09-17 production extract-file had two 502s,
+        # both Read timed out); same handling as suggest_terms: turn it off.
+        payload["thinking"] = {"type": "disabled"}
+    r = post_and_record(url, payload, headers, provider=provider,
+                        feature="profile_extract", timeout=DEFAULT_TIMEOUT)
+    if r.status_code >= 400:
+        raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
+    data = r.json()
+    try:
+        choice = data["choices"][0]
+        content = choice["message"]["content"]
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"unexpected {provider} response shape: {e}")
+    if choice.get("finish_reason") == "length" and _retry and len(text) > 2000:
+        log.warning("profile extract: chunk %d/%d output truncated (input %d chars), retry with half",
+                    idx + 1, total, len(text))
+        return _extract_chunk(text[: len(text) // 2], idx=idx, total=total, provider=provider,
+                              model_id=model_id, url=url, headers=headers, _retry=False)
+    return _parse_json_loose(content)
+
+
+# Short fields that "take the first non-empty" when merging (identity / contact type; answers across chunks should match, take the first to appear)
+_FIRST_WINS = frozenset((
+    "profile_name", "company_full_name", "company_short_name", "industry", "service_geo",
+    "website", "contact_phone", "contact_wechat", "contact_email", "team_size", "founded_year",
+    "brand_slogan",
+))
+
+
+def _merge_parsed(parts: list[dict]) -> dict:
+    """Merge multi-chunk dicts into one: list fields concatenated in order and deduped; short fields take the first non-empty;
+    long text fields (intro / story / notes) concatenate distinct content from each chunk; entity_type takes the majority vote."""
+    out: dict = {}
+    votes: dict[str, int] = {}
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        for k, v in part.items():
+            if v is None or v == "" or v == []:
+                continue
+            if k == "entity_type":
+                key = _normalize_entity_type(v)
+                if key:
+                    votes[key] = votes.get(key, 0) + 1
+                continue
+            cur = out.get(k)
+            if k == "products":
+                # Products are list[dict] and use a dedicated merge (the generic list branch would stringify dicts, see _coerce_products)
+                out[k] = _merge_products(cur if isinstance(cur, list) else [], v)
+                continue
+            if isinstance(v, list) or isinstance(cur, list):
+                items = list(cur or []) if isinstance(cur, list) else ([cur] if cur else [])
+                seen = {str(x).strip() for x in items}
+                for x in (v if isinstance(v, list) else [v]):
+                    xs = str(x).strip()
+                    if xs and xs not in seen:
+                        seen.add(xs); items.append(xs)
+                out[k] = items
+            elif k in _FIRST_WINS:
+                if not cur:
+                    out[k] = v
+            else:
+                vs = str(v).strip()
+                if not cur:
+                    out[k] = vs
+                elif vs and vs not in str(cur):
+                    out[k] = f"{cur}\n\n{vs}"
+    if votes:
+        out["entity_type"] = max(votes.items(), key=lambda kv: kv[1])[0]
+    return out
+
+
 def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
-    """returns (profile, seed_suggestions, model_id);model_id="" 表示 provider 不可用."""
+    """returns (profile, seed_suggestions, model_id); model_id="" means the provider is unavailable.
+
+    Long materials are extracted in parallel chunks then merged (see CHUNK_CHARS); a single chunk failure only loses that chunk, raising only if all fail.
+    """
     provider, model_id, api_key = _resolve_provider()
     if not provider:
         return BrandProfile(), [], ""
@@ -139,35 +292,41 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
             "HTTP-Referer": "https://www.vigilath.com",
             "X-Title": "GEO Profile Extractor",
         }
-    payload = {
-        "model": model_id,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"以下是原始资料,请抽取为品牌资料 JSON:\n\n{text}"},
-        ],
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-    }
-    r = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
-    if r.status_code >= 400:
-        raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
-    data = r.json()
-    try:
-        content = data["choices"][0]["message"]["content"]
-    except Exception as e:  # noqa: BLE001
-        raise RuntimeError(f"unexpected {provider} response shape: {e}")
-    parsed = _parse_json_loose(content)
+
+    chunks = _split_chunks(_truncate(text), CHUNK_CHARS)
+    if not chunks:
+        return BrandProfile(), [], model_id
+    kw = dict(total=len(chunks), provider=provider, model_id=model_id, url=url, headers=headers)
+    parts: list[dict] = []
+    errors: list[str] = []
+    if len(chunks) == 1:
+        parts.append(_extract_chunk(chunks[0], idx=0, **kw))
+    else:
+        log.info("profile extract: %d chars → %d chunks", sum(len(c) for c in chunks), len(chunks))
+        from concurrent.futures import ThreadPoolExecutor
+        from geo.services.llm_usage import submit as _submit     # Carries contextvars, so usage attribution is not lost
+        with ThreadPoolExecutor(max_workers=max(1, min(CHUNK_WORKERS, len(chunks)))) as pool:
+            futs = [_submit(pool, _extract_chunk, c, idx=i, **kw) for i, c in enumerate(chunks)]
+            for i, f in enumerate(futs):
+                try:
+                    parts.append(f.result())
+                except Exception as e:  # noqa: BLE001 -- one bad chunk does not take down the whole document
+                    errors.append(f"第 {i + 1} 段: {e}")
+                    log.warning("profile extract: chunk %d/%d failed: %s", i + 1, len(chunks), e)
+        if not parts:
+            raise RuntimeError("所有分段都抽取失败: " + "; ".join(errors)[:300])
+    parsed = _merge_parsed(parts) if len(parts) > 1 else (parts[0] if isinstance(parts[0], dict) else {})
     safe = _coerce_to_profile_fields(parsed)
-    # entity_type 归一到枚举 key(模型可能回中文或近义词);非法 / 空 → ""
+    # Normalize entity_type to an enum key (the model may answer in Chinese or with synonyms); invalid / empty -> ""
     safe["entity_type"] = _normalize_entity_type(parsed.get("entity_type"))
     try:
         profile = BrandProfile(**safe)
     except Exception as e:  # noqa: BLE001
-        # 真挂了再降级 — 之前所有 list 超长都会触发 max_length 校验失败,
-        # 导致整张画像都空;coerce 之后这条路径基本不会进了
-        log.warning("BrandProfile 映射失败,降级用空资料: %s; raw=%s", e, content[:300])
+        # Only degrade when it really fails -- previously any overlong list triggered max_length validation failure,
+        # emptying the whole profile; after coerce this path is rarely taken
+        log.warning("BrandProfile mapping failed, degrading to empty materials: %s; raw=%s", e, str(parsed)[:300])
         profile = BrandProfile()
-    # seed_suggestions:LLM 给的种子词候选,清洗 + 去重 + 限长(1-30 字,最多 8 条)
+    # seed_suggestions: seed term candidates from the LLM, cleaned + deduped + length-limited (1-30 chars, at most 8)
     raw_seeds = parsed.get("seed_suggestions") or []
     seeds: list[str] = []
     seen: set[str] = set()
@@ -186,9 +345,9 @@ def extract_profile_from_text(text: str) -> tuple[BrandProfile, list[str], str]:
 
 _ENTITY_TYPE_KEYS = ("service_tool", "manufacturer", "brand_owner", "other")
 _ENTITY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
-    "service_tool": ("service_tool", "服务工具", "服务", "工具", "软件", "saas", "平台",
+    "service_tool": ("service_tool", "服务业", "服务工具", "服务", "工具", "软件", "saas", "平台",
                      "tool", "software", "platform", "api", "在线服务", "咨询", "代运营"),
-    "manufacturer": ("manufacturer", "生产制造商", "制造商", "厂商", "厂家", "工厂", "制造",
+    "manufacturer": ("manufacturer", "制造业", "生产制造商", "制造商", "厂商", "厂家", "工厂", "制造",
                      "代工", "oem", "factory", "设备", "零部件", "硬件"),
     "brand_owner": ("brand_owner", "品牌方", "品牌", "零售", "零售商", "经销", "代理",
                     "贸易", "brand", "retailer"),
@@ -197,7 +356,7 @@ _ENTITY_TYPE_ALIASES: dict[str, tuple[str, ...]] = {
 
 
 def _normalize_entity_type(raw) -> str:
-    """模型给的 entity_type 归一到 4 个枚举 key 之一;识别不出 → ""(让用户在表单里手选)."""
+    """Normalize the model's entity_type to one of 4 enum keys; unrecognized -> "" (let the user pick manually in the form)."""
     s = str(raw or "").strip().lower()
     if not s:
         return ""
@@ -209,13 +368,62 @@ def _normalize_entity_type(raw) -> str:
     return ""
 
 
+def _coerce_products(raw) -> list[dict]:
+    """LLM products -> a clean list of dicts: keep only dicts with a name, validate each against BrandProduct, at most 30.
+
+    Generic list handling str()s each item (the fallback for list[str] fields), which for list[dict] fields turns
+    dicts into "{'name': ...}" strings, failing BrandProfile validation and reverting the whole profile to an empty form -- hence this separate path.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for x in raw:
+        if not isinstance(x, dict) or not str(x.get("name") or "").strip():
+            continue
+        try:
+            out.append(BrandProduct(**x).model_dump())
+        except Exception:  # noqa: BLE001
+            continue
+        if len(out) >= 30:
+            break
+    return out
+
+
+def _merge_products(cur: list, new) -> list[dict]:
+    """Merge products extracted from multiple chunks by name (casefold): list fields take the union, is_featured takes OR, short fields first come first served.
+
+    _merge_parsed (merging parallel chunk extraction) routes the products key here, not through the generic list branch --
+    otherwise chunk merging would stringify product dicts, see the note on _coerce_products.
+    """
+    merged: list[dict] = [dict(p) for p in _coerce_products(cur)]
+    idx = {p["name"].strip().casefold(): i for i, p in enumerate(merged)}
+    for p in _coerce_products(new):
+        key = p["name"].strip().casefold()
+        if key not in idx:
+            idx[key] = len(merged)
+            merged.append(p)
+            continue
+        m = merged[idx[key]]
+        for lk in ("aliases", "selling_points", "target_users"):
+            seen = {str(x).casefold() for x in m.get(lk) or []}
+            for x in p.get(lk) or []:
+                if str(x).casefold() not in seen:
+                    seen.add(str(x).casefold())
+                    m.setdefault(lk, []).append(x)
+        m["is_featured"] = bool(m.get("is_featured")) or bool(p.get("is_featured"))
+        for sk in ("category", "launch_date", "price_range", "notes"):
+            if not m.get(sk) and p.get(sk):
+                m[sk] = p[sk]
+    return merged[:30]
+
+
 def _coerce_to_profile_fields(parsed: dict) -> dict:
-    """把 LLM 输出按 BrandProfile schema 强制兜底:
-      - list 字段超 max_length 的截断到上限
-      - LLM 给了 string 但 schema 要 list → 拆成单元素 list
-      - LLM 给了 list 但 schema 要 string → join 成多行
-      - None / 异常类型 → 丢弃(走默认值)
-    防止单条字段 hard-fail 让整张画像归零.
+    """Force-fit LLM output to the BrandProfile schema:
+      - list fields over max_length are truncated to the limit
+      - LLM gave a string but the schema wants a list -> split into a single-element list
+      - LLM gave a list but the schema wants a string -> join into multiple lines
+      - None / unexpected types -> dropped (use defaults)
+    Prevents a single field's hard failure from zeroing out the whole profile.
     """
     out: dict = {}
     for name, field in BrandProfile.model_fields.items():
@@ -224,8 +432,11 @@ def _coerce_to_profile_fields(parsed: dict) -> dict:
         raw = parsed[name]
         if raw is None:
             continue
+        if name == "products":
+            out[name] = _coerce_products(raw)
+            continue
         ann = field.annotation
-        # 拿 max_length(Field(..., max_length=N))
+        # Get max_length (Field(..., max_length=N))
         max_len = None
         for m in (field.metadata or []):
             ml = getattr(m, "max_length", None)
@@ -246,7 +457,7 @@ def _coerce_to_profile_fields(parsed: dict) -> dict:
                 items = items[:max_len]
             out[name] = items
         else:
-            # 字符串字段
+            # String field
             if isinstance(raw, list):
                 s = "\n".join(str(x).strip() for x in raw if x is not None and str(x).strip())
             else:
@@ -258,19 +469,19 @@ def _coerce_to_profile_fields(parsed: dict) -> dict:
 
 
 def _is_list_annotation(ann) -> bool:
-    """判断 Pydantic 字段类型是否是 list[...]."""
+    """Determine whether a Pydantic field type is list[...]."""
     import typing
     origin = typing.get_origin(ann)
     return origin in (list, typing.List)
 
 
-# ─────────────── 上传文件 → 纯文本 ─────────────────────────
+# --------------- Uploaded file -> plain text -------------------------
 
 
-# 上限同 BrandProfile.extra_notes 的合理边界:LLM 一次能消化的中文 ~30K 字
+# Cap matches the reasonable bound of BrandProfile.extra_notes: an LLM can digest ~30K Chinese chars at once
 MAX_EXTRACTED_TEXT = 60_000
 
-# 友好的错误消息体,调用方会包成 HTTPException
+# Friendly error message body; the caller wraps it in an HTTPException
 class FileParseError(Exception):
     pass
 
@@ -279,15 +490,15 @@ SUPPORTED_EXTS = ("txt", "md", "docx", "pdf")
 
 
 def file_bytes_to_text(filename: str, data: bytes) -> str:
-    """根据后缀分发到对应解析器;返回截断到 MAX_EXTRACTED_TEXT 的文本。
+    """Dispatch to the parser by extension; returns text truncated to MAX_EXTRACTED_TEXT.
 
-    支持:
-    - .docx → python-docx 段落 + 表格
-    - .pdf  → pypdf 按页 + 段落抽文字(扫描件 / 图片版 PDF 抽不到字,会抛 FileParseError)
-    - .txt / .md → utf-8 / gbk 兜底
+    Supported:
+    - .docx -> python-docx paragraphs + tables
+    - .pdf  -> pypdf text by page + paragraph (scanned / image PDFs yield no text and raise FileParseError)
+    - .txt / .md -> utf-8 / gbk fallback
 
-    其它类型(.doc / .csv / .json …)统一 415,提示用户复制内容到文本框,
-    或另存为支持的格式。
+    Other types (.doc / .csv / .json ...) all get 415, prompting the user to copy content into the text box
+    or save as a supported format.
     """
     name = (filename or "").lower()
     ext = name.rsplit(".", 1)[-1] if "." in name else ""
@@ -330,7 +541,7 @@ def _parse_docx(data: bytes) -> str:
     except Exception as e:  # noqa: BLE001
         raise FileParseError(f"Word 解析失败(文件可能损坏):{e}") from e
     paras = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
-    # 表格也抽一下 — PRD / 公司简介常用表格列字段
+    # Extract tables too -- PRDs / company intros often list fields in tables
     tables: list[str] = []
     for table in doc.tables:
         for row in table.rows:
@@ -344,9 +555,9 @@ def _parse_docx(data: bytes) -> str:
 
 
 def _parse_pdf(data: bytes) -> str:
-    """pypdf 按页抽文字,保留页内的段落换行 — LLM 后续靠这些换行识别"按段落分项"。
+    """pypdf extracts text by page, keeping in-page paragraph line breaks -- the LLM later relies on them to recognize "items by paragraph".
 
-    扫描件 / 图片版 PDF 抽不到字符,会落到 FileParseError 让前端提示用户用 Word/文本。
+    Scanned / image PDFs yield no characters and end in FileParseError, so the frontend prompts the user to use Word/text.
     """
     try:
         from pypdf import PdfReader
@@ -402,3 +613,59 @@ def _parse_json_loose(text: str) -> dict:
         except Exception:  # noqa: BLE001
             pass
     raise RuntimeError(f"failed to parse JSON from LLM output: {s[:200]}")
+
+
+# -- Lightweight: extract only "industry/category terms", for the audit page's "extract industry terms for me" --------------
+#
+# Do not use extract_profile_from_text -- it extracts the whole profile (a dozen-plus fields), with large output, taking
+# 26-53s. Here the model only emits 6-8 category terms, a few hundred tokens of output, usually back in 3-8s.
+def suggest_industry_terms_llm(brand: str, text: str = "") -> tuple[list[str], str]:
+    """Returns (terms, model_id). model_id="" means no LLM key configured."""
+    provider, model_id, api_key = _resolve_provider()
+    if not provider:
+        return [], ""
+    if provider == "deepseek":
+        url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    else:
+        url = OPENROUTER_URL
+        headers = {
+            "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+            "HTTP-Referer": "https://www.vigilath.com", "X-Title": "GEO Term Suggest",
+        }
+    sys_p = (
+        "你是行业分析助手。只输出该品牌所属的『行业/品类关键词』—— 就是用户在 AI 搜索里"
+        "会问的品类词(例:「扫地机器人」「气泡水」「无人机」),**不要品牌名本身、不要公司名**。"
+        '严格输出 JSON:{"terms": ["词1","词2", ...]},6-8 个,由宽到窄,每个不超过 12 字。'
+    )
+    brand = (brand or "").strip()
+    text = (text or "").strip()[:1500]
+    user = f"品牌名称:{brand}\n" + (f"官网正文节选:\n{text}\n" if text else "") + "请给出品类关键词。"
+    payload = {
+        "model": model_id,
+        "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user}],
+        "temperature": 0.3,
+        "max_tokens": 600,
+        "response_format": {"type": "json_object"},
+    }
+    if provider == "deepseek":
+        # In production DEEPSEEK_MODEL is a reasoning model (deepseek-v4-flash), and thinking tokens count toward max_tokens:
+        # on 2026-09-14 production had 9 failures and 2 successes within 24h, all failures "thinking ate the budget, not a word of body output"
+        # (finish_reason=length, empty content). 8 category terms need no reasoning -- with it off, measured
+        # 1.8s with stable JSON; with it on, anywhere from 2.8s (lucky short thinking) to 13s (1100 thinking tokens).
+        payload["thinking"] = {"type": "disabled"}
+    r = post_and_record(url, payload, headers, provider=provider,
+                        feature="term_suggest", timeout=30)
+    if r.status_code >= 400:
+        raise RuntimeError(f"{provider} {r.status_code}: {r.text[:200]}")
+    choice = r.json()["choices"][0]
+    content = choice["message"]["content"]
+    if not (content or "").strip() and choice.get("finish_reason") == "length":
+        # Do not let it end up as "failed to parse JSON: <empty>" -- that log took ages to recognize as truncation
+        raise RuntimeError("LLM 正文为空且 finish_reason=length:输出预算被思考占满")
+    parsed = _parse_json_loose(content)
+    terms = parsed.get("terms") if isinstance(parsed, dict) else None
+    if not isinstance(terms, list):
+        terms = []
+    out = [str(t).strip() for t in terms if str(t).strip()]
+    return out, model_id

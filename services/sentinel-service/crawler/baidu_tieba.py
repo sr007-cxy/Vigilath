@@ -86,7 +86,7 @@ class BaiduTiebaClient:
     def fetch_bar(self, bar_name: str, page: int = 1) -> Iterator[dict]:
         """获取特定贴吧的帖子列表.
 
-        bar_name: 贴吧名，如 "世纪互联" 或 "VNET"
+        bar_name: 贴吧名，如 "示例品牌" 或 "BABA"
         """
         url = "https://tieba.baidu.com/f"
         params = {"kw": bar_name, "pn": (page - 1) * 50}

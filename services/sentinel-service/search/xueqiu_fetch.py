@@ -24,7 +24,7 @@ def _txt(sel_list) -> str:
         return ""
     e = sel_list[0]
     # 用元素 HTML 直接去标签(不插空格)—— 雪球把搜索词包在高亮 span 里,
-    # get_all_text 会按文本节点插空格,导致 "世纪互联" → "世 纪 互 联",破坏相关性匹配。
+    # get_all_text 会按文本节点插空格,导致 "示例品牌" → "示 例 品 牌",破坏相关性匹配。
     h = getattr(e, "html_content", "") or ""
     if h:
         raw = re.sub(r'<[^>]+>', '', h)
@@ -92,7 +92,7 @@ def _parse(page, today: date) -> list:
 
 
 def main():
-    q = sys.argv[1] if len(sys.argv) > 1 else "世纪互联"
+    q = sys.argv[1] if len(sys.argv) > 1 else "示例品牌"
     mx = int(sys.argv[2]) if len(sys.argv) > 2 else 20
     url = "https://xueqiu.com/k?q=" + urllib.parse.quote(q)
     try:

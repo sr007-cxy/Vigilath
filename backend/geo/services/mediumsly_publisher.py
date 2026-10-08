@@ -1,27 +1,27 @@
-"""推送审完稿到 Mediumsly 站点。
+"""Push approved drafts to the Mediumsly site.
 
-约束:
-  - 单 token(MEDIUMSLY_INTERNAL_API_TOKEN);整套调用是受信任的服务器到服务器调用。
-  - 作者身份(bot 代发模型,按 topic 而不是按 user):**不**把真用户邮箱推到
-    Mediumsly。GEO 里一个 user 可挂多个 topic(品牌),每个 topic 是一个独立作者
-    身份 — 所以 Mediumsly 那边的作者 email 用 `topic-<topic_id>@<bot_domain>`
-    (而不是按 user 合并)。bot_domain 取自 MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST 的
-    第一项(排序后)。
-      • 同一 topic 始终对应同一个 Mediumsly 作者(email upsert key)
-      • 真用户邮箱永不外泄到第三方站点
-      • author.name 用 topic.name(品牌方名字,通常是中文),失败 fallback
-        到 topic.target → user.name → email 前缀
-  - 重推:有 mediumsly_post_id 走 PATCH,没有走 POST。PATCH 返回 404 说明 Mediumsly
-    那边文章被手动删了 —— publisher 抛 MediumslyPostGone,调用方应清空本地
-    mediumsly_post_id 后下次重试自动走 POST 重建。
+Constraints:
+  - Single token (MEDIUMSLY_INTERNAL_API_TOKEN); the whole call is a trusted server-to-server call.
+  - Author identity (bot publishing model, per topic not per user): **never** push real user emails to
+    Mediumsly. In GEO one user can own multiple topics (brands), each topic an independent author
+    identity -- so the author email on the Mediumsly side is `topic-<topic_id>@<bot_domain>`
+    (not merged per user). bot_domain is the first entry (after sorting) of
+    MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST.
+      • the same topic always maps to the same Mediumsly author (email upsert key)
+      • real user emails never leak to third-party sites
+      • author.name uses topic.name (the brand's name, usually Chinese), falling back
+        to topic.target -> user.name -> email prefix
+  - Republish: with mediumsly_post_id use PATCH, otherwise POST. A PATCH 404 means the article was
+    manually deleted on Mediumsly -- the publisher raises MediumslyPostGone, and the caller should clear the local
+    mediumsly_post_id so the next retry automatically recreates it via POST.
 
-硬化(都在本文件落地,不依赖运行环境):
-  - HTTPS 强制(URL 必须 https://)
-  - 必须配 MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST(为空 = 配置错误,拒发),
-    publisher 用这个域合成 bot 邮箱,实际上锁死了 Mediumsly 上的作者命名空间
-  - 并发 semaphore(防止 GEO 侧 bug 循环里调本函数把对端打爆)
+Hardening (all implemented in this file, independent of the runtime environment):
+  - HTTPS enforced (URL must be https://)
+  - MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST must be configured (empty = configuration error, refuse to send);
+    the publisher synthesizes bot emails with this domain, effectively locking the author namespace on Mediumsly
+  - Concurrency semaphore (prevents a GEO-side bug calling this function in a loop from overwhelming the other end)
 
-完整对接文档:mediumsly repo 的 docs/04-internal-api.md + docs/05-geo-integration.md。
+Full integration docs: docs/04-internal-api.md + docs/05-geo-integration.md in the mediumsly repo.
 """
 from __future__ import annotations
 
@@ -34,17 +34,18 @@ import httpx
 from geo.database import settings
 from geo.models.ai_telemetry import AiTelemetryTopicORM, TopicGeneratedDocORM
 from geo.models.user import UserORM
+from geo.services.content_marking import outbound_body
 
 log = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = 8.0  # seconds — Mediumsly 写入正常 < 200ms,留余量给冷启动 / 跨地域 RTT
+REQUEST_TIMEOUT = 8.0  # seconds -- Mediumsly writes are normally < 200ms; headroom for cold starts / cross-region RTT
 
-# 限并发,防止 GEO 侧 bug(循环里调 publish)瞬间打爆对端。
+# Limit concurrency, so a GEO-side bug (calling publish in a loop) cannot instantly overwhelm the other end.
 _CONCURRENCY = asyncio.Semaphore(5)
 
 
 def _allowed_domains() -> frozenset[str]:
-    """从 env 解析允许的 email 域名集合。"""
+    """Parse the set of allowed email domains from env."""
     raw = (settings.MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST or "").strip()
     if not raw:
         return frozenset()
@@ -52,7 +53,7 @@ def _allowed_domains() -> frozenset[str]:
 
 
 class MediumslyError(Exception):
-    """所有外发失败统一抛这个;publish endpoint 捕获后写入 mediumsly_last_error。"""
+    """All outbound failures raise this; the publish endpoint catches it and writes mediumsly_last_error."""
 
     def __init__(self, message: str, *, status: int | None = None, code: str | None = None):
         super().__init__(message)
@@ -61,40 +62,40 @@ class MediumslyError(Exception):
 
 
 class MediumslyNotConfigured(MediumslyError):
-    """MEDIUMSLY_INTERNAL_API_TOKEN 未设置;publish endpoint 看到这类异常就降级到只标记 publish_targets。"""
+    """MEDIUMSLY_INTERNAL_API_TOKEN not set; the publish endpoint degrades to only marking publish_targets on this exception."""
 
 
 class MediumslyPostGone(MediumslyError):
-    """PATCH 时 404 —— Mediumsly 那边文章已被删。调用方应清空 mediumsly_post_id 后重试 POST。"""
+    """404 on PATCH -- the article was deleted on Mediumsly. The caller should clear mediumsly_post_id and retry with POST."""
 
 
 @dataclass
 class PushResult:
     post_id: str
     url: str
-    author_created: bool  # Mediumsly 那边是否新建了账号(POST 路径返回 True,PATCH 路径不带这字段固定 False)
+    author_created: bool  # Whether Mediumsly created a new account (True on the POST path; the PATCH path has no such field, always False)
 
 
 def _platform_tags(doc: TopicGeneratedDocORM) -> list[str]:
-    """从 doc.platform("抖音"/"小红书"/...)派生 Mediumsly tag,最多 5 个。"""
+    """Derive Mediumsly tags from doc.platform ("抖音"/"小红书"/... -- Douyin/Xiaohongshu), at most 5."""
     tags: list[str] = []
     if doc.platform:
         tags.append(doc.platform)
-    # 后续可加 topic 名作为 tag 等,先保持最小。
+    # The topic name could be added as a tag later; kept minimal for now.
     return tags[:5]
 
 
 def _bot_email_for_topic(topic: AiTelemetryTopicORM, allowed_domains: frozenset[str]) -> str:
-    """合成 bot 邮箱:`topic-<topic_id>@<bot_domain>`。
-    bot_domain 取 allowlist 第一项(排序后,deterministic)。
+    """Synthesize the bot email: `topic-<topic_id>@<bot_domain>`.
+    bot_domain is the first allowlist entry (after sorting, deterministic).
     """
-    # sorted 让多域名时选择稳定,实际生产通常只配 1 个
+    # sorted keeps the choice stable with multiple domains; production usually configures only 1
     bot_domain = sorted(allowed_domains)[0]
     return f"topic-{topic.id}@{bot_domain}"
 
 
 def _author_display_name(topic: AiTelemetryTopicORM, user: UserORM) -> str:
-    """选展示在 Mediumsly 上的作者名,优先级:topic.name > topic.target > user.name > email 前缀."""
+    """Choose the author name shown on Mediumsly, priority: topic.name > topic.target > user.name > email prefix."""
     for candidate in (topic.name, topic.target, user.name):
         if candidate and candidate.strip():
             return candidate.strip()
@@ -104,7 +105,7 @@ def _author_display_name(topic: AiTelemetryTopicORM, user: UserORM) -> str:
 
 
 async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopicORM) -> PushResult:
-    """把 doc 推到 Mediumsly。返回 PushResult 或抛 MediumslyError 子类。"""
+    """Push the doc to Mediumsly. Returns a PushResult or raises a MediumslyError subclass."""
     if not settings.MEDIUMSLY_INTERNAL_API_TOKEN:
         raise MediumslyNotConfigured("MEDIUMSLY_INTERNAL_API_TOKEN not set")
 
@@ -117,7 +118,7 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopic
 
     allowed = _allowed_domains()
     if not allowed:
-        # bot 代发模型要求必须配 — 防止有人忘配后真用户邮箱被推到 Mediumsly
+        # Required by the bot publishing model -- prevents real user emails being pushed to Mediumsly if someone forgets to configure it
         raise MediumslyError(
             "MEDIUMSLY_EMAIL_DOMAIN_ALLOWLIST must be set (provides bot email domain)",
             code="CONFIG",
@@ -130,7 +131,8 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopic
 
     body: dict = {
         "title": doc.title or doc.source_query_text or f"Topic doc #{doc.id}",
-        "body_markdown": doc.body_markdown or "",
+        # Strip content label lines + zero-width watermarks from the outbound body (see content_marking.outbound_body)
+        "body_markdown": outbound_body(doc.body_markdown),
         "tags": _platform_tags(doc),
         "status": "published",
     }
@@ -138,7 +140,7 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopic
     async with _CONCURRENCY, httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         try:
             if doc.mediumsly_post_id:
-                # 原地更新已发布的文章。Mediumsly 不允许改 author —— 不带 author 字段。
+                # Update the published article in place. Mediumsly does not allow changing the author -- no author field.
                 r = await client.patch(
                     f"{base}/api/internal/posts/{doc.mediumsly_post_id}",
                     headers=headers, json=body,
@@ -149,10 +151,10 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopic
                         status=404, code="NOT_FOUND",
                     )
             else:
-                # 第一次推:bot 代发 — 用 topic-<id>@<bot_domain> 作为 Mediumsly 那边的
-                # 作者 email(upsert key),真用户邮箱永不外泄。同一 topic 在 Mediumsly
-                # 上始终是同一个作者(同一 user 的不同品牌不会被合并)。
-                # 展示用 topic.name(品牌方中文名),按优先级 fallback。
+                # First push: bot publishing -- use topic-<id>@<bot_domain> as the author
+                # email on the Mediumsly side (upsert key), real user emails never leak. The same topic on Mediumsly
+                # is always the same author (different brands of the same user are never merged).
+                # Display uses topic.name (the brand's Chinese name), with fallback by priority.
                 body["author"] = {
                     "email": _bot_email_for_topic(topic, allowed),
                     "name":  _author_display_name(topic, user),
@@ -165,7 +167,7 @@ async def push(doc: TopicGeneratedDocORM, user: UserORM, topic: AiTelemetryTopic
             raise MediumslyError(f"Network error: {e!s}", status=None, code="NETWORK") from e
 
     if r.status_code >= 400:
-        # Mediumsly 错误格式:{"error": {"code": "...", "message": "..."}}
+        # Mediumsly error format: {"error": {"code": "...", "message": "..."}}
         try:
             err = r.json().get("error", {}) or {}
         except Exception:  # noqa: BLE001

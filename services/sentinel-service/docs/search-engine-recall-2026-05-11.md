@@ -1,7 +1,7 @@
 # 搜索引擎召回 + 字段可得性 调研汇总
 
 > 调研时间:2026-05-11
-> 关键词样本:世纪互联(VNET)
+> 关键词样本:示例品牌(ACME)
 > 目标平台:weibo.com / sina.com / toutiao.com / mp.weixin.qq.com
 > 搜索引擎样本:DDG / Google / Baidu / Bing / Sogou / 360 / Brave / 神马
 > 时间窗:24h / 7d / 31d
@@ -79,7 +79,7 @@
 - `/tmp/dump_results.py` — Qianfan + ddgs 真实命中明细 dump
 - `/tmp/verify_ddg_html.py` — DDG 浏览器同源端点 (html.duckduckgo.com)
 
-## 附 · 三组数据落差(浏览器手数 vs API vs 真实命中,keyword = `世纪互联`)
+## 附 · 三组数据落差(浏览器手数 vs API vs 真实命中,keyword = `示例品牌`)
 
 | 平台 | 浏览器手数 DDG/Google/Baidu (24h/7d/31d) | API ddgs/serper/Qianfan (24h/7d/31d) | 去噪后真实命中(31d) |
 |---|---|---|---:|

@@ -18,13 +18,16 @@ from pathlib import Path
 import openai
 
 from llm_client import chat_create, has_openai, has_qwen
+from storage.llm_usage import set_feature
 
 PLAN_MODEL = os.environ.get("YUQING_PLAN_MODEL", "gpt-4o-mini")
-MAX_TOKENS = 2000
+# With larger entity groups (main name + aliases + competitor terms), the plan's query JSON gets longer; 2000 gets truncated, causing
+# a JSONDecodeError that crashed the whole monitor (2026-07-19/20 incident), so leave plenty of headroom.
+MAX_TOKENS = 6000
 
-# 内置负面 / 风险词库:用于在通用查询里主动召回负面舆情(用户诉求:多扩负面词,
-# 数据越多越好)。拆两组避免单条 query 的 OR 项过长稀释命中。抓回的旧负面内容
-# 仍全量入库,但展示层按 publish_time 新鲜度窗口收口,只露最新。
+# Built-in negative / risk term lexicon: used to actively recall negative sentiment in general queries (user request: expand negative terms,
+# the more data the better). Split into two groups so a single query's OR terms are not too long and dilute hits. Old negative content that gets fetched
+# is still fully persisted, but the display layer narrows by the publish_time freshness window, showing only the latest.
 RISK_LEXICON_FINANCE = [
     "暴跌", "亏损", "做空", "退市", "违约", "停牌", "债务", "爆仓",
     "财务造假", "业绩暴雷", "下调评级", "监管处罚",
@@ -43,7 +46,7 @@ RISK_LEXICON_OPS = [
 # DO NOT edit this list to add a platform — instead INSERT into the
 # `sentiment_platforms` table on the GEO backend (or rerun migration 010).
 PLATFORM_CATALOG: list[tuple[str, str]] = [
-    # ── 财经媒体(主力)──
+    # ── Financial media (primary) ──
     ("xueqiu",       "xueqiu.com"),
     ("eastmoney",    "guba.eastmoney.com"),
     ("caixin",       "caixin.com"),
@@ -56,7 +59,7 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("yicai",        "yicai.com"),
     ("cls",          "cls.cn"),
     ("gelonghui",    "gelonghui.com"),
-    # ── 财经媒体(扩展)──
+    # ── Financial media (extended) ──
     ("jrj",          "jrj.com.cn"),
     ("hexun",        "hexun.com"),
     ("jin10",        "jin10.com"),
@@ -71,12 +74,12 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("futunn",       "futunn.com"),
     ("itiger",       "itiger.com"),
     ("zhitong",      "zhitongcaijing.com"),
-    # ── 社交媒体 ──
+    # ── Social media ──
     ("weibo",        "weibo.com"),
     ("weixin",       "mp.weixin.qq.com"),
     ("xiaohongshu",  "xiaohongshu.com"),
     ("zhihu",        "zhihu.com"),
-    # ── 论坛社区 ──
+    # ── Forums and communities ──
     ("tieba",        "tieba.baidu.com"),
     ("zhidao",       "zhidao.baidu.com"),
     ("hupu",         "hupu.com"),
@@ -85,7 +88,7 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("guokr",        "guokr.com"),
     ("csdn",         "csdn.net"),
     ("juejin",       "juejin.cn"),
-    # ── 视频平台 ──
+    # ── Video platforms ──
     ("bilibili",     "bilibili.com"),
     ("douyin",       "douyin.com"),
     ("kuaishou",     "kuaishou.com"),
@@ -93,7 +96,7 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("vqq",          "v.qq.com"),
     ("iqiyi",        "iqiyi.com"),
     ("ixigua",       "ixigua.com"),
-    # ── 资讯门户 ──
+    # ── News portals ──
     ("baidu_news",   "news.baidu.com"),
     ("ifeng",        "ifeng.com"),
     ("sina_main",    "sina.com.cn"),
@@ -112,7 +115,7 @@ PLATFORM_CATALOG: list[tuple[str, str]] = [
     ("ifanr",        "ifanr.com"),
     ("qbitai",       "qbitai.com"),
     ("jiqizhixin",   "jiqizhixin.com"),
-    # ── 海外 ──
+    # ── Overseas ──
     ("reddit",       "reddit.com"),
     ("twitter",      "twitter.com"),
     ("seekingalpha", "seekingalpha.com"),
@@ -148,12 +151,12 @@ PLAN_SYSTEM = """你是一名舆情监测分析师。给定一个公司 / 品牌
   "queries": [
     {
       "platform": "xueqiu",
-      "query":    "site:xueqiu.com (世纪互联 OR VNET)",
+      "query":    "site:xueqiu.com (Acme Cloud OR ACME)",
       "intent":   "broad-recall: 该平台上所有提及"
     },
     {
       "platform": "xueqiu",
-      "query":    "site:xueqiu.com (世纪互联 OR VNET) (失望 OR 垃圾 OR 跌 OR 管理层 OR 业绩)",
+      "query":    "site:xueqiu.com (Acme Cloud OR ACME) (失望 OR 垃圾 OR 跌 OR 管理层 OR 业绩)",
       "intent":   "negative-sentiment: 吐槽 / 情绪化 / 风险信号"
     }
   ],
@@ -170,7 +173,7 @@ PLAN_SYSTEM = """你是一名舆情监测分析师。给定一个公司 / 品牌
 - 如果用户在 intent 中指定了关注点（例如"做空报告 / 业绩传闻"），优先生成相关查询
 - 如果用户提供了 `media` 字段（域名白名单），**只能**为这些域名生成 `site:` 查询；忽略其他平台
 - 如果用户提供了 `keywords` 字段（修饰词列表），把它们作为 AND 修饰组拼到 query 末尾：`site:X (target OR alias) (kw1 OR kw2 OR …)`，至少覆盖一条该平台的查询
-- 如果用户传入 `targets` 数组（同一集团下的多个实体），**每条 query 的目标分组必须把所有 targets 都 OR 进去**，再叠加别名，例如 `site:X (世纪互联 OR VNET世纪互联 OR 蓝云 OR <aliases…>)`。输出 JSON 中 `target` 字段使用首个主体（用作显示 / 主键），并新增 `targets` 字段镜像输入数组
+- 如果用户传入 `targets` 数组（同一集团下的多个实体），**每条 query 的目标分组必须把所有 targets 都 OR 进去**，再叠加别名，例如 `site:X (Acme Cloud OR VNETAcme Cloud OR Acme Blue OR <aliases…>)`。输出 JSON 中 `target` 字段使用首个主体（用作显示 / 主键），并新增 `targets` 字段镜像输入数组
 - 严格 JSON，不要附加任何额外文字 / 代码块标记
 """
 
@@ -212,6 +215,7 @@ def generate_monitoring_plan(
         "为以下目标生成监测查询计划：\n\n"
         f"```json\n{json.dumps(payload, ensure_ascii=False, indent=2)}\n```"
     )
+    set_feature("sentinel.search_plan")   # for billing: tag which feature this call belongs to
     resp = chat_create(
         PLAN_MODEL,
         max_completion_tokens=MAX_TOKENS,
@@ -222,7 +226,16 @@ def generate_monitoring_plan(
         ],
     )
     text = resp.choices[0].message.content or "{}"
-    plan = json.loads(text)
+    try:
+        plan = json.loads(text)
+    except json.JSONDecodeError as e:
+        # LLM output truncated (easy to exceed limits with many entity terms/queries) -> **never let the whole monitor crash**:
+        # degrade to a minimal plan; the later ensure_all_platforms / augment_queries_with_keywords /
+        # add_general_queries fill the queries with **deterministic rules** (risk lexicon + batched keywords + per-platform site queries).
+        print(f"[plan] LLM plan JSON 解析失败({e});退化为最小 plan,靠确定性查询兜底",
+              file=sys.stderr)
+        plan = {"target": primary, "ticker": ticker,
+                "aliases": list(targets[1:]), "platforms": [], "queries": []}
     plan.setdefault("target", primary)
     plan.setdefault("ticker", ticker)
     if len(targets) > 1:
@@ -239,11 +252,11 @@ def generate_monitoring_plan(
 
 def add_general_queries(plan: dict, targets: list[str],
                         keywords: list[str] | None = None) -> dict:
-    """追加不限 site 的通用查询。
+    """Append general queries without a site restriction.
 
-    监测计划默认都是 `site:平台 (...)` 限定查询;但有些引擎(如经 Web Unlocker
-    的百度)对 site: 限定不返回结果,只对通用查询返回。这里补两条通用查询,
-    让百度等也能贡献(覆盖新闻、自媒体等非平台来源)。
+    Monitoring plans default to `site:<platform> (...)` restricted queries; but some engines (e.g. Baidu via Web Unlocker)
+    return nothing for site: restrictions and only answer general queries. Two general queries are added here
+    so Baidu and others can contribute too (covering news, self-media and other non-platform sources).
     """
     primary = ((targets[0] if targets else plan.get("target")) or "").strip()
     if not primary:
@@ -251,30 +264,30 @@ def add_general_queries(plan: dict, targets: list[str],
     queries = plan.get("queries") or []
     existing = {q.get("query") for q in queries}
 
-    # 用引号锁定完整目标名:避免搜索引擎按中文分词把「世纪互联」拆成「世纪」,
-    # 召回词典释义 / 同名实体等噪声。配合 pipeline 的相关性闸门双保险。
+    # Quote the full target name: prevents search engines from splitting 「Acme Cloud」 into 「世纪」 ("century") via Chinese word segmentation,
+    # which recalls noise like dictionary definitions / same-name entities. Double protection together with the pipeline's relevance gate.
     extra = [{"platform": "general", "query": f'"{primary}"',
               "intent": "通用召回:全网提及(覆盖百度/新闻/自媒体)"}]
-    # 新闻向召回:偏向有时效的报道 / 财报 / 公告,压低词典 / 百科类常青页占比。
+    # News-oriented recall: favors timely reports / earnings / announcements, lowering the share of evergreen dictionary / encyclopedia pages.
     extra.append({"platform": "general",
                   "query": f'"{primary}" (新闻 OR 财报 OR 业绩 OR 公告 OR 股价)',
                   "intent": "通用召回:新闻/财经动态"})
-    # 负面 / 风险信号召回:内置词库分两组拼成 OR 查询,主动扩大负面舆情覆盖。
+    # Negative / risk signal recall: the built-in lexicon is split into two groups of OR queries to actively widen negative sentiment coverage.
     extra.append({"platform": "general",
                   "query": f'"{primary}" (' + " OR ".join(RISK_LEXICON_FINANCE) + ")",
                   "intent": "通用召回:财务/市场风险信号"})
     extra.append({"platform": "general",
                   "query": f'"{primary}" (' + " OR ".join(RISK_LEXICON_OPS) + ")",
                   "intent": "通用召回:经营/声誉风险信号"})
-    # 海外标的(美股 ADR / 港股等)中文源覆盖薄,有 ticker 时补一条英文新闻向查询。
+    # Overseas targets (US ADRs / HK stocks etc.) have thin Chinese source coverage; when a ticker exists, add one English news-oriented query.
     ticker = (plan.get("ticker") or "").strip()
     if ticker:
         extra.append({"platform": "general",
                       "query": f"{ticker} (news OR earnings OR stock OR revenue)",
                       "intent": "通用召回:英文新闻(海外标的)"})
-    # 关键词召回:OR 分批(每批 ~12 个)。避免"每词一条查询"在词表扩到 ~70 时
-    # 让 monitor 跑 70 条 × 各引擎(百度 Web Unlocker ~30s/条)而超时;OR 分批把
-    # 70 词压成 ~6 条查询,配合相关性闸门过滤跑题。
+    # Keyword recall: OR batches (~12 per batch). Avoids "one query per term", which with a ~70-term list
+    # makes the monitor run 70 queries x each engine (Baidu Web Unlocker ~30s each) and time out; OR batching
+    # compresses 70 terms into ~6 queries, with the relevance gate filtering off-topic results.
     kws = [k.strip() for k in (keywords or []) if k and k.strip()]
     _BATCH = 12
     for i in range(0, len(kws), _BATCH):

@@ -1,18 +1,19 @@
-"""4 维场景扩展 — 单 seed 并行喂 4 套 LLM 模板,产出搜索 / 问答 / 意图 / 品牌 4 类长尾.
+"""4-dimension scene expansion -- feed one seed into 4 LLM templates in parallel, yielding 4 long-tail kinds: search / QA / intent / brand.
 
-2026-05-28 起接管 `/expand-queries` 的扩展产出.老路径只调 telemetry-service 拿 1 份,
-新路径在我们这边做 LLM 调用,4 维并行,每维独立 prompt 模板.
+Since 2026-05-28 this takes over expansion output for `/expand-queries`. The old path called telemetry-service for 1 set;
+the new path makes LLM calls on our side, 4 dimensions in parallel, each with its own prompt template.
 
-模板根据讯灵实测反推:
-  - search:  品类/产品搜索意图 — XX厂家/XX供应商/推荐XX(纯关键词)
-  - qa:      问答 / 推荐 / 对比 — 哪家XX好/XX怎么选(带问句词)
-  - intent:  用户意图查询 — 如何选XX/XX攻略(带意图词)
-  - brand:   品牌评估 — {target}怎么样/详细介绍/客户评价(主语必须是品牌名)
+Templates reverse-engineered from Xunling measurements:
+  - search:  category/product search intent -- XX厂家/XX供应商/推荐XX ("XX manufacturer / XX supplier / recommend XX"; pure keywords)
+  - qa:      Q&A / recommendation / comparison -- 哪家XX好/XX怎么选 ("which XX is best / how to choose XX"; with question words)
+  - intent:  user intent queries -- 如何选XX/XX攻略 ("how to choose XX / XX guide"; with intent words)
+  - brand:   brand evaluation -- {target}怎么样/详细介绍/客户评价 ("how is {target} / details / customer reviews"; subject must be the brand name)
 
-ENV(复用 content_generator 的 2 路 fallback):
-  DEEPSEEK_API_KEY      优先,直连 DeepSeek
-  OPENROUTER_API_KEY    fallback,通过 OpenRouter 调 DeepSeek
-  GEO_EXPANSION_TIMEOUT 单条 LLM 请求超时(秒),默认 90
+ENV (reuses content_generator's 2-way fallback):
+  DEEPSEEK_API_KEY      preferred, direct DeepSeek
+  OPENROUTER_API_KEY    fallback, DeepSeek via OpenRouter
+  GEO_EXPANSION_TIMEOUT per-LLM-request timeout (seconds), default 90
+  GEO_EXPANSION_THINKING whether to enable thinking on the direct deepseek channel, default off (see comment in expand_one_scene)
 """
 from __future__ import annotations
 
@@ -23,7 +24,8 @@ from typing import Any
 
 import httpx
 
-from geo.models.ai_telemetry import ALL_SCENES, SceneType
+from geo.models.ai_telemetry import ALL_SCENES, DEFAULT_SCENE, SceneType, featured_products, find_product
+from geo.services.llm_usage import track
 
 log = logging.getLogger(__name__)
 
@@ -32,18 +34,23 @@ DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 OPENROUTER_DEEPSEEK_MODEL = os.environ.get("OPENROUTER_DEEPSEEK_MODEL", "deepseek/deepseek-v4-flash")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_TIMEOUT = int(os.environ.get("GEO_EXPANSION_TIMEOUT", "90"))
+# 2026-09-22 -- production DEEPSEEK_MODEL is a reasoning model (deepseek-v4-flash); thinking tokens count toward the output budget.
+# Per scene at most 50 items x 60 chars (safety cap) ~= 3000 tokens of JSON; 4000 is enough for the body. If unset the gateway uses
+# the model default, and long thinking truncates the body with finish_reason=length so _parse_json_loose gets nothing.
+MAX_TOKENS = int(os.environ.get("GEO_EXPANSION_MAX_TOKENS", "4000"))
+_THINKING_ON = os.environ.get("GEO_EXPANSION_THINKING", "").strip().lower() in ("1", "true", "on", "yes")
 
 
-# ─────────── 主体类型 → 扩展词风格指令(覆盖模板里默认的制造业措辞) ───────────
-# 资料里的 entity_type 决定扩展词往哪个方向走。空 / other → 不注入,模板按原样跑。
+# ─────────── Entity type -> expansion-word style directive (overrides the template's default manufacturing wording) ───────────
+# The profile's entity_type decides which direction expansion words go. Empty / other -> nothing injected, template runs as-is.
 ENTITY_TYPE_HINTS: dict[str, str] = {
     "service_tool": (
-        "主体类型:【服务 / 工具类】(SaaS / 软件 / 平台 / 在线服务)。"
+        "主体类型:【服务业】(SaaS / 软件 / 平台 / 在线服务 / 咨询)。"
         "把品类用「工具 / 软件 / 平台 / 系统 / 方案 / 服务」这类说法自然表达;"
         "别用「厂家 / 供应商 / 生产商 / 制造 / 批发 / OEM / 工厂」这类制造业词。"
     ),
     "manufacturer": (
-        "主体类型:【生产制造商】(工厂 / 代工 / 设备 / 零部件)。"
+        "主体类型:【制造业】(工厂 / 代工 / 设备 / 零部件)。"
         "贴合采购方找供应商的问法,可用「厂家 / 供应商 / 生产厂 / 设备 / 选型」这类说法。"
     ),
     "brand_owner": (
@@ -54,22 +61,27 @@ ENTITY_TYPE_HINTS: dict[str, str] = {
 }
 
 
-# ─────────────────── 4 套 prompt 模板 ──────────────────
+# ─────────────────── 4 prompt templates ──────────────────
 
-# 2026-05-28 — 画像注入策略(参考讯灵 AI蒸馏 实测):
-#   search:  弱依赖 — 只用 industry / service_geo(纯品类 SEO 词)
-#   qa:      弱依赖 — 只用 industry / service_geo
-#   intent:  中依赖 — industry / service_geo / case_stories(案例追溯型查询)
-#   brand:   强依赖 — target / aliases / industry / service_geo / case_stories
+# 2026-05-28 -- profile injection strategy (based on Xunling AI distillation measurements):
+#   search:  weak dependency -- only industry / service_geo (pure category SEO words)
+#   qa:      weak dependency -- only industry / service_geo
+#   intent:  medium dependency -- industry / service_geo / case_stories (case-tracing queries)
+#   brand:   strong dependency -- target / aliases / industry / service_geo / case_stories
 #                    / core_credentials / brand_diff_tags / core_service_overview
+# 2026-09-22 -- product list injection (profile_json.products, see models.BrandProduct):
+#   {own_products_block}  injected in all four scenes: tells the LLM these names are this brand's products, not competitors or categories
+#   {product_mode_hint}   injected only when the seed hits a product (find_product): search / qa / intent build category words from the product's
+#                         category and must never include the product name; the brand scene switches to product-evaluation phrasing
+#   Both placeholders are empty strings when not applicable; topics without products render byte-identical to before (verify_brand_products.py snapshot-checks this)
 SCENE_PROMPTS: dict[SceneType, str] = {
-    "search": """你在为「AI 搜索可见性监测」生成监测问题。这些词会拿去问 AI 搜索引擎(ChatGPT / 豆包 /
+    "search": """你在为「AI 搜索可见性监测」生成提示词。这些词会拿去问 AI 搜索引擎(ChatGPT / 豆包 /
 DeepSeek / 文心 等),用来看 AI 的回答里会不会推荐 / 列举某个品牌或公司 —— 用户随后优化内容,
 争取让自己的品牌出现在这些回答里。所以要生成【会让 AI 给出品牌 / 公司 / 产品推荐清单】的词。
 
 品类:「{seed}」(用它代表的【品类】来造词;若原文太长太书面,请换成更自然、口语、简短的品类说法,
 不要把这串字整块照搬)
-{entity_hint}
+{own_products_block}{product_mode_hint}{entity_hint}
 行业:{industry};地域:{service_geo}
 
 扩展 {count} 条,**全部按「修饰词 + 品类」的推荐型短语**(下面是句式骨架,{{品类}} 用本主题的品类替换):
@@ -90,11 +102,11 @@ DeepSeek / 文心 等),用来看 AI 的回答里会不会推荐 / 列举某个�
 {{"queries": ["推荐XX", "靠谱的XX", "口碑好的XX", "..."]}}
 不要前后包 ```json``` 围栏,不要任何额外说明文字。""",
 
-    "qa": """你在为「AI 搜索可见性监测」生成监测问题(用途同 search 场景:让 AI 回答里给出品牌 / 产品推荐,
+    "qa": """你在为「AI 搜索可见性监测」生成提示词(用途同 search 场景:让 AI 回答里给出品牌 / 产品推荐,
 供用户优化后争取被推荐)。本场景专出【对比 / 选型 / 求推荐】类口语问句。
 
 品类:「{seed}」(用自然、简短的品类说法,别整块照搬原文)
-{entity_hint}
+{own_products_block}{product_mode_hint}{entity_hint}
 行业:{industry};地域:{service_geo}
 
 扩展 {count} 条问句(下面是句式骨架,{{品类}} 用本主题的品类替换):
@@ -109,12 +121,12 @@ DeepSeek / 文心 等),用来看 AI 的回答里会不会推荐 / 列举某个�
 
 只输出 JSON 对象:{{"queries": ["..."]}};不要 ```json``` 围栏。""",
 
-    "intent": """你在为「AI 搜索可见性监测」生成监测问题(目的:让 AI 的回答里推荐到品牌 / 服务商 / 解决方案,
+    "intent": """你在为「AI 搜索可见性监测」生成提示词(目的:让 AI 的回答里推荐到品牌 / 服务商 / 解决方案,
 供用户优化后争取被推荐)。本场景出【带真实使用场景的第一人称口语问句】,像用户在跟 AI 聊天
 描述自己的需求并求推荐 / 求方案。
 
 品类:「{seed}」(用自然说法,别整块照搬原文)
-{entity_hint}
+{own_products_block}{product_mode_hint}{entity_hint}
 行业:{industry};地域:{service_geo}
 真实案例 / 业务经历(当作场景背景融进问句,**至少 30% 的 query 围绕这些展开**):
 {profile_cases_block}
@@ -142,7 +154,7 @@ DeepSeek / 文心 等),用来看 AI 的回答里会不会推荐 / 列举某个�
 
     "brand": """你是品牌评估词扩展专家。
 针对品牌名「{target}」(seed 是「{seed}」,作为业务/品类上下文)扩展 {count} 个**品牌评估**长尾问句。
-{entity_hint}
+{own_products_block}{product_mode_hint}{entity_hint}
 品牌全称:{target}
 品牌别名(可用):{aliases}
 行业:{industry};地域:{service_geo}
@@ -171,12 +183,80 @@ DeepSeek / 文心 等),用来看 AI 的回答里会不会推荐 / 列举某个�
 
 def _format_list_block(items: list[str] | None, *, max_items: int = 10,
                         per_item_max: int = 200) -> str:
-    """把列表渲染成 prompt 里的多行 bullet,空列表 → '(无)'."""
+    """Render a list as multi-line bullets in the prompt; empty list -> '(无)' ("(none)")."""
     items = [str(x or "").strip() for x in (items or []) if str(x or "").strip()]
     items = items[:max_items]
     if not items:
         return "(无 — 用户未在画像里填写,本次不要凭空编造)"
     return "\n".join(f"  - {s[:per_item_max]}" for s in items)
+
+
+def _own_products_block(products: list[dict] | None, *, target: str, max_items: int = 12) -> str:
+    """The "brand's own products" section; no products -> empty string. When non-empty it ends with a newline (placeholder shares a line with the next one in the template)."""
+    ps = featured_products([p for p in (products or []) if isinstance(p, dict) and str(p.get("name") or "").strip()])
+    if not ps:
+        return ""
+    lines: list[str] = []
+    for p in ps[:max_items]:
+        name = str(p.get("name") or "").strip()[:64]
+        bits: list[str] = []
+        cat = str(p.get("category") or "").strip()
+        if cat:
+            bits.append(f"品类:{cat[:64]}")
+        al = [str(a).strip() for a in (p.get("aliases") or []) if str(a).strip()] if isinstance(p.get("aliases"), list) else []
+        if al:
+            bits.append("别名:" + "/".join(al[:5]))
+        if p.get("is_featured"):
+            bits.append("主推")
+        lines.append(f"  - {name}" + (f"({';'.join(bits)})" if bits else ""))
+    return (
+        f"品牌「{target}」自有产品 / 型号(下面这些是本品牌自己的产品,**不是竞品、不是品类**;"
+        "不要拿它们当品类造词,不要把它们当成别的品牌):\n" + "\n".join(lines) + "\n"
+    )
+
+
+def _product_mode_hint(scene: SceneType, matched: dict | None, *, seed: str, target: str) -> str:
+    """Scene directive when the seed hits a product; no hit -> empty string. When non-empty it ends with a newline."""
+    if not matched:
+        return ""
+    name = str(matched.get("name") or "").strip()[:64]
+    cat = str(matched.get("category") or "").strip()[:64]
+    sp = [str(x).strip() for x in (matched.get("selling_points") or []) if str(x).strip()] if isinstance(matched.get("selling_points"), list) else []
+    tu = [str(x).strip() for x in (matched.get("target_users") or []) if str(x).strip()] if isinstance(matched.get("target_users"), list) else []
+    if scene in ("search", "qa", "intent"):
+        # 2026-09-22 -- this product may not rank for broad category words (e.g. "gamepad recommendations"); use its selling points / audience to build
+        # niche category words (e.g. "Hall-trigger gamepad recommendations", "gamepads for console players") where it's the answer that should appear.
+        facets = ""
+        if sp or tu:
+            facets = "该产品的差异点(用来造【细分品类词】:把卖点 / 人群当修饰词放在品类前,如「{卖点}的{品类}推荐」"\
+                     "「适合{人群}的{品类}哪款好」;**至少一半**的词要带其中一个维度,其余出泛品类词):\n"
+            if sp:
+                facets += "  卖点 / 特性:" + "、".join(sp[:6])[:300] + "\n"
+            if tu:
+                facets += "  目标人群 / 场景:" + "、".join(tu[:6])[:200] + "\n"
+        if cat:
+            return (
+                f"【产品模式】种子「{seed}」是{target}的产品「{name}」,它的品类是「{cat}」。"
+                f"请围绕品类「{cat}」造词(上面的「品类」已按此替换),**严禁**在任何一条里出现「{name}」"
+                "或其别名 —— 这类词只会让 AI 复述该产品,测不出品牌在品类推荐里的位置。\n" + facets
+            )
+        return (
+            f"【产品模式】种子「{seed}」是{target}的产品「{name}」,不是品类。请先推断它所属的通用品类"
+            f"(如「游戏手柄」「电动牙刷」),再围绕该品类造词;**严禁**在任何一条里出现「{name}」或其别名。\n" + facets
+        )
+    if scene == "brand":
+        extra = ""
+        if sp:
+            extra += "  产品卖点(可各取 1 条做评估角度):" + "、".join(sp[:6])[:300] + "\n"
+        if tu:
+            extra += "  目标人群 / 场景:" + "、".join(tu[:6])[:200] + "\n"
+        return (
+            f"【产品模式】种子「{seed}」是{target}的产品「{name}」" + (f"(品类:{cat})" if cat else "") +
+            "。本次至少一半的问句主语用该产品(其余仍用品牌名;下方「主语必须是品牌名」的要求里,产品名视同品牌名),句式参考:\n"
+            f"  {target}{name}怎么样 / {name}值得买吗 / {name}适合谁 / {name}和上一代有什么区别 / "
+            f"{name}和同价位竞品比怎么样 / {name}有什么缺点 / {name}用户评价\n" + extra
+        )
+    return ""
 
 
 def render_prompt(
@@ -193,16 +273,20 @@ def render_prompt(
     core_credentials: list[str] | None = None,
     brand_diff_tags: list[str] | None = None,
     core_service_overview: str = "",
+    products: list[dict] | None = None,
 ) -> str:
-    """渲染 scene 对应的 prompt(直接当 user 输入).
+    """Render the prompt for the scene (used directly as user input).
 
-    2026-05-28 — 按画像依赖度差异化注入:
-      - search / qa: 只用 seed + industry + service_geo
-      - intent:      额外注入 profile_cases(案例追溯)
-      - brand:       注入全部画像字段(target/aliases/cases/credentials/tags/overview)
+    2026-05-28 -- differentiated injection by profile dependency:
+      - search / qa: only seed + industry + service_geo
+      - intent:      additionally injects profile_cases (case tracing)
+      - brand:       injects all profile fields (target/aliases/cases/credentials/tags/overview)
+    2026-09-22 -- products (dict list from profile_json.products) injected in all four scenes; when the seed hits a
+      product it enters "product mode": search / qa / intent use that product's category (see the SCENE_PROMPTS header comment).
     """
     tpl = SCENE_PROMPTS.get(scene) or SCENE_PROMPTS["search"]
-    # 通用字段
+    matched = find_product(products or [], seed)
+    # Common fields
     kw: dict[str, str] = {
         "seed": seed,
         "count": str(int(count)),
@@ -210,10 +294,17 @@ def render_prompt(
         "aliases": "、".join((aliases or [])[:5]) or "(无)",
         "industry": industry or "(未指定)",
         "service_geo": service_geo or "",
-        # 主体类型指令 — 空 / other / 未知都退化成空串(模板按原样跑)
+        # Entity-type directive -- empty / other / unknown all degrade to empty string (template runs as-is)
         "entity_hint": ENTITY_TYPE_HINTS.get((entity_type or "").strip(), ""),
+        "own_products_block": _own_products_block(products, target=target or seed),
+        "product_mode_hint": _product_mode_hint(scene, matched, seed=seed, target=target or seed),
     }
-    # 按场景注入额外字段
+    if matched and scene in ("search", "qa", "intent"):
+        # Product mode: category words built from the product's category; if category is empty keep the seed (hint asks the LLM to infer it)
+        cat = str(matched.get("category") or "").strip()
+        if cat:
+            kw["seed"] = cat
+    # Inject extra fields per scene
     if scene == "intent":
         kw["profile_cases_block"] = _format_list_block(profile_cases)
     elif scene == "brand":
@@ -227,11 +318,11 @@ def render_prompt(
     return tpl.format(**kw)
 
 
-# ─────────────────── LLM provider 选择(复用 content_generator 同款) ──────────────────
+# ─────────────────── LLM provider selection (same as content_generator) ──────────────────
 
 
 def _resolve_provider() -> tuple[str | None, str, str]:
-    """挑 LLM provider + 拿 api key.返回 (provider | None, model_id, api_key)."""
+    """Pick the LLM provider + get the api key. Returns (provider | None, model_id, api_key)."""
     ds_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if ds_key:
@@ -241,16 +332,16 @@ def _resolve_provider() -> tuple[str | None, str, str]:
     return None, DEEPSEEK_MODEL, ""
 
 
-# ─────────────────── 单 scene 调用 ──────────────────
+# ─────────────────── Single scene call ──────────────────
 
 
 def _parse_json_loose(text: str) -> dict[str, Any]:
-    """把 LLM 输出宽松解析为 dict.允许前后包 ```json``` 围栏 / 前后多余文字."""
+    """Loosely parse LLM output into a dict. Allows ```json``` fences / extra text before or after."""
     s = (text or "").strip()
     # strip code fences
     if s.startswith("```"):
         s = s.lstrip("`")
-        # 去掉首行 'json'
+        # strip leading 'json' line
         if "\n" in s:
             first, rest = s.split("\n", 1)
             if first.strip().lower() in ("", "json"):
@@ -258,14 +349,14 @@ def _parse_json_loose(text: str) -> dict[str, Any]:
         if "```" in s:
             s = s.split("```", 1)[0]
     s = s.strip()
-    # 尝试 1:整体解析
+    # Attempt 1: parse the whole thing
     try:
         out = json.loads(s)
         if isinstance(out, dict):
             return out
     except Exception:  # noqa: BLE001
         pass
-    # 尝试 2:抠出 {...}
+    # Attempt 2: extract {...}
     lo = s.find("{")
     hi = s.rfind("}")
     if 0 <= lo < hi:
@@ -288,16 +379,17 @@ async def expand_one_scene(
     industry: str = "",
     service_geo: str = "",
     entity_type: str = "",
-    # 2026-05-28 — 画像注入(intent / brand 场景用,其他 scene 忽略)
+    # 2026-05-28 -- profile injection (used by intent / brand scenes, ignored by others)
     profile_cases: list[str] | None = None,
     core_credentials: list[str] | None = None,
     brand_diff_tags: list[str] | None = None,
     core_service_overview: str = "",
+    products: list[dict] | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    """对单个 scene 调一次 LLM,返回 {"queries": [...], "model": "...", "error": "..."}.
+    """Call the LLM once for a single scene; returns {"queries": [...], "model": "...", "error": "..."}.
 
-    失败不抛 — 把 error 写进返回字典,留给上层 fan-out 决定怎么展示.
+    Never raises -- errors go into the returned dict for the upper fan-out to decide how to display.
     """
     provider, model_id, api_key = _resolve_provider()
     if not provider:
@@ -312,6 +404,7 @@ async def expand_one_scene(
         core_credentials=core_credentials,
         brand_diff_tags=brand_diff_tags,
         core_service_overview=core_service_overview,
+        products=products,
     )
 
     if provider == "deepseek":
@@ -333,13 +426,28 @@ async def expand_one_scene(
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"},
         "temperature": 0.6,
+        "max_tokens": MAX_TOKENS,
     }
+    if provider == "deepseek" and not _THINKING_ON:
+        # Production DEEPSEEK_MODEL is a reasoning model (deepseek-v4-flash). Query expansion is "generate words by pattern" and needs no reasoning;
+        # with thinking on, intent (the most constrained template) writes a long chain of thought first; on 2026-09-22 one production expansion
+        # had only 2 of 4 paths return within 90s (27s / 79s); the intent path hit the timeout with no hint on frontend or backend.
+        # Same treatment as profile_extractor / full_diagnosis_queries: turn it off (the neolink gateway honors this field;
+        # the OpenRouter branch doesn't send it -- models vary in how they treat it).
+        body["thinking"] = {"type": "disabled"}
 
     owns_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=DEFAULT_TIMEOUT)
     try:
-        r = await client.post(url, headers=headers, json=body)
+        # Accounting: the async path can't use post_and_record (that's the sync requests version), so wrap with track.
+        # asyncio copies contextvars natively, so no extra context passing is needed here.
+        with track(f"query_expand.{scene}" if scene else "query_expand",
+                   provider, model_id, endpoint=url) as _t:
+            r = await client.post(url, headers=headers, json=body)
+            _t.http_status = r.status_code
+            if r.status_code == 200:
+                _t.usage = r.json()
         if r.status_code != 200:
             return {"queries": [], "model": model_id,
                     "error": f"LLM HTTP {r.status_code}: {r.text[:200]}"}
@@ -354,7 +462,7 @@ async def expand_one_scene(
         if not isinstance(raw_q, list):
             return {"queries": [], "model": model_id,
                     "error": "LLM did not return queries array"}
-        # 清洗:去空 / 去重 / 截长
+        # Clean: drop empty / dedupe / truncate long
         seen: set[str] = set()
         queries: list[str] = []
         for x in raw_q:
@@ -366,6 +474,9 @@ async def expand_one_scene(
             queries.append(s)
         return {"queries": queries, "model": model_id}
     except httpx.HTTPError as e:
+        # Timeouts / connection failures used to go only into the returned dict without logging, so debugging "intent words missing" in production was guesswork -- log one line.
+        log.warning("expand_one_scene http error scene=%s seed=%s model=%s timeout=%ss: %r",
+                    scene, seed, model_id, DEFAULT_TIMEOUT, e)
         return {"queries": [], "model": model_id, "error": f"HTTP error: {e}"}
     except Exception as e:  # noqa: BLE001
         log.warning("expand_one_scene crash scene=%s seed=%s: %s", scene, seed, e)
@@ -375,43 +486,56 @@ async def expand_one_scene(
             await client.aclose()
 
 
-# ─────────────────── 启发式分类(给历史 query 打 scene 标签) ──────────────────
+# ─────────────────── Heuristic classification (tag historical queries with a scene) ──────────────────
 
-# 顺序敏感:**意图必须先于问答命中**,避免「怎么用」被归 qa(怎么 = 问答?其实是意图).
-# 关键词覆盖尽量穷举常见中文搜索行为:产品 SEO query / Q&A / how-to 教程 / 品牌评估.
+# Order-sensitive: **intent must match before QA**, so "怎么用" ("how to use") isn't classified as qa (怎么 looks like QA but is really intent).
+# Keywords try to cover common Chinese search behavior exhaustively: product SEO queries / Q&A / how-to tutorials / brand evaluation.
 _INTENT_MARKERS: tuple[str, ...] = (
-    # how-to 显式词
+    # explicit how-to words
     "如何", "怎么用", "怎么做", "怎么选", "怎么挑", "怎么入门", "怎么找",
     "怎么获取", "怎么操作", "怎么学", "怎么实现",
-    # 攻略类
+    # guide-type
     "攻略", "教程", "指南", "操作步骤", "使用方法", "什么时候用",
     "用法", "玩法", "做法",
-    # 选择 / 上手 / 流程类
+    # choosing / getting started / process
     "挑选", "选购", "选型", "入门", "入手", "上手", "实操",
     "学会", "自学", "新手", "小白", "速成",
-    # 步骤 / 流程
+    # steps / process
     "步骤", "流程", "操作",
 )
 _QA_MARKERS: tuple[str, ...] = (
-    # 推荐 / 对比 / 选择类
+    # recommendation / comparison / choice
     "哪家", "哪个", "哪种", "哪款", "哪些", "选哪",
     "推荐", "排行", "排名", "TOP", "top",
     "对比", "比较", "vs", "VS", "vS", "Vs",
     "区别", "差异", "异同", "不同点",
-    # 评价 / 口碑 / 优劣
+    # reviews / reputation / pros and cons
     "怎么样", "怎样",
     "好不好", "好用吗", "靠谱吗", "靠不靠谱", "值不值", "值得吗",
     "可以信任", "可信", "可靠吗", "评价", "评测", "评估", "测评",
     "优缺点", "优劣", "利弊", "好处", "缺点", "优势", "劣势",
-    # 定义类 / 谁字类问题
+    # definition / "who" questions
     "是什么", "是啥", "啥是", "啥意思", "什么意思",
     "是谁", "找谁", "属于谁", "谁是", "谁来", "谁会", "谁能",
-    # 性价比 / 价格问句
+    # value-for-money / price questions
     "性价比怎么", "性价比好", "性价比高", "划算吗",
-    # 句尾问句词(放最后,优先级最低)
-    # 注意:同时覆盖 ASCII 半角和 Unicode 全角问号,避免中文 query 句尾 "？" 被漏
+    # sentence-final question words (last, lowest priority)
+    # Note: covers both ASCII half-width and Unicode full-width question marks, so Chinese queries ending in "？" aren't missed
     "?", "？", "吗", "呢",
 )
+
+
+# Strong comparison words: only when these appear **together with** a brand/competitor name is it a competitor-comparison word.
+# Deliberately excludes standalone generic words like 「对比」「比较」 ("compare") -- they're already in _QA_MARKERS;
+# promoting them to the compare layer would reclassify lots of existing QA words, and compare is in the exclusion set of the exposure-rate metric definition,
+# so once reclassified, the report center's exposure rate / TOP1 / TOP3 denominators break immediately.
+_COMPARE_MARKERS = ("哪个好", "哪个更好", "选哪个", "对比", "相比", "vs", "VS", "区别", "谁更")
+
+# Scenario words: tied to a specific audience / occasion / budget. A generic word list has inherently limited recall;
+# here we'd rather misclassify as intent than false-positive -- scenario words mainly come pre-tagged from expansion templates and diagnosis word generation.
+_SCENARIO_MARKERS = ("适合", "人群", "产后", "学生", "上班族", "老人", "新手", "初学",
+                     "预算", "小户型", "出差", "加班", "久坐", "第一次", "长期用",
+                     "家用", "商用", "孕妇", "儿童", "小白")
 
 
 def classify_query(
@@ -419,52 +543,111 @@ def classify_query(
     *,
     target: str = "",
     aliases: list[str] | None = None,
+    competitors: list[str] | None = None,
+    product_terms: list[str] | None = None,
 ) -> SceneType:
-    """启发式把一条 query 归到 4 维场景之一(给历史 query 打标用).
+    """Heuristically assign a query to one scene (for tagging historical queries).
 
-    优先级(从高到低):
-      1. 文本含 target / alias 字面 → brand
-      2. 含意图词(如何 / 攻略 / 教程 / 怎么选 / 怎么用 ...) → intent
-      3. 含问答词(哪家 / 怎么样 / 对比 / 是什么 / 评价 / 吗 ...) → qa
-      4. 其余(纯品类 / 关键词)→ search
+    product_terms (2026-09-22) = product names / aliases from the profile (models.profile_product_terms),
+    brand words just like target / aliases: 「<brand-e>手柄怎么样」 ("how is the <brand-e> gamepad") is a brand word, not a QA word.
 
-    这个分类只看字面,不调 LLM —— 跑得快、确定性强,适合一次性 backfill 大批量 query.
-    对个别歧义 case(怎么用既像 intent 也像 qa)按优先级一刀切,接受少量误分;
-    用户可以重跑(改 target / aliases 后)或手动改单条.
+    Priority (high to low):
+      1. strong comparison word + brand/competitor name -> compare (very strict, see _COMPARE_MARKERS comment)
+      2. text literally contains target / alias -> brand
+      3. contains scenario words (适合 / 人群 / 预算 / 新手 ... ("suitable / audience / budget / beginner")) -> scenario
+      4. contains intent words (如何 / 攻略 / 教程 / 怎么选 / 怎么用 ... ("how / guide / tutorial / how to choose / how to use")) -> intent
+      5. contains QA words (哪家 / 怎么样 / 对比 / 是什么 / 评价 / 吗 ... ("which / how is / compare / what is / review / ?")) -> qa
+      6. everything else (pure category / keywords) -> search
+
+    This classification is literal only, no LLM -- fast and deterministic, suited for one-off bulk backfill of queries.
+    Ambiguous cases (怎么用 ("how to use") looks like both intent and qa) are cut by priority, accepting a few misclassifications;
+    users can rerun (after changing target / aliases) or edit single items manually.
+
+    ⚠️ Rerunning this classifier on existing topics changes the word-class distribution and thus the report center's exposure-rate denominator.
+    See the warning at the top of scripts/backfill_query_scene.py.
     """
     s = (text or "").strip()
     if not s:
         return DEFAULT_SCENE
 
-    # 1. brand:文本含目标品牌名 / 别名(只在 target/alias 长度 ≥ 2 才匹配,
-    #    避免「a」「b」这种短 alias 命中所有 query)
+    # Brand word surface (only matched when length >= 2, so short aliases like "a" "b" don't match every query)
     brand_terms: list[str] = []
     if target and len(target.strip()) >= 2:
         brand_terms.append(target.strip())
-    for a in aliases or []:
+    for a in list(aliases or []) + list(product_terms or []):
         a = (a or "").strip()
         if a and len(a) >= 2:
             brand_terms.append(a)
-    for term in brand_terms:
-        if term and term in s:
-            return "brand"
+    comp_terms = [c.strip() for c in (competitors or []) if c and len(c.strip()) >= 2]
 
-    # 2. intent
+    has_brand = any(t in s for t in brand_terms)
+    has_comp = any(c in s for c in comp_terms)
+
+    # 1. compare -- requires a "strong comparison word" AND "some brand name"; pure category comparison words stay qa
+    if (has_brand or has_comp) and any(m in s for m in _COMPARE_MARKERS):
+        return "compare"
+
+    # 2. brand
+    if has_brand:
+        return "brand"
+
+    # 3. scenario
+    for marker in _SCENARIO_MARKERS:
+        if marker in s:
+            return "scenario"
+
+    # 4. intent
     for marker in _INTENT_MARKERS:
         if marker in s:
             return "intent"
 
-    # 3. qa
+    # 5. qa
     for marker in _QA_MARKERS:
         if marker in s:
             return "qa"
 
-    # 4. 默认 search
+    # 6. default search
     return "search"
+
+
+def route_brand_words(scene_results: dict[str, dict], brand_terms: list[str]) -> dict[str, dict]:
+    """Post-expansion fallback: move items in search / qa / intent whose text contains brand words (target / alias / product name) to brand.
+
+    Templates already say "product names are strictly forbidden", but the LLM doesn't always comply; this keeps category scenes clean -- otherwise
+    「<brand-e>手柄哪家好」 ("which <brand-e> gamepad is best") enters selected-queries as qa, counts in the exposure denominator, and treats our own product as a competitor.
+    Modifies in place and returns the same dict; creates the brand bucket if missing. Dedupes by text (items already in brand aren't appended).
+    """
+    terms = [t.strip() for t in (brand_terms or []) if t and len(t.strip()) >= 2]
+    if not terms:
+        return scene_results
+    lowered = [t.casefold() for t in terms]
+    brand = scene_results.setdefault("brand", {"queries": [], "model": "", "error": ""})
+    brand_qs: list[str] = list(brand.get("queries") or [])
+    seen = {q.casefold() for q in brand_qs}
+    moved = 0
+    for scene in ("search", "qa", "intent"):
+        info = scene_results.get(scene)
+        if not info:
+            continue
+        keep: list[str] = []
+        for q in info.get("queries") or []:
+            ql = (q or "").casefold()
+            if any(t in ql for t in lowered):
+                if ql not in seen:
+                    seen.add(ql)
+                    brand_qs.append(q)
+                moved += 1
+            else:
+                keep.append(q)
+        info["queries"] = keep
+    if moved:
+        brand["queries"] = brand_qs
+        log.info("route_brand_words: %d category-scene candidates contain brand/product words, moved to brand", moved)
+    return scene_results
 
 
 __all__ = [
     "ALL_SCENES", "SceneType", "SCENE_PROMPTS",
     "render_prompt", "expand_one_scene", "DEFAULT_TIMEOUT",
-    "classify_query",
+    "classify_query", "route_brand_words",
 ]

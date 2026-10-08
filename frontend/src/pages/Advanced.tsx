@@ -7,6 +7,7 @@ import { geoApi } from '../services/geoApi';
 import { useMembership } from '../hooks/useMembership';
 import { validateUrl, normalizeUrl } from '../utils/validateUrl';
 import { PaymentModal } from '../components/PaymentModal';
+import { UiSelect } from '../components/ui/Select';
 import type {
   AdvancedMode,
   AeoVisibilityResponse,
@@ -466,16 +467,17 @@ function ModeForm(props: ModeFormProps) {
         </div>
         <div>
           <label className="text-sm font-semibold text-primary mb-2 block">Entity type</label>
-          <select
+          <UiSelect
             value={props.entityType}
-            onChange={(e) => props.setEntityType(e.target.value as 'brand' | 'product' | 'person')}
+            onChange={(val) => props.setEntityType(val as 'brand' | 'product' | 'person')}
             disabled={loading}
             className={inputClass}
-          >
-            <option value="brand">Brand</option>
-            <option value="product">Product</option>
-            <option value="person">Person</option>
-          </select>
+            options={[
+              { value: 'brand', label: 'Brand' },
+              { value: 'product', label: 'Product' },
+              { value: 'person', label: 'Person' },
+            ]}
+          />
         </div>
       </div>
     );
@@ -1117,7 +1119,7 @@ function AuthorityResult({ data }: { data: AuthorityAuditResponse }) {
             </div>
           )}
         </SectionCard>
-        <SectionCard title={t('home.advanced.result.authority.googleTitle')}>
+        <SectionCard title={t('home.advanced.result.authority.searchAuthorityTitle')}>
           <p className="text-sm mb-1">
             <span className="text-secondary">{t('home.advanced.result.authority.indexedPages')} </span>
             <span className="text-primary">
@@ -1420,7 +1422,7 @@ function EntityResult({ data }: { data: EntityAuditResponse }) {
       found: data.knowledge_graph.wikidata,
       sub: data.knowledge_graph.wikidata_id || '',
     },
-    { key: t('home.advanced.result.entity.kgGoogleKg'), found: data.knowledge_graph.google_kg, sub: '' },
+    { key: t('home.advanced.result.entity.kgKnowledgeGraph'), found: data.knowledge_graph.google_kg, sub: '' },
     { key: t('home.advanced.result.entity.kgBaiduBaike'), found: data.knowledge_graph.baidu_baike, sub: '' },
   ];
   return (

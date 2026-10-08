@@ -13,6 +13,16 @@ class GeoTestRequest(BaseModel):
             "immediately instead of the 24h-stale cached report."
         ),
     )
+    include_seo: bool = Field(
+        default=False,
+        description=(
+            "Also run the 12-category SEO suite and return it under `seo`. "
+            "One request means one billable check: the quota is charged once "
+            "and a single history row is written, with the SEO block inside "
+            "the same snapshot. Defaults off so existing API callers are "
+            "unaffected."
+        ),
+    )
 
 class CheckResult(BaseModel):
     """Result of a single check"""

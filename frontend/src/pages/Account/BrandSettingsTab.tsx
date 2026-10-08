@@ -1,16 +1,17 @@
-// 品牌与监控配置 Tab — 统一放在账户中心.
+// Brand & monitoring config tab -- placed in the account center.
 //
-// 4 个区块:
-//   1. 品牌信息: 品牌名、股票代码、别名
-//   2. 监控配置: 监测重点、关键词分组、排除词
-//   3. 通知设置: 通知邮箱
-//   4. 知识库:   品牌语调、法务红线、响应剧本
+// 4 sections:
+//   1. Brand info: brand name, stock ticker, aliases
+//   2. Monitoring config: monitoring focus, keyword groups, excluded terms
+//   3. Notification settings: notification email
+//   4. Knowledge base: brand tone, legal red lines, response playbooks
 //
-// 未配置时展示 OnboardingWizard(品牌创建表单).
+// When not configured, show OnboardingWizard (brand creation form).
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/ui';
 
 import { mockAccount, mockKeywordGroups, mockKnowledge } from '../../mocks/sentiment';
 import { isMockMode } from '../../services/sentimentApi';
@@ -25,6 +26,10 @@ import { KeywordGroupsEditor } from '../Dashboard/sentiment/components/KeywordGr
 import { KnowledgeEditor } from '../Dashboard/sentiment/components/KnowledgeEditor';
 import { OnboardingWizard } from '../Dashboard/sentiment/OnboardingWizard';
 import { groupByMediaType } from '../../constants/sentimentPlatforms';
+import { uiConfirm } from '../../components/ui/dialogs';
+import { toast } from '../../components/ui/toast';
+import { UiSelect } from '../../components/ui/Select';
+import { useAgencyContext } from '../../contexts/AgencyContext';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -35,6 +40,7 @@ export function BrandSettingsTab() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const usingMock = isMockMode();
+  const { canWrite, managedAgency } = useAgencyContext();
 
   const accountsQuery = useSentimentAccounts();
   const accounts = accountsQuery.data ?? [];
@@ -57,6 +63,8 @@ export function BrandSettingsTab() {
   const [emails, setEmails] = useState<string[]>([]);
   const [weixinAlbumUrls, setWeixinAlbumUrls] = useState<string[]>([]);
   const [newsnowSources, setNewsnowSources] = useState<string[]>([]);
+  // Hour of daily monitoring (Beijing time). '' = unspecified, follows the system cadence.
+  const [runHour, setRunHour] = useState<string>('');
 
   useEffect(() => {
     if (!account) return;
@@ -80,6 +88,7 @@ export function BrandSettingsTab() {
     setEmails(account.notify_emails ?? []);
     setWeixinAlbumUrls(account.weixin_album_urls ?? []);
     setNewsnowSources(account.newsnow_sources ?? []);
+    setRunHour(account.run_hour == null ? '' : String(account.run_hour));
   }, [account, usingMock]);
 
   const knowledgeFromApi = (knowledgeQuery.data ?? []).reduce(
@@ -99,7 +108,7 @@ export function BrandSettingsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [knowledgeQuery.data, usingMock]);
 
-  // 未配置品牌 → 显示创建表单
+  // No brand configured -> show the creation form
   if (!usingMock && accountsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -112,6 +121,11 @@ export function BrandSettingsTab() {
   }
 
   if (!usingMock && !account) {
+    if (!canWrite) {
+      return <div className="rounded-xl p-5 text-sm text-muted" style={cardStyle}>
+        当前企业由「{managedAgency?.name || '代理组织'}」管理，品牌与监控配置只读且尚未建立。
+      </div>;
+    }
     return (
       <OnboardingWizard
         onSubmit={() => {
@@ -122,12 +136,15 @@ export function BrandSettingsTab() {
   }
 
   const buildPayload = () => ({
-    target, ticker,
+    // Stock ticker is optional: empty string = explicit clear (the backend treats only undefined as "leave this column alone")
+    target: target.trim(), ticker: ticker.trim(),
     aliases, intent: intents.length > 0 ? intents.join('、') : undefined,
     keyword_groups: keywordGroups,
     excludes, media_allowlist: mediaAllowlist, notify_emails: emails,
     weixin_album_urls: weixinAlbumUrls,
     newsnow_sources: newsnowSources,
+    // Don't send it if unspecified -- Update's run_hour is Optional, and passing undefined leaves the column untouched in the backend
+    ...(runHour === '' ? {} : { run_hour: Number(runHour) }),
   });
 
   const persistKnowledge = async () => {
@@ -145,52 +162,52 @@ export function BrandSettingsTab() {
 
   const handleSave = async () => {
     if (usingMock) {
-      alert(t('account.brand.saved'));
+      toast.success(t('account.brand.saved'));
       return;
     }
     try {
       await updateAccount.mutateAsync({ id: account!.id, payload: buildPayload() });
       await persistKnowledge();
-      alert(t('account.brand.saved'));
+      toast.success(t('account.brand.saved'));
     } catch (e) {
-      alert(`${t('account.brand.saveFailed')}${e instanceof Error ? e.message : e}`);
+      toast.error(`${t('account.brand.saveFailed')}${e instanceof Error ? e.message : e}`);
     }
   };
 
   const handleSaveAndRun = async () => {
     if (usingMock) {
-      alert(`${t('account.brand.saved')}\n${t('account.brand.runNowQueued')}`);
+      toast.success(`${t('account.brand.saved')}\n${t('account.brand.runNowQueued')}`);
       return;
     }
     try {
       await updateAccount.mutateAsync({ id: account!.id, payload: buildPayload() });
       await persistKnowledge();
-      // update 若检测到关键词/intent 变化会自动入队 pipeline,
-      // 此时 /run-now 返回 409 是正常的 — 忽略即可.
+      // If update detects keyword/intent changes it auto-enqueues the pipeline,
+      // in which case /run-now returning 409 is normal -- just ignore it.
       try {
         await runNowMutation.mutateAsync(account!.id);
       } catch {
-        // 409 = task already running/queued — 不影响保存成功
+        // 409 = task already running/queued -- doesn't affect the save succeeding
       }
-      alert(`${t('account.brand.saved')}\n${t('account.brand.runNowQueued')}`);
+      toast.success(`${t('account.brand.saved')}\n${t('account.brand.runNowQueued')}`);
       navigate('/sentiment');
     } catch (e) {
-      alert(`${t('account.brand.saveFailed')}${e instanceof Error ? e.message : e}`);
+      toast.error(`${t('account.brand.saveFailed')}${e instanceof Error ? e.message : e}`);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm(t('account.brand.deleteConfirm'))) return;
+    if (!(await uiConfirm(t('account.brand.deleteConfirm'), { danger: true }))) return;
     if (usingMock) {
-      alert(t('account.brand.deleted'));
+      toast.success(t('account.brand.deleted'));
       return;
     }
     try {
       await deleteAccount.mutateAsync(account!.id);
-      alert(t('account.brand.deleted'));
+      toast.success(t('account.brand.deleted'));
       accountsQuery.refetch();
     } catch (e) {
-      alert(`${t('account.brand.deleteFailed')}${e instanceof Error ? e.message : e}`);
+      toast.error(`${t('account.brand.deleteFailed')}${e instanceof Error ? e.message : e}`);
     }
   };
 
@@ -199,7 +216,9 @@ export function BrandSettingsTab() {
 
   return (
     <div className="space-y-5">
-      {/* ── 区块 1: 品牌信息 ── */}
+      {/* This page is the sentiment monitoring settings page (the component name BrandSettingsTab is historical); the title follows the workbench convention */}
+      <PageHeader title="舆情设置" hint="品牌名与别名 · 监测重点与关键词分组 · 通知邮箱 · 品牌语调与法务红线" />
+      {/* ── Section 1: brand info ── */}
       <Section title={t('account.brand.sections.brandInfo')}>
         <Grid>
           <Field label={t('account.brand.fields.target')} required>
@@ -214,7 +233,7 @@ export function BrandSettingsTab() {
         </Field>
       </Section>
 
-      {/* ── 区块 2: 监控配置 ── */}
+      {/* ── Section 2: monitoring config ── */}
       <Section title={t('account.brand.sections.monitoring')}>
         <Field label={t('account.brand.fields.intent')}>
           <TagInput value={intents} onChange={setIntents} placeholder={t('account.brand.fields.intentPlaceholder')}
@@ -229,7 +248,7 @@ export function BrandSettingsTab() {
         </Field>
       </Section>
 
-      {/* ── 区块 2.5: 扩展数据源(可选,默认关闭) ── */}
+      {/* ── Section 2.5: extended data sources (optional, off by default) ── */}
       <Section title={t('account.brand.sections.extraSources', '扩展数据源(可选)')}>
         <Field label={t('account.brand.fields.weixinAlbumUrls', '微信公众号合集 URL')}>
           <TagInput
@@ -257,19 +276,41 @@ export function BrandSettingsTab() {
         </Field>
       </Section>
 
-      {/* ── 区块 3: 通知设置 ── */}
+      {/* ── Section 3: notification settings ── */}
       <Section title={t('account.brand.sections.notify')}>
         <Field label={t('account.brand.fields.emails')}>
           <TagInput value={emails} onChange={setEmails} placeholder="ir@yourcompany.com" max={10} />
         </Field>
+        <Field label={t('account.brand.fields.runHour', '每天监测时间')}>
+          <UiSelect
+            value={runHour}
+            onChange={setRunHour}
+            className="rounded-md px-3 py-2 text-sm"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+            }}
+            options={[
+              { value: '', label: '不指定(按系统节奏)' },
+              ...Array.from({ length: 24 }, (_, h) => ({
+                value: String(h),
+                label: `${String(h).padStart(2, '0')}:00`,
+              })),
+            ]}
+          />
+          <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+            北京时间。舆情监测每天只扣一次积分,选在几点跑不影响费用。
+          </p>
+        </Field>
       </Section>
 
-      {/* ── 区块 4: 知识库 ── */}
+      {/* ── Section 4: knowledge base ── */}
       <Section title={t('account.brand.sections.knowledge')}>
         <KnowledgeEditor knowledge={localKnowledge} onChange={setLocalKnowledge} />
       </Section>
 
-      {/* ── 操作栏 ── */}
+      {/* ── Action bar ── */}
       <section className="rounded-2xl p-5 flex items-center justify-between flex-wrap gap-3" style={cardStyle}>
         <div className="flex gap-2">
           <button type="button" onClick={handleSave} disabled={saving}
@@ -291,7 +332,7 @@ export function BrandSettingsTab() {
   );
 }
 
-/* ── 本地 UI 组件 ── */
+/* ── Local UI components ── */
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -325,12 +366,12 @@ function Input({ value, onChange, mono }: { value: string; onChange: (v: string)
   );
 }
 
-/* ── 媒体白名单分组编辑器 — 参照 WisersOne 的"媒体类型"轴(网媒/微博/微信/
-   APP/论坛/短视频/长视频/...),每组一行小标题 + chip + 全选/清空。
-   平台目录从 useSentimentPlatforms() 拉,DB 是 single source of truth。
+/* ── Media whitelist group editor -- modeled on WisersOne's "media type" axis (web media/Weibo/WeChat/
+   APP/forums/short video/long video/...), each group a subheading row + chips + select all/clear.
+   The platform catalog is fetched from useSentimentPlatforms(); the DB is the single source of truth.
 
-   value 语义:`[]` = 全部平台(canonical "all"),非空数组 = 仅勾选的子集。
-   折叠态默认隐藏 chip 区,只展示"高级选择"入口 + 当前状态摘要。 */
+   value semantics: `[]` = all platforms (canonical "all"), a non-empty array = only the checked subset.
+   The collapsed state hides the chip area by default, showing only the "advanced selection" entry + a current state summary. */
 function MediaAllowlistEditor({
   value, onChange,
 }: { value: string[]; onChange: (next: string[]) => void }) {
@@ -342,8 +383,8 @@ function MediaAllowlistEditor({
   const total = allCodes.length;
 
   const [expanded, setExpanded] = useState(false);
-  // 每个媒体类型分组独立折叠 — 默认全部折叠,避免一展开就刷出 70+ chip。
-  // 用户点小箭头才展开对应组。
+  // Each media type group collapses independently -- all collapsed by default, to avoid 70+ chips flooding out on expand.
+  // Users click the small arrow to expand the corresponding group.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (mt: string) => {
     setOpenGroups(prev => {
@@ -353,12 +394,12 @@ function MediaAllowlistEditor({
     });
   };
 
-  // value=[] 视为"全选"——chip 全亮,但保持后端语义不变(空数组 = 全部)。
+  // value=[] is treated as "select all" -- all chips lit, while keeping backend semantics unchanged (empty array = all).
   const isAll = value.length === 0;
   const effective = isAll ? allCodes : value;
   const selectedSet = useMemo(() => new Set(effective), [effective]);
 
-  // 写回:全部勾上时 normalize 回 `[]`,与"留空 = 全部"对齐。
+  // Write back: when all are checked, normalize back to `[]`, aligned with "empty = all".
   const commit = (next: string[]) => {
     if (next.length === total && allCodes.every(c => next.includes(c))) {
       onChange([]);
@@ -378,7 +419,7 @@ function MediaAllowlistEditor({
     }
     commit(Array.from(set));
   };
-  // 优先 DB 里的本地化名;空再回 i18n sourceLabels;再回 code。
+  // Prefer the localized name from the DB; if empty fall back to i18n sourceLabels; then to code.
   const platformLabel = (p: SentimentPlatform): string => {
     const fromDb = i18n.language === 'zh' ? p.name_zh : p.name_en;
     if (fromDb) return fromDb;
@@ -435,7 +476,7 @@ function MediaAllowlistEditor({
               const open = openGroups.has(mediaType);
               return (
                 <div key={mediaType}>
-                  {/* 行头:点 caret/标题展开,右侧"全选/清空"按钮独立 */}
+                  {/* Row header: click the caret/title to expand; the "select all/clear" button on the right is independent */}
                   <div className="flex items-center gap-2 px-3 py-2">
                     <button
                       type="button"
@@ -465,8 +506,8 @@ function MediaAllowlistEditor({
                         : t('account.brand.fields.mediaAllowlistSelectGroup')}
                     </button>
                   </div>
-                  {/* 平台列表 — 竖列 list 项,平台增多时也不会撑爆宽度;
-                     超过 ~16 项限高滚动,选中行用浅蓝底 + ✓ 标记。 */}
+                  {/* Platform list -- vertical list items, so more platforms don't blow out the width;
+                     scrolls with a height limit beyond ~16 items; selected rows get a light blue background + ✓ mark. */}
                   {open && (
                     <div
                       className={`flex flex-col ${items.length > 16 ? 'max-h-72 overflow-y-auto' : ''}`}

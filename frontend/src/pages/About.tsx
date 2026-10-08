@@ -16,7 +16,7 @@ export function About() {
           {/* Hero Section */}
           <section className="hero mb-16">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up">
                 <span className="gradient-text">{t('aboutUs.title')}</span>
               </h1>
               <p className="text-lg sm:text-xl text-secondary max-w-3xl mx-auto leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>
@@ -45,12 +45,36 @@ export function About() {
                   {t('aboutUs.story.paragraph3')}
                 </p>
               </div>
-              <div className="rounded-2xl overflow-hidden shadow-lg shadow-accent-primary/10">
-                <img
-                  src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20office%20space%20with%20tech%20team%20working%20on%20computers%2C%20bright%20and%20professional%20environment&image_size=landscape_16_9"
-                  alt="Our Team"
-                  className="w-full h-auto object-cover"
-                />
+              {/* This used to show an image straight from Trae's text_to_image API; that URL is dead
+                  (returns 301 + a 2-byte JSON), so the page showed a broken image. Replaced with a brand visual block that depends on no
+                  external service; to use real team photos, put the images in
+                  frontend/public/image/ and replace this section. */}
+              <div className="rounded-2xl overflow-hidden shadow-lg shadow-accent-primary/10 border border-border">
+                <div className="relative aspect-[16/9] bg-tertiary flex items-center justify-center">
+                  <div
+                    className="absolute inset-0 opacity-70"
+                    style={{
+                      backgroundImage:
+                        'radial-gradient(circle at 20% 20%, var(--accent-primary), transparent 55%), radial-gradient(circle at 80% 70%, var(--accent-secondary), transparent 55%)',
+                      opacity: 0.18,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(var(--border-color) 1px, transparent 1px), linear-gradient(90deg, var(--border-color) 1px, transparent 1px)',
+                      backgroundSize: '32px 32px',
+                      opacity: 0.35,
+                    }}
+                  />
+                  <img
+                    src="/image/logo.webp"
+                    alt="Vigilath"
+                    className="relative w-28 md:w-36 opacity-80"
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -104,18 +128,26 @@ export function About() {
             </h2>
             <div className="max-w-2xl mx-auto">
               <div className="bg-card border border-border rounded-2xl p-8">
-                <h3 className="text-xl font-bold mb-6 gradient-text">
-                  {t('aboutUs.contact.info.title')}
-                </h3>
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex items-start gap-4">
                     <svg className="w-6 h-6 text-accent-primary shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                     <div>
-                      <h4 className="text-lg font-semibold mb-2 gradient-text">{t('aboutUs.contact.info.email')}</h4>
+                      <h4 className="text-lg font-semibold mb-2 gradient-text">联系邮箱</h4>
                       <p className="text-secondary">
-                        {t('aboutUs.contact.info.emailValue')}
+                        <a href="mailto:<support-email>" className="text-accent-primary hover:underline">{'<support-email>'}</a>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <svg className="w-6 h-6 text-accent-primary shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498A1 1 0 0121 15.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <div>
+                      <h4 className="text-lg font-semibold mb-2 gradient-text">客服热线</h4>
+                      <p className="text-secondary">
+                        <a href="tel:<support-phone>" className="text-accent-primary hover:underline">{'<support-phone>'}</a>
                       </p>
                     </div>
                   </div>

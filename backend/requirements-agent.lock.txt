@@ -1,0 +1,83 @@
+# Locked dependencies for the geo-agent image -- produced by pip freeze inside the container, smoke-tested (service starts, /health 200).
+#
+# Why lock: requirements-agent.txt is all loose >= constraints; building from it directly installs
+# whatever is newest that day and maybe something else next month -- the image isn't reproducible,
+# and "same tag, different behavior" is harder to debug than a failed upgrade.
+#
+# How to update: change constraints in requirements-agent.txt -> build once with it -> pip freeze inside the container
+# to overwrite this file -> commit with the code after the smoke test passes.
+#
+# ★ openai must stay on 2.x until 3.x is verified: >=3's httpx_aiohttp references
+#   aiohttp.SocketTimeoutError at import (aiohttp >= 3.10 only). With the old aiohttp 3.9.1 pin,
+#   importing raised AttributeError -> build_agent raises -> /api/agent/chat always 503.
+#   2026-08-25: this file once locked openai==3.3.1, and that "smoke-tested" run was done back when
+#   /health was hardcoded to return ok, so the broken version got locked in.
+#
+# Regenerated 2026-10-08 (Python 3.12, pip freeze of a clean venv) after moving to PyJWT and the
+# security-patched aiohttp / requests / python-multipart / python-dotenv versions.
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.4
+aiosignal==1.4.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+attrs==26.1.0
+bcrypt==5.0.0
+beautifulsoup4==4.12.2
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.0
+cryptography==50.0.2
+distro==1.9.0
+dnspython==2.8.0
+email-validator==2.3.0
+fastapi==0.142.4
+frozenlist==1.8.0
+genai-prices==0.0.73
+greenlet==3.5.6
+griffelib==2.3.2
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httptools==0.8.0
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+jiter==0.17.0
+logfire-api==5.1.1
+multidict==6.9.1
+openai==2.54.0
+opentelemetry-api==1.45.1
+passlib==1.7.4
+propcache==0.5.4
+psycopg==3.3.6
+psycopg-binary==3.3.6
+pycparser==3.0
+pydantic==2.13.5
+pydantic-ai-slim==1.107.7
+pydantic-graph==1.107.7
+pydantic-settings==2.15.0
+pydantic_core==2.46.5
+PyJWT==2.15.1
+python-dotenv==1.2.4
+python-multipart==0.0.32
+PyYAML==6.0.3
+redis==8.1.0
+regex==2026.9.29
+requests==2.34.2
+sniffio==1.3.1
+soupsieve==2.10
+SQLAlchemy==2.0.23
+starlette==1.7.0
+tiktoken==0.14.0
+tqdm==4.70.1
+truststore==0.10.4
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uvicorn==0.54.0
+uvloop==0.23.0
+watchfiles==1.3.0
+websockets==17.2
+yarl==1.25.1

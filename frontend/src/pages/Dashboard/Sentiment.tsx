@@ -1,13 +1,13 @@
-// 舆情监控落地页 — 访问控制守卫 + 数据面板.
+// Sentiment monitoring landing page — access-control guard + data panel.
 //
-// 访问控制流程:
-//   1. 未登录 → Navigate 到 / (首页)
-//   2. 已登录但无账号 → Navigate 到 /account/brand (品牌配置页)
-//   3. 已登录且有账号 → 展示数据监测面板 (4 Tabs)
+// Access-control flow:
+//   1. Not logged in -> Navigate to / (home)
+//   2. Logged in but no account -> Navigate to /account/brand (brand config page)
+//   3. Logged in with an account -> show the data monitoring panel (4 tabs)
 //
-// 数据来源:
-//   VITE_USE_MOCK_SENTIMENT=1  → 走 mocks/sentiment.ts (离线 demo)
-//   否则                         → useSentimentAccounts + sentimentApi (真实 API)
+// Data source:
+//   VITE_USE_MOCK_SENTIMENT=1  -> mocks/sentiment.ts (offline demo)
+//   otherwise                    -> useSentimentAccounts + sentimentApi (real API)
 import { useState } from 'react';
 import { useSearchParams, Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +25,7 @@ import { BriefsTab } from './sentiment/tabs/BriefsTab';
 import { StatusBanner, FirstRunWaiting } from './sentiment/components/StatusBanner';
 import { AccountSidebar } from './sentiment/components/AccountSidebar';
 import { HotTopicsPanel } from './sentiment/components/HotTopicsPanel';
+import { QuickCheckPanel } from './sentiment/components/QuickCheckPanel';
 
 type TabKey = 'today' | 'articles' | 'briefs';
 const TAB_KEYS: TabKey[] = ['today', 'articles', 'briefs'];
@@ -44,23 +45,24 @@ export function Sentiment() {
     ? (demo === 'onboarding' && !mockCreated ? null : (mockAccount as SentimentAccount))
     : (accounts.find(a => a.id === (selectedId ?? accounts[0]?.id)) ?? null);
 
-  // hooks 必须在所有 early return 之前调用 — React Rules of Hooks
+  // Hooks must be called before any early return — React Rules of Hooks
   const runStatusQuery = useRunStatus(usingMock ? null : (account?.id ?? null));
   const runNowMutation = useRunNow();
 
-  // ── 守卫 1: 未登录 → 首页 ──
+  // ── Guard 1: not logged in -> home ──
   if (!usingMock && !isLoggedIn) {
     return <Navigate to="/" replace />;
   }
 
-  // ── 加载中 ──
+  // 2026-08-25 — there used to be a guard here that "bounces back to home without a real paid subscription".
+  // Since sentiment monitoring switched to **pay-per-use**, tiers no longer gate access (the backend pro hard gate was retired as well);
+  // whether the balance suffices is checked by the backend when creating accounts/batch runs, and the frontend no longer blocks.
+
+  // ── Loading ──
   if (!usingMock && isLoading) {
     return (
-      <div className="min-h-[calc(100vh-5rem)] grid-background relative flex items-center justify-center">
-        <div className="bg-glow bg-glow-1" />
-        <div className="bg-glow bg-glow-2" />
-        <div className="bg-glow bg-glow-3" />
-        <div className="text-center space-y-3 relative z-10">
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center space-y-3">
           <div
             className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 mx-auto"
             style={{ borderColor: 'var(--accent-primary)' }}
@@ -71,19 +73,35 @@ export function Sentiment() {
     );
   }
 
-  // ── 守卫 2: 已登录但无配置的品牌 → 品牌设置页 ──
+  // ── No brand configured yet: offer a one-off quick check instead of turning people away ──
+  // "Taking a look" shouldn't require creating an account first -- this used to Navigate straight to the brand settings page,
+  // so users wanting a quick look for negative coverage were first asked to fill a full config, and the funnel broke here.
   if (!usingMock && !account) {
-    return <Navigate to="/account/brand" replace />;
+    return (
+      <div>
+        <div className="space-y-4">
+          <PageHead titleKey="pageMeta.sentiment.title" descriptionKey="pageMeta.sentiment.description" />
+          <QuickCheckPanel />
+          <p className="text-sm text-secondary text-center">
+            想要每天自动盯着 + 负面预警 + 历史回溯?
+            <Link to="/account/brand" className="underline ml-1"
+                  style={{ color: 'var(--accent-primary)' }}>
+              开通日常监测
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  // guard 2 已经处理了无账号场景,这里 account 一定存在
+  // guard 2 already handled the no-account case, so account must exist here
   const acct = account!;
 
   const status = demo === 'running' ? 'running'
               : demo === 'failed' ? 'failed'
               : demo === 'firstrun' ? null
               : (usingMock ? acct.last_run_status : (runStatusQuery.data?.status ?? acct.last_run_status));
-  const error = demo === 'failed' ? '调用 OpenAI 时出错(429 速率限制)'
+  const error = demo === 'failed' ? '调用模型接口出错(429 速率限制)'
               : (usingMock ? acct.last_run_error : runStatusQuery.data?.error ?? acct.last_run_error);
   const lastRunAt = usingMock ? acct.last_run_at : (runStatusQuery.data?.last_run_at ?? acct.last_run_at);
 
@@ -127,14 +145,11 @@ export function Sentiment() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] grid-background relative">
+    <div>
       <PageHead titleKey="pageMeta.sentiment.title" descriptionKey="pageMeta.sentiment.description" />
-      <div className="bg-glow bg-glow-1" />
-      <div className="bg-glow bg-glow-2" />
-      <div className="bg-glow bg-glow-3" />
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 md:py-8 relative z-10">
+      <div>
         <header className="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <h1 className="text-2xl font-bold text-primary">
+          <h1 className="text-xl font-semibold text-primary">
             {t('dashboard.sentiment.title')}
           </h1>
 
@@ -163,7 +178,7 @@ export function Sentiment() {
           </div>
         </header>
 
-        {/* 主体 2 列布局:左侧账户树 + 右侧 Tab 区. 移动端单列堆叠. */}
+        {/* Main 2-column layout: account tree on the left + tab area on the right. Single column stacked on mobile. */}
         <div className="grid grid-cols-1 xl:grid-cols-[220px_minmax(0,1fr)] gap-4">
           <AccountSidebar
             accounts={usingMock ? [acct] : accounts}
@@ -209,7 +224,7 @@ export function Sentiment() {
               </div>
             )}
 
-            {/* 首次运行的全屏占位 — 没历史数据时才用 */}
+            {/* Full-screen placeholder for the first run — used only when there's no historical data */}
             {(status === 'pending' || status === 'running') && !lastRunAt ? (
               <FirstRunWaiting onRefresh={handleRefresh} />
             ) : (
@@ -233,7 +248,7 @@ export function Sentiment() {
                       </button>
                     ))}
                   </div>
-                  {/* 子 Tab 通过 portal 把工具条渲染到这里 — 比如文章 Tab 的时间筛选 chip */}
+                  {/* Child tabs render their toolbar here via a portal — e.g. the articles tab's time filter chips */}
                   <div id="sentiment-tab-toolbar" className="flex items-center gap-2 pb-2" />
                 </nav>
 

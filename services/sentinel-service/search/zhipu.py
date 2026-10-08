@@ -6,7 +6,7 @@
 为什么加这个:
 - DDG 在国内机房限流严重;baidu 需要 cookie;cnbing 从海外出口 CAPTCHA
 - 智谱专门给 RAG 用,中文实时性好(微信/微博/雪球/B站 索引深且新)
-- 国内 API,vm02 直连零延迟
+- 国内 API,<app-host> 直连零延迟
 """
 from __future__ import annotations
 import os
@@ -106,8 +106,8 @@ def zhipu_search(query: str, max_results: int = 10,
 
 
 if __name__ == "__main__":
-    # python -m search.zhipu 'site:mp.weixin.qq.com 世纪互联'
-    q = " ".join(sys.argv[1:]) or "site:xueqiu.com 世纪互联"
+    # python -m search.zhipu 'site:mp.weixin.qq.com 示例品牌'
+    q = " ".join(sys.argv[1:]) or "site:xueqiu.com 示例品牌"
     rows = zhipu_search(q, max_results=10)
     print(f"[{len(rows)}] {q}")
     for x in rows[:5]:

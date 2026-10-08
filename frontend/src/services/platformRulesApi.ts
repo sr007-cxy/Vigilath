@@ -1,6 +1,6 @@
-// 平台审核规则库 API — /api/admin/platform-rules,后端 require_admin 守门.
-// 规则文本在生成文章时按发文行平台注入 prompt;「从拒稿学习」把平台拒稿原因
-// 提炼成规则增量(pending),admin 采纳后生效。
+// Platform review rule library API — /api/admin/platform-rules, guarded by backend require_admin.
+// Rule text is injected into the prompt per publish row platform at article generation; "learn from rejections" distills platform rejection reasons
+// into rule increments (pending), effective after admin adoption.
 
 import { localizedHeaders, readApiError } from './apiError';
 
@@ -13,6 +13,23 @@ export interface PlatformRule {
   learned_at?: string | null;
   updated_at?: string | null;
   rejected_count: number;
+  // 2026-08-04 — auto-adapt: in_use = this platform is really being placed on (appears in publish plans/placement tasks/drafted articles);
+  // usage = sources of use; ai_draft = the rule is an AI first draft not yet proofread by a human.
+  in_use?: boolean;
+  usage?: string[];
+  ai_draft?: boolean;
+}
+
+// Result of one auto-adapt round
+export interface PlatformRuleSyncResult {
+  in_use: number;
+  created: string[];       // Platforms with newly created rows
+  seeded: string[];        // Those with auto-generated first drafts taking effect
+  learned: string[];       // Those producing increments pending adoption
+  seed_failed: string[];
+  learn_failed: string[];
+  skipped_seed: string[];  // Not enough quota this round; first drafts filled in next round
+  rules: PlatformRule[];
 }
 
 async function request<T>(
@@ -44,15 +61,23 @@ export const platformRulesApi = {
     return request('PUT', `/${encodeURIComponent(platform)}`, token,
       { rules_text: rulesText, clear_pending: clearPending });
   },
-  // LLM 生成初稿(不落库,返回草稿文本由 admin 校对)
+  // LLM generates a first draft (not persisted to DB; returns the draft text for admin proofreading)
   async seed(platform: string, token: string): Promise<{ platform: string; draft: string }> {
     return request('POST', `/${encodeURIComponent(platform)}/seed`, token);
   },
-  // 全平台:聚合拒稿原因 → LLM 提炼增量写入 pending
+  // All platforms: aggregate rejection reasons -> LLM distills increments written to pending
   async learn(token: string): Promise<PlatformRule[]> {
     return request('POST', '/learn', token);
   },
   async approvePending(platform: string, token: string): Promise<PlatformRule> {
     return request('POST', `/${encodeURIComponent(platform)}/approve-pending`, token);
+  },
+  // One auto-adapt round: find platforms in use without rules -> create row + AI first draft (effective immediately, marked unproofread);
+  // rejection reasons for existing platforms -> distill increments into pending for adoption. Same service as the daily cron.
+  async sync(token: string): Promise<PlatformRuleSyncResult> {
+    return request('POST', '/sync', token);
+  },
+  async remove(platform: string, token: string): Promise<{ deleted: string }> {
+    return request('DELETE', `/${encodeURIComponent(platform)}`, token);
   },
 };

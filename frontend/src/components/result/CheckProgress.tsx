@@ -8,7 +8,9 @@ import type { RerunMode } from './rerunModes';
 // latencies — if the real API returns earlier, the overlay unmounts; if it
 // takes longer, the last stage parks with an "almost done" hint.
 const STAGE_WEIGHTS: Record<RerunMode, number[]> = {
-  default:    [3, 4, 5, 5, 6, 6, 5],
+  // The trailing 3 is the SEO suite, which now runs in the same request
+  // (`include_seo`). It costs roughly a quarter of the GEO half.
+  default:    [3, 4, 5, 5, 6, 6, 4, 5],
   aeo:        [4, 6, 8, 8, 6, 5],
   compare:    [30, 60, 120, 120, 60],
   crawlTest:  [3, 5, 6, 6, 4],
@@ -34,6 +36,7 @@ const STAGE_KEYS: Record<RerunMode, string[]> = {
     'result.progress.stages.default.content',
     'result.progress.stages.default.technical',
     'result.progress.stages.default.authority',
+    'result.progress.stages.default.seo',
     'result.progress.stages.default.finalize',
   ],
   compare: [
@@ -59,15 +62,15 @@ const STAGE_KEYS: Record<RerunMode, string[]> = {
   ],
   citation: [
     'result.progress.stages.citation.prepare',
-    'result.progress.stages.citation.perplexity',
+    'result.progress.stages.citation.engineQuery',
     'result.progress.stages.citation.parseCites',
     'result.progress.stages.citation.finalize',
   ],
   visibility: [
     'result.progress.stages.visibility.prepare',
-    'result.progress.stages.visibility.chatgpt',
-    'result.progress.stages.visibility.perplexity',
-    'result.progress.stages.visibility.claude',
+    'result.progress.stages.visibility.engine1',
+    'result.progress.stages.visibility.engine2',
+    'result.progress.stages.visibility.engine3',
     'result.progress.stages.visibility.classify',
     'result.progress.stages.visibility.finalize',
   ],
@@ -82,9 +85,23 @@ const STAGE_KEYS: Record<RerunMode, string[]> = {
   ],
 };
 
-export function CheckProgress({ mode }: { mode: RerunMode }) {
+export function CheckProgress({ mode, url, onCancel }: {
+  mode: RerunMode;
+  /** The address being audited -- the full-screen overlay covers the input box, so without echoing it users can't confirm which site is being tested */
+  url?: string;
+  /** Give it if you can: this is a full-screen modal, and a wait with no way out is the most uncomfortable kind */
+  onCancel?: () => void;
+}) {
   const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
+
+  // Esc to exit -- the common modal convention; the mouse shouldn't be the only way
+  useEffect(() => {
+    if (!onCancel) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
 
   useEffect(() => {
     const start = Date.now();
@@ -145,6 +162,9 @@ export function CheckProgress({ mode }: { mode: RerunMode }) {
           <p className="text-xs text-secondary mt-1">
             {t(`result.progress.subtitle.${mode}`)}
           </p>
+          {url && (
+            <p className="text-[11px] text-muted mt-1.5 truncate font-mono" title={url}>{url}</p>
+          )}
         </div>
 
         {/* Circular ring progress */}
@@ -243,6 +263,18 @@ export function CheckProgress({ mode }: { mode: RerunMode }) {
             <span className="text-muted">{t('result.progress.hint')}</span>
           )}
         </div>
+
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-4 w-full py-2 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)',
+                     border: '1px solid var(--border-color)' }}
+          >
+            {t('result.progress.cancel', { defaultValue: '取消检测(Esc)' })}
+          </button>
+        )}
       </div>
     </div>
   );

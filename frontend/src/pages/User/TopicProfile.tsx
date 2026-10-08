@@ -1,26 +1,32 @@
-// Phase D — 用户侧资料编辑 + 监测问题勾选 + 提交审核.
-// 路由:/dashboard/topics/:topicId/profile
+// Phase D — user-side materials editing + prompt selection + submit for review.
+// Route: /dashboard/topics/:topicId/profile
 //
-// 状态机:
+// State machine:
 //   draft → (submit) → pending → admin review → approved | rejected
-//   rejected 可重新编辑后再 submit;approved 后整张表只读
+//   rejected can be edited and resubmitted; after approved the whole form is read-only
 //
-// 三 tab:资料 / 种子词 / 监测问题(候选 + 勾选 ≤50)
+// Three tabs: materials / seed queries / prompts (candidates + selection ≤50)
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
 import {
   aiTelemetryApi, EMPTY_BRAND_PROFILE, MAX_SELECTED_QUERIES,
   type BrandProfile, type SceneType, type Topic, type SubmissionStatus,
 } from '../../services/aiTelemetryApi';
-import { topicProfileApi } from '../../services/topicProfileApi';
+import {
+  topicProfileApi,
+} from '../../services/topicProfileApi';
 import { SceneExpander } from '../../components/SceneExpander';
 import {
   BrandProfileForm, PROFILE_REQUIRED_FIELDS as REQUIRED_FIELDS,
   profileMissingFields,
 } from '../../components/BrandProfileForm';
 import { ProfileImporter } from '../../components/ProfileImporter';
+import { MonitorRunPanel } from '../../components/MonitorRunPanel';
+import { uiConfirm } from '../../components/ui/dialogs';
+import { toast } from '../../components/ui/toast';
+import { readApiError, friendlyErrorMessage } from '../../services/apiError';
 
 type Tab = 'profile' | 'seeds' | 'monitor';
 
@@ -31,7 +37,12 @@ export function TopicProfile() {
   const token = localStorage.getItem('token') || '';
   const tid = Number(topicId);
 
-  const [tab, setTab] = useState<Tab>('profile');
+  // ?tab=monitor: the dashboard "Monitoring & batch runs" button lands directly on the prompts tab (the panel is at the top of that page)
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const q = searchParams.get('tab');
+    return q === 'seeds' || q === 'monitor' ? q : 'profile';
+  });
   const [topic, setTopic] = useState<Topic | null>(null);
   const [profile, setProfile] = useState<BrandProfile>(EMPTY_BRAND_PROFILE);
   const [loading, setLoading] = useState(true);
@@ -111,7 +122,7 @@ export function TopicProfile() {
           </h1>
           <p className="text-xs text-secondary mt-0.5">{t('topic.profile.subtitle')}</p>
         </div>
-        <button type="button" onClick={() => navigate('/dashboard')}
+        <button type="button" onClick={() => navigate('/app')}
                 className="text-xs px-3 py-1.5 rounded-md"
                 style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
           ← {t('topic.profile.backToDashboard')}
@@ -122,13 +133,13 @@ export function TopicProfile() {
 
       {err && (
         <div className="rounded-md p-3 text-sm"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+             style={{ background: 'var(--danger-bg)', color: 'var(--danger-fg)', border: '1px solid rgba(239,68,68,0.3)' }}>
           {err}
         </div>
       )}
       {okMsg && (
         <div className="rounded-md p-3 text-sm"
-             style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}>
+             style={{ background: 'var(--success-bg)', color: 'var(--success-fg)', border: '1px solid rgba(16,185,129,0.3)' }}>
           {okMsg}
         </div>
       )}
@@ -165,17 +176,17 @@ export function TopicProfile() {
         <MonitorView topic={topic} onChange={refresh} token={token} readOnly={!isEditable} />
       )}
 
-      {/* 操作栏 */}
+      {/* Action bar */}
       <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-3 flex-wrap p-3 rounded-md"
            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
         <div className="text-xs text-muted">
           {missingFields.length > 0 && (
-            <span style={{ color: '#f59e0b' }}>
+            <span style={{ color: 'var(--warn-fg)' }}>
               {t('topic.profile.missing', { n: missingFields.length })}
             </span>
           )}
           {missingFields.length === 0 && (
-            <span style={{ color: '#10b981' }}>{t('topic.profile.allFilled')}</span>
+            <span style={{ color: 'var(--success-fg)' }}>{t('topic.profile.allFilled')}</span>
           )}
           <span className="mx-2">·</span>
           <span>{t('topic.profile.selectedNow', { n: selectedCount, max: MAX_SELECTED_QUERIES })}</span>
@@ -188,7 +199,7 @@ export function TopicProfile() {
               {busy ? t('topic.profile.saving') : t('topic.profile.save')}
             </button>
           )}
-          {/* 去审核流:客户不再「提交审核」.改由 admin 在工作台「启动项目」. */}
+          {/* Review flow removed: clients no longer "submit for review". Instead admins "Start project" in the workbench. */}
         </div>
       </div>
     </div>
@@ -198,9 +209,9 @@ export function TopicProfile() {
 function StatusBanner({ status, t }: { status: SubmissionStatus; t: (k: string) => string; rejectedReason: string | null }) {
   const styleMap: Record<SubmissionStatus, { bg: string; color: string; label: string }> = {
     draft:     { bg: 'rgba(148,163,184,0.15)', color: '#94a3b8', label: t('topic.profile.status.draft') },
-    pending:   { bg: 'rgba(234,179,8,0.15)',   color: '#eab308', label: t('topic.profile.status.pending') },
-    approved:  { bg: 'rgba(16,185,129,0.15)',  color: '#10b981', label: t('topic.profile.status.approved') },
-    rejected:  { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', label: t('topic.profile.status.rejected') },
+    pending:   { bg: 'rgba(234,179,8,0.15)',   color: 'var(--warn-fg)', label: t('topic.profile.status.pending') },
+    approved:  { bg: 'var(--success-bg)',  color: 'var(--success-fg)', label: t('topic.profile.status.approved') },
+    rejected:  { bg: 'var(--danger-bg)',   color: 'var(--danger-fg)', label: t('topic.profile.status.rejected') },
   };
   const s = styleMap[status];
   return (
@@ -212,7 +223,7 @@ function StatusBanner({ status, t }: { status: SubmissionStatus; t: (k: string) 
   );
 }
 
-// ProfileForm + Section/Label/TextRow/TextAreaRow/TagsRow 已抽到 components/BrandProfileForm.tsx
+// ProfileForm + Section/Label/TextRow/TextAreaRow/TagsRow have been extracted to components/BrandProfileForm.tsx
 
 
 // ─────────────── SeedsView ───────────────
@@ -225,12 +236,11 @@ function SeedsView({ topic, onChange, token, readOnly }: SeedsViewProps) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
     const v = text.trim();
     if (!v || busy) return;
-    setBusy(true); setErr(null);
+    setBusy(true);
     try {
       const resp = await fetch(
         `/api/ai-telemetry/topics/${topic.id}/seed-prompts`,
@@ -241,13 +251,14 @@ function SeedsView({ topic, onChange, token, readOnly }: SeedsViewProps) {
         },
       );
       if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(body || `HTTP ${resp.status}`);
+        // Echoing the raw response body would splash nginx's full 502 HTML page onto the UI during the few seconds of a deploy restart
+        // (see services/apiError.readApiError). Only take the normalized one-line message here.
+        throw new Error(await readApiError(resp, '添加失败'));
       }
       setText('');
       onChange();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : String(e));
+      toast.error(friendlyErrorMessage(e, '添加失败'));
     } finally {
       setBusy(false);
     }
@@ -256,7 +267,6 @@ function SeedsView({ topic, onChange, token, readOnly }: SeedsViewProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">{t('topic.profile.seeds.hint')}</p>
-      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
       {!readOnly && (
         <div className="flex gap-2">
           <input type="text" value={text}
@@ -278,7 +288,7 @@ function SeedsView({ topic, onChange, token, readOnly }: SeedsViewProps) {
                className="rounded-md p-2.5 flex items-center gap-2 flex-wrap"
                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
             <span className="text-sm text-primary flex-1">{s.text}</span>
-            <StatusChip status={s.status} />
+            <StatusChip />
           </div>
         ))}
         {(topic.seed_prompts || []).length === 0 && (
@@ -289,18 +299,22 @@ function SeedsView({ topic, onChange, token, readOnly }: SeedsViewProps) {
   );
 }
 
-function StatusChip({ status }: { status: 'pending' | 'approved' | 'rejected' }) {
-  const color = status === 'approved' ? '#10b981' : status === 'rejected' ? '#ef4444' : '#eab308';
-  const label = status === 'approved' ? '已批准' : status === 'rejected' ? '已拒绝' : '待审';
+// Seed queries are no longer reviewed (2026-09-09, see backend api/ai_telemetry.submit_seed_prompt): submitting makes them
+// approved, joining batch runs the same day. So this always shows "Active" -- drawing "Pending review" would make users think the query is held back,
+// when it's actually already running and has already consumed credits per Q&A.
+function StatusChip() {
   return (
     <span className="text-[10px] px-2 py-0.5 rounded-full"
-          style={{ background: `${color}22`, color }}>
-      {label}
+          style={{ background: '#10b98122', color: '#10b981' }}>
+      已生效
     </span>
   );
 }
 
-// ─────────────── MonitorView — 扩展 + 勾选 ─────────────
+// The "Continuous monitoring" card has been merged into components/MonitorRunPanel.tsx (the monitoring & batch-run panel):
+// models / cadence / day and time / pause / run new / run all once / current status, one card mounted in two places.
+
+// ─────────────── MonitorView — expansion + selection ─────────────
 
 interface MonitorViewProps {
   topic: Topic; onChange: () => void; token: string; readOnly: boolean;
@@ -308,25 +322,40 @@ interface MonitorViewProps {
 
 function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
   const { t } = useTranslation();
-  // 2026-05-28 — 4 维场景扩展.候选(尚未持久化的拓词产出)从 SceneExpander 内部维护,
-  // 这里只跟踪「用户从某场景勾选下来的候选 text」对应的种子词 + 场景标签,持久化时一并送给后端.
+  // 2026-05-28 — 4-dimension scene expansion. Candidates (query expansion output not yet persisted) are maintained inside SceneExpander;
+  // here we only track the seed query + scene tag for "candidate text the user picked from a scene", sent to the backend together on persist.
   const [candidateSeeds, setCandidateSeeds] = useState<Map<string, string>>(new Map());
   const [candidateScenes, setCandidateScenes] = useState<Map<string, SceneType>>(new Map());
-  // 用户在 SceneExpander tab 里勾过的所有 text(用于回显 + 同步到 existing).
-  // 勾下来后这些 text 也会出现在「已勾选」区,即使最终被 togglePick 取消勾选.
+  // All texts the user has checked in SceneExpander tabs (for echo + syncing into existing).
+  // Once checked, these texts also appear in the "Selected" area, even if later unchecked via togglePick.
   const [pickedTexts, setPickedTexts] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 当前已知 query(资料里) + selected map.candidate 加进来后也算 existing.
+  // 2026-08-17 — soft-deleted queries. The backend still returns all elements (historical metric definitions need to look up scene tags by text),
+  // distinguished by this parallel array; hidden by default, revealed and restorable only with "Include deleted".
+  const deletedSet = useMemo(() => {
+    const s = new Set<string>();
+    (topic.queries || []).forEach((q, i) => {
+      if ((topic.query_deleted || [])[i]) s.add(q);
+    });
+    return s;
+  }, [topic]);
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // Currently known queries (in materials) + selected map. Once a candidate is added it counts as existing too.
+  // Soft-deleted queries aren't included here: they don't take part in selection and must never be written back to selected-queries via buildItems.
   const existing = useMemo(() => {
     const m = new Map<string, boolean>();
-    (topic.queries || []).forEach((q, i) => m.set(q, (topic.query_selected || [])[i] ?? true));
+    (topic.queries || []).forEach((q, i) => {
+      if ((topic.query_deleted || [])[i]) return;
+      m.set(q, (topic.query_selected || [])[i] ?? true);
+    });
     pickedTexts.forEach(c => { if (!m.has(c)) m.set(c, false); });
     return m;
   }, [topic, pickedTexts]);
 
-  // 2026-05-26 — locked query(种子原文派生)map:UI 不可取消勾选
+  // 2026-05-26 — locked query (derived from the seed's original text) map: the UI can't uncheck them
   const lockedSet = useMemo(() => {
     const s = new Set<string>();
     (topic.queries || []).forEach((q, i) => {
@@ -335,8 +364,8 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     return s;
   }, [topic]);
 
-  // 2026-05-28 — query → 4 维场景标签 map(用于已勾选列表的 badge 展示).
-  // 老 query 没 scene_type 后端兜底成 search,新候选用 candidateScenes,优先级:candidateScenes > topic.query_scene_types
+  // 2026-05-28 — query -> 4-dimension scene tag map (for badges in the selected list).
+  // Old queries without scene_type fall back to search in the backend; new candidates use candidateScenes. Priority: candidateScenes > topic.query_scene_types
   const sceneByText = useMemo(() => {
     const m = new Map<string, SceneType>();
     (topic.queries || []).forEach((q, i) => {
@@ -370,7 +399,7 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
 
   const togglePick = (text: string) => {
     if (readOnly) return;
-    // 2026-05-26 — locked query(种子原文)永远 selected,不允许取消
+    // 2026-05-26 — locked queries (seed original text) are always selected and can't be unchecked
     if (lockedSet.has(text)) return;
     const cur = existing.get(text) ?? false;
     if (!cur && totalSelected >= MAX_SELECTED_QUERIES) {
@@ -378,6 +407,35 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
       return;
     }
     persistSelection(buildItems(text, !cur));
+  };
+
+  /** Soft delete / restore. Deleted queries no longer join batch runs, report metrics or publish query selection; the query and historical responses are kept. */
+  const setDeleted = async (text: string, deleted: boolean) => {
+    if (readOnly || busy) return;
+    if (deleted) {
+      const ok = await uiConfirm(
+        t('topic.profile.monitor.deleteConfirmBody', { q: text })
+          || `「${text}」将不再跑批、不进报告口径、也不再用于发文选词。`
+             + '历史应答与已发文章都保留,随时可以恢复。'
+             + '注意:近几天的报告数字会跟着变(趋势图会标出口径变更),'
+             + '本主题正在进行中的智能选题动作也会作废。',
+        {
+          title: t('topic.profile.monitor.deleteConfirmTitle') || '不再监测这个问题?',
+          okText: t('topic.profile.monitor.deleteConfirm') || '确认删除',
+          danger: true,
+        },
+      );
+      if (!ok) return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      await topicProfileApi.deleteQueries(topic.id, [{ text, deleted }], token);
+      onChange();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const persistSelection = async (
@@ -394,14 +452,14 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     }
   };
 
-  // 2026-05-28 — SceneExpander 触发拓词;不在这里持久化,产出只是候选,
-  // 用户在 SceneExpander tab 内勾下来后才会经 pickFromScene 走到 persistSelection.
+  // 2026-05-28 — SceneExpander triggers query expansion; nothing is persisted here, the output is just candidates,
+  // and only after the user checks them in a SceneExpander tab do they go through pickFromScene to persistSelection.
   const handleExpand = async (seedText: string, scenes: SceneType[], countPerScene: number) => {
     setErr(null);
     const resp = await topicProfileApi.expandQueries(
       topic.id, seedText, { scenes, countPerScene }, token,
     );
-    // 记下每条候选的 seed/scene 归属,后续 persist 时一并送后端
+    // Record each candidate's seed/scene membership, sent to the backend together on later persist
     setCandidateSeeds(prev => {
       const next = new Map(prev);
       const sceneMap = resp.scenes || {};
@@ -409,7 +467,7 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
         const qs = sceneMap[sc]?.queries || [];
         qs.forEach(q => { if (!next.has(q)) next.set(q, seedText); });
       }
-      // 老 schema fallback
+      // Old schema fallback
       if (Object.keys(sceneMap).length === 0 && Array.isArray(resp.queries)) {
         resp.queries.forEach(q => { if (!next.has(q)) next.set(q, seedText); });
       }
@@ -427,24 +485,24 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
     return resp;
   };
 
-  // 用户在某 scene tab 内勾选一个候选 → 加进 existing + 触发持久化(默认 selected=true)
+  // The user checks a candidate in some scene tab -> add to existing + trigger persistence (default selected=true)
   const pickFromScene = (text: string, scene: SceneType, seedText: string) => {
     if (readOnly) return;
     const currentlySelected = existing.get(text) ?? false;
-    // 容量检查(只有从未勾过的新选项需要检查)
+    // Capacity check (only new options never checked before need it)
     if (!currentlySelected && totalSelected >= MAX_SELECTED_QUERIES) {
       setErr(t('topic.profile.monitor.cap', { max: MAX_SELECTED_QUERIES }));
       return;
     }
-    // 把这条 text 写进 picked + 归属表,然后 persist
+    // Write this text into picked + the membership map, then persist
     setPickedTexts(prev => prev.has(text) ? prev : new Set(prev).add(text));
     setCandidateSeeds(prev => prev.has(text) ? prev : new Map(prev).set(text, seedText));
     setCandidateScenes(prev => prev.has(text) ? prev : new Map(prev).set(text, scene));
-    // 切换选中状态
+    // Toggle selection
     persistSelection(buildItems(text, !currentlySelected));
   };
 
-  // 已勾选 set,送给 SceneExpander 让它在 candidate 上正确回显勾选状态
+  // Selected set, passed to SceneExpander so it echoes check states on candidates correctly
   const selectedSet = useMemo(() => {
     const s = new Set<string>();
     existing.forEach((sel, text) => { if (sel) s.add(text); });
@@ -453,19 +511,48 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
 
   return (
     <div className="space-y-3">
+      {/* ★ Deliberately **ignores** readOnly: that lock means "materials/queries are finalized and can't change",
+          while approved (the normal running state) is exactly when toggling monitoring is most needed.
+          Following that lock would make this switch clickable only on topics not yet live -- back to "can't find the entry". */}
+      <MonitorRunPanel topicId={topic.id} token={token} readOnly={false} />
+
       <SceneExpander
         brandSceneAvailable={!!(topic.target && topic.target.trim())}
         onExpand={handleExpand}
         onPickCandidate={pickFromScene}
         selectedSet={selectedSet}
         readOnly={readOnly}
+        products={topic.profile?.products}
+        onAddProduct={async p => {
+          // The seed is our own product but not registered in the materials -> write it into section 3 of the materials and save (the query expansion endpoint reads profile_json from the DB),
+          // then the parent refreshes to get the new topic; clicking "Expand" again uses product mode
+          setErr(null);
+          try {
+            const base = { ...EMPTY_BRAND_PROFILE, ...(topic.profile || {}) };
+            await topicProfileApi.updateProfile(topic.id, { ...base, products: [...(base.products || []), p] }, token);
+            onChange();
+          } catch (e: unknown) {
+            setErr(e instanceof Error ? e.message : String(e));
+          }
+        }}
       />
 
-      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+      {err && <div className="text-xs" style={{ color: 'var(--danger-fg)' }}>{err}</div>}
 
-      <p className="text-xs text-muted">
-        {t('topic.profile.monitor.selectedHint', { n: totalSelected, max: MAX_SELECTED_QUERIES })}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">
+          {t('topic.profile.monitor.selectedHint', { n: totalSelected, max: MAX_SELECTED_QUERIES })}
+        </p>
+        {deletedSet.size > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer">
+            <input type="checkbox" checked={showDeleted}
+                   onChange={e => setShowDeleted(e.target.checked)}
+                   style={{ accentColor: 'var(--accent-primary)' }} />
+            {t('topic.profile.monitor.showDeleted', { n: deletedSet.size })
+              || `含已删除(${deletedSet.size})`}
+          </label>
+        )}
+      </div>
 
       <div className="space-y-1.5">
         {Array.from(existing.entries()).map(([text, sel]) => (
@@ -493,7 +580,7 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
               )}
               {(() => {
                 const sc = sceneByText.get(text);
-                if (!sc || sc === 'search') return null;  // search 是默认值,不展示 badge 减少噪音
+                if (!sc || sc === 'search') return null;  // search is the default; no badge, to reduce noise
                 const colorMap: Record<SceneType, string> = {
                   search: '#6366f1', qa: '#10b981', intent: '#f59e0b', brand: '#ec4899',
                 };
@@ -510,7 +597,37 @@ function MonitorView({ topic, onChange, token, readOnly }: MonitorViewProps) {
               })()}
               {text}
             </span>
+            {!readOnly && !lockedSet.has(text) && (
+              <button type="button" disabled={busy}
+                      onClick={e => { e.preventDefault(); void setDeleted(text, true); }}
+                      className="text-[11px] px-1.5 py-0.5 rounded shrink-0 disabled:opacity-50"
+                      style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}
+                      title={t('topic.profile.monitor.deleteHint')
+                             || '不再监测这个问题(可恢复)'}>
+                {t('common.delete') || '删除'}
+              </button>
+            )}
           </label>
+        ))}
+        {showDeleted && Array.from(deletedSet).map(text => (
+          <div key={`del-${text}`}
+               className="flex items-start gap-2 p-2 rounded-md"
+               style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-color)',
+                        opacity: busy ? 0.6 : 0.75 }}>
+            <span className="text-sm flex-1" style={{ color: 'var(--text-secondary)',
+                                                      textDecoration: 'line-through' }}>
+              {text}
+            </span>
+            {!readOnly && (
+              <button type="button" disabled={busy}
+                      onClick={() => void setDeleted(text, false)}
+                      className="text-[11px] px-1.5 py-0.5 rounded shrink-0 disabled:opacity-50"
+                      style={{ color: 'var(--accent-primary)',
+                               border: '1px solid var(--accent-primary)' }}>
+                {t('topic.profile.monitor.restore') || '恢复'}
+              </button>
+            )}
+          </div>
         ))}
         {existing.size === 0 && (
           <div className="text-xs text-muted py-8 text-center">{t('topic.profile.monitor.empty')}</div>

@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { membershipApi, type Membership, formatTierPrice } from '../services/membershipApi';
+import { membershipApi, type Membership, formatTierPrice, grantPoints } from '../services/membershipApi';
 import { useMembership } from '../hooks/useMembership';
 import { AuthModal } from '../components/AuthModal';
 import { useContactModal } from '../components/ContactModalContext';
 import { PageHead } from '../components/PageHead';
+import { IS_CN } from '../config/region';
+import { CnServiceModules } from '../components/CnServiceModules';
 
 type ContactFormState = {
   name: string;
@@ -152,7 +154,7 @@ export function ProductsServices() {
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           <section className="hero mb-16">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up">
                 <span className="gradient-text">{t('productsServices.title')}</span>
               </h1>
               <p className="text-lg sm:text-xl text-secondary max-w-3xl mx-auto leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>
@@ -166,14 +168,26 @@ export function ProductsServices() {
               <span className="gradient-text">{t('productsServices.sections.ourServices')}</span>
             </h2>
 
-            {isLoading && (
+            {/* CN site (REGION=cn): no plan prices shown; instead a GEO service system table + contact-advisor CTA */}
+            {IS_CN && (
+              <>
+                <CnServiceModules />
+                <div className="mt-10 text-center">
+                  <button onClick={openContact} className="btn-primary !py-3 px-8 text-sm">
+                    {t('productsServices.cta.contactSales')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {!IS_CN && isLoading && (
               <div className="text-center text-secondary">{t('productsServices.loadingMemberships')}</div>
             )}
-            {loadError && (
+            {!IS_CN && loadError && (
               <div className="text-center text-rose-400">{loadError}</div>
             )}
 
-            {!isLoading && !loadError && (
+            {!IS_CN && !isLoading && !loadError && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 mb-12 items-stretch">
                   {memberships.map((tier) => {
@@ -186,11 +200,18 @@ export function ProductsServices() {
                           : 'border-border'
                           }`}
                       >
-                        {tier.popular && (
+                        {/* "Free for a limited time" takes precedence over "Most popular": only one badge in the same spot,
+                            so the two don't overlap. login_granted is sent by the backend per LOGIN_GRANTED_TIER;
+                            when the giveaway is turned off the badge disappears automatically; the frontend doesn't hardcode tiers. */}
+                        {tier.login_granted ? (
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-accent-primary text-[#000] text-[10px] tracking-[0.15em] font-semibold whitespace-nowrap">
+                            {t('productsServices.cta.freeForNow', { defaultValue: '限时免费送' })}
+                          </div>
+                        ) : tier.popular ? (
                           <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-white bg-accent-primary text-[#000] text-[10px] uppercase tracking-[0.2em] font-semibold whitespace-nowrap">
                             {t('productsServices.cta.popular')}
                           </div>
-                        )}
+                        ) : null}
                         <h3 className="text-lg font-bold mb-2 min-h-[1.75rem]">{text.name}</h3>
                         <div className="flex items-baseline gap-1 mb-3 min-h-[2.5rem]">
                           <span className="text-3xl font-bold text-accent-primary">
@@ -205,6 +226,14 @@ export function ProductsServices() {
                             <span className="text-xs text-secondary font-medium ml-1">{t('productsServices.perProject')}</span>
                           )}
                         </div>
+                        {/* Buying a membership = tier + an equal amount of credits (1 yuan = 100 credits) */}
+                        {grantPoints(tier) !== null && (
+                          <p className="text-xs font-medium mb-3 text-accent-primary">
+                            {t('productsServices.grantPoints', '购买即赠 {{n}} 积分', {
+                              n: grantPoints(tier)!.toLocaleString('zh-CN'),
+                            })}
+                          </p>
+                        )}
                         <p className="text-xs text-secondary leading-relaxed mb-4 line-clamp-3 min-h-[3.4rem]">
                           {text.description}
                         </p>
@@ -264,7 +293,7 @@ export function ProductsServices() {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* 价格行 */}
+                      {/* Price row */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary"></td>
                         <td className="px-4 py-3 text-sm font-medium">{t('productsServices.table.rows.price')}</td>
@@ -274,7 +303,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.price')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.price')}</td>
                       </tr>
-                      {/* 形态行 */}
+                      {/* Format row */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary"></td>
                         <td className="px-4 py-3 text-sm font-medium">{t('productsServices.table.rows.type')}</td>
@@ -285,7 +314,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.type')}</td>
                       </tr>
 
-                      {/* 权益项1 */}
+                      {/* Benefit 1 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">1</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.checkItems')}</td>
@@ -295,7 +324,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.checkItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.checkItems')}</td>
                       </tr>
-                      {/* 权益项2 */}
+                      {/* Benefit 2 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">2</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.subCheckItems')}</td>
@@ -305,7 +334,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.subCheckItems')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.subCheckItems')}</td>
                       </tr>
-                      {/* 权益项3 */}
+                      {/* Benefit 3 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">3</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.monthlyChecks')}</td>
@@ -315,7 +344,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.monthlyChecks')}</td>
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.monthlyChecks')}</td>
                       </tr>
-                      {/* 权益项4 */}
+                      {/* Benefit 4 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">4</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.prioritySorting')}</td>
@@ -325,7 +354,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.prioritySorting')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.prioritySorting')}</td>
                       </tr>
-                      {/* 权益项5 */}
+                      {/* Benefit 5 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">5</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.fullReport')}</td>
@@ -335,7 +364,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.fullReport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.fullReport')}</td>
                       </tr>
-                      {/* 权益项6 */}
+                      {/* Benefit 6 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">6</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.history')}</td>
@@ -345,7 +374,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.history')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.history')}</td>
                       </tr>
-                      {/* 权益项7 */}
+                      {/* Benefit 7 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">7</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.support')}</td>
@@ -355,7 +384,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.growth.support')}</td>
                         <td className="px-4 py-3 text-center text-sm font-medium">{t('productsServices.table.values.scale.support')}</td>
                       </tr>
-                      {/* 权益项8 */}
+                      {/* Benefit 8 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">8</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.optimizationDetails')}</td>
@@ -365,7 +394,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.optimizationDetails')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.optimizationDetails')}</td>
                       </tr>
-                      {/* 权益项9 */}
+                      {/* Benefit 9 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">9</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.basicGeo')}</td>
@@ -375,7 +404,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.basicGeo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.basicGeo')}</td>
                       </tr>
-                      {/* 权益项10 */}
+                      {/* Benefit 10 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">10</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.llmStandards')}</td>
@@ -385,7 +414,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.llmStandards')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.llmStandards')}</td>
                       </tr>
-                      {/* 权益项11 */}
+                      {/* Benefit 11 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">11</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.websiteCopy')}</td>
@@ -395,7 +424,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.websiteCopy')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.websiteCopy')}</td>
                       </tr>
-                      {/* 权益项12 */}
+                      {/* Benefit 12 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">12</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.productInfo')}</td>
@@ -405,7 +434,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.productInfo')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.productInfo')}</td>
                       </tr>
-                      {/* 权益项13 */}
+                      {/* Benefit 13 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">13</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.maintenance')}</td>
@@ -415,7 +444,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.maintenance')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.maintenance')}</td>
                       </tr>
-                      {/* 权益项14 */}
+                      {/* Benefit 14 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">14</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.seoPlacement')}</td>
@@ -425,7 +454,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.seoPlacement')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.seoPlacement')}</td>
                       </tr>
-                      {/* 权益项15 */}
+                      {/* Benefit 15 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">15</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.reputation')}</td>
@@ -435,7 +464,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.reputation')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.reputation')}</td>
                       </tr>
-                      {/* 权益项16 */}
+                      {/* Benefit 16 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">16</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.prSupport')}</td>
@@ -445,7 +474,7 @@ export function ProductsServices() {
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.growth.prSupport')}</td>
                         <td className="px-4 py-3 text-center text-sm">{t('productsServices.table.values.scale.prSupport')}</td>
                       </tr>
-                      {/* 权益项17 */}
+                      {/* Benefit 17 */}
                       <tr className="border-b border-border">
                         <td className="px-4 py-3 text-sm text-secondary">17</td>
                         <td className="px-4 py-3 text-sm">{t('productsServices.table.rows.serviceCycle')}</td>

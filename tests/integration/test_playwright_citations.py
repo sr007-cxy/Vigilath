@@ -3,11 +3,11 @@
 
 Usage:
     python test_playwright_citations.py                          # test default engines
-    python test_playwright_citations.py --engines copilot        # test Copilot (no login needed)
+    python test_playwright_citations.py --engines qwen           # test Qwen (session optional)
     python test_playwright_citations.py --engines deepseek qwen  # test specific engines
     python test_playwright_citations.py --engines all            # test all available engines
     python test_playwright_citations.py --query "Tesla Model S"  # custom query
-    python test_playwright_citations.py --engines all --query "小米汽车"  # all + Chinese query
+    python test_playwright_citations.py --engines all --query "<brand-k>汽车"  # all + Chinese query ("Xiaomi Auto")
 """
 
 import argparse
@@ -17,7 +17,7 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend")))
 
 from browser_engine.session_store import load_storage_state
 from browser_engine.browser import close_browser
@@ -25,18 +25,16 @@ from browser_engine.browser import close_browser
 
 # All available engines — (engine_key, module_path, class_name, needs_login)
 ALL_ENGINES = {
-    # ── 国内引擎 ──
+    # ── CN engines ──
     "deepseek":  ("backend.browser_engine.engines.deepseek_browser",  "DeepSeekBrowserAdapter",  False),
     "doubao":    ("backend.browser_engine.engines.doubao_browser",    "DoubaoBrowserAdapter",    False),
     "qwen":      ("backend.browser_engine.engines.qwen_browser",     "QwenBrowserAdapter",      True),
     "wenxin":    ("backend.browser_engine.engines.wenxin_browser",   "WenxinBrowserAdapter",    True),
     "yuanbao":   ("backend.browser_engine.engines.yuanbao_browser",  "YuanbaoBrowserAdapter",   False),
-    # ── 海外引擎 ──
+    # ── Global engines ──
     "chatgpt":   ("backend.browser_engine.engines.chatgpt_browser",  "ChatGPTBrowserAdapter",   False),
     "gemini":    ("backend.browser_engine.engines.gemini_browser",   "GeminiBrowserAdapter",    False),
-    "grok":      ("backend.browser_engine.engines.grok_browser",     "GrokBrowserAdapter",      False),
     "claude":    ("backend.browser_engine.engines.claude_browser",   "ClaudeBrowserAdapter",    False),
-    "copilot":   ("backend.browser_engine.engines.copilot_browser",  "CopilotBrowserAdapter",   True),  # anonymous OK
 }
 
 ENGINE_NAMES = sorted(ALL_ENGINES.keys())
@@ -115,22 +113,22 @@ async def main():
         epilog="""
 Available engines:
   国内: deepseek, doubao, qwen, wenxin, yuanbao
-  海外: chatgpt, gemini, grok, claude, copilot
+  海外: chatgpt, gemini, claude
 
-Note: copilot works without login. All others require a valid session.
+Note: qwen / wenxin sessions are optional. All others require a valid session.
         """,
     )
     parser.add_argument(
         "--engines", "-e",
         nargs="+",
-        default=["deepseek", "copilot"],
+        default=["deepseek", "qwen"],
         choices=ENGINE_NAMES + ["all", "cn", "global", "available"],
-        help="Engines to test. 'all'=全部, 'cn'=国内, 'global'=海外, 'available'=有session的. (default: deepseek copilot)",
+        help="Engines to test. 'all'=全部, 'cn'=国内, 'global'=海外, 'available'=有session的. (default: deepseek qwen)",
     )
     parser.add_argument(
         "--query", "-q",
-        default="小米汽车",
-        help='Test query (default: "小米汽车")',
+        default="<brand-k>汽车",
+        help='Test query (default: "<brand-k>汽车")',
     )
     parser.add_argument(
         "--parallel", "-p",
@@ -146,14 +144,14 @@ Note: copilot works without login. All others require a valid session.
     elif "cn" in selected:
         selected = ["deepseek", "doubao", "qwen", "wenxin", "yuanbao"]
     elif "global" in selected:
-        selected = ["chatgpt", "gemini", "grok", "claude", "copilot"]
+        selected = ["chatgpt", "gemini", "claude"]
     elif "available" in selected:
         selected = [
             k for k, (_, _, optional) in ALL_ENGINES.items()
             if _check_session(k) or optional
         ]
         if not selected:
-            print("No engines with sessions found. Try --engines copilot (no login needed).")
+            print("No engines with sessions found. Try --engines qwen (session optional).")
             return
 
     print(f"Query: '{args.query}'")

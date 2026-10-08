@@ -1,49 +1,32 @@
-# ai.txt for www.vigilath.com
-# Spec: https://site.spawning.ai/spawning-ai-txt
-# Last updated: 2026-04-19
-
-# Vigilath welcomes AI crawlers for search indexing and citation.
-# We want AI engines to discover, cite, and recommend our content.
+# ai.txt for www.vigilath.cn
+# Last updated: 2026-08-06
+#
+# Vigilath welcomes AI crawlers to fetch this site's content for retrieval and citation.
 
 User-Agent: *
 Allow: /
 
-# Explicitly allow all major AI bots for indexing and citation
-User-Agent: GPTBot
+# Chinese AI and search engine crawlers (explicitly allowed)
+User-Agent: DeepSeekBot
 Allow: /
 
-User-Agent: ChatGPT-User
+User-Agent: Baiduspider
 Allow: /
 
-User-Agent: OAI-SearchBot
+User-Agent: Sogou web spider
 Allow: /
 
-User-Agent: Google-Extended
+User-Agent: Sogou inst spider
 Allow: /
 
-User-Agent: ClaudeBot
+User-Agent: 360Spider
 Allow: /
 
-User-Agent: anthropic-ai
-Allow: /
-
-User-Agent: PerplexityBot
-Allow: /
-
-User-Agent: Applebot-Extended
-Allow: /
-
-User-Agent: CCBot
-Allow: /
-
-User-Agent: Meta-ExternalAgent
-Allow: /
-
-User-Agent: Cohere-ai
-Allow: /
-
-User-Agent: Diffbot
+User-Agent: Yisouspider
 Allow: /
 
 User-Agent: Bytespider
+Allow: /
+
+User-Agent: PetalBot
 Allow: /

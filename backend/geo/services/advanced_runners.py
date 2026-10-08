@@ -226,8 +226,15 @@ def run_citation_check(url: str) -> Dict[str, Any]:
     )
 
 
-def run_ai_visibility(url: str, custom_queries: Optional[List[str]] = None) -> Dict[str, Any]:
-    identity = {"url": url, "custom_queries": sorted(custom_queries) if custom_queries else None}
+def run_ai_visibility(url: str, custom_queries: Optional[List[str]] = None,
+                      custom_queries_only: bool = False,
+                      brand_name: Optional[str] = None) -> Dict[str, Any]:
+    identity = {
+        "url": url,
+        "custom_queries": sorted(custom_queries) if custom_queries else None,
+        "custom_only": custom_queries_only or None,
+        "brand": brand_name or None,
+    }
     return _cached_run(
         "visibility",
         identity,
@@ -236,6 +243,8 @@ def run_ai_visibility(url: str, custom_queries: Optional[List[str]] = None) -> D
             url,
             custom_queries=custom_queries,
             return_data=True,
+            custom_queries_only=custom_queries_only,
+            brand_name=brand_name,
         ),
     )
 
@@ -258,7 +267,7 @@ def run_entity_audit(entity_name: str, entity_type: str = "brand") -> Dict[str, 
 # ---------------------------------------------------------------------------
 # Async task support for long-running entity audits
 # ---------------------------------------------------------------------------
-# Entity audits take 2-4 minutes (10 browser engines in parallel).  The BMS02
+# Entity audits take 2-4 minutes (10 browser engines in parallel).  The prod host
 # proxy layer times out before the backend finishes.  To work around this,
 # POST /entity returns a task_id immediately and the frontend polls for the
 # result.

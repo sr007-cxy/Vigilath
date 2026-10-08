@@ -2,111 +2,12 @@ import { readApiError, localizedHeaders } from './apiError';
 
 const API_BASE = '/api';
 
-export interface CreateCheckoutSessionResponse {
-  session_id: string;
-  checkout_url: string;
-}
-
-export interface StripeSessionStatus {
-  session_id: string;
-  payment_status: string | null;
-  status: 'pending' | 'paid' | 'expired' | 'failed' | 'unknown';
-  membership_id: number | null;
-  fulfilled_now: boolean;
-}
-
 export const paymentApi = {
-  async createStripeCheckoutSession(
-    token: string,
-    slug: string,
-    locale: string = 'en',
-  ): Promise<CreateCheckoutSessionResponse> {
-    const response = await fetch(`${API_BASE}/payment/stripe/create-checkout-session`, {
-      method: 'POST',
-      headers: localizedHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      }),
-      body: JSON.stringify({ slug, locale }),
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to create checkout session'));
-    }
-    return response.json();
-  },
-
-  async getStripeSessionStatus(
-    token: string,
-    sessionId: string,
-  ): Promise<StripeSessionStatus> {
-    const response = await fetch(
-      `${API_BASE}/payment/stripe/session/${encodeURIComponent(sessionId)}`,
-      {
-        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
-      },
-    );
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to read checkout status'));
-    }
-    return response.json();
-  },
-
-  async createMoltsPaySession(
-    token: string,
-    slug: string,
-  ): Promise<MoltsPayCreateResponse> {
-    const response = await fetch(`${API_BASE}/payment/moltspay/create`, {
-      method: 'POST',
-      headers: localizedHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      }),
-      body: JSON.stringify({ slug }),
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to create USDC payment'));
-    }
-    return response.json();
-  },
-
-  async verifyMoltsPayTx(
-    token: string,
-    paymentId: number,
-    txHash: string,
-  ): Promise<MoltsPayVerifyResponse> {
-    const response = await fetch(`${API_BASE}/payment/moltspay/verify`, {
-      method: 'POST',
-      headers: localizedHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      }),
-      body: JSON.stringify({ payment_id: paymentId, tx_hash: txHash }),
-    });
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Payment verification failed'));
-    }
-    return response.json();
-  },
-
-  async getMoltsPayStatus(
-    token: string,
-    paymentId: number,
-  ): Promise<MoltsPayStatusResponse> {
-    const response = await fetch(
-      `${API_BASE}/payment/moltspay/status/${paymentId}`,
-      {
-        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
-      },
-    );
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to check USDC payment status'));
-    }
-    return response.json();
-  },
-
   async createWechatPaySession(
     token: string,
     slug: string,
+    scene: 'native' | 'h5' = 'native',
+    redirectUrl?: string,
   ): Promise<WechatPayCreateResponse> {
     const response = await fetch(`${API_BASE}/payment/wechat/create`, {
       method: 'POST',
@@ -114,10 +15,43 @@ export const paymentApi = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       }),
-      body: JSON.stringify({ slug }),
+      body: JSON.stringify({ slug, scene, redirect_url: redirectUrl }),
     });
     if (!response.ok) {
       throw new Error(await readApiError(response, 'Failed to create WeChat Pay order'));
+    }
+    return response.json();
+  },
+
+  async getWechatJsapiConfig(
+    redirectUri: string,
+    state = '',
+  ): Promise<WechatJsapiConfigResponse> {
+    const qs = new URLSearchParams({ redirect_uri: redirectUri, state });
+    const response = await fetch(`${API_BASE}/payment/wechat/jsapi/config?${qs}`, {
+      headers: localizedHeaders({}),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to read WeChat config'));
+    }
+    return response.json();
+  },
+
+  async createWechatJsapiSession(
+    token: string,
+    slug: string,
+    code: string,
+  ): Promise<WechatJsapiCreateResponse> {
+    const response = await fetch(`${API_BASE}/payment/wechat/jsapi/create`, {
+      method: 'POST',
+      headers: localizedHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }),
+      body: JSON.stringify({ slug, code }),
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, 'Failed to create WeChat payment'));
     }
     return response.json();
   },
@@ -154,51 +88,45 @@ export const paymentApi = {
     }
   },
 
-  async cancelMoltsPaySession(
-    token: string,
-    paymentId: number,
-  ): Promise<void> {
-    const response = await fetch(
-      `${API_BASE}/payment/moltspay/cancel/${paymentId}`,
-      {
-        method: 'POST',
-        headers: localizedHeaders({ Authorization: `Bearer ${token}` }),
-      },
-    );
-    if (!response.ok) {
-      throw new Error(await readApiError(response, 'Failed to cancel USDC payment'));
-    }
-  },
 };
-
-export interface MoltsPayCreateResponse {
-  payment_id: number;
-  user_id: number;
-  amount_usdc: number;
-  chain: string;
-  service_id: string;
-  wallet_address: string;
-  status: string;
-}
-
-export interface MoltsPayStatusResponse {
-  payment_id: number;
-  status: string;
-  tx_hash: string | null;
-  completed_at: string | null;
-}
-
-export interface MoltsPayVerifyResponse {
-  success: boolean;
-  payment_id: number;
-  already_paid?: boolean;
-}
-
 export interface WechatPayCreateResponse {
   payment_id: number;
-  code_url: string;
+  /** Native QR order: the QR code content. Not returned when scene='h5' and H5 is available. */
+  code_url?: string;
+  /** H5 order: the URL to redirect to that launches the WeChat app. Returned only when scene='h5' and the merchant has H5 payment enabled. */
+  h5_url?: string;
+  /** H5 was requested but the merchant hasn't enabled it, so the backend fell back to a QR order -- the frontend switches guidance text accordingly. */
+  fallback?: 'h5_not_enabled';
   amount_cny: number;
   out_trade_no: string;
+}
+
+export interface WechatJsapiConfigResponse {
+  /** false = the backend hasn't configured the official account AppSecret, JSAPI can't work, and the frontend should fall back to the QR code */
+  configured: boolean;
+  /** Official account web authorization URL; send the user there to exchange for a code */
+  oauth_url: string;
+}
+
+/** The set of signed params required by WeixinJSBridge.invoke('getBrandWCPayRequest', ...) */
+export interface WechatJsapiPayParams {
+  appId: string;
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: string;
+  paySign: string;
+}
+
+export interface WechatJsapiCreateResponse {
+  payment_id: number;
+  amount_cny: number;
+  out_trade_no: string;
+  /** Returned when JSAPI works normally; absent when falling back to a QR order */
+  pay_params?: WechatJsapiPayParams;
+  /** QR code content, returned only on fallback */
+  code_url?: string;
+  fallback?: 'jsapi_not_configured';
 }
 
 export interface WechatPayStatusResponse {

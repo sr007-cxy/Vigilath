@@ -1,11 +1,11 @@
-"""知乎直采适配器 —— 经 search_v3 API(登录态)抓问答/文章 UGC。
+"""Zhihu direct-collection adapter - fetches Q&A/article UGC via the search_v3 API (login session).
 
-知乎搜索 API 需登录(`z_c0`)+ 设备标识(`d_c0`);搜索引擎对知乎收录有限,
-而知乎有大量**员工爆料 / 离职评价 / 行业深度**(舆情高价值)。本适配器用一个
-知乎账号 cookie(环境变量 `ZHIHU_COOKIE`,需含 `z_c0` + `d_c0`)直采。
-发布时间取条目结构化 `created_time`(unix)—— 天然解决时间问题。
+The Zhihu search API requires login (`z_c0`) + a device id (`d_c0`); search engines index Zhihu poorly,
+while Zhihu has lots of **employee leaks / resignation reviews / in-depth industry posts** (high sentiment value). This adapter collects directly with a
+Zhihu account cookie (environment variable `ZHIHU_COOKIE`, must include `z_c0` + `d_c0`).
+Publish time comes from the item's structured `created_time` (unix) - naturally solving the time problem.
 
-cookie 失效(z_c0 过期)→ 返回 [](打 stderr),不拖垮 plan;换 cookie 更新 `ZHIHU_COOKIE`。
+Invalid cookie (z_c0 expired) -> returns [] (prints to stderr) without dragging down the plan; to replace the cookie, update `ZHIHU_COOKIE`.
 """
 from __future__ import annotations
 
@@ -17,19 +17,14 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
+from .cookie_pool import CookiePool
+
 _API = "https://www.zhihu.com/api/v4/search_v3"
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 _TIMEOUT = 25
 _CST = timezone(timedelta(hours=8))
 _TAG_RE = re.compile(r'<[^>]+>')
-
-
-def _cookie() -> str:
-    c = os.environ.get("ZHIHU_COOKIE", "").strip()
-    if not c:
-        raise RuntimeError("ZHIHU_COOKIE 未设置 —— 需含 z_c0 + d_c0 的知乎 cookie")
-    return c
 
 
 def _clean(s: str | None) -> str:
@@ -61,22 +56,44 @@ def _url_for(obj: dict) -> str:
 
 def zhihu_search(query: str, max_results: int = 20,
                  timelimit: str | None = None) -> list[dict]:
-    """知乎综合搜索,返回 [{title,href,body,publish_time,author}]。失败返回 []。"""
-    headers = {
-        "User-Agent": _UA, "Cookie": _cookie(),
-        "Accept": "application/json, text/plain, */*",
-        "x-api-version": "3.0.91",
-        "Referer": ("https://www.zhihu.com/search?type=content&q="
-                    + urllib.parse.quote(query)),
-    }
+    """Zhihu comprehensive search, returns [{title,href,body,publish_time,author}]. Returns [] on failure.
+
+    Cookies go through CookiePool: rotate multiple cookies per request; if z_c0 expired (401/403), mark it dead and switch to the next.
+    """
+    pool = CookiePool("zhihu")
+    if pool.count() == 0:
+        print("  [zhihu] ZHIHU_COOKIE 未设置 —— 需含 z_c0 + d_c0 的知乎 cookie", file=sys.stderr)
+        return []
     params = {"t": "general", "q": query, "offset": 0,
               "limit": min(max_results, 20), "correction": 1}
-    try:
-        r = requests.get(_API, params=params, headers=headers, timeout=_TIMEOUT)
-        r.raise_for_status()
-        data = r.json()
-    except Exception as e:
-        print(f"  [zhihu] request failed: {e}", file=sys.stderr)
+    data = None
+    for idx, cookie in pool.try_cookies():
+        headers = {
+            "User-Agent": _UA, "Cookie": cookie,
+            "Accept": "application/json, text/plain, */*",
+            "x-api-version": "3.0.91",
+            "Referer": ("https://www.zhihu.com/search?type=content&q="
+                        + urllib.parse.quote(query)),
+        }
+        try:
+            r = requests.get(_API, params=params, headers=headers, timeout=_TIMEOUT)
+            if r.status_code in (401, 403):
+                pool.mark_dead(idx, f"鉴权失败 {r.status_code}(z_c0 过期)")
+                continue
+            r.raise_for_status()
+            j = r.json()
+        except Exception as e:
+            print(f"  [zhihu] request failed: {e}", file=sys.stderr)
+            continue                              # transport error != dead cookie, try the next one
+        if isinstance(j, dict) and j.get("error"):
+            pool.mark_dead(idx, f"API error:{str(j['error'])[:40]}")
+            continue
+        pool.mark_ok(idx)
+        pool.capture_refresh(idx, {c.name: c.value for c in r.cookies})  # rolling capture of z_c0 refresh
+        data = j
+        break
+    if data is None:
+        print("  [zhihu] 无可用 cookie", file=sys.stderr)
         return []
     out: list[dict] = []
     for it in data.get("data", []):
@@ -101,8 +118,8 @@ def zhihu_search(query: str, max_results: int = 20,
     return out
 
 
-if __name__ == "__main__":   # 自测:python - "世纪互联"
-    q = sys.argv[1] if len(sys.argv) > 1 else "世纪互联"
+if __name__ == "__main__":   # self-test: python - "Acme Cloud"
+    q = sys.argv[1] if len(sys.argv) > 1 else "Acme Cloud"
     rows = zhihu_search(q, max_results=10)
     print(f"query={q!r} → {len(rows)} 条")
     for r in rows:

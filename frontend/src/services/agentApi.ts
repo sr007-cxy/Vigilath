@@ -1,5 +1,5 @@
-// GEO 优化 Agent — 对话式后端(独立 service,nginx 反代 /api/agent/*)。
-// chat 走 SSE 流式:POST + ReadableStream(EventSource 不支持自定义 Authorization 头)。
+// GEO optimization agent — conversational backend (separate service, nginx reverse-proxies /api/agent/*).
+// chat streams via SSE: POST + ReadableStream (EventSource doesn't support a custom Authorization header).
 
 import { localizedHeaders } from './apiError';
 
@@ -10,21 +10,58 @@ export interface AgentCard {
   data: Record<string, unknown>;
 }
 
+/** Page action command issued by the agent: action = action name, args = arguments. */
+export interface AgentUiAction {
+  action: string;
+  args?: Record<string, unknown>;
+}
+
+/** "Current page" context reported with each message, so the agent can operate the UI. */
+export interface AgentPageContext {
+  page: string;
+  describe?: string;
+  snapshot?: Record<string, unknown>;
+  actions: string[];   // Action names available on the current page (including the built-in navigate)
+  nav_targets?: { label: string; path: string }[];   // Directory of in-site targets available to navigate, so the agent jumps to the right path
+  route?: string;      // Current path. Backend resolve_scope falls back on it to determine the ops console line when the frontend omits scope
+}
+
+/** Two-step confirmation preview: irreversible/paid actions return this first, and the agent only really executes after the user replies "confirm". */
+export interface AgentConfirm {
+  action: string;
+  action_label: string;
+  topic?: { id: number; name: string };
+  preview?: Record<string, unknown>;
+  impact?: string[];
+  irreversible?: string[];
+  cost?: { currency?: string; amount?: string; note?: string } | null;
+  expires_in?: number;
+}
+
 export interface ChatCallbacks {
   onDelta: (text: string) => void;
-  onCards?: (cards: AgentCard[]) => void;   // 数据工具返回 → 结构化卡片
+  /** "What it's doing now" -- when a tool node starts running, push a plain-language sentence, so a long round isn't just a lone "Thinking...". */
+  onStage?: (text: string) => void;
+  onCards?: (cards: AgentCard[]) => void;       // Data tool returns -> structured cards
+  onUnauthorized?: () => void;                  // 401: the caller decides whether to re-login or show a hint
+  onUiActions?: (actions: AgentUiAction[]) => void;  // control_page commands -> executed by the frontend
+  onConfirms?: (confirms: AgentConfirm[]) => void;   // Two-step confirmation preview -> render confirmation cards
   onDone?: () => void;
   onError?: (msg: string) => void;
   signal?: AbortSignal;
 }
 
-/** 流式对话。把 message 发给 agent,逐 token 回调 onDelta。 */
+/** Streaming conversation. Send message to the agent, calling onDelta per token. */
 export async function streamAgentChat(
   message: string,
   topicId: number | null,
+  pageContext: AgentPageContext | null,
   cb: ChatCallbacks,
+  scope?: 'admin',
+  /** Override login credentials. The WeCom passwordless page holds a jwt exchanged via OAuth, not in localStorage. */
+  authToken?: string,
 ): Promise<void> {
-  const token = localStorage.getItem('token');
+  const token = authToken ?? localStorage.getItem('token');
   let resp: Response;
   try {
     resp = await fetch(`${API_BASE}/agent/chat`, {
@@ -33,7 +70,7 @@ export async function streamAgentChat(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token ?? ''}`,
       }),
-      body: JSON.stringify({ message, topic_id: topicId }),
+      body: JSON.stringify({ message, topic_id: topicId, page_context: pageContext, scope }),
       signal: cb.signal,
     });
   } catch (e) {
@@ -41,7 +78,12 @@ export async function streamAgentChat(
     return;
   }
 
-  if (resp.status === 401) { cb.onError?.('未登录或登录已过期'); return; }
+  if (resp.status === 401) {
+    // Separate callback for 401: the WeCom passwordless page relies on it to redo OAuth, rather than showing "network error"
+    if (cb.onUnauthorized) { cb.onUnauthorized(); return; }
+    cb.onError?.('未登录或登录已过期');
+    return;
+  }
   if (resp.status === 503) { cb.onError?.('Agent 服务暂不可用'); return; }
   if (!resp.ok || !resp.body) { cb.onError?.(`请求失败(${resp.status})`); return; }
 
@@ -60,12 +102,15 @@ export async function streamAgentChat(
         if (!line.startsWith('data:')) continue;
         const payload = line.slice(5).trim();
         try {
-          const obj = JSON.parse(payload) as { delta?: string; cards?: AgentCard[]; error?: string; done?: boolean };
+          const obj = JSON.parse(payload) as { delta?: string; stage?: string; cards?: AgentCard[]; ui_actions?: AgentUiAction[]; confirms?: AgentConfirm[]; error?: string; done?: boolean };
           if (obj.delta) cb.onDelta(obj.delta);
+          else if (obj.stage) cb.onStage?.(obj.stage);
           else if (obj.cards) cb.onCards?.(obj.cards);
+          else if (obj.ui_actions) cb.onUiActions?.(obj.ui_actions);
+          else if (obj.confirms) cb.onConfirms?.(obj.confirms);
           else if (obj.error) cb.onError?.(obj.error);
           else if (obj.done) { cb.onDone?.(); return; }
-        } catch { /* 跳过非 JSON 行 */ }
+        } catch { /* Skip non-JSON lines */ }
       }
     }
   } catch (e) {
@@ -75,6 +120,34 @@ export async function streamAgentChat(
   cb.onDone?.();
 }
 
+/** A historical message for replay (only user-visible things: body + cards). */
+export interface AgentHistoryMsg {
+  role: 'user' | 'assistant';
+  text: string;
+  cards?: AgentCard[];
+}
+
+/**
+ * Fetch the last few rounds of history to fill the window when the chat mounts.
+ *
+ * The frontend msgs are pure component state: one refresh or route change and the whole conversation is gone -- while the backend has kept it all along.
+ * What users feel is "I just discussed the diagnosis with it, and after a refresh it remembers nothing", so they ask again and place another order.
+ */
+export async function fetchAgentHistory(scope?: 'admin', limit = 20): Promise<AgentHistoryMsg[]> {
+  const token = localStorage.getItem('token');
+  try {
+    const qs = new URLSearchParams({ limit: String(limit), ...(scope ? { scope } : {}) });
+    const r = await fetch(`${API_BASE}/agent/history?${qs}`, {
+      headers: { Authorization: `Bearer ${token ?? ''}` },
+    });
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.messages as AgentHistoryMsg[]) || [];
+  } catch {
+    return [];      // Failing to fetch history shouldn't block the chat window from opening
+  }
+}
+
 export interface AgentNotification {
   id: number;
   title: string;
@@ -82,7 +155,7 @@ export interface AgentNotification {
   created_at: string | null;
 }
 
-/** 拉未读主动通知(舆情高风险等)。 */
+/** Fetch unread proactive notifications (high-risk sentiment monitoring alerts etc.). */
 export async function fetchNotifications(): Promise<AgentNotification[]> {
   const token = localStorage.getItem('token');
   try {
@@ -97,7 +170,7 @@ export async function fetchNotifications(): Promise<AgentNotification[]> {
   }
 }
 
-/** 标记所有未读为已读。 */
+/** Mark all unread as read. */
 export async function markNotificationsRead(): Promise<void> {
   const token = localStorage.getItem('token');
   try {
@@ -105,5 +178,5 @@ export async function markNotificationsRead(): Promise<void> {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
-  } catch { /* 忽略 */ }
+  } catch { /* Ignore */ }
 }

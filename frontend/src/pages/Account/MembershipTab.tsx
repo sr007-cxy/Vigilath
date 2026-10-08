@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { balanceApi, points } from '../../services/balanceApi';
 import { useContactModal } from '../../components/ContactModalContext';
 import { useTierModal } from '../../components/TierModalContext';
 import {
@@ -28,6 +29,8 @@ export function MembershipTab() {
   const [details, setDetails] = useState<MembershipType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Credits and plans are bought together; people looking at their plan naturally want to know how many credits remain
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
 
   const load = async () => {
     const token = localStorage.getItem('token');
@@ -51,6 +54,16 @@ export function MembershipTab() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    let cancelled = false;
+    balanceApi.get(token)
+      .then(b => { if (!cancelled) setBalanceCents(b.balance_cents); })
+      .catch(() => { /* if unavailable, don't show it; doesn't affect plan info */ });
+    return () => { cancelled = true; };
   }, []);
 
   const tierText = (tier: MembershipType) => {
@@ -97,6 +110,7 @@ export function MembershipTab() {
       </div>
     );
   }
+
 
   const hasPaidPlan = !!(userMembership && userMembership.is_active && userMembership.id > 0);
   const endDate = userMembership ? new Date(userMembership.end_date) : null;
@@ -171,6 +185,25 @@ export function MembershipTab() {
               {daysLeft === null ? '∞' : `${daysLeft} ${t('account.membership.days', '天')}`}
             </dd>
           </div>
+          {balanceCents !== null && (
+            <div>
+              <dt className="text-xs text-secondary">
+                {t('account.membership.points', '积分余额')}
+              </dt>
+              <dd className="text-sm font-medium text-primary mt-1">
+                {points(balanceCents)}
+                {' · '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/account/balance')}
+                  className="underline"
+                  style={{ color: 'var(--accent-primary)' }}
+                >
+                  {t('account.membership.pointsDetail', '明细/充值')}
+                </button>
+              </dd>
+            </div>
+          )}
         </dl>
 
         <div className="mt-5 flex flex-col sm:flex-row gap-3">

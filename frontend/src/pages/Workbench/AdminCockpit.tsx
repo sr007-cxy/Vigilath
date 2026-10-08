@@ -1,12 +1,16 @@
-// 项目进度 — admin 主入口,一屏看完每个主题在 GEO 管线上的进度.
-// 路由:/workbench/cockpit (workbench 默认页)
-// 不按 pipeline stage 让 admin 一步步点 sidebar,而是把所有主题铺开 + 每个 stage 用 chip
-// 显示状态(完成 / 进行中 / 待处理 / 异常 / 未启动),admin 直接点 chip 跳详情页.
+// Project progress — the admin main entry, showing each topic's progress through the GEO pipeline on one screen.
+// Route: /ops/cockpit (workbench default page)
+// Instead of making admins click through the sidebar stage by stage, lay out all topics + show each stage's status with a chip
+// (done / in progress / pending / error / not started); admins click a chip to jump to the detail page.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import type { TFunction } from 'i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHead } from '../../components/PageHead';
+import { Pagination } from '../../components/Pagination';
+import { UiSelect } from '../../components/ui/Select';
+import { useOverlayDismiss } from '../../components/ui/useOverlayDismiss';
 import { adminReviewApi, type StageState, type TopicReviewListItem } from '../../services/adminReviewApi';
 import { authApi } from '../../services/authApi';
 
@@ -14,34 +18,38 @@ type StageKey = 'submit' | 'review' | 'solution' | 'plan' | 'content' | 'insight
 
 const STAGE_ORDER: StageKey[] = ['submit', 'review', 'solution', 'plan', 'content', 'insight'];
 
+// Sortable columns; null = unsorted, keeping the backend's original order.
+type SortKey = 'id' | 'topic' | 'customer' | 'progress';
+type SortDir = 'asc' | 'desc';
+
 const STATE_COLOR: Record<StageState, { c: string; bg: string; border: string }> = {
-  done: { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)' },
-  running: { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.35)' },
-  pending: { c: '#eab308', bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.35)' },
-  blocked: { c: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.35)' },
-  idle: { c: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.30)' },
+  done: { c: 'var(--wb-status-fg)', bg: 'var(--wb-status-bg)', border: 'var(--wb-status-border)' },
+  running: { c: 'var(--wb-status-strong-fg)', bg: 'var(--wb-status-strong-bg)', border: 'var(--wb-status-strong-border)' },
+  pending: { c: 'var(--wb-status-fg)', bg: 'var(--wb-status-bg)', border: 'var(--wb-line-strong)' },
+  blocked: { c: 'var(--wb-status-strong-fg)', bg: 'var(--wb-status-strong-bg)', border: 'var(--wb-status-strong-border)' },
+  idle: { c: 'var(--wb-status-muted-fg)', bg: 'var(--wb-status-muted-bg)', border: 'var(--wb-line)' },
 };
 
 function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageState; to: string }> {
   const tid = t.topic_id;
   const sub = t.submission_status;
-  // stage 1 submit:有 topic 就算 done.
-  // stage 2 review:由 submission_status 推.
-  // stage 3-6:后端 admin_review.py 已经按各自表的状态算好(idle/running/done/blocked/pending),
-  //           前端直接读字段;后端缺字段时 Pydantic 会回退到 'idle'.
+  // stage 1 submit: done if there's a topic.
+  // stage 2 review: inferred from submission_status.
+  // stage 3-6: backend admin_review.py already computes them from each table's state (idle/running/done/blocked/pending),
+  //           the frontend reads the fields directly; when the backend lacks a field Pydantic falls back to 'idle'.
   const reviewRaw: StageState =
     sub === 'approved' ? 'done' :
       sub === 'rejected' ? 'blocked' :
         sub === 'pending' ? 'pending' : 'idle';
 
-  // 工作流式管线 — backward infer:任意 stage 状态非 idle(done / running /
-  // pending / blocked),意味着上游早已发生过,即便上游 DB 行缺失.把上游的
-  // idle 推升为 done,避免「下游已完成、上游仍未启动」的错位.
+  // Workflow-style pipeline — backward infer: any stage whose state is non-idle (done / running /
+  // pending / blocked) implies the upstream already happened, even if the upstream DB row is missing. Promote the upstream
+  // idle to done, avoiding the mismatch "downstream done, upstream not started".
   //
-  // 这条规则替代了原来的「forward 门禁」(上游非 done → 下游强制 idle).
-  // forward 门禁在老数据/缺失行场景下会把真实完成的下游硬塞成 idle —
-  // 例如 程晓峰 topic_id=2:plan 行未生成、但 content 70 篇已 published、
-  // telemetry success,plan 的「样本缺失」不应该把 content 拖成未启动.
+  // This rule replaces the old "forward gate" (upstream not done -> downstream forced idle).
+  // With old data/missing rows the forward gate would force genuinely completed downstream stages to idle —
+  // e.g. user Zhang, topic_id=2: the plan row was never generated, but 70 content articles were published
+  // and telemetry succeeded; the plan's "missing sample" shouldn't drag content down to not started.
   const rawByKey: Record<StageKey, StageState> = {
     submit: 'done',
     review: reviewRaw,
@@ -59,27 +67,27 @@ function deriveStages(t: TopicReviewListItem): Record<StageKey, { state: StageSt
     }
     if (effective[key] !== 'idle') downstreamProgressed = true;
   }
-  // Forward gate:效果查验依赖内容已发布 — 没发布就没效果可查.
-  // 后端 _insight_state 用 last_run_status === 'success' 直接判 done,会让 batch 跑完
-  // 但文稿还在审/没 published 时出现「6 已完成 5 没完成」的视觉错乱.
-  // 这里把 content !== done 时的 insight done 强制降到 running(等内容发布).
+  // Forward gate: results verification depends on content being published — nothing published means no results to verify.
+  // Backend _insight_state judges done directly from last_run_status === 'success', which, when the batch has finished
+  // but drafts are still under review/unpublished, causes the visual glitch "stage 6 done, stage 5 not done".
+  // Here, when content !== done, insight done is forced down to running (waiting for content to be published).
   if (effective.content !== 'done' && effective.insight === 'done') {
     effective.insight = 'running';
   }
-  // 用户偏好:项目进度看板不展示「异常」(red),blocked 一律按「进行中」(blue)呈现.
-  // 真实失败状态查 stage 详情页(执行计划 / 审核 / 监测各页都会还原 raw status).
+  // User preference: the project progress board doesn't show "error"; blocked is always shown as "in progress".
+  // For the real failure state check the stage detail pages (execution plan / review / monitoring pages all restore the raw status).
   for (const key of STAGE_ORDER) {
     if (effective[key] === 'blocked') effective[key] = 'running';
   }
 
-  // 全部 6 段 chip 都指向「画像」主流程的对应 step,只保留这一个主流程.
-  //   submit (品牌与主题创建)   → step 1 设置 / 资料
-  //   review (诊断与方案预评估) → step 3 监测问题(种子 + queries 全景)
-  //   solution (GEO策略优化方案) → step 4 健康诊断报告
-  //   plan (执行策略与规划)     → step 5 计划书(inline)
-  //   content (内容发布与审核)  → step 6 文案复审(inline)
-  //   insight (效果查验与更新)  → step 7 监测反哺(inline)
-  const base = `/workbench/topics/${tid}/edit`;
+  // All 6 stage chips point to the corresponding step of the "Profile" main flow; only this one main flow is kept.
+  //   submit (brand and topic creation)            -> step 1 settings / materials
+  //   review (diagnosis and plan pre-assessment)   -> step 3 prompts (seeds + full view of queries)
+  //   solution (GEO strategy optimization plan)    -> step 4 health diagnosis report
+  //   plan (execution strategy and planning)       -> step 5 plan (inline)
+  //   content (content publishing and review)      -> step 6 copy review (inline)
+  //   insight (results verification and updates)   -> step 7 monitoring feedback (inline)
+  const base = `/ops/topics/${tid}/edit`;
   return {
     submit: { state: effective.submit, to: `${base}?step=1` },
     review: { state: effective.review, to: `${base}?step=3` },
@@ -97,9 +105,20 @@ export function AdminCockpit() {
   const [topics, setTopics] = useState<TopicReviewListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  // 「新建项目」入口:与「画像」页 (AdminAccounts.tsx) 同一套创建账号弹窗,成功后
-  // 跳到 /workbench/accounts/{id}/topics?new=1,AdminAccountTopics 会自动打开新建主题编辑器.
+  // Search / filter / sort -- all done on the frontend: the list endpoint returns all topics at once and the volume is small (hundreds),
+  // not worth adding backend pagination params; switch to backend filtering if it really reaches thousands.
+  const [kw, setKw] = useState('');
+  // Current stage = the first "not completed" of the 6 stages; 'alldone' when all are complete.
+  const [stageFilter, setStageFilter] = useState<'' | StageKey | 'alldone'>('');
+  const [stateFilter, setStateFilter] = useState<'' | StageState>('');
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  // "New project" entry: the same create-account modal as the "Profile" page (AdminAccounts.tsx); on success
+  // jump to /ops/accounts/{id}/topics?new=1, and AdminAccountTopics automatically opens the new topic editor.
   const [modalOpen, setModalOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -136,6 +155,8 @@ export function AdminCockpit() {
     if (submitting) return;
     setModalOpen(false);
   };
+  // Overlay close checks both mousedown and mouseup, so selecting text in an input and releasing outside the box doesn't close it by mistake
+  const dismissModal = useOverlayDismiss(closeModal);
   const handleCreate = async () => {
     setFormErr(null);
     const e = email.trim().toLowerCase();
@@ -145,9 +166,9 @@ export function AdminCockpit() {
     if (p.length < 6) { setFormErr(t('workbench.adminAccounts.createForm.passwordTooShort')); return; }
     setSubmitting(true);
     try {
-      const u = await authApi.register(e, p, n || undefined);
+      const u = await authApi.register(e, p, n || undefined, token);
       setModalOpen(false);
-      navigate(`/workbench/accounts/${u.id}/topics?new=1`);
+      navigate(`/ops/accounts/${u.id}/topics?new=1`);
     } catch (ex: unknown) {
       setFormErr(ex instanceof Error ? ex.message : String(ex));
     } finally {
@@ -156,14 +177,77 @@ export function AdminCockpit() {
   };
 
   const rows = useMemo(
-    () => topics.map(tp => ({ topic: tp, stages: deriveStages(tp) })),
+    () => topics.map(tp => {
+      const stages = deriveStages(tp);
+      const doneCount = STAGE_ORDER.filter(k => stages[k].state === 'done').length;
+      // Current stage: the first non-done of the 6 stages; all done -> 'alldone'.
+      const current = STAGE_ORDER.find(k => stages[k].state !== 'done');
+      return {
+        topic: tp,
+        stages,
+        doneCount,
+        current: (current ?? 'alldone') as StageKey | 'alldone',
+        currentState: current ? stages[current].state : null,
+      };
+    }),
     [topics],
   );
 
-  // 待办计数(去审核流):
-  //   - 未启动 = approved 但 plan 为 idle(admin 直建后未点「启动」)
-  //   - 跑批待处理 = plan_status === 'blocked' (run failed) 或 'pending'
-  //   - 待复审文案 = content_status === 'pending'
+  // Search (topic name / brand name / short name / industry / client email / ID) + stage filter + sorting.
+  const viewRows = useMemo(() => {
+    const q = kw.trim().toLowerCase().replace(/^#/, '');
+    let out = rows.filter(r => {
+      if (q) {
+        const hay = [
+          r.topic.topic_name, r.topic.profile_name, r.topic.company_short_name,
+          r.topic.industry, r.topic.user_email, String(r.topic.topic_id),
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (stageFilter && r.current !== stageFilter) return false;
+      // Status filtering judges by "the current stage's status": fully completed rows have no current status, so selecting a status excludes them.
+      if (stateFilter && r.currentState !== stateFilter) return false;
+      return true;
+    });
+    if (sortKey) {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const txt = (a: string, b: string) => a.localeCompare(b, 'zh-Hans-CN');
+      out = [...out].sort((a, b) => dir * (
+        sortKey === 'id' ? a.topic.topic_id - b.topic.topic_id
+          : sortKey === 'progress'
+            // With the same number of completed stages, rows whose current stage is further along come first (deeper progress)
+            ? (a.doneCount - b.doneCount) || (STAGE_ORDER.indexOf(a.current as StageKey) - STAGE_ORDER.indexOf(b.current as StageKey))
+            : sortKey === 'customer' ? txt(a.topic.user_email, b.topic.user_email)
+              : txt(a.topic.profile_name || a.topic.topic_name, b.topic.profile_name || b.topic.topic_name)
+      ));
+    }
+    return out;
+  }, [rows, kw, stageFilter, stateFilter, sortKey, sortDir]);
+
+  // Clicking the same column again: ascending -> descending -> cancel (back to the endpoint's original order)
+  const toggleSort = (key: SortKey) => {
+    setPage(1);
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir(key === 'progress' ? 'desc' : 'asc');
+      return;
+    }
+    if (sortDir === 'asc') setSortDir('desc');
+    else { setSortKey(null); setSortDir('asc'); }
+  };
+
+  const filtering = !!kw.trim() || !!stageFilter || !!stateFilter;
+  const clearFilters = () => { setKw(''); setStageFilter(''); setStateFilter(''); setPage(1); };
+
+  // When page size / filters change, pull an out-of-range page number back into the valid range
+  useEffect(() => { setPage(1); }, [pageSize]);
+  useEffect(() => { setPage(1); }, [kw, stageFilter, stateFilter]);
+  const pagedRows = viewRows.slice((page - 1) * pageSize, page * pageSize);
+
+  // To-do counts (review flow removed):
+  //   - Not started = approved but plan is idle (created directly by an admin without clicking "Start")
+  //   - Batch run pending = plan_status === 'blocked' (run failed) or 'pending'
+  //   - Copy pending review = content_status === 'pending'
   const todoCounts = useMemo(() => {
     let notStarted = 0, runStuck = 0, docPending = 0;
     for (const tp of topics) {
@@ -174,116 +258,223 @@ export function AdminCockpit() {
     return { notStarted, runStuck, docPending };
   }, [topics]);
 
+  const completedProjects = useMemo(
+    () => rows.filter(row => row.doneCount === STAGE_ORDER.length).length,
+    [rows],
+  );
+  const completionRate = rows.length ? Math.round((completedProjects / rows.length) * 100) : 0;
+
   return (
-    <div className="space-y-4">
+    <div className="wb-page">
       <PageHead titleKey="workbench.adminCockpit.title" titleFallback="项目进度" />
-      <header className="flex items-start justify-between gap-3">
+      <header className="wb-page-header">
         <div>
+          <div className="wb-eyebrow">
+            {t('workbench.adminCockpit.overviewLabel', { defaultValue: '交付总览' })}
+          </div>
           <h1 className="text-xl font-semibold text-primary">
             {t('workbench.adminCockpit.heading')}
           </h1>
-          <p className="text-xs text-secondary mt-0.5">
+          <p className="wb-subtitle">
             {t('workbench.adminCockpit.subtitle')}
           </p>
         </div>
         <button type="button" onClick={openModal}
-                className="text-xs px-3 py-1.5 rounded-md text-white whitespace-nowrap"
-                style={{ background: 'var(--accent-primary)' }}>
-          + {t('workbench.adminCockpit.newProject')}
+                className="wb-button wb-button-primary">
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+               strokeWidth="1.8" aria-hidden>
+            <path d="M8 2.5v11M2.5 8h11" strokeLinecap="round" />
+          </svg>
+          {t('workbench.adminCockpit.newProject')}
         </button>
       </header>
 
-      {/* 待办区:3 张计数卡 — 点击跳到对应列表(带过滤) */}
+      {/* Overview band: overall project progress + three kinds of ops to-dos. */}
       {!loading && !err && topics.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          <TodoCard count={todoCounts.notStarted}
-                    label={t('workbench.adminCockpit.todo.notStarted')}
-                    color="#3b82f6"
-                    to="/workbench/accounts" />
-          <TodoCard count={todoCounts.runStuck}
-                    label={t('workbench.adminCockpit.todo.runStuck')}
-                    color="#eab308"
-                    to="/workbench/accounts" />
-          <TodoCard count={todoCounts.docPending}
-                    label={t('workbench.adminCockpit.todo.docPending')}
-                    color="#10b981"
-                    to="/workbench/content-review?status=pending_review" />
+        <div className="wb-overview">
+          <div className="wb-overview-primary">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="wb-overview-label">
+                  {t('workbench.adminCockpit.totalProjects', { defaultValue: '全部项目' })}
+                </div>
+                <div className="wb-overview-number mt-1">{rows.length}</div>
+              </div>
+              <div className="text-right">
+                <div className="wb-overview-label">
+                  {t('workbench.adminCockpit.completedProjects', { defaultValue: '已完成' })}
+                </div>
+                <div className="text-sm font-semibold text-primary mt-1 tabular-nums">
+                  {completedProjects} / {rows.length}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="wb-progress-track flex-1" aria-hidden>
+                <div className="wb-progress-fill" style={{ width: `${completionRate}%` }} />
+              </div>
+              <span className="text-[11px] font-semibold text-secondary tabular-nums">
+                {completionRate}%
+              </span>
+            </div>
+          </div>
+          <OverviewStat count={todoCounts.notStarted}
+                        label={t('workbench.adminCockpit.todo.notStarted')}
+                        color="var(--wb-ink)"
+                        to="/ops/accounts" />
+          <OverviewStat count={todoCounts.runStuck}
+                        label={t('workbench.adminCockpit.todo.runStuck')}
+                        color="var(--wb-ink-secondary)"
+                        to="/ops/accounts" />
+          <OverviewStat count={todoCounts.docPending}
+                        label={t('workbench.adminCockpit.todo.docPending')}
+                        color="var(--wb-ink)"
+                        to="/ops/content-review?status=pending_review" />
         </div>
       )}
 
       {loading ? (
-        <div className="text-xs text-muted text-center py-10">{t('common.loading')}</div>
+        <CockpitSkeleton />
       ) : err ? (
-        <div className="text-xs text-red-500">{err}</div>
+        <StatePanel kind="error" title={t('common.loadFailed', { defaultValue: '项目列表加载失败' })}
+                    description={err} />
       ) : rows.length === 0 ? (
-        <div className="text-xs text-muted text-center py-10">
-          {t('workbench.adminCockpit.empty')}
+        <StatePanel title={t('workbench.adminCockpit.empty')}
+                    description={t('workbench.adminCockpit.emptyHint', {
+                      defaultValue: '创建第一个项目后，交付阶段和待办会集中显示在这里。',
+                    })}
+                    action={<button type="button" onClick={openModal}
+                                    className="wb-button wb-button-primary mt-4">
+                      {t('workbench.adminCockpit.newProject')}
+                    </button>} />
+      ) : viewRows.length === 0 ? (
+        <div className="wb-panel">
+          <CockpitToolbar
+            kw={kw} setKw={setKw} stageFilter={stageFilter} setStageFilter={setStageFilter}
+            stateFilter={stateFilter} setStateFilter={setStateFilter} filtering={filtering}
+            clearFilters={clearFilters} shown={viewRows.length} total={rows.length} t={t}
+          />
+          <StatePanel title={t('workbench.adminCockpit.noMatch')}
+                      description={t('workbench.adminCockpit.noMatchHint', {
+                        defaultValue: '尝试更换关键词或清除筛选条件。',
+                      })}
+                      action={<button type="button" onClick={clearFilters}
+                                      className="wb-button wb-button-quiet mt-3">
+                        {t('workbench.adminCockpit.clearFilters')}
+                      </button>} bare />
         </div>
       ) : (
-        <div className="rounded-lg overflow-hidden"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted">
-                <th className="text-left px-3 py-2 whitespace-nowrap">{t('workbench.adminCockpit.colTopic')}</th>
-                <th className="text-left px-3 py-2 whitespace-nowrap">{t('workbench.adminCockpit.colCustomer')}</th>
-                {STAGE_ORDER.map((s, i) => (
-                  <th key={s} className="px-2 py-2 text-center whitespace-nowrap">
-                    <span className="text-muted">{i + 1}.</span>{' '}
-                    {t(`workbench.adminCockpit.stage.${s}`)}
+        <div className="wb-panel overflow-hidden">
+          <CockpitToolbar
+            kw={kw} setKw={setKw} stageFilter={stageFilter} setStageFilter={setStageFilter}
+            stateFilter={stateFilter} setStateFilter={setStateFilter} filtering={filtering}
+            clearFilters={clearFilters} shown={viewRows.length} total={rows.length} t={t}
+          />
+          {/* With many rows the list scrolls vertically, the header frozen at the top of the container (same approach as batch-run results / monitoring runs).
+              The pagination bar sits outside the scroll container, always visible. */}
+          <div className="wb-table-scroll">
+            <table className="wb-table">
+              <thead>
+                <tr>
+                  <SortTh label={t('workbench.adminCockpit.colTopic')} sortKey="topic"
+                    active={sortKey} dir={sortDir} onSort={toggleSort} align="left"
+                    hint={t('workbench.adminCockpit.sortHint')} sticky />
+                  <SortTh label={t('workbench.adminCockpit.colCustomer')} sortKey="customer"
+                    active={sortKey} dir={sortDir} onSort={toggleSort} align="left"
+                    hint={t('workbench.adminCockpit.sortHint')} />
+                  <SortTh label={t('workbench.adminCockpit.colProgress')} sortKey="progress"
+                    active={sortKey} dir={sortDir} onSort={toggleSort} align="center"
+                    hint={t('workbench.adminCockpit.sortHint')} />
+                  {STAGE_ORDER.map((s, i) => (
+                    <th key={s} className="text-center">
+                      <span className="text-muted">{i + 1}.</span>{' '}
+                      {t(`workbench.adminCockpit.stage.${s}`)}
+                    </th>
+                  ))}
+                  <th className="text-center">
+                    {t('workbench.adminCockpit.colReports')}
                   </th>
-                ))}
-                <th className="px-2 py-2 text-center whitespace-nowrap">
-                  {t('workbench.adminCockpit.colGrowth')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ topic, stages }) => (
-                <tr key={topic.topic_id} className="border-t"
-                  style={{ borderColor: 'var(--border-color)' }}>
-                  <td className="px-3 py-2 text-primary">
-                    {topic.profile_name || topic.topic_name}
-                    <div className="text-[10px] text-muted">#{topic.topic_id}</div>
-                  </td>
-                  <td className="px-3 py-2 text-secondary">
-                    {topic.user_email}
-                  </td>
-                  {STAGE_ORDER.map(key => {
-                    const { state, to } = stages[key];
-                    const c = STATE_COLOR[state];
-                    return (
-                      <td key={key} className="px-2 py-2 text-center">
-                        <Link to={to}
-                          className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors"
-                          style={{ color: c.c, background: c.bg, borderColor: c.border }}>
-                          {t(`workbench.adminCockpit.stageStatus.${state}`)}
-                        </Link>
-                      </td>
-                    );
-                  })}
-                  {/* 客户视角品牌增长面板入口 — admin 直接看客户看到的那个 /brand-growth */}
-                  <td className="px-2 py-2 text-center">
-                    <Link to={`/brand-growth?topic=${topic.topic_id}`}
-                      className="inline-block px-2 py-0.5 rounded-md text-[11px] border transition-colors hover:opacity-80"
-                      style={{ color: 'var(--accent-primary)', borderColor: 'var(--accent-primary)' }}>
-                      {t('workbench.adminCockpit.viewGrowth')}
-                    </Link>
-                  </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pagedRows.map(({ topic, stages, doneCount }) => (
+                  <tr key={topic.topic_id}>
+                    <td className="wb-sticky-col">
+                      <div className="wb-project-cell">
+                        <div className="wb-project-mark" aria-hidden>
+                          {(topic.profile_name || topic.topic_name || '项').trim().slice(0, 1)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-primary truncate max-w-[14rem]">
+                            {topic.profile_name || topic.topic_name}
+                          </div>
+                          <div className="text-[10px] text-muted mt-0.5 truncate max-w-[14rem]">
+                            #{topic.topic_id}{topic.industry ? ` · ${topic.industry}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="block max-w-[12rem] truncate" title={topic.user_email}>
+                        {topic.user_email}
+                      </span>
+                    </td>
+                    {/* Completion progress — the number of completed stages out of 6, also the sort key for the "Progress" column */}
+                    <td>
+                      <div className="wb-row-progress">
+                        <div className="wb-progress-track" aria-hidden>
+                          <div className="wb-progress-fill"
+                               style={{ width: `${(doneCount / STAGE_ORDER.length) * 100}%` }} />
+                        </div>
+                        <span className="text-[11px] font-semibold tabular-nums"
+                              style={{ color: doneCount === STAGE_ORDER.length ? 'var(--wb-ink)' : 'var(--text-secondary)' }}>
+                          {doneCount}/{STAGE_ORDER.length}
+                        </span>
+                      </div>
+                    </td>
+                    {STAGE_ORDER.map(key => {
+                      const { state, to } = stages[key];
+                      const c = STATE_COLOR[state];
+                      return (
+                        <td key={key} className="text-center">
+                          <Link to={to}
+                            className="wb-stage-link"
+                            style={{
+                              '--state-color': c.c,
+                              '--state-bg': c.bg,
+                              '--state-border': c.border,
+                            } as CSSProperties}>
+                            <span className="wb-stage-dot" aria-hidden />
+                            {t(`workbench.adminCockpit.stageStatus.${state}`)}
+                          </Link>
+                        </td>
+                      );
+                    })}
+                    {/* Client-view report center entry — admins see exactly the /reports the client sees */}
+                    <td className="text-center">
+                      <Link to={`/reports?topic=${topic.topic_id}`}
+                        className="wb-button wb-button-quiet !min-h-[1.8rem] !px-2 !py-1 text-[11px]">
+                        {t('workbench.adminCockpit.viewReports')}
+                        <span aria-hidden>↗</span>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="wb-table-footer">
+            <Pagination page={page} pageSize={pageSize} total={viewRows.length}
+              onPageChange={setPage} onPageSizeChange={setPageSize} />
+          </div>
         </div>
       )}
 
-      {/* 「新建项目」弹窗 — 与「画像」AdminAccounts.tsx 同源,复用同一套 i18n 字典. */}
+      {/* "New project" modal — same source as "Profile" AdminAccounts.tsx, reusing the same i18n dictionary. */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
-             onClick={closeModal}>
-          <div className="w-full max-w-md rounded-xl p-5 shadow-2xl"
-               style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+        <div className="wb-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+             {...dismissModal}>
+          <div className="wb-modal w-full max-w-md p-5"
                onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-4">
               <h2 className="text-base font-semibold text-primary">
@@ -302,8 +493,7 @@ export function AdminCockpit() {
                        onChange={e => setEmail(e.target.value)}
                        onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
                        placeholder={t('workbench.adminAccounts.createForm.emailPlaceholder')}
-                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+                       className="wb-input w-full" />
               </label>
               <label className="block text-xs text-secondary">
                 <span className="block mb-1">
@@ -313,8 +503,7 @@ export function AdminCockpit() {
                        onChange={e => setPassword(e.target.value)}
                        onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
                        placeholder={t('workbench.adminAccounts.createForm.passwordPlaceholder')}
-                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+                       className="wb-input w-full" />
               </label>
               <label className="block text-xs text-secondary">
                 <span className="block mb-1">
@@ -324,8 +513,7 @@ export function AdminCockpit() {
                        onChange={e => setName(e.target.value)}
                        onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
                        placeholder={t('workbench.adminAccounts.createForm.namePlaceholder')}
-                       className="w-full px-2 py-1.5 rounded-md text-xs text-primary"
-                       style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)' }} />
+                       className="wb-input w-full" />
               </label>
             </div>
             {formErr && (
@@ -333,13 +521,12 @@ export function AdminCockpit() {
             )}
             <div className="mt-5 flex items-center justify-end gap-2">
               <button type="button" disabled={submitting} onClick={closeModal}
-                      className="text-xs px-3 py-1.5 rounded-md"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                      className="wb-button">
                 {t('workbench.adminAccounts.createForm.cancel')}
               </button>
               <button type="button" disabled={submitting} onClick={handleCreate}
-                      className="text-xs px-3 py-1.5 rounded-md text-white"
-                      style={{ background: 'var(--accent-primary)', opacity: submitting ? 0.5 : 1 }}>
+                      className="wb-button wb-button-primary"
+                      style={{ opacity: submitting ? 0.5 : 1 }}>
                 {submitting
                   ? t('workbench.adminAccounts.createForm.submitting')
                   : t('workbench.adminAccounts.createForm.submit')}
@@ -352,25 +539,178 @@ export function AdminCockpit() {
   );
 }
 
-function TodoCard({ count, label, color, to }: {
+// Sortable table header -- clicking toggles ascending -> descending -> cancel; the current sort column shows an arrow.
+function SortTh({ label, sortKey, active, dir, onSort, align, hint, sticky = false }: {
+  label: string;
+  sortKey: SortKey;
+  active: SortKey | null;
+  dir: SortDir;
+  onSort: (k: SortKey) => void;
+  align: 'left' | 'center';
+  hint: string;
+  sticky?: boolean;
+}) {
+  const on = active === sortKey;
+  return (
+    <th className={`${sticky ? 'wb-sticky-col' : ''} ${align === 'left' ? 'text-left' : 'text-center'}`}>
+      <button type="button" onClick={() => onSort(sortKey)} title={hint}
+        className="inline-flex items-center gap-1 hover:text-primary transition-colors"
+        style={{ color: on ? 'var(--accent-primary)' : 'inherit' }}>
+        {label}
+        <span className="text-[9px]" style={{ opacity: on ? 1 : 0.35 }}>
+          {on ? (dir === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function OverviewStat({ count, label, color, to }: {
   count: number; label: string; color: string; to: string;
 }) {
-  const isEmpty = count === 0;
   return (
     <Link to={to}
-          className="rounded-lg p-3 flex items-center justify-between transition-colors"
-          style={{
-            background: isEmpty ? 'var(--bg-card)' : `${color}15`,
-            border: `1px solid ${isEmpty ? 'var(--border-color)' : `${color}40`}`,
-            opacity: isEmpty ? 0.55 : 1,
-          }}>
-      <div>
-        <div className="text-xs text-muted">{label}</div>
-        <div className="text-2xl font-semibold tabular-nums" style={{ color: isEmpty ? 'var(--text-muted)' : color }}>
-          {count}
+          className="wb-overview-stat"
+          data-empty={count === 0}
+          style={{ '--stat-color': color } as CSSProperties}>
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="wb-stat-dot" aria-hidden />
+        <div className="min-w-0">
+          <div className="wb-overview-label truncate">{label}</div>
+          <div className="text-lg font-semibold tabular-nums mt-0.5" style={{ color: count ? color : undefined }}>
+            {count}
+          </div>
         </div>
       </div>
-      <div className="text-xs" style={{ color: isEmpty ? 'var(--text-muted)' : color }}>→</div>
+      <svg className="w-3.5 h-3.5 shrink-0 text-muted" fill="none" viewBox="0 0 16 16"
+           stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        <path d="M3 8h9M9 4.5 12.5 8 9 11.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
     </Link>
+  );
+}
+
+function CockpitToolbar({
+  kw, setKw, stageFilter, setStageFilter, stateFilter, setStateFilter,
+  filtering, clearFilters, shown, total, t,
+}: {
+  kw: string;
+  setKw: (value: string) => void;
+  stageFilter: '' | StageKey | 'alldone';
+  setStageFilter: (value: '' | StageKey | 'alldone') => void;
+  stateFilter: '' | StageState;
+  setStateFilter: (value: '' | StageState) => void;
+  filtering: boolean;
+  clearFilters: () => void;
+  shown: number;
+  total: number;
+  t: TFunction;
+}) {
+  return (
+    <div className="wb-toolbar">
+      <label className="wb-field flex-1 min-w-[15rem] max-w-[24rem]">
+        <span className="wb-field-label">
+          {t('workbench.adminCockpit.searchLabel', { defaultValue: '搜索项目' })}
+        </span>
+        <span className="relative block">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted"
+               fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <circle cx="7" cy="7" r="4.25" />
+            <path d="m10.25 10.25 3 3" strokeLinecap="round" />
+          </svg>
+          <input type="search" value={kw} onChange={e => setKw(e.target.value)}
+                 placeholder={t('workbench.adminCockpit.searchPlaceholder')}
+                 className="wb-input w-full !pl-8" />
+        </span>
+      </label>
+      <label className="wb-field">
+        <span className="wb-field-label">{t('workbench.adminCockpit.filterStage')}</span>
+        <UiSelect value={stageFilter}
+          onChange={v => setStageFilter(v as '' | StageKey | 'alldone')}
+          className="wb-select w-[12.5rem]"
+          options={[
+            { value: '', label: t('workbench.adminCockpit.filterStageAll') },
+            ...STAGE_ORDER.map((s, i) => ({
+              value: s,
+              label: `${i + 1}. ${t(`workbench.adminCockpit.stage.${s}`)}`,
+            })),
+            { value: 'alldone', label: t('workbench.adminCockpit.filterAllDone') },
+          ]} />
+      </label>
+      <label className="wb-field">
+        <span className="wb-field-label">{t('workbench.adminCockpit.filterState')}</span>
+        <UiSelect value={stateFilter}
+          onChange={v => setStateFilter(v as '' | StageState)}
+          className="wb-select w-[8rem]"
+          options={[
+            { value: '', label: t('workbench.adminCockpit.filterStateAll') },
+            { value: 'running', label: t('workbench.adminCockpit.stageStatus.running') },
+            { value: 'pending', label: t('workbench.adminCockpit.stageStatus.pending') },
+            { value: 'idle', label: t('workbench.adminCockpit.stageStatus.idle') },
+          ]} />
+      </label>
+      {filtering && (
+        <button type="button" onClick={clearFilters} className="wb-button wb-button-quiet">
+          {t('workbench.adminCockpit.clearFilters')}
+        </button>
+      )}
+      <span className="wb-result-count">
+        {t('workbench.adminCockpit.resultCount', { shown, total })}
+      </span>
+    </div>
+  );
+}
+
+function CockpitSkeleton() {
+  return (
+    <div className="wb-panel overflow-hidden" aria-label="加载中" aria-busy="true">
+      <div className="wb-toolbar">
+        <div className="wb-skeleton h-9 w-72 rounded-lg" />
+        <div className="wb-skeleton h-9 w-40 rounded-lg" />
+        <div className="wb-skeleton h-9 w-28 rounded-lg" />
+      </div>
+      <div className="p-4 space-y-3">
+        {Array.from({ length: 7 }, (_, i) => (
+          <div key={i} className="grid grid-cols-[1.4fr_1fr_0.6fr_repeat(4,0.5fr)] gap-4 items-center">
+            <div className="wb-skeleton h-9 rounded-lg" />
+            <div className="wb-skeleton h-4 rounded" />
+            <div className="wb-skeleton h-2 rounded" />
+            {Array.from({ length: 4 }, (__, j) => (
+              <div key={j} className="wb-skeleton h-6 rounded-md" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatePanel({ title, description, action, kind = 'empty', bare = false }: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  kind?: 'empty' | 'error';
+  bare?: boolean;
+}) {
+  return (
+    <div className={`${bare ? '' : 'wb-panel'} wb-empty`}>
+      <div>
+        <div className="wb-empty-icon"
+             style={kind === 'error' ? { color: 'var(--danger-fg)', background: 'var(--danger-bg)' } : undefined}>
+          {kind === 'error' ? (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+              <path d="M12 8v5m0 3h.01M10.3 3.9 2.8 17a2 2 0 0 0 1.74 3h14.92a2 2 0 0 0 1.74-3L13.7 3.9a2 2 0 0 0-3.4 0Z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+              <path d="M5 5h14v14H5zM8 9h8M8 13h5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+        <h2 className="text-sm font-semibold text-primary">{title}</h2>
+        {description && <p className="mt-1.5 text-xs leading-5 text-secondary max-w-md">{description}</p>}
+        {action}
+      </div>
+    </div>
   );
 }

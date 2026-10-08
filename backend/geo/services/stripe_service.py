@@ -282,7 +282,12 @@ class StripeService:
                 row.stripe_payment_intent_id = payment_intent
             db.commit()
 
-            membership_service.upgrade_membership(row.user_id, row.membership_id)
+            # Activate tier + credit an equal amount of credits (USD orders converted to cents via USD_TO_CNY_RATE).
+            # Shares membership_billing with WeChat / MoltsPay -- three separate implementations would inevitably drift.
+            from geo.services.membership_billing import fulfill_paid_membership
+
+            fulfill_paid_membership(db, row, provider="stripe",
+                                    order_ref=str(row.stripe_session_id or row.id))
             return True
         finally:
             db.close()

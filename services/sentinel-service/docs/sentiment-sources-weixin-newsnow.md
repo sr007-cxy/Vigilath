@@ -45,7 +45,7 @@
 | 入库字段 | source / post_id / symbol(=album_id) / title / url / content / publish_time |
 | 实测吞吐 | 30 篇含正文 ~74 秒;500 篇 ~13 分钟 |
 
-### 实测覆盖(2026-05-17 vm02)
+### 实测覆盖(2026-05-17 <app-host>)
 
 | 合集 | 篇数 | 平均正文字数 | 主题 |
 |---|---|---|---|
@@ -86,12 +86,12 @@
 | 代码 | `/opt/newsnow`(github.com/ourongxing/newsnow,MIT 协议) |
 | 接入 | sentinel-service `.env` 配 `NEWSNOW_BASE_URL=http://127.0.0.1:4444` |
 | 数据 API | `/api/s?id=<source>` 返 JSON |
-| 站列表 | 42 个源,其中 vm02 国内机房**可用 ~30 个**(海外 v2ex/github/HN/reddit fail) |
+| 站列表 | 42 个源,其中 <app-host> 国内机房**可用 ~30 个**(海外 v2ex/github/HN/reddit fail) |
 | 数据 shape | `id / title / url / mobileUrl / extra`,**无时间戳 / 无正文 / 无阅读量** |
 | 刷新 | 2 分钟最小窗口 + 30 分钟服务端缓存 |
 | 入库前过滤 | 本地按 `target + aliases + keywords` 取并集做 title 子串过滤 |
 
-### 实测覆盖(2026-05-17 vm02)
+### 实测覆盖(2026-05-17 <app-host>)
 
 | 类型 | 可用源 | 备注 |
 |---|---|---|
@@ -115,8 +115,8 @@
 - **数据极薄**:只有 title + url,**没有正文 / 时间戳 / 阅读量**
 - **不能服务端按品牌搜**:只能拿"每站当前热榜",再本地过滤
 - **无历史**:纯快照,不持久化就消失
-- **关键词命中靠运气**:小众 B2B 品牌词(如"世纪互联")可能 0 命中,**只有热门词(宁德时代/算力/AI/品牌大事件)才高命中**
-- **海外源国内不可用**:vm02 → v2ex.com / HN / GitHub 全 timeout(需独立 EC2 代理,**目前未做**)
+- **关键词命中靠运气**:小众 B2B 品牌词(如"示例品牌")可能 0 命中,**只有热门词(宁德时代/算力/AI/品牌大事件)才高命中**
+- **海外源国内不可用**:<app-host> → v2ex.com / HN / GitHub 全 timeout(需独立 EC2 代理,**目前未做**)
 - **每站只返 30-50 条 hot**:深度排名外抓不到
 - **部分源需 cookie**:微博 SUB / 抖音 / B 站,过期得手动续
 
@@ -156,8 +156,8 @@
 1. 账号编辑页 → 扩展数据源 → "NewsNow 热榜源订阅"
 2. 推荐组合:`weibo,zhihu,toutiao,36kr,huxiu,ithome,jin10,wallstreetcn,cls`(国内可用 + 财经科技覆盖)
 3. **关键**:`keywords` 必须包含品牌词 + 行业词。仅品牌词太精确,命中往往为 0
-   - 反例:`["世纪互联","vnet"]` → 命中 0
-   - 正例:`["世纪互联","vnet","数据中心","IDC","AIDC","算力"]` → 命中 4(含财联社研报)
+   - 反例:`["示例品牌","acme"]` → 命中 0
+   - 正例:`["示例品牌","acme","数据中心","IDC","AIDC","算力"]` → 命中 4(含财联社研报)
 4. 保存并立即跑一次 → 几分钟后 posts 表出现 `source='newsnow:weibo'` 等
 
 ### 5.3 微博完整热搜(可选,需 cookie)
@@ -225,7 +225,7 @@ WEIBO_COOKIE=SUB=<你浏览器 weibo.com 登录后从 DevTools 抠出来的 SUB 
 ### Infra
 
 - `docker-compose.yml` 加 newsnow service(开发环境用)
-- `/etc/systemd/system/geo-newsnow.service`(测试环境 vm02)
+- `/etc/systemd/system/geo-newsnow.service`(测试环境 <app-host>)
 - `/opt/newsnow/.env.server`(随机 JWT_SECRET,占位 OAuth)
 
 ### 测试环境部署

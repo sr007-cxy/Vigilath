@@ -1,42 +1,80 @@
 """PostgreSQL storage for posts, LLM analyses, AI briefs and response drafts.
 
-多租户落地:每个 account_id 一个独立 PG schema `tenant_{N}`,
-通过 `SET search_path` 让原有未限定的 `SELECT * FROM posts` 自动路由到当前
-租户的表上(对调用方零侵入).
+Multi-tenancy implementation: **one set of tables + an account_id column**, all under the fixed schema `sentinel`.
 
-历史背景:这个模块原来是裸 sqlite3,每账户一个 .db 文件.切 PG 时:
-- driver psycopg3,row_factory=dict_row 让 `row["col"]` 语法不变
+Before 2026-09-07 it was "one PG schema tenant_{N} per account_id", routed via `SET search_path`.
+Why it was replaced: the data volume never needed per-tenant schemas, while the cost was real -
+  · every request had to CREATE SCHEMA + run 17 DDL statements, all sharing one advisory lock with a constant key;
+  · with more accounts there are dozens to hundreds of schemas, and backups, migrations and debugging all have to iterate over them;
+  · even asking "how many items did the whole site fetch today" across accounts required a loop.
+Isolation now relies on `account_id = %s`, and **every SQL statement must include it** - this is the only tenant boundary;
+missing it in one place means customer A reads customer B's data. account_id is taken from the contextvar `current_account`
+(set by service.py at the request entry) and raises if unset, never degrading into "query the whole table".
+
+Why `sentinel` instead of `public`: public may still contain same-named tables from an earlier (single-tenant era),
+so the new tables live in their own schema with account_id from creation, avoiding a pile of checks for adding columns to existing tables.
+
+Background: this module was originally raw sqlite3, one .db file per account. When switching to PG:
+- driver psycopg3, row_factory=dict_row keeps the `row["col"]` syntax unchanged
 - `?` → `%s`
 - `INSERT OR REPLACE` → `INSERT … ON CONFLICT (...) DO UPDATE SET …`
 - `lastrowid` → `RETURNING id` + `fetchone()["id"]`
-- `json_extract(col, '$[0]')` → `(col::jsonb)->>0`(空串/NULL 用 CASE 兜底)
+- `json_extract(col, '$[0]')` -> `(col::jsonb)->>0` (empty string/NULL handled by a CASE fallback)
 - `AUTOINCREMENT` → `BIGSERIAL`
 """
 from __future__ import annotations
 
 import json
 import os
+import threading
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import psycopg
 from psycopg.rows import dict_row
 
 
-# DATABASE_URL 来自 systemd EnvironmentFile / .env;import 阶段不连库,
-# 真正缺值在 connect() 抛,避免 pytest collect 阶段炸.
+# DATABASE_URL comes from the systemd EnvironmentFile / .env; no DB connection at import time,
+# a missing value raises in connect(), so pytest collection does not blow up.
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 
-# 历史 alias:storage/__init__.py 旧版 re-export 此名;新版不再用,保留空值避免
-# 上游 from storage import DEFAULT_DB_PATH 立即炸.可在 cleanup 后删.
+# Historical alias: the old storage/__init__.py re-exported this name; the new one no longer uses it, kept empty so
+# upstream `from storage import DEFAULT_DB_PATH` does not blow up immediately. Can be removed after cleanup.
 DEFAULT_DB_PATH: Path | None = None
+
+
+# The fixed schema shared by all tenants. To rename, change only this (the migration script reads the same constant).
+SCHEMA = os.environ.get("SENTINEL_SCHEMA", "sentinel")
+
+
+# The account_id bound to the current request; set at service.py endpoint entry, reset on exit.
+# Moved here from storage/__init__.py - db.py itself now needs it to build WHERE clauses,
+# and keeping it at the upper layer would create a db -> __init__ circular import. __init__.py keeps re-exporting this name.
+current_account: ContextVar[int | None] = ContextVar("current_account", default=None)
+
+
+def _aid() -> int:
+    """Current tenant id. **Raises if missing** - this is the only tenant boundary.
+
+    Must never degrade into "no WHERE" or account_id=0: then a single call that forgot to set the contextvar
+    would return the whole site's data mixed together without any error. Better a 500.
+    """
+    aid = current_account.get()
+    if aid is None:
+        raise RuntimeError(
+            "current_account 未设置:storage 的每一次读写都必须绑定 account_id"
+            "(service.py 的 _account_context / _account_db_context 负责 set)"
+        )
+    return int(aid)
 
 
 SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS posts (
+        account_id    BIGINT NOT NULL,
         source        TEXT NOT NULL,
         post_id       TEXT NOT NULL,
         symbol        TEXT,
@@ -50,13 +88,16 @@ SCHEMA_STATEMENTS = (
         share_count   INTEGER,
         url           TEXT,
         ingested_at   TEXT NOT NULL,
-        PRIMARY KEY (source, post_id)
+        -- account_id 必须在主键里:同一条微博/帖子会被两个客户各抓一次,
+        -- 旧的 (source, post_id) 主键会让第二个客户的那条被 ON CONFLICT DO NOTHING 丢掉。
+        PRIMARY KEY (account_id, source, post_id)
     )
     """,
-    "CREATE INDEX IF NOT EXISTS idx_posts_symbol ON posts(symbol)",
-    "CREATE INDEX IF NOT EXISTS idx_posts_pubtime ON posts(publish_time)",
+    "CREATE INDEX IF NOT EXISTS idx_posts_acct_symbol ON posts(account_id, symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_posts_acct_pubtime ON posts(account_id, publish_time)",
     """
     CREATE TABLE IF NOT EXISTS analyses (
+        account_id          BIGINT NOT NULL,
         source              TEXT NOT NULL,
         post_id             TEXT NOT NULL,
         symbol              TEXT,
@@ -79,26 +120,29 @@ SCHEMA_STATEMENTS = (
         reasoning           TEXT,
         model               TEXT NOT NULL,
         analyzed_at         TEXT NOT NULL,
-        PRIMARY KEY (source, post_id)
+        PRIMARY KEY (account_id, source, post_id)
     )
     """,
-    "CREATE INDEX IF NOT EXISTS idx_analyses_symbol ON analyses(symbol)",
-    "CREATE INDEX IF NOT EXISTS idx_analyses_risk ON analyses(risk_level)",
-    "CREATE INDEX IF NOT EXISTS idx_analyses_sentiment ON analyses(sentiment_label)",
+    "CREATE INDEX IF NOT EXISTS idx_analyses_acct_symbol ON analyses(account_id, symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_analyses_acct_risk ON analyses(account_id, risk_level)",
+    "CREATE INDEX IF NOT EXISTS idx_analyses_acct_sentiment ON analyses(account_id, sentiment_label)",
     """
     CREATE TABLE IF NOT EXISTS briefs (
         id            BIGSERIAL PRIMARY KEY,
+        account_id    BIGINT NOT NULL,
         symbol        TEXT NOT NULL,
         date          TEXT NOT NULL,
+        kind          TEXT NOT NULL DEFAULT 'daily',
         body          TEXT NOT NULL,
         model         TEXT NOT NULL,
         generated_at  TEXT NOT NULL
     )
     """,
-    "CREATE INDEX IF NOT EXISTS idx_briefs_symbol_date ON briefs(symbol, date)",
+    "CREATE INDEX IF NOT EXISTS idx_briefs_acct_symbol_date ON briefs(account_id, symbol, date)",
     """
     CREATE TABLE IF NOT EXISTS drafts (
         id                BIGSERIAL PRIMARY KEY,
+        account_id        BIGINT NOT NULL,
         symbol            TEXT NOT NULL,
         source            TEXT,
         post_id           TEXT,
@@ -112,31 +156,59 @@ SCHEMA_STATEMENTS = (
         generated_at      TEXT NOT NULL
     )
     """,
-    "CREATE INDEX IF NOT EXISTS idx_drafts_symbol ON drafts(symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_drafts_acct_symbol ON drafts(account_id, symbol)",
     """
     CREATE TABLE IF NOT EXISTS query_runs (
+        account_id    BIGINT NOT NULL,
         symbol        TEXT NOT NULL,
         query         TEXT NOT NULL,
         last_run_at   TEXT NOT NULL,
-        PRIMARY KEY (symbol, query)
+        PRIMARY KEY (account_id, symbol, query)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS websearch_reports (
+        id                   BIGSERIAL PRIMARY KEY,
+        account_id           BIGINT NOT NULL,
+        provider             TEXT NOT NULL DEFAULT 'yuanbao',
+        target               TEXT NOT NULL,
+        ticker               TEXT NOT NULL,
+        generated_at         TEXT NOT NULL,
+        query_count          INTEGER NOT NULL DEFAULT 0,
+        valid_results        INTEGER NOT NULL DEFAULT 0,
+        risk_level           TEXT NOT NULL DEFAULT 'none',
+        sentiment_label      TEXT NOT NULL DEFAULT 'unknown',
+        sentiment_score      DOUBLE PRECISION NOT NULL DEFAULT 0,
+        summary              TEXT NOT NULL DEFAULT '',
+        llm_model            TEXT,
+        positive_points_json TEXT NOT NULL DEFAULT '[]',
+        negative_points_json TEXT NOT NULL DEFAULT '[]',
+        risks_json           TEXT NOT NULL DEFAULT '[]',
+        suggestions_json     TEXT NOT NULL DEFAULT '[]',
+        sources_json         TEXT NOT NULL DEFAULT '[]',
+        queries_json         TEXT NOT NULL DEFAULT '[]',
+        raw_rows_json        TEXT NOT NULL DEFAULT '[]',
+        created_at           TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_websearch_acct_ticker_generated "
+    "ON websearch_reports(account_id, ticker, generated_at DESC)",
 )
 
 
-def _schema_name(account_id: int) -> str:
-    # int cast 是安全卫词:account_id 来自上游 user 配置,不应直接拼 SQL 标识符.
-    return f"tenant_{int(account_id)}"
+# Creating tables only needs to happen once per process - tables are shared globally, no longer created per account.
+_SCHEMA_READY = False
+_SCHEMA_READY_LOCK = threading.Lock()
 
 
 def connect(account_id: int | None = None) -> psycopg.Connection:
-    """获取 PG 连接,可选地绑定到某个 tenant schema.
+    """Get a PG connection and pin search_path to the fixed `sentinel` schema.
 
-    - account_id 非 None:确保 schema 存在,然后 SET search_path TO tenant_{N}, public.
-      原有未限定 SQL(`SELECT * FROM posts`)自动解析到该 schema.
-    - account_id None:连默认 search_path(运维 / 健康检查 / 不读写租户数据用).
+    The `account_id` parameter is **kept only for old callers and no longer affects the connection** - tenant isolation has moved from
+    "one schema per account" to "every SQL statement carries account_id", and the connection itself treats all accounts the same.
+    The real account_id is taken from the contextvar inside each query function (see `_aid`).
 
-    DATABASE_URL 必须在 env 中设置,否则抛.
+    DATABASE_URL must be set in env, otherwise raises.
     """
     if not DATABASE_URL:
         raise RuntimeError(
@@ -144,32 +216,42 @@ def connect(account_id: int | None = None) -> psycopg.Connection:
             "DATABASE_URL=postgresql://appuser:***@host:port/appdb"
         )
     conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
-    if account_id is not None:
-        schema = _schema_name(account_id)
-        with conn.cursor() as cur:
-            cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-            cur.execute(f'SET search_path TO "{schema}", public')
-        conn.commit()
+    with conn.cursor() as cur:
+        # An unqualified `SELECT * FROM posts` resolves to sentinel.posts; public stays as a fallback
+        # (old tables, if still present, will not be written by mistake - our tables are all under sentinel).
+        cur.execute(f'SET search_path TO "{SCHEMA}", public')
+    conn.commit()
     return conn
 
 
 def init_schema(conn: psycopg.Connection) -> None:
-    """在 conn 当前 search_path(由 connect 绑定的 tenant)下建齐 5 张表.
+    """Create all business tables (idempotent), **actually run only once per process**.
 
-    幂等(CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS),每个请求入口
-    都调一次也无所谓 — 已存在的 schema/表会直接跳过.
+    Previously every request ran 17 DDL statements here, wrapped in a transaction-level advisory lock with a constant key -
+    all tenants and all parallel crawlers queued on that one lock. Now the tables are one global set; once created it is remembered in the process
+    and later calls return immediately. A process restart clears it, so columns/indexes added in new versions are still applied after restart.
     """
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+
     with conn.cursor() as cur:
-        # 串行化并发 schema 初始化:多个爬虫端点并行调用时,CREATE INDEX / ALTER 的
-        # AccessExclusiveLock 会两两死锁。事务级咨询锁让它们排队(持有到 commit),
-        # 而不是死锁。key 任意常量,全局唯一即可。
+        # Concurrent first creation can still collide (multiple workers cold-starting at once), so keep the advisory lock to serialize.
+        # After acquiring the lock the DDL is idempotent; being a bit slow is fine - each process does it only once in its lifetime.
         cur.execute("SELECT pg_advisory_xact_lock(727274)")
+        cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{SCHEMA}"')
+        cur.execute(f'SET search_path TO "{SCHEMA}", public')
         for stmt in SCHEMA_STATEMENTS:
             cur.execute(stmt)
-        # 历史 ADD COLUMN 兼容:posts 后期加 like_count / share_count
+        # Historical ADD COLUMN compatibility: posts later gained like_count / share_count
         cur.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS like_count INTEGER")
         cur.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS share_count INTEGER")
+        # briefs later gained kind (daily/monthly): distinguishes daily briefs from monthly summaries; old rows default to daily
+        cur.execute("ALTER TABLE briefs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'daily'")
     conn.commit()
+
+    with _SCHEMA_READY_LOCK:
+        _SCHEMA_READY = True
 
 
 def _now() -> str:
@@ -181,14 +263,15 @@ def upsert_post(conn: psycopg.Connection, rec: dict) -> bool:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO posts (source, post_id, symbol, author, title, content,
+            INSERT INTO posts (account_id, source, post_id, symbol, author, title, content,
                                publish_time, view_count, reply_count,
                                like_count, share_count,
                                url, ingested_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (source, post_id) DO NOTHING
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (account_id, source, post_id) DO NOTHING
             """,
             (
+                _aid(),
                 rec.get("source"),
                 str(rec.get("post_id")),
                 rec.get("symbol"),
@@ -213,7 +296,7 @@ def upsert_analysis(conn: psycopg.Connection, source: str, post_id: str,
         cur.execute(
             """
             INSERT INTO analyses (
-                source, post_id, symbol,
+                account_id, source, post_id, symbol,
                 is_relevant, filter_reason,
                 summary, sentiment_label, sentiment_score,
                 emotions_json, topics_json, entities_json,
@@ -221,8 +304,8 @@ def upsert_analysis(conn: psycopg.Connection, source: str, post_id: str,
                 risk_level, risk_signals_json, influence_potential,
                 hidden_meaning, citations_json, reasoning,
                 model, analyzed_at
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (source, post_id) DO UPDATE SET
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (account_id, source, post_id) DO UPDATE SET
                 symbol              = EXCLUDED.symbol,
                 is_relevant         = EXCLUDED.is_relevant,
                 filter_reason       = EXCLUDED.filter_reason,
@@ -245,7 +328,7 @@ def upsert_analysis(conn: psycopg.Connection, source: str, post_id: str,
                 analyzed_at         = EXCLUDED.analyzed_at
             """,
             (
-                source, str(post_id), symbol,
+                _aid(), source, str(post_id), symbol,
                 1 if analysis.get("is_relevant") else 0,
                 analysis.get("filter_reason"),
                 analysis.get("summary"),
@@ -269,15 +352,27 @@ def upsert_analysis(conn: psycopg.Connection, source: str, post_id: str,
 
 
 def insert_brief(conn: psycopg.Connection, symbol: str, date: str,
-                 body: str, model: str) -> int:
+                 body: str, model: str, kind: str = "daily") -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO briefs (symbol, date, body, model, generated_at) "
-            "VALUES (%s,%s,%s,%s,%s) RETURNING id",
-            (symbol, date, body, model, _now()),
+            "INSERT INTO briefs (account_id, symbol, date, kind, body, model, generated_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (_aid(), symbol, date, kind, body, model, _now()),
         )
         row = cur.fetchone()
         return int(row["id"])
+
+
+def brief_exists(conn: psycopg.Connection, symbol: str, date: str,
+                 kind: str = "daily") -> bool:
+    """Whether a brief of a given kind has been generated for a symbol on a date - used for monthly idempotency, preventing reruns and re-pushes."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM briefs WHERE account_id = %s AND symbol = %s "
+            "AND date = %s AND kind = %s LIMIT 1",
+            (_aid(), symbol, date, kind),
+        )
+        return cur.fetchone() is not None
 
 
 def insert_draft(conn: psycopg.Connection, symbol: str,
@@ -288,12 +383,12 @@ def insert_draft(conn: psycopg.Connection, symbol: str,
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO drafts (symbol, source, post_id, topic, variant, body,
+            INSERT INTO drafts (account_id, symbol, source, post_id, topic, variant, body,
                                 rationale, predicted_effect, cautions,
                                 model, generated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """,
-            (symbol, source, post_id, topic, variant, body,
+            (_aid(), symbol, source, post_id, topic, variant, body,
              rationale, predicted_effect, cautions, model, _now()),
         )
         row = cur.fetchone()
@@ -303,33 +398,36 @@ def insert_draft(conn: psycopg.Connection, symbol: str,
 def posts_for_symbol(conn: psycopg.Connection, symbol: str) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT * FROM posts WHERE symbol = %s ORDER BY publish_time DESC",
-            (symbol,),
+            "SELECT * FROM posts WHERE account_id = %s AND symbol = %s "
+            "ORDER BY publish_time DESC",
+            (_aid(), symbol),
         )
         return list(cur.fetchall())
 
 
 def posts_missing_analysis(conn: psycopg.Connection, symbol: str,
                            limit: int | None = None) -> list[dict]:
+    aid = _aid()
     sql = """
         SELECT p.* FROM posts p
-        LEFT JOIN analyses a ON a.source = p.source AND a.post_id = p.post_id
-        WHERE p.symbol = %s AND a.post_id IS NULL
+        LEFT JOIN analyses a
+          ON a.account_id = p.account_id AND a.source = p.source AND a.post_id = p.post_id
+        WHERE p.account_id = %s AND p.symbol = %s AND a.post_id IS NULL
         ORDER BY p.publish_time DESC
     """
-    params: tuple = (symbol,)
+    params: tuple = (aid, symbol)
     if limit:
         sql += " LIMIT %s"
-        params = (symbol, limit)
+        params = (aid, symbol, limit)
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return list(cur.fetchall())
 
 
-# sort_by 白名单 → SQL ORDER BY 子句.
-# 全部在 SQL 层排,前端不再客户端排,避免跨 page 顺序错乱.
-# 时间排序只认 publish_time;undated(NULL)放最后,不再用 ingested_at 兜底.
-# cluster 用 topics_json 第一个 topic;PG 下要 cast 成 jsonb,空串/NULL 兜底.
+# sort_by allowlist -> SQL ORDER BY clause.
+# All sorting happens in SQL; the frontend no longer sorts client-side, avoiding order mix-ups across pages.
+# Time sorting only uses publish_time; undated (NULL) goes last, no longer falling back to ingested_at.
+# cluster uses the first topic in topics_json; on PG it must be cast to jsonb, with an empty string/NULL fallback.
 _SORT_SQL: dict[str, str] = {
     "newest":         "p.publish_time DESC NULLS LAST",
     "oldest":         "p.publish_time ASC NULLS LAST",
@@ -362,14 +460,14 @@ def analyses_for_symbol(conn: psycopg.Connection, symbol: str,
                         offset: int = 0,
                         sort_by: str = "newest",
                         ) -> list[dict]:
-    """文章列表(舆情 Tab 用).参见 sqlite 版本的 docstring,语义一致.
+    """Article list (for the sentiment monitoring tab). See the sqlite version's docstring; semantics are the same.
 
-    只返回 is_relevant=1 的帖子 — 与 today_aggregation 的 KPI / 趋势 / 风险饼 /
-    Top5 及简报口径一致(它们早已过滤),避免文章列表把分析判定无关的搜索噪声
-    (同名实体、词典释义)露给用户.
+    Only returns posts with is_relevant=1 - consistent with the metric definition of today_aggregation's KPIs / trend / risk pie /
+    Top5 and the brief (which already filter), so the article list does not expose search noise judged irrelevant by analysis
+    (same-name entities, dictionary definitions) to users.
     """
-    where = ["a.symbol = %s", "a.is_relevant = 1"]
-    params: list = [symbol]
+    where = ["a.account_id = %s", "a.symbol = %s", "a.is_relevant = 1"]
+    params: list = [_aid(), symbol]
 
     if start or end:
         if start:
@@ -391,7 +489,8 @@ def analyses_for_symbol(conn: psycopg.Connection, symbol: str,
                p.reply_count, p.like_count, p.share_count,
                p.url, p.content, p.ingested_at
         FROM analyses a
-        JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
+        JOIN posts p
+          ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
         WHERE {' AND '.join(where)}
         ORDER BY {order}, {tie}
     """
@@ -408,9 +507,9 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
                               start: str | None = None,
                               end: str | None = None,
                               ) -> int:
-    # 与 analyses_for_symbol 口径一致:只数 is_relevant=1,分页总数才对得上。
-    where = ["a.symbol = %s", "a.is_relevant = 1"]
-    params: list = [symbol]
+    # Same metric definition as analyses_for_symbol: only count is_relevant=1 so the pagination total matches.
+    where = ["a.account_id = %s", "a.symbol = %s", "a.is_relevant = 1"]
+    params: list = [_aid(), symbol]
 
     if start or end:
         if start:
@@ -428,7 +527,8 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
     sql = f"""
         SELECT count(*) AS c
         FROM analyses a
-        JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
+        JOIN posts p
+          ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
         WHERE {' AND '.join(where)}
     """
     with conn.cursor() as cur:
@@ -439,13 +539,13 @@ def analyses_count_for_symbol(conn: psycopg.Connection, symbol: str,
 
 def analyses_for_day(conn: psycopg.Connection, symbol: str,
                      date: str, hours: int | None = None) -> list[dict]:
-    """日报取帖 —— 只认**发布时间** publish_time,**滚动近 N 小时**窗口(默认 24h)。
+    """Fetch posts for the daily brief - only uses the **publish time** publish_time, with a **rolling last N hours** window (default 24h).
 
-    窗口 = publish_time 在 [now - hours, now]:
-      · 带时分的(如 2026-06-18T09:07)→ 精确比 now-hours;
-      · 纯日期的(如 2026-06-18,只到天)→ 按"发布日 >= 截止当天"宽松纳入(不知具体时分)。
-    undated(publish_time 为 NULL)一律**排除**,绝不退回 ingested_at。
-    hours 可用环境变量 SENTINEL_BRIEF_HOURS 调:24=近24小时 / 72=近3天 / 168=近一周。
+    Window = publish_time in [now - hours, now]:
+      · with hour:minute (e.g. 2026-06-18T09:07) -> compared exactly against now-hours;
+      · date only (e.g. 2026-06-18, day precision) -> loosely included if "publish day >= cutoff day" (exact time unknown).
+    undated (publish_time NULL) is always **excluded**, never falling back to ingested_at.
+    hours can be tuned with the SENTINEL_BRIEF_HOURS env var: 24 = last 24 hours / 72 = last 3 days / 168 = last week.
     """
     import os
     from datetime import datetime, timedelta
@@ -463,8 +563,9 @@ def analyses_for_day(conn: psycopg.Connection, symbol: str,
             SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
                    p.reply_count, p.url, p.content
             FROM analyses a
-            JOIN posts p ON p.source = a.source AND p.post_id = a.post_id
-            WHERE a.symbol = %s
+            JOIN posts p
+              ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE a.account_id = %s AND a.symbol = %s
               AND p.publish_time IS NOT NULL
               AND (
                 (length(p.publish_time) > 10 AND p.publish_time >= %s)
@@ -472,7 +573,79 @@ def analyses_for_day(conn: psycopg.Connection, symbol: str,
               )
             ORDER BY p.publish_time DESC
             """,
-            (symbol, cutoff_iso, cutoff_date),
+            (_aid(), symbol, cutoff_iso, cutoff_date),
+        )
+        return list(cur.fetchall())
+
+
+def analyses_for_month(conn: psycopg.Connection, symbol: str,
+                       year: int, month: int) -> list[dict]:
+    """Fetch posts for the monthly report - relevant posts whose **publish time** falls in the given calendar month (YYYY-MM), the whole month.
+
+    Key difference from the daily: **no 24h rolling window, no 3-day freshness gate** (the monthly covers the whole month by design).
+    Only the year-month of publish_time is used (first 7 chars via substr, works for both date-only and datetime);
+    undated (publish_time NULL) is always excluded, same metric definition as the daily, keeping trend numbers clean.
+    Only is_relevant=1. Ordered by publish_time descending.
+    """
+    ym = f"{int(year):04d}-{int(month):02d}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
+                   p.reply_count, p.like_count, p.share_count, p.url, p.content
+            FROM analyses a
+            JOIN posts p
+              ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE a.account_id = %s AND a.symbol = %s AND a.is_relevant = 1
+              AND p.publish_time IS NOT NULL
+              AND substr(p.publish_time, 1, 7) = %s
+            ORDER BY p.publish_time DESC
+            """,
+            (_aid(), symbol, ym),
+        )
+        return list(cur.fetchall())
+
+
+def competitor_analyses(conn: psycopg.Connection, symbol: str,
+                        terms: list[str], hours: int | None = None) -> list[dict]:
+    """Fetch competitor posts - **same metric definition as the main daily brief**: rolling last hours (default SENTINEL_BRIEF_HOURS=24),
+    by **publish_time**, **excluding undated** (no padding with undated/old news), with the extra requirement of being relevant and having the title/
+    body contain any competitor term. If there is no competitor news within 24h, returns empty (the competitor section stays blank, no old items). Ordered by publish_time descending."""
+    if not terms:
+        return []
+    import os
+    from datetime import datetime, timedelta
+    if hours is None:
+        try:
+            hours = int(os.environ.get("SENTINEL_BRIEF_HOURS", "24"))
+        except ValueError:
+            hours = 24
+    cutoff = datetime.now() - timedelta(hours=max(hours, 1))
+    cutoff_iso = cutoff.strftime("%Y-%m-%dT%H:%M")
+    cutoff_date = cutoff.strftime("%Y-%m-%d")
+    like = " OR ".join(["(p.title ILIKE %s OR p.content ILIKE %s)"] * len(terms))
+    params: list = [_aid(), symbol]
+    for t in terms:
+        params += [f"%{t}%", f"%{t}%"]
+    params += [cutoff_iso, cutoff_date]
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT a.*, p.title, p.author, p.publish_time, p.view_count,
+                   p.reply_count, p.url, p.content
+            FROM analyses a
+            JOIN posts p
+              ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE a.account_id = %s AND a.symbol = %s AND a.is_relevant = 1
+              AND ({like})
+              AND p.publish_time IS NOT NULL
+              AND (
+                (length(p.publish_time) > 10 AND p.publish_time >= %s)
+                OR (length(p.publish_time) <= 10 AND substr(p.publish_time, 1, 10) >= %s)
+              )
+            ORDER BY p.publish_time DESC
+            """,
+            params,
         )
         return list(cur.fetchall())
 
@@ -485,10 +658,11 @@ def brand_post_lookup(conn: psycopg.Connection, source: str,
             SELECT p.*, a.summary, a.sentiment_label, a.risk_level,
                    a.topics_json, a.intent, a.stance
             FROM posts p
-            LEFT JOIN analyses a ON a.source = p.source AND a.post_id = p.post_id
-            WHERE p.source = %s AND p.post_id = %s
+            LEFT JOIN analyses a
+              ON a.account_id = p.account_id AND a.source = p.source AND a.post_id = p.post_id
+            WHERE p.account_id = %s AND p.source = %s AND p.post_id = %s
             """,
-            (source, str(post_id)),
+            (_aid(), source, str(post_id)),
         )
         return cur.fetchone()
 
@@ -497,8 +671,9 @@ def get_query_last_run(conn: psycopg.Connection, symbol: str,
                        query: str) -> str | None:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT last_run_at FROM query_runs WHERE symbol = %s AND query = %s",
-            (symbol, query),
+            "SELECT last_run_at FROM query_runs "
+            "WHERE account_id = %s AND symbol = %s AND query = %s",
+            (_aid(), symbol, query),
         )
         row = cur.fetchone()
         return row["last_run_at"] if row else None
@@ -509,12 +684,125 @@ def upsert_query_last_run(conn: psycopg.Connection, symbol: str,
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO query_runs (symbol, query, last_run_at)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (symbol, query) DO UPDATE SET last_run_at = EXCLUDED.last_run_at
+            INSERT INTO query_runs (account_id, symbol, query, last_run_at)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (account_id, symbol, query)
+                DO UPDATE SET last_run_at = EXCLUDED.last_run_at
             """,
-            (symbol, query, ts or _now()),
+            (_aid(), symbol, query, ts or _now()),
         )
+
+
+def _json_list(value: Any) -> list:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def insert_websearch_report(conn: psycopg.Connection, report: dict[str, Any]) -> int:
+    """Write a Yuanbao WebSearch quick-check report into the current tenant schema, same as posts/briefs."""
+    meta = report.get("_meta") if isinstance(report.get("_meta"), dict) else {}
+    llm_meta = meta.get("llm") if isinstance(meta.get("llm"), dict) else {}
+    llm_model = report.get("llm_model") or llm_meta.get("model")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO websearch_reports (
+                account_id, provider, target, ticker, generated_at,
+                query_count, valid_results, risk_level, sentiment_label,
+                sentiment_score, summary, llm_model,
+                positive_points_json, negative_points_json, risks_json,
+                suggestions_json, sources_json, queries_json, raw_rows_json,
+                created_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+            """,
+            (
+                _aid(),
+                str(report.get("provider") or "yuanbao"),
+                str(report.get("target") or ""),
+                str(report.get("ticker") or ""),
+                str(report.get("generated_at") or _now()),
+                int(report.get("query_count") or len(report.get("queries") or [])),
+                int(report.get("valid_results") or 0),
+                str(report.get("risk_level") or "none"),
+                str(report.get("sentiment_label") or "unknown"),
+                float(report.get("sentiment_score") or 0.0),
+                str(report.get("summary") or ""),
+                str(llm_model or "") or None,
+                json.dumps(_json_list(report.get("positive_points")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("negative_points")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("risks")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("suggestions")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("sources")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("queries")), ensure_ascii=False),
+                json.dumps(_json_list(report.get("raw_rows")), ensure_ascii=False),
+                _now(),
+            ),
+        )
+        row = cur.fetchone()
+        return int(row["id"])
+
+
+def _websearch_row_to_dict(row: dict) -> dict:
+    d = dict(row)
+    return {
+        "id": d.get("id"),
+        "report_id": d.get("id"),
+        "mode": "yuanbao_websearch",
+        "provider": d.get("provider") or "yuanbao",
+        "target": d.get("target") or "",
+        "ticker": d.get("ticker") or "",
+        "generated_at": d.get("generated_at"),
+        "risk_level": d.get("risk_level") or "none",
+        "sentiment_label": d.get("sentiment_label") or "unknown",
+        "sentiment_score": float(d.get("sentiment_score") or 0.0),
+        "query_count": int(d.get("query_count") or 0),
+        "valid_results": int(d.get("valid_results") or 0),
+        "summary": d.get("summary") or "",
+        "llm_model": d.get("llm_model"),
+        "positive_points": _json_list(d.get("positive_points_json")),
+        "negative_points": _json_list(d.get("negative_points_json")),
+        "risks": _json_list(d.get("risks_json")),
+        "suggestions": _json_list(d.get("suggestions_json")),
+        "sources": _json_list(d.get("sources_json")),
+        "queries": _json_list(d.get("queries_json")),
+        "raw_rows": _json_list(d.get("raw_rows_json")),
+        "created_at": d.get("created_at"),
+    }
+
+
+def latest_websearch_report(conn: psycopg.Connection, ticker: str | None = None) -> dict | None:
+    """Read the latest WebSearch report from the current tenant schema. When ticker is given, narrow by the account's current ticker."""
+    with conn.cursor() as cur:
+        if ticker:
+            cur.execute(
+                """
+                SELECT * FROM websearch_reports
+                WHERE account_id = %s AND ticker = %s
+                ORDER BY generated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (_aid(), ticker),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT * FROM websearch_reports
+                WHERE account_id = %s
+                ORDER BY generated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (_aid(),),
+            )
+        row = cur.fetchone()
+        return _websearch_row_to_dict(row) if row else None
 
 
 def ingest_jsonl_dir(conn: psycopg.Connection, data_dir: Path) -> tuple[int, int]:

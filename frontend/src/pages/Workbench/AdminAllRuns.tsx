@@ -1,8 +1,10 @@
-// admin 跨用户 / 跨主题 / 每日跑批结果总览
-// 路由:/workbench/runs
+// Admin overview of daily batch-run results across users / topics
+// Route: /ops/runs
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { aiTelemetryApi, type AdminAccount, type AdminRun } from '../../services/aiTelemetryApi';
+import { UiSelect } from '../../components/ui/Select';
+import { SingleDayPicker } from '../../components/ui/FilterBar';
 
 function today(): string {
   const d = new Date();
@@ -23,9 +25,9 @@ const PAGE_SIZE = 10;
 
 function StatusChip({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string; label: string }> = {
-    success: { bg: 'rgba(34,197,94,0.15)', fg: '#15803d', label: '成功' },
+    success: { bg: 'var(--success-bg)', fg: '#15803d', label: '成功' },
     running: { bg: 'rgba(59,130,246,0.15)', fg: '#1d4ed8', label: '运行中' },
-    failed: { bg: 'rgba(239,68,68,0.15)', fg: '#b91c1c', label: '失败' },
+    failed: { bg: 'var(--danger-bg)', fg: '#b91c1c', label: '失败' },
   };
   const m = map[status] || { bg: 'rgba(148,163,184,0.18)', fg: '#475569', label: status };
   return (
@@ -69,7 +71,7 @@ export function AdminAllRuns() {
 
   useEffect(() => { load(); }, [load]);
 
-  // runs 缩短 / 筛选变后总页数变 → safePage 在渲染时夹到合法区间.
+  // runs shrink / filters change and the total page count changes -> safePage is clamped to a valid range at render time.
   const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pagedRuns = runs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
@@ -97,13 +99,7 @@ export function AdminAllRuns() {
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <label className="text-muted">日期</label>
-        <input
-          type="date"
-          value={day}
-          onChange={e => setDay(e.target.value)}
-          className="px-2 py-1 rounded-md"
-          style={{ ...inputStyle, minWidth: 140 }}
-        />
+        <SingleDayPicker value={day} onChange={setDay} />
         <button
           type="button"
           onClick={() => setDay('')}
@@ -116,32 +112,33 @@ export function AdminAllRuns() {
         <span className="mx-2 text-muted">·</span>
 
         <label className="text-muted">用户</label>
-        <select
+        <UiSelect
           value={userId === '' ? '' : String(userId)}
-          onChange={e => setUserId(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={val => setUserId(val === '' ? '' : Number(val))}
           className="px-2 py-1 rounded-md"
           style={{ ...inputStyle, minWidth: 200 }}
-        >
-          <option value="">全部用户</option>
-          {accounts.map(a => (
-            <option key={a.id} value={a.id}>
-              #{a.id} {a.email}{a.is_admin ? ' (admin)' : ''}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: '', label: '全部用户' },
+            ...accounts.map(a => ({
+              value: String(a.id),
+              label: `#${a.id} ${a.email}${a.is_admin ? ' (admin)' : ''}`,
+            })),
+          ]}
+        />
 
         <label className="text-muted">状态</label>
-        <select
+        <UiSelect
           value={status}
-          onChange={e => setStatus(e.target.value)}
+          onChange={setStatus}
           className="px-2 py-1 rounded-md"
           style={{ ...inputStyle, minWidth: 100 }}
-        >
-          <option value="">全部</option>
-          <option value="success">成功</option>
-          <option value="running">运行中</option>
-          <option value="failed">失败</option>
-        </select>
+          options={[
+            { value: '', label: '全部' },
+            { value: 'success', label: '成功' },
+            { value: 'running', label: '运行中' },
+            { value: 'failed', label: '失败' },
+          ]}
+        />
 
         <button
           type="button"
@@ -184,13 +181,13 @@ export function AdminAllRuns() {
             {loading ? (
               <tr><td colSpan={10} className="px-3 py-10 text-center text-muted">加载中…</td></tr>
             ) : err ? (
-              <tr><td colSpan={10} className="px-3 py-10 text-center" style={{ color: '#ef4444' }}>{err}</td></tr>
+              <tr><td colSpan={10} className="px-3 py-10 text-center" style={{ color: 'var(--danger-fg)' }}>{err}</td></tr>
             ) : runs.length === 0 ? (
               <tr><td colSpan={10} className="px-3 py-10 text-center text-muted">没有符合条件的跑批</td></tr>
             ) : pagedRuns.map(r => (
               <tr key={r.run_id} className="border-t" style={{ borderColor: 'var(--border-color)' }}>
                 <td className="px-2 py-2 text-right tabular-nums">
-                  <Link to={`/workbench/runs/${r.run_id}`} className="text-accent hover:underline">
+                  <Link to={`/ops/runs/${r.run_id}`} className="text-accent hover:underline">
                     #{r.run_id}
                   </Link>
                 </td>
@@ -210,11 +207,11 @@ export function AdminAllRuns() {
                   {r.hit_count}/{r.response_count}
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums"
-                    style={r.error_count > 0 ? { color: '#ef4444' } : undefined}>
+                    style={r.error_count > 0 ? { color: 'var(--danger-fg)' } : undefined}>
                   {r.error_count}
                 </td>
                 <td className="px-2 py-2 text-right">
-                  <Link to={`/workbench/runs/${r.run_id}`} className="text-xs text-accent hover:underline">
+                  <Link to={`/ops/runs/${r.run_id}`} className="text-xs text-accent hover:underline">
                     查看详情
                   </Link>
                 </td>

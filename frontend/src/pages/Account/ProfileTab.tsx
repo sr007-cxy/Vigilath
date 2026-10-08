@@ -2,13 +2,10 @@ import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { accountApi } from '../../services/accountApi';
-
-interface StoredUser {
-  id: number;
-  email: string;
-  name?: string | null;
-  is_active: boolean;
-}
+// Use the canonical definition in AuthContext; don't copy it here -- the local copy before lacked
+// phone / wechat_nickname, so newly added fields would silently be invisible here.
+import { type StoredUser } from '../../contexts/AuthContext';
+import { isPlaceholderEmail, maskPhone } from '../../utils/userDisplay';
 
 type Ctx = { user: StoredUser | null };
 
@@ -77,8 +74,18 @@ export function ProfileTab() {
             className="py-3 flex justify-between gap-4 border-b"
             style={{ borderColor: 'var(--border-color)' }}
           >
-            <dt className="text-secondary">{t('account.profile.email', '邮箱')}</dt>
-            <dd className="text-primary font-medium break-all">{user?.email ?? '-'}</dd>
+            {/* For accounts registered via WeChat/phone the email is a placeholder address and can't be shown to users as "email" --
+                show the phone number if present, otherwise the WeChat nickname */}
+            <dt className="text-secondary">
+              {isPlaceholderEmail(user?.email)
+                ? t('account.profile.phone', '手机号')
+                : t('account.profile.email', '邮箱')}
+            </dt>
+            <dd className="text-primary font-medium break-all">
+              {isPlaceholderEmail(user?.email)
+                ? (maskPhone(user?.phone) || user?.wechat_nickname || '-')
+                : (user?.email ?? '-')}
+            </dd>
           </div>
           <div
             className="py-3 flex justify-between gap-4 border-b"

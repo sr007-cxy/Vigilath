@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   mockKpi, mockSentimentTrend, mockRiskDist, mockBriefs, mockPosts,
 } from '../../../../mocks/sentiment';
-import { useTodayData } from '../../../../hooks/useSentiment';
+import { useTodayData, useWebsearchLatest } from '../../../../hooks/useSentiment';
 import type { SentimentAccount, SentimentPost } from '../../../../types/sentiment';
 
 import { KpiCards } from '../components/KpiCards';
@@ -12,6 +12,7 @@ import { SentimentChart } from '../components/SentimentChart';
 import { RiskPie } from '../components/RiskPie';
 import { BriefRenderer } from '../components/BriefRenderer';
 import { PostCard } from '../components/PostCard';
+import { WebSearchSummary } from '../components/WebSearchSummary';
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -23,7 +24,7 @@ interface Props {
   usingMock?: boolean;
 }
 
-/** influence × |sentiment| 排序(yuqin chat agent top_posts SQL 同款公式)*/
+/** Sort by influence × |sentiment| (same formula as the yuqin chat agent top_posts SQL) */
 function noteworthy(p: SentimentPost): number {
   return (p.influence_potential ?? 0) * Math.abs(p.sentiment_score ?? 0);
 }
@@ -31,15 +32,21 @@ function noteworthy(p: SentimentPost): number {
 export function TodayTab({ account, usingMock }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const ticker = account.ticker;
+  // Use symbol as the fetch key -- the ticker is optional and may be an empty string
+  const ticker = account.symbol || account.ticker || account.target;
 
-  // 真实模式拉数据;mock 模式 enabled=false 不发请求
+  // Real mode fetches data; mock mode has enabled=false and sends no request
   const { data, isLoading, error } = useTodayData(
     usingMock ? null : account.id,
     usingMock ? null : ticker,
   );
+  const {
+    data: websearchLatest,
+    isLoading: websearchLoading,
+    error: websearchError,
+  } = useWebsearchLatest(usingMock ? null : account.id);
 
-  // mock 模式:从静态 fixture 拼一份 today payload
+  // mock mode: assemble a today payload from static fixtures
   const today = usingMock
     ? {
         kpi: mockKpi,
@@ -53,14 +60,27 @@ export function TodayTab({ account, usingMock }: Props) {
       }
     : data;
 
+  const websearchCard = (
+    <WebSearchSummary
+      data={websearchLatest}
+      isLoading={websearchLoading}
+      error={websearchError}
+    />
+  );
+
   if (!usingMock && isLoading) {
-    return <SkeletonCard label={t('common.loading') || 'Loading...'} />;
+    return <div className="space-y-4">{websearchCard}<SkeletonCard label={t('common.loading') || 'Loading...'} /></div>;
   }
   if (!usingMock && error) {
-    return <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />;
+    return (
+      <div className="space-y-4">
+        {websearchCard}
+        <ErrorCard message={error instanceof Error ? error.message : 'Failed to load'} />
+      </div>
+    );
   }
   if (!today) {
-    return <SkeletonCard label="暂无数据" />;
+    return <div className="space-y-4">{websearchCard}<SkeletonCard label="暂无数据" /></div>;
   }
 
   return (
@@ -76,7 +96,9 @@ export function TodayTab({ account, usingMock }: Props) {
         </div>
       </div>
 
-      {/* 今日简报内联 */}
+      {websearchCard}
+
+      {/* Today's brief inline */}
       <section className="rounded-xl p-5" style={cardStyle}>
         <header className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-primary uppercase tracking-wide">
@@ -98,7 +120,7 @@ export function TodayTab({ account, usingMock }: Props) {
         )}
       </section>
 
-      {/* 高风险帖 Top 5 */}
+      {/* High-risk posts Top 5 */}
       <section className="rounded-xl p-5" style={cardStyle}>
         <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
           {t('dashboard.sentiment.today.topRisk')}
@@ -137,7 +159,7 @@ function ErrorCard({ message }: { message: string }) {
     <div
       className="rounded-xl py-6 px-4 text-sm"
       style={{
-        background: 'rgba(239,68,68,0.1)',
+        background: 'var(--danger-bg)',
         color: '#dc2626',
         border: '1px solid rgba(239,68,68,0.3)',
       }}

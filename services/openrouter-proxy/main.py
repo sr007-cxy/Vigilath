@@ -1,14 +1,14 @@
-"""OpenRouter HTTPS 透传代理 — 给 vm02(国内 IP 被 OpenRouter chat completions 风控)用.
+"""OpenRouter HTTPS 透传代理 — 给 <app-host>(国内 IP 被 OpenRouter chat completions 风控)用.
 
 架构(与 ddg-proxy 同构):
-    vm02 → EC2 nginx :80 /openrouter/ → 127.0.0.1:8096
+    <app-host> → EC2 nginx :80 /openrouter/ → 127.0.0.1:8096
                                           ↓
                   这个 FastAPI 服务用 EC2 出口(美国 IP)调 openrouter.ai
                                           ↓
                                        原样返回
 
 特点:
-- **Authorization 头透传** — vm02 仍管 OPENROUTER_API_KEY,只是绕开 IP 风控
+- **Authorization 头透传** — <app-host> 仍管 OPENROUTER_API_KEY,只是绕开 IP 风控
 - **X-Proxy-Token 额外鉴权** — 防公网被滥用(nginx IP 白名单 + token 双重)
 - **透传 status / body / 关键 header** — JSON 错误响应一字不改
 

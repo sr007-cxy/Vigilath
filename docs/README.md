@@ -53,9 +53,6 @@ Component-specific operational details should stay next to the component:
 - `backend/deploy/` contains deployable systemd and nginx assets.
 - `skills/vigilath-geo/README.md` documents the installable agent skill.
 
-Root-level `COMPARISON.md`, `ENHANCEMENT.md`, and `OPTIMIZATION.md` are planning
-or analysis records. They are not operational sources of truth.
-
 ## Maintenance policy
 
 - Write maintained documentation in English.

@@ -78,12 +78,8 @@ export function CookiePolicy() {
                 </thead>
                 <tbody>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td className="py-2 pr-4"><strong>Stripe</strong></td>
-                    <td className="py-2 pr-4">{isZh ? '在支付 checkout 页面使用，用于欺诈检测和支付处理' : 'Used on the payment checkout page for fraud detection and payment processing'}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td className="py-2 pr-4"><strong>Cloudflare</strong></td>
-                    <td className="py-2 pr-4">{isZh ? '安全防护和性能优化（如 __cf_bm 用于机器人检测）' : 'Security and performance (e.g., __cf_bm for bot detection)'}</td>
+                    <td className="py-2 pr-4"><strong>{isZh ? '微信支付' : 'WeChat Pay'}</strong></td>
+                    <td className="py-2 pr-4">{isZh ? '在支付页面使用，用于完成交易与风险控制' : 'Used on the payment page to complete the transaction and for risk control'}</td>
                   </tr>
                 </tbody>
               </table>
@@ -116,7 +112,7 @@ export function CookiePolicy() {
                 : 'If you have questions about this Cookie Policy, please contact us:'}
             </p>
             <p className="mt-2">
-              Email: <a href="mailto:support@zen7.com" className="text-accent-primary hover:underline">support@zen7.com</a>
+              Email: <a href="mailto:<support-email>" className="text-accent-primary hover:underline">{'<support-email>'}</a>
             </p>
           </section>
         </div>

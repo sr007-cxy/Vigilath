@@ -1,6 +1,6 @@
-"""add agent_conversations (账号级多轮对话记忆)
+"""add agent_conversations (account-level multi-turn conversation memory)
 
-加性新表,不改现有表。
+Additive new table, existing tables unchanged.
 
 Revision ID: d8b2e1c4f0a6
 Revises: c7a1f0d2b9e4
@@ -23,7 +23,8 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("account_id", sa.Integer(), nullable=False),
         sa.Column("messages_json", sa.Text(), nullable=False, server_default="[]"),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(), nullable=False,
+                  server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_agent_conversations_account_id", "agent_conversations", ["account_id"], unique=True)
 

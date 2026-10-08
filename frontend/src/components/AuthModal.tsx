@@ -3,18 +3,29 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
+import { wechatAuthApi } from '../services/wechatAuthApi';
+import { WechatQrLogin } from './WechatQrLogin';
+import { PhoneLogin } from './PhoneLogin';
 import { useAuth } from '../contexts/AuthContext';
-import { GoogleSignInButton } from './GoogleSignInButton';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultTab?: 'login' | 'register';
+  defaultTab?: 'login' | 'register' | 'phone' | 'wechat';
   onSuccess?: () => void;
 }
 
 export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: AuthModalProps) {
-  const [tab, setTab] = useState<'login' | 'register'>(defaultTab);
+  const [tab, setTab] = useState<'login' | 'register' | 'wechat' | 'phone'>(defaultTab);
+  const [wechatEnabled, setWechatEnabled] = useState(false);
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
+  // Config probing is async (~100ms). If the user has already clicked a tab by then, don't change their choice.
+  const tabTouchedRef = useRef(false);
+  const pickTab = (next: 'login' | 'register' | 'wechat' | 'phone') => {
+    tabTouchedRef.current = true;
+    setTab(next);
+  };
+  const [emailRegisterEnabled, setEmailRegisterEnabled] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,6 +40,43 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
   const { t } = useTranslation();
   const { setToken, setUser } = useAuth();
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // On open, first land on the tab the caller asked for. The Provider stays mounted, and useState(defaultTab)
+  // only evaluates once -- without this, opening a second time with a different defaultTab would stay on the previous tab.
+  useEffect(() => {
+    if (isOpen) setTab(defaultTab);
+  }, [isOpen, defaultTab]);
+
+  // Probe the channel switches again. **When email registration is off, always land on QR code**, not just for the register tab.
+  //
+  // All 19 gates on the site call openAuthModal('login'), while email registration is already closed with a 403 --
+  // new users can only come from WeChat QR scanning and can't fill in that email/password form. It used to switch only when
+  // cur === 'register', effectively sending every new user stopped by a gate into a dead end.
+  // Existing email users are unaffected: right below the QR panel there's a one-click "Have an account? Log in" to switch back.
+  useEffect(() => {
+    if (!isOpen) return;
+    let alive = true;
+    tabTouchedRef.current = false;   // re-evaluate on every open
+    void wechatAuthApi.config().then((cfg) => {
+      if (!alive) return;
+      setWechatEnabled(cfg.wechat_login_enabled);
+      setPhoneEnabled(cfg.phone_login_enabled);
+      setEmailRegisterEnabled(cfg.email_register_enabled);
+      // WeChat QR scanning is the default entry (product decision): it's the main channel for both login and registration,
+      // and email/phone keep one-click switches in the tab bar and at the bottom.
+      // tabTouchedRef is necessary -- this callback arrives after the user's click, and without the check it would override their choice.
+      setTab((cur) => {
+        if (tabTouchedRef.current) return cur;
+        if (cur === 'login' && cfg.wechat_login_enabled) return 'wechat';
+        if (cur === 'register' && !cfg.email_register_enabled) {
+          if (cfg.wechat_login_enabled) return 'wechat';
+          if (cfg.phone_login_enabled) return 'phone';
+        }
+        return cur;
+      });
+    });
+    return () => { alive = false; };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -56,27 +104,31 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
     };
   }, [isOpen]);
 
-  // 登录成功后回填 user profile 进 AuthContext(同步 localStorage)。
-  // Header 从 context 读 is_admin 决定「工作台」入口是否渲染,光写 email
-  // 会让 admin 看不到入口;故先尝试 /me,失败再兜底只写 email。
+  // After a successful login, backfill the user profile into AuthContext (synced to localStorage).
+  // Header reads is_admin from context to decide whether to render the "Workbench" entry; writing only email
+  // would hide the entry from admins; so try /me first, and on failure fall back to writing only email.
   const persistUser = async (accessToken: string, fallbackEmail: string) => {
     try {
       const me = await authApi.getCurrentUser(accessToken);
       setUser(me);
+      return me;
     } catch {
       setUser({ email: fallbackEmail });
+      return null;
     }
   };
-
-  const handleGoogleSuccess = async (accessToken: string, profile: { email: string }) => {
-    await persistUser(accessToken, profile.email);
+  // QR scan / phone verification code share the same landing logic
+  const handleWechatAuthenticated = async (accessToken: string) => {
+    const me = await persistUser(accessToken, email);
     setToken(accessToken);
     onClose();
-    if (onSuccess) {
+    if (me?.role === 'tenant') {
+      navigate('/gateway-portal');
+    } else if (onSuccess) {
       onSuccess();
-    } else {
-      navigate('/');
     }
+    // Without onSuccess, **stay in place**. AuthModal is an overlay; kicking the user back to the home page after login
+    // throws away the report/pricing page they were looking at -- and the moment this dialog pops is exactly when intent is strongest.
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -86,14 +138,16 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
 
     try {
       const response = await authApi.login(email, password);
-      await persistUser(response.access_token, email);
+      const me = await persistUser(response.access_token, email);
       setToken(response.access_token);
       onClose();
-      if (onSuccess) {
+      if (me?.role === 'tenant') {
+        // Gateway tenant login goes straight to the tenant portal
+        navigate('/gateway-portal');
+      } else if (onSuccess) {
         onSuccess();
-      } else {
-        navigate('/');
       }
+      // Same as above: stay in place by default, don't go to the home page
     } catch (err) {
       setError(err instanceof Error ? err.message : t('login.failed'));
     } finally {
@@ -226,7 +280,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                     </div>
 
                     {error && (
-                      <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
+                      <div className="bg-danger-bg border border-danger-border text-danger-fg p-3 rounded-md text-sm">
                         {error}
                       </div>
                     )}
@@ -347,7 +401,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                     </div>
 
                     {error && (
-                      <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
+                      <div className="bg-danger-bg border border-danger-border text-danger-fg p-3 rounded-md text-sm">
                         {error}
                       </div>
                     )}
@@ -371,48 +425,88 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                     </button>
                   </form>
 
-                  {/* Google login */}
-                  <div className="mt-6">
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-border"></div>
-                      </div>
-                      <div className="relative flex justify-center">
-                        <span className="px-3 text-secondary text-sm" style={{ background: 'var(--bg-card)' }}>
-                          {t('login.orUse', '或使用')}
-                        </span>
-                      </div>
+                  {(emailRegisterEnabled || wechatEnabled || phoneEnabled) && (
+                    <div className="mt-6 text-center text-sm text-secondary">
+                      {t('login.noAccount')}{' '}
+                      <button
+                        onClick={() => {
+                          setError('');
+                          pickTab(emailRegisterEnabled ? 'register' : wechatEnabled ? 'wechat' : 'phone');
+                        }}
+                        className="font-medium transition-colors duration-200"
+                        style={{ color: 'var(--accent-primary)' }}
+                      >
+                        {emailRegisterEnabled
+                          ? t('login.register')
+                          : wechatEnabled
+                            ? t('wechatLogin.tab')
+                            : t('phoneLogin.tab')}
+                      </button>
                     </div>
-                    <div className="mt-4">
-                      {isOpen && tab === 'login' && (
-                        <GoogleSignInButton
-                          intent="signin"
-                          onSuccess={handleGoogleSuccess}
-                          onError={setError}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 text-center text-sm text-secondary">
-                    {t('login.noAccount')}{' '}
-                    <button
-                      onClick={() => {
-                        setError('');
-                        setTab('register');
-                      }}
-                      className="font-medium transition-colors duration-200"
-                      style={{ color: 'var(--accent-primary)' }}
-                    >
-                      {t('login.register')}
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
             </>
           )}
 
-          {tab === 'register' && (
+          {tab === 'phone' && (
+            <div className="animate-fade-in">
+              <h2 className="text-2xl font-bold text-primary mb-2">{t('phoneLogin.tab')}</h2>
+              <p className="text-sm text-secondary mb-6">{t('phoneLogin.modalSubtitle')}</p>
+
+              <PhoneLogin compact onAuthenticated={handleWechatAuthenticated} />
+
+              <div className="mt-6 text-center text-sm text-secondary">
+                {t('register.hasAccount')}{' '}
+                <button
+                  onClick={() => {
+                    setError('');
+                    pickTab('login');
+                  }}
+                  className="font-medium transition-colors duration-200"
+                  style={{ color: 'var(--accent-primary)' }}
+                >
+                  {t('register.login')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'wechat' && (
+            <div className="animate-fade-in">
+              <h2 className="text-2xl font-bold text-primary mb-2">{t('wechatLogin.tab')}</h2>
+              <p className="text-sm text-secondary mb-6">{t('wechatLogin.modalSubtitle')}</p>
+
+              <WechatQrLogin compact onAuthenticated={handleWechatAuthenticated} />
+
+              {/* QR scanning is the default entry; other methods must have an exit here, or people who only want phone/email have no way forward */}
+              <div className="mt-6 pt-4 border-t border-border text-center text-sm text-secondary">
+                {t('wechatLogin.otherWays')}
+                {phoneEnabled && (
+                  <>
+                    {' '}
+                    <button
+                      onClick={() => { setError(''); pickTab('phone'); }}
+                      className="font-medium transition-colors duration-200"
+                      style={{ color: 'var(--accent-primary)' }}
+                    >
+                      {t('phoneLogin.tab')}
+                    </button>
+                    <span className="mx-1 text-muted">·</span>
+                  </>
+                )}
+                <button
+                  onClick={() => { setError(''); pickTab('login'); }}
+                  className="font-medium transition-colors duration-200"
+                  style={{ color: 'var(--accent-primary)' }}
+                >
+                  {t('wechatLogin.emailTab')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'register' && emailRegisterEnabled && (
             <div className="animate-fade-in">
               <h2 className="text-2xl font-bold text-primary mb-2">{t('register.title')}</h2>
               <p className="text-sm text-secondary mb-6">{t('register.subtitle')}</p>
@@ -505,7 +599,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                 </div>
 
                 {error && (
-                  <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-300 p-3 rounded-md text-sm">
+                  <div className="bg-danger-bg border border-danger-border text-danger-fg p-3 rounded-md text-sm">
                     {error}
                   </div>
                 )}
@@ -529,35 +623,12 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login', onSuccess }: 
                 </button>
               </form>
 
-              {/* Google login */}
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="px-3 text-secondary text-sm" style={{ background: 'var(--bg-card)' }}>
-                      {t('login.orUse', '或使用')}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  {isOpen && tab === 'register' && (
-                    <GoogleSignInButton
-                      intent="signup"
-                      onSuccess={handleGoogleSuccess}
-                      onError={setError}
-                    />
-                  )}
-                </div>
-              </div>
-
               <div className="mt-6 text-center text-sm text-secondary">
                 {t('register.hasAccount')}{' '}
                 <button
                   onClick={() => {
                     setError('');
-                    setTab('login');
+                    pickTab('login');
                   }}
                   className="font-medium transition-colors duration-200"
                   style={{ color: 'var(--accent-primary)' }}

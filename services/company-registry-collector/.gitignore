@@ -1,0 +1,17 @@
+# Collection output, not versioned
+out/
+*.csv
+*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Credentials
+.env

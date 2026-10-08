@@ -28,6 +28,7 @@ from ..ai import (
     _query_deepseek, _query_doubao,
     _check_brand_in_result, _extract_competitors, _classify_framing,
 )
+from geo_checker.llm_ledger import post_chat
 
 
 def citation_check(url, return_data=False):
@@ -116,16 +117,17 @@ def citation_check(url, return_data=False):
         }
 
         try:
-            r = requests.post(api_url, json=payload, headers=headers, timeout=30)
+            # post_chat has built-in "on 429 wait 5s and send again", equivalent to the old hand-written two lines;
+            # the rate-limit message is kept -- this is a CLI, and users need to see why it's stalled
+            r = post_chat(api_url, payload, headers, provider="openrouter",
+                          engine="citation", timeout=30)
             if r.status_code == 401:
                 if return_data:
                     raise RuntimeError("Invalid OPENROUTER_API_KEY")
                 print(f"  [{FAIL}] Invalid API key. Check your OPENROUTER_API_KEY.")
                 sys.exit(1)
             elif r.status_code == 429:
-                print(f"  [{WARN}] Rate limited. Waiting before next query...")
-                time.sleep(5)
-                r = requests.post(api_url, json=payload, headers=headers, timeout=30)
+                print(f"  [{WARN}] Rate limited (重试后仍被限流)")
             if r.status_code != 200:
                 err_body = r.text[:200] if r.text else ""
                 print(f"    [{WARN}] API error (HTTP {r.status_code}), skipping this query")

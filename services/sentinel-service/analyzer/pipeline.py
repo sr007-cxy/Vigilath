@@ -22,6 +22,7 @@ from storage import (
 )
 from llm_client import chat_create, has_openai, has_qwen
 from .prompts import ANALYZER_SYSTEM
+from storage.llm_usage import set_feature
 
 ANALYZE_MODEL = os.environ.get("YUQING_ANALYZE_MODEL", "gpt-4o-mini")
 MAX_TOKENS = 1500
@@ -59,6 +60,7 @@ def _ensure_key() -> None:
 
 
 def _analyze_one(post):
+    set_feature("sentinel.analyze")   # for billing: tag which feature this call belongs to
     resp = chat_create(
         ANALYZE_MODEL,
         max_completion_tokens=MAX_TOKENS,
@@ -77,8 +79,8 @@ def _analyze_one(post):
 
 def analyze_symbol(symbol: str, limit: int | None = None,
                    db_path=None, sleep_s: float | None = None) -> dict:
-    # 默认节流:免费档(GLM glm-4.5-flash 等)RPM 通常 60,留 buffer 设 1.2s/req.
-    # 允许调用方覆盖;cron 跑可以更慢,首跑默认即可.
+    # Default throttling: free tiers (GLM glm-4.5-flash etc.) usually allow 60 RPM; leave a buffer at 1.2s/req.
+    # Callers may override; cron runs can go slower, the first run uses the default.
     if sleep_s is None:
         sleep_s = float(os.environ.get("LLM_THROTTLE_S", "1.2"))
     conn = connect(db_path) if db_path else connect()
@@ -91,7 +93,7 @@ def analyze_symbol(symbol: str, limit: int | None = None,
 
     _ensure_key()
 
-    # 并发数: 付费 LLM RPM 高可并发更多, 免费档保守一些
+    # Concurrency: paid LLMs with high RPM can run more in parallel, free tiers stay conservative
     concurrency = int(os.environ.get("LLM_ANALYZE_CONCURRENCY", "5"))
 
     if concurrency <= 1:
@@ -100,7 +102,7 @@ def analyze_symbol(symbol: str, limit: int | None = None,
 
 
 def _analyze_serial(conn, posts, symbol, sleep_s):
-    """原始串行分析 — 兼容低 RPM 的免费 LLM."""
+    """Original serial analysis - compatible with low-RPM free LLMs."""
     analyzed = skipped = 0
     cached = inp = outp = 0
 
@@ -141,7 +143,7 @@ def _analyze_serial(conn, posts, symbol, sleep_s):
 
 
 def _analyze_concurrent(conn, posts, symbol, concurrency):
-    """并发批量分析 — 显著加速, 适合付费 LLM 或高 RPM."""
+    """Concurrent batch analysis - significantly faster, suited to paid LLMs or high RPM."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     analyzed = skipped = 0

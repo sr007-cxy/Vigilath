@@ -7,7 +7,7 @@ type FaqGroup = { title: string; items: FaqItem[] };
 
 export function Faq() {
   const { t } = useTranslation();
-  // key = `${groupIndex}-${itemIndex}`,跨分组也唯一
+  // key = `${groupIndex}-${itemIndex}`, unique across groups too
   const [openFaq, setOpenFaq] = useState<Set<string>>(new Set());
   const toggleFaq = (key: string) =>
     setOpenFaq((prev) => {
@@ -49,7 +49,7 @@ export function Faq() {
                   {t('home.faq.badge')}
                 </span>
               </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up">
                 <span className="gradient-text">{t('home.faq.title')}</span>
               </h1>
               <p className="text-lg sm:text-xl text-secondary leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>

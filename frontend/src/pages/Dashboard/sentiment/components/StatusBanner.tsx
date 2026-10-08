@@ -11,22 +11,22 @@ interface Props {
 const STYLE: Record<string, { bg: string; fg: string; border: string }> = {
   pending: { bg: 'rgba(251,191,36,0.10)', fg: '#b45309', border: 'rgba(251,191,36,0.35)' },
   running: { bg: 'rgba(251,191,36,0.10)', fg: '#b45309', border: 'rgba(251,191,36,0.35)' },
-  failed:  { bg: 'rgba(239,68,68,0.10)',  fg: '#b91c1c', border: 'rgba(239,68,68,0.35)' },
+  failed:  { bg: 'var(--danger-bg)',  fg: '#b91c1c', border: 'var(--danger-border)' },
 };
 
 export function StatusBanner({ status, error, onRefresh, onRetry }: Props) {
   const { t } = useTranslation();
 
-  // failed 也静默 — 用户要求:舆情监控任务异常不在前端暴露,继续展示历史数据即可。
-  // 经此早 return 后,余下 status 类型只能是 'pending' | 'running'。
+  // failed is silent too — per user request: sentiment monitoring task errors aren't exposed in the frontend; just keep showing historical data.
+  // After this early return, the remaining status can only be 'pending' | 'running'.
   if (status === 'success' || status === null || status === 'failed') return null;
 
-  // onRetry 现在不再触发(failed 已 silent),保留参数避免破坏调用方签名
+  // onRetry is no longer triggered (failed is now silent); the parameter is kept to avoid breaking caller signatures
   void onRetry;
 
   const s = STYLE[status] || STYLE.pending;
   const message = t(`dashboard.sentiment.status.${status}`);
-  void error;  // failed 静默后不再展示具体错误
+  void error;  // Specific errors are no longer shown now that failed is silent
 
   return (
     <div
@@ -48,7 +48,7 @@ export function StatusBanner({ status, error, onRefresh, onRetry }: Props) {
   );
 }
 
-/** 全屏的"首次运行中"占位(用 status === null 时)。 */
+/** Full-screen "first run in progress" placeholder (used when status === null). */
 export function FirstRunWaiting({ onRefresh }: { onRefresh?: () => void }) {
   const { t } = useTranslation();
   return (

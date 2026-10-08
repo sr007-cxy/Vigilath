@@ -11,7 +11,9 @@ class PaymentSessionORM(Base):
     id = Column(Integer, primary_key=True, index=True)
     stripe_session_id = Column(String, unique=True, nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    membership_id = Column(Integer, ForeignKey("memberships.id"), nullable=False)
+    # Top-up orders have no plan, so nullable; purpose decides fulfillment on callback (activate membership / credit wallet)
+    membership_id = Column(Integer, ForeignKey("memberships.id"), nullable=True)
+    purpose = Column(String, nullable=False, default="membership", index=True)  # membership | topup
     amount_cents = Column(Integer, nullable=False)
     currency = Column(String, nullable=False, default="usd")
     status = Column(String, nullable=False, default="pending", index=True)

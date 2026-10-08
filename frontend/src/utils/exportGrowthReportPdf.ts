@@ -1,13 +1,13 @@
-// PDF 导出 — 品牌增长报告(首次跑批 vs 当前累计)。
-// 复用 pdfPrimitives 的 jsPDF + html2canvas 流水线 + CJK 字体栈,不引新依赖。
-// 布局一律用 table / table-cell(html2canvas@1.4.1 下 flex / gap 会偏移)。
+// PDF export - brand growth report (first batch run vs current cumulative).
+// Reuses the pdfPrimitives jsPDF + html2canvas pipeline + CJK font stack; no new dependencies.
+// Layout uses table / table-cell throughout (flex / gap shift under html2canvas@1.4.1).
 
 import type { TFunction } from 'i18next';
 import {
   blockWrapClose, blockWrapOpen, composeAndSavePdf, escapeHtml,
 } from './pdfPrimitives';
 import type { GrowthReport, GrowthSnapshot, GrowthStatus } from '../services/aiTelemetryApi';
-import { engineLabel } from '../pages/BrandGrowth/lang';
+import { engineLabel } from '../constants/engines';
 
 interface Dict {
   reportTitle: string;
@@ -40,7 +40,7 @@ interface Dict {
 
 const ZH: Dict = {
   reportTitle: '品牌增长报告',
-  subtitle: '首次跑批 vs 当前 · 监测问题逐条对比',
+  subtitle: '首次跑批 vs 当前 · 提示词逐条对比',
   brandLabel: '品牌',
   generatedAt: '生成时间',
   baselineRunAt: '首次跑批时间',
@@ -50,17 +50,17 @@ const ZH: Dict = {
   baselineCol: '首次跑批',
   currentCol: '当前',
   queriesHit: '命中问题数',
-  hitRate: '命中率',
+  hitRate: '问题命中率',
   avgRank: '平均排名',
   enginesCovered: '覆盖引擎数',
-  rowsHeading: '监测问题明细',
+  rowsHeading: '提示词明细',
   colIndex: '序号',
-  colQuery: '监测问题',
+  colQuery: '提示词',
   colBaseline: '首次命中模型',
   colCurrent: '当前命中模型',
   colChange: '变化',
   miss: '未命中',
-  rowsEmpty: '暂无命中的监测问题',
+  rowsEmpty: '暂无命中的提示词',
   rankShort: (n) => `第 ${n} 位`,
   hitNoRank: '命中',
   status: {
@@ -85,7 +85,7 @@ const EN: Dict = {
   baselineCol: 'First run',
   currentCol: 'Current',
   queriesHit: 'Queries hit',
-  hitRate: 'Hit rate',
+  hitRate: 'Query hit rate',
   avgRank: 'Avg rank',
   enginesCovered: 'Engines covered',
   rowsHeading: 'Tracked queries',
@@ -119,7 +119,7 @@ const STATUS_COLOR: Record<GrowthStatus, string> = {
 const fmtDate = (iso: string | null, lang: string): string =>
   iso ? new Date(iso).toLocaleString(lang.startsWith('zh') ? 'zh-CN' : 'en-US') : '';
 
-// 命中模型列:列出命中的引擎(本地化名),命中且抽出排名时追加「· 第N位」。未命中显示「未命中」。
+// Hit-models column: list the engines that hit (localized names); when hit and a rank was extracted, append "· #N". Not hit shows "Not hit".
 const resultText = (hit: boolean, rank: number | null, engines: string[], L: Dict): string => {
   if (!hit) return L.miss;
   const names = engines.length ? engines.map(engineLabel).join('、') : L.hitNoRank;
@@ -172,7 +172,7 @@ const buildSummary = (b: GrowthSnapshot, c: GrowthSnapshot, L: Dict): string => 
 };
 
 const buildRowsTable = (report: GrowthReport, L: Dict): string => {
-  // 只展示当前命中的监测问题 — 未命中的不进表(噪音)。
+  // Only show prompts that currently hit - prompts that miss are left out of the table (noise).
   const rows = report.rows.filter(r => r.current_hit);
   if (rows.length === 0) {
     return (

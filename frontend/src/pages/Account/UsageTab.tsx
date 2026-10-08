@@ -110,11 +110,32 @@ export function UsageTab() {
 
         <p className="text-sm text-secondary mt-3">
           {unlimited
-            ? t('account.usage.unlimited', '您当前套餐无检测次数限制。')
+            ? t('account.usage.unlimited', '您当前套餐无月度检测次数限制。')
             : t('account.usage.remaining', '剩余 {{n}} 次，月初自动重置。', {
                 n: usage?.remaining ?? 0,
               })}
         </p>
+
+        {/* Daily cap -- a capacity guardrail unified across the three tiers. Even tiers with a monthly "unlimited" hit it,
+            and without showing it users only see a baffling 429. */}
+        {usage && usage.daily_quota > 0 && (
+          <div
+            className="mt-4 pt-4 flex items-baseline justify-between"
+            style={{ borderTop: '1px solid var(--border-color)' }}
+          >
+            <span className="text-sm text-secondary">
+              {t('account.usage.daily', '今日已用')}
+            </span>
+            <span className="text-sm text-primary tabular-nums">
+              {usage.daily_used} / {usage.daily_quota}{' '}
+              {t('account.usage.times', '次')}
+              <span className="text-secondary">
+                {' · '}
+                {t('account.usage.dailyReset', '每日 00:00 重置')}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl p-6" style={cardStyle}>

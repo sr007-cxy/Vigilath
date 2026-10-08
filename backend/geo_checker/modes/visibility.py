@@ -33,12 +33,17 @@ from ..analyzers.source_preference import analyze_source_preference
 from api_engine.base import Citation, EngineResult
 
 
-def ai_visibility(url, custom_queries=None, return_data=False):
+def ai_visibility(url, custom_queries=None, return_data=False,
+                  custom_queries_only=False, brand_name=None):
     """Comprehensive AI Visibility Audit — checks if AI would recommend the brand.
 
     When return_data=True, returns a dict with scorecard + per-engine visibility
     rates, top competitors, framings, and content gaps. Raises RuntimeError on
     missing API keys instead of sys.exit.
+
+    When custom_queries_only=True only custom_queries run (one-click diagnosis: queries are generated from the user's
+    industry/brand words, no longer adding the built-in English query groups).
+    brand_name: explicit brand name (used for hit detection); when omitted keeps the old behavior of deriving from the domain.
     """
     import os
 
@@ -48,7 +53,7 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         parsed = urlparse(url)
     base_url = f"{parsed.scheme}://{parsed.netloc}"
     domain = parsed.netloc.replace("www.", "")
-    brand = domain.split(".")[0]
+    brand = (brand_name or "").strip() or domain.split(".")[0]
 
     # Detect available AI engines (using OpenRouter)
     engines = {}
@@ -145,13 +150,17 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         gap_queries.append(f"Top {site_description[:50].split(',')[0].strip()} solutions")
     gap_queries.append(f"Best {brand} competitors 2025")
 
-    all_query_groups = {
-        "Entity Definition": entity_queries,
-        "Competitive": competitive_queries,
-        "Category Association": category_queries,
-        "Custom": user_queries,
-        "Gap Detection": gap_queries,
-    }
+    if custom_queries_only and user_queries:
+        # One-click diagnosis: only use queries generated from industry/brand words, without the built-in English groups
+        all_query_groups = {"Custom": user_queries}
+    else:
+        all_query_groups = {
+            "Entity Definition": entity_queries,
+            "Competitive": competitive_queries,
+            "Category Association": category_queries,
+            "Custom": user_queries,
+            "Gap Detection": gap_queries,
+        }
     # Remove empty groups
     all_query_groups = {k: v for k, v in all_query_groups.items() if v}
 
@@ -184,13 +193,12 @@ def ai_visibility(url, custom_queries=None, return_data=False):
 
     # ── Run all queries across all engines (parallel) ──
     # STABILITY_RUNS was 3 historically (inherited from upstream) to smooth
-    # out AI temperature noise. 2026-04-17 收敛到 1:
-    # - 调用数 10 × 3 × 3 = 90 → 10 × 3 × 1 = 30(省 67% 调用 + 成本)
-    # - 耗时 120-180s → ~40-60s
-    # - 分数方差 ±2-3 → ±5-8 分(用户无感;单次 snapshot 已足够)
-    # - 单次 /visibility 成本 $0.84 → ~$0.28
-    # Cost and convergence guidance:
-    # docs/engineering/checker-reliability-and-performance.md
+    # out AI temperature noise. Converged to 1 on 2026-04-17:
+    # - calls 10 x 3 x 3 = 90 -> 10 x 3 x 1 = 30 (67% fewer calls + cost)
+    # - duration 120-180s -> ~40-60s
+    # - score variance +/-2-3 -> +/-5-8 points (unnoticeable to users; a single snapshot is enough)
+    # - cost per /visibility $0.84 -> ~$0.28
+    # See the convergence analysis in docs/03-系统设计/引擎采集层/ai-cost-analysis.md.
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
@@ -243,9 +251,9 @@ def ai_visibility(url, custom_queries=None, return_data=False):
         for run_idx in range(STABILITY_RUNS)
     ]
 
-    # max_workers 8→16: 30 calls / 16 = 2 批次 vs 之前 12 批次,进一步压低
-    # 墙钟时间;OpenRouter 60 RPM 免费档里 16 并发也在安全区(30 calls 总量
-    # 远低于 60/min 限制)。
+    # max_workers 8->16: 30 calls / 16 = 2 batches vs 12 batches before, further lowering
+    # wall-clock time; 16 concurrent is also safe on OpenRouter's 60 RPM free tier (30 calls total
+    # is well below the 60/min limit).
     print(f"\n  Running {len(tasks)} API calls in parallel (max 16 concurrent)...")
 
     with ThreadPoolExecutor(max_workers=16) as pool:
@@ -260,9 +268,9 @@ def ai_visibility(url, custom_queries=None, return_data=False):
                 global_competitors[comp] = global_competitors.get(comp, 0) + count
 
     # ── Run DeepSeek via browser service if available ──
-    # GEO_VISIBILITY_USE_BROWSER 默认 0:不走 browser-cn(每个 query 串行 30-60s
-    # 是 visibility 主要耗时来源),让 OpenRouter / DeepSeek API / Doubao / Qwen
-    # 全走 API 并发。要回退到 browser-cn 兜底,export GEO_VISIBILITY_USE_BROWSER=1。
+    # GEO_VISIBILITY_USE_BROWSER defaults to 0: don't use browser-cn (30-60s serial per query
+    # is visibility's main time sink); OpenRouter / DeepSeek API / Doubao / Qwen
+    # all go through APIs concurrently. To fall back to browser-cn, export GEO_VISIBILITY_USE_BROWSER=1.
     deepseek_results = []
     use_browser = os.environ.get("GEO_VISIBILITY_USE_BROWSER", "0").strip() == "1"
     try:

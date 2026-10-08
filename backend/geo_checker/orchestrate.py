@@ -28,9 +28,17 @@ from .checks import (
     check_mobile_and_weight, check_url_normalization, check_outbound_and_media,
     check_multilingual_depth, check_cross_platform, check_multi_page,
 )
+from .seo_checks import (
+    check_seo_title, check_seo_meta_description, check_seo_headings,
+    check_seo_indexability, check_seo_canonical_redirects,
+    check_seo_internal_links, check_seo_images, check_seo_rich_results,
+    check_seo_speed_signals, check_seo_mobile, check_seo_crawl_sitemap,
+    check_seo_international,
+)
 from .output import print
 from .state import (
-    _scores, reset_state, get_ai_visibility_score, get_grade,
+    _scores, _seo_scores, reset_state, get_ai_visibility_score, get_seo_score,
+    get_grade,
 )
 
 
@@ -81,6 +89,42 @@ FREE_CATEGORIES = [
     "sitemap.xml",
     "Meta Tags",
     "Mobile-Friendliness & Page Weight",
+]
+
+
+# ---------------------------------------------------------------------------
+# SEO registry — the classic search-optimization suite (separate score)
+# ---------------------------------------------------------------------------
+# Same contract as CHECK_REGISTRY: the label MUST match the `--- SEO: X ---`
+# header printed by the corresponding check_seo_* function, because the
+# backend parser derives `checks[].category` from those headers.
+#
+# The `SEO: ` prefix is deliberate — it keeps SEO categories from ever
+# colliding with the 25 GEO categories in a single `CheckResult` stream, so a
+# combined report can be split back apart by prefix alone.
+SEO_CHECK_REGISTRY = [
+    ("SEO: Title Tag",                    check_seo_title),
+    ("SEO: Meta Description",             check_seo_meta_description),
+    ("SEO: Heading Structure",            check_seo_headings),
+    ("SEO: Indexability",                 check_seo_indexability),
+    ("SEO: URL, Canonical & Redirects",   check_seo_canonical_redirects),
+    ("SEO: Internal Linking",             check_seo_internal_links),
+    ("SEO: Image SEO",                    check_seo_images),
+    ("SEO: Rich Result Schema",           check_seo_rich_results),
+    ("SEO: Page Speed Signals",           check_seo_speed_signals),
+    ("SEO: Mobile Usability",             check_seo_mobile),
+    ("SEO: Crawl Directives & Sitemap",   check_seo_crawl_sitemap),
+    ("SEO: International Targeting",      check_seo_international),
+]
+
+ALL_SEO_CATEGORIES = [label for label, _ in SEO_CHECK_REGISTRY]
+
+# Free-tier SEO categories. Same funnel logic as FREE_CATEGORIES: everything
+# runs so the score is real, only these are shown in full to free callers.
+FREE_SEO_CATEGORIES = [
+    "SEO: Title Tag",
+    "SEO: Meta Description",
+    "SEO: Heading Structure",
 ]
 
 
@@ -202,6 +246,167 @@ def generate_score(base_url, allowed_categories=None):
 
     total_earned = sum(v["earned"] for v in _state._scores.values())
     total_max = sum(v["max"] for v in _state._scores.values())
+    print(f"  {'-'*25} {'-'*7}")
+    print(f"  {'TOTAL':<25} {total_earned:>4.1f}/{total_max:<3.0f}")
+
+    print(f"\n  Legend: PASS = good | WARN = could improve | FAIL = missing/bad")
+    if _state.SHOW_FIX:
+        print("          FIX = recommended action to resolve the issue")
+    else:
+        print("  Tip: Run with --fix to see recommended solutions")
+    print(f"{'='*60}\n")
+
+    return score
+
+
+class _ThreadLocalStdout:
+    """stdout shim used by the SEO runner on the CLI path only.
+
+    Each worker thread parks its own StringIO in `_local.buf`; writes from that
+    thread land there instead of the shared terminal, and the runner flushes
+    the whole block once the check finishes. Threads without a buffer (the main
+    thread, anything else in the process) pass straight through to the real
+    stream, so nothing else in the process is affected.
+    """
+
+    def __init__(self, target):
+        import threading as _threading
+        self._target = target
+        self._local = _threading.local()
+
+    def write(self, s):
+        buf = getattr(self._local, "buf", None)
+        return (buf if buf is not None else self._target).write(s)
+
+    def flush(self):
+        buf = getattr(self._local, "buf", None)
+        if buf is None:
+            self._target.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._target, name)
+
+
+def _run_seo_checks(base_url, allowed_categories=None):
+    """Execute the SEO registry concurrently, optionally restricted by label.
+
+    Deliberately a separate function from `_run_checks` rather than a
+    generalization of it: the GEO path has a hard sequencing constraint
+    (check_sitemap feeds check_multi_page) that the SEO suite does not, and
+    the GEO runner is the one whose output must stay bit-comparable with the
+    frozen baseline. Duplicating ~20 lines of thread plumbing is cheaper than
+    risking that.
+
+    Same stdout discipline as `_run_checks`: each task buffers into its own
+    StringIO and flushes as one atomic block, so `--- SEO: X ---` headers and
+    their check lines never interleave in the parser's view.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import io as _io2
+    import sys as _sys2
+    import threading
+
+    allowed_set = set(allowed_categories) if allowed_categories else None
+    runnable = [
+        (label, fn) for label, fn in SEO_CHECK_REGISTRY
+        if allowed_set is None or label in allowed_set
+    ]
+    if not runnable:
+        return
+
+    _proxy = _sys2.stdout
+    _parent_state = getattr(_proxy, "_state", None)
+    _parent_buf = getattr(_parent_state, "buf", None) if _parent_state is not None else None
+    _flush_lock = threading.Lock()
+
+    # CLI path: no backend proxy is installed, so all 12 threads would write
+    # straight to the shared stdout and their section headers would interleave.
+    # Install a thread-local shim for the duration of the run so `--seo` output
+    # is readable. (The GEO runner predates this and keeps its legacy
+    # behavior — changing it would churn output the frozen baseline is
+    # compared against.)
+    _cli_shim = None
+    if _parent_state is None:
+        _cli_shim = _ThreadLocalStdout(_proxy)
+        _sys2.stdout = _cli_shim
+
+    def _run_one(fn):
+        if _cli_shim is not None:
+            local_buf = _io2.StringIO()
+            _cli_shim._local.buf = local_buf
+            try:
+                fn(base_url)
+            finally:
+                _cli_shim._local.buf = None
+                with _flush_lock:
+                    _cli_shim._target.write(local_buf.getvalue())
+            return
+
+        local_buf = _parent_buf
+        if _parent_buf is not None:
+            local_buf = _io2.StringIO()
+            _proxy._state.buf = local_buf
+        try:
+            fn(base_url)
+        finally:
+            if _parent_buf is not None:
+                with _flush_lock:
+                    _parent_buf.write(local_buf.getvalue())
+                _proxy._state.buf = None
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(_run_one, fn) for _label, fn in runnable]
+            for fut in as_completed(futures):
+                fut.result()  # let exceptions propagate
+    finally:
+        if _cli_shim is not None:
+            _sys2.stdout = _cli_shim._target
+
+
+def generate_seo_score(base_url, allowed_categories=None):
+    """Run the SEO suite and print the report. Returns the 0-100 SEO score.
+
+    Mirrors generate_score() but reads the `_seo_scores` namespace, and prints
+    `SEO SCORE:` rather than `AI VISIBILITY SCORE:` so the backend parser can
+    tell the two report types apart from the text alone.
+    """
+    reset_state()
+    parsed = urlparse(base_url)
+    if not parsed.scheme:
+        base_url = "https://" + base_url
+    if not base_url.endswith("/"):
+        base_url += "/"
+
+    mode = "Diagnose + Fix Recommendations" if _state.SHOW_FIX else "Diagnose Only"
+    print(f"{'='*60}")
+    print(f"  SEO Readiness Report for: {base_url}")
+    print(f"  Mode: {mode}")
+    if allowed_categories:
+        print(f"  Restricted to {len(allowed_categories)} categories: {', '.join(allowed_categories)}")
+    print(f"{'='*60}")
+
+    _run_seo_checks(base_url, allowed_categories=allowed_categories)
+
+    score = get_seo_score()
+    grade = get_grade(score)
+
+    print(f"\n{'='*60}")
+    print(f"  SEO SCORE: {score}/100  (Grade: {grade})")
+    print(f"{'='*60}")
+    print(f"\n  Category Breakdown:")
+    print(f"  {'Category':<25} {'Score':>7}  {'Bar'}")
+    print(f"  {'-'*25} {'-'*7}  {'-'*20}")
+    for cat, vals in sorted(_seo_scores.items(), key=lambda x: x[0]):
+        earned = vals["earned"]
+        mx = vals["max"]
+        pct = (earned / mx * 100) if mx > 0 else 0
+        bar_len = int(pct / 5)
+        bar = "\033[92m" + "█" * bar_len + "\033[0m" + "░" * (20 - bar_len)
+        print(f"  {cat:<25} {earned:>4.1f}/{mx:<3.0f}  {bar}")
+
+    total_earned = sum(v["earned"] for v in _seo_scores.values())
+    total_max = sum(v["max"] for v in _seo_scores.values())
     print(f"  {'-'*25} {'-'*7}")
     print(f"  {'TOTAL':<25} {total_earned:>4.1f}/{total_max:<3.0f}")
 

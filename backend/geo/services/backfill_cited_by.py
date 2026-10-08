@@ -1,7 +1,7 @@
-"""把 ai_telemetry_responses.citations_json 跟 topic_generated_docs.publish_targets_json
-取交集,回填 doc.cited_by_json。
+"""Intersect ai_telemetry_responses.citations_json with topic_generated_docs.publish_targets_json
+and backfill doc.cited_by_json.
 
-被以下入口调用:
+Called from the following entry points:
   - CLI:scripts/backfill_doc_cited_by.py
   - HTTP:POST /api/admin/content-review/rebuild-cited-by
 """
@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
+
+from sqlalchemy import and_, or_
 
 from geo.database import SessionLocal
 from geo.models.ai_telemetry import (
@@ -23,22 +25,32 @@ log = logging.getLogger(__name__)
 
 
 def run(topic_id: int | None = None, *, dry_run: bool = False, replace: bool = False) -> dict:
-    """主入口。
+    """Main entry point.
 
     Args:
-        topic_id: 限定 topic;None = 全部有 publish_targets 的 doc。
-        dry_run: 只算不写。
-        replace: True = 完全重算,丢弃旧 cited_by;False = 合并,保留旧记录。
+        topic_id: restrict to a topic; None = all docs with publish_targets.
+        dry_run: compute only, do not write.
+        replace: True = full recompute, discard old cited_by; False = merge, keep old records.
 
     Returns:
-        统计字典 {topics, docs, matched_docs, responses_scanned, hits, dry_run, replace}
+        Stats dict {topics, docs, matched_docs, responses_scanned, hits, dry_run, replace}
     """
     s = SessionLocal()
     try:
+        # Include docs whose publish_targets have a URL or that were actually published via Mediumsly (the auto-publish path historically had empty
+        # targets url; mediumsly_url is the fallback attribution source).
         doc_q = s.query(TopicGeneratedDocORM).filter(
-            TopicGeneratedDocORM.publish_targets_json.isnot(None),
-            TopicGeneratedDocORM.publish_targets_json != "",
-            TopicGeneratedDocORM.publish_targets_json != "[]",
+            or_(
+                and_(
+                    TopicGeneratedDocORM.publish_targets_json.isnot(None),
+                    TopicGeneratedDocORM.publish_targets_json != "",
+                    TopicGeneratedDocORM.publish_targets_json != "[]",
+                ),
+                and_(
+                    TopicGeneratedDocORM.mediumsly_url.isnot(None),
+                    TopicGeneratedDocORM.mediumsly_url != "",
+                ),
+            )
         )
         if topic_id is not None:
             doc_q = doc_q.filter(TopicGeneratedDocORM.topic_id == topic_id)
@@ -57,9 +69,13 @@ def run(topic_id: int | None = None, *, dry_run: bool = False, replace: bool = F
         total_hits = 0
 
         for tid, docs in docs_by_topic.items():
-            doc_urls: dict[int, list[str]] = {
-                d.id: extract_publish_urls(d.publish_targets_json) for d in docs
-            }
+            doc_urls: dict[int, list[str]] = {}
+            for d in docs:
+                urls = extract_publish_urls(d.publish_targets_json)
+                mu = (d.mediumsly_url or "").strip()
+                if mu and mu not in urls:
+                    urls.append(mu)
+                doc_urls[d.id] = urls
             doc_urls = {k: v for k, v in doc_urls.items() if v}
             if not doc_urls:
                 continue
@@ -112,7 +128,16 @@ def run(topic_id: int | None = None, *, dry_run: bool = False, replace: bool = F
                     matched_docs += 1
                 if (d.cited_by_json or "{}") != new_json:
                     if not dry_run:
+                        # Engines that **newly appeared** this time -- only push for new ones, otherwise every backfill round would
+                        # re-push the same batch of old hits
+                        try:
+                            was = set(json.loads(d.cited_by_json or "{}"))
+                        except Exception:  # noqa: BLE001
+                            was = set()
+                        fresh = [e for e in new_payload if e not in was]
                         d.cited_by_json = new_json
+                        if fresh:
+                            _notify_cited(s, d, tid, fresh)
 
         if not dry_run:
             s.commit()
@@ -133,3 +158,22 @@ def run(topic_id: int | None = None, *, dry_run: bool = False, replace: bool = F
         raise
     finally:
         s.close()
+
+
+def _notify_cited(s, doc, topic_id: int, engines: list[str]) -> None:
+    """Citation hit -> proactively push a notification.
+
+    **This is the product's only aha moment**, and the only thing that justifies renewal: users will not come back on their own to ask
+    "was my article from three weeks ago cited?". Without the push, this moment never happens.
+
+    A failure to persist the notification never affects the backfill -- notify.push swallows its own exceptions, and we wrap it once more here.
+    """
+    try:
+        from agents.geo import notify
+        from geo.models.ai_telemetry import AiTelemetryTopicORM
+
+        topic = s.get(AiTelemetryTopicORM, topic_id)
+        if topic is not None:
+            notify.cited_by_engine(s, doc, topic, engines)
+    except Exception:  # noqa: BLE001
+        log.debug("citation notification failed doc=%s", doc.id, exc_info=True)

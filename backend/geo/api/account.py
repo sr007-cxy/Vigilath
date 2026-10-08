@@ -6,10 +6,11 @@ change. Everything here requires a valid Bearer token — `get_current_user`
 returns the `UserORM` row for the caller.
 """
 import json
+import logging
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from geo.api.auth import get_current_user
@@ -31,6 +32,7 @@ from geo.utils.error_handler import AppException
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -72,6 +74,53 @@ async def get_user_detection(
         deleted_at=row.deleted_at,
         result=snapshot,
     )
+
+
+@router.post("/detections/{record_id}/export-pdf")
+async def export_detection_pdf(
+    record_id: int,
+    request: Request,
+    current_user: UserORM = Depends(get_current_user),
+):
+    """Export an audit as a vector PDF: backend Chrome prints /result/print/{id}.
+
+    Why not in the frontend: the frontend html2canvas path screenshots bitmaps block by block and recomputes text baselines itself,
+    which misalign with background boxes under Chinese fonts (fixed several rounds), and a report starts at 6MB. Using
+    the browser's own print engine gives vector text, selectable and searchable, at a few hundred KB.
+
+    The path is built by the backend from a row id verified for ownership, never from a frontend-supplied address: there is no arbitrary-address
+    rendering surface, isomorphic to the full_diagnosis export. Anonymous users have no history rows and never reach here;
+    the result page still falls back to the frontend export for them.
+    """
+    row = get_detection(user_id=current_user.id, record_id=record_id)
+    if row is None:
+        raise AppException(status_code=404, message="Detection record not found")
+
+    auth = request.headers.get("authorization") or ""
+    token = auth[7:] if auth.lower().startswith("bearer ") else ""
+    if not token:
+        raise AppException(status_code=401, message="missing token")
+
+    from geo.api.report_export import capture_document_pdf, _SEM
+
+    lang = request.query_params.get("lang", "zh")
+    zh = lang.startswith("zh")
+    title = "AI 搜索可见度与传统 SEO 检测报告" if zh else "AI Visibility & SEO Report"
+    header_right = (f"检测目标: {row.url}" if zh else f"Target: {row.url}")
+
+    async with _SEM:
+        try:
+            pdf = await capture_document_pdf(
+                f"/result/print/{row.id}", token, lang, current_user,
+                title=title, header_right=header_right,
+            )
+        except Exception as e:  # noqa: BLE001
+            # The frontend only sees a 502 and quietly falls back to html2canvas, so the real cause must stay in the logs
+            logger.exception("[detection-export] PDF rendering failed record=%s user=%s",
+                             row.id, current_user.email)
+            raise AppException(status_code=502, message=f"render failed: {e}")
+
+    return Response(content=pdf, media_type="application/pdf")
 
 
 @router.delete("/detections/{record_id}")
@@ -166,9 +215,9 @@ async def change_password(
     return {"success": True}
 
 
-# ── 对外开放:账号自助 embed token(给外部 agent / 小龙虾链接本账号)──────────
-# 签发模块 geo.agent.embed.tokens 不依赖 pydantic-ai,可在主后端安全调用;
-# 签名密钥与 agent service 共用(同 .env),故主后端签的 token 在 :8010 校验通过。
+# ── External access: self-service account embed tokens (for external agents / OpenClaw ("xiaolongxia") to link this account) ──────────
+# The issuing module agents.geo.embed.tokens does not depend on pydantic-ai and can be called safely from the main backend;
+# the signing key is shared with the agent service (same .env), so tokens signed by the main backend verify on :8010.
 
 class IssueTokenRequest(BaseModel):
     label: str = ""
@@ -177,7 +226,7 @@ class IssueTokenRequest(BaseModel):
 
 @router.get("/agent-tokens")
 async def list_agent_tokens(current_user: UserORM = Depends(get_current_user)):
-    """列出本账号的 embed token(不返回明文,只元数据)。"""
+    """List this account's embed tokens (no plaintext, metadata only)."""
     from geo.models.agent import AgentTokenORM
 
     db = SessionLocal()
@@ -210,11 +259,11 @@ async def issue_agent_token(
     payload: IssueTokenRequest,
     current_user: UserORM = Depends(get_current_user),
 ):
-    """自助领号:为当前账号签发 1 年期 embed token(明文只此一次返回)。
+    """Self-service token: issue a 1-year embed token for the current account (plaintext returned only this once).
 
-    能力一律全开(读 + 诊断/产稿);真实对外发布不在 token 能力内,由平台护栏控制(can_publish 恒 False)。
+    All capabilities enabled (read + diagnose/produce drafts); real external publishing is not a token capability and is controlled by platform guardrails (can_publish is always False).
     """
-    from geo.agent.embed.tokens import issue_token
+    from agents.geo.embed.tokens import issue_token
 
     caps = ["read", "write"]
     days = max(1, min(int(payload.days or 365), 366))
@@ -230,7 +279,7 @@ async def issue_agent_token(
 
 @router.post("/agent-token/{tid}/revoke")
 async def revoke_agent_token(tid: str, current_user: UserORM = Depends(get_current_user)):
-    """吊销本账号的某个 token(只能吊销自己的)。"""
+    """Revoke one of this account's tokens (only your own can be revoked)."""
     from geo.models.agent import AgentTokenORM
 
     db = SessionLocal()
@@ -249,23 +298,105 @@ async def revoke_agent_token(tid: str, current_user: UserORM = Depends(get_curre
         db.close()
 
 
-# ── 对外开放:IM 接入器(自建应用模式,飞书/企微)────────────────────────────
+# ── Device code authorization: approval side (browser login session) ────────────────────────────────────────
+# The CLI side (start flow + polling) is in agents/geo/embed/device.py, running in the agent service;
+# approval requires a login session, so it lives in the main backend. Both sides share the same agent_device_codes table.
+def _normalize_user_code(s: str) -> str:
+    """Must follow the same rules as normalize_user_code in agents/geo/embed/device.py (codes typed by hand)."""
+    raw = "".join(ch for ch in (s or "").upper() if ch.isalnum())
+    return f"{raw[:4]}-{raw[4:8]}" if len(raw) >= 8 else raw
+
+
+def _load_device_row(db, user_code: str):
+    from geo.models.agent import AgentDeviceCodeORM
+
+    code = _normalize_user_code(user_code)
+    if len(code) != 9:
+        raise AppException(status_code=400, message="配对码格式不对(应为 8 位)")
+    row = db.query(AgentDeviceCodeORM).filter(AgentDeviceCodeORM.user_code == code).first()
+    if row is None:
+        raise AppException(status_code=404, message="配对码不存在,请核对终端里显示的码")
+    return row
+
+
+@router.get("/agent-device/{user_code}")
+async def get_device_request(user_code: str, current_user: UserORM = Depends(get_current_user)):
+    """Shown on the approval page: who this code is, from which machine, and when it was started, so the user can judge whether it is theirs."""
+    from datetime import datetime
+
+    db = SessionLocal()
+    try:
+        row = _load_device_row(db, user_code)
+        expired = row.expires_at < datetime.utcnow()
+        return {
+            "user_code": row.user_code,
+            "status": "expired" if (expired and row.status == "pending") else row.status,
+            "client": row.client,
+            "client_ip": row.client_ip,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+            "caps": ["read", "write"],
+            "can_publish": False,
+        }
+    finally:
+        db.close()
+
+
+@router.post("/agent-device/{user_code}/approve")
+async def approve_device_request(user_code: str, current_user: UserORM = Depends(get_current_user)):
+    """Approve: only writes account_id + approved. The token is signed on the fly when the CLI polls (no plaintext kept in the DB)."""
+    from datetime import datetime
+
+    db = SessionLocal()
+    try:
+        row = _load_device_row(db, user_code)
+        if row.expires_at < datetime.utcnow():
+            raise AppException(status_code=400, message="配对码已过期,请在终端重新发起安装")
+        if row.status == "consumed":
+            raise AppException(status_code=400, message="该配对码已完成授权,不能重复批准")
+        if row.status == "denied":
+            raise AppException(status_code=400, message="该配对码已被拒绝,请重新发起安装")
+        row.status = "approved"
+        row.account_id = current_user.id
+        row.approved_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "user_code": row.user_code, "account_id": current_user.id}
+    finally:
+        db.close()
+
+
+@router.post("/agent-device/{user_code}/deny")
+async def deny_device_request(user_code: str, current_user: UserORM = Depends(get_current_user)):
+    """Deny: click this if you did not start it; the CLI stops polling immediately and reports "user denied"."""
+    db = SessionLocal()
+    try:
+        row = _load_device_row(db, user_code)
+        if row.status == "consumed":
+            raise AppException(status_code=400, message="该配对码已完成授权,无法撤销;请到本页吊销对应 token")
+        row.status = "denied"
+        db.commit()
+        return {"success": True, "user_code": row.user_code}
+    finally:
+        db.close()
+
+
+# ── External access: IM connectors (self-built app mode, Feishu/WeCom) ────────────────────────────
 def _mask(s: str) -> str:
     return (s[:4] + "••••" + s[-2:]) if s and len(s) > 8 else ("••••" if s else "")
 
 
 class IMConnectorRequest(BaseModel):
     platform: str = "feishu"          # feishu / wecom / dingtalk
-    app_id: str                       # 飞书 App ID / 企微 CorpID / 钉钉 AppKey(robotCode)
+    app_id: str                       # Feishu App ID / WeCom CorpID / DingTalk AppKey (robotCode)
     app_secret: str = ""
-    verify_token: str = ""            # 企微 Token(飞书可空)
-    aes_key: str = ""                 # 企微 EncodingAESKey / 飞书 Encrypt Key
-    agentid: str = ""                 # 企微自建应用 AgentId
+    verify_token: str = ""            # WeCom Token (may be empty for Feishu)
+    aes_key: str = ""                 # WeCom EncodingAESKey / Feishu Encrypt Key
+    agentid: str = ""                 # WeCom self-built app AgentId
 
 
 @router.get("/im-connectors")
 async def list_im_connectors(current_user: UserORM = Depends(get_current_user)):
-    """列出本账号的 IM 接入器(密钥脱敏)。"""
+    """List this account's IM connectors (secrets masked)."""
     from geo.models.agent import AgentIMConnectorORM
 
     db = SessionLocal()
@@ -292,7 +423,7 @@ async def upsert_im_connector(
     payload: IMConnectorRequest,
     current_user: UserORM = Depends(get_current_user),
 ):
-    """保存/更新本账号某平台的 IM 接入器(一账号一平台一条)。返回回调路径供填回飞书。"""
+    """Save/update this account's IM connector for a platform (one per account per platform). Returns the callback path to fill back into Feishu."""
     from geo.models.agent import AgentIMConnectorORM
 
     if payload.platform not in ("feishu", "wecom", "dingtalk"):
@@ -313,7 +444,7 @@ async def upsert_im_connector(
         row.app_secret = payload.app_secret.strip()
         row.verify_token = payload.verify_token.strip()
         row.aes_key = payload.aes_key.strip()
-        # 保留已有的快捷按钮/菜单配置(quick_actions / menu_map),只更新 agentid
+        # Keep existing quick button/menu config (quick_actions / menu_map); only update agentid
         try:
             cfg = _json.loads(row.config_json) if row.config_json else {}
             if not isinstance(cfg, dict):
@@ -334,7 +465,7 @@ async def upsert_im_connector(
 
 @router.post("/im-bind-code")
 async def gen_im_bind_code(current_user: UserORM = Depends(get_current_user)):
-    """生成一次性飞书绑定码(ISV 模式):用户在飞书把它发给机器人即可绑定本账号。10 分钟有效。"""
+    """Generate a one-time Feishu binding code (ISV mode): the user sends it to the bot in Feishu to bind this account. Valid for 10 minutes."""
     import random
     import string
     from datetime import datetime, timedelta
@@ -343,7 +474,7 @@ async def gen_im_bind_code(current_user: UserORM = Depends(get_current_user)):
 
     db = SessionLocal()
     try:
-        # 6 位、去掉易混字符(0/O/1/I)
+        # 6 characters, excluding easily confused characters (0/O/1/I)
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         for _ in range(8):
             code = "".join(random.choice(alphabet) for _ in range(6))
@@ -381,29 +512,29 @@ async def delete_im_connector(cid: int, current_user: UserORM = Depends(get_curr
 
 
 class QuickConfigRequest(BaseModel):
-    # 回复底部快捷按钮:[["📈 投放进展","今日投放进展和效果如何?"], ...]
+    # Quick buttons at the bottom of replies: [["📈 Placement progress","How are today's placements progressing and performing?"], ...]
     quick_actions: list[list[str]] = []
-    # 飞书机器人底部菜单 event_key → 问句:{"today":"今日投放效果如何?", ...}
+    # Feishu bot bottom menu event_key -> question: {"today":"How are today's placements performing?", ...}
     menu_map: dict[str, str] = {}
 
 
 class PushTargetItem(BaseModel):
     type: str = "webhook"          # webhook | bot
     name: str = ""
-    url: str = ""                  # webhook 用:飞书自定义机器人 hook URL
-    secret: str = ""               # webhook 加签密钥(可选)
-    chat_id: str = ""              # bot 用:群 chat_id
+    url: str = ""                  # For webhook: Feishu custom bot hook URL
+    secret: str = ""               # Webhook signing secret (optional)
+    chat_id: str = ""              # For bot: group chat_id
     enabled: bool = True
 
 
 class PushTargetsRequest(BaseModel):
-    # 简报/告警群发的推送目标:webhook(可多个)+ bot 群,可单独开关
+    # Push targets for brief/alert broadcasts: webhooks (can be several) + bot groups, each switchable on/off
     push_targets: list[PushTargetItem] = []
 
 
 @router.get("/im-connector/{cid}/quick-config")
 async def get_im_quick_config(cid: int, current_user: UserORM = Depends(get_current_user)):
-    """读某连接器的快捷按钮 + 菜单映射(未配返回默认,供控制台编辑)。"""
+    """Read a connector's quick buttons + menu mapping (returns defaults if unset, for editing in the console)."""
     from geo.im_quick_config import DEFAULT_MENU_MAP, DEFAULT_QUICK_ACTIONS, menu_map, quick_actions
     from geo.models.agent import AgentIMConnectorORM
 
@@ -427,7 +558,7 @@ async def get_im_quick_config(cid: int, current_user: UserORM = Depends(get_curr
 async def set_im_quick_config(
     cid: int, payload: QuickConfigRequest, current_user: UserORM = Depends(get_current_user),
 ):
-    """保存某连接器的快捷按钮 + 菜单映射(合并进 config_json,不动凭证)。"""
+    """Save a connector's quick buttons + menu mapping (merged into config_json, credentials untouched)."""
     import json as _json
 
     from geo.models.agent import AgentIMConnectorORM
@@ -444,7 +575,7 @@ async def set_im_quick_config(
                 cfg = {}
         except (ValueError, TypeError):
             cfg = {}
-        # 清洗:label/问句非空,按钮最多 6 个
+        # Sanitize: label/question non-empty, at most 6 buttons
         qa = [[str(it[0]).strip(), str(it[1]).strip()] for it in payload.quick_actions
               if isinstance(it, (list, tuple)) and len(it) >= 2 and str(it[0]).strip() and str(it[1]).strip()][:6]
         mm = {str(k).strip(): str(v).strip() for k, v in payload.menu_map.items()
@@ -460,7 +591,7 @@ async def set_im_quick_config(
 
 @router.get("/im-connector/{cid}/push-targets")
 async def get_im_push_targets(cid: int, current_user: UserORM = Depends(get_current_user)):
-    """读连接器的推送目标(webhook + bot 群,简报/告警群发用)。"""
+    """Read the connector's push targets (webhooks + bot groups, for brief/alert broadcasts)."""
     from geo.models.agent import AgentIMConnectorORM
 
     db = SessionLocal()
@@ -483,7 +614,7 @@ async def get_im_push_targets(cid: int, current_user: UserORM = Depends(get_curr
 async def set_im_push_targets(
     cid: int, payload: PushTargetsRequest, current_user: UserORM = Depends(get_current_user),
 ):
-    """保存推送目标(合并进 config_json.push_targets,不动凭证/快捷按钮)。"""
+    """Save push targets (merged into config_json.push_targets, credentials/quick buttons untouched)."""
     from geo.models.agent import AgentIMConnectorORM
 
     db = SessionLocal()
@@ -503,7 +634,7 @@ async def set_im_push_targets(
             typ = (t.type or "").strip()
             if typ == "webhook":
                 url = t.url.strip()
-                # 空 URL 的 webhook 作为占位**保留并展示**,但强制不启用(不会误发)
+                # Webhooks with an empty URL are **kept and shown** as placeholders, but forced disabled (no accidental sends)
                 clean.append({"type": "webhook", "name": t.name.strip(),
                               "url": url, "secret": t.secret.strip(),
                               "enabled": bool(t.enabled) and bool(url)})

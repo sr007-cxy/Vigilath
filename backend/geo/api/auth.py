@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
 from jwt import PyJWTError as JWTError
 from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 from geo.models.user import User, UserCreate, UserLogin, Token
 from geo.services.user_service import user_service
 from geo.services.email_service import email_service
@@ -64,15 +65,78 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     return user
 
 
+def _user_role(user) -> str:
+    """role is the single source of truth for permissions; legacy data without role falls back to is_admin"""
+    role = getattr(user, "role", None)
+    if role:
+        return role
+    return "admin" if getattr(user, "is_admin", False) else "user"
+
+
+def is_staff(user) -> bool:
+    """Workbench staff (admin | operator); all cross-user read checks go through here"""
+    return _user_role(user) in ("admin", "operator")
+
+
+def require_roles(*roles):
+    """Role-check dependency factory: Depends(require_roles("admin", "operator"))"""
+    async def _dep(current_user = Depends(get_current_user)):
+        if _user_role(current_user) not in roles:
+            raise AppException(status_code=403, message="权限不足")
+        return current_user
+    return _dep
+
+
 async def require_admin(current_user = Depends(get_current_user)):
     """Reject non-admin users with 403. Wrap any admin-only endpoint with this."""
-    if not getattr(current_user, "is_admin", False):
+    if _user_role(current_user) != "admin":
         raise AppException(status_code=403, message="Admin only")
     return current_user
 
+
+# Workbench level (admin | operator): project progress / profile / copy review / audit reports / batch-run results
+require_workbench = require_roles("admin", "operator")
+
+# Maintenance roles (admin | maintainer): platform rules / AI crawler analysis / dispatch center / external gateway
+require_maintainer = require_roles("admin", "maintainer")
+
+# Monitoring data (engine measurements): available to workbench staff + maintenance roles
+require_workbench_or_maintainer = require_roles("admin", "operator", "maintainer")
+
+def _bearer_user(authorization: Optional[str]):
+    """Best-effort resolve the user from the Authorization header; return None if it cannot be resolved (no raise).
+
+    /register is now both the anonymous signup entry (off by default) and the workbench create-account-for-customer entry, the latter carrying
+    an admin token. Depends(get_current_user) would make anonymous requests 401 immediately, never getting
+    the correct message "registration is closed", so we parse manually here.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    try:
+        payload = jwt.decode(authorization.split(" ", 1)[1].strip(),
+                             SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    email = payload.get("sub")
+    return user_service.get_user_by_email(email) if email else None
+
+
 @router.post("/register", response_model=User)
-async def register(user: UserCreate):
-    """Register a new user"""
+async def register(user: UserCreate, authorization: Optional[str] = Header(default=None)):
+    """Register a new user.
+
+    Email registration is off by default (settings.EMAIL_REGISTER_ENABLED=False): public signup goes through
+    WeChat QR + phone number. **Email login is unaffected**; existing accounts work as usual. Workbench admins creating accounts for customers
+    still use this endpoint, allowed through by the admin token.
+    """
+    if not settings.EMAIL_REGISTER_ENABLED:
+        actor = _bearer_user(authorization)
+        if not (actor and _user_role(actor) == "admin"):
+            raise AppException(
+                status_code=403,
+                message="邮箱注册已关闭,请使用微信扫码登录",
+            )
+
     # Check if user already exists
     existing_user = user_service.get_user_by_email(user.email)
     if existing_user:
@@ -116,6 +180,10 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def forgot_password(body: ForgotPasswordRequest):
     """Send password reset email"""
     email = body.email
+    # Emails of WeChat-registered accounts are placeholder addresses (see user_service.WECHAT_EMAIL_DOMAIN);
+    # that subdomain does not receive mail, so sending would vanish — tell the user to scan the QR code instead of waiting.
+    if email.lower().endswith("@" + user_service.WECHAT_EMAIL_DOMAIN):
+        raise AppException(status_code=400, message="该账号请使用微信扫码登录")
     user = user_service.get_user_by_email(email)
     if not user:
         raise AppException(status_code=404, message="Email not found")

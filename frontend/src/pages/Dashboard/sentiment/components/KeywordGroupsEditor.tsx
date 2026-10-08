@@ -2,6 +2,8 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { KeywordGroup, KeywordKind } from '../../../../types/sentiment';
+import { uiConfirm, uiPrompt } from '../../../../components/ui/dialogs';
+import { UiSelect } from '../../../../components/ui/Select';
 
 interface Props {
   value: KeywordGroup[];
@@ -42,8 +44,8 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
     onChange(value.map((g, i) => (i === idx ? mut(g) : g)));
   };
 
-  const addGroup = () => {
-    const name = prompt(t('dashboard.sentiment.keywordGroups.newGroupPrompt'));
+  const addGroup = async () => {
+    const name = await uiPrompt(t('dashboard.sentiment.keywordGroups.newGroupPrompt'));
     if (!name?.trim()) return;
     onChange([
       ...value,
@@ -52,16 +54,16 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
     setActiveIdx(value.length);
   };
 
-  const removeGroup = (idx: number) => {
-    if (!confirm(t('dashboard.sentiment.keywordGroups.removeGroupConfirm', { name: value[idx]?.name ?? '' }))) return;
+  const removeGroup = async (idx: number) => {
+    if (!(await uiConfirm(t('dashboard.sentiment.keywordGroups.removeGroupConfirm', { name: value[idx]?.name ?? '' }), { danger: true }))) return;
     onChange(value.filter((_, i) => i !== idx));
     setActiveIdx(Math.max(0, idx - 1));
   };
 
-  const renameGroup = (idx: number) => {
+  const renameGroup = async (idx: number) => {
     const cur = value[idx];
     if (!cur) return;
-    const next = prompt(t('dashboard.sentiment.keywordGroups.renamePrompt'), cur.name);
+    const next = await uiPrompt(t('dashboard.sentiment.keywordGroups.renamePrompt'), { defaultValue: cur.name });
     if (!next?.trim()) return;
     update(idx, (g) => ({ ...g, name: next.trim() }));
   };
@@ -110,7 +112,7 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-3 rounded-xl p-3" style={cardStyle}>
-      {/* 左:分组列表 */}
+      {/* Left: group list */}
       <aside className="space-y-1.5">
         <header className="flex items-center justify-between px-1 mb-1">
           <span className="text-xs font-semibold text-secondary uppercase tracking-wider">
@@ -153,7 +155,7 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
         )}
       </aside>
 
-      {/* 右:当前分组 items */}
+      {/* Right: items of the current group */}
       <section className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
         {!activeGroup ? (
           <p className="text-sm text-muted py-12 text-center">
@@ -172,16 +174,14 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <select value={activeGroup.kind}
-                  onChange={(e) => setKind(safeIdx, e.target.value as KeywordKind)}
+                <UiSelect value={activeGroup.kind}
+                  onChange={(val) => setKind(safeIdx, val as KeywordKind)}
                   className="text-xs rounded px-2 py-1"
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-                  {KIND_OPTIONS.map((k) => (
-                    <option key={k.kind} value={k.kind}>
-                      {k.emoji} {t(`dashboard.sentiment.keywordGroups.kinds.${k.kind}`)}
-                    </option>
-                  ))}
-                </select>
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                  options={KIND_OPTIONS.map((k) => ({
+                    value: k.kind,
+                    label: `${k.emoji} ${t(`dashboard.sentiment.keywordGroups.kinds.${k.kind}`)}`,
+                  }))} />
                 <button type="button" onClick={() => removeGroup(safeIdx)}
                   className="text-xs" style={{ color: '#dc2626' }}>
                   🗑 {t('dashboard.sentiment.keywordGroups.removeGroup')}
@@ -189,7 +189,7 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
               </div>
             </header>
 
-            {/* 添加输入 */}
+            {/* Add input */}
             <div className="flex items-center gap-2 mb-2">
               <input type="text" value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -203,7 +203,7 @@ export function KeywordGroupsEditor({ value, onChange }: Props) {
               </button>
             </div>
 
-            {/* items 列表 */}
+            {/* items list */}
             {activeGroup.items.length === 0 ? (
               <p className="text-xs text-muted py-6 text-center">
                 {t('dashboard.sentiment.keywordGroups.noItems')}

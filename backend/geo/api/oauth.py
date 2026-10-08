@@ -21,7 +21,7 @@ SECRET_KEY = settings.SECRET_KEY
 
 @router.post("/google", response_model=Token)
 async def google_login(payload: GoogleLoginRequest):
-    """Google OAuth登录"""
+    """Google OAuth login"""
     google_token = payload.google_token
     google_response = requests.get(
         "https://oauth2.googleapis.com/tokeninfo",

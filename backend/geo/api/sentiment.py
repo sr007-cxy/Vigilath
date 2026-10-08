@@ -1,19 +1,21 @@
-"""舆情监测 API 路由.
+"""Sentiment monitoring API routes.
 
-负责:
-1. 账号 CRUD(/api/sentiment/accounts/...)
-2. 任务状态查询和手动触发(/run-status, /run-now)
-3. 数据查询代理(从 sentinel-service 拿数据,加 auth + 整理)
-4. 知识库 CRUD
-5. 草稿生成
+Responsibilities:
+1. Account CRUD (/api/sentiment/accounts/...)
+2. Task status queries and manual triggers (/run-status, /run-now)
+3. Data query proxy (fetch data from sentinel-service, add auth + tidy up)
+4. Knowledge base CRUD
+5. Draft generation
 
-定时任务自动触发的部分见 services/sentiment_scheduler.py — 同样调
-sentiment_pipeline.run_pipeline_for_account(),与本文件 /run-now 共用编排.
+Scheduled automatic triggers live in services/sentiment_scheduler.py — the same
+sentiment_pipeline orchestration, just called directly in APScheduler's own thread;
+this file always uses submit_pipeline() to put work into the dedicated batch-run pool, not occupying API threads.
 """
 from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -29,12 +31,23 @@ from geo.models.sentiment import (
     KeywordGroup, SentimentAccountCreate, SentimentAccountORM, SentimentAccountOut,
     SentimentAccountUpdate, SentimentKnowledgeORM, SentimentRunLogORM,
     SentimentPlatformORM, SentimentPlatformOut,
-    RunStatusOut, KnowledgeOut, _as_utc, flatten_keyword_groups,
+    RunStatusOut, KnowledgeOut, _as_utc, account_symbol, flatten_keyword_groups,
 )
-from geo.models.user import User
-from geo.services import sentinel_client
+from geo.models.balance import PRICE_SENTIMENT_DAILY, PRICE_SENTIMENT_ONCE
+from geo.models.user import User, UserORM
+from geo.services import balance_service, sentinel_client
 from geo.services.sentinel_client import SentinelError
-from geo.services.sentiment_pipeline import run_pipeline_for_account
+from geo.services.sentiment_pipeline import submit_pipeline
+from geo.services.access_control import (
+    ACTION_READ,
+    ACTION_WRITE,
+    apply_enterprise_scope,
+    require_resource_access,
+    resource_not_found,
+    create_operation_context,
+    create_resource_operation_context,
+)
+from geo.services.system_audit import append_event as append_system_audit
 
 log = logging.getLogger(__name__)
 
@@ -52,36 +65,72 @@ def get_db():
         db.close()
 
 
-def _get_account_or_404(db: Session, account_id: int, user_id: int) -> SentimentAccountORM:
+def _get_account_or_404(
+    db: Session, account_id: int, actor: User, action: str = ACTION_WRITE,
+) -> SentimentAccountORM:
     acc = db.get(SentimentAccountORM, account_id)
-    if not acc or acc.user_id != user_id:
-        raise HTTPException(404, "account not found")
+    if not acc:
+        raise resource_not_found()
+    require_resource_access(db, actor, acc, action)
     return acc
 
 
-def _ensure_membership_has_sentiment(user: User) -> None:
-    """档位准入校验 — 没有舆情权限的会员报 402.
+def _ensure_can_afford_sentiment(db: Session, user: User, price_key: str,
+                                 what: str = "舆情监测") -> None:
+    """Credits admission — allowed if there is enough for one run.
 
-    MVP 不做严格校验,直接放行;接入会员体系后这里 JOIN memberships.
+    Before 2026-08-25 this was a hard gate requiring "a real paid pro-or-higher subscription", combined with the quota's fake
+    `cap = 999` implementation; the effect: those who paid had unlimited use, those who did not could create none.
+    Now sentiment monitoring is **charged per run**, so admission naturally reduces to "are there enough credits for one run"; tiers no longer matter.
+
+    `price_key` has two levels: quick check `sentiment_once` (10 yuan per order), daily monitoring `sentiment_daily`
+    (5 yuan per day) — account creation pre-checks against the latter; do not block people at the door with the quick-check price.
+
+    Ops (admin/operator) own accounts are neither charged nor blocked — internal topics and demo accounts live there.
     """
-    # TODO: 接入 membership_service.has_sentiment_enabled(user.id)
-    # if not allowed: raise HTTPException(402, ...)
-    pass
+    if _is_staff_user(user):
+        return
+    need = balance_service.get_price(db, price_key)
+    if need <= 0:
+        return
+    if balance_service.can_afford(db, user.id, need):
+        return
+    bal = balance_service.get_balance(db, user.id)
+    raise HTTPException(402, {
+        "code": "INSUFFICIENT_BALANCE",
+        "message": f"{what}每次消耗 {need} 积分,当前积分 {bal},充值后即可开始。",
+        "required_cents": need,
+        "balance_cents": bal,
+        "topup": {"web": "/account/balance"},
+    })
+
+
+def _is_staff_user(user) -> bool:
+    return (getattr(user, "role", "") or "user") in ("admin", "operator")
 
 
 def _enforce_account_quota(db: Session, user_id: int) -> None:
-    """档位上限校验 — starter=1, growth=3, scale=∞."""
-    # TODO: 从 membership 拿配额
-    cap = 999
+    """Cap on the number of brands monitored at the same time.
+
+    With per-run charging this gate is no longer "selling tiers", only preventing scripts from bulk-creating accounts — every active account
+    is charged daily on an ongoing basis, so runaway counts cost real money. Default 20, adjustable via env.
+    """
+    try:
+        cap = max(1, int(os.environ.get("SENTIMENT_MAX_ACCOUNTS", 20)))
+    except (TypeError, ValueError):
+        cap = 20
     existing = db.query(SentimentAccountORM).filter_by(
         user_id=user_id, active=True,
     ).count()
     if existing >= cap:
-        raise HTTPException(402, f"account quota exceeded ({cap})")
+        raise HTTPException(402, {
+            "code": "ACCOUNT_QUOTA",
+            "message": f"最多同时监控 {cap} 个品牌,请先停用不需要的。",
+        })
 
 
 def _has_meaningful_change(acc: SentimentAccountORM, payload: SentimentAccountUpdate) -> bool:
-    """关键词/intent/aliases 变了就值得重跑."""
+    """A change in keywords/intent/aliases is worth a rerun."""
     fields = ("target", "ticker", "intent")
     for f in fields:
         v = getattr(payload, f, None)
@@ -116,15 +165,20 @@ def _resolve_keywords_for_storage(
     keyword_groups: Optional[list[KeywordGroup]],
     fallback_keywords: list[str],
 ) -> list[str]:
-    """决定 keywords_json 存什么 — keyword_groups 优先,扁平 keywords 兜底."""
-    if keyword_groups is not None:
+    """Decide what keywords_json stores — keyword_groups first, flat keywords as fallback.
+
+    Emptiness uses truthiness rather than `is not None`: Create's keyword_groups defaults to `[]`,
+    so with `is not None` users who only filled flat keywords during onboarding would be flattened to
+    an empty list — no keywords left, and no error.
+    """
+    if keyword_groups:
         return flatten_keyword_groups(keyword_groups)
     if keywords is not None:
         return keywords
     return fallback_keywords
 
 
-# ─────────────────────────── 平台目录 ──────────────────────────
+# ─────────────────────────── Platform catalog ──────────────────────────
 
 
 @router.get("/platforms", response_model=list[SentimentPlatformOut])
@@ -132,9 +186,9 @@ def list_platforms(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """媒体平台目录(全局只读).
-    用户登录后即可拉,不限会员档位 — 这是用来渲染白名单选择器和文章页过滤器的元数据,
-    不暴露用户私有信息。返回顺序:category 默认顺序 → 组内 sort_order。
+    """Media platform catalog (global, read-only).
+    Available to any logged-in user regardless of membership tier — this is metadata for rendering the whitelist selector and article page filters,
+    exposing no private user data. Order: category default order → sort_order within the group.
     """
     category_rank = {
         "finance": 1, "social": 2, "forum": 3,
@@ -149,7 +203,69 @@ def list_platforms(
     return [SentimentPlatformOut.from_orm_row(r) for r in rows]
 
 
-# ─────────────────────────── 账号 CRUD ────────────────────────
+# ─────────────────────────── Account CRUD ────────────────────────
+
+
+# ─────────────────── One-off quick check (no account created) ────────────────────
+#
+# A separate line from "daily health monitoring", do not mix: this does not create a sentiment_account, write tenant tables,
+# or enter batch runs; it runs with just a brand name, and results only go into a 24h cache (see services/sentiment_once.py).
+#
+# Previously only the agent tool could call it — web users could not reach it except by asking in the chat box. This adds an equivalent entry.
+
+
+class OncePayload(BaseModel):
+    brand: str
+    keywords: list[str] = []
+    # Category terms: used for **brand disambiguation**. Searching by brand name alone pulls in same-named entities from other industries;
+    # brands whose names contain industry words ("GEO Analytics") are worse — what comes back is the whole industry's negatives.
+    # The same parameter as industry_terms in the agent-side run_sentiment_once.
+    industry_terms: list[str] = []
+
+
+@router.post("/once")
+def start_once(
+    payload: OncePayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Start a one-off quick check order. One round takes up to 360s, so it is "start + poll", not waited on inline."""
+    from geo.services import sentiment_once
+
+    brand = (payload.brand or "").strip()
+    if not brand:
+        raise HTTPException(422, {"code": "NO_BRAND", "message": "请先填写品牌名"})
+    _ensure_can_afford_sentiment(db, current_user, PRICE_SENTIMENT_ONCE, "舆情快检")
+
+    cat = payload.industry_terms or None
+    st = sentiment_once.start(current_user.id, brand, payload.keywords or None, cat)
+    if st.get("state") == "degraded":
+        # When the cache is unavailable, **do not pretend to queue** (queued but results cannot be stored is the worst kind of bad);
+        # run one round synchronously instead, with a hard cap
+        st = sentiment_once.run_sync(current_user.id, brand, payload.keywords or None, cat)
+    return {"brand": brand, **st}
+
+
+@router.get("/once")
+def get_once(
+    brand: str,
+    keywords: Optional[str] = None,
+    industry_terms: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+):
+    """Poll this order's status: ready / running / failed / stale / none.
+
+    ★ industry_terms must be **the same as passed at start** — it is part of the cache key; a mismatch is a different key,
+      and you will never poll your own order.
+    """
+    from geo.services import sentiment_once
+
+    def _split(raw: Optional[str]) -> Optional[list[str]]:
+        return [k.strip() for k in (raw or "").split(",") if k.strip()] or None
+
+    return {"brand": brand,
+            **sentiment_once.status(current_user.id, brand, _split(keywords),
+                                    _split(industry_terms))}
 
 
 @router.get("/accounts", response_model=list[SentimentAccountOut])
@@ -157,12 +273,10 @@ def list_accounts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    rows = (
-        db.query(SentimentAccountORM)
-          .filter_by(user_id=current_user.id)
-          .order_by(SentimentAccountORM.created_at.desc())
-          .all()
+    query = apply_enterprise_scope(
+        db.query(SentimentAccountORM), db, current_user, SentimentAccountORM.user_id,
     )
+    rows = query.order_by(SentimentAccountORM.created_at.desc()).all()
     return [SentimentAccountOut.from_orm_row(r) for r in rows]
 
 
@@ -173,32 +287,41 @@ def create_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """创建账号,可选立即触发首跑.
+    """Create an account, optionally triggering the first run immediately.
 
-    流程:
-    1. 校验会员档位
-    2. 校验账号配额
-    3. INSERT,状态机 = pending(若 run_now)
-    4. BackgroundTasks 入队 first_run
-    5. 返回账号实体(前端立刻跳工作台 + 进入轮询/手动刷新流程)
+    Flow:
+    1. Check the balance is enough for one run (sentiment monitoring is charged per run; membership tier no longer matters)
+    2. Check the cap on concurrently monitored brands
+    3. INSERT, state machine = pending (if run_now)
+    4. Enqueue first_run via BackgroundTasks
+    5. Return the account entity (frontend jumps to the workbench + enters the polling/manual-refresh flow)
     """
-    _ensure_membership_has_sentiment(current_user)
-    _enforce_account_quota(db, current_user.id)
+    owner_user_id = payload.enterprise_user_id or current_user.id
+    owner_user = db.get(UserORM, owner_user_id)
+    if owner_user is None:
+        raise resource_not_found()
+    _ensure_can_afford_sentiment(db, owner_user, PRICE_SENTIMENT_DAILY, "舆情日常监控")
+    _enforce_account_quota(db, owner_user_id)
 
-    # 唯一性:同一用户下同 ticker 只能一个 active
-    dup = db.query(SentimentAccountORM).filter_by(
-        user_id=current_user.id, ticker=payload.ticker,
-    ).first()
-    if dup:
-        raise HTTPException(409, f"ticker {payload.ticker} already monitored")
+    # Uniqueness: one monitored entity per user.
+    # The key is symbol (= stock ticker, or the brand name if empty), not ticker — since the stock ticker became optional,
+    # two different unlisted brands both have an empty ticker, and comparing tickers would misjudge the second brand as a duplicate.
+    target = payload.target.strip()
+    ticker = (payload.ticker or "").strip()
+    if not target:
+        raise HTTPException(400, "品牌名不能为空")
+    new_symbol = ticker or target
+    existing = db.query(SentimentAccountORM).filter_by(user_id=owner_user_id).all()
+    if any(account_symbol(a) == new_symbol for a in existing):
+        raise HTTPException(409, f"「{new_symbol}」已在监测中,请勿重复添加")
 
     flat_keywords = _resolve_keywords_for_storage(
         payload.keywords, payload.keyword_groups, payload.keywords,
     )
     acc = SentimentAccountORM(
-        user_id=current_user.id,
-        target=payload.target,
-        ticker=payload.ticker,
+        user_id=owner_user_id,
+        target=target,
+        ticker=ticker,
         aliases_json=json.dumps(payload.aliases, ensure_ascii=False),
         intent=payload.intent,
         keywords_json=json.dumps(flat_keywords, ensure_ascii=False),
@@ -211,16 +334,31 @@ def create_account(
         notify_emails_json=json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False),
         weixin_album_urls_json=json.dumps(payload.weixin_album_urls, ensure_ascii=False),
         newsnow_sources_json=json.dumps(payload.newsnow_sources, ensure_ascii=False),
+        run_hour=payload.run_hour,
         active=True,
         last_run_status="pending" if payload.run_now else None,
     )
     db.add(acc)
+    db.flush()
+    _, operation = create_operation_context(
+        db, current_user, owner_user_id,
+        action="sentiment.account.create",
+        target_resource_type="sentiment_account",
+        target_resource_id=acc.id,
+    )
+    append_system_audit(
+        db, operation_context=operation, event_type="resource_created",
+        action="sentiment.account.create", object_type="sentiment_account",
+        object_id=acc.id, result="success",
+    )
     db.commit()
     db.refresh(acc)
 
     if payload.run_now:
         log.info("[sentiment] queue first_run for account %s", acc.id)
-        background_tasks.add_task(run_pipeline_for_account, acc.id, "first_run")
+        background_tasks.add_task(
+            submit_pipeline, acc.id, "first_run", False, operation.id,
+        )
 
     return SentimentAccountOut.from_orm_row(acc)
 
@@ -231,7 +369,7 @@ def get_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    acc = _get_account_or_404(db, account_id, current_user.id)
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
     return SentimentAccountOut.from_orm_row(acc)
 
 
@@ -243,11 +381,32 @@ def update_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """改账号配置,如果关键词/intent/aliases 变化则自动入队重跑."""
-    acc = _get_account_or_404(db, account_id, current_user.id)
+    """Change account config; if keywords/intent/aliases change, automatically enqueue a rerun."""
+    acc = _get_account_or_404(db, account_id, current_user)
+    if payload.target is not None:
+        payload.target = payload.target.strip()
+        if not payload.target:
+            raise HTTPException(400, "品牌名不能为空")
+    if payload.ticker is not None:
+        payload.ticker = payload.ticker.strip()
     rerun = _has_meaningful_change(acc, payload)
 
+    # Check uniqueness before assignment: checking after the change lets autoflush flush the dirty data first,
+    # and hitting uq_user_target_ticker becomes a 500 with no explanation.
+    new_target = payload.target if payload.target is not None else acc.target
+    new_ticker = payload.ticker if payload.ticker is not None else acc.ticker
+    new_symbol = (new_ticker or "").strip() or (new_target or "").strip()
+    others = (
+        db.query(SentimentAccountORM)
+          .filter(SentimentAccountORM.user_id == acc.user_id,
+                  SentimentAccountORM.id != acc.id)
+          .all()
+    )
+    if any(account_symbol(a) == new_symbol for a in others):
+        raise HTTPException(409, f"「{new_symbol}」已在监测中,请勿重复添加")
+
     if payload.target is not None: acc.target = payload.target
+    # "" is a valid value (changing a listed entity back to unlisted); only None means "leave this column alone"
     if payload.ticker is not None: acc.ticker = payload.ticker
     if payload.aliases is not None: acc.aliases_json = json.dumps(payload.aliases, ensure_ascii=False)
     if payload.intent is not None: acc.intent = payload.intent
@@ -256,14 +415,15 @@ def update_account(
         acc.media_allowlist_json = json.dumps(payload.media_allowlist, ensure_ascii=False)
     if payload.notify_emails is not None:
         acc.notify_emails_json = json.dumps([str(e) for e in payload.notify_emails], ensure_ascii=False)
+    if payload.run_hour is not None: acc.run_hour = payload.run_hour
     if payload.weixin_album_urls is not None:
         acc.weixin_album_urls_json = json.dumps(payload.weixin_album_urls, ensure_ascii=False)
     if payload.newsnow_sources is not None:
         acc.newsnow_sources_json = json.dumps(payload.newsnow_sources, ensure_ascii=False)
     if payload.active is not None: acc.active = payload.active
 
-    # keyword_groups 变化时,优先以 group 为准重算 keywords_json;
-    # 否则若客户端只传 keywords 就保留旧逻辑.
+    # When keyword_groups changes, recompute keywords_json from groups first;
+    # otherwise if the client only sends keywords, keep the old logic.
     if payload.keyword_groups is not None:
         acc.keyword_groups_json = json.dumps(
             [g.model_dump(exclude_none=True) for g in payload.keyword_groups],
@@ -275,9 +435,33 @@ def update_account(
     elif payload.keywords is not None:
         acc.keywords_json = json.dumps(payload.keywords, ensure_ascii=False)
 
-    if rerun and acc.active:
+    # If a round is already queued (pending) or running, do not queue another:
+    #   - the pending round **has not started**; when it starts it reads the latest config from this submission,
+    #     so queuing another is pure duplicate work (and it would run a whole extra round afterwards, not merge);
+    #   - even if queued during running, the reentrancy guard at the start of run_pipeline_for_account would skip it immediately.
+    # Before this dedup, "change one term and click save" = queue a batch run, and clicking several times stacked several rounds.
+    # Note /run-now deliberately does **not** dedupe — it is the escape hatch in case pending gets stuck.
+    if rerun and acc.active and acc.last_run_status not in ("pending", "running"):
         acc.last_run_status = "pending"
-        background_tasks.add_task(run_pipeline_for_account, acc.id, "manual")
+        _, operation = create_resource_operation_context(
+            db,
+            current_user,
+            acc,
+            action="sentiment.run",
+            target_resource_type="sentiment_account",
+        )
+        append_system_audit(
+            db,
+            operation_context=operation,
+            event_type="task_created",
+            action="sentiment.run",
+            object_type="sentiment_account",
+            object_id=acc.id,
+            result="success",
+        )
+        background_tasks.add_task(
+            submit_pipeline, acc.id, "manual", False, operation.id,
+        )
 
     db.commit()
     db.refresh(acc)
@@ -290,13 +474,13 @@ def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    acc = _get_account_or_404(db, account_id, current_user.id)
+    acc = _get_account_or_404(db, account_id, current_user)
     db.delete(acc)
     db.commit()
     return None
 
 
-# ─────────────────────────── 任务状态 / 手动触发 ────────────────
+# ─────────────────────────── Task status / manual trigger ────────────────
 
 
 @router.get("/accounts/{account_id}/run-status", response_model=RunStatusOut)
@@ -305,8 +489,8 @@ def get_run_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """前端"手动刷新"时调这个看任务进展."""
-    acc = _get_account_or_404(db, account_id, current_user.id)
+    """Called on the frontend's "manual refresh" to check task progress."""
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
     return RunStatusOut(
         status=acc.last_run_status,
         last_run_at=_as_utc(acc.last_run_at),
@@ -321,14 +505,33 @@ def run_now(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """用户点"重试"或"立即跑一次"按钮时调."""
-    acc = _get_account_or_404(db, account_id, current_user.id)
+    """Called when the user clicks the "retry" or "run once now" button."""
+    acc = _get_account_or_404(db, account_id, current_user)
     if acc.last_run_status == "running":
         raise HTTPException(409, "task already running, please wait")
 
+    # Unified call gate (internal unlimited, external limited by tier); both write a call_audit row
+    from geo.services.call_policy import CallDenied, CallerRef, enforce
+    try:
+        enforce(db, CallerRef(channel="web", account_id=current_user.id, user_id=current_user.id),
+                "sentiment_run_now", endpoint="/api/sentiment/accounts/{id}/run-now")
+    except CallDenied as e:
+        raise HTTPException(e.code, e.reason)
+
+    _, operation = create_resource_operation_context(
+        db, current_user, acc,
+        action="sentiment.run", target_resource_type="sentiment_account",
+    )
+    append_system_audit(
+        db, operation_context=operation, event_type="task_created",
+        action="sentiment.run", object_type="sentiment_account",
+        object_id=acc.id, result="success",
+    )
     acc.last_run_status = "pending"
     db.commit()
-    background_tasks.add_task(run_pipeline_for_account, account_id, "manual")
+    background_tasks.add_task(
+        submit_pipeline, account_id, "manual", False, operation.id,
+    )
     return {"queued": True}
 
 
@@ -339,8 +542,8 @@ def list_run_logs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """任务执行历史(用于排障)."""
-    _get_account_or_404(db, account_id, current_user.id)
+    """Task execution history (for troubleshooting)."""
+    _get_account_or_404(db, account_id, current_user, ACTION_READ)
     rows = (
         db.query(SentimentRunLogORM)
           .filter_by(account_id=account_id)
@@ -358,17 +561,34 @@ def list_run_logs(
     ]
 
 
-# ─────────────────────────── 数据查询(代理 sentinel-service)─
+@router.get("/accounts/{account_id}/websearch-latest")
+def get_websearch_latest(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Read the latest Yuanbao WebSearch sentiment quick-check result."""
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
+    report = _proxy(sentinel_client.get_websearch_latest, account_id, acc.symbol)
+    return {
+        **report,
+        "status": acc.last_run_status,
+        "error": acc.last_run_error,
+        "last_run_at": _as_utc(acc.last_run_at),
+    }
+
+
+# ─────────────────────────── Data queries (proxying sentinel-service) ─
 
 
 def _proxy(fn, *args, **kwargs):
-    """统一处理 sentinel-service 错误.
+    """Unified handling of sentinel-service errors.
 
-    区分三类,避免把"上游报错"误显示成"服务连不上":
-      - SentinelError          → 502,sentinel 业务失败(status=failed)
-      - httpx.HTTPStatusError  → 502,sentinel 返回了 4xx/5xx(端点 bug / 数据问题),
-                                  透出上游状态码 + 响应片段便于排障
-      - 连接/超时类异常         → 503,sentinel 真正不可达
+    Three cases are distinguished, to avoid showing "upstream error" as "service unreachable":
+      - SentinelError          → 502, sentinel business failure (status=failed)
+      - httpx.HTTPStatusError  → 502, sentinel returned 4xx/5xx (endpoint bug / data issue),
+                                  exposing the upstream status code + response snippet for troubleshooting
+      - connection/timeout errors → 503, sentinel truly unreachable
     """
     try:
         return fn(*args, **kwargs)
@@ -389,25 +609,29 @@ def _proxy(fn, *args, **kwargs):
         raise HTTPException(502, f"sentinel proxy error: {e}") from e
 
 
+# The 4 data proxies below all take a `ticker` query parameter — **accepted but unused**.
+# symbol always comes from the server-side `acc.symbol` (= stock ticker, or the brand name if empty):
+# what the client sends should not decide whose data can be read, and since the ticker became optional the frontend may well send an empty string,
+# in which case sentinel would query symbol='' and always get 0 rows. The parameter is kept only for old-frontend compatibility.
 @router.get("/accounts/{account_id}/posts")
 def proxy_posts(
-    account_id: int, ticker: str,
+    account_id: int, ticker: Optional[str] = None,
     limit: int = 50, offset: int = 0, days: int = 1,
     start: Optional[str] = None, end: Optional[str] = None,
     sort_by: str = "newest",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """文章列表 + 分页 + 排序。
+    """Article list + paging + sorting.
 
-    时间过滤(基于 ingested_at):start/end (YYYY-MM-DD,闭区间) 优先,
-    否则按 days(1=今日,N>1=最近 N 天,0=全部历史)。
-    排序:sort_by(详见 sentinel-service /posts 接口)。
+    Time filter (on ingested_at): start/end (YYYY-MM-DD, inclusive) take precedence,
+    otherwise days (1 = today, N>1 = last N days, 0 = all history).
+    Sorting: sort_by (see the sentinel-service /posts endpoint).
     """
-    _get_account_or_404(db, account_id, current_user.id)
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
     return _proxy(
         sentinel_client.list_posts,
-        account_id, ticker,
+        account_id, acc.symbol,
         limit=limit, days=days, offset=offset, start=start, end=end,
         sort_by=sort_by,
     )
@@ -415,12 +639,12 @@ def proxy_posts(
 
 @router.get("/accounts/{account_id}/briefs")
 def proxy_briefs(
-    account_id: int, ticker: str,
+    account_id: int, ticker: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_account_or_404(db, account_id, current_user.id)
-    return _proxy(sentinel_client.list_briefs, account_id, ticker)
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
+    return _proxy(sentinel_client.list_briefs, account_id, acc.symbol)
 
 
 @router.get("/accounts/{account_id}/briefs/{brief_id}")
@@ -429,39 +653,39 @@ def proxy_brief_detail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_account_or_404(db, account_id, current_user.id)
+    _get_account_or_404(db, account_id, current_user, ACTION_READ)
     return _proxy(sentinel_client.get_brief, account_id, brief_id)
 
 
 @router.get("/accounts/{account_id}/drafts")
 def proxy_drafts(
-    account_id: int, ticker: str,
+    account_id: int, ticker: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_account_or_404(db, account_id, current_user.id)
-    return _proxy(sentinel_client.list_drafts, account_id, ticker)
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
+    return _proxy(sentinel_client.list_drafts, account_id, acc.symbol)
 
 
 @router.get("/accounts/{account_id}/today")
 def proxy_today(
-    account_id: int, ticker: str, days: int = 7,
+    account_id: int, ticker: Optional[str] = None, days: int = 7,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Tab 1 聚合数据 — KPI/趋势/风险分布/最新简报/Top5."""
-    _get_account_or_404(db, account_id, current_user.id)
-    return _proxy(sentinel_client.get_today, account_id, ticker, days)
+    """Tab 1 aggregate data — KPIs/trends/risk distribution/latest brief/Top 5."""
+    acc = _get_account_or_404(db, account_id, current_user, ACTION_READ)
+    return _proxy(sentinel_client.get_today, account_id, acc.symbol, days)
 
 
-# ─────────────────── newsnow 实时热点(不绑 account)──────────────
+# ─────────────────── newsnow real-time trending (not bound to an account) ──────────────
 
 
 @router.get("/newsnow/sources")
 def proxy_newsnow_sources(
     current_user: User = Depends(get_current_user),
 ):
-    """newsnow 推荐源目录(静态)。仅要求登录,不绑 account。"""
+    """newsnow recommended source catalog (static). Requires login only, not bound to an account."""
     return _proxy(sentinel_client.list_newsnow_sources)
 
 
@@ -470,11 +694,11 @@ def proxy_newsnow_hot(
     source: str, limit: int = 30,
     current_user: User = Depends(get_current_user),
 ):
-    """指定 source 当前热榜(实时新闻 / 今日热点用)。"""
+    """Current trending list of the given source (for real-time news / today's hot topics)."""
     return _proxy(sentinel_client.get_newsnow_hot, source, limit)
 
 
-# ─────────────────────────── 草稿生成 ────────────────────────
+# ─────────────────────────── Draft generation ────────────────────────
 
 
 class GenerateDraftRequest(BaseModel):
@@ -491,8 +715,8 @@ def generate_draft(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """同步调用,等 LLM 返回(5-10 秒)."""
-    acc = _get_account_or_404(db, payload.account_id, current_user.id)
+    """Synchronous call, waits for the LLM to return (5-10 seconds)."""
+    acc = _get_account_or_404(db, payload.account_id, current_user)
     if not (payload.post_id or payload.topic):
         raise HTTPException(400, "post_id 或 topic 至少传一个")
 
@@ -504,14 +728,14 @@ def generate_draft(
 
     return _proxy(
         sentinel_client.run_respond,
-        account_id=acc.id, ticker=acc.ticker,
+        account_id=acc.id, ticker=acc.symbol,
         source=payload.source, post_id=payload.post_id,
         topic=payload.topic, situation=payload.situation,
         knowledge=knowledge or None,
     )
 
 
-# ─────────────────────────── 知识库 ────────────────────────
+# ─────────────────────────── Knowledge base ────────────────────────
 
 
 VALID_KNOWLEDGE_KEYS = {"brand_voice", "legal_redlines", "response_playbook"}
@@ -523,7 +747,7 @@ def list_knowledge(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_account_or_404(db, account_id, current_user.id)
+    _get_account_or_404(db, account_id, current_user, ACTION_READ)
     rows = db.query(SentimentKnowledgeORM).filter_by(account_id=account_id).all()
     return [KnowledgeOut(key=r.key, body=r.body, updated_at=r.updated_at) for r in rows]
 
@@ -540,7 +764,7 @@ def upsert_knowledge(
 ):
     if key not in VALID_KNOWLEDGE_KEYS:
         raise HTTPException(400, f"key must be one of {VALID_KNOWLEDGE_KEYS}")
-    _get_account_or_404(db, account_id, current_user.id)
+    _get_account_or_404(db, account_id, current_user)
 
     row = db.query(SentimentKnowledgeORM).filter_by(account_id=account_id, key=key).first()
     if row:
@@ -557,12 +781,12 @@ def upsert_knowledge(
     return KnowledgeOut(key=row.key, body=row.body, updated_at=row.updated_at)
 
 
-# ─────────────────────────── 健康检查 ────────────────────────
+# ─────────────────────────── Health check ────────────────────────
 
 
 @router.get("/health")
 def health(current_user: User = Depends(get_current_user)):
-    """转发 sentinel-service 健康状态."""
+    """Forward sentinel-service health status."""
     try:
         upstream = sentinel_client.health()
         return {"status": "ok", "sentinel": upstream}

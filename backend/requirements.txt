@@ -5,24 +5,36 @@ pydantic-settings==2.1.0
 python-multipart>=0.0.30
 requests>=2.32.4
 beautifulsoup4==4.12.2
+# markdown -> HTML for publish bodies (geo/services/aitoearn_publisher.py:_md_to_html).
+# Replaced the hand-written regex version on 2026-08-14: that one dropped links/bold/lists/tables. bleach is its allowlist sanitizer;
+# the two are a pair, don't install only one -- without bleach you'd be sending unsanitized HTML to platforms.
+Markdown==3.10.3
+bleach==6.4.0
 passlib[bcrypt]==1.7.4
 PyJWT[crypto]>=2.10.1
 sqlalchemy==2.0.23
 alembic==1.13.0
+# DATABASE_URL is postgresql+psycopg://; without it SQLAlchemy can't start.
+# It was always missing here -- the test host's venv had it hand-installed (3.3.4); it only surfaced when building the image from requirements.
+psycopg[binary]>=3.1
 aiofiles==23.2.1
 aiohttp>=3.14.3
 python-dotenv>=1.2.2
 stripe==9.12.0
 redis>=5.0
-httpx>=0.25.0
+# Lower bound 0.26: the code uses the singular `httpx.Client(proxy=...)`, introduced only in 0.26.
+# No upper bound: the old `<0.28` cap only existed for starlette 0.27's TestClient (FastAPI 0.104.1);
+# with FastAPI >= 0.115 the test suite passes on httpx 0.28.
+httpx>=0.26.0
 cryptography>=41.0
 playwright>=1.44.0
+pillow>=10.0.0
+boto3>=1.34            # shared media storage (MinIO / S3): services/media_storage, GEO_MEDIA_BACKEND=s3
 apscheduler>=3.10.4
 python-docx>=1.1.0
 pypdf>=4.0.0
-# GEO 优化 Agent(对话式)— Pydantic AI(大脑走 DeepSeek/OpenRouter,OpenAI 兼容)
-# ⚠️ 暂不放主后端 requirements:pydantic-ai>=1.0 需 pydantic>=2.11,而本环境 FastAPI 0.104.1
-#    只兼容 pydantic<2.11(2026-06-04 实测:装它会升 pydantic 到 2.13 → FastAPI 路由解析崩、
-#    后端起不来)。启用 agent 前必须先把 FastAPI 升到兼容 pydantic>=2.11 的版本(≥0.115),
-#    或把 agent 跑在独立 venv/进程(隔离 pydantic 版本)。届时再取消下行注释:
+# GEO optimization Agent (conversational) -- Pydantic AI (brain via DeepSeek/OpenRouter, OpenAI-compatible)
+# ⚠️ Not in the main backend requirements: pydantic-ai>=1.0 needs pydantic>=2.11, while this environment pins pydantic 2.5.0
+#    (installing it upgrades pydantic and can break the main backend). The agent runs in its own venv/process
+#    with requirements-agent.txt instead. Only uncomment the line below after moving the main backend to pydantic>=2.11:
 # pydantic-ai-slim[openai]>=1.0,<2

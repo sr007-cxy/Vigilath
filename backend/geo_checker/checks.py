@@ -112,13 +112,15 @@ def check_robots_txt(base_url):
     if wildcard_blocks_all:
         emit_check(WARN, "result.checks.robots.wildcard_blocks_all", "Wildcard user-agent blocks all crawlers (Disallow: /)")
         emit_fix("result.fixes.robots.unblock_wildcard", "Change 'Disallow: /' under 'User-agent: *' to 'Allow: /' if you want AI crawlers to index your site.\nYou can selectively block specific bots while allowing others.")
+    # AI crawler user-agents are matched by name internally (AI_BOTS) but never
+    # named in the output — the result page reports aggregate counts only.
     if blocked:
-        emit_check(WARN, "result.checks.robots.bots_blocked", f"AI bots explicitly BLOCKED: {', '.join(blocked)}", {"bots": ", ".join(blocked)})
-        emit_fix("result.fixes.robots.unblock_bots", "To allow these AI bots, remove or modify their Disallow directives in robots.txt.\nExample to allow GPTBot:\n  User-agent: GPTBot\n  Allow: /")
+        emit_check(WARN, "result.checks.robots.bots_blocked", f"AI crawler rules: {len(blocked)} user-agent(s) explicitly blocked", {"count": len(blocked)})
+        emit_fix("result.fixes.robots.unblock_bots", "To allow these AI crawlers, remove or relax their Disallow directives in robots.txt.\nExample:\n  User-agent: <crawler-name>\n  Allow: /")
     if allowed:
-        emit_check(PASS, "result.checks.robots.bots_with_directives", f"AI bots with directives (not blocked): {', '.join(allowed)}", {"bots": ", ".join(allowed)})
+        emit_check(PASS, "result.checks.robots.bots_with_directives", f"AI crawler rules: {len(allowed)} user-agent(s) explicitly allowed", {"count": len(allowed)})
     if not_mentioned:
-        emit_check(INFO, "result.checks.robots.bots_inherit_wildcard", f"AI bots not mentioned (inherit wildcard rules): {', '.join(not_mentioned)}", {"bots": ", ".join(not_mentioned)})
+        emit_check(INFO, "result.checks.robots.bots_inherit_wildcard", f"AI crawler rules: {len(not_mentioned)} user-agent(s) inherit the wildcard rule", {"count": len(not_mentioned)})
 
     # Score: 3 pts for AI bot access
     total_bots = len(AI_BOTS)
@@ -154,8 +156,8 @@ def check_robots_txt(base_url):
                  "  # Allow search indexing for AI answers\n"
                  "  User-Agent: *\n"
                  "  Allow: /\n"
-                 "  # Opt out of training\n"
-                 "  User-Agent: GPTBot\n"
+                 "  # Opt out of training for a specific crawler\n"
+                 "  User-Agent: <crawler-name>\n"
                  "  Disallow: /private/\n"
                  "This communicates a deliberate allow-for-citation / opt-out-of-training stance.")
         track_score("robots.txt", 0, 2)
@@ -171,13 +173,21 @@ def check_llms_txt(base_url):
     for filename in ["llms.txt", "llms-full.txt", ".well-known/llms.txt"]:
         url = urljoin(base_url, f"/{filename}")
         resp = fetch(url)
-        if resp and resp.status_code == 200 and len(resp.text.strip()) > 0:
+        # SPA / catch-all servers return index.html (HTTP 200) for unknown paths
+        # (soft-200). That HTML is not an llms.txt — parsing it emits bogus
+        # "no title / no sections" WARNs. Sniff the body and treat HTML as not-found.
+        body_head = resp.text[:512].lstrip().lower() if resp else ""
+        is_html = body_head.startswith("<!doctype html") or body_head.startswith("<html")
+        if resp and resp.status_code == 200 and len(resp.text.strip()) > 0 and not is_html:
             text = resp.text.strip()
             lines = text.splitlines()
-            emit_check(PASS, "result.checks.llms.found", f"{filename} found ({len(lines)} lines, {len(text)} bytes)", {"filename": filename, "lines": len(lines), "bytes": len(text)})
+            byte_len = len(text.encode("utf-8"))  # len(text) is characters; CJK is 3 bytes/char
+            emit_check(PASS, "result.checks.llms.found", f"{filename} found ({len(lines)} lines, {byte_len} bytes)", {"filename": filename, "lines": len(lines), "bytes": byte_len})
 
             has_title = any(line.strip().startswith("# ") for line in lines)
-            has_description = len([l for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith(">") and not l.strip().startswith("-")]) > 0
+            # llms.txt spec puts the summary in a `> ` blockquote — count that as a description,
+            # otherwise fall back to any plain prose line (non-#/>/- )
+            has_description = any(l.strip().startswith("> ") for l in lines) or len([l for l in lines if l.strip() and not l.strip().startswith("#") and not l.strip().startswith(">") and not l.strip().startswith("-")]) > 0
             has_sections = any(line.strip().startswith("## ") for line in lines)
             has_links = any(
                 "](http" in line or "](/" in line
@@ -221,11 +231,15 @@ def check_llms_txt(base_url):
             if has_blockquotes:
                 emit_check(PASS, "result.checks.llms.blockquotes_present", "Blockquote descriptions (>) present")
 
-            if len(text) < 100:
-                emit_check(WARN, "result.checks.llms.too_short", f"File is very short ({len(text)} bytes) — may be a placeholder", {"bytes": len(text)})
+            # Only flag as a possible placeholder when it's both small AND structurally thin —
+            # a complete-but-concise file (title + sections + links) is not a placeholder
+            if byte_len < 100 and not (has_title and has_sections and has_links):
+                emit_check(WARN, "result.checks.llms.too_short", f"File is very short ({byte_len} bytes) — may be a placeholder", {"bytes": byte_len})
                 emit_fix("result.fixes.llms.expand_content", "Expand the file with meaningful content about your site, its purpose, key pages, and resources.")
         else:
-            emit_check(FAIL, "result.checks.llms.file_not_found", f"{filename} not found", {"filename": filename})
+            # llms.txt is the required file (FAIL); llms-full.txt and .well-known/llms.txt are optional (INFO)
+            severity = FAIL if filename == "llms.txt" else INFO
+            emit_check(severity, "result.checks.llms.file_not_found", f"{filename} not found", {"filename": filename})
             if filename == "llms.txt":
                 emit_fix("result.fixes.llms.create_file", "Create an llms.txt file at your site root. Example structure:\n  # Your Site Name\n  A brief description of your site.\n  \n  ## Documentation\n  > Overview of your docs\n  - [Getting Started](https://yoursite.com/docs/start)\n  \n  ## API\n  > API reference\n  - [API Docs](https://yoursite.com/api)")
             elif filename == "llms-full.txt":
@@ -241,10 +255,10 @@ def check_well_known(base_url):
     print("\n--- .well-known Discovery ---")
 
     well_known_files = {
-        ".well-known/ai-plugin.json": "OpenAI plugin manifest (ChatGPT plugins)",
-        ".well-known/openai.yaml": "OpenAI API spec for plugins",
+        ".well-known/ai.txt": "AI crawler policy declaration",
+        ".well-known/llms.txt": "LLM-facing content index",
         ".well-known/security.txt": "Security contact info (trust signal for AI engines)",
-        ".well-known/gpc.json": "Global Privacy Control signal",
+        ".well-known/gpc.json": "Privacy control signal",
     }
 
     found_any = False
@@ -265,7 +279,7 @@ def check_well_known(base_url):
                 emit_check(INFO, "result.checks.well_known.file_not_found", f"{path} not found — {description} (server returned HTML fallback)", {"path": path, "description": description})
                 continue
             try:
-                data = json.loads(resp.text)
+                json.loads(resp.text)  # validity probe only
             except json.JSONDecodeError:
                 emit_check(WARN, "result.checks.well_known.invalid_json", f"{path} exists but contains invalid JSON", {"path": path})
                 emit_fix("result.fixes.well_known.fix_invalid_json", f"Validate and fix the JSON in {path} — use a JSON linter to check for syntax errors.", {"path": path})
@@ -275,9 +289,6 @@ def check_well_known(base_url):
             found_any = True
             wk_found += 1
             emit_check(PASS, "result.checks.well_known.file_found", f"{path} found — {description}", {"path": path, "description": description})
-            if path.endswith("ai-plugin.json"):
-                name = data.get("name_for_human", data.get("name", "unknown"))
-                print(f"         Plugin name: {name}")
         else:
             found_any = True
             wk_found += 1
@@ -334,7 +345,7 @@ def check_sitemap(base_url):
 
     if not found:
         emit_check(FAIL, "result.checks.sitemap.not_found", "No sitemap.xml found")
-        emit_fix("result.fixes.sitemap.create_file", "Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms (WordPress, Next.js, etc.) can auto-generate sitemaps.")
+        emit_fix("result.fixes.sitemap.create_file", "Create a sitemap.xml at your site root. Example:\n  <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n  <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n    <url>\n      <loc>https://yoursite.com/</loc>\n      <lastmod>2025-01-15</lastmod>\n    </url>\n  </urlset>\nMost CMS platforms and site frameworks can auto-generate sitemaps.")
         track_score("Sitemap", 0, 7)
 
     return sitemap_urls
@@ -343,6 +354,35 @@ def check_sitemap(base_url):
 # ---------------------------------------------------------------------------
 # 5b. Search Engine & AI Platform Registration
 # ---------------------------------------------------------------------------
+def _dns_txt_records(domain, timeout=8):
+    """Fetch a domain's TXT records via DNS-over-HTTPS (stdlib + requests only,
+    no extra dependency). Returns a list of TXT strings; empty on any failure.
+
+    Used to detect search-console ownership proven by DNS (e.g. a
+    ``google-site-verification=...`` TXT record) rather than a homepage meta tag.
+    """
+    records = []
+    for doh in ("https://dns.google/resolve",
+                "https://cloudflare-dns.com/dns-query"):
+        try:
+            r = requests.get(
+                doh,
+                params={"name": domain, "type": "TXT"},
+                headers={"Accept": "application/dns-json"},
+                timeout=timeout,
+            )
+            if r.status_code != 200:
+                continue
+            for ans in r.json().get("Answer", []):
+                # DoH returns TXT data wrapped in quotes; strip them.
+                records.append(str(ans.get("data", "")).strip().strip('"'))
+            if records:
+                break
+        except Exception:
+            continue
+    return records
+
+
 def check_search_engine_registration(base_url):
     """Check for signs that the site is registered with search engines and AI platforms."""
     print("\n--- Search Engine & AI Platform Registration ---")
@@ -352,85 +392,93 @@ def check_search_engine_registration(base_url):
         track_score("Platform Registration", 0, 7)
         return
 
-    # Google Search Console verification
+    # Primary webmaster platform verification — ownership can be proven via meta
+    # tag, DNS TXT record, or an HTML file. We detect the first two (the file is
+    # hash-named so can't be probed blindly); any one counts as verified.
     google_verify = soup.find("meta", attrs={"name": "google-site-verification"})
     if google_verify and google_verify.get("content"):
-        emit_check(PASS, "result.checks.platform_reg.gsc_verified", "Google Search Console verification tag found")
+        gsc_verified = True
+        emit_check(PASS, "result.checks.platform_reg.gsc_verified", "Primary webmaster platform verification tag found")
+    elif any("google-site-verification=" in t for t in _dns_txt_records(urlparse(base_url).netloc)):
+        gsc_verified = True
+        emit_check(PASS, "result.checks.platform_reg.gsc_verified_dns", "Primary webmaster platform verified via DNS TXT record")
     else:
-        # Check for verification file
-        gsc_resp = fetch(urljoin(base_url, "/google*.html"), timeout=5)
-        # Can't glob on server, so just note the absence
-        emit_check(WARN, "result.checks.platform_reg.gsc_missing", "No Google Search Console verification tag found")
-        emit_fix("result.fixes.search_reg.google_console", "Register your site with Google Search Console (https://search.google.com/search-console):\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml under Sitemaps\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — Google's AI Overviews and SGE pull from the Google index.")
+        gsc_verified = False
+        emit_check(WARN, "result.checks.platform_reg.gsc_missing", "No primary webmaster platform verification tag found")
+        emit_fix("result.fixes.search_reg.google_console", "Register your site with a search engine webmaster platform:\n  1. Add your property (URL prefix or domain)\n  2. Verify ownership via meta tag, DNS, or HTML file\n  3. Submit your sitemap.xml\n  4. Monitor indexing status and fix any crawl errors\nThis is critical — the search index is a primary retrieval source for AI answers.")
 
-    # Bing Webmaster Tools verification
+    # Second webmaster platform — meta tag OR the site-auth XML file
+    # (the XML-file method is a standard ownership proof).
     bing_verify = soup.find("meta", attrs={"name": "msvalidate.01"})
     if bing_verify and bing_verify.get("content"):
-        emit_check(PASS, "result.checks.platform_reg.bing_verified", "Bing Webmaster Tools verification tag found")
+        bing_verified = True
+        emit_check(PASS, "result.checks.platform_reg.bing_verified", "Second webmaster platform verification tag found")
     else:
-        emit_check(WARN, "result.checks.platform_reg.bing_missing", "No Bing Webmaster Tools verification tag found")
-        emit_fix("result.fixes.search_reg.bing_webmaster", "Register your site with Bing Webmaster Tools (https://www.bing.com/webmasters):\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This is essential — Bing's index powers Microsoft Copilot, ChatGPT (via Bing search),\n     and other AI assistants that use Bing as their search backend.")
+        bing_auth = fetch(urljoin(base_url, "/BingSiteAuth.xml"), timeout=5)
+        if bing_auth is not None and bing_auth.status_code == 200 and "<user>" in bing_auth.text:
+            bing_verified = True
+            emit_check(PASS, "result.checks.platform_reg.bing_verified_file", "Second webmaster platform verified via site-auth file")
+        else:
+            bing_verified = False
+            emit_check(WARN, "result.checks.platform_reg.bing_missing", "No second webmaster platform verification tag found")
+            emit_fix("result.fixes.search_reg.bing_webmaster", "Register your site with a second search engine webmaster platform:\n  1. Add your site and verify ownership\n  2. Submit your sitemap.xml\n  3. This matters — several AI assistants use a search index as their retrieval backend.")
 
-    # Yandex verification (feeds into some AI systems)
-    yandex_verify = soup.find("meta", attrs={"name": "yandex-verification"})
-    if yandex_verify and yandex_verify.get("content"):
-        emit_check(PASS, "result.checks.platform_reg.yandex_verified", "Yandex Webmaster verification tag found")
+    # Domestic webmaster platform verification meta tags (informational, unscored).
+    # The `yandex_*` i18n keys are kept on purpose: historical audit records store exactly these two keys,
+    # and changing keys would make old records fall back to the English original. The copy in zh-result.ts has been changed to CN wording.
+    cn_verify_metas = [
+        "baidu-site-verification", "baidu_union_verify",
+        "360-site-verification", "sogou_site_verification",
+        "shenma-site-verification",
+    ]
+    if any(soup.find("meta", attrs={"name": m}) for m in cn_verify_metas):
+        emit_check(PASS, "result.checks.platform_reg.yandex_verified", "Domestic webmaster platform verification tag found")
     else:
-        emit_check(INFO, "result.checks.platform_reg.yandex_missing", "No Yandex Webmaster verification tag — relevant if targeting international AI platforms")
+        emit_check(INFO, "result.checks.platform_reg.yandex_missing", "No domestic webmaster platform verification tag detected")
 
-    # IndexNow support — check for key file
+    # Instant index push support — check for the key file
     indexnow_found = False
-    # Check for IndexNow key in common locations
+    # Check for the push key in common locations
     for key_path in ["/.well-known/indexnow", "/indexnow"]:
         inow_url = urljoin(base_url, key_path)
         inow_resp = fetch(inow_url, timeout=5)
         if inow_resp and inow_resp.status_code == 200 and len(inow_resp.text.strip()) > 0:
             indexnow_found = True
-            emit_check(PASS, "result.checks.platform_reg.indexnow_endpoint", f"IndexNow endpoint found at {key_path} — enables instant index notifications", {"path": key_path})
+            emit_check(PASS, "result.checks.platform_reg.indexnow_endpoint", f"Instant index push endpoint found at {key_path} — enables immediate index notifications", {"path": key_path})
             break
 
-    # Also check for IndexNow meta tag or key file pattern
+    # Also check for a push meta tag or key file pattern
     if not indexnow_found:
         # Some sites host the key as a text file at root
         indexnow_meta = soup.find("meta", attrs={"name": "indexnow"})
         if indexnow_meta:
             indexnow_found = True
-            emit_check(PASS, "result.checks.platform_reg.indexnow_meta", "IndexNow meta tag found")
+            emit_check(PASS, "result.checks.platform_reg.indexnow_meta", "Instant index push meta tag found")
 
     if not indexnow_found:
-        emit_check(INFO, "result.checks.platform_reg.indexnow_missing", "No IndexNow integration detected")
-        emit_fix("result.fixes.search_reg.indexnow", "Set up IndexNow for instant indexing by Bing, Yandex, and others:\n  1. Generate an API key at https://www.indexnow.org/\n  2. Host the key file at your site root: https://yoursite.com/{key}.txt\n  3. Notify search engines when content changes:\n     POST https://api.indexnow.org/indexnow\n     {\"host\": \"yoursite.com\", \"key\": \"your-key\", \"urlList\": [\"https://yoursite.com/updated-page\"]}\n  4. Many CMS plugins (WordPress, etc.) support IndexNow automatically.")
+        emit_check(INFO, "result.checks.platform_reg.indexnow_missing", "No instant index push integration detected")
+        emit_fix("result.fixes.search_reg.indexnow", "Set up instant index push so new content is picked up immediately:\n  1. Get a push token from your search engine's webmaster platform\n  2. Push each new or updated URL to the push endpoint after publishing\n  3. Also configure sitemap submission and auto-push JS as a fallback\n  4. Most CMS platforms have a ready-made plugin for this.")
 
-    # Check for Pinterest verification (some AI visual search)
-    pinterest_verify = soup.find("meta", attrs={"name": "p:domain_verify"})
-    if pinterest_verify:
-        emit_check(PASS, "result.checks.platform_reg.pinterest_verified", "Pinterest domain verification found")
-
-    # Summary / platform checklist
+    # Summary / registration checklist. Channel names are not emitted — the
+    # per-channel rows above already say which one is missing.
     print()
-    platforms = {
-        "Google Search Console": bool(google_verify and google_verify.get("content")),
-        "Bing Webmaster Tools": bool(bing_verify and bing_verify.get("content")),
-        "IndexNow": indexnow_found,
-    }
-    registered = [k for k, v in platforms.items() if v]
-    not_registered = [k for k, v in platforms.items() if not v]
+    channels = [gsc_verified, bing_verified, indexnow_found]
+    registered_count = sum(1 for v in channels if v)
+    missing_count = len(channels) - registered_count
 
-    if registered:
-        registered_text = ", ".join(registered)
-        emit_check(PASS, "result.checks.platform_reg.summary_registered", f"Registered: {registered_text}", {"platforms": registered_text})
-    if not_registered:
-        missing_text = ", ".join(not_registered)
-        emit_check(WARN, "result.checks.platform_reg.summary_missing", f"Not detected: {missing_text}", {"platforms": missing_text})
+    if registered_count:
+        emit_check(PASS, "result.checks.platform_reg.summary_registered", f"Registered: {registered_count}/{len(channels)} channels", {"count": registered_count, "total": len(channels)})
+    if missing_count:
+        emit_check(WARN, "result.checks.platform_reg.summary_missing", f"Not detected: {missing_count}/{len(channels)} channels", {"count": missing_count, "total": len(channels)})
 
-        emit_fix("result.fixes.search_reg.submit_all", "Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register and submit them to each platform:\n  \n  Google Search Console → Submit sitemap → Powers Google AI Overviews / SGE\n  Bing Webmaster Tools  → Submit sitemap → Powers Copilot, ChatGPT (Bing backend)\n  IndexNow              → Auto-notify   → Instant indexing for Bing, Yandex, Naver\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing.")
+        emit_fix("result.fixes.search_reg.submit_all", "Having files like sitemap.xml and robots.txt is not enough on its own.\nYou must also register on each webmaster platform and submit them:\n  \n  Webmaster platform → Submit sitemap → Feeds the search index behind AI answers\n  Instant push       → Auto-notify   → New content indexed within minutes\n  \nWithout registration, search engines may find your sitemap eventually via crawling,\nbut submission ensures faster, more reliable indexing.")
 
     reg_score = 0
-    if platforms.get("Google Search Console"):
+    if gsc_verified:
         reg_score += 3
-    if platforms.get("Bing Webmaster Tools"):
+    if bing_verified:
         reg_score += 3
-    if platforms.get("IndexNow"):
+    if indexnow_found:
         reg_score += 1
     track_score("Platform Registration", reg_score, 7)
 
@@ -544,7 +592,7 @@ def check_structured_data(base_url):
     else:
         emit_check(WARN, "result.checks.structured_data.jsonld_missing", "No JSON-LD structured data found — helps AI engines understand your content")
         track_score("Structured Data", 0, 7)
-        emit_fix("result.fixes.structured.add_organization_jsonld", "Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nUse Google's Rich Results Test to validate: https://search.google.com/test/rich-results")
+        emit_fix("result.fixes.structured.add_organization_jsonld", "Add JSON-LD structured data to your <head>. Example for an Organization:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"description\": \"What your company does\"\n  }\n  </script>\nValidate the markup with schema.org's official validator: https://validator.schema.org/")
 
     has_schema_ref = 'schema.org' in resp.text
     if has_schema_ref and not json_ld_scripts:
@@ -607,6 +655,8 @@ def check_meta_tags(base_url):
         emit_fix("result.fixes.meta.add_og", "Add the missing Open Graph tags in your <head>:\n  <meta property=\"og:title\" content=\"Page Title\" />\n  <meta property=\"og:description\" content=\"Page description\" />\n  <meta property=\"og:type\" content=\"website\" />\n  <meta property=\"og:url\" content=\"https://yoursite.com/page\" />\n  <meta property=\"og:image\" content=\"https://yoursite.com/image.jpg\" />\nog:image is what makes your logo/thumbnail appear when links are shared.")
     meta_score += (len(found_og) / len(required_og))
 
+    # Social share card meta tags. The tag names are matched internally but never
+    # echoed into the output — only how many of the four are present.
     required_tw = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"]
     present_tw = {}
     for tag in soup.find_all("meta"):
@@ -616,10 +666,10 @@ def check_meta_tags(base_url):
     found_tw = [name for name in required_tw if present_tw.get(name)]
     missing_tw = [name for name in required_tw if not present_tw.get(name)]
     if found_tw:
-        emit_check(PASS, "result.checks.meta.twitter_cards_found", f"Twitter Card tags present: {', '.join(found_tw)}", {"tags": ", ".join(found_tw)})
+        emit_check(PASS, "result.checks.meta.twitter_cards_found", f"Social share card tags present: {len(found_tw)}/{len(required_tw)}", {"count": len(found_tw), "total": len(required_tw)})
     if missing_tw:
-        emit_check(INFO, "result.checks.meta.twitter_cards_missing", f"Missing Twitter Card tags: {', '.join(missing_tw)} — improves X/Twitter link previews", {"missing": ", ".join(missing_tw)})
-        emit_fix("result.fixes.meta.add_twitter_cards", "Add Twitter Card meta tags in your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
+        emit_check(INFO, "result.checks.meta.twitter_cards_missing", f"Missing social share card tags: {len(missing_tw)}/{len(required_tw)} — they improve link previews when shared", {"count": len(missing_tw), "total": len(required_tw)})
+        emit_fix("result.fixes.meta.add_twitter_cards", "Add the social share card meta tags in your <head> — card type, title, description\nand cover image — so shared links render a full preview instead of a bare URL.")
 
     html_tag = soup.find("html")
     if html_tag and html_tag.get("lang"):
@@ -831,7 +881,7 @@ def check_ai_crawl_readiness(base_url):
         acr_score += 1
     elif elapsed < 3:
         emit_check(WARN, "result.checks.crawl_ready.response_slow", f"Response time: {elapsed:.2f}s — slow responses may cause AI crawlers to skip pages", {"seconds": f"{elapsed:.2f}"})
-        emit_fix("result.fixes.crawl_ready.improve_response_time", "Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN (Cloudflare, Fastly, CloudFront)\n  4. Enable gzip/brotli compression")
+        emit_fix("result.fixes.crawl_ready.improve_response_time", "Improve response time:\n  1. Enable server-side caching (Redis, Varnish, CDN)\n  2. Optimize database queries\n  3. Use a CDN\n  4. Enable gzip/brotli compression")
     else:
         emit_check(FAIL, "result.checks.crawl_ready.response_timeout", f"Response time: {elapsed:.2f}s — too slow for reliable AI crawling", {"seconds": f"{elapsed:.2f}"})
         emit_fix("result.fixes.crawl_ready.critical_response_time", "Response time is critically slow. AI crawlers may time out.\nImmediate actions:\n  1. Add a CDN in front of your origin server\n  2. Enable page caching at the server level\n  3. Profile your server-side code for bottlenecks\n  4. Consider static site generation for content pages")
@@ -1065,7 +1115,7 @@ def check_technical_crawlability(base_url):
             tc_score += 1
         elif http_version:
             emit_check(INFO, "result.checks.tech_crawl.http1_only", f"HTTP/{http_version} — consider upgrading to HTTP/2 or HTTP/3 for faster crawling", {"version": http_version})
-            emit_fix("result.fixes.tech_crawl.enable_http2", "Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or use a CDN like Cloudflare which enables HTTP/2 automatically.")
+            emit_fix("result.fixes.tech_crawl.enable_http2", "Enable HTTP/2 on your server for faster crawling:\n  Nginx: listen 443 ssl http2;\n  Apache: Protocols h2 http/1.1\n  Or put a CDN in front, which usually enables HTTP/2 automatically.")
     except Exception:
         emit_check(INFO, "result.checks.tech_crawl.http_unknown", "Could not determine HTTP version")
 
@@ -1080,10 +1130,10 @@ def check_technical_crawlability(base_url):
         if first_href:
             feed_url = urljoin(base_url, first_href)
     else:
-        # issue #13: 6 个 feed 路径并发 fetch(原来串行 6 × 5s timeout
-        # 最坏 30s)。对不存在 feed 的站点 baidu 这种 2-5s/404,并发后
-        # bound by 最慢一个,典型 2-3s。保留 break-on-first-match 语义:
-        # 按原列表顺序 pick 第一个命中的。
+        # issue #13: fetch the 6 feed paths concurrently (previously serial 6 x 5s timeout,
+        # worst case 30s). For sites without feeds, like baidu at 2-5s/404, concurrency is
+        # bound by the slowest one, typically 2-3s. Keeps break-on-first-match semantics:
+        # pick the first hit in the original list order.
         feed_paths = ["/feed", "/feed.xml", "/rss.xml", "/atom.xml", "/rss", "/blog/feed"]
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=len(feed_paths)) as _pool:
@@ -1132,7 +1182,7 @@ def check_technical_crawlability(base_url):
                         emit_check(INFO, "result.checks.tech_crawl.feed_excerpts", f"Feed provides excerpts (avg {int(avg)} words/item) — consider full content", {"avg_words": int(avg)})
                         emit_fix("result.fixes.tech_crawl.feed_full_content", "Publish full content in your feed rather than excerpts. AI agents that consume feeds\n"
                             "programmatically prefer complete text they can extract without following every link:\n"
-                            "  WordPress: Settings \u2192 Reading \u2192 'Full text' in feed\n"
+                            "  Most CMS: switch the feed setting from summary/excerpt to full text\n"
                             "  Custom: include <content:encoded> with the full post body")
                     else:
                         emit_check(WARN, "result.checks.tech_crawl.feed_headlines_only", f"Feed items are very short (avg {int(avg)} words) — mostly headlines", {"avg_words": int(avg)})
@@ -1152,9 +1202,9 @@ def check_technical_crawlability(base_url):
         ("/integrations", "Integrations page"),
         ("/developers", "Developer portal"),
     ]
-    # issue #13: 10 个 API 路径并发 fetch(原来串行 10 × 5s timeout
-    # 最坏 50s)。对 baidu 这种 10 × 404 ≈ 20s 串行,并发后 ~3s。
-    # 保留 break-after-3-matches 语义:按原列表顺序取前 3 个命中。
+    # issue #13: fetch the 10 API paths concurrently (previously serial 10 x 5s timeout,
+    # worst case 50s). For baidu, 10 x 404 ~= 20s serial, ~3s concurrent.
+    # Keeps break-after-3-matches semantics: take the first 3 hits in the original list order.
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=len(api_probes)) as _pool:
         _api_responses = {
@@ -1309,7 +1359,7 @@ def check_authority_trust(base_url):
                 emit_fix("result.fixes.authority.strengthen_bio", "Strengthen your bio/about page with explicit E-E-A-T signals:\n"
                     "  \u2022 Credentials (PhD, MD, certifications)\n"
                     "  \u2022 Years of experience and roles (\"10 years at X as...\")\n"
-                    "  \u2022 Notable prior affiliations (\"formerly at Google\", \"ex-McKinsey\")\n"
+                    "  \u2022 Notable prior affiliations (\"formerly at ...\", \"ex-...\")\n"
                     "  \u2022 External bylines, publications, or press coverage")
 
             # External bylines discovered on bio page
@@ -1327,7 +1377,7 @@ def check_authority_trust(base_url):
                     at_score += 0.5
                 else:
                     emit_check(INFO, "result.checks.authority.no_external_bylines", "No external bylines detected on bio page")
-                    emit_fix("result.fixes.authority.add_external_bylines", "Link to external bylines (Medium, Substack, trade press, Google Scholar, ORCID)\n"
+                    emit_fix("result.fixes.authority.add_external_bylines", "Link to external bylines (industry media, trade press, academic profiles such as ORCID)\n"
                         "from your bio/about page. Independent bylines carry more E-E-A-T weight than self-claims.")
             except Exception:
                 pass
@@ -1466,7 +1516,7 @@ def check_brand_entity_kg(base_url):
         emit_check(WARN, "result.checks.brand_kg.wikidata_not_found",
                    f"No Wikidata entity found for \"{brand}\"", {"brand": brand})
         emit_fix("result.fixes.brand_kg.create_wikidata",
-                 "Wikidata is free to edit and AI engines (especially Google Knowledge Graph) ingest it\n"
+                 "Wikidata is free to edit and knowledge-graph pipelines behind AI answers ingest it\n"
                  "heavily. Create an entry at https://www.wikidata.org/wiki/Special:NewItem with:\n"
                  "  • Label + description\n"
                  "  • instance of (P31) — e.g. 'business'\n"
@@ -1832,18 +1882,16 @@ def check_social_signals(base_url):
 
     ss_score = 0
 
-    # Twitter/X card meta tags
+    # Social share card meta tags — matched by tag name, reported as a count only
     twitter_tags = soup.find_all("meta", attrs={"name": re.compile(r"^twitter:", re.IGNORECASE)})
     if not twitter_tags:
         twitter_tags = soup.find_all("meta", property=re.compile(r"^twitter:", re.IGNORECASE))
     if twitter_tags:
-        tw_types = [t.get("name") or t.get("property") for t in twitter_tags]
-        tw_text = ", ".join(tw_types)
-        emit_check(PASS, "result.checks.social.twitter_found", f"Twitter/X card tags found: {tw_text}", {"tags": tw_text})
+        emit_check(PASS, "result.checks.social.twitter_found", f"Social share card tags found: {len(twitter_tags)}", {"count": len(twitter_tags)})
         ss_score += 1
     else:
-        emit_check(WARN, "result.checks.social.twitter_missing", "No Twitter/X card meta tags found")
-        emit_fix("result.fixes.social.add_twitter_card", "Add Twitter card tags to your <head>:\n  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n  <meta name=\"twitter:site\" content=\"@yourhandle\" />\n  <meta name=\"twitter:title\" content=\"Page Title\" />\n  <meta name=\"twitter:description\" content=\"Page description\" />\n  <meta name=\"twitter:image\" content=\"https://yoursite.com/image.jpg\" />")
+        emit_check(WARN, "result.checks.social.twitter_missing", "No social share card meta tags found")
+        emit_fix("result.fixes.social.add_twitter_card", "Add the social share card meta tags to your <head> — card type, account, title,\ndescription and cover image — so shared links render a full preview.")
 
     # sameAs links in JSON-LD (social profiles for entity disambiguation)
     same_as_links = []
@@ -1874,12 +1922,14 @@ def check_social_signals(base_url):
             print(f"         {link}")
     else:
         emit_check(WARN, "result.checks.social.sameas_missing", "No sameAs social profile links in structured data")
-        emit_fix("result.fixes.social.add_sameas", "Add sameAs to your Organization JSON-LD to connect your social profiles:\n  \"sameAs\": [\n    \"https://twitter.com/yourbrand\",\n    \"https://linkedin.com/company/yourbrand\",\n    \"https://github.com/yourbrand\",\n    \"https://facebook.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.")
+        emit_fix("result.fixes.social.add_sameas", "Add sameAs to your Organization JSON-LD to connect your public profiles:\n  \"sameAs\": [\n    \"https://weibo.com/yourbrand\",\n    \"https://www.zhihu.com/org/yourbrand\",\n    \"https://space.bilibili.com/yourbrand\",\n    \"https://gitee.com/yourbrand\"\n  ]\nThis helps AI engines confirm your entity identity across platforms.")
 
     # Check for social profile links in HTML (fallback)
     if not same_as_links:
-        social_domains = ["twitter.com", "x.com", "linkedin.com", "facebook.com",
-                          "instagram.com", "youtube.com", "github.com", "tiktok.com"]
+        social_domains = ["weibo.com", "zhihu.com", "bilibili.com", "b23.tv",
+                          "douyin.com", "xiaohongshu.com", "mp.weixin.qq.com",
+                          "baijiahao.baidu.com", "toutiao.com", "csdn.net",
+                          "juejin.cn", "gitee.com"]
         social_links = []
         for a in soup.find_all("a", href=True):
             href = a["href"]
@@ -2111,10 +2161,10 @@ def check_schema_knowledge(base_url):
         if missing_optional:
             missing_text = ", ".join(missing_optional)
             emit_check(INFO, "result.checks.schema_kg.optional_missing", f"Optional fields missing: {missing_text}", {"fields": missing_text})
-            emit_fix("result.fixes.schema_kb.add_org_fields", "Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://twitter.com/...\", \"https://linkedin.com/...\"]")
+            emit_fix("result.fixes.schema_kb.add_org_fields", "Add more fields to strengthen knowledge panel eligibility:\n  \"address\": {\"@type\": \"PostalAddress\", \"streetAddress\": \"...\", \"addressLocality\": \"...\"},\n  \"telephone\": \"+1-xxx-xxx-xxxx\",\n  \"foundingDate\": \"2020\",\n  \"sameAs\": [\"https://weibo.com/...\", \"https://www.zhihu.com/org/...\"]")
     else:
         emit_check(WARN, "result.checks.schema_kg.org_schema_missing", "No Organization/LocalBusiness schema found — needed for knowledge panels")
-        emit_fix("result.fixes.schema_kb.add_organization", "Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://twitter.com/you\", \"https://linkedin.com/company/you\"]\n  }\n  </script>")
+        emit_fix("result.fixes.schema_kb.add_organization", "Add Organization structured data for knowledge panel eligibility:\n  <script type=\"application/ld+json\">\n  {\n    \"@context\": \"https://schema.org\",\n    \"@type\": \"Organization\",\n    \"name\": \"Your Company\",\n    \"url\": \"https://yoursite.com\",\n    \"logo\": \"https://yoursite.com/logo.png\",\n    \"description\": \"What your company does\",\n    \"sameAs\": [\"https://weibo.com/you\", \"https://www.zhihu.com/org/you\"]\n  }\n  </script>")
 
     track_score("Schema & Knowledge", min(sk_score, 4), 4)
 
@@ -2422,10 +2472,10 @@ def check_outbound_and_media(base_url):
     elif len(formats_found) >= 1:
         emit_check(INFO, "result.checks.outbound.multi_format_limited", f"Only {len(formats_found)} non-text format(s) detected — more formats = more AI surface area", {"count": len(formats_found)})
         emit_fix("result.fixes.outbound.diversify_formats", "Diversify your content formats so AI engines encounter you in more contexts:\n"
-            "  \u2022 Podcast (audio transcripts feed ChatGPT, Perplexity)\n"
+            "  \u2022 Podcast (audio transcripts are indexable by AI engines)\n"
             "  \u2022 PDF whitepapers (citable documents)\n"
             "  \u2022 Infographics with descriptive alt text\n"
-            "  \u2022 Slides on SlideShare / Speaker Deck\n"
+            "  \u2022 Slides published on a document platform\n"
             "  \u2022 Video with transcripts")
     else:
         emit_check(WARN, "result.checks.outbound.multi_format_none", "No non-text formats detected — content is text-only")
@@ -2546,48 +2596,46 @@ def check_cross_platform(base_url):
     domain = parsed.netloc.replace("www.", "")
     brand = domain.split(".")[0]
 
-    # Platform definitions: name -> (url_patterns_to_check, on_page_signal_domains)
+    # Platform definitions: name -> {probe_urls?, link_domains}
+    #
+    # Only covers CN platforms. Most CN platforms' profile URLs are numeric uids, so no probeable URL can be built
+    # (WeChat official accounts have no public profile page at all); such platforms have no probe_urls and can only be recognized via on-site outbound links /
+    # JSON-LD sameAs -- detection rate is inherently lower than building URLs from the brand name.
     platforms = {
-        "X / Twitter":  {
-            "probe_urls": [f"https://x.com/{brand}", f"https://twitter.com/{brand}"],
-            "link_domains": ["x.com", "twitter.com"],
-            "meta_signal": "twitter:site",
+        "微信公众号":   {
+            "link_domains": ["mp.weixin.qq.com"],
         },
-        "LinkedIn":     {
-            "probe_urls": [f"https://www.linkedin.com/company/{brand}"],
-            "link_domains": ["linkedin.com"],
+        # Weibo: weibo.com/n/<name> always returns the "Sina Visitor System" visitor page (HTTP 200) to logged-out requests,
+        # identical for real and fake accounts -- probing inevitably gives false positives, so only on-site outbound links count
+        "微博":        {
+            "link_domains": ["weibo.com"],
         },
-        "YouTube":      {
-            "probe_urls": [f"https://www.youtube.com/@{brand}", f"https://www.youtube.com/c/{brand}"],
-            "link_domains": ["youtube.com"],
+        # Zhihu: logged-out access to org/personal pages returns a 403 risk-control page, so probing can never confirm existence; likewise only outbound links count
+        "知乎":        {
+            "link_domains": ["zhihu.com", "zhuanlan.zhihu.com"],
         },
-        "GitHub":       {
-            "probe_urls": [f"https://github.com/{brand}"],
-            "link_domains": ["github.com"],
+        "小红书":      {
+            "link_domains": ["xiaohongshu.com", "xhslink.com"],
         },
-        "Reddit":       {
-            "probe_urls": [f"https://www.reddit.com/r/{brand}", f"https://www.reddit.com/user/{brand}"],
-            "link_domains": ["reddit.com"],
+        "抖音":        {
+            "link_domains": ["douyin.com", "iesdouyin.com"],
         },
-        "Facebook":     {
-            "probe_urls": [f"https://www.facebook.com/{brand}"],
-            "link_domains": ["facebook.com"],
+        "哔哩哔哩":     {
+            "link_domains": ["bilibili.com", "b23.tv"],
         },
-        "Instagram":    {
-            "probe_urls": [f"https://www.instagram.com/{brand}"],
-            "link_domains": ["instagram.com"],
+        "百家号":      {
+            "link_domains": ["baijiahao.baidu.com"],
         },
-        "Medium":       {
-            "probe_urls": [f"https://medium.com/@{brand}", f"https://{brand}.medium.com"],
-            "link_domains": ["medium.com"],
+        "今日头条":     {
+            "link_domains": ["toutiao.com"],
         },
-        "TikTok":       {
-            "probe_urls": [f"https://www.tiktok.com/@{brand}"],
-            "link_domains": ["tiktok.com"],
+        "CSDN":       {
+            "probe_urls": [f"https://blog.csdn.net/{brand}"],
+            "link_domains": ["csdn.net"],
         },
-        "Quora":        {
-            "probe_urls": [f"https://www.quora.com/profile/{brand}"],
-            "link_domains": ["quora.com"],
+        "Gitee":      {
+            "probe_urls": [f"https://gitee.com/{brand}"],
+            "link_domains": ["gitee.com"],
         },
     }
 
@@ -2628,28 +2676,23 @@ def check_cross_platform(base_url):
                 if plat_name in on_page_links:
                     break
 
-        # Check meta signals (e.g. twitter:site)
-        for plat_name, plat_info in platforms.items():
-            if plat_name in on_page_links:
-                continue
-            meta_key = plat_info.get("meta_signal")
-            if meta_key:
-                tag = soup.find("meta", attrs={"name": meta_key}) or soup.find("meta", attrs={"property": meta_key})
-                if tag and tag.get("content"):
-                    on_page_links[plat_name] = tag["content"]
-
     # --- Phase 2: Probe platforms not found on-page (concurrent) ---
     # Serial was the single biggest default-check bottleneck — 10 platforms
     # × 8s timeout = up to 80s blocking. Fan out with ThreadPoolExecutor;
     # max_workers caps at the platform count (≤ 10).
+    # Platforms without probe_urls (uid-based or no public profile page) are
+    # skipped here — on-page links are their only detection path.
     probed = {}  # platform_name -> (found: bool, url)
-    platforms_to_probe = {k: v for k, v in platforms.items() if k not in on_page_links}
+    platforms_to_probe = {
+        k: v for k, v in platforms.items()
+        if k not in on_page_links and v.get("probe_urls")
+    }
 
     browser_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
     def _probe_platform(plat_name, plat_info):
         """Probe one platform; return (plat_name, found, url). No prints."""
-        for probe_url in plat_info["probe_urls"]:
+        for probe_url in plat_info.get("probe_urls", []):
             try:
                 r = requests.get(probe_url, timeout=8, allow_redirects=True, headers={
                     "User-Agent": browser_ua
@@ -2658,6 +2701,7 @@ def check_cross_platform(base_url):
                     final_url = r.url.lower()
                     redirected_to_login = any(seg in final_url for seg in [
                         "/login", "/signin", "/sign_in", "/accounts/login",
+                        "passport.", "/visitor/visitor",
                     ])
                     text_lower = r.text.lower() if len(r.text) < 500000 else r.text[:500000].lower()
                     is_404_page = redirected_to_login or any(phrase in text_lower for phrase in [
@@ -2671,12 +2715,16 @@ def check_cross_platform(base_url):
                         "this user is not available", "suspended account",
                         "no results found", "couldn't find this account",
                         "we couldn't find", "does not exist",
+                        # Empty page / risk-control page text on CN platforms
+                        "页面不存在", "该页面不存在", "用户不存在", "内容不存在",
+                        "你访问的页面不存在", "抱歉，没有找到", "请先登录",
+                        "访问过于频繁", "参数错误",
                     ])
                     if not is_404_page:
                         return plat_name, True, probe_url
             except requests.RequestException:
                 pass
-        return plat_name, False, plat_info["probe_urls"][0]
+        return plat_name, False, (plat_info.get("probe_urls") or [""])[0]
 
     if platforms_to_probe:
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -2704,11 +2752,13 @@ def check_cross_platform(base_url):
             found_platforms.append(plat_name)
             emit_check(PASS, "result.checks.cross_platform.profile_found", f"{plat_name:<16} profile found: {url}", {"platform": plat_name, "url": url})
 
-    # Not found
-    for plat_name, (found, url) in sorted(probed.items()):
-        if not found:
-            not_found_platforms.append(plat_name)
-            emit_check(INFO, "result.checks.cross_platform.not_detected", f"{plat_name:<16} not detected", {"platform": plat_name})
+    # Not found — probed-and-missing plus the ones that have no probe path at all,
+    # so every platform in the list still shows up on the result page.
+    for plat_name in platforms:
+        if plat_name in found_platforms:
+            continue
+        not_found_platforms.append(plat_name)
+        emit_check(INFO, "result.checks.cross_platform.not_detected", f"{plat_name:<16} not detected", {"platform": plat_name})
 
     # --- Score & summary ---
     total_platforms = len(platforms)
@@ -2727,11 +2777,11 @@ def check_cross_platform(base_url):
     if not_found_platforms:
         emit_fix(
             "result.fixes.cross_platform.expand_presence",
-            "Expand your brand presence on platforms that AI models train on:\n"
+            "Expand your brand presence on the content platforms AI engines retrieve from:\n"
             + "".join(f"  - {p}\n" for p in not_found_platforms)
-            + "AI engines (ChatGPT, Perplexity, Claude, Gemini) train on data from these platforms.\n"
-            "Being present increases the probability of your brand being cited in AI answers,\n"
-            "regardless of which source the AI pulls from.",
+            + "Publishing there — and linking those profiles from your own site — raises the\n"
+            "probability of your brand being cited in AI answers, whichever source the\n"
+            "engine happens to pull from.",
             {"platforms": ", ".join(not_found_platforms)},
         )
 
@@ -2748,24 +2798,10 @@ def check_cross_platform(base_url):
         cp_score = 0
     track_score("Cross-Platform", cp_score, 5)
 
-    # Provide the AI training context
     if found_platforms:
-        print(f"\n  Platforms where your brand is visible to AI training:")
-        ai_training_map = {
-            "X / Twitter": "ChatGPT, Grok, Perplexity",
-            "Reddit":      "ChatGPT, Claude, Gemini, Perplexity",
-            "YouTube":     "Gemini, Perplexity (transcripts)",
-            "LinkedIn":    "Bing Copilot, Perplexity",
-            "GitHub":      "Copilot, ChatGPT, Claude",
-            "Medium":      "ChatGPT, Claude, Perplexity",
-            "Facebook":    "Meta AI",
-            "Instagram":   "Meta AI",
-            "TikTok":      "ByteDance AI",
-            "Quora":       "ChatGPT, Perplexity",
-        }
+        print("\n  Platforms where your brand is visible to AI retrieval:")
         for plat in found_platforms:
-            ai_models = ai_training_map.get(plat, "various AI models")
-            print(f"    {plat:<16} → trains: {ai_models}")
+            print(f"    {plat}")
 
 
 # ---------------------------------------------------------------------------

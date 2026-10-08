@@ -5,7 +5,7 @@ const zhKnowledge = {
             "sections": {
               "about": "理解 GEO & AEO",
               "whatIsGeo": "什么是 GEO & AEO？",
-              "whatIsGeoBody": "GEO（生成式引擎优化）和 AEO（答案引擎优化）是专为 AI 搜索引擎和 AI 助手（ChatGPT、Perplexity、Google AI Overviews、Gemini、Claude、Copilot 等）设计的优化实践。GEO 专注于让你的品牌在 AI 引擎中可见并可被引用。AEO 更进一步 — 优化你的内容，让 AI 不仅能找到你，更能直接理解、信任并选择你的品牌作为用户问题的最佳答案。传统 SEO 优化的是搜索结果页上的蓝色链接，而 GEO + AEO 优化的是 AI 实际生成的那段答案。",
+              "whatIsGeoBody": "GEO（生成式引擎优化）和 AEO（答案引擎优化）是专为 AI 搜索引擎和 AI 助手（DeepSeek、通义千问、豆包、文心一言、元宝、Kimi 等）设计的优化实践。GEO 专注于让你的品牌在 AI 引擎中可见并可被引用。AEO 更进一步 — 优化你的内容，让 AI 不仅能找到你，更能直接理解、信任并选择你的品牌作为用户问题的最佳答案。传统 SEO 优化的是搜索结果页上的蓝色链接，而 GEO + AEO 优化的是 AI 实际生成的那段答案。",
               "whyGeoImportant": "为什么 GEO + AEO 重要",
               "whyGeoPoints": [
                 "传统搜索流量正在被 AI 生成的答案取代 — 如果你不在答案里，就是彻底隐形。",
@@ -19,12 +19,12 @@ const zhKnowledge = {
               "contentLocalizationPoints": [
                 "围绕核心话题产出深度、专家级的原创内容，拒绝稀薄营销文案",
                 "添加 Organization / Product 结构化数据（JSON-LD）与 llms.txt 文件",
-                "在 Wikipedia、Wikidata、Reddit、GitHub 及权威目录站建立品牌存在"
+                "在百度百科、维基数据、知乎、GitHub 及权威目录站建立品牌存在"
               ],
               "technicalOptimization": "技术基础与 AI 可抓取性",
-              "technicalOptimizationDesc": "AI 爬虫拿不到你的内容就无法引用你。确保 GPTBot、ClaudeBot、PerplexityBot、Google-Extended 能够真实抓取并渲染你的页面。",
+              "technicalOptimizationDesc": "AI 爬虫拿不到你的内容就无法引用你。确保主流 AI 爬虫能够真实抓取并渲染你的页面。",
               "technicalOptimizationPoints": [
-                "在 robots.txt 中放行 AI 爬虫（GPTBot、ClaudeBot、PerplexityBot、Google-Extended）",
+                "在 robots.txt 中放行主流 AI 爬虫",
                 "提供快速的服务端渲染 HTML，避免纯 JS 页面——AI 爬虫不会执行 JavaScript",
                 "使用语义化 HTML 与干净的标记，让大模型能把页面解析成结构化事实"
               ],
@@ -57,14 +57,14 @@ const zhKnowledge = {
                     "https": {
                       "name": "HTTPS 安全协议",
                       "measures": "检测你的站点是否通过 HTTPS 提供服务、TLS 证书是否合法有效。",
-                      "why": "AI 引擎爬虫（OpenAI GPTBot、Anthropic ClaudeBot、Perplexity、Google-Extended）会直接跳过非 HTTPS 站点。明文 HTTP 页面无论是在训练阶段还是实时检索阶段都会被降权或直接忽略。",
+                      "why": "AI 引擎爬虫会直接跳过非 HTTPS 站点。明文 HTTP 页面无论是在训练阶段还是实时检索阶段都会被降权或直接忽略。",
                       "scoring": "HTTPS 且证书有效 → PASS；HTTP 自动重定向到 HTTPS 可接受；纯 HTTP 或证书过期 → FAIL。"
                     },
                     "robots": {
                       "name": "robots.txt 爬虫规则",
-                      "measures": "检测 robots.txt 是否存在、语法是否合法、是否明确放行主流 AI 爬虫（GPTBot、ClaudeBot、PerplexityBot、Google-Extended、CCBot）。",
-                      "why": "AI 爬虫默认尊重 robots.txt。一条 Disallow: / 或 User-agent: GPTBot 的屏蔽就能让 OpenAI 永远看不到你的内容，相当于主动从 AI 视野里消失。",
-                      "scoring": "文件存在且放行所有主流 AI 爬虫 → PASS；屏蔽 1–2 个次要爬虫 → WARN；屏蔽 GPTBot / ClaudeBot / CCBot 中任意一个 → FAIL。"
+                      "measures": "检测 robots.txt 是否存在、语法是否合法、是否明确放行主流 AI 爬虫。",
+                      "why": "AI 爬虫默认尊重 robots.txt。一条 Disallow: / 或针对某个 AI 爬虫的屏蔽，就能让对应引擎永远看不到你的内容，相当于主动从 AI 视野里消失。",
+                      "scoring": "文件存在且放行所有主流 AI 爬虫 → PASS；屏蔽 1–2 个次要爬虫 → WARN；屏蔽任一主流 AI 爬虫 → FAIL。"
                     },
                     "sitemap": {
                       "name": "sitemap.xml 站点地图",
@@ -75,13 +75,13 @@ const zhKnowledge = {
                     "llms": {
                       "name": "llms.txt LLM 索引文件",
                       "measures": "检测根目录下是否存在 llms.txt。这是 2024 年提出的新协议，用 Markdown 格式告诉大模型你站点是什么、核心内容在哪里。",
-                      "why": "llms.txt 给 AI 爬虫一份「策划过的导览地图」——它不用猜哪些页面是精华，直接按你列的顺序抓。Anthropic、Perplexity 等已开始支持或参考这个协议，先做先占位。",
+                      "why": "llms.txt 给 AI 爬虫一份「策划过的导览地图」——它不用猜哪些页面是精华，直接按你列的顺序抓。已有多家 AI 引擎开始支持或参考这个协议，先做先占位。",
                       "scoring": "文件存在 → PASS；缺失 → INFO（目前非强制，但成本低、先做先赢）。"
                     },
                     "aiCrawlerAccess": {
                       "name": "AI 爬虫实测可访问性",
-                      "measures": "用 GPTBot、ClaudeBot、PerplexityBot 等真实 User-Agent 发 HTTP 请求，检查你的 WAF、Cloudflare Bot Fight、验证码是否把它们挡在门外。",
-                      "why": "robots.txt 放行只是第一层——Cloudflare Bot Fight 或 AWS WAF 常常把所有非浏览器 UA 一律当恶意爬虫拦掉，AI 爬虫也会被误伤。robots 策略和边缘策略必须一致。",
+                      "measures": "用主流 AI 爬虫的真实 User-Agent 发 HTTP 请求，检查你的 WAF、防爬策略、验证码是否把它们挡在门外。",
+                      "why": "robots.txt 放行只是第一层——CDN 的防爬策略或 WAF 常常把所有非浏览器 UA 一律当恶意爬虫拦掉，AI 爬虫也会被误伤。robots 策略和边缘策略必须一致。",
                       "scoring": "所有 AI UA 返回 200 → PASS；部分被拦 → WARN；全部被拦 → FAIL。"
                     }
                   }
@@ -93,19 +93,19 @@ const zhKnowledge = {
                     "jsonld": {
                       "name": "JSON-LD 结构化数据",
                       "measures": "检测首页是否有 JSON-LD 代码块，以及是否描述了 Organization、Product、WebSite 等 schema.org 类型，核心字段是否填齐。",
-                      "why": "结构化数据是你能给 LLM 的最机器可读的信号。ChatGPT、Perplexity、Google AI Overviews 都依赖 schema.org 标记来确认实体身份和抽取事实——缺了它，模型只能从散文里猜，猜错的代价就是被加免责声明或干脆忽略。",
+                      "why": "结构化数据是你能给 LLM 的最机器可读的信号。主流 AI 引擎都依赖 schema.org 标记来确认实体身份和抽取事实——缺了它，模型只能从散文里猜，猜错的代价就是被加免责声明或干脆忽略。",
                       "scoring": "Organization + Product / WebSite / FAQ 中任一，且核心字段齐全 → PASS；只有单个瘦身块 → WARN；完全没有 → FAIL。"
                     },
                     "metaTags": {
                       "name": "Meta 标签覆盖",
-                      "measures": "检测首页的 title、meta description、canonical、viewport、Open Graph（og:title / og:description / og:image）、以及 Twitter Card 标签。",
+                      "measures": "检测首页的 title、meta description、canonical、viewport、Open Graph（og:title / og:description / og:image）、以及社交分享卡片标签。",
                       "why": "Meta 标签是 AI 决定页面是否相关时看的那两行摘要。描述缺失意味着模型得自己生成一段——或者干脆跳过这个页面。og:image 也是 AI 聊天答案里链接预览卡片渲染的底图。",
                       "scoring": "6 条核心信号全都有 → PASS；4–5 条 → WARN；少于 4 条 → FAIL。"
                     },
                     "breadcrumbs": {
                       "name": "面包屑与知识面板标记",
                       "measures": "检查 BreadcrumbList JSON-LD、可见的面包屑导航，以及知识面板友好的标记（`sameAs`、`logo`、`SearchAction`）。",
-                      "why": "面包屑帮 AI 理解你的站点结构——一个页面在品类树的什么位置。知识面板标记是 Google 和 Perplexity 构造查询旁那个「摘要框」的原料。两者都会随时间累积发挥作用。",
+                      "why": "面包屑帮 AI 理解你的站点结构——一个页面在品类树的什么位置。知识面板标记是 AI 引擎构造查询旁那个「摘要框」的原料。两者都会随时间累积发挥作用。",
                       "scoring": "两类信号都有 → PASS；只有其中一类 → WARN；都没有 → FAIL。"
                     },
                     "answerFormat": {
@@ -123,19 +123,19 @@ const zhKnowledge = {
                     "commonCrawl": {
                       "name": "AI 训练数据收录 (Common Crawl)",
                       "measures": "在 Common Crawl 最新一期全网快照里查你的域名，统计有多少页面被采入这个公开网页语料库。",
-                      "why": "Common Crawl 是 ChatGPT、Claude、LLaMA 以及几乎所有开源 LLM 的训练数据。如果你没进 Common Crawl，这些模型在训练时从没见过你——用户问到品牌相关问题时，它们对你零记忆，结果要么加免责声明要么直接忽略。",
+                      "why": "公开网页语料库是几乎所有大模型的训练数据来源。如果你没被这类语料收录，模型在训练时从没见过你——用户问到品牌相关问题时，它们对你零记忆，结果要么加免责声明要么直接忽略。",
                       "scoring": "找到页面 → PASS；未收录但域名 < 60 天 → INFO（新站正常）；未收录且老站 → WARN；未收录 + robots.txt 屏蔽了 CCBot → FAIL。"
                     },
                     "wikipedia": {
                       "name": "Wikipedia / Wikidata 实体",
                       "measures": "检测你的品牌或产品是否在 Wikipedia（中英文）有词条，以及是否有 Wikidata Q-item。",
-                      "why": "Wikipedia 和 Wikidata 是 LLM 用来验证实体的最权威结构化源。如果 ChatGPT 能在 Wikidata 上查到你，它就把你当真实实体对待；否则你会得到 `我对这个品牌不太确定` 的免责声明——这基本等于把推荐机会让出去。",
+                      "why": "Wikipedia 和 Wikidata 是 LLM 用来验证实体的最权威结构化源。如果 AI 引擎能在知识图谱上查到你，它就把你当真实实体对待；否则你会得到 `我对这个品牌不太确定` 的免责声明——这基本等于把推荐机会让出去。",
                       "scoring": "Wikipedia 词条 + Wikidata Q-item 都有 → PASS；只有其一 → WARN；都没有 → FAIL。"
                     },
                     "knowledgeGraph": {
-                      "name": "Google 知识图谱收录",
-                      "measures": "通过 schema.org 标记和 Google Knowledge Graph API 查询你的品牌是否在 Google 知识图谱里——就是那个出现在 Google 搜索右侧的实体侧栏。",
-                      "why": "Google 的知识图谱直接喂给 Google AI Overviews、SGE 和 Gemini。在图谱里的实体会被引用，不在的就不会。同时它也为其他把 Google 结果作为参考的 LLM 播下了品牌事实种子。",
+                      "name": "知识图谱收录",
+                      "measures": "通过 schema.org 标记和知识图谱接口查询你的品牌是否已被收录——就是搜索结果页旁边那个实体侧栏。",
+                      "why": "搜索引擎的知识图谱直接喂给 AI 生成式结果。在图谱里的实体会被引用，不在的就不会。同时它也为把搜索结果作为参考的大模型播下了品牌事实种子。",
                       "scoring": "实体被找到且字段丰富 → PASS；部分覆盖 → WARN；未找到 → FAIL。"
                     },
                     "reviews": {
@@ -158,7 +158,7 @@ const zhKnowledge = {
                   "items": {
                     "citationRate": {
                       "name": "AI 引用率",
-                      "measures": "通过 OpenRouter 把一组品牌相关和品类相关的问题发给 Perplexity，统计你的域名作为引用来源出现的频率。",
+                      "measures": "把一组品牌相关和品类相关的问题发给 AI 引擎，统计你的域名作为引用来源出现的频率。",
                       "why": "最终考试：用户在品类问题里问 AI，AI 会不会指向你？词典里其它所有项都是先行指标，引用率才是真正驱动收入的滞后指标。",
                       "scoring": "≥80% 引用率 → A（优秀）；60–79% → B；40–59% → C；20–39% → D；<20% → F。"
                     },
@@ -206,7 +206,7 @@ const zhKnowledge = {
                     },
                     "platformCoverage": {
                       "name": "多平台覆盖",
-                      "measures": "检测你在 LLM 训练最密集的平台上是否有经过验证的存在：Wikipedia、Wikidata、Crunchbase、LinkedIn、GitHub、Reddit、Product Hunt、Hacker News、行业目录。",
+                      "measures": "检测你在大模型语料最密集的平台上是否有经过验证的存在：百度百科、维基数据、知乎、GitHub、行业目录与垂直社区。",
                       "why": "每多一个高权重平台都是 AI 用来构建你实体画像的一份交叉证据。覆盖 6+ 个平台的品牌会被自信地推荐；只有一个官网的会被当作未验证，推荐时会被加免责声明。",
                       "scoring": "覆盖 ≥6 / 10 个关键平台 → PASS；3–5 个 → WARN；<3 → FAIL。"
                     },

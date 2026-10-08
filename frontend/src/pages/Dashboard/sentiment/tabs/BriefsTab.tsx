@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { fmtTime } from '../../../../utils/datetime';
 import { useTranslation } from 'react-i18next';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -6,12 +7,14 @@ import jsPDF from 'jspdf';
 import { mockBriefs } from '../../../../mocks/sentiment';
 import { useBriefs, useBriefDetail, usePosts } from '../../../../hooks/useSentiment';
 import type { Brief, BriefSummary, SentimentAccount, SentimentPost } from '../../../../types/sentiment';
+import { accountSymbol } from '../../../../types/sentiment';
 
+import { toast } from '../../../../components/ui/toast';
 import { BriefRenderer } from '../components/BriefRenderer';
 import { extractAnchors } from '../components/briefUtils';
 
-// PDF 数据摘要计算 — 把 posts[] 聚合成 PDF 头/尾要展示的统计.
-// 抽出来便于单测,且解耦于 React 渲染.
+// PDF data summary computation — aggregates posts[] into the stats shown in the PDF header/footer.
+// Extracted for unit testing and decoupled from React rendering.
 interface PdfDataSummary {
   totalPosts: number;
   sourceBreakdown: Array<{ source: string; count: number }>;
@@ -52,7 +55,7 @@ function computeSummary(posts: SentimentPost[]): PdfDataSummary {
   };
 }
 
-// 数据来源中文名映射 — 让 PDF 不出现"eastmoney_ann"这种内部名
+// Display-name mapping for data sources — so the PDF doesn't show internal names like "eastmoney_ann"
 const SOURCE_LABEL: Record<string, string> = {
   eastmoney: '东方财富股吧',
   eastmoney_news: '东财资讯',
@@ -88,14 +91,14 @@ interface Props {
 export function BriefsTab({ account, usingMock }: Props) {
   const { t } = useTranslation();
 
-  const briefsQuery = useBriefs(usingMock ? null : account.id, usingMock ? null : account.ticker);
+  const briefsQuery = useBriefs(usingMock ? null : account.id, usingMock ? null : accountSymbol(account));
   const briefs: BriefSummary[] = useMemo(
     () => usingMock ? mockBriefs : (briefsQuery.data?.items ?? []),
     [usingMock, briefsQuery.data],
   );
 
-  // PDF 增强:抓取最新 200 篇 post 用于聚合数据来源/情感/风险
-  const postsQuery = usePosts(usingMock ? null : account.id, usingMock ? null : account.ticker, 200);
+  // PDF enhancement: fetch the latest 200 posts to aggregate data source/sentiment/risk
+  const postsQuery = usePosts(usingMock ? null : account.id, usingMock ? null : accountSymbol(account), 200);
   const posts: SentimentPost[] = useMemo(
     () => (usingMock ? [] : (postsQuery.data?.items ?? [])),
     [usingMock, postsQuery.data],
@@ -103,10 +106,10 @@ export function BriefsTab({ account, usingMock }: Props) {
   const summary = useMemo(() => computeSummary(posts), [posts]);
 
   const [explicitId, setExplicitId] = useState<number | null>(null);
-  // 默认选中第一个,通过派生值实现(避免 useEffect setState)
+  // Select the first by default, via a derived value (avoids setState in useEffect)
   const selectedId = explicitId ?? briefs[0]?.id ?? null;
 
-  // 真实模式拉详情;mock 模式直接从静态拿
+  // Real mode fetches details; mock mode reads directly from static data
   const detailQuery = useBriefDetail(
     usingMock ? null : account.id,
     usingMock ? null : selectedId,
@@ -124,9 +127,9 @@ export function BriefsTab({ account, usingMock }: Props) {
   const briefRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  // 构造 PDF 增强 DOM:封面统计 + 数据源分布 + 风险高亮 + 简报正文 + 页脚
-  // 通过临时挂到 document.body 上(off-screen 定位),html2canvas 截图后移除。
-  // 这样不影响 React 主渲染流,也保留了所有样式继承。
+  // Build the enhanced PDF DOM: cover stats + data source distribution + risk highlights + brief body + footer
+  // Temporarily attached to document.body (positioned off-screen), removed after html2canvas captures it.
+  // This doesn't affect React's main render flow and keeps all style inheritance.
   const buildPdfDom = (): HTMLDivElement | null => {
     if (!selected) return null;
     const root = document.createElement('div');
@@ -194,7 +197,7 @@ export function BriefsTab({ account, usingMock }: Props) {
       </div>
     `;
 
-    // 把 BriefRenderer 已经渲染好的 DOM 克隆到 body 槽里,继承现有 markdown 样式
+    // Clone the DOM already rendered by BriefRenderer into the body slot, inheriting existing markdown styles
     const briefSlot = root.querySelector<HTMLDivElement>('#__pdf_brief_body');
     if (briefSlot && briefRef.current) {
       briefSlot.innerHTML = briefRef.current.innerHTML;
@@ -223,7 +226,7 @@ export function BriefsTab({ account, usingMock }: Props) {
       const contentW = pageW - margin * 2;
       const imgH = (canvas.height / canvas.width) * contentW;
 
-      // 如果内容高度超出一页,分页
+      // Paginate if the content is taller than one page
       let yOffset = 0;
       const availH = pageH - margin * 2;
       while (yOffset < imgH) {
@@ -234,7 +237,7 @@ export function BriefsTab({ account, usingMock }: Props) {
 
       pdf.save(`brief_${selected.symbol}_${selected.date}.pdf`);
     } finally {
-      // 清理临时 DOM
+      // Clean up the temporary DOM
       if (dom && dom !== briefRef.current && dom.parentNode) {
         dom.parentNode.removeChild(dom);
       }
@@ -242,7 +245,7 @@ export function BriefsTab({ account, usingMock }: Props) {
     }
   };
 
-  const handleEmail = () => alert('邮件发送(演示)');
+  const handleEmail = () => toast.info('邮件发送(演示)');
 
   if (!usingMock && briefsQuery.isLoading) {
     return <div className="rounded-xl py-12 text-center text-secondary text-sm" style={cardStyle}>
@@ -250,7 +253,7 @@ export function BriefsTab({ account, usingMock }: Props) {
     </div>;
   }
   if (!usingMock && briefsQuery.error) {
-    return <div className="rounded-xl py-6 px-4 text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
+    return <div className="rounded-xl py-6 px-4 text-sm" style={{ background: 'var(--danger-bg)', color: '#dc2626' }}>
       ⚠ {briefsQuery.error instanceof Error ? briefsQuery.error.message : 'Failed to load briefs'}
     </div>;
   }
@@ -262,7 +265,7 @@ export function BriefsTab({ account, usingMock }: Props) {
           <h4 className="text-sm font-semibold text-primary">
             {t('dashboard.sentiment.briefs.list')}
           </h4>
-          <button type="button" onClick={() => alert('临时简报生成(演示)')}
+          <button type="button" onClick={() => toast.info('临时简报生成(演示)')}
             className="text-xs" style={{ color: 'var(--accent-primary)' }}>
             {t('dashboard.sentiment.briefs.newAdHoc')}
           </button>
@@ -284,7 +287,7 @@ export function BriefsTab({ account, usingMock }: Props) {
                     <span className="font-medium">📄 {b.date}</span>
                   </div>
                   <div className="text-[11px] text-muted mt-0.5">
-                    {new Date(b.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                    {fmtTime(b.generated_at, false).slice(11, 16)}
                   </div>
                 </button>
               </li>

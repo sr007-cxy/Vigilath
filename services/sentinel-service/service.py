@@ -1,18 +1,18 @@
-"""Sentinel(yuqin)微服务 — FastAPI 包装.
+"""Sentinel (yuqin) microservice - FastAPI wrapper.
 
-GEO backend 通过 HTTP 调本服务,本服务再调 yuqin 的 4 个核心函数.
+The GEO backend calls this service over HTTP, and this service calls yuqin's 4 core functions.
 
-设计要点:
-- 多租户隔离:每个 account_id 对应一个 PG schema(`tenant_{N}`),通过
-  `SET search_path` 路由,storage 包的 contextvar `current_account` 在请求
-  入口绑定.原历史方案是每账户一个独立 SQLite 文件(2026-05-21 切到 PG).
-- API key 注入:client 在 header 里传 X-OpenAI-Key,本服务设到 env 后透传.
-- 异常包成 dict 返回,不抛给 client(yuqin 内部用 sys.exit 的地方在主入口拦截).
+Design points:
+- Multi-tenant isolation: each account_id maps to a PG schema (`tenant_{N}`), routed via
+  `SET search_path`; the storage package's contextvar `current_account` is bound at the request
+  entry. The historical design was one SQLite file per account (switched to PG on 2026-05-21).
+- API key injection: the client passes X-OpenAI-Key in a header; this service sets it in env and passes it through.
+- Exceptions are wrapped into a dict and returned, never raised to the client (places where yuqin uses sys.exit are intercepted at the main entry).
 
-环境变量:
-- SENTINEL_DATA_DIR    数据目录(默认 ./data)
-- SENTINEL_PORT        端口(默认 8090)
-- OPENAI_API_KEY       平台 fallback(client 没传时用)
+Environment variables:
+- SENTINEL_DATA_DIR    data directory (default ./data)
+- SENTINEL_PORT        port (default 8090)
+- OPENAI_API_KEY       platform fallback (used when the client does not pass one)
 """
 from __future__ import annotations
 
@@ -28,43 +28,43 @@ from typing import Any, Optional
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-# 把当前目录加到 sys.path,这样 yuqin 模块可以直接 import
+# Add the current directory to sys.path so yuqin modules can be imported directly
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-# ── 数据目录(副产物落盘:briefs / knowledge / 等)──────────────
-# 主数据(posts / analyses / briefs / drafts / query_runs)已迁到 PG schema,
-# 这个目录只保留落盘类副产物.
+# ── Data directory (on-disk by-products: briefs / knowledge / etc.) ──────────────
+# Main data (posts / analyses / briefs / drafts / query_runs) has moved to PG schemas;
+# this directory only keeps on-disk by-products.
 DATA_DIR = Path(os.environ.get("SENTINEL_DATA_DIR", str(ROOT / "data"))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# 展示新鲜度窗口(天):today 聚合 / Top5 / 风险分布 / 简报只露最近 N 天的"内容"
-# (按 publish_time,不是入库时间),把"今天爬到但发布于 2024 年"的旧帖挡在展示外。
-# 抓取仍全量增量入库,只在展示层收口。默认 3 天;要"最近 24 小时"设为 1。
+# Display freshness window (days): today aggregates / Top5 / risk distribution / brief only show "content" from the last N days
+# (by publish_time, not ingestion time), keeping old posts "crawled today but published in 2024" out of the display.
+# Crawling still persists everything incrementally; only the display layer narrows. Default 3 days; set to 1 for "last 24 hours".
 DISPLAY_MAX_AGE_DAYS = int(os.environ.get("SENTINEL_DISPLAY_MAX_AGE_DAYS", "3"))
 
 
 def _account_db_path(account_id: int) -> Path:
-    """历史名:返回 `account_{N}/yuqing.db` 路径,**主库已切 PG**,这里只是
-    给老 caller 借用 `.parent` 拿账户的落盘子目录(briefs / knowledge 等).
+    """Historical name: returns the `account_{N}/yuqing.db` path. **The main DB has moved to PG**; this only
+    lets old callers borrow `.parent` to get the account's on-disk subdirectory (briefs / knowledge etc.).
     """
     p = DATA_DIR / f"account_{account_id}" / "yuqing.db"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
 
-# 多租户 contextvar(由 storage 包统一定义,service.py 只 set/reset)
-# 这取代了历史的 6 层 monkey-patch:storage 包级 wrapper 在每次 connect()
-# 调用时动态读 contextvar,所以子模块 `from storage import connect` 拷贝
-# 函数引用的快照问题不再存在.
+# Multi-tenant contextvar (defined centrally by the storage package; service.py only sets/resets it)
+# This replaces the historical 6 layers of monkey-patching: the storage package-level wrapper reads the contextvar dynamically on every connect()
+# call, so the snapshot problem of submodules copying the function reference via `from storage import connect`
+# no longer exists.
 from storage import current_account              # type: ignore  # noqa: E402
 
-# yuqin 业务入口
+# yuqin business entry points
 from search import (                              # type: ignore  # noqa: E402
     generate_monitoring_plan, run_plan,
 )
 from analyzer import analyze_symbol               # type: ignore  # noqa: E402
-from brief import generate_brief                  # type: ignore  # noqa: E402
+from brief import generate_brief, generate_monthly_brief  # type: ignore  # noqa: E402
 from response import generate_drafts              # type: ignore  # noqa: E402
 from response import draft as _draft_module       # type: ignore  # noqa: E402
 from crawler.eastmoney import EastmoneyGubaClient # type: ignore  # noqa: E402
@@ -89,21 +89,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("sentinel")
 
 
-# ── 工具:运行环境 + 异常包装 ──────────────────────────────────
+# ── Utilities: runtime environment + exception wrapping ──────────────────────────────────
 def _is_plausible_openai_key(key: Optional[str]) -> bool:
-    """合法 OpenAI key 一定 'sk-' 前缀.过滤上游 backend 传过来的占位垃圾
-    (例如 'api-key-...-duze' 这种内部 token 被错配到 OPENAI_API_KEY 上,
-    会覆盖 sentinel-service 自己 env 里的真 key 导致 401)."""
+    """A valid OpenAI key always has the 'sk-' prefix. Filters out placeholder junk passed from the upstream backend
+    (e.g. internal tokens like 'api-key-...-duze' misconfigured as OPENAI_API_KEY,
+    which would override the real key in sentinel-service's own env and cause 401)."""
     return bool(key) and key.startswith("sk-")
 
 
 @asynccontextmanager
 async def _account_context(account_id: int, api_key: Optional[str]):
-    """设当前账号 + OpenAI API Key,函数返回时清理.
+    """Set the current account + OpenAI API Key, cleaned up when the function returns.
 
-    只接受看起来像合法 OpenAI key 的值;空 / 占位垃圾被忽略,从而保留
-    sentinel-service 进程自己 env 的 OPENAI_API_KEY,让 llm_client 走
-    OpenAI → Qwen fallback 链.
+    Only accepts values that look like a valid OpenAI key; empty / placeholder junk is ignored, thus keeping
+    the OPENAI_API_KEY from the sentinel-service process's own env so llm_client follows
+    the OpenAI -> Qwen fallback chain.
     """
     token = current_account.set(account_id)
     prev_key = os.environ.get("OPENAI_API_KEY")
@@ -127,9 +127,26 @@ async def _account_context(account_id: int, api_key: Optional[str]):
                 os.environ["OPENAI_API_KEY"] = prev_key
 
 
+def _stamped(records, symbol: Optional[str]):
+    """Normalize every record's symbol to the account's canonical symbol.
+
+    Why this stamp is required: analyze / brief / frontend data fetching all use `WHERE symbol = %s` (the account's
+    ticker, or the brand name if unset), while keyword-based crawlers each write their own - sina_finance writes the search term,
+    weixin_album writes the Official Account name. So **for accounts with a stock ticker, posts from these sources were never
+    analyzed**: they sit under symbol='<brand name>' while analyze looks under symbol='ACME';
+    the two never meet, and nothing errors (stats only show inserted +N, never "nobody analyzed it").
+
+    With symbol=None the crawler's original value is kept - compatible with callers not yet upgraded.
+    """
+    for rec in records:
+        if symbol:
+            rec["symbol"] = symbol
+        yield rec
+
+
 def _wrap(fn, *args, **kwargs) -> dict:
-    """yuqin 函数有用 sys.exit 的地方,这里不能让进程退出.
-    把 SystemExit 也包成 failed."""
+    """Some yuqin functions use sys.exit; the process must not exit here.
+    SystemExit is also wrapped as failed."""
     try:
         result = fn(*args, **kwargs)
         return {"status": "success", "data": result}
@@ -144,10 +161,10 @@ def _wrap(fn, *args, **kwargs) -> dict:
         return {"status": "failed", "error": str(e), "category": "system"}
 
 
-# ── Pydantic 请求模型 ──────────────────────────────────────────
+# ── Pydantic request models ──────────────────────────────────────────
 class MonitorRequest(BaseModel):
     account_id: int
-    target: str = Field(..., description="品牌名,例:世纪互联")
+    target: str = Field(..., description="品牌名,例:Acme Cloud")
     ticker: Optional[str] = None
     intent: Optional[str] = None
     aliases: list[str] = Field(default_factory=list)
@@ -160,8 +177,8 @@ class MonitorRequest(BaseModel):
     auto_widen: bool = True
     region: str = "wt-wt"
     engines: list[str] = Field(default_factory=lambda: ["searxng"])
-    # 默认走 SearXNG:server 端聚合多上游引擎 + 反爬/IP 池统一处理。
-    # 自带引擎 cnbing/baidu/sogou/ddg 仍保留,显式传 engines 即可回退。
+    # Defaults to SearXNG: server side aggregates multiple upstream engines + handles anti-bot/IP pool centrally.
+    # Built-in engines cnbing/baidu/sogou/ddg are still kept; pass engines explicitly to fall back.
 
 
 class AnalyzeRequest(BaseModel):
@@ -177,6 +194,18 @@ class BriefRequest(BaseModel):
     date: Optional[str] = None
     batch_size: int = 20
     top_noteworthy: int = 5
+    competitors: list[str] = Field(default_factory=list,
+                                   description="竞品实体词,简报据此分主体/竞品并出竞品模块")
+
+
+class MonthlyBriefRequest(BaseModel):
+    account_id: int
+    ticker: str
+    year: int
+    month: int
+    competitors: list[str] = Field(default_factory=list,
+                                   description="竞品实体词,月报据此分主体/竞品并出竞品模块")
+    force: bool = False          # True = rerun even if already generated; idempotent skip by default
 
 
 class RespondRequest(BaseModel):
@@ -209,35 +238,45 @@ class CrawlSinaRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
+    # Symbol to persist under. **Required for keyword-based sources** - see the _stamped comment.
+    symbol: Optional[str] = None
 
 
 class CrawlEastmoneyNewsRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
+    # Symbol to persist under. **Required for keyword-based sources** - see the _stamped comment.
+    symbol: Optional[str] = None
 
 
 class CrawlTiebaRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
+    # Symbol to persist under. **Required for keyword-based sources** - see the _stamped comment.
+    symbol: Optional[str] = None
 
 
 class CrawlClsRequest(BaseModel):
     account_id: int
     keyword: str
     pages: int = 3
+    # Symbol to persist under. **Required for keyword-based sources** - see the _stamped comment.
+    symbol: Optional[str] = None
 
 
 class CrawlGenericRequest(BaseModel):
-    """通用搜索型爬虫请求."""
+    """Generic search-type crawler request."""
     account_id: int
     keyword: str
     pages: int = 3
+    # Symbol to persist under. **Required for keyword-based sources** - see the _stamped comment.
+    symbol: Optional[str] = None
 
 
 class CrawlWeixinAlbumRequest(BaseModel):
-    """微信公众号合集抓取请求."""
+    """WeChat Official Account album crawl request."""
     account_id: int
     album_urls: list[str] = Field(default_factory=list,
                                   description="合集 URL 列表(__biz + album_id 完整 URL)")
@@ -245,10 +284,11 @@ class CrawlWeixinAlbumRequest(BaseModel):
                                description="是否额外抓 mp.weixin 正文(每篇 +1-2s)")
     max_articles_per_album: Optional[int] = Field(
         None, description="单合集上限保护;None=全量")
+    symbol: Optional[str] = Field(None, description="入库 symbol;见 _stamped")
 
 
 class CrawlNewsnowRequest(BaseModel):
-    """NewsNow 热榜聚合抓取请求."""
+    """NewsNow trending aggregation crawl request."""
     account_id: int
     source_ids: list[str] = Field(
         default_factory=list,
@@ -259,6 +299,12 @@ class CrawlNewsnowRequest(BaseModel):
     symbol: str = Field(..., description="入库 symbol(通常 = account.ticker)")
     base_url: Optional[str] = Field(
         None, description="覆盖 NEWSNOW_BASE_URL env;None=用容器默认")
+
+
+class WebSearchReportRequest(BaseModel):
+    """Request to persist a Yuanbao WebSearch quick-check report. The actual report fields are generated by the backend."""
+    account_id: int
+    report: dict[str, Any] = Field(default_factory=dict)
 
 
 # ── FastAPI app ────────────────────────────────────────────────
@@ -279,9 +325,9 @@ async def run_monitor(
     req: MonitorRequest,
     x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
 ) -> dict:
-    """生成 plan + 多引擎抓取 + 写 posts.
+    """Generate the plan + multi-engine crawl + write posts.
 
-    返回:{"status": "success"|"failed", "data": stats, "error": "..."}
+    Returns: {"status": "success"|"failed", "data": stats, "error": "..."}
     stats: {"queries": N, "inserted": N, "total": N, "by_source": {...}, "by_engine": {...}}
     """
     async with _account_context(req.account_id, x_openai_key):
@@ -317,7 +363,7 @@ async def run_analyze(
     req: AnalyzeRequest,
     x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
 ) -> dict:
-    """对未分析帖子做 LLM 分析,写 analyses."""
+    """Run LLM analysis on unanalyzed posts and write analyses."""
     async with _account_context(req.account_id, x_openai_key):
         def _do():
             return analyze_symbol(req.ticker, limit=req.limit, sleep_s=req.sleep_s)
@@ -329,9 +375,9 @@ async def run_brief(
     req: BriefRequest,
     x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
 ) -> dict:
-    """生成日度简报 Markdown 入库,返回 brief 内容."""
+    """Generate the daily brief Markdown, persist it, and return the brief content."""
     async with _account_context(req.account_id, x_openai_key):
-        # brief/generate.py 把 MD 写到 data/brief_*.md;我们让它输出到账号目录
+        # brief/generate.py writes MD to data/brief_*.md; we make it output to the account directory
         out_dir = _account_db_path(req.account_id).parent / "briefs"
 
         def _do():
@@ -341,9 +387,43 @@ async def run_brief(
                 out_dir=out_dir,
                 batch_size=req.batch_size,
                 top_noteworthy=req.top_noteworthy,
+                competitors=req.competitors or None,
             )
             body = Path(path).read_text(encoding="utf-8")
             return {"path": str(path), "body": body, "date": req.date}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.post("/run-monthly-brief")
+async def run_monthly_brief(
+    req: MonthlyBriefRequest,
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+) -> dict:
+    """Generate the monthly sentiment monitoring summary Markdown and persist it (kind=monthly), returning the content. Idempotent by default: skipped if the month is already generated."""
+    from storage import brief_exists                       # noqa: PLC0415
+    month_start = f"{int(req.year):04d}-{int(req.month):02d}-01"
+    async with _account_context(req.account_id, x_openai_key):
+        out_dir = _account_db_path(req.account_id).parent / "briefs"
+
+        def _do():
+            if not req.force:
+                conn = _yuqin_connect()
+                init_schema(conn)
+                if brief_exists(conn, req.ticker, month_start, kind="monthly"):
+                    row = conn.execute(
+                        "SELECT body FROM briefs WHERE account_id=%s AND symbol=%s "
+                        "AND date=%s AND kind='monthly' "
+                        "ORDER BY id DESC LIMIT 1", (req.account_id, req.ticker, month_start),
+                    ).fetchone()
+                    return {"skipped": True, "year": req.year, "month": req.month,
+                            "body": (row["body"] if row else "")}
+            path = generate_monthly_brief(
+                req.ticker, req.year, req.month,
+                out_dir=out_dir, competitors=req.competitors or None,
+            )
+            body = Path(path).read_text(encoding="utf-8")
+            return {"skipped": False, "path": str(path), "body": body,
+                    "year": req.year, "month": req.month}
         return await asyncio.to_thread(_wrap, _do)
 
 
@@ -352,13 +432,13 @@ async def run_respond(
     req: RespondRequest,
     x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
 ) -> dict:
-    """生成三档草稿,写 drafts."""
+    """Generate three draft tiers and write drafts."""
     if not (req.post_id or req.topic):
         raise HTTPException(400, "post_id 或 topic 至少传一个")
 
     async with _account_context(req.account_id, x_openai_key):
-        # 临时覆盖 KNOWLEDGE_DIR 让 yuqin _load_knowledge() 读账号知识库
-        # MVP:如果 client 传了 knowledge,落到临时目录;否则用容器默认 knowledge/
+        # Temporarily override KNOWLEDGE_DIR so yuqin's _load_knowledge() reads the account knowledge base
+        # MVP: if the client passed knowledge, write it to a temp directory; otherwise use the container default knowledge/
         original_dir = _draft_module.KNOWLEDGE_DIR
         if req.knowledge:
             kdir = _account_db_path(req.account_id).parent / "knowledge"
@@ -384,7 +464,7 @@ async def run_respond(
 
 @app.post("/run-crawl-eastmoney")
 async def run_crawl_eastmoney(req: CrawlEastmoneyRequest) -> dict:
-    """直接抓东财股吧(无需 OpenAI)."""
+    """Crawl the Eastmoney stock forum directly (no OpenAI needed)."""
     async with _account_context(req.account_id, None):
         def _do():
             client = EastmoneyGubaClient()
@@ -404,7 +484,7 @@ async def run_crawl_eastmoney(req: CrawlEastmoneyRequest) -> dict:
 
 @app.post("/run-crawl-xueqiu")
 async def run_crawl_xueqiu(req: CrawlXueqiuRequest) -> dict:
-    """直接抓雪球讨论帖(无需 OpenAI)."""
+    """Crawl Xueqiu discussion posts directly (no OpenAI needed)."""
     async with _account_context(req.account_id, None):
         def _do():
             client = XueqiuClient()
@@ -422,14 +502,14 @@ async def run_crawl_xueqiu(req: CrawlXueqiuRequest) -> dict:
 
 @app.post("/run-crawl-sina")
 async def run_crawl_sina(req: CrawlSinaRequest) -> dict:
-    """抓新浪财经搜索新闻."""
+    """Crawl Sina Finance search news."""
     async with _account_context(req.account_id, None):
         def _do():
             client = SinaFinanceClient()
             conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
-            for rec in client.search_pages(req.keyword, pages=req.pages):
+            for rec in _stamped(client.search_pages(req.keyword, pages=req.pages), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
@@ -440,14 +520,14 @@ async def run_crawl_sina(req: CrawlSinaRequest) -> dict:
 
 @app.post("/run-crawl-eastmoney-news")
 async def run_crawl_eastmoney_news(req: CrawlEastmoneyNewsRequest) -> dict:
-    """东财资讯搜索(新闻/研报/公告)."""
+    """Eastmoney news search (news/research reports/announcements)."""
     async with _account_context(req.account_id, None):
         def _do():
             client = EastmoneyNewsClient()
             conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
-            for rec in client.search_pages(req.keyword, pages=req.pages):
+            for rec in _stamped(client.search_pages(req.keyword, pages=req.pages), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
@@ -458,14 +538,14 @@ async def run_crawl_eastmoney_news(req: CrawlEastmoneyNewsRequest) -> dict:
 
 @app.post("/run-crawl-tieba")
 async def run_crawl_tieba(req: CrawlTiebaRequest) -> dict:
-    """百度贴吧搜索."""
+    """Baidu Tieba search."""
     async with _account_context(req.account_id, None):
         def _do():
             client = BaiduTiebaClient()
             conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
-            for rec in client.search_pages(req.keyword, pages=req.pages):
+            for rec in _stamped(client.search_pages(req.keyword, pages=req.pages), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
@@ -476,18 +556,18 @@ async def run_crawl_tieba(req: CrawlTiebaRequest) -> dict:
 
 @app.post("/run-crawl-cls")
 async def run_crawl_cls(req: CrawlClsRequest) -> dict:
-    """财联社快讯+搜索."""
+    """Cailian Press flash news + search."""
     async with _account_context(req.account_id, None):
         def _do():
             client = ClsFinanceClient()
             conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
-            for rec in client.fetch_telegraph(keyword=req.keyword, count=100):
+            for rec in _stamped(client.fetch_telegraph(keyword=req.keyword, count=100), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
-            for rec in client.search_pages(req.keyword, pages=req.pages):
+            for rec in _stamped(client.search_pages(req.keyword, pages=req.pages), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
@@ -497,7 +577,7 @@ async def run_crawl_cls(req: CrawlClsRequest) -> dict:
 
 
 def _generic_crawl_endpoint(client_cls, source_name: str):
-    """工厂函数: 生成通用搜索型爬虫 endpoint."""
+    """Factory function: create a generic search-type crawler endpoint."""
     async def handler(req: CrawlGenericRequest) -> dict:
         async with _account_context(req.account_id, None):
             def _do():
@@ -505,7 +585,8 @@ def _generic_crawl_endpoint(client_cls, source_name: str):
                 conn = _yuqin_connect()
                 init_schema(conn)
                 total = inserted = 0
-                for rec in client.search_pages(req.keyword, pages=req.pages):
+                for rec in _stamped(client.search_pages(req.keyword, pages=req.pages),
+                                    req.symbol):
                     if upsert_post(conn, rec):
                         inserted += 1
                     total += 1
@@ -522,8 +603,8 @@ app.post("/run-crawl-wallstreetcn")(_generic_crawl_endpoint(WallstreetcnClient, 
 app.post("/run-crawl-yicai")(_generic_crawl_endpoint(YicaiClient, "yicai"))
 app.post("/run-crawl-36kr")(_generic_crawl_endpoint(Kr36Client, "kr36"))
 
-# 新增 EastMoney 系列(2026-05-08):公告 / 个股研报 / 行业研究
-# 这些 endpoint 接收的 keyword 实际是 6 位 A 股代码(由 service 层透传)
+# New EastMoney series (2026-05-08): announcements / stock research reports / industry research
+# The keyword these endpoints receive is actually a 6-digit A-share code (passed through by the service layer)
 app.post("/run-crawl-eastmoney-ann")(_generic_crawl_endpoint(EastmoneyAnnouncementClient, "eastmoney_ann"))
 app.post("/run-crawl-eastmoney-research")(_generic_crawl_endpoint(EastmoneyResearchClient, "eastmoney_research"))
 app.post("/run-crawl-eastmoney-industry")(_generic_crawl_endpoint(EastmoneyIndustryClient, "eastmoney_industry"))
@@ -532,7 +613,7 @@ app.post("/run-crawl-sina-stock")(_generic_crawl_endpoint(SinaStockNewsClient, "
 
 @app.post("/run-crawl-weixin-album")
 async def run_crawl_weixin_album(req: CrawlWeixinAlbumRequest) -> dict:
-    """按合集 URL 全量枚举微信公众号文章(无 cookie,无 LLM)."""
+    """Enumerate all WeChat Official Account articles by album URL (no cookie, no LLM)."""
     async with _account_context(req.account_id, None):
         def _do():
             if not req.album_urls:
@@ -541,9 +622,9 @@ async def run_crawl_weixin_album(req: CrawlWeixinAlbumRequest) -> dict:
             conn = _yuqin_connect()
             init_schema(conn)
             total = inserted = 0
-            for rec in client.fetch_albums(
+            for rec in _stamped(client.fetch_albums(
                 req.album_urls, max_articles_per_album=req.max_articles_per_album,
-            ):
+            ), req.symbol):
                 if upsert_post(conn, rec):
                     inserted += 1
                 total += 1
@@ -555,7 +636,7 @@ async def run_crawl_weixin_album(req: CrawlWeixinAlbumRequest) -> dict:
 
 @app.post("/run-crawl-newsnow")
 async def run_crawl_newsnow(req: CrawlNewsnowRequest) -> dict:
-    """轮询自托管 newsnow 热榜聚合(无 LLM)."""
+    """Poll the self-hosted newsnow trending aggregator (no LLM)."""
     async with _account_context(req.account_id, None):
         def _do():
             if not req.source_ids:
@@ -577,13 +658,40 @@ async def run_crawl_newsnow(req: CrawlNewsnowRequest) -> dict:
         return await asyncio.to_thread(_wrap, _do)
 
 
-# ── newsnow 实时热点(只读 / 不绑 account / 不入库) ─────────────
-# 用于前端"实时新闻 / 今日热点"面板:纯转发自托管 newsnow JSON,
-# 不消费 keywords 也不落 posts 表,只展示给用户看。
-# 与 /run-crawl-newsnow 互补:那条路径走 account.newsnow_sources +
-# keywords 过滤,产物落 posts 进入分析管线;本路径是"裸热榜"。
+@app.post("/websearch-report")
+async def save_websearch_report(req: WebSearchReportRequest) -> dict:
+    """Save a Yuanbao WebSearch sentiment quick-check report into the current account's tenant schema."""
+    async with _account_context(req.account_id, None):
+        def _do():
+            from storage import insert_websearch_report  # type: ignore
+            conn = _yuqin_connect()
+            init_schema(conn)
+            report_id = insert_websearch_report(conn, req.report or {})
+            conn.commit()
+            return {"id": report_id, "report_id": report_id}
+        return await asyncio.to_thread(_wrap, _do)
+
+
+@app.get("/accounts/{account_id}/websearch-latest")
+def websearch_latest(account_id: int, ticker: Optional[str] = None) -> dict:
+    """Read the latest Yuanbao WebSearch quick-check report from the current account's tenant schema."""
+    with _account_db_context(account_id):
+        from storage import latest_websearch_report  # type: ignore
+        conn = _yuqin_connect()
+        init_schema(conn)
+        report = latest_websearch_report(conn, ticker=ticker)
+        if not report:
+            return {"available": False, "mode": None}
+        return {"available": True, **report}
+
+
+# ── newsnow real-time trending (read-only / not bound to an account / not persisted) ─────────────
+# Used by the frontend "Live news / Today's trending" panel: a pure pass-through of the self-hosted newsnow JSON,
+# does not consume keywords or write to the posts table, only shown to the user.
+# Complements /run-crawl-newsnow: that path uses account.newsnow_sources +
+# keyword filtering and writes posts into the analysis pipeline; this path is the "raw trending list".
 _NEWSNOW_SOURCE_CATALOG: list[dict] = [
-    # 推荐顺序 ≈ 国内可用 + 群众反应面优先
+    # Recommended order ≈ available in China + public-reaction sources first
     {"id": "weibo",       "name_zh": "微博热搜",      "name_en": "Weibo",         "category": "social"},
     {"id": "zhihu",       "name_zh": "知乎热榜",      "name_en": "Zhihu",         "category": "social"},
     {"id": "douyin",      "name_zh": "抖音热榜",      "name_en": "Douyin",        "category": "social"},
@@ -614,16 +722,16 @@ _NEWSNOW_SOURCE_CATALOG: list[dict] = [
 
 @app.get("/newsnow/sources")
 def newsnow_sources() -> dict:
-    """返回 newsnow 推荐源目录(静态)。前端用来渲染 tab 切换。"""
+    """Return the newsnow recommended source catalog (static). The frontend uses it to render tab switching."""
     return {"count": len(_NEWSNOW_SOURCE_CATALOG), "items": _NEWSNOW_SOURCE_CATALOG}
 
 
 @app.get("/newsnow/hot")
 async def newsnow_hot(source: str, limit: int = 30) -> dict:
-    """拉指定 source 的当前热榜(实时新闻 / 今日热点用)。
-    - 不落库、不分析、不过滤,纯转发 newsnow JSON
-    - 当 newsnow 不可达时返回 items=[] + error,前端友好降级
-    - limit 默认 30,上限 100
+    """Fetch the current trending list for the given source (for Live news / Today's trending).
+    - Not persisted, not analyzed, not filtered; a pure pass-through of newsnow JSON
+    - When newsnow is unreachable, returns items=[] + error so the frontend degrades gracefully
+    - limit defaults to 30, max 100
     """
     source = (source or "").strip().lower()
     if not source:
@@ -634,7 +742,7 @@ async def newsnow_hot(source: str, limit: int = 30) -> dict:
         from datetime import datetime, timezone
         client = NewsnowHubClient()
         items = client.fetch_source(source)
-        # 友好降级:newsnow 不返时间戳,前端展示用 fetched_at = 服务端时间
+        # Graceful degradation: newsnow returns no timestamps, so the frontend displays fetched_at = server time
         return {
             "source": source,
             "items": items[:limit] if items else [],
@@ -645,25 +753,25 @@ async def newsnow_hot(source: str, limit: int = 30) -> dict:
     return await asyncio.to_thread(_do)
 
 
-# ── 数据查询 endpoints(给 GEO backend 取数渲染前端用)──────────
+# ── Data query endpoints (for the GEO backend to fetch data for frontend rendering) ──────────
 @app.get("/accounts/{account_id}/posts")
 def list_posts(account_id: int, ticker: str, limit: int = 50,
                offset: int = 0, days: int = 1,
                start: str | None = None, end: str | None = None,
                sort_by: str = "newest") -> dict:
-    """返回 posts JOIN analyses(给文章 Tab 用)。
+    """Return posts JOIN analyses (for the Articles tab).
 
-    时间过滤(基于 ingested_at):
-      - start/end (YYYY-MM-DD,闭区间) 优先;任一端可省。
-      - 否则按 days:1=今日(默认), N>1=最近 N 天, 0=全部历史。
+    Time filtering (based on ingested_at):
+      - start/end (YYYY-MM-DD, inclusive) take precedence; either end may be omitted.
+      - Otherwise by days: 1 = today (default), N>1 = last N days, 0 = all history.
 
-    排序 sort_by(默认 newest)— 支持:
+    Sort sort_by (default newest) - supports:
       newest / oldest / engagement / replies / likes / shares / views /
       cluster / mediaAZ / mediaZA / scoreSentiment / scoreInfluence.
-      未知值后端回退 newest。
+      Unknown values fall back to newest on the backend.
 
-    分页:limit + offset。返回:
-      items[]、count(本页)、total(满足时间筛选的总条数)、offset、days、start、end、sort_by。
+    Pagination: limit + offset. Returns:
+      items[], count (this page), total (total rows matching the time filter), offset, days, start, end, sort_by.
     """
     from storage import analyses_for_symbol, analyses_count_for_symbol  # type: ignore
     with _account_db_context(account_id):
@@ -684,15 +792,20 @@ def list_posts(account_id: int, ticker: str, limit: int = 50,
 
 
 @app.get("/accounts/{account_id}/briefs")
-def list_briefs(account_id: int, ticker: str) -> dict:
-    """返回该 account 的所有简报(metadata only,body 由 /briefs/{id} 取)."""
+def list_briefs(account_id: int, ticker: str, kind: Optional[str] = None) -> dict:
+    """Return the account's briefs (metadata only; body via /briefs/{id}).
+    kind optionally filters (daily/monthly); if omitted, returns all with a kind field so the frontend can distinguish."""
     with _account_db_context(account_id):
         conn = _yuqin_connect()
         init_schema(conn)
-        rows = list(conn.execute(
-            "SELECT id, symbol, date, model, generated_at FROM briefs "
-            "WHERE symbol = %s ORDER BY date DESC, id DESC", (ticker,),
-        ))
+        sql = ("SELECT id, symbol, date, kind, model, generated_at FROM briefs "
+               "WHERE account_id = %s AND symbol = %s")
+        params: list = [account_id, ticker]
+        if kind:
+            sql += " AND kind = %s"
+            params.append(kind)
+        sql += " ORDER BY date DESC, id DESC"
+        rows = list(conn.execute(sql, tuple(params)))
         return {"count": len(rows), "items": [dict(r) for r in rows]}
 
 
@@ -700,7 +813,10 @@ def list_briefs(account_id: int, ticker: str) -> dict:
 def get_brief(account_id: int, brief_id: int) -> dict:
     with _account_db_context(account_id):
         conn = _yuqin_connect()
-        row = conn.execute("SELECT * FROM briefs WHERE id = %s", (brief_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM briefs WHERE account_id = %s AND id = %s",
+            (account_id, brief_id),
+        ).fetchone()
         if not row:
             raise HTTPException(404, "brief not found")
         return dict(row)
@@ -712,16 +828,17 @@ def list_drafts(account_id: int, ticker: str) -> dict:
         conn = _yuqin_connect()
         init_schema(conn)
         rows = list(conn.execute(
-            "SELECT * FROM drafts WHERE symbol = %s ORDER BY id DESC", (ticker,),
+            "SELECT * FROM drafts WHERE account_id = %s AND symbol = %s ORDER BY id DESC",
+            (account_id, ticker),
         ))
         return {"count": len(rows), "items": [dict(r) for r in rows]}
 
 
 @app.get("/accounts/{account_id}/today")
 def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
-    """Tab 1 数据聚合 — 一次请求拿到所有渲染所需:KPI / 7 天趋势 / 风险分布 / 最新简报 / 高风险 Top5.
+    """Tab 1 data aggregation - one request gets everything needed to render: KPIs / 7-day trend / risk distribution / latest brief / high-risk Top5.
 
-    在 sentinel-service 里聚合,前端不必拉几百条 posts 自己算.
+    Aggregated in sentinel-service so the frontend does not have to pull hundreds of posts and compute itself.
     """
     from collections import Counter
     from datetime import date, datetime, timedelta
@@ -733,12 +850,12 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
-        # 内容新鲜度下限:发布日期(publish_time)早于此的旧帖,即便今天才爬到也不展示。
+        # Content freshness floor: old posts whose publish date (publish_time) is earlier than this are not shown, even if crawled today.
         recency_cutoff = (date.today() - timedelta(days=DISPLAY_MAX_AGE_DAYS - 1)).isoformat()
 
-        # 当日 KPI:posts × analyses(仅 is_relevant=1,与下方趋势图/风险饼/文章列表保持一致)
-        # 追加新鲜度闸门:COALESCE(publish_time, ingested_at) >= recency_cutoff —— publish_time
-        # 已知且陈旧(如今天爬到的 2024 文章)被剔除;无日期的回退入库时间(都是今天入库,算新)。
+        # Today's KPIs: posts x analyses (only is_relevant=1, consistent with the trend chart/risk pie/article list below)
+        # Plus the freshness gate: COALESCE(publish_time, ingested_at) >= recency_cutoff - posts whose publish_time
+        # is known and stale (e.g. a 2024 article crawled today) are excluded; undated ones fall back to ingestion time (all ingested today, counted as new).
         kpi_sql = """
             SELECT
                 count(*) AS total,
@@ -746,34 +863,34 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                 avg(a.sentiment_score) AS avg_sentiment,
                 count(DISTINCT p.source) AS active_sources
             FROM posts p JOIN analyses a
-              ON p.source = a.source AND p.post_id = a.post_id
-            WHERE p.symbol = %s
+              ON a.account_id = p.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE p.account_id = %s AND p.symbol = %s
               AND a.is_relevant = 1
               AND substr(p.ingested_at, 1, 10) = %s
               AND COALESCE(p.publish_time, p.ingested_at) >= %s
         """
-        kpi_row = conn.execute(kpi_sql, (ticker, today, recency_cutoff)).fetchone()
-        prev_row = conn.execute(kpi_sql, (ticker, yesterday, recency_cutoff)).fetchone()
+        kpi_row = conn.execute(kpi_sql, (account_id, ticker, today, recency_cutoff)).fetchone()
+        prev_row = conn.execute(kpi_sql, (account_id, ticker, yesterday, recency_cutoff)).fetchone()
 
-        # N 天情感堆叠柱:严格按 publish_time 分桶(NULL 的丢弃).
-        # Why: 爬虫单次能拉回半年历史内容,若按 ingested_at 分桶,所有历史都
-        # 堆到首次入库当天,左侧巨柱、中间空白.而 publish_time 为 NULL 的(主
-        # 要是搜索引擎结果页未能解析发布日期)无法归到任一具体日期,如果回退
-        # 到 ingested_at 又会重新制造首次入库当天的尖峰,所以直接丢弃.今日
-        # KPI 仍按 ingested_at 统计,语义不同,允许不一致.
+        # N-day stacked sentiment bars: bucketed strictly by publish_time (NULLs dropped).
+        # Why: a single crawl can pull back half a year of history; bucketing by ingested_at would pile all history
+        # onto the first ingestion day - a giant bar on the left, blank in the middle. Posts with NULL publish_time (mainly
+        # search result pages where the publish date could not be parsed) cannot be assigned to a specific date, and falling back
+        # to ingested_at would recreate the first-ingestion-day spike, so they are dropped. Today's
+        # KPIs are still counted by ingested_at; the semantics differ, so the inconsistency is allowed.
         trend_rows = list(conn.execute("""
             SELECT
                 substr(p.publish_time, 1, 10) AS d,
                 a.sentiment_label AS sl,
                 count(*) AS c
             FROM posts p JOIN analyses a
-              ON p.source = a.source AND p.post_id = a.post_id
-            WHERE p.symbol = %s AND a.is_relevant = 1
+              ON a.account_id = p.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE p.account_id = %s AND p.symbol = %s AND a.is_relevant = 1
               AND p.publish_time IS NOT NULL
               AND substr(p.publish_time, 1, 10) >= %s
             GROUP BY d, sl
             ORDER BY d ASC
-        """, (ticker, cutoff)))
+        """, (account_id, ticker, cutoff)))
 
         trend_dict: dict[str, dict] = {}
         for r in trend_rows:
@@ -787,7 +904,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             else:
                 bucket["neutral"] += r["c"]
 
-        # 补齐 N 天连续(没有数据的日期填 0)
+        # Fill in N consecutive days (dates without data get 0)
         trend = []
         for i in range(days - 1, -1, -1):
             d = (date.today() - timedelta(days=i)).isoformat()
@@ -796,28 +913,29 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
             else:
                 trend.append({"date": d[5:], "bullish": 0, "neutral": 0, "bearish": 0, "mixed": 0})
 
-        # 风险分布(新鲜度窗口内):用于饼图。同样按 publish_time 收口,不再算陈旧内容。
+        # Risk distribution (within the freshness window): for the pie chart. Also narrowed by publish_time, no longer counting stale content.
         risk_rows = list(conn.execute("""
             SELECT a.risk_level AS lvl, count(*) AS c
             FROM analyses a JOIN posts p
-              ON a.source = p.source AND a.post_id = p.post_id
-            WHERE a.symbol = %s AND a.is_relevant = 1
+              ON p.account_id = a.account_id AND a.source = p.source AND a.post_id = p.post_id
+            WHERE a.account_id = %s AND a.symbol = %s AND a.is_relevant = 1
               AND COALESCE(p.publish_time, p.ingested_at) >= %s
             GROUP BY lvl
-        """, (ticker, recency_cutoff)))
+        """, (account_id, ticker, recency_cutoff)))
         RISK_COLORS = {"none": "#94a3b8", "low": "#fbbf24", "medium": "#fb923c", "high": "#ef4444"}
         risk_dist = []
         for lvl in ("none", "low", "medium", "high"):
             count = next((r["c"] for r in risk_rows if (r["lvl"] or "none") == lvl), 0)
             risk_dist.append({"level": lvl, "count": count, "color": RISK_COLORS[lvl]})
 
-        # 最新简报
+        # Latest brief
         brief = conn.execute(
-            "SELECT * FROM briefs WHERE symbol = %s ORDER BY date DESC, id DESC LIMIT 1", (ticker,),
+            "SELECT * FROM briefs WHERE account_id = %s AND symbol = %s "
+            "ORDER BY date DESC, id DESC LIMIT 1", (account_id, ticker),
         ).fetchone()
         latest_brief = dict(brief) if brief else None
 
-        # 高风险 Top 5(按 yuqin chat agent top_posts 同款公式)
+        # High-risk Top 5 (same formula as yuqin chat agent top_posts)
         top_rows = list(conn.execute("""
             SELECT a.source, a.post_id, p.title, p.author, p.publish_time, p.url,
                    p.view_count, p.reply_count, p.content,
@@ -828,14 +946,14 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                    a.influence_potential, a.hidden_meaning, a.citations_json,
                    a.reasoning, a.is_relevant
             FROM analyses a JOIN posts p
-              ON p.source = a.source AND p.post_id = a.post_id
-            WHERE a.symbol = %s AND a.is_relevant = 1
+              ON p.account_id = a.account_id AND p.source = a.source AND p.post_id = a.post_id
+            WHERE a.account_id = %s AND a.symbol = %s AND a.is_relevant = 1
               AND COALESCE(p.publish_time, p.ingested_at) >= %s
             ORDER BY (coalesce(a.influence_potential,0)
                      * abs(coalesce(a.sentiment_score,0)) + 0.01) DESC,
                      coalesce(p.view_count,0) DESC
             LIMIT 5
-        """, (ticker, recency_cutoff)))
+        """, (account_id, ticker, recency_cutoff)))
         top_posts = [_row_to_dict(r) for r in top_rows]
 
         total_today = kpi_row["total"] or 0
@@ -859,7 +977,7 @@ def today_aggregation(account_id: int, ticker: str, days: int = 7) -> dict:
                 "active_sources": kpi_row["active_sources"] or 0,
                 "trend_total_pct": _pct(total_today, total_prev),
                 "trend_risk_pct": _pct(high_risk_today, high_risk_prev),
-                # 情感分数本身就在 -1..+1,差值 × 100 当百分点更直观
+                # Sentiment scores are already in -1..+1; difference x 100 as percentage points is more intuitive
                 "trend_sentiment_pct": round((avg_sentiment_today - avg_sentiment_prev) * 100),
             },
             "sentiment_trend": trend,
@@ -883,7 +1001,7 @@ def _account_db_context(account_id: int):
 
 
 def _summarize_plan(plan: dict) -> dict:
-    """精简 plan 给客户端,避免传整个 LLM 输出."""
+    """Trimmed plan for the client, avoiding sending the whole LLM output."""
     return {
         "target": plan.get("target"),
         "ticker": plan.get("ticker"),
@@ -893,7 +1011,7 @@ def _summarize_plan(plan: dict) -> dict:
 
 
 def _row_to_dict(r) -> dict:
-    """row(psycopg dict_row 已经是 dict)→ dict,JSON 字段反序列化."""
+    """row (psycopg dict_row is already a dict) -> dict, with JSON fields deserialized."""
     d = dict(r)
     for k in ("emotions_json", "topics_json", "entities_json", "risk_signals_json", "citations_json"):
         if k in d and d[k]:

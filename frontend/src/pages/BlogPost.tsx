@@ -1,12 +1,14 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { PageHead } from '../components/PageHead';
-import { getPostBySlug } from '../data/blogPosts';
+import { getPostBySlug, type BlogPost as BlogPostType } from '../data/blogPosts';
+import { fetchBlogPost } from '../services/blogApi';
 
-// Markdown 渲染样式 —— 复用项目主题色变量,不依赖 tailwind typography 插件
+// Markdown rendering styles -- reuse the project's theme color variables, no dependency on the tailwind typography plugin
 const mdComponents: Components = {
   h2: ({ children }) => (
     <h2 className="text-2xl font-bold mt-12 mb-4 gradient-text">{children}</h2>
@@ -50,18 +52,36 @@ const mdComponents: Components = {
 };
 
 export function BlogPost() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { slug } = useParams();
-  const lang = i18n.language === 'en' ? 'en' : 'zh';
-  const post = slug ? getPostBySlug(slug) : undefined;
+  const lang = 'zh' as const;  // ICP filing remediation: the site serves Chinese only
+
+  // DB first: an article may exist only in appdb (adding articles needs no deploy); static data is only a fallback.
+  // notFound holds only when "the API explicitly returned 404 and static data doesn't have it either" -- an API outage doesn't count.
+  const staticPost = slug ? getPostBySlug(slug) : undefined;
+  const [apiPost, setApiPost] = useState<BlogPostType | null>(null);
+  const [apiDone, setApiDone] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setApiPost(null); setApiDone(false);
+    if (!slug) { setApiDone(true); return; }
+    fetchBlogPost(slug)
+      .then((p) => { if (!alive) return; if (p) setApiPost(p); setApiDone(true); })
+      .catch(() => { if (alive) setApiDone(true); });
+    return () => { alive = false; };
+  }, [slug]);
+
+  const post = apiPost ?? staticPost;
 
   if (!post) {
+    // API still in flight and no static fallback -> render an empty shell for a beat to avoid a wrong redirect
+    if (!apiDone && slug) return <div className="min-h-screen grid-background" />;
     return <Navigate to="/blog" replace />;
   }
 
   const c = post[lang];
   const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN', {
+    new Date(iso).toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

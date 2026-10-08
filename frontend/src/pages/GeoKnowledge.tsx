@@ -10,18 +10,18 @@ export function GeoKnowledge() {
   return (
     <div className="min-h-screen grid-background">
       <PageHead titleKey="pageMeta.geoKnowledge.title" descriptionKey="pageMeta.geoKnowledge.description" />
-      {/* 背景发光效果 */}
+      {/* Background glow effect */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
 
-      {/* 主内容 */}
+      {/* Main content */}
       <main className="flex-1 px-4 py-16 sm:py-24 hero-gradient relative z-10">
         <div className="w-full max-w-6xl mx-auto animate-fade-in">
           {/* Hero Section */}
           <section className="hero mb-10">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up">
                 <span className="gradient-text">{t('geoKnowledge.title')}</span>
               </h1>
               <p className="text-lg sm:text-xl text-secondary max-w-3xl mx-auto leading-relaxed animate-slide-up" style={{ animationDelay: '0.1s' }}>

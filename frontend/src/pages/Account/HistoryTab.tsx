@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
+import { PageHeader } from '../../components/ui';
+import { fmtTime } from '../../utils/datetime';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { accountApi, type DetectionRecordSummary } from '../../services/accountApi';
+import { uiConfirm } from '../../components/ui/dialogs';
+import { toast } from '../../components/ui/toast';
 
 const PAGE_SIZE = 10;
 
@@ -51,23 +55,27 @@ export function HistoryTab() {
     setViewingId(id);
     try {
       const detail = await accountApi.getDetection(token, id);
-      navigate('/result', { state: { result: detail.result, fromHistory: true } });
+      // record_id in the snapshot is null (it's backfilled onto the response only after persisting to DB),
+      // so fill in the row id here, letting "Export PDF" for historical reports use backend Chrome printing.
+      navigate('/result', {
+        state: { result: { ...detail.result, record_id: detail.id }, fromHistory: true },
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('common.errors.loadFailed'));
+      toast.error(err instanceof Error ? err.message : t('common.errors.loadFailed'));
     } finally {
       setViewingId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm(t('account.history.deleteConfirm', '确定删除这条检测记录吗？'))) return;
+    if (!(await uiConfirm(t('account.history.deleteConfirm', '确定删除这条检测记录吗？'), { danger: true }))) return;
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
       await accountApi.deleteDetection(token, id);
       await load(page);
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('common.errors.deleteFailed'));
+      toast.error(err instanceof Error ? err.message : t('common.errors.deleteFailed'));
     }
   };
 
@@ -75,6 +83,7 @@ export function HistoryTab() {
 
   return (
     <div className="space-y-4">
+      <PageHeader title="检测记录" hint="历次 GEO 检测的结果与评分,点进去看单次报告" />
       <div className="rounded-2xl overflow-hidden" style={cardStyle}>
         <div
           className="px-6 py-4 flex items-center justify-between"
@@ -138,12 +147,17 @@ export function HistoryTab() {
                       >
                         {row.mode === 'advanced'
                           ? t('account.history.modeAdvanced', '高级')
-                          : t('account.history.modeFree', '标准')}
+                          : row.mode === 'seo'
+                            // Written by the standalone /api/seo/check endpoint
+                            // (API / CLI callers). Website runs bundle SEO into
+                            // the GEO row, so this is the only source of them.
+                            ? t('account.history.modeSeo', 'SEO')
+                            : t('account.history.modeFree', '标准')}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-secondary">
                       <span style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
-                        {new Date(row.created_at).toLocaleString()}
+                        {fmtTime(row.created_at)}
                       </span>
                       {row.score != null && (
                         <span className="font-semibold text-primary" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
@@ -218,7 +232,7 @@ export function HistoryTab() {
                       className="transition-colors hover:bg-white/5"
                     >
                       <td className="px-4 py-3 text-secondary whitespace-nowrap" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
-                        {new Date(row.created_at).toLocaleString()}
+                        {fmtTime(row.created_at)}
                       </td>
                       <td className="px-4 py-3 text-primary max-w-xs truncate" style={isDeleted ? { textDecoration: 'line-through' } : undefined}>
                         <span title={row.url}>{row.url}</span>

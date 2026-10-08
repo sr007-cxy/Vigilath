@@ -16,11 +16,48 @@ export default {
       divideColor: {
         DEFAULT: 'var(--border-color)',
       },
+      borderRadius: {
+        // Elements (shadcn source) uses rounded-lg; give it its own radius without touching the Tailwind default
+        aui: 'var(--aui-radius)',
+      },
       colors: {
+        // === assistant-ui / Elements dedicated palette ===
+        // All prefixed aui-, fully isolated from the site-wide tokens below. The copied Elements source has
+        // bg-background / text-muted-foreground changed to bg-aui-background / text-aui-muted-foreground.
+        // Never override muted / card / border below just to change fewer classNames -
+        // muted is a text color here but a background color in shadcn; overriding it silently recolors text-muted site-wide.
+        'aui-background': 'var(--aui-background)',
+        'aui-foreground': 'var(--aui-foreground)',
+        'aui-card': 'var(--aui-card)',
+        'aui-card-foreground': 'var(--aui-card-foreground)',
+        'aui-popover': 'var(--aui-popover)',
+        'aui-popover-foreground': 'var(--aui-popover-foreground)',
+        'aui-primary': 'var(--aui-primary)',
+        'aui-primary-foreground': 'var(--aui-primary-foreground)',
+        'aui-secondary': 'var(--aui-secondary)',
+        'aui-secondary-foreground': 'var(--aui-secondary-foreground)',
+        'aui-muted': 'var(--aui-muted)',
+        'aui-muted-foreground': 'var(--aui-muted-foreground)',
+        'aui-accent': 'var(--aui-accent)',
+        'aui-accent-foreground': 'var(--aui-accent-foreground)',
+        'aui-destructive': 'var(--aui-destructive)',
+        'aui-destructive-foreground': 'var(--aui-destructive-foreground)',
+        'aui-border': 'var(--aui-border)',
+        'aui-input': 'var(--aui-input)',
+        'aui-ring': 'var(--aui-ring)',
+
         // Theme-aware tokens backed by CSS variables in index.css. These make
         // classes like `bg-card`, `bg-tertiary`, `text-accent-primary`,
         // `border-border`, `placeholder-muted` etc. respect the active theme
         // (peec / light / dark) instead of resolving to hardcoded shades.
+        // Semantic colors: error messages. index.css defines a set per data-theme, so these classes
+        // **follow the site theme**. Do not use the `bg-red-100 dark:bg-red-900/30` style anymore -
+        // Tailwind has no darkMode configured, so `dark:` follows the system prefers-color-scheme by default,
+        // decoupled from the site theme: with "light site + dark system" the measured contrast is only 1.06, effectively invisible.
+        'danger-fg': 'var(--danger-fg)',
+        'danger-bg': 'var(--danger-bg)',
+        'danger-border': 'var(--danger-border)',
+        'danger-solid': 'var(--danger-solid)',
         border: 'var(--border-color)',
         'border-strong': 'var(--border-strong)',
         card: 'var(--bg-card)',

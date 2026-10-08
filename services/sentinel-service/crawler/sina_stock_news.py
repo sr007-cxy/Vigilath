@@ -55,7 +55,7 @@ class SinaStockNewsClient:
 
         stock_code:
         - "300750" / "600519" → A 股,自动加 sz/sh 前缀
-        - "VNET" / "TSLA"     → 美股,大写代码
+        - "BABA" / "TSLA"     → 美股,大写代码
         """
         prefix = _to_sina_prefix(stock_code)
         if not prefix:
@@ -116,7 +116,7 @@ def _to_sina_prefix(code: str) -> str | None:
     if not s:
         return None
     s_upper = s.upper()
-    # 美股:纯字母,如 VNET, TSLA
+    # 美股:纯字母,如 BABA, TSLA
     if s_upper.isalpha():
         return s_upper
     # 6 位数字 = A 股

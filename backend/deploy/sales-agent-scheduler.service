@@ -1,0 +1,45 @@
+# systemd unit: Sales Agent scheduled sending scheduler (design §7.1).
+#
+# **Without this unit, the scheduled sending feature does not exist at all**, and the symptom is "the user scheduled 15:00, and at the time nothing
+# was sent, with no error on the page and no exception in the logs". For the first week after launch, watch whether
+# sales_agent_scheduler_heartbeats is being written; it is the only place to discover it did not start (§7.4).
+#
+# Install:
+#   cp deploy/sales-agent-scheduler.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now sales-agent-scheduler
+# Check that it is alive:
+#   systemctl status sales-agent-scheduler
+#   psql -c "select instance_key, last_beat_at, live_workers, last_error
+#            from sales_agent_scheduler_heartbeats order by last_beat_at desc"
+#
+# Two hard requirements:
+#   1. **Only one instance in the whole system.** The advisory lock prevents duplicate sends, but two instances would fight
+#      over the lock, wasting half their runs, and the heartbeat table would keep two rows, muddying debugging;
+#   2. **Use the same venv as geo-agent.** It imports agents.sales_agent.*, with exactly the same dependency set
+#      as geo-agent (the pydantic-ai stack); do not create a separate environment.
+#
+# If it is not PostgreSQL, the process logs an INFO line and exits immediately (pg_try_advisory_lock does not exist on SQLite,
+# and it does not degrade to running without a lock). Combined with Restart=always it exits every 10 seconds: if you see this
+# log flooding, DATABASE_URL in .env points to the wrong place; the scheduler is not broken.
+[Unit]
+Description=Vigilath Sales Agent Send Scheduler (定时发送)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/geo/backend
+EnvironmentFile=/opt/geo/backend/.env
+# Dedicated venv: the same one as geo-agent.service, do not create a new one
+ExecStart=/opt/geo/agent-venv/bin/python -m agents.sales_agent.scheduler
+# on-failure is not enough: this process should also be brought back after a normal exit (cleanup after SIGTERM).
+# It is a single point; while it is down, no plan sends anything.
+Restart=always
+RestartSec=10
+# The main loop runs every 60 seconds; after SIGTERM it waits for the current round's wait to wake up; send threads are daemons,
+# and it does not wait for them to finish a whole batch (that could take 50 minutes). Unfinished item rows' claimed_at is reclaimed
+# by the next process after 5 minutes.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

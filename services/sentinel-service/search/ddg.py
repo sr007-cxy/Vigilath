@@ -4,7 +4,7 @@ Uses the `ddgs` package (formerly `duckduckgo-search`). Region defaults to
 `wt-wt` (no region bias) so a single query gets both Chinese and English
 results in one shot — the analyzer is bilingual.
 
-远程代理模式:vm02 这种国内机房 IP 直连 DDG 全部 backend 都超时/被禁。
+远程代理模式:<app-host> 这种国内机房 IP 直连 DDG 全部 backend 都超时/被禁。
 若设了 env DDG_REMOTE_URL(指向 ddg-proxy 服务),改走 HTTP 调用代理,
 代理在出口可达 DDG 的服务器上(如 AWS EC2)运行。返回格式不变。
 """

@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLoadNs } from '../i18n/useLoadNs';
+import { categoryLabel } from '../i18n';
 import { useAuthModal } from '../contexts/AuthModalContext';
 import { PaymentModal } from '../components/PaymentModal';
 import { Tooltip } from '../components/Tooltip';
 import { useMembership } from '../hooks/useMembership';
 import { useTierModal } from '../components/TierModalContext';
 import { geoApi, ApiError } from '../services/geoApi';
+import { accountApi } from '../services/accountApi';
 import { resolveCategoryVisual } from '../components/result/CategoryVisual';
 import { CheckProgress } from '../components/result/CheckProgress';
 import { RerunModeDropdown } from '../components/result/RerunModeDropdown';
@@ -15,99 +17,22 @@ import { ADVANCED_MODES, type AdvancedMode, type RerunMode } from '../components
 import { ResultPanel as AdvancedResultPanel, type AnyAdvancedResult } from './Advanced';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { exportAdvancedPdfReport } from '../utils/exportAdvancedPdfReport';
+import { renderCheckMessage, renderCheckFix } from '../utils/checkText';
 import { validateUrl, normalizeUrl } from '../utils/validateUrl';
-import type { GeoTestResult, CheckResult } from '../types/geo';
-
-/**
- * Render a check's user-facing message. Prefers i18n key + params (emitted
- * via geo_checker.emit_check), falls back to the raw English `message`
- * for legacy un-migrated checks.
- */
-function renderCheckMessage(
-  check: CheckResult,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (check.message_key) {
-    return t(check.message_key, (check.message_params || {}) as Record<string, unknown>);
-  }
-  return check.message;
-}
-
-/**
- * Render a check's fix recommendation. Prefers `fix_key` + `fix_params`
- * (emitted via emit_fix), falls back to the raw English `fix` text.
- * Returns an empty string when no fix is available so callers can boolean-
- * check the result.
- */
-function renderCheckFix(
-  check: CheckResult,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (check.fix_key) {
-    return t(check.fix_key, (check.fix_params || {}) as Record<string, unknown>);
-  }
-  return (check.fix || '').trim();
-}
-
-// 25 categories split into 7 tabs (2 free + 5 paid) aligned with
-// Free and paid category grouping. Free and paid
-// groups do not cross over, so a whole paid tab can show 🔒 for non-members
-// while free tabs are always visible.
-// Labels MUST match the `--- X ---` section headers emitted by geo_checker.py —
-// the backend parser sets `checks[].category` from those headers.
-const categoryGroups: Record<string, string[]> = {
-  // 🆓 基础协议与可抓取性
-  infraProtocols: [
-    'HTTPS',
-    'robots.txt',
-    'sitemap.xml',
-  ],
-  // 🆓 页面基础与移动体验
-  pageBasics: [
-    'Meta Tags',
-    'Mobile-Friendliness & Page Weight',
-  ],
-  // 💎 AI 专属协议与抓取
-  aiProtocols: [
-    'llms.txt',
-    '.well-known Discovery',
-    'AI Crawl Readiness',
-  ],
-  // 💎 结构化与语义
-  structuredSemantic: [
-    'Structured Data',
-    'Schema Breadcrumbs & Knowledge Panel',
-    'URL Normalization',
-  ],
-  // 💎 内容质量与可读性
-  contentQuality: [
-    'Content Accessibility',
-    'Content Quality for AI',
-    'AI-Specific Optimization',
-    'AI Answer Format Optimization',
-  ],
-  // 💎 技术健壮性与媒体
-  techRobustness: [
-    'Technical Crawlability',
-    'Outbound Links & Media',
-    'Multilingual Content Depth',
-    'Multi-Page Sampling',
-  ],
-  // 💎 权威与外部信号
-  authorityExternal: [
-    'Search Engine & AI Platform Registration',
-    'Authority & Trust Signals',
-    'Brand Entity in Knowledge Graphs',
-    'Trust & Safety Signals',
-    'Social Signals',
-    'Cross-Platform Content Distribution',
-  ],
-};
-
-// Tabs in FREE_GROUPS render for everyone; all others are paid and show 🔒
-// on the tab for non-members (i.e. when any of their categories are in the
-// backend-provided `locked_categories` set).
-const FREE_GROUPS = new Set(['infraProtocols', 'pageBasics']);
+import { submitContact } from '../utils/contactForm';
+import type { GeoTestResult, SeoTestResult, CheckResult } from '../types/geo';
+import {
+  seoCategoryGroups,
+  FREE_SEO_GROUPS,
+  DEFAULT_SEO_TAB,
+} from '../constants/seoCategories';
+import {
+  geoCategoryGroups as categoryGroups,
+  FREE_GEO_GROUPS as FREE_GROUPS,
+} from '../constants/geoCategories';
+import { useDimensionView } from '../hooks/useDimensionView';
+import { toast } from '../components/ui/toast';
+import { UiSelect } from '../components/ui/Select';
 
 const TIER_RANK: Record<string, number> = {
   free: 0,
@@ -117,7 +42,90 @@ const TIER_RANK: Record<string, number> = {
   scale: 4,
 };
 
-const STATUS_ORDER: Record<string, number> = { FAIL: 0, WARN: 1, INFO: 2, PASS: 3 };
+
+/**
+ * One score ring + grade + plain-language read. Rendered once per dimension so
+ * GEO and SEO always read as two independent numbers — the two suites score
+ * different things and averaging them would hide both kinds of problem.
+ *
+ * `gradientId` must be unique per instance: two SVG <linearGradient> nodes
+ * sharing an id on one page makes the second ring inherit the first's paint.
+ */
+function ScoreRing({
+  score,
+  grade,
+  label,
+  gradientId,
+  levelsPrefix = 'result.pdfReport.scoreLevels',
+  t,
+}: {
+  score: number;
+  grade: string;
+  label: string;
+  gradientId: string;
+  /** i18n prefix for the plain-language read. Must differ per dimension —
+   *  the GEO copy talks about AI engines, which is wrong for an SEO score. */
+  levelsPrefix?: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const pct = Math.max(0, Math.min(100, score));
+  return (
+    <div className="flex items-center gap-5 lg:gap-6">
+      <div className="relative">
+        <svg width="100" height="100" viewBox="0 0 100 100" className="transform -rotate-90 shrink-0">
+          <defs>
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--accent-primary, #06b6d4)" />
+              <stop offset="100%" stopColor="var(--accent-secondary, #3b82f6)" />
+            </linearGradient>
+          </defs>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--bg-tertiary, rgba(148,163,184,0.12))" strokeWidth="6" />
+          <circle
+            cx="50" cy="50" r="42"
+            fill="none"
+            stroke={`url(#${gradientId})`}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={`${2 * Math.PI * 42}`}
+            strokeDashoffset={`${2 * Math.PI * 42 * (1 - pct / 100)}`}
+            className="transition-all duration-700"
+          />
+          <text
+            x="50" y="50"
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="transform rotate-90 origin-center"
+            fill="var(--text-primary, #e2e8f0)"
+            fontSize="26"
+            fontWeight="800"
+          >
+            {score}
+          </text>
+        </svg>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted font-semibold">
+          {label}
+        </span>
+        <span className="text-xs text-muted font-mono">/ 100</span>
+        <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-tertiary text-primary border border-border leading-none w-fit">
+          {grade}
+        </span>
+        <p className="text-[11px] text-secondary leading-relaxed mt-1 max-w-[180px]">
+          {score >= 90
+            ? t(`${levelsPrefix}.excellent`)
+            : score >= 75
+              ? t(`${levelsPrefix}.good`)
+              : score >= 60
+                ? t(`${levelsPrefix}.average`)
+                : score >= 40
+                  ? t(`${levelsPrefix}.poor`)
+                  : t(`${levelsPrefix}.critical`)}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 const statusTheme = (status: string) => {
   switch (status) {
@@ -183,6 +191,14 @@ export function Result() {
   const { openTierModal } = useTierModal();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('infraProtocols');
+  // Which report the tabs below the hero are showing. Both scores are always
+  // in the hero; this only switches the detail pane. See docs/03-系统设计/网站检测/网站SEO检测系统设计文档.md.
+  const [dimension, setDimension] = useState<'geo' | 'seo'>('geo');
+  // SEO comes bundled with the GEO response (`include_seo`). `seoRetry` holds a
+  // result fetched by the standalone endpoint after the bundled half failed.
+  const [seoRetry, setSeoRetry] = useState<SeoTestResult | null>(null);
+  const [seoRetrying, setSeoRetrying] = useState(false);
+  const seoResult = seoRetry ?? result?.seo ?? null;
   const [showContactModal, setShowContactModal] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', website: '', service: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -244,13 +260,15 @@ export function Result() {
   useEffect(() => {
     if (!pendingUrl || result) return;
     const controller = new AbortController();
+    // Attach to the ref so the cancel button can reach this initial audit request
+    rerunAbortRef.current = controller;
     setRerunLoading(true);
     setRerunError('');
     setRerunQuotaExceeded(false);
     setRerunMode('default');
 
     geoApi
-      .checkGeo({ url: pendingUrl }, controller.signal)
+      .checkGeo({ url: pendingUrl, include_seo: true }, controller.signal)
       .then((fresh) => {
         // Replace state so a refresh / forward-nav doesn't re-trigger the
         // check, and so the rerun bar picks up the fresh result URL.
@@ -272,6 +290,15 @@ export function Result() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Cancel the in-progress audit: abort the request and dismiss the overlay; if there's no previous result to fall back to, go home,
+  // rather than staying on an empty shell page with neither data nor progress.
+  const handleCancelCheck = () => {
+    rerunAbortRef.current?.abort();
+    setRerunLoading(false);
+    setRerunError('');
+    if (!result && !advancedResult) navigate('/', { replace: true });
+  };
+
   const effectiveTier = result?.tier || 'free';
   const effectiveRank = TIER_RANK[effectiveTier] ?? 0;
   // Fix recommendations are a starter+ perk. Rank 2 = starter; growth/scale
@@ -292,18 +319,56 @@ export function Result() {
   // Deriving from the response (rather than from the membership hook) means
   // anonymous free users and logged-in free users behave identically, and a
   // tier change on the server is reflected without a client reload.
-  const lockedCategorySet = useMemo(
-    () => new Set(result?.locked_categories ?? []),
-    [result],
+  //
+  // Both dimensions are derived unconditionally (hooks can't be conditional);
+  // `dimension` only decides which one the render reads.
+  const geoView = useDimensionView(
+    result?.checks, categoryGroups, FREE_GROUPS,
+    result?.locked_categories, t, i18n.language,
   );
-  const isUnlocked = lockedCategorySet.size === 0;
+  const seoView = useDimensionView(
+    seoResult?.checks, seoCategoryGroups, FREE_SEO_GROUPS,
+    seoResult?.locked_categories, t, i18n.language,
+  );
+  const view = dimension === 'seo' ? seoView : geoView;
+  const { checksByCategory, groupStats, categoriesForTab } = view;
+  const lockedCategorySet = view.lockedCategorySet;
+  // Unlock state is a property of the account, not of the dimension — always
+  // read it from the GEO half so switching tabs never changes the CTA copy.
+  const isUnlocked = geoView.lockedCategorySet.size === 0;
 
   const handleUnlockClick = () => {
     if (!isLoggedIn) {
-      openAuthModal('login');
+      // Refresh the tier in place after login: accounts that already have access unlock right away; others click again to get the payment dialog.
+      // The key point is **not navigating away** -- this report took over 30 seconds to run, and losing it means starting over.
+      openAuthModal('login', { onSuccess: () => { void refresh(); } });
       return;
     }
     setShowPaymentModal(true);
+  };
+
+  // Tab keys are namespaced per dimension, so the active tab has to move with
+  // the switch — carrying 'infraProtocols' into the SEO view would land on a
+  // tab that doesn't exist there and render an empty pane.
+  const switchDimension = (next: 'geo' | 'seo') => {
+    if (next === dimension) return;
+    setDimension(next);
+    setActiveTab(next === 'seo' ? DEFAULT_SEO_TAB : 'infraProtocols');
+  };
+
+  // Retry just the SEO half. Only reachable when the bundled run came back with
+  // seo: null — the GEO result on screen stays untouched either way.
+  const handleSeoRetry = async () => {
+    if (!result?.url || seoRetrying) return;
+    setSeoRetrying(true);
+    try {
+      const fresh = await geoApi.checkSeo({ url: result.url, force_refresh: true });
+      setSeoRetry(fresh);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (t('home.error.failed') as string));
+    } finally {
+      setSeoRetrying(false);
+    }
   };
 
   const handleContactClick = () => {
@@ -322,13 +387,25 @@ export function Result() {
     setFeedback(null);
     setFeedbackKind(null);
     try {
-      // 这里可以添加表单提交逻辑
-      // 暂时模拟成功
-      setFeedback('Your message has been sent successfully! We will contact you soon.');
+      // The service dropdown and the audited URL are context specific to the result page, and contact_submissions
+      // has no matching columns -- merge them into message and submit together so the lead info isn't lost.
+      const context = [
+        form.service ? `${t('productsServices.contact.service')}: ${form.service}` : '',
+        result?.url ? `URL: ${result.url}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      await submitContact({
+        name: form.name,
+        email: form.email,
+        website: form.website,
+        message: [form.message, context].filter(Boolean).join('\n\n'),
+      });
+      setFeedback(t('contact.form.success') as string);
       setFeedbackKind('success');
       setForm({ name: '', email: '', website: '', service: '', message: '' });
     } catch (err) {
-      setFeedback('Failed to send message. Please try again later.');
+      setFeedback(t('contact.form.error') as string);
       setFeedbackKind('error');
     } finally {
       setSubmitting(false);
@@ -339,80 +416,6 @@ export function Result() {
     setShowPaymentModal(false);
     refresh();
   };
-
-  const checksByCategory = useMemo(() => {
-    if (!result?.checks) return {} as Record<string, CheckResult[]>;
-    const map: Record<string, CheckResult[]> = {};
-    for (const check of result.checks) {
-      (map[check.category] ||= []).push(check);
-    }
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
-    }
-    return map;
-  }, [result]);
-
-  const groupKeys = useMemo(() => Object.keys(categoryGroups), []);
-
-  const knownCategories = useMemo(() => new Set(groupKeys.flatMap((g) => categoryGroups[g])), [groupKeys]);
-
-  const otherCategories = useMemo(
-    () => Object.keys(checksByCategory).filter((c) => !knownCategories.has(c)),
-    [checksByCategory, knownCategories],
-  );
-
-  const allTabs = useMemo(() => {
-    const tabs = [...groupKeys];
-    if (otherCategories.length > 0) tabs.push('other');
-    return tabs;
-  }, [groupKeys, otherCategories]);
-
-  const categoriesForTab = (tab: string): string[] =>
-    tab === 'other' ? otherCategories : categoryGroups[tab] || [];
-
-  const groupStats = useMemo(() => {
-    return allTabs.map((tab) => {
-      const cats = categoriesForTab(tab);
-      const checks = cats.flatMap((c) => checksByCategory[c] || []);
-      const total = checks.length;
-      const nameOf = (c: CheckResult) => renderCheckMessage(c, t);
-      const namesByStatus = (status: string) =>
-        checks.filter((c) => c.status === status).map(nameOf);
-      const passedNames = namesByStatus('PASS');
-      const failedNames = namesByStatus('FAIL');
-      const warnedNames = namesByStatus('WARN');
-      const infoNames = namesByStatus('INFO');
-      const allNames = checks.map(nameOf);
-      const passed = passedNames.length;
-      const failed = failedNames.length;
-      const warned = warnedNames.length;
-      const info = infoNames.length;
-      const passRate = total === 0 ? 0 : Math.round((passed / total) * 100);
-      const lockedInTab = cats.filter((c) => lockedCategorySet.has(c)).length;
-      // Paid tab is "locked" if not in FREE_GROUPS and any category is
-      // in the backend-provided locked set. Free tabs are never locked.
-      const isPaid = !FREE_GROUPS.has(tab) && tab !== 'other';
-      const isTabLocked = isPaid && lockedInTab > 0;
-      return {
-        tab,
-        total,
-        passed,
-        failed,
-        warned,
-        info,
-        passRate,
-        lockedInTab,
-        isPaid,
-        isTabLocked,
-        passedNames,
-        failedNames,
-        warnedNames,
-        infoNames,
-        allNames,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTabs, checksByCategory, lockedCategorySet, i18n.language]);
 
   // Explicit "verify after fix" path — always bypasses the 24h cache. Distinct
   // from the rerun bar's same-URL heuristic so users have a discoverable action
@@ -428,7 +431,7 @@ export function Result() {
     rerunAbortRef.current = controller;
     try {
       const fresh = await geoApi.checkGeo(
-        { url: result.url, force_refresh: true },
+        { url: result.url, force_refresh: true, include_seo: true },
         controller.signal,
       );
       setAdvancedResult(null);
@@ -454,7 +457,7 @@ export function Result() {
     // Safety net — dropdown already disables locked modes, but double-check.
     if (rerunMode !== 'default' && isModeLocked(rerunMode)) {
       if (!isLoggedIn) {
-        openAuthModal('login');
+        openAuthModal('login', { onSuccess: () => { void refresh(); } });
         return;
       }
       setShowPaymentModal(true);
@@ -502,7 +505,7 @@ export function Result() {
         // peer lookup, fine to use cache.
         const sameUrl = !!result?.url && normalizeUrl(result.url) === url;
         const fresh = await geoApi.checkGeo(
-          { url, force_refresh: sameUrl },
+          { url, force_refresh: sameUrl, include_seo: true },
           controller.signal,
         );
         setAdvancedResult(null);
@@ -574,8 +577,8 @@ export function Result() {
       : 'btn-solid px-4 py-2 rounded-xl sm:rounded-full flex items-center justify-center gap-1.5 font-semibold transition-all shrink-0 disabled:opacity-60 text-xs sm:text-sm w-full sm:w-auto';
     const iconSize = hero ? 'h-4 w-4' : 'h-3.5 w-3.5';
     const selectClass = hero
-      ? 'appearance-none bg-transparent text-base text-primary pl-3 pr-2 py-3 focus:outline-none cursor-pointer shrink-0'
-      : 'appearance-none bg-transparent text-xs sm:text-sm text-primary pl-3 pr-2 py-2 focus:outline-none cursor-pointer shrink-0';
+      ? 'bg-transparent text-base text-primary pl-3 pr-2 py-3 focus:outline-none cursor-pointer shrink-0'
+      : 'bg-transparent text-xs sm:text-sm text-primary pl-3 pr-2 py-2 focus:outline-none cursor-pointer shrink-0';
 
     return (
       <form onSubmit={handleRerunSubmit} className={formClass}>
@@ -596,23 +599,19 @@ export function Result() {
                 disabled={rerunLoading}
               />
               <div className="hidden sm:block w-px h-5 bg-border shrink-0" />
-              <select
+              <UiSelect
                 value={rerunEntityType}
-                onChange={(e) => setRerunEntityType(e.target.value as 'brand' | 'product' | 'person')}
+                onChange={(val) => setRerunEntityType(val as 'brand' | 'product' | 'person')}
                 disabled={rerunLoading}
                 title={t('result.header.entityTypeLabel', { defaultValue: '实体类型' }) as string}
                 className={selectClass}
-              >
-                <option value="brand" className="bg-card">
-                  {t('result.header.entityType.brand', { defaultValue: '品牌' }) as string}
-                </option>
-                <option value="product" className="bg-card">
-                  {t('result.header.entityType.product', { defaultValue: '产品' }) as string}
-                </option>
-                <option value="person" className="bg-card">
-                  {t('result.header.entityType.person', { defaultValue: '人物' }) as string}
-                </option>
-              </select>
+                style={{ background: 'transparent', border: 'none' }}
+                options={[
+                  { value: 'brand', label: t('result.header.entityType.brand', { defaultValue: '品牌' }) as string },
+                  { value: 'product', label: t('result.header.entityType.product', { defaultValue: '产品' }) as string },
+                  { value: 'person', label: t('result.header.entityType.person', { defaultValue: '人物' }) as string },
+                ]}
+              />
             </>
           ) : rerunMode === 'visibility' ? (
             <>
@@ -701,6 +700,31 @@ export function Result() {
     );
   };
 
+  /**
+   * Use backend Chrome printing to get a vector PDF. Returns true on success; returns false with no history row (anonymous), not logged in,
+   * or when server-side rendering fails, letting the caller fall back to the frontend html2canvas export.
+   *
+   * The silent fallback is intentional: users want a PDF, not a "vector rendering unavailable" error.
+   */
+  const tryServerPdf = async (res: GeoTestResult): Promise<boolean> => {
+    const token = localStorage.getItem('token');
+    if (!res.record_id || !token) return false;
+    try {
+      const blob = await accountApi.exportDetectionPdf(token, res.record_id, i18n.language || 'zh');
+      const safeUrl = (res.url || 'site').replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60);
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = `${t('result.pdfReport.fileName')}-${safeUrl}.pdf`;
+      a.click();
+      URL.revokeObjectURL(href);
+      return true;
+    } catch (err) {
+      console.warn('server PDF render unavailable, falling back to client export', err);
+      return false;
+    }
+  };
+
   const handleExportPDF = async () => {
     if (exportingPdf) return;
     setExportingPdf(true);
@@ -715,19 +739,38 @@ export function Result() {
           language: i18n.language || 'en',
         });
       } else if (result) {
+        // Prefer backend Chrome printing: vector text, selectable and searchable, an order of magnitude smaller.
+        // It needs a history row (only logged-in users have one) and a server-side render; if any link fails,
+        // fall back to the frontend html2canvas export below -- which anonymous users have always used.
+        if (await tryServerPdf(result)) return;
+
+        // One PDF covers both dimensions regardless of which tab is on screen:
+        // the deliverable is "this site's check", and splitting it in two left
+        // whichever half the user wasn't looking at out of the file.
         await exportPdfReport({
-          result,
+          geo: {
+            result,
+            groups: categoryGroups,
+            checksByCategory: geoView.checksByCategory,
+            otherCategories: geoView.otherCategories,
+            groupStats: geoView.groupStats,
+          },
+          seo: seoResult
+            ? {
+                result: seoResult,
+                groups: seoCategoryGroups,
+                checksByCategory: seoView.checksByCategory,
+                otherCategories: seoView.otherCategories,
+                groupStats: seoView.groupStats,
+              }
+            : null,
           t,
-          language: i18n.language || 'en',
-          groupStats,
-          categoryGroups,
-          checksByCategory,
-          otherCategories,
+          language: i18n.language || 'zh',
         });
       }
     } catch (err) {
       console.error('PDF export failed', err);
-      alert(t('result.error.noData'));
+      toast.error(t('result.error.noData'));
     } finally {
       setExportingPdf(false);
     }
@@ -742,7 +785,7 @@ export function Result() {
       if (err instanceof ApiError && err.status === 403) {
         openTierModal();
       } else {
-        alert(err instanceof Error ? err.message : t('result.fixPackage.error'));
+        toast.error(err instanceof Error ? err.message : t('result.fixPackage.error'));
       }
     } finally {
       setDownloadingFixPackage(false);
@@ -860,12 +903,12 @@ export function Result() {
               </div>
             )}
           </main>
-          {rerunLoading && <CheckProgress mode={rerunMode} />}
+          {rerunLoading && <CheckProgress mode={rerunMode} url={rerunUrl} onCancel={handleCancelCheck} />}
         </div>
       );
     }
     if (rerunLoading) {
-      return <CheckProgress mode={rerunMode} />;
+      return <CheckProgress mode={rerunMode} url={rerunUrl} onCancel={handleCancelCheck} />;
     }
     return (
       <div className="grid-background flex justify-center py-16 sm:py-20 px-4">
@@ -901,6 +944,12 @@ export function Result() {
 
   const score = result.score || 0;
   const grade = result.grade || 'F';
+  // Counts follow the dimension being viewed; the two rings above always show
+  // both scores regardless.
+  const activeSummary =
+    (dimension === 'seo' ? seoResult?.summary : result.summary) ?? result.summary;
+  // SEO has no report of its own to switch to until the bundled half lands.
+  const canSwitchDimension = !!seoResult;
 
   const tabLabel = (tab: string) => t(`result.categories.${tab}`);
 
@@ -981,81 +1030,70 @@ export function Result() {
               </div>
 
               {/* Score + Stats */}
-              <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 items-stretch">
-                {/* Left: Score ring + grade + interpretation */}
-                <div className="flex items-center gap-5 lg:gap-6 lg:w-[280px] shrink-0">
-                  <div className="relative">
-                    <svg width="100" height="100" viewBox="0 0 100 100" className="transform -rotate-90 shrink-0">
-                      <defs>
-                        <linearGradient id="hero-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="var(--accent-primary, #06b6d4)" />
-                          <stop offset="100%" stopColor="var(--accent-secondary, #3b82f6)" />
-                        </linearGradient>
-                      </defs>
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="var(--bg-tertiary, rgba(148,163,184,0.12))" strokeWidth="6" />
-                      <circle
-                        cx="50" cy="50" r="42"
-                        fill="none"
-                        stroke="url(#hero-ring-grad)"
-                        strokeWidth="6"
-                        strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 42}`}
-                        strokeDashoffset={`${2 * Math.PI * 42 * (1 - Math.max(0, Math.min(100, score)) / 100)}`}
-                        className="transition-all duration-700"
+              <div className="flex flex-col gap-5 lg:gap-6 items-stretch">
+                {/* Two independent scores. Never averaged — a site can be
+                    indexed perfectly by Google and invisible to AI engines,
+                    and one blended number would hide both cases. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 lg:gap-6">
+                  <ScoreRing
+                    score={score}
+                    grade={grade}
+                    label={t('result.dimensions.geo.scoreLabel')}
+                    gradientId="hero-ring-grad-geo"
+                    t={t}
+                  />
+                  <div className="sm:border-l sm:border-border sm:pl-5 lg:pl-6">
+                    {seoResult ? (
+                      <ScoreRing
+                        score={seoResult.score || 0}
+                        grade={seoResult.grade || 'F'}
+                        label={t('result.dimensions.seo.scoreLabel')}
+                        gradientId="hero-ring-grad-seo"
+                        levelsPrefix="result.dimensions.seo.scoreLevels"
+                        t={t}
                       />
-                      <text
-                        x="50" y="50"
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        className="transform rotate-90 origin-center"
-                        fill="var(--text-primary, #e2e8f0)"
-                        fontSize="26"
-                        fontWeight="800"
-                      >
-                        {score}
-                      </text>
-                    </svg>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.2em] text-muted font-semibold">
-                      {t('result.pdfReport.overallScore')}
-                    </span>
-                    <span className="text-xs text-muted font-mono">/ 100</span>
-                    <span className="text-sm font-bold px-2.5 py-1 rounded-lg bg-tertiary text-primary border border-border leading-none w-fit">
-                      {grade}
-                    </span>
-                    <p className="text-[11px] text-secondary leading-relaxed mt-1 max-w-[180px]">
-                      {score >= 90
-                        ? t('result.pdfReport.scoreLevels.excellent')
-                        : score >= 75
-                          ? t('result.pdfReport.scoreLevels.good')
-                          : score >= 60
-                            ? t('result.pdfReport.scoreLevels.average')
-                            : score >= 40
-                              ? t('result.pdfReport.scoreLevels.poor')
-                              : t('result.pdfReport.scoreLevels.critical')}
-                    </p>
+                    ) : (
+                      /* SEO half failed — the GEO report beside it is
+                         unaffected, so offer a retry instead of an error page. */
+                      <div className="flex flex-col gap-2 justify-center h-full">
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-muted font-semibold">
+                          {t('result.dimensions.seo.scoreLabel')}
+                        </span>
+                        <p className="text-[11px] text-secondary leading-relaxed max-w-[220px]">
+                          {t('result.dimensions.seo.unavailable')}
+                        </p>
+                        <button
+                          onClick={handleSeoRetry}
+                          disabled={seoRetrying}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-tertiary text-primary border border-border w-fit transition-colors hover:border-accent-primary/50 disabled:opacity-50"
+                        >
+                          {seoRetrying
+                            ? t('result.dimensions.seo.retrying')
+                            : t('result.dimensions.seo.retry')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Right: stat tiles + meta info */}
+                {/* Stat tiles + meta info for the dimension being viewed */}
                 <div className="flex-1 min-w-0 flex flex-col gap-4">
                   {/* 4 stat tiles */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
-                      <div className="text-2xl font-extrabold text-emerald-500">{result.summary.pass_count}</div>
+                      <div className="text-2xl font-extrabold text-emerald-500">{activeSummary.pass_count}</div>
                       <div className="text-[10px] font-semibold text-emerald-600 mt-1">{t('result.summary.passed')}</div>
                     </div>
                     <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
-                      <div className="text-2xl font-extrabold text-amber-500">{result.summary.warn_count}</div>
+                      <div className="text-2xl font-extrabold text-amber-500">{activeSummary.warn_count}</div>
                       <div className="text-[10px] font-semibold text-amber-600 mt-1">{t('result.summary.warnings')}</div>
                     </div>
                     <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-center">
-                      <div className="text-2xl font-extrabold text-rose-500">{result.summary.fail_count}</div>
+                      <div className="text-2xl font-extrabold text-rose-500">{activeSummary.fail_count}</div>
                       <div className="text-[10px] font-semibold text-rose-600 mt-1">{t('result.summary.failed')}</div>
                     </div>
                     <div className="rounded-xl bg-cyan-500/10 border border-cyan-500/20 p-3 text-center">
-                      <div className="text-2xl font-extrabold text-cyan-500">{result.summary.info_count}</div>
+                      <div className="text-2xl font-extrabold text-cyan-500">{activeSummary.info_count}</div>
                       <div className="text-[10px] font-semibold text-cyan-600 mt-1">{t('result.summary.info')}</div>
                     </div>
                   </div>
@@ -1120,6 +1158,37 @@ export function Result() {
           )}
 
           {!advancedResult && (<>
+            {/* ── Dimension switch: which report the groups + details below show ── */}
+            <div className="flex items-center gap-1 p-1 mb-5 rounded-xl bg-tertiary/50 border border-border w-fit">
+              {([
+                { key: 'geo' as const, count: result.checks.length },
+                { key: 'seo' as const, count: seoResult?.checks.length ?? 0 },
+              ]).map(({ key, count }) => {
+                const isActive = dimension === key;
+                const disabled = key === 'seo' && !canSwitchDimension;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => switchDimension(key)}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-card text-primary shadow-sm border border-border'
+                        : disabled
+                          ? 'text-muted opacity-50 cursor-not-allowed'
+                          : 'text-secondary hover:text-primary'
+                    }`}
+                  >
+                    {t(`result.dimensions.${key}.tab`)}
+                    {count > 0 && (
+                      <span className="ml-2 text-[10px] font-mono text-muted tabular-nums">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* ── Overview grid ── */}
             {(() => {
               const totalPassed = groupStats.reduce((s, g) => s + g.passed, 0);
@@ -1313,7 +1382,7 @@ export function Result() {
                           <div className="flex items-center gap-2 mb-2">
                             <span className="w-1 h-4 gradient-bg rounded-full"></span>
                             <h3 className="text-sm font-semibold text-primary">
-                              {t(`result.categoryLabels.${cat}`, { defaultValue: cat })}
+                              {categoryLabel(cat)}
                             </h3>
                           </div>
                           <div className="bg-card border border-border rounded-xl divide-y divide-border">
@@ -1455,7 +1524,7 @@ export function Result() {
                       {!canShowFix && (check.status === 'FAIL' || check.status === 'WARN') && (
                         <button
                           onClick={() => {
-                            if (!isLoggedIn) { openAuthModal('login'); return; }
+                            if (!isLoggedIn) { openAuthModal('login', { onSuccess: () => { void refresh(); } }); return; }
                             openTierModal();
                           }}
                           className="mt-2 ml-[4.25rem] flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
@@ -1502,7 +1571,7 @@ export function Result() {
                         <div className="flex items-center gap-2">
                           <span className="w-1 h-4 gradient-bg rounded-full"></span>
                           <h3 className="text-sm font-semibold text-primary">
-                            {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                            {categoryLabel(categoryKey)}
                           </h3>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1554,7 +1623,7 @@ export function Result() {
                       {visual && !canShowFix && checksForCategory.some((c) => c.status === 'FAIL' || c.status === 'WARN') && (
                         <button
                           onClick={() => {
-                            if (!isLoggedIn) { openAuthModal('login'); return; }
+                            if (!isLoggedIn) { openAuthModal('login', { onSuccess: () => { void refresh(); } }); return; }
                             openTierModal();
                           }}
                           className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
@@ -1577,7 +1646,7 @@ export function Result() {
                       <div className="flex items-center gap-2">
                         <span className="w-1 h-4 gradient-bg rounded-full opacity-60"></span>
                         <h3 className="text-sm font-semibold text-secondary">
-                          {t(`result.categoryLabels.${categoryKey}`, { defaultValue: categoryKey })}
+                          {categoryLabel(categoryKey)}
                         </h3>
                       </div>
                       <span className="flex items-center gap-1 text-[10px] font-mono text-accent-primary">
@@ -1757,19 +1826,17 @@ export function Result() {
                 <label htmlFor="service" className="block text-sm font-semibold mb-2">
                   {t('productsServices.contact.service')}
                 </label>
-                <select
-                  id="service"
-                  name="service"
-                  required
+                <UiSelect
                   value={form.service}
-                  onChange={(e) => setForm({ ...form, service: e.target.value })}
+                  onChange={(val) => setForm({ ...form, service: val })}
                   className="w-full px-4 py-3 rounded-lg bg-card border border-border text-primary placeholder-muted focus:outline-none focus:border-accent-primary transition-colors duration-200"
-                >
-                  <option value="">{t('productsServices.contact.service')}</option>
-                  <option value="Basic Detection Service">{t('productsServices.contact.serviceOptions.0')}</option>
-                  <option value="Advanced Detection Service">{t('productsServices.contact.serviceOptions.1')}</option>
-                  <option value="Custom GEO Optimization Service">{t('productsServices.contact.serviceOptions.2')}</option>
-                </select>
+                  options={[
+                    { value: '', label: t('productsServices.contact.service') },
+                    { value: 'Basic Detection Service', label: t('productsServices.contact.serviceOptions.0') },
+                    { value: 'Advanced Detection Service', label: t('productsServices.contact.serviceOptions.1') },
+                    { value: 'Custom GEO Optimization Service', label: t('productsServices.contact.serviceOptions.2') },
+                  ]}
+                />
               </div>
               <div>
                 <label htmlFor="message" className="block text-sm font-semibold mb-2">
@@ -1798,7 +1865,7 @@ export function Result() {
         </div>
       )}
 
-      {rerunLoading && <CheckProgress mode={rerunMode} />}
+      {rerunLoading && <CheckProgress mode={rerunMode} url={rerunUrl} onCancel={handleCancelCheck} />}
     </div>
   );
 }

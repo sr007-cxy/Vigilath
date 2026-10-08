@@ -1,0 +1,24 @@
+[project]
+name = "company-registry-collector"
+version = "0.1.0"
+description = "企业工商数据采集模块(多服务商;Sales Agent 企业推荐 / ICP 取数)"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "SQLAlchemy>=2.0.0",
+    "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+company-registry = "company_registry.cli:main"
+
+[tool.setuptools]
+packages = ["company_registry", "company_registry.providers"]

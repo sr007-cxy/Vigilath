@@ -3,7 +3,7 @@
 > 为什么独立:`pydantic-ai` 需 `pydantic>=2.11`,主后端钉死 `fastapi==0.104.1`+`pydantic==2.5.0`,不兼容。
 > 独立 venv + 独立进程,共用同一 DB / `SECRET_KEY` / `OPENROUTER_API_KEY`,主后端零改动、零风险。
 
-## vm02 部署步骤
+## <app-host> 部署步骤
 
 ```bash
 cd /opt/geo

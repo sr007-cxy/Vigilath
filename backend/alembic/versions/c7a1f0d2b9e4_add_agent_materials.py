@@ -1,6 +1,6 @@
-"""add agent_materials (Agent 资料知识库)
+"""add agent_materials (Agent materials knowledge base)
 
-加性新表,不改动现有表 —— 低风险。供对话式 Agent 的 ingest_material / ask_knowledge 用。
+Additive new table, no changes to existing tables: low risk. Used by the conversational Agent's ingest_material / ask_knowledge.
 
 Revision ID: c7a1f0d2b9e4
 Revises: f3a9c1d2e4b7
@@ -26,7 +26,8 @@ def upgrade() -> None:
         sa.Column("source", sa.String(length=512), nullable=False, server_default=""),
         sa.Column("title", sa.String(length=512), nullable=False, server_default=""),
         sa.Column("text", sa.Text(), nullable=False, server_default=""),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), nullable=False,
+                  server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_agent_materials_account_id", "agent_materials", ["account_id"])
     op.create_index("idx_agent_mat_acct_topic", "agent_materials", ["account_id", "topic_id"])

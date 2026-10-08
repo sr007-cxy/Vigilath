@@ -11,7 +11,7 @@ from geo.database import SessionLocal, settings
 from geo.models.payment import PaymentSessionORM
 from geo.models.membership import MembershipORM
 from geo.models.user import UserORM
-from geo.services.membership_service import membership_service
+from geo.services.membership_billing import fulfill_paid_membership
 from geo.utils.error_handler import AppException
 
 router = APIRouter()
@@ -214,7 +214,9 @@ async def moltspay_fulfill(request: Request, body: FulfillRequest):
         row.completed_at = datetime.utcnow()
         db.commit()
 
-        membership_service.upgrade_membership(body.user_id, membership.id)
+        # Activate the tier + credit the equivalent credits (USDC converted 1:1 to USD, then to RMB cents)
+        fulfill_paid_membership(db, row, provider="moltspay",
+                                order_ref=str(row.stripe_session_id or row.id))
 
         return {"success": True, "payment_id": row.id}
     finally:
@@ -307,7 +309,8 @@ async def verify_moltspay_tx(
         row.completed_at = datetime.utcnow()
         db.commit()
 
-        membership_service.upgrade_membership(current_user.id, row.membership_id)
+        fulfill_paid_membership(db, row, provider="moltspay",
+                                order_ref=str(row.stripe_session_id or row.id))
 
         return {"success": True, "payment_id": row.id}
     finally:

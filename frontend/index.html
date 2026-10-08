@@ -1,206 +1,269 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
+
+<!-- CN site template. Maintenance notes in docs/06-发布运维/合规与资质/备案整改/01-CN站去境外信息-开发文档.md -->
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <script>document.documentElement.classList.add('js');</script>
 
-  <title>Vigilath — Unified GEO+AEO for Global AI Visibility</title>
-  <meta name="description" content="Vigilath is the unified GEO+AEO platform for global AI visibility. Audit any website and get a 0–100 AI Visibility Score, a 25-category breakdown, and an actionable fix list for ChatGPT, Perplexity, Claude, and Google AI Overviews." />
-  <meta name="keywords" content="GEO, AEO, Generative Engine Optimization, Answer Engine Optimization, AI SEO, LLM SEO, ChatGPT visibility, Perplexity SEO, AI search, llms.txt" />
-  <meta name="author" content="Vigilath" />
+  <title>GEO优化｜AI搜索优化｜AI品牌可见性增长平台 - 威吉力 Vigilath GEO</title>
+
+  <meta name="keywords" content="GEO优化,AI搜索优化,AI SEO优化,生成式引擎优化,AEO优化,大模型SEO,DeepSeek优化,豆包优化,文心一言优化,AI品牌可见性,威吉力,Vigilath GEO" />
+	<!--Home page SEO description-->
+	<meta name="description" content="威吉力 Vigilath GEO 是面向 AI 搜索时代的 GEO+AEO 优化平台，提供网站 GEO 检测、AI 搜索可见性评分、DeepSeek/通义千问/豆包/文心一言等多引擎品牌监测、内容优化与品牌增长服务。" />
+
+  <meta name="author" content="威吉力 Vigilath" />
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
   <meta name="theme-color" content="#0ea5e9" />
 
-  <!-- Google Search Console -->
-  <meta name="google-site-verification" content="REPLACE_WITH_GOOGLE_CODE" />
-  <!-- Bing Webmaster Tools -->
-  <meta name="msvalidate.01" content="REPLACE_WITH_BING_CODE" />
+  <!-- Vigilath visitor collection (vtag) -->
+  <script>(function(w,d,s,id){w.VigilathTag=w.VigilathTag||function(){(w.VigilathTag.q=w.VigilathTag.q||[]).push(arguments)};w.VigilathTag('config',id);var js=d.createElement(s);js.async=1;js.src='https://vtag.vigilath.cn/vtag.js?id='+id;d.head.appendChild(js)})(window,document,'script','VG-2336E210');</script>
 
-  <link rel="canonical" href="https://www.vigilath.com/" />
+  <!-- ByteDance site verification -->
+  <meta name="bytedance-verification-code" content="ZX2qgwS4l02y2hVXUacd" />
+
+  <link rel="canonical" href="https://www.vigilath.cn/" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="alternate" type="application/xml" title="Sitemap" href="/sitemap.xml" />
-  <link rel="alternate" type="application/rss+xml" title="Vigilath RSS Feed" href="/feed.xml" />
+  <link rel="alternate" type="application/rss+xml" title="威吉力 RSS 订阅" href="/feed.xml" />
 
-  <!-- 预加载首屏 logo 的 webp(46 KB,Home.tsx + Header.tsx 都用到)。
-       SVG 矢量 logo,所有现代浏览器原生支持. -->
+  <!-- Preload the first-screen logo webp (46 KB, used by both Home.tsx and Header.tsx).
+       SVG vector logo, natively supported by all modern browsers. -->
   <link rel="preload" href="/image/logo.svg" as="image" type="image/svg+xml" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Vigilath" />
-  <meta property="og:title" content="Vigilath — Unified GEO+AEO for Global AI Visibility" />
-  <meta property="og:description" content="Vigilath is the unified GEO+AEO platform for global AI visibility. Audit any website and get a 0–100 AI Visibility Score, a 25-category breakdown, and an actionable fix list for ChatGPT, Perplexity, Claude, and Google AI Overviews." />
-  <meta property="og:url" content="https://www.vigilath.com/" />
-  <meta property="og:image" content="https://www.vigilath.com/favicon.svg" />
-  <meta property="og:locale" content="en_US" />
-  <meta property="og:locale:alternate" content="zh_CN" />
+  <meta property="og:site_name" content="威吉力 Vigilath" />
+  <meta property="og:title" content="GEO优化｜AI搜索优化｜AI品牌可见性增长平台 - 威吉力 Vigilath GEO" />
+  <meta property="og:description" content="威吉力 Vigilath GEO 是面向 AI 搜索时代的 GEO+AEO 优化平台，提供网站 GEO 检测、AI 搜索可见性评分、DeepSeek/通义千问/豆包/文心一言等多引擎品牌监测、内容优化与品牌增长服务。" />
+  <meta property="og:url" content="https://www.vigilath.cn/" />
+  <meta property="og:image" content="https://www.vigilath.cn/favicon.svg" />
+  <meta property="og:locale" content="zh_CN" />
 
-  <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@zen7_labs" />
-  <meta name="twitter:creator" content="@zen7_labs" />
-  <meta name="twitter:title" content="Vigilath — Unified GEO+AEO for Global AI Visibility" />
-  <meta name="twitter:description" content="Vigilath is the unified GEO+AEO platform for global AI visibility. Audit any website and see where you stand with ChatGPT, Perplexity, Claude, and Google AI Overviews." />
-  <meta name="twitter:image" content="https://www.vigilath.com/favicon.svg" />
+  <link rel="alternate" hreflang="zh-CN" href="https://www.vigilath.cn/" />
 
-  <!-- Alternate language -->
-  <link rel="alternate" hreflang="en" href="https://www.vigilath.com/" />
-  <link rel="alternate" hreflang="zh" href="https://www.vigilath.com/" />
-  <link rel="alternate" hreflang="x-default" href="https://www.vigilath.com/" />
-
-  <!-- Structured data: Organization -->
+  <!-- Structured data: homepage entity graph -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "Vigilath",
-    "alternateName": "Vigilath GEO+AEO Platform",
-    "url": "https://www.vigilath.com/",
-    "logo": "https://www.vigilath.com/favicon.svg",
-    "description": "Vigilath is the unified GEO+AEO platform for global AI visibility. It audits any website across 25 categories to measure its visibility to ChatGPT, Perplexity, Claude, and Google AI Overviews.",
-    "foundingDate": "2025",
-    "address": {
-      "@type": "PostalAddress",
-      "addressLocality": "San Francisco",
-      "addressRegion": "CA",
-      "addressCountry": "US"
-    },
-    "sameAs": [
-      "https://x.com/zen7_labs",
-      "https://discord.gg/mJVEVXyxD5",
-      "https://www.instagram.com/vigilath",
-      "https://www.reddit.com/r/vigilath"
-    ],
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "email": "support@zen7.com",
-      "contactType": "customer support",
-      "availableLanguage": ["English", "Chinese"]
-    }
-  }
-  </script>
-
-  <!-- Structured data: WebSite with SearchAction -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "Vigilath",
-    "url": "https://www.vigilath.com/",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://www.vigilath.com/checker?url={search_term_string}",
-      "query-input": "required name=search_term_string"
-    }
-  }
-  </script>
-
-  <!-- Structured data: FAQPage -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
+    "@graph": [
       {
-        "@type": "Question",
-        "name": "What is Generative Engine Optimization (GEO)?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "GEO is the practice of making a website discoverable and quotable by AI answer engines like ChatGPT, Perplexity, Claude, and Google AI Overviews. Unlike traditional SEO, GEO optimizes for both AI crawl access (explicit robots.txt rules for GPTBot, ClaudeBot, PerplexityBot) and for content formats that LLMs prefer to cite (definitions, lists, tables, FAQs, quotable statistics)."
+        "@type": "Organization",
+        "@id": "https://www.vigilath.cn/#organization",
+        "name": "威吉力 Vigilath GEO",
+        "legalName": "威吉力 Vigilath",
+        "alternateName": [
+          "威吉力",
+          "Vigilath",
+          "威吉力 GEO+AEO 平台",
+          "威吉力 AI 可见性平台"
+        ],
+        "url": "https://www.vigilath.cn/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://www.vigilath.cn/favicon.svg"
+        },
+        "description": "威吉力 Vigilath GEO 是面向 AI 搜索时代的一体化 GEO+AEO 优化平台，提供网站 GEO 检测、AI 搜索可见性评分、多引擎品牌监测、内容优化与品牌增长服务。",
+        "foundingDate": "2025",
+        "contactPoint": [
+          {
+            "@type": "ContactPoint",
+            "email": "<support-email>",
+            "telephone": "<support-phone>",
+            "contactType": "customer support",
+            "availableLanguage": ["zh-CN"],
+            "areaServed": "CN"
+          }
+        ],
+        "knowsAbout": [
+          "GEO优化",
+          "AI搜索优化",
+          "AI SEO优化",
+          "AEO优化",
+          "生成式引擎优化",
+          "大模型SEO",
+          "AI品牌可见性",
+          "llms.txt",
+          "结构化数据"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.vigilath.cn/#website",
+        "name": "威吉力 Vigilath GEO",
+        "alternateName": "威吉力",
+        "url": "https://www.vigilath.cn/",
+        "publisher": {
+          "@id": "https://www.vigilath.cn/#organization"
+        },
+        "inLanguage": ["zh-CN"],
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://www.vigilath.cn/checker?url={search_term_string}",
+          "query-input": "required name=search_term_string"
         }
       },
       {
-        "@type": "Question",
-        "name": "How does Vigilath audit a website?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Vigilath runs 100+ discrete checks across 25 categories: HTTPS, robots.txt, llms.txt, sitemap.xml, .well-known manifests, platform registration, meta tags, Open Graph, JSON-LD structured data, semantic HTML, heading structure, content extractability, content quality, technical crawlability, security headers, authority signals, brand entity knowledge graphs, trust & safety signals, cross-platform presence, and AI answer-format readiness. The result is a 0–100 AI Visibility Score with a letter grade, a category-by-category breakdown, and an actionable list of fixes."
+        "@type": "WebPage",
+        "@id": "https://www.vigilath.cn/#webpage",
+        "url": "https://www.vigilath.cn/",
+        "name": "GEO优化｜AI搜索优化｜AI品牌可见性增长平台 - 威吉力 Vigilath GEO",
+        "description": "威吉力 Vigilath GEO 是面向 AI 搜索时代的 GEO+AEO 优化平台，提供网站 GEO 检测、AI 搜索可见性评分、DeepSeek/通义千问/豆包/文心一言等多引擎品牌监测、内容优化与品牌增长服务。",
+        "isPartOf": {
+          "@id": "https://www.vigilath.cn/#website"
+        },
+        "about": {
+          "@id": "https://www.vigilath.cn/#organization"
+        },
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "url": "https://www.vigilath.cn/favicon.svg"
+        },
+        "breadcrumb": {
+          "@id": "https://www.vigilath.cn/#breadcrumb"
+        },
+        "inLanguage": "zh-CN"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://www.vigilath.cn/#software",
+        "name": "威吉力 Vigilath GEO",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://www.vigilath.cn/",
+        "description": "威吉力 Vigilath GEO 提供 25 类别、100+ 信号的网站 GEO 检测，输出 AI 可见性评分、类别拆解和优先修复清单。",
+        "publisher": {
+          "@id": "https://www.vigilath.cn/#organization"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "CNY",
+          "description": "免费 GEO 检测"
+        },
+        "featureList": [
+          "网站 GEO 检测",
+          "AI 搜索可见性评分",
+          "AI 爬虫可访问性检查",
+          "结构化数据与语义 HTML 检查",
+          "多引擎品牌监测",
+          "内容优化与品牌增长建议"
+        ]
+      },
+      {
+        "@type": "Service",
+        "@id": "https://www.vigilath.cn/#geo-service",
+        "name": "威吉力 GEO 优化服务",
+        "serviceType": "GEO优化、AI搜索优化、AI SEO优化、AEO优化",
+        "provider": {
+          "@id": "https://www.vigilath.cn/#organization"
+        },
+        "areaServed": "CN",
+        "audience": {
+          "@type": "BusinessAudience",
+          "audienceType": "品牌方、市场团队、SEO团队、增长团队、内容团队"
+        },
+        "description": "威吉力 GEO 帮助品牌完成 AI 搜索可见性基线检测、内容结构优化、多平台信源建设、AI 引擎监测与持续增长闭环。",
+        "hasOfferCatalog": {
+          "@type": "OfferCatalog",
+          "name": "威吉力 GEO 产品与服务",
+          "itemListElement": [
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "免费 GEO 检测"
+              }
+            },
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "AI 搜索可见性监测"
+              }
+            },
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "品牌增长与内容优化"
+              }
+            }
+          ]
         }
       },
       {
-        "@type": "Question",
-        "name": "Why is server-side content important for AI crawlers?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Most AI crawlers — including GPTBot, ClaudeBot, and PerplexityBot — do not execute JavaScript. A pure client-side-rendered SPA appears almost empty to them, which means LLMs never see the content and cannot cite it. Adding server-side rendering, static-site generation, or a content-rich index.html fixes this."
-        }
+        "@type": "FAQPage",
+        "@id": "https://www.vigilath.cn/#faq",
+        "isPartOf": {
+          "@id": "https://www.vigilath.cn/#webpage"
+        },
+        "inLanguage": "zh-CN",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "什么是 GEO 优化？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GEO 优化即生成式引擎优化，目标是让品牌和网站内容更容易被 DeepSeek、通义千问、豆包、文心一言、腾讯元宝、Kimi 等 AI 引擎抓取、理解、引用和推荐。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "威吉力 GEO 可以检测什么？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "威吉力 GEO 从 25 个类别和 100+ 信号检测网站，包括 HTTPS、robots.txt、sitemap.xml、llms.txt、结构化数据、语义 HTML、标题层级、内容可提取性、AI 爬虫访问、品牌权威和答案格式适配。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "GEO 优化和 SEO 优化有什么区别？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "SEO 主要提升传统搜索结果排名，GEO 更关注品牌是否出现在 AI 生成回答中，是否被准确描述、引用和推荐。GEO 会优化实体识别、可信信源、内容可引用性和 AI 爬虫可访问性。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "为什么 SPA 首页需要静态 SEO 内容？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "很多搜索引擎和 AI 爬虫不会完整执行 JavaScript。纯 SPA 首页如果只返回空的 root 容器，爬虫难以读取正文。静态 SEO 内容可以让爬虫直接获得标题、描述、正文、FAQ 和结构化数据。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "威吉力 GEO 覆盖哪些 AI 搜索引擎？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "威吉力 GEO 覆盖 DeepSeek、通义千问、豆包、文心一言、腾讯元宝、Kimi 等国内主流 AI 平台。"
+            }
+          }
+        ]
       },
       {
-        "@type": "Question",
-        "name": "Which AI bots should I allow in robots.txt?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "At minimum: GPTBot and ChatGPT-User (OpenAI), OAI-SearchBot (ChatGPT search), Google-Extended (Gemini + AI Overviews), ClaudeBot and anthropic-ai (Claude), PerplexityBot and Perplexity-User (Perplexity), Applebot-Extended (Apple Intelligence), CCBot (Common Crawl, used as LLM training source), and Meta-ExternalAgent. Explicit allow rules are a stronger signal than relying on wildcard fallback."
-        }
-      }
-    ]
-  }
-  </script>
-
-  <!-- Structured data: SoftwareApplication -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Vigilath",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web",
-    "url": "https://www.vigilath.com/",
-    "description": "Vigilath is the unified GEO+AEO platform that audits any website across 25 categories and 100+ signals to produce a 0–100 AI Visibility Score for ChatGPT, Perplexity, Claude, and Google AI Overviews.",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD",
-      "description": "Free plan with 3 checks per month"
-    }
-  }
-  </script>
-
-  <!-- Structured data: BreadcrumbList -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://www.vigilath.com/"
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "GEO Knowledge",
-        "item": "https://www.vigilath.com/geo-knowledge"
-      },
-      {
-        "@type": "ListItem",
-        "position": 3,
-        "name": "Products & Services",
-        "item": "https://www.vigilath.com/products-services"
-      },
-      {
-        "@type": "ListItem",
-        "position": 4,
-        "name": "About",
-        "item": "https://www.vigilath.com/about"
-      },
-      {
-        "@type": "ListItem",
-        "position": 5,
-        "name": "Contact",
-        "item": "https://www.vigilath.com/contact"
+        "@type": "BreadcrumbList",
+        "@id": "https://www.vigilath.cn/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "首页",
+            "item": "https://www.vigilath.cn/"
+          }
+        ]
       }
     ]
   }
   </script>
 
   <style>
-    /* Critical CSS — 在主 CSS bundle 到位前给出"页面在加载"的视觉,避免白屏刺眼。
-       颜色匹配默认 peec 主题的 --bg-primary / --text-primary。 */
+    /* Critical CSS -- shows a "page is loading" visual before the main CSS bundle arrives, avoiding a harsh white screen.
+       Colors match the default peec theme's --bg-primary / --text-primary. */
     html, body {
       margin: 0;
       background: #f5f5f7;
@@ -208,14 +271,14 @@
       font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     }
 
-    /* 隐藏静态 SEO 骨架,避免 React 挂载前出现 FOUC。
-       AI 爬虫(GPTBot/ClaudeBot/PerplexityBot 等)不执行 CSS,仍可抓到 #seo-skeleton 内容。 */
-    #seo-skeleton { display: none; }
+    /* Hide the static SEO skeleton to avoid FOUC before React mounts.
+       AI crawlers don't execute CSS and can still read #seo-skeleton content. */
+    .js #seo-skeleton { display: none; }
 
-    /* 启动骨架——给真实用户看,消灭手机端 2-3s 白屏。内联 CSS 与 HTML
-       同步到达,不等主 bundle;React createRoot.render 挂载 <App /> 时会把
-       #root 下的所有内容(包括这个骨架和上面的 SEO 骨架)一起替换,无需
-       手动清理。 */
+    /* Boot skeleton -- shown to real users to eliminate the 2-3s white screen on mobile. Inline CSS arrives
+       together with the HTML without waiting for the main bundle; when React createRoot.render mounts <App /> it
+       replaces everything under #root (including this skeleton and the SEO skeleton above), so no
+       manual cleanup is needed. */
     #app-boot-skeleton { min-height: 100vh; display: flex; flex-direction: column; }
     #app-boot-skeleton .sk-header {
       height: 64px;
@@ -240,158 +303,138 @@
 </head>
 
 <body>
-  <!-- #root 下有两个兄弟骨架,React createRoot.render 挂载时整块替换:
-       - #app-boot-skeleton:对人类可见,头部条 + 中央 spinner,消除白屏
-       - #seo-skeleton:对人类 display:none,给不跑 JS 的 AI 爬虫抓语义内容 -->
+  <!-- #root has two sibling skeletons, replaced wholesale when React createRoot.render mounts:
+       - #app-boot-skeleton: visible to humans, header bar + center spinner, eliminating the white screen
+       - #seo-skeleton: display:none for humans, semantic content for AI crawlers that don't run JS -->
   <div id="root">
-    <div id="app-boot-skeleton" role="status" aria-label="Loading">
+    <div id="app-boot-skeleton" role="status" aria-label="加载中">
       <div class="sk-header" aria-hidden="true"></div>
       <div class="sk-center" aria-hidden="true"><div class="sk-spinner"></div></div>
     </div>
     <div id="seo-skeleton">
     <header>
-      <nav aria-label="Primary">
-        <a href="/" rel="home"><strong>Vigilath</strong></a>
+      <nav aria-label="主导航">
+        <a href="/" rel="home"><strong>威吉力 Vigilath GEO</strong></a>
         <ul>
-          <li><a href="/checker">Run a check</a></li>
-          <li><a href="/geo-knowledge">GEO knowledge</a></li>
-          <li><a href="/products-services">Products &amp; services</a></li>
-          <li><a href="/membership">Membership</a></li>
-          <li><a href="/about">About</a></li>
-          <li><a href="/contact">Contact</a></li>
+          <li><a href="/checker">免费 GEO 检测</a></li>
+          <li><a href="/geo-knowledge">GEO 知识中心</a></li>
+          <li><a href="/products-services">产品与服务</a></li>
+          <li><a href="/pricing">定价方案</a></li>
+          <li><a href="/about">关于我们</a></li>
+          <li><a href="/contact">联系我们</a></li>
         </ul>
       </nav>
     </header>
 
     <main>
       <article>
-        <h1>Vigilath — Unified GEO+AEO for Global AI Visibility</h1>
+        <h1>GEO优化与 AI 搜索优化平台：威吉力 Vigilath GEO</h1>
 
         <section aria-labelledby="key-takeaways">
-          <h2 id="key-takeaways">Key Takeaways</h2>
+          <h2 id="key-takeaways">核心能力</h2>
           <ul>
-            <li><dfn>Vigilath</dfn> is the unified <abbr title="Generative Engine Optimization">GEO</abbr>+<abbr title="Answer Engine Optimization">AEO</abbr> platform for global AI visibility.</li>
-            <li>Audit any website across 25 categories and 100+ signals for a 0–100 AI Visibility Score.</li>
-            <li>Covers ChatGPT, Perplexity, Claude, Google AI Overviews, Copilot, and other <abbr title="Large Language Model">LLM</abbr> answer engines.</li>
-            <li>According to a <a href="https://arxiv.org/abs/2311.09735" rel="noopener">2024 study by Georgia Tech researchers</a>, websites optimized for generative engines receive up to 40% more AI citations.</li>
+            <li><dfn>威吉力 Vigilath GEO</dfn> 是一体化 <abbr title="Generative Engine Optimization">GEO</abbr> + <abbr title="Answer Engine Optimization">AEO</abbr> 平台，帮助品牌提升 AI 搜索可见性。</li>
+            <li>免费检测任意网站，获得 0–100 AI 可见性评分、25 类别拆解和优先修复清单。</li>
+            <li>覆盖 DeepSeek、通义千问、豆包、文心一言、腾讯元宝、Kimi 等国内主流 AI 引擎。</li>
+            <li>从网站检测到品牌增长，威吉力支持 GEO 审计、AI SEO 优化、多引擎监测、内容生成、媒介分发和效果回流。</li>
           </ul>
         </section>
 
         <p>
-          <strong>Vigilath</strong> is the unified GEO+AEO platform for global AI visibility.
-          Audit any website across 25 categories and 100+ signals to see how visible, quotable,
-          and citable it is to ChatGPT, Perplexity, Claude, Google AI Overviews, and Copilot.
-          You get a 0–100 AI Visibility Score, a letter grade, a category breakdown, and a
-          prioritized fix list. According to <a href="https://www.w3.org/standards/" rel="noopener">W3C web standards</a>, semantic HTML and structured data are foundational to machine-readable content.
+          <strong>威吉力 Vigilath GEO</strong> 面向 AI 搜索时代，帮助企业解决“AI 是否知道我、是否准确描述我、是否愿意推荐我”的问题。
+          平台先通过网站 GEO 检测评估技术基础、内容结构、结构化数据、AI 爬虫可访问性和品牌权威信号，再通过 8 步品牌增长流程持续优化内容与信源，让品牌更容易被 AI 引擎发现、理解、引用和推荐。
         </p>
 
         <section aria-labelledby="what-is-geo">
-          <h2 id="what-is-geo">What is Generative Engine Optimization?</h2>
+          <h2 id="what-is-geo">什么是 GEO 优化？</h2>
           <p>
-            <dfn>Generative Engine Optimization</dfn> (<abbr title="Generative Engine Optimization">GEO</abbr>) is the practice of making a website legible and attractive to the retrieval and
-            citation layer of large language models. Unlike traditional <abbr title="Search Engine Optimization">SEO</abbr> — which optimizes
-            for a keyword-based ranking algorithm — GEO optimizes for two things: AI crawl
-            access and quotability by <abbr title="Large Language Models">LLMs</abbr>.
-            As noted by the <a href="https://schema.org/" rel="noopener">Schema.org</a> initiative, structured data markup helps search engines and AI systems understand page content more effectively.
+            <dfn>GEO 优化</dfn>（生成式引擎优化，Generative Engine Optimization）是让品牌和网站内容适配生成式 AI 检索、理解、引用与推荐机制的优化方法。
+            传统 SEO 主要面向搜索结果页排名，GEO 更关注 AI 回答中的品牌提及、引用来源、实体识别和可信描述。
           </p>
           <ul>
-            <li><strong>Crawl access</strong> — explicit allow/deny rules for GPTBot, ClaudeBot, PerplexityBot, Google-Extended, and 12 other AI bots in <code>robots.txt</code>; machine-readable manifests in <code>.well-known/</code>; a complete <code>sitemap.xml</code>; the <code>llms.txt</code> convention.</li>
-            <li><strong>Quotability</strong> — semantic HTML, clean heading structure, JSON-LD structured data, canonical URLs, authorship signals, and content shapes LLMs prefer to cite (definitions, lists, comparison tables, step-by-step instructions, FAQ blocks, quotable statistics).</li>
+            <li><strong>技术可抓取</strong>：检查 HTTPS、robots.txt、sitemap.xml、llms.txt、.well-known、语义化 HTML、SSR/静态内容等基础。</li>
+            <li><strong>内容可引用</strong>：把品牌介绍、产品能力、FAQ、对比表格、步骤说明、案例数据整理成 AI 更容易引用的结构。</li>
+            <li><strong>信源可信度</strong>：结合第三方提及、媒体内容、平台资料、实体信息和持续监测，提升 AI 对品牌的信任度。</li>
           </ul>
         </section>
 
         <section aria-labelledby="geo-vs-seo">
-          <h2 id="geo-vs-seo">GEO vs. Traditional SEO</h2>
+          <h2 id="geo-vs-seo">GEO 优化和传统 SEO 的区别</h2>
           <table>
             <thead>
-              <tr><th>Dimension</th><th>Traditional SEO</th><th>GEO (Generative Engine Optimization)</th></tr>
+              <tr><th>维度</th><th>传统 SEO</th><th>GEO / AI 搜索优化</th></tr>
             </thead>
             <tbody>
-              <tr><td>Target</td><td>Google / Bing keyword rankings</td><td>AI answer engines (ChatGPT, Perplexity, Claude, Gemini)</td></tr>
-              <tr><td>Optimization unit</td><td>Keywords &amp; backlinks</td><td>Quotability &amp; AI-crawl access</td></tr>
-              <tr><td>Key signals</td><td>PageRank, domain authority, anchor text</td><td>Structured data, llms.txt, semantic HTML, FAQ blocks</td></tr>
-              <tr><td>Content format</td><td>Long-form articles for SERP snippets</td><td>Definitions, tables, step-by-step, pros/cons — passage-level citations</td></tr>
-              <tr><td>Measurement</td><td>Rank position, CTR, organic traffic</td><td>AI Visibility Score, citation frequency, answer inclusion rate</td></tr>
+              <tr><td>目标</td><td>提升百度、搜狗、360 等搜索结果排名</td><td>进入 DeepSeek、通义千问、豆包、文心一言等 AI 回答与推荐</td></tr>
+              <tr><td>优化对象</td><td>关键词、页面、外链、点击率</td><td>实体识别、内容可引用性、AI 爬虫访问、可信信源</td></tr>
+              <tr><td>内容形态</td><td>长文章、落地页、关键词布局</td><td>定义、FAQ、表格、清单、步骤、案例、可引用事实</td></tr>
+              <tr><td>衡量指标</td><td>排名、收录、自然流量</td><td>AI 可见性评分、品牌提及率、引用率、情绪倾向、推荐位置</td></tr>
             </tbody>
           </table>
         </section>
 
         <section aria-labelledby="what-we-check">
-          <h2 id="what-we-check">What Vigilath checks</h2>
-          <p>Each audit runs through 25 categories grouped into five themes:</p>
+          <h2 id="what-we-check">威吉力 GEO 检测什么？</h2>
+          <p>首页免费检测会从 25 个类别、100+ 信号判断网站是否适合被 AI 搜索引擎抓取、理解和引用：</p>
           <ol>
-            <li><strong>Crawl access</strong> — HTTPS, robots.txt, llms.txt, sitemap.xml, .well-known manifests, IndexNow.</li>
-            <li><strong>Content extractability</strong> — SSR vs. client-rendered, content-to-HTML ratio, semantic tags, heading structure, internal links.</li>
-            <li><strong>Meta &amp; structured data</strong> — title, description, canonical, Open Graph, Twitter card, JSON-LD (Organization, WebSite, FAQ, HowTo, Breadcrumbs).</li>
-            <li><strong>Authority &amp; trust</strong> — security headers, author attribution, brand entity knowledge graphs, trust &amp; safety signals, sameAs profile links, cross-platform presence.</li>
-            <li><strong>Answer-format readiness</strong> — definitions, step-by-step, comparison tables, pros/cons, TL;DR, FAQs, quotable stats.</li>
+            <li><strong>抓取访问</strong>：HTTPS、robots.txt、AI 爬虫规则、sitemap.xml、llms.txt、.well-known。</li>
+            <li><strong>内容提取</strong>：是否有服务端/静态内容、语义标签、标题层级、内部链接、正文比例。</li>
+            <li><strong>Meta 与结构化数据</strong>：title、description、canonical、Open Graph、社交卡片、Organization / FAQ / Breadcrumb JSON-LD。</li>
+            <li><strong>权威与可信</strong>：安全头、作者信息、品牌实体、第三方资料、跨平台存在感和声誉信号。</li>
+            <li><strong>答案格式适配</strong>：定义、步骤、对比、优缺点、FAQ、可引用数据和总结段落。</li>
           </ol>
         </section>
 
-        <section aria-labelledby="pros-cons">
-          <h2 id="pros-cons">Pros and Cons of GEO Optimization</h2>
-          <h3>Pros</h3>
-          <ul>
-            <li>Increases brand visibility in AI-generated answers across ChatGPT, Perplexity, Claude, and Google AI Overviews</li>
-            <li>Complements existing SEO — most GEO fixes also improve traditional search rankings</li>
-            <li>Measurable with a 0–100 AI Visibility Score and 25-category breakdown</li>
-            <li>Early-mover advantage — fewer than 5% of websites are currently GEO-optimized</li>
-          </ul>
-          <h3>Cons</h3>
-          <ul>
-            <li>Requires ongoing monitoring as AI crawlers and citation algorithms evolve</li>
-            <li>Some checks (AI citation, entity audit) require paid API keys</li>
-            <li>Brand entity signals (Wikipedia, Wikidata) take time to build organically</li>
-          </ul>
+        <section aria-labelledby="pipeline">
+          <h2 id="pipeline">8 阶段 GEO 自动化品牌增长流程</h2>
+          <ol>
+            <li><strong>种子问题</strong>：整理品牌资料和用户真实会问 AI 的问题。</li>
+            <li><strong>意图扩展</strong>：用大模型扩展候选问题和长尾场景。</li>
+            <li><strong>问题聚类</strong>：去重并形成约 200 条核心提示词。</li>
+            <li><strong>内容生成</strong>：围绕品牌资料和提示词生成内容稿件。</li>
+            <li><strong>媒介分发</strong>：覆盖新闻媒体、知乎、行业平台和品牌自有阵地。</li>
+            <li><strong>引擎抓取</strong>：推动内容被主流 AI 引擎抓取与索引。</li>
+            <li><strong>遥测采集</strong>：每日监测提及、引用、排名和情绪变化。</li>
+            <li><strong>强化闭环</strong>：把监测结果回流到下一轮内容和信源优化。</li>
+          </ol>
         </section>
 
-        <section aria-labelledby="plans">
-          <h2 id="plans">Membership plans</h2>
-          <p>Pick a tier that matches how you use AI visibility data:</p>
-          <table>
-            <thead>
-              <tr><th>Plan</th><th>Price</th><th>Checks / month</th><th>Key features</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Free</td><td>$0</td><td>3</td><td>Basic 25-category audit</td></tr>
-              <tr><td>Pro</td><td>$9.99/mo</td><td>20</td><td>Full audit, check history, fix list</td></tr>
-              <tr><td>Starter</td><td>$999/mo</td><td>Unlimited</td><td>Managed GEO, AI inclusion spec, copywriting compliance</td></tr>
-              <tr><td>Growth</td><td>$2,500/mo</td><td>Unlimited</td><td>Starter + paid SEO placements, priority support</td></tr>
-              <tr><td>Scale</td><td>Custom</td><td>Unlimited</td><td>Enterprise GEO, reputation management, dedicated advisor</td></tr>
-            </tbody>
-          </table>
+        <section aria-labelledby="engines-covered">
+          <h2 id="engines-covered">覆盖的 AI 搜索引擎</h2>
+          <p>
+            威吉力 GEO 覆盖国内主流 AI 平台，包括 DeepSeek、通义千问、豆包、文心一言、腾讯元宝和 Kimi。
+            企业可以看到不同 AI 引擎如何描述品牌、是否给出引用、是否推荐竞品，以及哪些信源最影响 AI 回答。
+          </p>
         </section>
 
         <section aria-labelledby="cta">
-          <h2 id="cta">Ready to measure your AI visibility?</h2>
+          <h2 id="cta">开始检测你的 AI 搜索可见性</h2>
           <p>
-            <a href="/checker">Run a free Vigilath audit</a> on any URL, or
-            <a href="/geo-knowledge">browse the GEO knowledge base</a> to understand what
-            the 25 categories mean and how LLMs actually pick what to cite.
+            你可以先使用 <a href="/checker">免费 GEO 检测</a> 获取网站基础评分，也可以查看
+            <a href="/products-services">产品与服务</a> 或 <a href="/contact">预约演示</a>，进一步了解品牌增长、内容优化和多引擎监测方案。
           </p>
         </section>
       </article>
     </main>
 
-    <nav aria-label="Breadcrumb">
+    <nav aria-label="面包屑">
       <ol>
-        <li><a href="/">Home</a></li>
+        <li><a href="/">首页</a></li>
       </ol>
     </nav>
 
     <footer>
       <p>
         <small>
-          © Vigilath — Unified GEO+AEO for Global AI Visibility.
-          <a href="/sitemap.xml">Sitemap</a> ·
+          © 威吉力 Vigilath —— AI 搜索可见性全链路解决方案（检测 · 审计 · 优化 · 监控）。
+          <a href="/sitemap.xml">站点地图</a> ·
           <a href="/robots.txt">robots.txt</a> ·
           <a href="/llms.txt">llms.txt</a> ·
-          <a href="/about">About</a> ·
-          <a href="/contact">Contact</a> ·
-          <a href="/privacy">Privacy Policy</a> ·
-          <a href="/terms">Terms of Service</a> ·
-          <a href="/cookie-policy">Cookie Policy</a> ·
-          <a href="https://x.com/zen7_labs" rel="noopener">X / Twitter</a>
+          <a href="/about">关于我们</a> ·
+          <a href="/contact">联系我们</a> ·
+          <a href="/privacy">隐私政策</a> ·
+          <a href="/terms">服务条款</a> ·
+          <a href="/cookie-policy">Cookie 政策</a>
         </small>
       </p>
     </footer>

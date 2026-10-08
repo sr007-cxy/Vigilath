@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/authApi';
+import { wechatAuthApi } from '../services/wechatAuthApi';
+import { WechatQrLogin } from '../components/WechatQrLogin';
+import { PhoneLogin } from '../components/PhoneLogin';
 import { useAuth } from '../contexts/AuthContext';
-import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { PageHead } from '../components/PageHead';
 
 export function Login() {
@@ -12,9 +14,39 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<'wechat' | 'phone' | 'email'>('email');
+  const [wechatEnabled, setWechatEnabled] = useState(false);
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
+  const [emailRegisterEnabled, setEmailRegisterEnabled] = useState(false);
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { setToken, setUser } = useAuth();
+
+  // Channel probing. The default tab lands on "the path that can register": email sign-up is off, so QR scan comes first,
+  // then phone number; only if neither is enabled fall back to email (then only existing accounts can log in).
+  useEffect(() => {
+    let alive = true;
+    void wechatAuthApi.config().then((cfg) => {
+      if (!alive) return;
+      setWechatEnabled(cfg.wechat_login_enabled);
+      setPhoneEnabled(cfg.phone_login_enabled);
+      setEmailRegisterEnabled(cfg.email_register_enabled);
+      if (cfg.wechat_login_enabled) setTab('wechat');
+      else if (cfg.phone_login_enabled) setTab('phone');
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // Landing after a successful QR scan / phone binding, sharing the write logic with email login
+  const handleAuthenticated = useCallback(async (accessToken: string) => {
+    try {
+      setUser(await authApi.getCurrentUser(accessToken));
+    } catch {
+      /* A /me failure shouldn't block login; the Header will fill it in on the next refresh */
+    }
+    setToken(accessToken);
+    navigate('/');
+  }, [navigate, setToken, setUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,9 +61,9 @@ export function Login() {
       } catch {
         setUser({ email });
       }
-      setToken(response.access_token);  // 通过 AuthContext 同步所有消费者
-      // SPA 跳转首页;AuthProvider 已经广播 token 更新,无需 window.location
-      // 的整页刷新(老版靠整页刷新绕过 state 不同步问题)
+      setToken(response.access_token);  // Sync all consumers via AuthContext
+      // SPA navigation to home; AuthProvider already broadcast the token update, so no full-page refresh via window.location
+      // is needed (the old version relied on a full refresh to work around state desync)
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -40,21 +72,10 @@ export function Login() {
     }
   };
 
-  const handleGoogleSuccess = async (accessToken: string, profile: { email: string }) => {
-    try {
-      const me = await authApi.getCurrentUser(accessToken);
-      setUser(me);
-    } catch {
-      setUser({ email: profile.email });
-    }
-    setToken(accessToken);
-    navigate('/');
-  };
-
   return (
     <div className="min-h-screen grid-background">
       <PageHead titleKey="pageMeta.login.title" descriptionKey="pageMeta.login.description" />
-      {/* 背景发光效果 */}
+      {/* Background glow effect */}
       <div className="bg-glow bg-glow-1"></div>
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
@@ -67,19 +88,73 @@ export function Login() {
                 {t('login.title')}
               </h2>
               <p className="mt-2 text-sm text-secondary">
-                {t('login.subtitle')}{' '}
-                <Link
-                  to="/register"
-                  className="font-medium text-accent-primary hover:text-primary transition-colors duration-200"
-                >
-                  {t('login.createAccount')}
-                </Link>
+                {t('login.subtitle')}
+                {emailRegisterEnabled ? (
+                  <>
+                    {' '}
+                    <Link
+                      to="/register"
+                      className="font-medium text-accent-primary hover:text-primary transition-colors duration-200"
+                    >
+                      {t('login.createAccount')}
+                    </Link>
+                  </>
+                ) : null}
               </p>
             </div>
 
+            {(wechatEnabled || phoneEnabled) && (
+              <div
+                className="mt-6 grid gap-1 p-1 rounded-lg border border-border"
+                style={{ gridTemplateColumns: `repeat(${1 + (wechatEnabled ? 1 : 0) + (phoneEnabled ? 1 : 0)}, minmax(0, 1fr))` }}
+              >
+                {wechatEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setTab('wechat')}
+                    className={`py-2 text-sm font-medium rounded-md transition-colors ${
+                      tab === 'wechat' ? 'bg-accent-primary text-white' : 'text-secondary hover:text-primary'
+                    }`}
+                  >
+                    {t('wechatLogin.tab')}
+                  </button>
+                )}
+                {phoneEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setTab('phone')}
+                    className={`py-2 text-sm font-medium rounded-md transition-colors ${
+                      tab === 'phone' ? 'bg-accent-primary text-white' : 'text-secondary hover:text-primary'
+                    }`}
+                  >
+                    {t('phoneLogin.tab')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setTab('email')}
+                  className={`py-2 text-sm font-medium rounded-md transition-colors ${
+                    tab === 'email' ? 'bg-accent-primary text-white' : 'text-secondary hover:text-primary'
+                  }`}
+                >
+                  {t('wechatLogin.emailTab')}
+                </button>
+              </div>
+            )}
+
+            {wechatEnabled && tab === 'wechat' ? (
+              <div className="mt-6">
+                <WechatQrLogin onAuthenticated={handleAuthenticated} />
+              </div>
+            ) : phoneEnabled && tab === 'phone' ? (
+              <div className="mt-6">
+                <PhoneLogin onAuthenticated={handleAuthenticated} />
+              </div>
+            ) : (
+
             <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
               {error && (
-                <div className="bg-red-100 border border-red-300 text-red-700 dark:bg-red-900 dark:border-red-800 dark:text-red-300 p-4 rounded-md text-sm">
+                <div className="bg-danger-bg border border-danger-border text-danger-fg p-4 rounded-md text-sm">
                   {error}
                 </div>
               )}
@@ -175,28 +250,15 @@ export function Login() {
                 </button>
               </div>
             </form>
+            )}
 
-            {/* Third-party login options */}
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="px-3 bg-card text-secondary text-sm">
-                    {t('login.orUse', '或使用')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <GoogleSignInButton
-                  intent="signin"
-                  onSuccess={handleGoogleSuccess}
-                  onError={setError}
-                />
-              </div>
-            </div>
+            {!emailRegisterEnabled && (
+              <p className="mt-6 text-center text-xs text-muted">
+                {phoneEnabled && !wechatEnabled
+                  ? t('phoneLogin.emailRegisterClosed')
+                  : t('wechatLogin.emailRegisterClosed')}
+              </p>
+            )}
           </div>
         </div>
       </main>

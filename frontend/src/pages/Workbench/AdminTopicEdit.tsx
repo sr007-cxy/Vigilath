@@ -1,6 +1,6 @@
-// 项目内「画像」页 — stepper step 1 落地,套壳 TopicEditor 让 admin 在项目上下文里
-// 编辑资料/种子/监测问题,不再跳到客户列表页的弹层模式.
-// 路由:/workbench/topics/:topicId/edit
+// In-project "Profile" page — landing for stepper step 1, wrapping TopicEditor so admins edit materials/seeds/prompts
+// within the project context, no longer jumping to the client list page's overlay mode.
+// Route: /ops/topics/:topicId/edit
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -16,7 +16,7 @@ export function AdminTopicEdit() {
   const navigate = useNavigate();
   const tid = Number(topicId);
   const token = localStorage.getItem('token') || '';
-  // 项目进度看板把 6 段 chip 都指向 /edit?step=N,这里读出来透传给 TopicEditor.
+  // The project progress board points all 6 stage chips to /edit?step=N; read it here and pass it through to TopicEditor.
   const [searchParams] = useSearchParams();
   const stepParam = Number(searchParams.get('step'));
   const initialStep =
@@ -51,7 +51,7 @@ export function AdminTopicEdit() {
 
       {err && (
         <div className="rounded-md p-3 text-sm"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+             style={{ background: 'var(--danger-bg)', color: 'var(--danger-fg)',
                       border: '1px solid rgba(239,68,68,0.3)' }}>
           {err}
         </div>
@@ -68,10 +68,10 @@ export function AdminTopicEdit() {
           mode="edit"
           adminTargetUserId={userId}
           initialStep={initialStep}
-          onCancel={() => navigate('/workbench/cockpit')}
+          onCancel={() => navigate('/ops/cockpit')}
           onSave={handleSave}
           onSaveDone={() => {
-            // 保存后留在原页,刷新 topic 数据(让 stepper 更新画像/监测问题状态)
+            // Stay on the page after saving and refresh the topic data (so the stepper updates profile/prompt status)
             adminReviewApi.getTopicReview(tid, token).then(setTopic).catch(() => {});
           }}
         />

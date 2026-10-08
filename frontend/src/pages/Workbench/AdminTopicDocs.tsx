@@ -1,5 +1,5 @@
-// 项目内「文案」页 — stepper step 3 落地,套壳 AdminContentReview 锁定到当前 topic.
-// 路由:/workbench/topics/:topicId/docs
+// In-project "Copy" page — landing for stepper step 3, wrapping AdminContentReview locked to the current topic.
+// Route: /ops/topics/:topicId/docs
 
 import { useParams } from 'react-router-dom';
 import { PageHead } from '../../components/PageHead';

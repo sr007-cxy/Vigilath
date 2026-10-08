@@ -14,6 +14,7 @@ from typing import List
 import requests
 
 from .base import Citation, EngineAdapter, EngineResult, extract_urls_from_text
+from geo.services.llm_gateway import post_and_record
 
 
 class PerplexityAPIAdapter(EngineAdapter):
@@ -39,9 +40,10 @@ class PerplexityAPIAdapter(EngineAdapter):
         }
 
         try:
-            r = requests.post(
+            r = post_and_record(
                 "https://api.perplexity.ai/chat/completions",
-                json=payload, headers=headers, timeout=45,
+                payload, headers, provider="perplexity",
+                feature="advanced.perplexity", timeout=45,
             )
             if r.status_code == 401:
                 return EngineResult(engine=self.name, query=query, error="invalid_key")

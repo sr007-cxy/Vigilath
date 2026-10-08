@@ -10,7 +10,18 @@ interface UserMembership {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  /** Tier slug (free / pro / starter / growth / scale), filled by the backend API layer */
+  slug?: string | null;
 }
+
+// Tier ranking, kept consistent with TIER_RANK in backend models/advanced.py.
+const TIER_RANK: Record<string, number> = {
+  free: 0,
+  pro: 1,
+  starter: 2,
+  growth: 3,
+  scale: 4,
+};
 
 /**
  * Shared logout helper — delegates to AuthContext.clearAuth via a
@@ -33,9 +44,9 @@ export function useClearStoredAuth(): () => boolean {
 }
 
 export function useMembership() {
-  // Token 现在来自 AuthContext,全局单一真相。任何 setToken / clearAuth
-  // 调用都会触发所有消费 useMembership 的组件重渲染。修掉了 TierModal 等
-  // 常驻组件"登录了但 state 不同步"的 bug。
+  // The token now comes from AuthContext, the single global source of truth. Any setToken / clearAuth
+  // call re-renders every component consuming useMembership. This fixes the bug of persistent components like TierModal
+  // being "logged in but with out-of-sync state".
   const { token, isLoggedIn, clearAuth } = useAuth();
   const queryClient = useQueryClient();
 
@@ -46,9 +57,9 @@ export function useMembership() {
       try {
         return await membershipApi.getUserMembership(token);
       } catch (err) {
-        // Zombie-login killer: token 被后端拒(401/403),清掉存储以免 UI
-        // 继续假装"已登录"。其他错误(网络、5xx、解析)保留 token,下次
-        // 刷新再试,不要无故踢用户下线。
+        // Zombie-login killer: the token was rejected by the backend (401/403); clear storage so the UI
+        // doesn't keep pretending to be "logged in". Other errors (network, 5xx, parsing) keep the token and retry
+        // on the next refresh, without kicking the user out for no reason.
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           clearAuth();
         }
@@ -67,11 +78,15 @@ export function useMembership() {
   return {
     token,
     isLoggedIn,
-    // `id === 0` is the backend's sentinel for a synthesized free-tier row
-    // (no real `user_memberships` record exists — logged-in free users always
-    // get one of these). A real paid subscription has a positive PK. Treating
-    // the sentinel as "unlocked" would let free users bypass the paywall.
-    isUnlocked: !!(data && data.is_active && data.id > 0),
+    // Gate for audit features (advanced audit modes + one-click full diagnosis) -- only the tier matters.
+    // After "logging in grants audit membership", the backend gives pro to logged-in users without a subscription too, so this must
+    // judge by slug rather than by whether there's a payment record, otherwise the backend allows it while the frontend still pops the upgrade dialog.
+    // The metric definition must align with the backend `_ensure_tier` (audit features in MODE_MIN_TIER are all pro).
+    isUnlocked: !!(
+      data &&
+      data.is_active &&
+      TIER_RANK[data.slug ?? 'free'] >= TIER_RANK.pro
+    ),
     isLoading,
     refresh,
   };

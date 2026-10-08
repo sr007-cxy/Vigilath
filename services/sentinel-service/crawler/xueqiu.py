@@ -46,7 +46,7 @@ class XueqiuClient:
     def fetch_posts(self, symbol: str, count: int = 50, page: int = 1) -> Iterator[dict]:
         """拉取某只股票的讨论帖.
 
-        symbol: 股票代码（如 VNET、SH600519、01810 等）
+        symbol: 股票代码（如 BABA、SH600519、01810 等）
         count: 每页数量（最大 100）
         page: 页码
         """
@@ -100,7 +100,7 @@ class XueqiuClient:
 def _to_xueqiu_symbol(symbol: str) -> str:
     """将通用股票代码转为雪球格式.
 
-    雪球格式: 美股=VNET, A股=SH600519/SZ000001, 港股=01810
+    雪球格式: 美股=BABA, A股=SH600519/SZ000001, 港股=01810
     """
     s = symbol.strip().upper()
     # 已经是雪球格式

@@ -2,8 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Old-kernel WebViews (WeCom/WeChat X5, Chrome<87) don't support the `inset` shorthand property,
+   so Tailwind's inset-0/inset-x-0/inset-y-0 are ignored entirely -> absolutely positioned overlays lose top/left/right/bottom,
+   showing up as "donut chart center text misplaced/missing", "overlay/divider misaligned", etc. Longhands are added here; no effect on new kernels. */
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.inset-x-0 { left: 0; right: 0; }
+.inset-y-0 { top: 0; bottom: 0; }
+
 @layer base {
   :root {
+    /* Tertiary text -- weaker than secondary, on par with muted. Used in 19 places site-wide for a long time,
+       but never defined, so it rendered as the inherited color (no weakening at all). Filled in here. */
+    --text-tertiary: var(--text-muted);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -37,6 +47,33 @@
     --success: #10b981;
     --warning: #f59e0b;
 
+    /* === Semantic status colors (used uniformly by data pages: -fg text / -bg light background / -border light border / -solid chart fill) ===
+       All rgba literals, color-mix() forbidden (html2canvas 1.4.1 can't parse it, and these values go into the PDF export area) */
+    --bg-input: #f0f0f2;
+    --success-fg: #15803d;
+    --success-bg: rgba(34, 197, 94, 0.1);
+    --success-border: rgba(34, 197, 94, 0.32);
+    --success-solid: #22c55e;
+    --warn-fg: #b45309;
+    --warn-bg: rgba(245, 158, 11, 0.1);
+    --warn-border: rgba(245, 158, 11, 0.3);
+    --warn-solid: #f59e0b;
+    --danger-fg: #b91c1c;
+    --danger-bg: rgba(239, 68, 68, 0.09);
+    --danger-border: rgba(239, 68, 68, 0.3);
+    --danger-solid: #ef4444;
+    --info-fg: #2563eb;
+    --info-bg: rgba(59, 130, 246, 0.1);
+    --info-solid: #3b82f6;
+    --neutral-fg: #64748b;
+    --neutral-bg: rgba(148, 163, 184, 0.14);
+    /* Text color on solid accent blocks (buttons/selected state), guaranteeing contrast per theme */
+    --accent-contrast: #ffffff;
+    /* Card shadow: tinted blue-gray, not pure black */
+    --shadow-card:
+      0 1px 2px rgba(15, 23, 42, 0.05),
+      0 1px 3px rgba(15, 23, 42, 0.05);
+
     /* Pipeline phase colors — fixed across themes, section uses dark blueprint bg */
     --phase-ingest: #5eead4;
     --phase-produce: #a78bfa;
@@ -44,8 +81,45 @@
     --phase-adapt: #fb7185;
   }
 
+  /* aui tokens are defined on body, not :root: the base variables overridden by the three themes live on body,
+     and if defined on :root, var() would resolve to peec's values at :root and not follow theme switches. */
+  body {
+    /* === assistant-ui / Elements-specific tokens (prefix aui-, isolated from site-wide tokens) ===
+       Elements is shadcn source copied into the repo, consuming names like --background / --muted by default.
+       Running `npx shadcn init` directly would overwrite same-named keys in tailwind.config.js -- `muted`
+       is a **text color** here and a **background color** in shadcn, so the site's 1374 text-muted usages
+       would silently get a background color. Hence a separate namespace; copied components use bg-aui-* / text-aui-* instead.
+
+       These only map to site-wide tokens, no hardcoded colors -- the three themes (peec / light / dark) redefine
+       the same set of base variables, so the mapping follows automatically without copying per theme. */
+    --aui-background: var(--bg-primary);
+    --aui-foreground: var(--text-primary);
+    --aui-card: var(--bg-card);
+    --aui-card-foreground: var(--text-primary);
+    --aui-popover: var(--bg-surface);
+    --aui-popover-foreground: var(--text-primary);
+    --aui-primary: var(--accent-primary);
+    --aui-primary-foreground: var(--solid-btn-text);
+    --aui-secondary: var(--bg-tertiary);
+    --aui-secondary-foreground: var(--text-primary);
+    /* shadcn's muted is a background color and muted-foreground is the weakened text -- exactly offset from the semantics of our --text-muted */
+    --aui-muted: var(--bg-tertiary);
+    --aui-muted-foreground: var(--text-muted);
+    --aui-accent: var(--bg-surface-hover);
+    --aui-accent-foreground: var(--text-primary);
+    --aui-destructive: var(--danger-solid);
+    --aui-destructive-foreground: #ffffff;
+    --aui-border: var(--border-color);
+    --aui-input: var(--bg-input);
+    --aui-ring: var(--accent-primary);
+    --aui-radius: 12px;
+  }
+
   /* === Theme: classic light (blue/purple gradient) === */
   body[data-theme="light"] {
+    /* Tertiary text -- weaker than secondary, on par with muted. Used in 19 places site-wide for a long time,
+       but never defined, so it rendered as the inherited color (no weakening at all). Filled in here. */
+    --text-tertiary: var(--text-muted);
     --bg-primary: #f0f2f5;
     --bg-secondary: #ffffff;
     --bg-tertiary: #e4e7eb;
@@ -68,10 +142,14 @@
     --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     --grid-line: rgba(0, 136, 204, 0.06);
     --h1-gradient: linear-gradient(135deg, #0088cc 0%, #6b46c1 100%);
+    --bg-input: #eef0f4;
   }
 
   /* === Theme: dark (neon cyberpunk) === */
   body[data-theme="dark"] {
+    /* Tertiary text -- weaker than secondary, on par with muted. Used in 19 places site-wide for a long time,
+       but never defined, so it rendered as the inherited color (no weakening at all). Filled in here. */
+    --text-tertiary: var(--text-muted);
     --bg-primary: #0a0a0f;
     --bg-secondary: #11111a;
     --bg-tertiary: #1a1a25;
@@ -94,6 +172,134 @@
     --nav-shadow: 0 0 0 rgba(0, 0, 0, 0);
     --grid-line: rgba(0, 240, 255, 0.04);
     --h1-gradient: linear-gradient(135deg, #ffffff 0%, #a0a0b0 100%);
+    /* On dark backgrounds semantic colors switch to the brighter 400 series (the 700 series lacks contrast on #0a0a0f) */
+    --bg-input: #1a1a26;
+    /* In dark mode --accent-primary is #00f0ff and white text doesn't hold up -- the aui primary button uses a dark foreground */
+    --aui-primary-foreground: #0a0a0f;
+    --success-fg: #4ade80;
+    --success-bg: rgba(74, 222, 128, 0.1);
+    --success-border: rgba(74, 222, 128, 0.28);
+    --warn-fg: #fbbf24;
+    --warn-bg: rgba(251, 191, 36, 0.1);
+    --warn-border: rgba(251, 191, 36, 0.26);
+    --danger-fg: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.1);
+    --danger-border: rgba(248, 113, 113, 0.26);
+    --info-fg: #60a5fa;
+    --info-bg: rgba(96, 165, 250, 0.1);
+    --neutral-fg: #94a3b8;
+    --neutral-bg: rgba(148, 163, 184, 0.12);
+    --shadow-card:
+      0 0 0 1px rgba(148, 163, 184, 0.06),
+      0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Report center scope (direction A · dense data terminal style):
+     ink blue #0b1526 as the main control color (buttons/selected state/section markers), --data-accent dedicated to chart data coloring
+     (trend lines/areas/mini trends/chart legends), --rpt-hairline for thin dividers inside cards. */
+  .reports-shell {
+    --bg-primary: #edeff2;
+    --accent-primary: #0b1526;
+    --accent-contrast: #ffffff;
+    --border-color: rgba(11, 21, 38, 0.14);
+    --rpt-hairline: rgba(11, 21, 38, 0.09);
+    --data-accent: #2563eb;
+    /* Dedicated colors for the six metrics (scheme A · colorful data observatory): the same metric has the same color in metric cards/mini charts/progress bars.
+       --mh-* = main color, --mht-* = start color of the card's light gradient background (rgba literals, color-mix forbidden) */
+    --mh-exposure: #2563eb;
+    --mh-top1: #7c3aed;
+    --mh-top3: #0891b2;
+    --mh-accuracy: #059669;
+    --mh-citation: #d97706;
+    --mh-mention: #db2777;
+    --mht-exposure: rgba(37, 99, 235, 0.07);
+    --mht-top1: rgba(124, 58, 237, 0.07);
+    --mht-top3: rgba(8, 145, 178, 0.07);
+    --mht-accuracy: rgba(5, 150, 105, 0.07);
+    --mht-citation: rgba(217, 119, 6, 0.08);
+    --mht-mention: rgba(219, 39, 119, 0.06);
+  }
+
+  /* Blue-purple light theme: data colors follow the theme accent, dividers revert to the theme default */
+  body[data-theme="light"] .reports-shell {
+    --bg-primary: #f0f2f5;
+    --accent-primary: #0088cc;
+    --border-color: rgba(0, 0, 0, 0.12);
+    --rpt-hairline: rgba(0, 0, 0, 0.08);
+    --data-accent: #0088cc;
+  }
+
+  /* Report center scope: tone down the neon in the dark theme -- desaturated accent, reduced glow, finer borders.
+     Applies only to the .reports-shell container; the marketing pages' neon style is unaffected. */
+  body[data-theme="dark"] .reports-shell {
+    --accent-primary: #22d3ee;
+    --accent-contrast: #06232b;
+    --text-primary: #f4f4f6;
+    --border-color: rgba(148, 163, 184, 0.13);
+    --rpt-hairline: rgba(148, 163, 184, 0.1);
+    --data-accent: #22d3ee;
+    --grid-line: rgba(148, 163, 184, 0.1);
+    --glow-primary:
+      0 0 0 1px rgba(56, 189, 248, 0.12),
+      0 8px 24px rgba(0, 0, 0, 0.4);
+    /* In dark mode the six metric colors are brightened a notch, and the card's light gradient background switches to a dark version */
+    --mh-exposure: #60a5fa;
+    --mh-top1: #a78bfa;
+    --mh-top3: #22d3ee;
+    --mh-accuracy: #34d399;
+    --mh-citation: #fbbf24;
+    --mh-mention: #f472b6;
+    --mht-exposure: rgba(96, 165, 250, 0.1);
+    --mht-top1: rgba(167, 139, 250, 0.1);
+    --mht-top3: rgba(34, 211, 238, 0.09);
+    --mht-accuracy: rgba(52, 211, 153, 0.09);
+    --mht-citation: rgba(251, 191, 36, 0.09);
+    --mht-mention: rgba(244, 114, 182, 0.08);
+  }
+
+  /* One-click full diagnosis report scope: this page isn't inside .reports-shell, so --data-accent is unavailable
+     (when undefined, linear-gradient() fails entirely -> transparent bars, colorless radar), so it carries its own set here.
+     --dg-1..6 are a categorical palette: four-dimension scores/engine bars/competitor bars take colors in order, same dimension same color across the page. */
+  .diagnosis-report {
+    --data-accent: #4f46e5;
+    --dg-1: #4f46e5;   /* AI search visibility -- indigo */
+    --dg-2: #0d9488;   /* infrastructure completeness -- teal */
+    --dg-3: #ea580c;   /* authority endorsement -- orange */
+    --dg-4: #059669;   /* competitive advantage -- green */
+    --dg-5: #7c3aed;
+    --dg-6: #db2777;   /* sentiment health -- magenta (not dg-5 purple, whose hue is too close to dg-1 indigo) */
+    --dg-track: rgba(15, 23, 42, 0.09);
+    /* Darker report body text: the global values (#6b7280 / #9ca3af) are too weak for long paragraphs,
+       and much of this page's body is model-generated narrative that must be set as body text, not as annotations.
+       Overridden only in this scope, not leaking into marketing pages. */
+    --text-secondary: #3f4654;
+    --text-muted: #5b6472;
+    /* Heat base color for the metric matrix, written as an RGB triple for rgba() assembly (dark mode needs a brighter green) */
+    --matrix-heat: 34, 197, 94;
+  }
+
+  body[data-theme="light"] .diagnosis-report {
+    --data-accent: #4f46e5;
+    --dg-track: rgba(0, 0, 0, 0.09);
+    --text-secondary: #334155;
+    --text-muted: #4a5568;
+    --matrix-heat: 34, 197, 94;
+  }
+
+  /* Dark theme: brighten everything a notch, track switches to semi-transparent light gray (unfilled segments still visible on dark backgrounds) */
+  body[data-theme="dark"] .diagnosis-report {
+    --data-accent: #818cf8;
+    --dg-1: #818cf8;
+    --dg-2: #2dd4bf;
+    --dg-3: #fb923c;
+    --dg-4: #34d399;
+    --dg-5: #a78bfa;
+    --dg-6: #f472b6;
+    --dg-track: rgba(148, 163, 184, 0.18);
+    /* The global --text-muted is #606070, only about 2.6:1 on the #15151f card background, far below AA */
+    --text-secondary: #d5d7e0;
+    --text-muted: #9ea3b5;
+    --matrix-heat: 74, 222, 128;
   }
 
   * {
@@ -141,6 +347,235 @@
 
   .text-secondary {
     color: var(--text-secondary);
+  }
+
+  .rich-body-editor .ql-toolbar.ql-snow {
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .rich-body-editor .ql-toolbar.ql-snow .ql-formats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 0;
+  }
+
+  .rich-body-editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-spacer {
+    flex: 1 1 auto;
+    min-width: 12px;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action,
+  .rich-body-editor-toolbar .rich-toolbar-mode-switch button {
+    appearance: none;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    border-radius: 10px;
+    transition: all .18s ease;
+    float: none;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action {
+    width: auto;
+    height: 34px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-icon-action {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-action__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-doc,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-doc {
+    background: linear-gradient(135deg, #ff8a00 0%, #ffb347 100%);
+    color: #fff;
+    border-color: rgba(255, 138, 0, 0.32);
+    box-shadow: 0 10px 24px rgba(255, 138, 0, 0.20);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-image,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-image {
+    background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%);
+    color: #fff;
+    border-color: rgba(37, 99, 235, 0.26);
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-video,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-video {
+    background: linear-gradient(135deg, #7c3aed 0%, #c084fc 100%);
+    color: #fff;
+    border-color: rgba(124, 58, 237, 0.28);
+    box-shadow: 0 10px 24px rgba(124, 58, 237, 0.18);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-active,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-active {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.14);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-icon-action:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-doc:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-doc:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-image:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-image:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-text-action.is-video:hover:not(:disabled),
+  .rich-body-editor-toolbar .rich-toolbar-icon-action.is-video:hover:not(:disabled) {
+    color: #fff;
+    filter: brightness(1.03);
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-text-action:disabled,
+  .rich-body-editor-toolbar .rich-toolbar-icon-action:disabled,
+  .rich-body-editor-toolbar .rich-toolbar-mode-switch button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-mode-switch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    flex: none;
+    white-space: nowrap;
+    min-height: 30px;
+  }
+
+  .rich-body-editor-toolbar .rich-toolbar-mode-switch button {
+    width: auto;
+    min-width: 52px;
+    height: 30px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+  }
+
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button:hover,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button:focus,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button:focus-visible,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button:active {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none;
+  }
+
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button.is-active,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button.is-active:hover,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button.is-active:focus,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button.is-active:focus-visible,
+  .rich-body-editor .ql-toolbar.ql-snow .rich-toolbar-mode-switch button.is-active:active {
+    background: var(--accent-primary) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .rich-body-editor .ql-container.ql-snow {
+    border: none;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  .rich-body-editor .ql-editor {
+    min-height: 320px;
+    padding: 16px;
+    line-height: 1.85;
+    color: var(--text-primary);
+  }
+
+  .rich-body-editor .ql-editor.ql-blank::before {
+    color: var(--text-muted);
+    font-style: normal;
+    left: 16px;
+    right: 16px;
+  }
+
+  .rich-body-editor .ql-snow .ql-stroke {
+    stroke: var(--text-secondary);
+  }
+
+  .rich-body-editor .ql-snow .ql-fill {
+    fill: var(--text-secondary);
+  }
+
+  .rich-body-editor .ql-snow .ql-picker {
+    color: var(--text-secondary);
+  }
+
+  .rich-body-editor .ql-snow .ql-picker-options {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+  }
+
+  .rich-body-editor .ql-snow .ql-tooltip {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-card);
   }
 
   .text-muted {
@@ -269,7 +704,7 @@
     color: var(--text-muted);
   }
 
-  /* 响应式容器 */
+  /* Responsive container */
   .responsive-container {
     width: 100%;
     max-width: 1280px;
@@ -293,7 +728,7 @@
     }
   }
 
-  /* 响应式断点 */
+  /* Responsive breakpoints */
   @media (max-width: 768px) {
     h1 {
       font-size: 2rem;
@@ -551,7 +986,7 @@
     color: var(--text-primary);
   }
 
-  /* Moltspay 特有样式 */
+  /* Moltspay-specific styles */
   .hero-badges {
     display: flex;
     flex-wrap: wrap;
@@ -729,7 +1164,7 @@
     height: 80px;
   }
 
-  /* 导航栏样式 */
+  /* Navbar styles */
   .nav-link {
     font-size: 0.875rem;
     font-weight: 500;
@@ -772,7 +1207,7 @@
     fill: none;
   }
 
-  /* 网格背景 */
+  /* Grid background */
   .grid-background {
     position: relative;
     background-color: var(--bg-primary);
@@ -803,7 +1238,7 @@
     background-size: 60px 60px;
   }
 
-  /* 发光效果 — 仅在 dark 主题显示 */
+  /* Glow effect -- shown only in the dark theme */
   .bg-glow {
     display: none;
     position: fixed;
@@ -813,7 +1248,7 @@
     filter: blur(120px);
     opacity: 0.15;
     pointer-events: none;
-    z-index: 0;
+    z-index: -1;   /* sink below the content: layout shells no longer need z-10 to lift content, and fixed drawers can return to the root layer to cover the Header/sidebar */
   }
 
   body[data-theme="dark"] .bg-glow {
@@ -838,12 +1273,12 @@
     background: #ff006e;
   }
 
-  /* 英雄区域渐变 */
+  /* Hero area gradient */
   .hero-gradient {
     /* background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%); */
   }
 
-  /* 动画效果 */
+  /* Animation effects */
   .animate-fade-in {
     animation: fadeIn 0.6s ease-in-out;
   }
@@ -886,6 +1321,182 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  /* Collapse transition of the assistant launcher from "full display -> right edge handle" (AgentChatWidget shrinks automatically 15s after entering the workbench).
+     It moves toward the top right because the edge handle sits at right:0 / bottom:152 and the launcher's default anchor is right:24 / bottom:88 --
+     shrinking over there instead of vanishing in place lets users see "it's still here, just tucked away". */
+  .agent-launcher-shrink {
+    animation: agentLauncherShrink 0.32s ease-in forwards;
+    pointer-events: none;
+  }
+
+  @keyframes agentLauncherShrink {
+    from {
+      opacity: 1;
+      transform: scale(1) translate(0, 0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.4) translate(24px, -24px);
+    }
+  }
+
+  /* ── Report center (reports) component styles (direction A · dense data terminal style) ──
+     Radius convention: section cards 8px / embedded blocks and buttons 6px / badges fully rounded.
+     PDF red line: new layouts inside pageRef must not use flex+gap / flex-wrap / justify-center (html2canvas 1.4.1 offsets them);
+     use grid / table / inline-block / absolute. */
+  .rpt-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.2s ease;
+  }
+
+  /* Tabular numbers (terminal feel): used for big numbers / periods / metric values */
+  .rpt-num {
+    font-family:
+      "IBM Plex Mono",
+      ui-monospace,
+      "SF Mono",
+      "Cascadia Mono",
+      "Roboto Mono",
+      Consolas,
+      monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* KPI card group (scheme A · colorful data observatory): six separate colored cards, a 3px metric-color top edge + a light gradient background.
+     grid+gap isn't within the html2canvas red line (which only targets the flex family), so it's PDF-safe */
+  .rpt-kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .rpt-kpi {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--kpi-hue, var(--data-accent));
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+  }
+  @media (max-width: 1100px) {
+    .rpt-kpis {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    .rpt-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Competitor comparison data: radar on the left + head-to-head card group on the right */
+  .rpt-cmpgrid {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .rpt-battles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  @media (max-width: 1180px) {
+    .rpt-battles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 900px) {
+    .rpt-cmpgrid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Market competition insight: full-width dark banner (the page's only dark block, fixed dark, theme-independent) */
+  .rpt-insight {
+    border-radius: 12px;
+    color: #e8eefc;
+    padding: 18px 24px;
+    background: linear-gradient(120deg, #101a33 0%, #1a1440 65%, #26124a 100%);
+    border: 1px solid #2b3660;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px 30px;
+    align-items: center;
+  }
+  @media (max-width: 900px) {
+    .rpt-insight {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Section card header: small accent bar on the left + title + flexible hairline (direction A's section signature) */
+  .rpt-sechead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .rpt-sechead::before {
+    content: "";
+    width: 4px;
+    height: 13px;
+    border-radius: 1px;
+    background: var(--accent-primary);
+    flex: none;
+  }
+  .rpt-sechead-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--rpt-hairline);
+  }
+
+  .rpt-card:hover {
+    border-color: var(--border-strong);
+  }
+
+  .rpt-table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rpt-table tbody tr {
+    transition: background 0.15s ease;
+  }
+
+  .rpt-table tbody tr:hover {
+    background: var(--bg-surface-hover);
+  }
+
+  /* Sparkline draw-in: only animates dashoffset, restrained and can be turned off by reduced-motion */
+  .rpt-spark-line {
+    stroke-dasharray: 400;
+    stroke-dashoffset: 400;
+    animation: rptDraw 0.9s ease-out forwards;
+  }
+
+  @keyframes rptDraw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rpt-spark-line {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+
+    .animate-fade-in,
+    .animate-slide-up,
+    .animate-scale-in,
+    .animate-pulse,
+    .agent-launcher-shrink {
+      animation: none;
     }
   }
 }
@@ -970,7 +1581,7 @@
     transform: rotate(15deg);
   }
 
-  /* 自定义divide-y边框颜色 */
+  /* Custom divide-y border color */
   .divide-y > :not([hidden]) ~ :not([hidden]) {
     --tw-divide-y-reverse: 0;
     border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
@@ -978,7 +1589,7 @@
     border-color: var(--border-color);
   }
 
-  /* 表格边框颜色 */
+  /* Table border color */
   table.border-collapse {
     border-color: var(--border-color);
   }
@@ -991,7 +1602,7 @@
     border-color: var(--border-color);
   }
 
-  /* Moltspay 特有工具类 */
+  /* Moltspay-specific utility classes */
   .card-hover {
     transition: all 0.3s ease;
   }
@@ -1082,4 +1693,88 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* ── Seamlessly scrolling partner logo strip ── */
+.partners-marquee {
+  overflow: hidden;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.partners-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  animation: partners-scroll 60s linear infinite;
+}
+.partners-track + .partners-track { margin-top: 0.75rem; }
+/* The second row scrolls in reverse with an offset start, giving the two rows more depth */
+.partners-track--rev { animation-direction: reverse; }
+.partners-marquee:hover .partners-track { animation-play-state: paused; }
+@keyframes partners-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+/* Spacing is on the chip (not the track's gap), so two copies are exactly 2x one copy wide -> seamless at -50% */
+/* Chips have fixed height and adaptive width: logos expand proportionally at a fixed height, wide logos get wide chips, never squashed */
+.partner-chip {
+  flex: 0 0 auto;
+  height: 84px;
+  margin-right: 0.75rem;
+  background: #ffffff;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.partner-chip img {
+  /* v2 assets are unified on a fixed-height 120 canvas, with the visual balance of tall badges/short wordmarks baked into the images;
+     scaling uniformly by 68/120 here is enough; setting the height smaller causes double padding and logos look compressed */
+  height: 68px;
+  width: auto;
+  max-width: 260px;      /* cap for extremely wide logos; object-contain still keeps the ratio (no stretching) */
+  object-fit: contain;
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .partners-track { animation: none; }
+}
+
+/* System architecture diagram: a single PNG, backed by a white card (stays readable under the dark theme too) */
+.arch-figure img { width: 100%; height: auto; display: block; }
+
+/* One-click full diagnosis report page: browser print fallback (used when the backend PDF export fails) */
+@media print {
+  .print-hidden { display: none !important; }
+  header, nav, footer { display: none !important; }
+}
+
+/* react-day-picker theming -- the library's own style.css has light defaults; here it's wired to our
+   CSS variables so both light and dark themes follow. The calendar is also a size smaller; the filter bar popover doesn't need 44px cells. */
+.vg-daypicker {
+  --rdp-accent-color: var(--accent-primary);
+  --rdp-accent-background-color: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  --rdp-range_middle-background-color: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  --rdp-range_middle-color: var(--text-primary);
+  --rdp-today-color: var(--accent-primary);
+  --rdp-day-height: 34px;
+  --rdp-day-width: 34px;
+  --rdp-day_button-height: 32px;
+  --rdp-day_button-width: 32px;
+  --rdp-day_button-border-radius: 6px;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-nav-height: 2rem;
+  --rdp-months-gap: 1rem;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.vg-daypicker .rdp-weekday { color: var(--text-secondary); }
+.vg-daypicker .rdp-month_caption { color: var(--text-primary); }
+.vg-daypicker .rdp-chevron { fill: var(--text-secondary); }
+.vg-daypicker .rdp-day_button:hover {
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }

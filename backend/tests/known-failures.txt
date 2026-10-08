@@ -1,0 +1,39 @@
+# Known always-red test cases -- CI uses this as a baseline: **only new failures outside this list block**.
+#
+# Why not "run a green subset": then real regressions in sales_agent would go unnoticed.
+# Run everything and compare against the list: it isn't red every time, yet no new breakage slips through.
+#
+# Rules:
+#   - remove an entry here once it's fixed (CI will remind you: a listed case now passes)
+#   - adding an entry here requires explaining in the PR description why it can't be fixed for now
+#   - this file only grows; line contents never change -- each line is a pytest nodeid pasted verbatim; reasons go in # comments above
+#
+# Runs in two partitions, each with its own venv (see scripts/check_new_test_failures.py); each partition only compares its own entries:
+#   cd backend && ./venv/bin/python scripts/check_new_test_failures.py --partition main
+#   cd backend && ../agent-venv/bin/python scripts/check_new_test_failures.py --partition agent
+#
+# Rebuilt on develop on 2026-09-24: main partition 0 entries; agent partition 6 entries, all failing the same way on develop (ffadddb2)
+# before the release/cn merge, so not introduced by that merge. The previous 20 entries were listed against release/cn,
+# when the Agent directory failed to collect in the main backend venv and never ran at all; that list no longer matched develop's actual state.
+
+# ── agent partition ──────────────────────────────────────────────────────────
+
+# The frontend file checked by the test, frontend/src/pages/BrandGrowth/shell.tsx, no longer exists (frontend refactor); the case is stale and needs repointing
+tests/geo_agent/test_frontend_agent_dock.py::test_runbatch_is_still_gated
+
+# Frontend TopicProfile.tsx no longer has ScheduleCard (monitoring page redesign); the case is stale and its assertions need updating
+tests/geo_agent/test_qa_2026_09_03.py::test_frontend_monitor_tab_has_the_switch
+
+# Real issue: the ledger label table of Agent tool list_ledger lacks the charge type "solution", so users asking about the ledger see the raw key
+tests/geo_agent/test_qa_2026_09_03.py::test_ledger_labels_cover_every_debit_kind
+
+# Real issue: route_line routes sentences containing 「提示词」 ("prompt") to both (expected sentiment / geo) --
+# cecc9db6 (09-11 terminology unification) also replaced 「监测词」 ("monitoring word") with 「提示词」 in the sentiment keywords of agents/geo/agent.py,
+# while the GEO side recognizes the same word, so both lines hit -> both. Routing keywords need re-partitioning
+tests/geo_agent/test_routing.py::test_route_line[g_seed_gated]
+tests/geo_agent/test_routing.py::test_route_line[s_config]
+
+# The agent venv doesn't install alembic, so this case that imports a migration file directly can't run in the agent partition;
+# it tests main backend migrations and should move to the main partition or mock alembic.op (see docs/08-独立模块/SalesAgent/05-测试验收/
+# 测试报告-2026-09-11-自动化测试失败核对.md)
+tests/sales_agent/test_company_hub_migration.py::test_company_backfill_uses_batched_executemany

@@ -228,15 +228,15 @@ class EmailService:
         *,
         to: str,
         topic_name: str,
-        decision: str,                                  # 仅 "approved" — rejected 在去审核流里退役
-        reject_reason: Optional[str] = None,            # 兼容签名,不再使用
+        decision: str,                                  # Only "approved" -- rejected was retired with the review flow removal
+        reject_reason: Optional[str] = None,            # Kept for signature compatibility, no longer used
         execution_plan_url: Optional[str] = None,
     ) -> bool:
-        """去审核流 — 项目启动后给客户发通知(原审核通过邮件,改文案).
+        """Review flow removed -- notify the customer after project start (formerly the approval email, copy changed).
 
-        decision != "approved" 直接 no-op(rejected 分支已退役).
+        decision != "approved" is a no-op (the rejected branch is retired).
         """
-        del reject_reason  # 兼容旧调用方签名,不再使用
+        del reject_reason  # Compatible with old caller signatures, no longer used
         if decision != "approved":
             return True
 
@@ -257,7 +257,7 @@ class EmailService:
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
             <h2 style="color: #111827;">您的 GEO 监测项目已启动</h2>
             <p>主题:<strong>{topic_name}</strong></p>
-            <p>我们已经为您的监测问题触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
+            <p>我们已经为您的提示词触发了一次正式跑批,并生成了执行计划书(含项目总体状况、主题日志、泛化日志和运行进度)。</p>
             {cta_block}
             <p>内容文案稿正在异步生成,生成完成后会在「文案复审」环节再次通知您。</p>
             <p>— GEO 团队</p>
@@ -268,7 +268,7 @@ class EmailService:
             "您的 GEO 监测项目已启动",
             f"主题:{topic_name}",
             "",
-            "我们已经为您的监测问题触发了一次正式跑批,并生成了执行计划书。",
+            "我们已经为您的提示词触发了一次正式跑批,并生成了执行计划书。",
         ]
         if execution_plan_url:
             text_lines.append(f"查看执行计划书:{execution_plan_url}")
@@ -284,7 +284,7 @@ class EmailService:
         reject_reason: Optional[str] = None,
         publish_targets: Optional[list[dict]] = None,
     ) -> bool:
-        """Phase D — 内容文档审核结果通知(approved / rejected / published)."""
+        """Phase D -- content document review result notification (approved / rejected / published)."""
         if decision == "approved":
             subject = f"【GEO】内容审核通过:{doc_title}"
             body_title = "你的内容稿件已通过审核"
@@ -366,6 +366,105 @@ class EmailService:
             html=html,
             text=text,
         )
+
+    def send_compliance_ticket_email(
+        self,
+        *,
+        to: str,
+        kind: str,                    # opened / overdue / retest_failed / closed
+        brand: str,
+        ticket_no: str,
+        action_label: str,
+        deadline_at,
+        quote: str = "",
+    ) -> bool:
+        """Compliance audit center P1 -- remediation ticket notification (opened / overdue / re-test not effective / closed)."""
+        deadline_str = deadline_at.strftime("%Y-%m-%d %H:%M") if deadline_at else "—"
+        meta = {
+            "opened": (f"【合规】处置单已开:{ticket_no}",
+                       "已确认一条违规告警并开出处置单",
+                       f"<p>处置动作:<b>{action_label}</b>,处置时限:<b>{deadline_str}</b>(超时将升级提醒)。</p>"),
+            "overdue": (f"【合规】处置单已超时:{ticket_no}",
+                        "处置单超过时限仍未闭环",
+                        f"<p>原定时限:<b>{deadline_str}</b>。请尽快完成处置并等待复测。</p>"),
+            "retest_failed": (f"【合规】复测未通过:{ticket_no}",
+                              "处置后复测发现违规内容仍然存在",
+                              "<p>处置单已退回「处置中」,请核实处置动作是否生效。</p>"),
+            "closed": (f"【合规】处置单已闭环:{ticket_no}",
+                       "复测确认违规内容已消失,处置单自动关闭",
+                       "<p>连续多轮复测未再出现违规摘录,闭环凭据已计入审计日志。</p>"),
+        }.get(kind)
+        if meta is None:
+            return False
+        subject, headline, extra = meta
+        quote_html = (f'<blockquote style="margin:12px 0;padding:8px 12px;'
+                      f'border-left:3px solid #ef4444;color:#555;">{quote[:200]}</blockquote>'
+                      if quote else "")
+        html = f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+          <h2 style="font-size:16px;">{headline}</h2>
+          <p>品牌:<b>{brand}</b> · 处置单号:<b>{ticket_no}</b></p>
+          {quote_html}
+          {extra}
+          <p style="color:#888;font-size:12px;">此邮件由合规审计中心自动发送,处置详情请登录平台
+          「品牌增长 → 合规审计中心 → 事中监测」查看。</p>
+        </div>"""
+        return self._send(to=to, subject=subject, html=html)
+
+    def send_abuse_report_email(
+        self,
+        *,
+        to: str,
+        kind: str,                    # received / internal / resolved / rejected
+        report_no: str,
+        category_label: str,
+        sla_days: int = 7,
+        description: str = "",
+        reply: str = "",
+        target: str = "",
+        reporter: str = "",
+    ) -> bool:
+        """Report/complaint ticket notification -- the "feedback" step of item 13 in the filing correction list.
+
+        received  receipt to the reporter (with a ticket number to check progress later)
+        internal  internal reminder to the public mailbox
+        resolved  reply after handling is complete
+        rejected  reply for not accepting (a rejection must also give a reason, otherwise the loop is not closed)
+        """
+        quote = (f'<blockquote style="margin:12px 0;padding:8px 12px;'
+                 f'border-left:3px solid #999;color:#555;">{description[:300]}</blockquote>'
+                 if description else "")
+        reply_html = (f'<p>处理结论:</p><blockquote style="margin:12px 0;padding:8px 12px;'
+                      f'border-left:3px solid #10b981;color:#333;">{reply[:1000]}</blockquote>'
+                      if reply else "")
+        meta = {
+            "received": (f"【举报受理】{report_no}",
+                         "你的举报已受理",
+                         f"<p>问题类型:<b>{category_label}</b></p>{quote}"
+                         f"<p>我们将在 <b>{sla_days} 个自然日</b>内完成核查并反馈。"
+                         f"请保留工单号 <b>{report_no}</b>,可凭工单号与本邮箱查询进度。</p>"),
+            "internal": (f"【新举报】{report_no} · {category_label}",
+                         "收到一条新的举报投诉",
+                         f"<p>举报人:{reporter or '匿名'}<br/>涉及对象:{target or '—'}</p>{quote}"
+                         f"<p>请在 {sla_days} 个自然日内于「工作台 → 举报处置」受理并反馈。</p>"),
+            "resolved": (f"【举报处置完成】{report_no}",
+                         "你举报的问题已处置完成",
+                         f"<p>问题类型:<b>{category_label}</b></p>{quote}{reply_html}"),
+            "rejected": (f"【举报处理结果】{report_no}",
+                         "关于你举报事项的处理说明",
+                         f"<p>问题类型:<b>{category_label}</b></p>{quote}{reply_html}"),
+        }.get(kind)
+        if meta is None:
+            return False
+        subject, headline, body = meta
+        html = f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;">
+          <h2 style="font-size:16px;">{headline}</h2>
+          <p>工单号:<b>{report_no}</b></p>
+          {body}
+          <p style="color:#888;font-size:12px;">&lt;company-name&gt; · 本邮件由举报处置系统自动发送。</p>
+        </div>"""
+        return self._send(to=to, subject=subject, html=html)
 
 
 email_service = EmailService()

@@ -1,6 +1,7 @@
 """Unified HTTP client for browser engine microservice.
 
-Routes engine queries to the configured regional browser-service instance.
+Routes engine queries to the correct browser-service instance
+(cn on 103, global on 101) based on engine name.
 """
 from __future__ import annotations
 
@@ -25,8 +26,6 @@ ENGINE_ROUTING = {
     "chatgpt":  "global",
     "claude":   "global",
     "gemini":   "global",
-    "grok":     "global",
-    "copilot":  "global",
 }
 
 _TIMEOUT = 180.0
@@ -67,6 +66,42 @@ def search(engine: str, query: str) -> dict:
         return {"engine": engine, "query": query, "answer": "", "citations": [], "error": str(e)}
 
 
+async def search_with_options(
+    engine: str,
+    query: str,
+    *,
+    record_video: Optional[bool] = None,
+    session_pool: Optional[str] = None,
+    timeout: float = 330.0,
+) -> dict:
+    """Async search with options: can force video recording / choose the account pool per request.
+
+    Used by the workspace "engine live test": record_video=True + session_pool="workbench".
+    None fields are not sent, so browser-service's default behavior is unchanged (follows GEO_RECORD_VIDEO / default pool).
+    timeout defaults to 330s: slightly above browser-service's ENGINE_SEARCH_TIMEOUT (300s),
+    so the timeout hits on the server first and the error message is more accurate.
+    """
+    base = _base_url(engine)
+    body: dict = {"engine": engine, "query": query}
+    if record_video is not None:
+        body["record_video"] = record_video
+    if session_pool is not None:
+        body["session_pool"] = session_pool
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(f"{base}/search", json=body)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.ConnectError:
+        return {"engine": engine, "query": query, "answer": "", "citations": [], "error": "browser service unavailable"}
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429:
+            return {"engine": engine, "query": query, "answer": "", "citations": [], "error": "browser service busy (429)"}
+        return {"engine": engine, "query": query, "answer": "", "citations": [], "error": f"browser service error: {e}"}
+    except Exception as e:
+        return {"engine": engine, "query": query, "answer": "", "citations": [], "error": str(e)}
+
+
 async def search_async(engine: str, query: str) -> dict:
     """Async search — call from async context."""
     base = _base_url(engine)
@@ -88,11 +123,11 @@ async def search_async(engine: str, query: str) -> dict:
 # ── Fetch page title ───────────────────────────────────────────
 
 def fetch_title(url: str, region: str = "cn", timeout_ms: int = 15000) -> str:
-    """用 browser-service 的真实浏览器抓任意 URL 的页面标题.
+    """Fetch the page title of any URL with browser-service's real browser.
 
-    知乎等站点对裸 HTTP 请求 403,只有真实浏览器能拿到 <title>,所以走 browser-service.
-    best-effort — 服务不可用 / 抓不到都返回空字符串,调用方自行回退.
-    region: "cn"(默认,国内信源如知乎)或 "global".
+    Sites like Zhihu return 403 to bare HTTP requests, and only a real browser gets <title>, hence browser-service.
+    best-effort: service unavailable / nothing fetched both return an empty string; callers fall back on their own.
+    region: "cn" (default, CN sources such as Zhihu) or "global".
     """
     host = BROWSER_GLOBAL_URL if region == "global" else BROWSER_CN_URL
     if not host:

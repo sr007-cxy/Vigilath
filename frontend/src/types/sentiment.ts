@@ -1,32 +1,32 @@
-// 舆情模块共享类型定义.
-// 字段命名严格对齐后端(yuqin SQLite + GEO sentiment_accounts).
+// Shared type definitions for the sentiment monitoring module.
+// Field names strictly match the backend (yuqin SQLite + GEO sentiment_accounts).
 
 export type RunStatus = 'pending' | 'running' | 'success' | 'failed' | null;
 export type SentimentLabel = 'bullish' | 'bearish' | 'neutral' | 'mixed' | 'unknown';
 export type RiskLevel = 'none' | 'low' | 'medium' | 'high';
 export type DraftVariant = 'conservative' | 'standard' | 'proactive';
 
-// ─────────────── 关键词分类(对标客户实际配置规模) ───────────────
-// 客户用 Excel 维护 6+ 类、上百关键词,我们用结构化分组承载.
+// ─────────────── Keyword categories (matching the scale of clients' actual configs) ───────────────
+// Clients maintain 6+ categories and hundreds of keywords in Excel; we carry them with structured groups.
 
 export type KeywordKind =
-  | 'entity'      // 公司主体(目标 + 子公司 + 别名 + 项目代号)
-  | 'legal'       // 法院 / 诉讼 / 官司
-  | 'exec'        // 高管(姓名 + Title 前缀,展开成"主体 × 姓名"组合)
-  | 'project'     // 项目代号(如 Reits / 超互联 / AIDC)
-  | 'competitor'  // 友商(用于对比分析,不是品牌主体)
-  | 'custom';     // 用户自定义
+  | 'entity'      // Company entity (target + subsidiaries + aliases + project codenames)
+  | 'legal'       // Courts / litigation / lawsuits
+  | 'exec'        // Executives (name + title prefix, expanded into "entity × name" combinations)
+  | 'project'     // Project codenames (e.g. Reits / Acme Interconnect / AIDC)
+  | 'competitor'  // Peer companies (for comparative analysis, not the brand entity)
+  | 'custom';     // User-defined
 
 export interface KeywordItem {
-  term: string;            // 关键词文本(单词或带空格的"主体 修饰词")
-  is_new?: boolean;        // 黄色高亮 = 新增
-  enabled?: boolean;       // 默认 true
-  note?: string;           // 备注
+  term: string;            // Keyword text (a single word or a space-separated "entity modifier")
+  is_new?: boolean;        // Yellow highlight = newly added
+  enabled?: boolean;       // Default true
+  note?: string;           // Note
 }
 
 export interface KeywordGroup {
-  name: string;            // 显示名:"公司主体" / "法院诉讼" / 自定义
-  kind: KeywordKind;       // 类别
+  name: string;            // Display name: 「公司主体」 ("Company entity") / 「法院诉讼」 ("Court litigation") / custom
+  kind: KeywordKind;       // Category
   items: KeywordItem[];
 }
 
@@ -34,21 +34,26 @@ export interface SentimentAccount {
   id: number;
   user_id: number;
   target: string;
+  /** Stock ticker -- optional; empty string for non-listed entities */
   ticker: string;
+  /** Storage symbol used for fetching (= ticker or brand name). Always use it to fetch posts/briefs/today. */
+  symbol: string;
   aliases: string[];
   intent: string | null;
-  /** 旧字段:扁平关键词列表(向后兼容).新代码用 keyword_groups. */
+  /** Old field: flat keyword list (backward compatible). New code uses keyword_groups. */
   keywords: string[];
   excludes: string[];
-  /** 结构化关键词分组 — 6+ 类别,每类多条目. */
+  /** Structured keyword groups — 6+ categories, multiple entries each. */
   keyword_groups?: KeywordGroup[];
-  /** 媒体白名单(平台 code 列表,空数组 = 全平台). */
+  /** Media allowlist (list of platform codes, empty array = all platforms). */
   media_allowlist: string[];
   notify_emails: string[];
-  /** 微信公众号合集 URL 列表 — 周级别盯防 KOL/竞品官号. 空 = 不启用. */
+  /** List of WeChat official account collection URLs — weekly watch on KOL/competitor official accounts. Empty = disabled. */
   weixin_album_urls: string[];
-  /** newsnow source id 列表(如 ['weibo','zhihu','v2ex']). 空 = 不启用. */
+  /** List of newsnow source ids (e.g. ['weibo','zhihu','v2ex']). Empty = disabled. */
   newsnow_sources: string[];
+  /** What hour to run each day (Beijing time 0-23). null = unspecified, following the system cadence. Only shifts the time, doesn't change billing. */
+  run_hour: number | null;
   active: boolean;
   last_run_at: string | null;
   last_run_status: RunStatus;
@@ -57,8 +62,10 @@ export interface SentimentAccount {
 }
 
 export interface AccountCreatePayload {
+  enterprise_user_id?: number;
   target: string;
-  ticker: string;
+  /** Optional; pass an empty string for non-listed entities */
+  ticker?: string;
   aliases?: string[];
   intent?: string;
   keywords?: string[];
@@ -68,6 +75,7 @@ export interface AccountCreatePayload {
   notify_emails?: string[];
   weixin_album_urls?: string[];
   newsnow_sources?: string[];
+  run_hour?: number | null;
   run_now?: boolean;
 }
 
@@ -83,11 +91,19 @@ export type AccountUpdatePayload = Partial<{
   notify_emails: string[];
   weixin_album_urls: string[];
   newsnow_sources: string[];
+  run_hour: number;
   active: boolean;
 }>;
 
-/** 把结构化分组展开成扁平 keywords 列表(发给 yuqin 用).
- *  不区分 kind,所有 enabled 条目都拼进去.
+/** Storage symbol used for fetching -- the backend's `symbol` (= stock ticker, or the brand name if not filled in).
+ *  Old responses may not have this field yet, so fall back to ticker / target, lest the whole page's query
+ *  be disabled by `enabled: !!ticker` because of an empty string. */
+export function accountSymbol(acc: Pick<SentimentAccount, 'symbol' | 'ticker' | 'target'>): string {
+  return acc.symbol || acc.ticker || acc.target;
+}
+
+/** Expand structured groups into a flat keywords list (sent to yuqin).
+ *  kind is not distinguished; all enabled entries are concatenated in.
  */
 export function flattenKeywordGroups(groups: KeywordGroup[]): string[] {
   const out: string[] = [];
@@ -98,7 +114,7 @@ export function flattenKeywordGroups(groups: KeywordGroup[]): string[] {
       if (t) out.push(t);
     }
   }
-  return Array.from(new Set(out));    // 去重
+  return Array.from(new Set(out));    // Deduplicate
 }
 
 export interface RunStatusPayload {
@@ -107,13 +123,56 @@ export interface RunStatusPayload {
   error: string | null;
 }
 
+export interface SentimentWebSearchSource {
+  title: string;
+  url: string;
+  domain?: string;
+  snippet?: string;
+  position?: number;
+  query?: string;
+}
+
+export interface SentimentWebSearchRisk {
+  title: string;
+  detail?: string;
+  severity?: 'low' | 'medium' | 'high' | string;
+  source_indexes?: number[];
+}
+
+export interface SentimentWebSearchLatestResponse {
+  available: boolean;
+  id?: number;
+  report_id?: number;
+  mode?: 'yuanbao_websearch' | string | null;
+  provider?: 'yuanbao' | string;
+  target?: string;
+  ticker?: string;
+  generated_at?: string;
+  query_count?: number;
+  valid_results?: number;
+  risk_level?: RiskLevel | string;
+  sentiment_label?: SentimentLabel | string;
+  sentiment_score?: number;
+  summary?: string;
+  llm_model?: string | null;
+  positive_points?: string[];
+  negative_points?: string[];
+  risks?: SentimentWebSearchRisk[];
+  suggestions?: string[];
+  sources?: SentimentWebSearchSource[];
+  queries?: string[];
+  status?: RunStatus;
+  error?: string | null;
+  last_run_at?: string | null;
+}
+
 export interface RiskSignal {
   type: string;
   reason: string;
 }
 
-/** posts JOIN analyses 行(yuqin sentinel-service 返回的形态).
- *  注意:JSON 字段被 _row_to_dict 反序列化,所以前端拿到的是数组而不是 JSON 字符串.
+/** posts JOIN analyses rows (the shape returned by yuqin sentinel-service).
+ *  Note: JSON fields are deserialized by _row_to_dict, so the frontend gets arrays rather than JSON strings.
  */
 export interface SentimentPost {
   source: string;
@@ -162,8 +221,8 @@ export interface PostsResponse {
   end?: string | null;
 }
 
-// 排序键 — 与后端 _SORT_SQL.keys() 一一对应。
-// 默认 newest(对标图里"按最新文章 默认")。
+// Sort keys — one-to-one with backend _SORT_SQL.keys().
+// Default newest (matching "latest articles (default)" in the reference image).
 export type PostSortKey =
   | 'newest' | 'oldest'
   | 'engagement' | 'replies' | 'likes' | 'shares' | 'views'
@@ -174,7 +233,7 @@ export type PostSortKey =
 export interface PostsQuery {
   limit?: number;
   offset?: number;
-  /** days 与 start/end 二选一;后端 start/end 优先 */
+  /** days and start/end are mutually exclusive; the backend prefers start/end */
   days?: number;
   start?: string;
   end?: string;
@@ -218,7 +277,7 @@ export interface DraftsResponse {
   items: DraftRow[];
 }
 
-/** 草稿生成接口直接返回的形态(三档 + 元信息) */
+/** Shape returned directly by the draft generation endpoint (three tiers + metadata) */
 export interface DraftGenerateResult {
   summary: string;
   drafts: {
@@ -248,12 +307,12 @@ export type Industry =
   | 'finance' | 'general' | 'tech' | 'science'
   | 'party_media' | 'health' | 'overseas_en';
 
-/** 媒体平台目录条目(全局只读,GET /api/sentiment/platforms 返回)。
- *  - media_type:载体形态(网媒/微博/微信/APP/论坛/短视频/长视频/...)
- *  - industry:主题/行业(金融财经/综合资讯/科技/科普/党政央媒/...)
- *  - region:地区
- *  category 是 legacy 单轴,前端不再消费(后端 SentimentPlatformOut 仍输出
- *  以兼容外部),保留为可选 string。 */
+/** Media platform catalog entry (global, read-only, returned by GET /api/sentiment/platforms).
+ *  - media_type: carrier format (web media/Weibo/WeChat/APP/forum/short video/long video/...)
+ *  - industry: topic/industry (finance and economics/general news/technology/popular science/party and central government media/...)
+ *  - region: region
+ *  category is the legacy single axis, no longer consumed by the frontend (the backend SentimentPlatformOut still outputs it
+ *  for external compatibility), kept as an optional string. */
 export interface SentimentPlatform {
   code: string;
   domain: string;
@@ -298,10 +357,10 @@ export interface TodayResponse {
   top_posts: SentimentPost[];
 }
 
-// ─────────────── newsnow 实时热点(不绑 account)──────────────
-// 数据极薄:只有 title + url + 极少 extra(微博/知乎偶尔含 hotness)。
-// 无时间戳 / 无正文 / 无作者 — 这是 newsnow 接口的天花板。
-// fetched_at 由后端注入,代表"这一拉的时刻"。
+// ─────────────── newsnow real-time trending (not bound to an account) ──────────────
+// Very thin data: only title + url + minimal extra (Weibo/Zhihu occasionally include hotness).
+// No timestamp / no body / no author - that is the ceiling of the newsnow API.
+// fetched_at is injected by the backend and means "the moment of this pull".
 
 export type NewsnowCategory = 'social' | 'news' | 'tech' | 'finance' | string;
 
@@ -322,7 +381,7 @@ export interface NewsnowItem {
   title: string;
   url?: string;
   mobileUrl?: string;
-  /** newsnow 偶尔在 extra 里塞 hotness / icon / info,前端用 string 渲染 */
+  /** newsnow occasionally stuffs hotness / icon / info into extra; the frontend renders it as a string */
   extra?: {
     info?: string;
     icon?: string;

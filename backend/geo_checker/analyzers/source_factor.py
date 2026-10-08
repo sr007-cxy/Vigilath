@@ -1,38 +1,84 @@
-"""GEO 推荐因子分类(FirstPageSage 口径).
+"""GEO recommendation factor classification (FirstPageSage metric definition).
 
-把一条被引用的信源(url + 标题)归到它代表的 GEO 排名因子:
+Assigns a cited source (url + title) to the GEO ranking factor it represents:
 list_mention / reviews / directory / awards / customer / social / authority / other.
 
-跟 source_classify(内容类型:新闻/社交/视频…)不同 —— 因子要看引用的标题/URL,
-同一媒体站一篇"2026 最佳CRM"榜单算「权威榜单提及」,普通报道就不是。
+Different from source_classify (content type: news / social / video...) -- factors depend on the cited title/URL;
+on the same media site a "2026 best CRM" list article counts as an "authoritative list mention", an ordinary report doesn't.
 
-参考:FirstPageSage GEO recommendation algorithm 拆解。
+Reference: a breakdown of the FirstPageSage GEO recommendation algorithm.
 """
 
 from __future__ import annotations
 
 from urllib.parse import urlparse
 
-# ── 域名集合(按域名直接判定的因子)──
+# ── Domain sets (factors determined directly by domain) ──
 _REVIEW_DOMAINS: set[str] = {
     "g2.com", "trustpilot.com", "capterra.com", "trustradius.com",
     "getapp.com", "softwareadvice.com", "yelp.com", "glassdoor.com",
-    "sitejabber.com", "productreview.com.au", "dianping.com",  # 大众点评
+    "sitejabber.com", "productreview.com.au", "dianping.com",  # Dianping
 }
 _DIRECTORY_DOMAINS: set[str] = {
     "crunchbase.com", "clutch.co", "goodfirms.co", "bbb.org", "dnb.com",
-    "manta.com", "yellowpages.com", "yelp.com",  # yelp 同时是评价,评价优先(下面顺序保证)
-    "tianyancha.com", "qcc.com", "aiqicha.baidu.com",  # 天眼查/企查查/爱企查
+    "manta.com", "yellowpages.com", "yelp.com",  # yelp is also reviews; reviews take precedence (guaranteed by the order below)
+    "tianyancha.com", "qcc.com", "aiqicha.baidu.com",  # Tianyancha / Qichacha / Aiqicha
     "wellfound.com", "angel.co", "builtwith.com",
+    "baike.baidu.com", "wikipedia.org", "baike.so.com", "baike.sogou.com",  # encyclopedia entries
+    "cbinsights.com", "preqin.com", "sec.gov", "maigoo.com", "chambers.com",
 }
 _SOCIAL_DOMAINS: set[str] = {
     "reddit.com", "x.com", "twitter.com", "linkedin.com", "facebook.com",
     "instagram.com", "weibo.com", "zhihu.com", "quora.com", "tiktok.com",
     "douyin.com", "xiaohongshu.com", "v2ex.com", "youtube.com", "bilibili.com",
-    "medium.com", "substack.com",
+    "medium.com", "substack.com", "smzdm.com", "xueqiu.com",
+    "mp.weixin.qq.com", "zhidao.baidu.com",  # WeChat official accounts / Baidu Zhidao (UGC word of mouth)
 }
+# Three content-type classes (fallback when no factor keyword hits, shrinking the "other" share):
+# Tech communities / developer content
+_TECH_COMMUNITY_DOMAINS: set[str] = {
+    "csdn.net", "51cto.com", "cnblogs.com", "php.cn", "juejin.cn",
+    "segmentfault.com", "oschina.net", "infoq.cn", "jianshu.com",
+    "icode.best", "jishuzhan.net", "aisharenet.com", "educity.cn",
+    "xuehai.net", "stackoverflow.com", "github.com", "gitee.com",
+    "cloud.tencent.com", "cloud.tencent.cn", "cloud.tencent.com.cn",
+}
+# News / industry media coverage
+_NEWS_MEDIA_DOMAINS: set[str] = {
+    "sina.cn", "sina.com.cn", "sohu.com", "163.com", "ithome.com",
+    "36kr.com", "leiphone.com", "inews.qq.com", "eastmoney.com",
+    "10jqka.com.cn", "cyzone.cn", "ikanchai.com", "sqrb.com.cn",
+    "jjckb.cn", "doit.com.cn", "dostor.com", "eet-china.com",
+    "china.com", "prnewswire.com", "trjcn.com", "zhineng.com.cn",
+    "pconline.com.cn", "thepaper.cn", "jiemian.com", "cnbeta.com",
+    "techcrunch.com", "theregister.com", "zdnet.com", "inewsweek.cn",
+    "gmw.cn", "cena.com.cn", "chinadaily.com.cn", "enorth.com.cn",
+    "ifeng.com", "nbd.com.cn", "news.qq.com", "ajupress.com",
+    "c114.com.cn", "cri.cn", "hebnews.cn", "jingjiribao.cn", "cnr.cn",
+    "geekpark.net", "it168.com", "itbrief.co.nz", "azertag.az",
+    "bjd.com.cn", "hebccw.cn", "hbgrb.net", "hbjjrb.com", "cww.net.cn",
+    "toutiao.com", "baijiahao.baidu.com",  # Toutiao / Baijiahao (self-media news)
+}
+# Vendor official sites and official materials (product pages / docs / solutions)
+_VENDOR_DOMAINS: set[str] = {
+    "aliyun.com", "huaweicloud.com", "h3c.com", "sangfor.com.cn",
+    "intel.cn", "intel.com", "intel.com.tw", "gigabyte.com",
+    "samsung.com", "ibm.com", "inspur.com", "ieisystem.com",
+    "kove.com", "memverge.ai", "memverge.com", "juicefs.com",
+    "worktile.com", "jiandaoyun.com", "pingcode.com", "bothstrong.com",
+    "puyuetian.com", "saniffer.cn", "itangsoft.com", "vmware.com",
+    "micron.com", "nvidia.com", "huawei.com", "microsoft.com",
+    "aws.amazon.com", "asiainfo.com", "fusionlayer.com",
+}
+# Government / academic / industry institutions (mainly by domain suffix) -> site authority
+_AUTHORITY_ORG_DOMAINS: set[str] = {
+    "ceri.com.cn", "gdec.net.cn", "xiongan.gov.cn", "rmxiongan.com",
+}
+_AUTHORITY_SUFFIXES: tuple[str, ...] = (
+    ".gov.cn", ".gov", ".edu.cn", ".org.cn", ".org.tw", ".ac.cn", ".org",
+)
 
-# ── 关键词集合(在 标题 + URL path 里找)──
+# ── Keyword sets (searched in title + URL path) ──
 _LIST_KW: tuple[str, ...] = (
     "best ", "top ", "top10", "top 10", "leading", " vs ", "versus",
     "alternatives", "comparison", "compare", "roundup",
@@ -59,13 +105,13 @@ def _domain_hit(domain: str, domset: set[str]) -> bool:
 
 
 def classify_factor(url: str, title: str = "", domain: str = "", owned: bool = False) -> str:
-    """把一条 citation 归到 GEO 因子.
+    """Assign a citation to a GEO factor.
 
     Args:
         url: citation URL.
-        title: citation 标题(因子判定主要靠它).
-        domain: 已抽好的域名(可选,缺省时从 url 解析).
-        owned: 该域名是否命中品牌自有(命中且无其它信号 → authority).
+        title: citation title (factor determination relies mainly on it).
+        domain: pre-extracted domain (optional; parsed from url when omitted).
+        owned: whether the domain matches the brand's own (match with no other signal -> authority).
 
     Returns:
         list_mention / reviews / directory / awards / customer / social /
@@ -73,14 +119,14 @@ def classify_factor(url: str, title: str = "", domain: str = "", owned: bool = F
     """
     try:
         parsed = urlparse(url)
-        dom = (domain or parsed.netloc).replace("www.", "").lower().strip()
+        dom = (domain or parsed.netloc).replace("www.", "").lower().strip().split(":")[0]
         path = parsed.path.lower()
     except Exception:
         dom, path = (domain or "").lower(), ""
 
     text = f"{title or ''} {path}".lower()
 
-    # 1) 域名直判(社交 / 评价 / 目录)—— 评价优先于目录(yelp 类双属性归评价)
+    # 1) Direct domain match (social / reviews / directories) -- reviews before directories (dual-attribute sites like yelp go to reviews)
     if _domain_hit(dom, _SOCIAL_DOMAINS):
         return "social"
     if _domain_hit(dom, _REVIEW_DOMAINS):
@@ -88,7 +134,7 @@ def classify_factor(url: str, title: str = "", domain: str = "", owned: bool = F
     if _domain_hit(dom, _DIRECTORY_DOMAINS):
         return "directory"
 
-    # 2) 标题/URL 信号词(信号优先于 owned,保证榜单/案例/奖项页正确归因)
+    # 2) Title/URL signal words (signals before owned, so list/case study/award pages are attributed correctly)
     if any(k in text for k in _AWARD_KW):
         return "awards"
     if any(k in text for k in _CUSTOMER_KW):
@@ -100,7 +146,20 @@ def classify_factor(url: str, title: str = "", domain: str = "", owned: bool = F
     if any(k in text for k in _REVIEW_KW):
         return "reviews"
 
-    # 3) 自有域名 → 网站权威
+    # 3) Content-type fallback (shrink "other": tech communities / media coverage / vendor and official materials)
+    if _domain_hit(dom, _TECH_COMMUNITY_DOMAINS):
+        return "tech_community"
+    if _domain_hit(dom, _NEWS_MEDIA_DOMAINS):
+        return "news_media"
+    if _domain_hit(dom, _VENDOR_DOMAINS):
+        return "vendor"
+    if _domain_hit(dom, _AUTHORITY_ORG_DOMAINS) or dom.endswith(_AUTHORITY_SUFFIXES):
+        return "authority"
+    # Media domain pattern fallback (news./epaper. prefixes are common in local media networks)
+    if dom.startswith(("news.", "epaper.", "paper.")):
+        return "news_media"
+
+    # 4) Own domain -> site authority
     if owned:
         return "authority"
 

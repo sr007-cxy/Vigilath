@@ -1,6 +1,9 @@
-// 对外集成 Tab —— 自助生成「接入 token」,把本账号的 GEO agent 作为 skill 接进外部 agent(小龙虾)。
-// 生成后直接给出一行安装命令(用当前站点 origin,自动对齐 test/prod),复制即用。
+// External integrations tab -- self-service generation of an "access token" to plug this account's GEO agent as a skill into an external agent (Xiaolongxia).
+// After generation, a one-line install command is given directly (using the current site origin, automatically matching test/prod), ready to copy.
 import { useCallback, useEffect, useState } from 'react';
+import { uiConfirm } from '../../components/ui/dialogs';
+import { UiSelect } from '../../components/ui/Select';
+import { readApiError, friendlyErrorMessage } from '../../services/apiError';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
@@ -16,7 +19,7 @@ interface TokenRow {
 const card: React.CSSProperties = { background: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
 type PField = [key: string, label: string, placeholder: string];
-interface IMPlatform { key: 'feishu' | 'wecom' | 'dingtalk'; name: string; idLabel: string; callbackWhere: string; note: string; fields: PField[] }
+interface IMPlatform { key: 'feishu' | 'wecom' | 'dingtalk'; name: string; idLabel: string; callbackWhere: string; note: string; fields: PField[]; unavailable?: boolean }
 const IM_PLATFORMS: IMPlatform[] = [
   {
     key: 'feishu', name: '飞书', idLabel: 'App ID', callbackWhere: '事件订阅',
@@ -37,6 +40,8 @@ const IM_PLATFORMS: IMPlatform[] = [
   },
   {
     key: 'dingtalk', name: '钉钉', idLabel: 'AppKey', callbackWhere: '机器人 · 消息接收地址',
+    // Routes and code exist, but access isn't open externally yet (per the filing materials: we haven't integrated DingTalk).
+    unavailable: true,
     note: '回钉钉:在机器人配置里把「消息接收地址」填为上面的回调URL,发布机器人,@它即可对话。',
     fields: [
       ['app_id', 'AppKey(机器人 robotCode)', ''], ['app_secret', 'AppSecret', '用于验签'],
@@ -66,10 +71,10 @@ export function AgentIntegrationTab() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState('');
-  const [fresh, setFresh] = useState<string | null>(null);   // 刚生成的明文 token(只显示这一次)
+  const [fresh, setFresh] = useState<string | null>(null);   // just-generated plaintext token (shown only this once)
   const [err, setErr] = useState('');
 
-  // IM 接入器(自建应用):支持飞书 / 企业微信 / 钉钉
+  // IM connectors (self-built apps): supports Feishu / WeCom / DingTalk
   const [imPlatform, setImPlatform] = useState<'feishu' | 'wecom' | 'dingtalk'>('feishu');
   const [im, setIm] = useState<Record<string, string>>({});
   const [imConns, setImConns] = useState<Array<{ id: number; platform: string; app_id: string; app_secret_masked: string; enabled: boolean }>>([]);
@@ -77,19 +82,23 @@ export function AgentIntegrationTab() {
   const [imMsg, setImMsg] = useState('');
   const [bindCode, setBindCode] = useState('');
 
-  // 快捷按钮/菜单配置编辑器(按连接器)
+  // Quick button/menu config editor (per connector)
   const [cfgFor, setCfgFor] = useState<number | null>(null);
   const [qa, setQa] = useState<string[][]>([]);            // [[label, query], ...]
   const [mm, setMm] = useState<string[][]>([]);            // [[event_key, query], ...]
   const [cfgBusy, setCfgBusy] = useState(false);
   const [cfgMsg, setCfgMsg] = useState('');
-  // 推送目标:webhook(可多个)+ bot 群,简报/告警群发
+  // Push targets: webhooks (multiple) + bot groups, for broadcasting briefs/alerts
   const [pt, setPt] = useState<Array<{ type: string; name: string; url: string; secret: string; chat_id: string; enabled: boolean }>>([]);
   const [ptBusy, setPtBusy] = useState(false);
   const [ptMsg, setPtMsg] = useState('');
 
   const origin = window.location.origin;
-  const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh}` : '';
+  // --base is required: when the script runs via a `curl | bash` pipe it can't get its own download URL ($0 is just "bash"),
+  // so the base URL can only be injected here. With it, whichever domain the user entered the admin from is the one the install points to.
+  const installCmd = fresh ? `curl -fsSL ${origin}/skill/install.sh | bash -s -- ${fresh} --base ${origin}` : '';
+  // Token-free generic command: the other side runs it -> the terminal shows a pairing code -> you approve it at /link. The command is the same for everyone and can be printed in docs.
+  const deviceCmd = `curl -fsSL ${origin}/skill/install.sh | bash`;
   const curPlatform = IM_PLATFORMS.find((p) => p.key === imPlatform)!;
   const imCallback = `${origin}/api/agent/im/${imPlatform}/callback`;
 
@@ -123,7 +132,7 @@ export function AgentIntegrationTab() {
         type: String(t.type || 'webhook'), name: String(t.name || ''), url: String(t.url || ''),
         secret: String(t.secret || ''), chat_id: String(t.chat_id || ''), enabled: t.enabled !== false,
       })));
-    } catch { /* 推送目标可选,加载失败不阻塞 */ }
+    } catch { /* push targets are optional; load failure doesn't block */ }
   };
   const saveCfg = async (cid: number) => {
     setCfgBusy(true); setCfgMsg('');
@@ -134,19 +143,19 @@ export function AgentIntegrationTab() {
       const r = await fetch(`${API_BASE}/account/im-connector/${cid}/quick-config`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ quick_actions, menu_map }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await readApiError(r, '保存失败'));
       setCfgMsg('✅ 已保存,下次回复/菜单点击即生效');
     } catch { setCfgMsg('保存失败'); } finally { setCfgBusy(false); }
   };
   const savePt = async (cid: number) => {
     setPtBusy(true); setPtMsg('');
     try {
-      // webhook 全部保留(含空 URL 占位,后端会把空 URL 的强制不启用);bot 需有 chat_id
+      // Keep all webhooks (including empty URL placeholders; the backend forces empty-URL ones disabled); bots need a chat_id
       const push_targets = pt.filter((t) => t.type === 'webhook' || (t.type === 'bot' && t.chat_id.trim()));
       const r = await fetch(`${API_BASE}/account/im-connector/${cid}/push-targets`, {
         method: 'POST', headers: authHeaders(), body: JSON.stringify({ push_targets }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await readApiError(r, '保存失败'));
       setPtMsg('✅ 已保存,简报/告警将按此推送');
     } catch { setPtMsg('保存失败'); } finally { setPtBusy(false); }
   };
@@ -158,15 +167,15 @@ export function AgentIntegrationTab() {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ platform: imPlatform, ...im }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await readApiError(r, '保存失败'));
       setImMsg('✅ 已保存。把上面的回调地址填回对应平台即可。');
       setIm({});
       await reload();
-    } catch (e) { setImMsg(`保存失败:${e instanceof Error ? e.message : e}`); } finally { setImBusy(false); }
+    } catch (e) { setImMsg(`保存失败:${friendlyErrorMessage(e, '保存失败')}`); } finally { setImBusy(false); }
   };
 
   const deleteIm = async (id: number) => {
-    if (!confirm('确认删除此 IM 接入?删除后机器人将无法再回复。')) return;
+    if (!(await uiConfirm('确认删除此 IM 接入?删除后机器人将无法再回复。', { danger: true }))) return;
     await fetch(`${API_BASE}/account/im-connector/${id}/delete`, { method: 'POST', headers: authHeaders() });
     await reload();
   };
@@ -187,16 +196,16 @@ export function AgentIntegrationTab() {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ label }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await readApiError(r, '保存失败'));
       const d = await r.json();
       setFresh(d.token);
       setLabel('');
       await reload();
-    } catch (e) { setErr(`生成失败:${e instanceof Error ? e.message : e}`); } finally { setBusy(false); }
+    } catch (e) { setErr(`生成失败:${friendlyErrorMessage(e, '生成失败')}`); } finally { setBusy(false); }
   };
 
   const revoke = async (tid: string) => {
-    if (!confirm(`确认吊销 ${tid}?吊销后用此 token 的对接立即失效。`)) return;
+    if (!(await uiConfirm(`确认吊销 ${tid}?吊销后用此 token 的对接立即失效。`, { danger: true }))) return;
     await fetch(`${API_BASE}/account/agent-token/${tid}/revoke`, { method: 'POST', headers: authHeaders() });
     await reload();
   };
@@ -210,9 +219,32 @@ export function AgentIntegrationTab() {
         </p>
       </div>
 
-      {/* 生成区 */}
+      {/* Recommended: device code authorization (no token copying) */}
+      <div className="rounded-xl p-5" style={{ ...card, borderColor: 'var(--accent-primary)' }}>
+        <h2 className="text-base font-semibold text-primary mb-1">推荐:免 token 安装</h2>
+        <p className="text-xs text-secondary mb-3">
+          让对方在他的机器上直接跑下面这行(对所有人都一样,可以印在文档里)。终端会显示一个 8 位配对码,
+          你在 <a href="/link" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>{origin}/link</a> 输入该码点「批准」,安装即自动完成。
+          token 不经过剪贴板、不进命令历史。
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 px-3 py-2 rounded-lg text-xs break-all" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+            {deviceCmd}
+          </code>
+          <CopyBtn text={deviceCmd} />
+        </div>
+        <p className="text-xs text-secondary mt-3">配对码 10 分钟内有效、只能用一次;批准后签发的 token 会出现在下面的列表里,可随时吊销。</p>
+        <p className="text-xs text-secondary mt-2">
+          嫌命令长?把这个地址直接发给对方的 AI 助手也行:
+          <code className="px-1.5 py-0.5 mx-1 rounded" style={{ background: 'var(--bg-surface)' }}>{origin}/skill</code>
+          —— agent 抓到的是可直接执行的安装指令,人打开则是安装页。
+        </p>
+      </div>
+
+      {/* Generation area */}
       <div className="rounded-xl p-5" style={card}>
-        <h2 className="text-base font-semibold text-primary mb-4">生成接入 token</h2>
+        <h2 className="text-base font-semibold text-primary mb-4">备选:手动生成 token</h2>
+        <p className="text-xs text-secondary mb-4">适合无人值守的机器、CI、或对方不方便交互的场景。需要你把 token 复制给对方。</p>
         <div className="flex flex-wrap items-end gap-4">
           <label className="text-sm flex-1 min-w-[180px]">
             <span className="block text-secondary mb-1">备注(可选)</span>
@@ -234,7 +266,7 @@ export function AgentIntegrationTab() {
         {err && <p className="text-xs mt-2" style={{ color: '#f43f5e' }}>{err}</p>}
       </div>
 
-      {/* 刚生成:token + 安装命令(只此一次)*/}
+      {/* Just generated: token + install command (shown only once) */}
       {fresh && (
         <div className="rounded-xl p-5" style={{ ...card, borderColor: 'var(--accent-primary)' }}>
           <h2 className="text-base font-semibold text-primary mb-1">✅ 已生成(请立即复制,关闭后不再显示)</h2>
@@ -255,7 +287,7 @@ export function AgentIntegrationTab() {
         </div>
       )}
 
-      {/* 已有 token 列表 */}
+      {/* Existing token list */}
       <div className="rounded-xl p-5" style={card}>
         <h2 className="text-base font-semibold text-primary mb-4">已发放的 token</h2>
         {loading ? (
@@ -289,7 +321,7 @@ export function AgentIntegrationTab() {
         )}
       </div>
 
-      {/* ── IM 对话接入(自建应用):飞书 / 企业微信 / 钉钉 ── */}
+      {/* ── IM chat integration (self-built apps): Feishu / WeCom / DingTalk ── */}
       <div className="rounded-xl p-5" style={card}>
         <h2 className="text-base font-semibold text-primary mb-1">IM 对话接入</h2>
         <p className="text-sm text-secondary mb-4">
@@ -297,7 +329,7 @@ export function AgentIntegrationTab() {
           在你公司的 IM 后台建一个<strong>企业自建应用/机器人</strong>,把凭证填到这里(应用与凭证都在你自己的 IM,不经过我们)。
         </p>
 
-        {/* 平台切换 */}
+        {/* Platform switch */}
         <div className="flex gap-2 mb-4">
           {IM_PLATFORMS.map((p) => (
             <button key={p.key} onClick={() => { setImPlatform(p.key); setIm({}); setImMsg(''); }}
@@ -306,11 +338,12 @@ export function AgentIntegrationTab() {
                 ? { background: 'var(--accent-primary)', color: '#fff' }
                 : { background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
               {p.name}
+              {p.unavailable && <span className="ml-1.5 text-[11px] opacity-70">暂未开放</span>}
             </button>
           ))}
         </div>
 
-        {/* 现有连接(当前平台) */}
+        {/* Existing connections (current platform) */}
         {imConns.filter((c) => c.platform === imPlatform).map((c) => (
           <div key={c.id} className="mb-3">
             <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
@@ -327,7 +360,7 @@ export function AgentIntegrationTab() {
 
             {cfgFor === c.id && (
               <div className="mt-2 p-4 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-                {/* 回复底部快捷按钮 */}
+                {/* Quick buttons at the bottom of replies */}
                 <div className="text-sm font-semibold text-primary mb-1">回复底部快捷按钮(最多 6 个)</div>
                 <p className="text-xs text-secondary mb-2">每条回复底部展示这些按钮,点击即把对应问句发给 AI 营销官。</p>
                 {qa.map((row, i) => (
@@ -341,7 +374,7 @@ export function AgentIntegrationTab() {
                   <button onClick={() => setQa([...qa, ['', '']])} className="text-xs font-semibold mb-3" style={{ color: 'var(--accent-primary)' }}>+ 添加按钮</button>
                 )}
 
-                {/* 飞书菜单映射(仅飞书) */}
+                {/* Feishu menu mapping (Feishu only) */}
                 {imPlatform === 'feishu' && (
                   <>
                     <div className="text-sm font-semibold text-primary mt-3 mb-1">飞书底部菜单映射(event_key → 问句)</div>
@@ -362,15 +395,12 @@ export function AgentIntegrationTab() {
                   {cfgMsg && <span className="text-xs" style={{ color: cfgMsg.startsWith('✅') ? 'var(--accent-secondary)' : '#f43f5e' }}>{cfgMsg}</span>}
                 </div>
 
-                {/* 推送目标:webhook(可多个)+ bot 群,简报/告警群发 */}
+                {/* Push targets: webhooks (multiple) + bot groups, for broadcasting briefs/alerts */}
                 <div className="text-sm font-semibold text-primary mt-5 mb-1">推送目标(简报/告警群发)</div>
                 <p className="text-xs text-secondary mb-2">支持多个飞书自定义机器人 webhook + 应用机器人群,每个可单独开关。webhook:飞书群「设置 → 群机器人 → 添加自定义机器人」复制 URL(有加签则填密钥);群机器人:填群 chat_id(oc_…)。</p>
                 {pt.map((t, i) => (
                   <div key={i} className="flex items-center gap-2 mb-2 flex-wrap">
-                    <select value={t.type} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, type: e.target.value } : r))} className="px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-                      <option value="webhook">webhook</option>
-                      <option value="bot">群机器人</option>
-                    </select>
+                    <UiSelect value={t.type} onChange={(val) => setPt(pt.map((r, j) => j === i ? { ...r, type: val } : r))} options={[{ value: 'webhook', label: 'webhook' }, { value: 'bot', label: '群机器人' }]} className="px-2 py-1.5 rounded-md text-sm" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
                     <input value={t.name} onChange={(e) => setPt(pt.map((r, j) => j === i ? { ...r, name: e.target.value } : r))} placeholder="名称 如 测试群" className="px-2 py-1.5 rounded-md text-sm w-28" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }} />
                     {t.type === 'webhook' ? (
                       <>
@@ -395,7 +425,13 @@ export function AgentIntegrationTab() {
           </div>
         ))}
 
-        {/* 回调地址 */}
+        {curPlatform.unavailable && (
+          <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+            {curPlatform.name}接入<strong>暂未开放</strong>,下方配置仅作预留,填写后不会生效。请先使用飞书或企业微信。
+          </p>
+        )}
+
+        {/* Callback URL */}
         <div className="mb-4">
           <p className="text-xs text-secondary mb-1">① 在{curPlatform.name}「{curPlatform.callbackWhere}」把回调/请求地址填成:</p>
           <div className="flex items-center gap-2">
@@ -404,7 +440,7 @@ export function AgentIntegrationTab() {
           </div>
         </div>
 
-        {/* 凭证表单(按平台) */}
+        {/* Credential form (per platform) */}
         <p className="text-xs text-secondary mb-2">② 把{curPlatform.name}应用里的凭证填进来:</p>
         <div className="grid sm:grid-cols-2 gap-3">
           {curPlatform.fields.map(([k, lbl, ph]) => (
@@ -433,7 +469,7 @@ export function AgentIntegrationTab() {
         <p className="text-xs text-secondary mt-3">③ {curPlatform.note}</p>
       </div>
 
-      {/* ── 飞书绑定码(应用市场版机器人,每个使用者各自绑定)── */}
+      {/* ── Feishu binding code (app marketplace bot; each user binds separately) ── */}
       <div className="rounded-xl p-5" style={card}>
         <h2 className="text-base font-semibold text-primary mb-1">飞书绑定码(应用市场机器人)</h2>
         <p className="text-sm text-secondary mb-4">

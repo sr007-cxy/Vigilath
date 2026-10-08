@@ -1,0 +1,22 @@
+# Slim the build context. frontend/ didn't have this file, so every docker build sent the whole directory
+# to the daemon -- 513M locally (node_modules 468M), and on the deploy machine all the past dist.bak backups.
+#
+# node_modules especially is pointless: the image does `COPY package*.json` + `npm ci` to reinstall,
+# so the host's copy is **never used** and just gets sent for nothing.
+
+node_modules/
+.npm/
+
+# Build output and past backups. dist.bak.* is left by the deploy script, 11M each time;
+# without excluding it, "the more deploys, the slower the next build".
+dist/
+dist.new/
+dist.bak.*/
+stats.html
+
+# Local environment and caches
+.env
+.env.*
+.vite/
+*.log
+coverage/

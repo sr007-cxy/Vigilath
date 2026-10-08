@@ -12,53 +12,44 @@ import type { CheckResult } from '../../../types/geo';
 const byStatus = (checks: CheckResult[], pred: (msg: string) => boolean, status?: string) =>
   checks.find((c) => (!status || c.status === status) && pred(c.message));
 
-// ---- robots.txt: AI bot permission matrix ----------------------------------
+// ---- robots.txt: AI crawler rule summary -----------------------------------
 //
-// Source messages (see geo_checker.py:check_robots_txt):
+// Source messages (see geo_checker/checks.py:check_robots_txt):
 //   [PASS] robots.txt found (N bytes)
 //   [FAIL] robots.txt not found at URL
 //   [PASS] robots.txt references a sitemap
 //   [WARN] robots.txt does not reference a sitemap
 //   [WARN] Wildcard user-agent blocks all crawlers (Disallow: /)
-//   [WARN] AI bots explicitly BLOCKED: GPTBot, ClaudeBot
-//   [PASS] AI bots with directives (not blocked): GPTBot, PerplexityBot
-//   [INFO] AI bots not mentioned (inherit wildcard rules): Bytespider, ...
-
-export const KNOWN_AI_BOTS = [
-  'GPTBot',
-  'ChatGPT-User',
-  'ClaudeBot',
-  'anthropic-ai',
-  'Claude-Web',
-  'PerplexityBot',
-  'Google-Extended',
-  'GoogleOther',
-  'CCBot',
-  'Bytespider',
-  'Applebot-Extended',
-  'Cohere-ai',
-  'Meta-ExternalAgent',
-  'Diffbot',
-  'Anthropic',
-] as const;
-
-export type BotState = 'allowed' | 'blocked' | 'inherited' | 'unknown';
+//   [WARN] AI crawler rules: N user-agent(s) explicitly blocked
+//   [PASS] AI crawler rules: N user-agent(s) explicitly allowed
+//   [INFO] AI crawler rules: N user-agent(s) inherit the wildcard rule
+//
+// The backend deliberately no longer emits crawler user-agent names — the card
+// shows counts only. Records written before that change carry the old
+// "AI bots explicitly BLOCKED: <names>" form; we count those names without ever
+// surfacing them, so historical results keep rendering the right numbers.
 
 export interface RobotsParsed {
   fileFound: boolean;
   hasSitemapRef: boolean | null;
   wildcardBlocksAll: boolean;
-  bots: { name: string; state: BotState }[];
+  blockedCount: number;
+  allowedCount: number;
+  inheritedCount: number;
 }
 
-const splitBotList = (line: string, marker: string): string[] => {
-  const idx = line.indexOf(marker);
-  if (idx < 0) return [];
-  return line
-    .slice(idx + marker.length)
+/** Count from the current "…: N user-agent(s) …" form, else from a legacy name list. */
+const botCount = (message: string | undefined, legacyMarker: string): number => {
+  if (!message) return 0;
+  const m = /:\s*(\d+)\s+user-agent/.exec(message);
+  if (m) return Number(m[1]);
+  const idx = message.indexOf(legacyMarker);
+  if (idx < 0) return 0;
+  return message
+    .slice(idx + legacyMarker.length)
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean).length;
 };
 
 export function parseRobotsTxt(checks: CheckResult[]): RobotsParsed | null {
@@ -78,33 +69,26 @@ export function parseRobotsTxt(checks: CheckResult[]): RobotsParsed | null {
     m.startsWith('Wildcard user-agent blocks all crawlers'),
   );
 
-  const blockedMsg = byStatus(checks, (m) => m.startsWith('AI bots explicitly BLOCKED:'));
-  const allowedMsg = byStatus(checks, (m) => m.startsWith('AI bots with directives (not blocked):'));
-  const inheritedMsg = byStatus(checks, (m) => m.startsWith('AI bots not mentioned'));
-
-  const blockedSet = new Set(blockedMsg ? splitBotList(blockedMsg.message, 'BLOCKED:') : []);
-  const allowedSet = new Set(allowedMsg ? splitBotList(allowedMsg.message, '(not blocked):') : []);
-  const inheritedSet = new Set(
-    inheritedMsg ? splitBotList(inheritedMsg.message, 'inherit wildcard rules):') : [],
+  const blockedMsg = byStatus(
+    checks,
+    (m) => m.includes('explicitly blocked') || m.startsWith('AI bots explicitly BLOCKED:'),
   );
-
-  const bots: RobotsParsed['bots'] = KNOWN_AI_BOTS.map((name) => {
-    if (blockedSet.has(name)) return { name, state: 'blocked' as BotState };
-    if (allowedSet.has(name)) return { name, state: 'allowed' as BotState };
-    if (inheritedSet.has(name)) {
-      return {
-        name,
-        state: (wildcardBlocksAll ? 'blocked' : 'allowed') as BotState,
-      };
-    }
-    return { name, state: 'unknown' as BotState };
-  });
+  const allowedMsg = byStatus(
+    checks,
+    (m) => m.includes('explicitly allowed') || m.startsWith('AI bots with directives (not blocked):'),
+  );
+  const inheritedMsg = byStatus(
+    checks,
+    (m) => m.includes('inherit the wildcard rule') || m.startsWith('AI bots not mentioned'),
+  );
 
   return {
     fileFound,
     hasSitemapRef,
     wildcardBlocksAll,
-    bots,
+    blockedCount: botCount(blockedMsg?.message, 'BLOCKED:'),
+    allowedCount: botCount(allowedMsg?.message, '(not blocked):'),
+    inheritedCount: botCount(inheritedMsg?.message, 'inherit wildcard rules):'),
   };
 }
 
@@ -210,17 +194,18 @@ export function parseMetaTags(checks: CheckResult[]): MetaParsed | null {
 //
 // The platform name is left-padded to 16 chars; we split on the status keywords.
 
+// Must stay in sync with `platforms` in geo_checker/checks.py:check_cross_platform.
 export const KNOWN_PLATFORMS = [
-  'X / Twitter',
-  'LinkedIn',
-  'YouTube',
-  'GitHub',
-  'Reddit',
-  'Facebook',
-  'Instagram',
-  'Medium',
-  'TikTok',
-  'Quora',
+  '微信公众号',
+  '微博',
+  '知乎',
+  '小红书',
+  '抖音',
+  '哔哩哔哩',
+  '百家号',
+  '今日头条',
+  'CSDN',
+  'Gitee',
 ] as const;
 
 export type PlatformState = 'linked' | 'probed' | 'notFound' | 'unknown';

@@ -26,38 +26,194 @@ from ..state import (
 from ..ai import (
     _check_brand_in_result, _extract_competitors, _classify_framing,
 )
+from geo_checker.llm_ledger import post_chat
+
+
+# ── Doubao: use the API, no browser ───────────────────────────────────────────
+# Doubao has the tightest server-side browser risk control (QR account pool + shark verification); in entity audits it's the
+# one most likely to stall/time out. The ARK Bot API is the same model + web search, with answers and citations from the same source,
+# so the API is preferred here: call directly if this process has ARK credentials, otherwise relay via the batch run center
+# (credentials live in the telemetry process; exec_mode=api guarantees it won't fall back to the browser either).
+# Only when both API paths fail do we fall back to the browser -- only the standalone CLI ends up there.
+ARK_BOT_URL = "https://ark.cn-beijing.volces.com/api/v3/bots/chat/completions"
+
+
+def _doubao_api_mode():
+    """Which API path Doubao can use: "ark" (this process's credentials) / "telemetry" (batch run center) / "" (neither)."""
+    if os.environ.get("ARK_API_KEY", "").strip() and os.environ.get("DOUBAO_BOT_ID", "").strip():
+        return "ark"
+    try:
+        import geo.services.telemetry_client  # noqa: F401
+        return "telemetry"
+    except Exception:  # noqa: BLE001 —— no geo package when running as a standalone CLI
+        return ""
+
+
+def _query_doubao_ark(query, timeout=90):
+    """Direct ARK Bot API call, returning a dict shaped like browser_engine.client.search."""
+    key = os.environ.get("ARK_API_KEY", "").strip()
+    bot_id = os.environ.get("DOUBAO_BOT_ID", "").strip()
+    if not key or not bot_id:
+        return {"answer": "", "citations": [], "error": "ark_credentials_missing"}
+    try:
+        r = post_chat(
+            ARK_BOT_URL,
+            {"model": bot_id, "messages": [{"role": "user", "content": query}]},
+            {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            provider="ark", engine="entity.doubao", timeout=timeout,
+        )
+        if r.status_code != 200:
+            return {"answer": "", "citations": [], "error": f"http_{r.status_code}"}
+        data = r.json()
+        if "error" in data:
+            return {"answer": "", "citations": [], "error": f"ark_error: {data['error']}"}
+        msg = (data.get("choices") or [{}])[0].get("message", {}) or {}
+        refs = data.get("references") or msg.get("references") or []
+        citations = []
+        for i, ref in enumerate(refs):
+            if not isinstance(ref, dict):
+                continue
+            url = (ref.get("url") or "").strip()
+            if not url:
+                continue
+            citations.append({
+                "url": url, "title": (ref.get("title") or "").strip(),
+                "snippet": (ref.get("summary") or ref.get("snippet") or "").strip()[:500],
+                "position": i + 1,
+            })
+        return {"answer": msg.get("content", "") or "", "citations": citations, "error": None}
+    except requests.RequestException as e:
+        return {"answer": "", "citations": [], "error": str(e)}
+
+
+def _query_doubao_telemetry(query, timeout=180):
+    """Run one Doubao query via the batch run center. exec_mode=api -- if the batch run center has no ARK credentials it returns 403 directly;
+    better to fail this one than let it quietly fall back to the browser."""
+    try:
+        from geo.services.full_diagnosis_competitive import TELEMETRY_SERVICE_URL
+        from geo.services.telemetry_client import post_run_now
+    except Exception as e:  # noqa: BLE001
+        return {"answer": "", "citations": [], "error": f"telemetry_unavailable: {e}"}
+    try:
+        rows = post_run_now(
+            TELEMETRY_SERVICE_URL,
+            {"name": "entity-audit:doubao", "queries": [query],
+             "engines": ["doubao"], "exec_mode": "api"},
+            timeout=timeout, label="entity-doubao",
+        )
+    except Exception as e:  # noqa: BLE001
+        return {"answer": "", "citations": [], "error": f"telemetry_error: {e}"}
+    row = next((r for r in rows if isinstance(r, dict)), None) if isinstance(rows, list) else None
+    if not row:
+        return {"answer": "", "citations": [], "error": "telemetry_empty"}
+    return {"answer": row.get("answer") or "", "citations": row.get("citations") or [],
+            "error": row.get("error")}
+
+
+def _query_doubao_api(query, mode):
+    return _query_doubao_ark(query) if mode == "ark" else _query_doubao_telemetry(query)
+
+
+_KG_PROXY_CACHE = None
+# Wikimedia sites require a User-Agent that can reach a human; the default python-requests / "GEO-Checker/1.0"
+# gets 403 outright (measured 2026-09-28, same via proxy).
+_KG_UA = os.environ.get(
+    "GEO_KG_USER_AGENT",
+    "VigilathGEOBot/1.0 (+https://vigilath.com; contact@vigilath.com) python-requests")
+
+
+def _kg_proxy():
+    """Overseas proxy string for foreign knowledge graph probes; returns None if none (fall back to direct).
+
+    Why a proxy is required: the backend container egress is in mainland China, and direct connections to en/zh.wikipedia.org and www.wikidata.org
+    always hit ConnectTimeout / ReadTimeout (measured 2026-09-28). The original code's four probes were all
+    `except: pass`, so timeouts were swallowed -> wikipedia/wikidata/google_kg always False, knowledge graph always 0,
+    while the report still said status=ok -- that's how six reports #138~#148 all got an entity score of 5/160.
+
+    Lookup order: GEO_KG_PROXY_URL > GEO_KG_PROXY_IDS in engine_proxies (default 12,22,21,
+    i.e. Tencent Cloud Korea / BrightData US / BrightData shared pool, all three measured working) >
+    HTTPS_PROXY > None. The result is cached in-process, failures too (to avoid a DB lookup for every entity).
+    """
+    global _KG_PROXY_CACHE
+    if _KG_PROXY_CACHE is not None:
+        return _KG_PROXY_CACHE or None
+    url = (os.environ.get("GEO_KG_PROXY_URL") or "").strip()
+    if not url:
+        ids = [s.strip() for s in
+               (os.environ.get("GEO_KG_PROXY_IDS") or "12,22,21").split(",") if s.strip()]
+        try:
+            from sqlalchemy import text as _sql_text
+
+            from geo.database import SessionLocal
+            db = SessionLocal()
+            try:
+                rows = db.execute(
+                    _sql_text("select id, proxy_url from engine_proxies "
+                              "where id = any(:ids) and coalesce(disabled, false) = false"),
+                    {"ids": [int(i) for i in ids if i.isdigit()]}).all()
+            finally:
+                db.close()
+            by_id = {str(r[0]): r[1] for r in rows if r[1]}
+            url = next((by_id[i] for i in ids if by_id.get(i)), "")
+        except Exception:  # noqa: BLE001 —— no geo package/DB connection when running as a standalone CLI
+            url = ""
+    if not url:
+        url = (os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or "").strip()
+    _KG_PROXY_CACHE = url
+    return url or None
 
 
 def _check_knowledge_graph(entity_name, entity_type):
     """Check entity presence in Wikipedia, Wikidata, Google Knowledge Panel signals,
-    and Baidu Baike. Returns (score 0-20, details dict)."""
+    and Baidu Baike. Returns (score 0-20, details dict).
+
+    Probe failure must be kept separate from "checked, really absent": each item's exception/non-200 is recorded in
+    details["probe_errors"], so callers can tell "no entry" from "couldn't check"
+    -- previously all were swallowed as False, and the report showed "all probes failed" as "AI doesn't know this brand at all".
+    """
     import urllib.parse
     score = 0
     details = {"wikipedia": False, "wikidata": False, "wikidata_id": None,
-               "google_kg": False, "baidu_baike": False, "platforms_found": []}
+               "google_kg": False, "baidu_baike": False, "platforms_found": [],
+               "probe_errors": {}}
+    proxies = None
+    p = _kg_proxy()
+    if p:
+        proxies = {"http": p, "https": p}
+    details["probe_via_proxy"] = bool(p)
+    hdr = {"User-Agent": _KG_UA}
 
-    # 1. Wikipedia check — search API
-    try:
-        enc = urllib.parse.quote(entity_name)
-        url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={enc}&format=json&srlimit=3"
-        r = requests.get(url, timeout=10, headers={"User-Agent": "GEO-Checker/1.0"})
-        if r.status_code == 200:
-            data = r.json()
-            results = data.get("query", {}).get("search", [])
-            for result in results:
-                if entity_name.lower() in result.get("title", "").lower():
-                    details["wikipedia"] = True
-                    details["platforms_found"].append("Wikipedia")
-                    score += 5
-                    break
-    except Exception:
-        pass
+    # 1. Wikipedia check -- go through api.wikimedia.org, **don't** hit en/zh.wikipedia.org.
+    #    The latter is blocked at the SNI level in mainland China; with any proxy (Korea / US BrightData / CN ISP) it's
+    #    ConnectionError, while the same proxies reach wikidata.org and api.wikimedia.org with 200
+    #    (measured 2026-09-28). Chinese brands check zhwiki first, then enwiki.
+    enc = urllib.parse.quote(entity_name)
+    for _lang in ("zh", "en"):
+        if details["wikipedia"]:
+            break
+        try:
+            url = (f"https://api.wikimedia.org/core/v1/wikipedia/{_lang}"
+                   f"/search/page?q={enc}&limit=3")
+            r = requests.get(url, timeout=15, headers=hdr, proxies=proxies)
+            if r.status_code == 200:
+                for page in (r.json() or {}).get("pages") or []:
+                    title = (page.get("title") or "")
+                    if entity_name.lower() in title.lower():
+                        details["wikipedia"] = True
+                        details["wikipedia_lang"] = _lang
+                        details["platforms_found"].append("Wikipedia")
+                        score += 5
+                        break
+            else:
+                details["probe_errors"][f"wikipedia_{_lang}"] = f"HTTP {r.status_code}"
+        except Exception as e:  # noqa: BLE001
+            details["probe_errors"][f"wikipedia_{_lang}"] = type(e).__name__
 
-    # 2. Wikidata check — search API
+    # 2. Wikidata check -- search API (same as above)
     try:
         enc = urllib.parse.quote(entity_name)
         url = f"https://www.wikidata.org/w/api.php?action=wbsearchentities&search={enc}&language=en&format=json&limit=3"
-        r = requests.get(url, timeout=10, headers={"User-Agent": "GEO-Checker/1.0"})
+        r = requests.get(url, timeout=15, headers=hdr, proxies=proxies)
         if r.status_code == 200:
             data = r.json()
             results = data.get("search", [])
@@ -68,35 +224,45 @@ def _check_knowledge_graph(entity_name, entity_type):
                     details["platforms_found"].append("Wikidata")
                     score += 5
                     break
-    except Exception:
-        pass
+        else:
+            details["probe_errors"]["wikidata"] = f"HTTP {r.status_code}"
+    except Exception as e:  # noqa: BLE001
+        details["probe_errors"]["wikidata"] = type(e).__name__
 
     # 3. Google Knowledge Panel signal — check if structured org/person data exists
-    try:
-        if details["wikipedia"]:
-            details["google_kg"] = True
-            details["platforms_found"].append("Google KG (inferred)")
-            score += 4
-    except Exception:
-        pass
+    if details["wikipedia"]:
+        details["google_kg"] = True
+        details["platforms_found"].append("Google KG (inferred)")
+        score += 4
 
-    # 4. Baidu Baike check — probe the Baike page directly
+    # 4. Baidu Baike -- use the Baike entry card API; don't scrape the /item page directly.
+    #    /item returns 403 whether direct or via proxy (CN ISP and BrightData both tried) -- the anti-scraping keys on
+    #    the TLS fingerprint; adding UA / Referer doesn't help. BaikeLemmaCardApi returns 200 directly,
+    #    returning {id, newLemmaId, key, desc, ...}; when not indexed there's no newLemmaId.
+    #    Measured 2026-09-28: "<brand-i> flaxseed oil" does have a Baike entry, but the old code judged it False.
     try:
         enc = urllib.parse.quote(entity_name)
-        url = f"https://baike.baidu.com/item/{enc}"
-        r = requests.get(url, timeout=10, allow_redirects=True,
-                         headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+        url = ("https://baike.baidu.com/api/openapi/BaikeLemmaCardApi"
+               f"?scope=103&format=json&appid=379020&bk_key={enc}&bk_length=600")
+        r = requests.get(url, timeout=15, headers={
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+            "Referer": "https://baike.baidu.com/"})
         if r.status_code == 200:
-            text_lower = r.text[:200000].lower()
-            # Baidu Baike returns 200 even for missing pages; check for real content
-            not_found_signals = ["百度百科尚未收录", "百度百科错误页", "页面不存在"]
-            is_real = not any(sig in text_lower for sig in not_found_signals)
-            if is_real and entity_name.lower() in text_lower:
+            try:
+                card = r.json()
+            except ValueError:
+                card = {}
+            if isinstance(card, dict) and (card.get("newLemmaId") or card.get("id")) \
+                    and (card.get("key") or card.get("desc")):
                 details["baidu_baike"] = True
+                details["baidu_baike_url"] = card.get("url") or ""
                 details["platforms_found"].append("Baidu Baike")
                 score += 6
-    except Exception:
-        pass
+        else:
+            details["probe_errors"]["baidu_baike"] = f"HTTP {r.status_code}"
+    except Exception as e:  # noqa: BLE001
+        details["probe_errors"]["baidu_baike"] = type(e).__name__
 
     # If no Wikipedia but has Wikidata, partial KG credit
     if not details["google_kg"] and details["wikidata"]:
@@ -271,8 +437,8 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     engines = []  # list of (name, model_id_or_sentinel)
     api_key = openrouter_key  # default for _query_openrouter
 
-    # ── 本地调试期:只跑 DeepSeek Playwright,其他引擎先注释。
-    #    调好 DeepSeek 的选择器后再把这里恢复。
+    # ── Local debugging phase: only run DeepSeek Playwright; other engines commented out for now.
+    #    Restore this once the DeepSeek selectors are sorted out.
     # if openai_key:
     #     engines.append(("OpenAI", "__openai_native__"))
     # elif openrouter_key:
@@ -292,12 +458,33 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
         ("豆包", "doubao", False),
         ("ChatGPT", "chatgpt", False),
         ("Gemini", "gemini", False),
-        ("Grok", "grok", False),
         ("Claude", "claude", False),
-        ("Copilot", "copilot", True),
     ]
+    # The disabled list uses the same switch as the competitor path (GEO_EXCLUDE_ENGINES), otherwise "don't run engine X"
+    # would only block the batch run center half while entity audits still call it
+    try:
+        from geo.services.full_diagnosis_competitive import excluded_engines
+        _excluded = excluded_engines()
+    except Exception:  # noqa: BLE001 —— no geo package when running as a standalone CLI
+        _excluded = {e.strip().lower() for e in
+                     os.environ.get("GEO_EXCLUDE_ENGINES", "").split(",") if e.strip()}
+
     _active_browser_engines = []  # list of (display_name, session_key)
+    _doubao_api = ""               # "ark" / "telemetry" / "" (use browser)
     for _disp, _skey, _optional in _BROWSER_ENGINES:
+        if _skey.lower() in _excluded:
+            sys.__stdout__.write(f"[{_disp}-Browser] skipped (GEO_EXCLUDE_ENGINES)\n")
+            sys.__stdout__.flush()
+            continue
+        if _skey == "doubao":
+            _doubao_api = _doubao_api_mode()
+            if _doubao_api:
+                # Phase B's executor switches to the API; pacing (single query) matches the browser engine
+                _active_browser_engines.append((_disp, _skey))
+                engines.append((_disp, "__api_doubao__"))
+                sys.__stdout__.write(f"[{_disp}-API] activated ({_doubao_api})\n")
+                sys.__stdout__.flush()
+                continue
         try:
             from browser_engine.client import has_session
             _has = has_session(_skey)
@@ -443,14 +630,10 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
             "messages": [{"role": "user", "content": query}],
         }
         try:
-            r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                              json=payload, headers=headers, timeout=45)
+            r = post_chat("https://openrouter.ai/api/v1/chat/completions", payload, headers,
+                          provider="openrouter", engine="entity", timeout=45)
             if r.status_code == 401:
                 return "", [], "invalid_key"
-            if r.status_code == 429:
-                time.sleep(5)
-                r = requests.post("https://openrouter.ai/api/v1/chat/completions",
-                                  json=payload, headers=headers, timeout=45)
             if r.status_code != 200:
                 return "", [], f"http_{r.status_code}"
             data = r.json()
@@ -472,14 +655,10 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
             "tools": [{"type": "web_search"}],
         }
         try:
-            r = requests.post("https://api.openai.com/v1/responses",
-                              json=payload, headers=headers, timeout=60)
+            r = post_chat("https://api.openai.com/v1/responses", payload, headers,
+                          provider="openai", engine="entity.openai", timeout=60)
             if r.status_code == 401:
                 return "", [], "invalid_key"
-            if r.status_code == 429:
-                time.sleep(5)
-                r = requests.post("https://api.openai.com/v1/responses",
-                                  json=payload, headers=headers, timeout=60)
             if r.status_code != 200:
                 return "", [], f"http_{r.status_code}"
             data = r.json()
@@ -508,7 +687,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
 
             def _call_engine(engine_name, model_id):
                 """Call one engine, return list of answers."""
-                if model_id.startswith("__browser_"):
+                if model_id.startswith("__browser_") or model_id == "__api_doubao__":
                     # Browser engines handle queries in Phase B (single query per
                     # engine).  Skipping here avoids 10× per-engine Playwright calls
                     # that would take 15-30 min.  Phase B answers are merged into
@@ -561,17 +740,27 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     # Running all 10 queries per engine would take 15-30 min (30 Playwright
     # calls).  Instead, run 1 identity query per engine and distribute the
     # answer into identity / category / competitive / gap scoring buckets.
-    if _active_browser_engines and _browser_search is not None:
+    if _active_browser_engines and (_browser_search is not None or _doubao_api):
         _pw_query = f"What is {entity_name}?" if entity_type != "person" else f"Who is {entity_name}?"
         print(
-            f"\n  Phase B — {len(_active_browser_engines)} browser engine(s) "
+            f"\n  Phase B — {len(_active_browser_engines)} engine(s) "
             f"in parallel, 1 query each: \"{_pw_query}\""
         )
+        # Engines using the API (currently only Doubao) log as -API, so troubleshooting doesn't assume the browser is still running
+        _api_disp = {d for d, k in _active_browser_engines if k == "doubao" and _doubao_api}
+
+        def _tag(disp):
+            return f"{disp}-API" if disp in _api_disp else f"{disp}-Browser"
 
         def _run_browser_engine(disp, skey):
-            """Call browser service for one engine."""
+            """Call one engine -- Doubao uses the API, the rest use browser-service."""
             try:
-                r = _browser_search(skey, _pw_query)
+                if skey == "doubao" and _doubao_api:
+                    r = _query_doubao_api(_pw_query, _doubao_api)
+                elif _browser_search is None:
+                    r = {"answer": "", "citations": [], "error": "browser_service_unavailable"}
+                else:
+                    r = _browser_search(skey, _pw_query)
                 answer = r.get("answer", "")
                 raw_cites = r.get("citations") or []
                 error = r.get("error")
@@ -582,7 +771,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                     error=error,
                 ))
                 sys.__stdout__.write(
-                    f"[{disp}-Browser] done "
+                    f"[{_tag(disp)}] done "
                     f"ans_len={len(answer)} cites={len(raw_cites)} "
                     f"err={error!r}\n"
                 )
@@ -590,7 +779,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                 return disp, answer if answer and not error else ""
             except Exception as e:
                 _adapter_results.append(_ER(engine=disp, query=_pw_query, error=str(e)))
-                sys.__stdout__.write(f"[{disp}-Browser] exception: {type(e).__name__}: {e}\n")
+                sys.__stdout__.write(f"[{_tag(disp)}] exception: {type(e).__name__}: {e}\n")
                 sys.__stdout__.flush()
                 return disp, ""
 
@@ -609,9 +798,9 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
                         category_results.append((_pw_query, [_answer]))
                         competitive_results.append((_pw_query, [_answer]))
                         gap_results.append((_pw_query, [_answer]))
-                    sys.__stdout__.write(f"[{disp}-Browser] Phase B done\n")
+                    sys.__stdout__.write(f"[{_tag(disp)}] Phase B done\n")
                 except Exception as _e:
-                    sys.__stdout__.write(f"[{disp}-Browser] Phase B crashed: {_e}\n")
+                    sys.__stdout__.write(f"[{_tag(disp)}] Phase B crashed: {_e}\n")
                 sys.__stdout__.flush()
 
     print(f"\n  Analysis complete. Scoring...\n")
@@ -1146,7 +1335,7 @@ def entity_audit(entity_name, entity_type="brand", return_data=False):
     else:
         print(f"    [{PASS}] No content gaps detected — entity appears across all tested queries")
 
-    # ── 引用源追溯（CLI & API 都输出）──────────────────────────
+    # ── Citation source tracing (output by both CLI & API) ──────────────────────────
     from ..analyzers.source_trace import analyze_source_trace
 
     playwright_results = [r for r in _adapter_results if r.engine in PLAYWRIGHT_ENGINE_NAMES]

@@ -1,17 +1,29 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { PageHead } from '../components/PageHead';
 import { blogPosts } from '../data/blogPosts';
+import { fetchBlogPosts, type BlogPostListItem } from '../services/blogApi';
 
 export function Blog() {
-  const { t, i18n } = useTranslation();
-  const lang = i18n.language === 'en' ? 'en' : 'zh';
+  const { t } = useTranslation();
+  const lang = 'zh' as const;  // ICP filing remediation: the site serves Chinese only
 
-  // 最新文章在前
-  const posts = [...blogPosts].sort((a, b) => b.date.localeCompare(a.date));
+  // DB first (test/prod both read appdb, adding articles needs no deploy); on fetch failure fall back to bundled static data
+  const [apiPosts, setApiPosts] = useState<BlogPostListItem[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchBlogPosts()
+      .then((posts) => { if (alive && posts.length > 0) setApiPosts(posts); })
+      .catch(() => { /* Silently fall back to static data */ });
+    return () => { alive = false; };
+  }, []);
+
+  // Newest articles first
+  const posts = [...(apiPosts ?? blogPosts)].sort((a, b) => b.date.localeCompare(a.date));
 
   const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN', {
+    new Date(iso).toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -29,7 +41,7 @@ export function Blog() {
           {/* Hero */}
           <section className="hero mb-16">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold mb-6 leading-[1.05] tracking-tight animate-slide-up">
                 <span className="gradient-text">{t('blog.title')}</span>
               </h1>
               <p

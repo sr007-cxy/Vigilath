@@ -1,26 +1,40 @@
-// AI 遥测 工作台页 — 一个组件承载 3 个 route:
-//   /dashboard            views=['config']                  — 主题配置(新 dashboard 首页)
-//   /dashboard/ai-telemetry  views=['overview','tracking','results'] — 遥测看板
-//   /dashboard/insights   views=['briefings']               — 优化建议
+// AI telemetry workbench page — one component serving 3 routes:
+//   /dashboard            views=['config']                  — topic config (new dashboard home)
+//   /dashboard/ai-telemetry  views=['overview','tracking','results'] — telemetry dashboard
+//   /dashboard/insights   views=['briefings']               — optimization suggestions
 //
-// 频率由后端固定为 daily,前端不暴露时间选择.
-import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react';
+// Cadence / time / models are set by the user in the "Monitoring & batch runs" panel (components/MonitorRunPanel.tsx).
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { fmtTime } from '../../utils/datetime';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 
+import { balanceApi } from '../../services/balanceApi';
 import { PageHead } from '../../components/PageHead';
+import { UiSelect } from '../../components/ui/Select';
+import { uiConfirm } from '../../components/ui/dialogs';
+import { toast } from '../../components/ui/toast';
+import { useRegisterAgentActions } from '../../components/AgentChat/agentActions';
 import { TagInput } from './sentiment/components/TagInput';
 import { BrandProfileForm } from '../../components/BrandProfileForm';
+import { FixedDenominatorBox } from '../../components/FixedDenominatorBox';
 import { ProfileImporter } from '../../components/ProfileImporter';
 import { topicProfileApi } from '../../services/topicProfileApi';
+import { reportsApi, type BrandTier, type IndustryClass } from '../../services/reportsApi';
 import { adminReviewApi, type TopicStrategicSolution } from '../../services/adminReviewApi';
-import { SolutionView } from '../Admin/Solution';
+import { SolutionGeneratingBanner, SolutionView } from '../Admin/Solution';
+import { TopicKpiOverviewCard } from '../../components/TopicKpiOverviewCard';
 import { ExecutionPlanView } from '../Admin/ExecutionPlan';
 import { AdminContentReview } from '../Admin/ContentReview';
+import { Content } from './Content';
 import { exportSolutionPdf } from '../../utils/exportSolutionPdf';
 import { exportSolutionDocx } from '../../utils/exportSolutionDocx';
 import {
-  aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE,
+  QUERY_CSV_ACCEPT, downloadTextFile, parseQueryCsv, queryCsvFilename, serializeQueryCsv,
+} from '../../utils/queryCsv';
+import {
+  aiTelemetryApi, CN_ENGINES, EMPTY_BRAND_PROFILE, MAX_SELECTED_QUERIES,
   type BrandProfile,
   type EngineId, type Topic, type TopicPayload,
   type RunSummary, type ResponseRow, type Overview, type DomainCount,
@@ -29,22 +43,27 @@ import {
   type TrackingMatrix, type QueryHitCell, type EngineFirstHit,
   type CellDrawer, type CellInsight, type Briefing, type ShareOfVoice,
   type QueryCandidate,
-  type SeedPrompt, type ReviewStatus,
+  type SeedPrompt,
+  type TopicProgress,
   type SceneType,
+  type MatchedProduct,
 } from '../../services/aiTelemetryApi';
+import { TopicProgressStrip } from '../../components/TopicProgressStrip';
+import { MarkSeedAsProduct } from '../../components/MarkSeedAsProduct';
+import { MonitorRunPanel } from '../../components/MonitorRunPanel';
 
-// 2026-05-28 — 4 维场景标签的展示元数据(label 走 i18n,color 内联避免跨主题串色)
+// 2026-05-28 — display metadata for the 4-dimension scenario tags (label via i18n, color inlined to avoid cross-theme bleed)
 const SCENE_COLORS: Record<SceneType, string> = {
-  search: '#6366f1',   // 蓝紫
-  qa: '#10b981',       // 绿
-  intent: '#f59e0b',   // 黄
-  brand: '#ec4899',    // 粉
+  search: '#6366f1',   // blue-violet
+  qa: '#10b981',       // green
+  intent: '#f59e0b',   // yellow
+  brand: '#ec4899',    // pink
 };
 const SCENE_KEYS: SceneType[] = ['search', 'qa', 'intent', 'brand'];
 
-// 品牌基础词 — 纯前端模板拼接,瞬时生成不走 LLM:品牌名 ×一组固定评价/了解后缀。
-// 问品牌自己的高频通用词,自有内容最容易覆盖、一批就能搞定(参考竞品「XX怎么样/口碑/实力」批量铺词)。
-// 归到 brand 场景展示,不新增维度。
+// Brand basic queries — pure frontend template concatenation, generated instantly without an LLM: brand name × a fixed set of review/info suffixes.
+// High-frequency generic queries about the brand itself, easiest for owned content to cover, done in one batch (modeled on competitors' bulk 「XX怎么样/口碑/实力」 ("how is XX / reputation / strength") queries).
+// Shown under the brand scenario; no new dimension added.
 const BRAND_BASIC_SUFFIXES = [
   '怎么样', '好不好', '口碑', '口碑怎么样', '评价如何', '客户评价如何', '用户评价怎么样',
   '实力怎么样', '有实力吗', '专业吗', '正规吗', '可信吗', '值得信任吗', '靠谱吗',
@@ -62,14 +81,14 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 import { Tooltip as HintTooltip } from '../../components/Tooltip';
+import { engineLabel } from '../../constants/engines';
 
 type TabKey = 'today' | 'overview' | 'tracking' | 'briefings' | 'config' | 'results';
 
 const ENGINE_COLORS: Record<EngineId, string> = {
-  deepseek: '#5B6CFF', doubao: '#FF7043', qwen: '#7E57C2',
-  wenxin: '#26A69A', yuanbao: '#EF5350',
-  chatgpt: '#10A37F', claude: '#C97650', gemini: '#4285F4',
-  grok: '#9CA3AF', copilot: '#0078D4',
+  deepseek: '#5B6CFF',
+  qwen: '#7E57C2', doubao: '#FF7043', wenxin: '#26A69A',
+  yuanbao: '#EF5350', kimi: '#111111',
 };
 
 function InfoHint({ text }: { text: string }) {
@@ -89,28 +108,26 @@ function InfoHint({ text }: { text: string }) {
   );
 }
 
-// Phase C — 种子词 / query 审核状态徽章
-function ReviewBadge({ status }: { status: ReviewStatus }) {
-  const map: Record<ReviewStatus, { fg: string; bg: string; icon: string; key: string }> = {
-    approved: { fg: '#10b981', bg: 'rgba(16,185,129,0.15)', icon: '✓', key: 'dashboard.aiTelemetry.form.badgeApproved' },
-    pending:  { fg: '#f59e0b', bg: 'rgba(245,158,11,0.15)', icon: '⏳', key: 'dashboard.aiTelemetry.form.badgePending' },
-    rejected: { fg: '#ef4444', bg: 'rgba(239,68,68,0.15)', icon: '✕', key: 'dashboard.aiTelemetry.form.badgeRejected' },
-  };
-  const s = map[status] || map.pending;
+// "Active" badge for seed queries / prompts.
+//
+// Since 2026-09-09 neither seed nor expanded queries are **reviewed anymore** (see backend api/ai_telemetry.update_topic):
+// whoever adds them, they are approved directly and join batch runs once persisted -- whether they run depends only on selected / deleted_at, not status
+// (see models.active_query_texts). So pending / rejected are two dead states that can never render;
+// drawing a "pending review" would only make users think the query is held back, when it actually runs that day and has already consumed credits.
+//
+// The badge itself stays: what users want confirmed is "does this run or not", not a review verdict -- so it always shows "Active"
+// and no longer reads status.
+function ReviewBadge() {
+  const { t } = useTranslation();
   return (
     <span
       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium"
-      style={{ color: s.fg, background: s.bg }}
+      style={{ color: '#10b981', background: 'var(--success-bg)' }}
     >
-      {s.icon}
-      <ReviewBadgeLabel keyName={s.key} />
+      ✓
+      {t('dashboard.aiTelemetry.form.badgeApproved')}
     </span>
   );
-}
-
-function ReviewBadgeLabel({ keyName }: { keyName: string }) {
-  const { t } = useTranslation();
-  return <>{t(keyName)}</>;
 }
 
 const ALL_TABS: TabKey[] = ['today', 'overview', 'tracking', 'briefings', 'config', 'results'];
@@ -122,15 +139,15 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   const showTabBar = visibleTabs.length > 1;
   const showNewTopicBtn = visibleTabs.includes('config');
   const [tab, setTab] = useState<TabKey>(visibleTabs[0]);
-  // clamp:若组件被复用(state 残留),把 tab 拉回当前视图允许的范围
+  // clamp: if the component is reused (stale state), pull the tab back into the range allowed by the current view
   const currentTab: TabKey = visibleTabs.includes(tab) ? tab : visibleTabs[0];
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(false);
   // undefined = modal closed; null = creating; Topic = editing
   const [editing, setEditing] = useState<Topic | null | undefined>(undefined);
-  // 进入 editor 时的形态:edit(可写) / view(只读)
+  // Mode when entering the editor: edit (writable) / view (read-only)
   const [editorMode, setEditorMode] = useState<'edit' | 'view'>('edit');
-  // 概览 / 引用追踪 / 检测详情 共享的 topic 选择 — 切 tab 时保留
+  // Topic selection shared by overview / citation tracking / audit details — kept across tab switches
   const [sharedTopicId, setSharedTopicId] = useState<number | null>(null);
 
   const refresh = async () => {
@@ -138,14 +155,14 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
     try {
       const list = await aiTelemetryApi.listTopics(token);
       setTopics(list);
-      // 首次拿到 topics 时把默认选中的 topic 落到共享 state
+      // When topics are first fetched, store the default selected topic in shared state
       setSharedTopicId(prev => (prev !== null ? prev : list[0]?.id ?? null));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { refresh();   }, []);
+  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const handleSave = async (payload: TopicPayload): Promise<Topic> => {
     const saved = editing && editing.id
@@ -160,7 +177,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   };
 
   const handleToggleEnabled = async (tp: Topic) => {
-    // 后端 PUT /topics/{id} 要求完整 payload — 由当前 topic 数据重建
+    // Backend PUT /topics/{id} requires the full payload — rebuild it from the current topic data
     const payload: TopicPayload = {
       name: tp.name,
       target: tp.target,
@@ -176,7 +193,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
     refresh();
   };
 
-  // 编辑 / 新建模式:把整页内容换成 inline editor,200+ 候选才有空间选
+  // Edit / create mode: replace the whole page with the inline editor; only then is there room to choose among 200+ candidates
   if (editing !== undefined) {
     return (
       <div className="space-y-4">
@@ -216,7 +233,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
     );
   }
 
-  // 标题 / 副标题:跟侧边栏菜单同源(用 dashboard.nav.*),subtitle 各 view 独立
+  // Title / subtitle: same source as the sidebar menu (dashboard.nav.*); subtitle is per view
   const headTitleKey =
     visibleTabs.length === 1 && visibleTabs[0] === 'config' ? 'dashboard.nav.config' :
     visibleTabs.length === 1 && visibleTabs[0] === 'briefings' ? 'dashboard.nav.insights' :
@@ -308,7 +325,7 @@ export function AiTelemetry({ views }: { views?: TabKey[] } = {}) {
   );
 }
 
-// ── 主题卡片网格(每个 topic 渲染成一个独立卡片,响应式 2/3 列)──────────────
+// ── Topic card grid (each topic rendered as its own card, responsive 2/3 columns) ──────────────
 
 function TopicTable({
   topics, loading, onView, onEdit, onToggleEnabled,
@@ -414,14 +431,14 @@ function TopicBlock({
 type TopicStatus = 'incomplete' | 'draft' | 'reviewing' | 'rejected' | 'enabled' | 'disabled';
 
 function deriveTopicStatus(tp: Topic): TopicStatus {
-  // submission_status 是审核主真相;旧逻辑(看 seed_prompts.pending)会让"draft 但种子是 pending"
-  // 错误显示为"审核中",于是用户以为提交了,但 admin 那边查 submission_status='pending' 看不到。
+  // submission_status is the primary review truth; the old logic (checking seed_prompts.pending) would show "draft but seeds pending"
+  // wrongly as "under review", so users thought they had submitted, but admins querying submission_status='pending' couldn't see it.
   const sub = tp.submission_status;
   if (sub === 'pending') return 'reviewing';
   if (sub === 'rejected') return 'rejected';
   if (sub === 'approved') return tp.enabled === false ? 'disabled' : 'enabled';
-  // draft 或 undefined。step1「下一步」只落了资料、还没配监测问题的骨架草稿(queries 为空)
-  // 单独标「草稿」,跟已配置好的可编辑主题区分,方便识别 / 清理中途放弃的半成品。
+  // draft or undefined. Skeleton drafts where step1 "Next" only saved materials and no prompts are configured yet (queries empty)
+  // are labeled "Draft" separately, distinguished from configured editable topics, to make abandoned half-finished ones easy to spot / clean up.
   if ((tp.queries?.length ?? 0) === 0) return 'incomplete';
   if (!tp.enabled) return 'disabled';
   return 'draft';
@@ -431,8 +448,8 @@ const TOPIC_STATUS_STYLE: Record<TopicStatus, { bg: string; fg: string }> = {
   incomplete:{ bg: 'rgba(148,163,184,0.18)', fg: '#64748b' },
   draft:    { bg: 'rgba(59,130,246,0.15)', fg: '#3b82f6' },
   reviewing:{ bg: 'rgba(234,179,8,0.15)',  fg: '#b45309' },
-  rejected: { bg: 'rgba(239,68,68,0.15)',  fg: '#dc2626' },
-  enabled:  { bg: 'rgba(34,197,94,0.15)',  fg: '#16a34a' },
+  rejected: { bg: 'var(--danger-bg)',  fg: '#dc2626' },
+  enabled:  { bg: 'var(--success-bg)',  fg: '#16a34a' },
   disabled: { bg: 'var(--bg-input)',       fg: 'var(--text-muted)' },
 };
 
@@ -446,18 +463,20 @@ function formatTime(iso?: string | null): string {
   return d.toLocaleDateString();
 }
 
-// ── 今日 ───────────────────────────────────────────────────────
+// ── Today ───────────────────────────────────────────────────────
 
 function TodayTab({ topics, token, topicId, onTopicChange }: {
   topics: Topic[]; token: string;
   topicId: number | null; onTopicChange: (id: number | null) => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const setTopicId = onTopicChange;
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [responsesByRun, setResponsesByRun] = useState<Record<number, ResponseRow[]>>({});
   const [loading, setLoading] = useState(false);
-  const [triggering, setTriggering] = useState(false);
+  const [progress, setProgress] = useState<TopicProgress | null>(null);
 
   useEffect(() => {
     if (topicId === null && topics.length > 0) setTopicId(topics[0].id);
@@ -468,7 +487,7 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
     try {
       const rs = await aiTelemetryApi.listRuns(tid, token);
       setRuns(rs);
-      // 加载今天 + 昨天的 runs 的 responses(昨天用于算 citations 增量)
+      // Load responses of today's + yesterday's runs (yesterday is used to compute the citations delta)
       const dayStart = startOfDay(new Date()).getTime();
       const need = rs.filter(r => {
         const ts = parseApiTs(r.started_at).getTime();
@@ -481,6 +500,9 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
       const map: Record<number, ResponseRow[]> = {};
       for (const [id, rows] of pairs) map[id] = rows;
       setResponsesByRun(map);
+      // Status bar: which step we're at and what's next. If unavailable, hide it without blocking the rest of the page.
+      try { setProgress(await aiTelemetryApi.getProgress(tid, token)); }
+      catch { setProgress(null); }
     } finally { setLoading(false); }
   };
 
@@ -509,41 +531,39 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
     color: 'var(--text-primary)',
   };
 
-  const handleRunNow = async () => {
-    if (topicId === null || triggering) return;
-    setTriggering(true);
-    try {
-      await aiTelemetryApi.triggerRun(topicId, token);
-      // 后端异步,等一下再 refresh
-      setTimeout(() => { if (topicId !== null) load(topicId); }, 1500);
-    } finally { setTriggering(false); }
+  // "Audit now" used to kick off a full run right here. Since 2026-09-21 batch runs are triggered only from the "Monitoring & batch runs" panel
+  // (topic settings page -> top of the prompts tab); this just takes the user there -- with three entry points each running separately,
+  // users couldn't tell which click would charge them. The ops console embed path is topics/:id/profile; navigate by the current prefix.
+  const openMonitorPanel = () => {
+    if (topicId === null) return;
+    const base = location.pathname.startsWith('/ops') ? '/ops' : '/dashboard';
+    navigate(`${base}/topics/${topicId}/profile?tab=monitor`);
   };
 
   return (
     <div className="space-y-4">
-      {/* 顶部:topic 选 + 立即检测 */}
+      {/* Top: topic picker + audit now */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="text-xs text-secondary">
           {t('dashboard.aiTelemetry.today.selectTopic')}
-          <select
-            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+          <UiSelect
+            value={String(topicId ?? '')} onChange={val => setTopicId(Number(val))}
             className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
-          >
-            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
-          </select>
+            options={topics.map(tp => ({ value: String(tp.id), label: tp.name }))}
+          />
         </label>
         <button
           type="button"
-          onClick={handleRunNow}
-          disabled={triggering || topicId === null}
+          onClick={openMonitorPanel}
+          disabled={topicId === null}
           className="px-3 py-1.5 text-xs rounded-md text-white disabled:opacity-50"
           style={{ background: 'var(--accent-primary)' }}
         >
-          {triggering
-            ? t('dashboard.aiTelemetry.actions.running')
-            : t('dashboard.aiTelemetry.today.runNow')}
+          监测与跑批 →
         </button>
       </div>
+
+      {progress && <TopicProgressStrip p={progress} />}
 
       {loading && <div className="text-sm text-muted py-6 text-center">…</div>}
 
@@ -563,14 +583,15 @@ function TodayTab({ topics, token, topicId, onTopicChange }: {
   );
 }
 
+
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
 
-// 后端 datetime.utcnow() 序列化为 naive ISO(无 Z),JS 默认按本地时区解析会偏 8h —
-// 这里显式补 Z,让它按 UTC 解析,本地化的活交给 toLocaleString 之类
+// Backend datetime.utcnow() serializes as naive ISO (no Z); JS parses it in local time by default and is off by 8h —
+// explicitly append Z here so it parses as UTC, leaving localization to toLocaleString and the like
 function parseApiTs(s: string): Date {
   if (!s) return new Date(NaN);
   return new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z');
@@ -586,7 +607,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
   const enginesAll = topic.engines.length > 0 ? topic.engines : CN_ENGINES;
   const queriesAll = topic.queries;
 
-  // 每引擎状态:done(有成功) / failed(只有 error) / pending(还没回来)
+  // Per-engine status: done (has success) / failed (errors only) / pending (not back yet)
   const engineStatus = useMemo(() => {
     const map: Record<string, 'done' | 'failed' | 'pending'> = {};
     const anyRunning = todayRuns.some(r => r.status === 'running');
@@ -623,7 +644,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
     .reduce((s, r) => s + r.citations.length, 0);
   const citationsDelta = citationsToday - citationsYesterday;
 
-  // 矩阵:queries × engines
+  // Matrix: queries × engines
   const cellMap = useMemo(() => {
     const m: Record<string, ResponseRow[]> = {};
     for (const r of todayResponses) {
@@ -650,7 +671,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
     return { hit, ran };
   };
 
-  // 今日新增引用
+  // Citations added today
   const citedDomains = useMemo(() => {
     const map = new Map<string, { url: string; title: string; domain: string; count: number; engines: Set<string> }>();
     for (const r of okResponses) {
@@ -664,7 +685,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [okResponses]);
 
-  // 盲区:今日所有 engine 都未提及的 query
+  // Blind spots: queries not mentioned by any engine today
   const blindQueries = queriesAll.filter(q => {
     const { hit, ran } = queryHitCount(q);
     return ran > 0 && hit === 0;
@@ -676,7 +697,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
 
   return (
     <div className="space-y-4">
-      {/* 状态条 */}
+      {/* Status bar */}
       <div className="px-4 py-2.5 rounded-lg flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" style={cardBg}>
         <span className="text-secondary">{t('dashboard.aiTelemetry.today.runStatus')}:</span>
         {allDone
@@ -700,7 +721,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
         </span>
       </div>
 
-      {/* KPI 4 张卡 */}
+      {/* 4 KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <TodayKpiCard
           label={t('dashboard.aiTelemetry.today.kpiQueries')}
@@ -740,7 +761,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
         />
       </div>
 
-      {/* 命中矩阵 */}
+      {/* Hit matrix */}
       <div className="rounded-lg overflow-hidden" style={cardBg}>
         <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
           <div className="text-sm font-medium text-primary">
@@ -803,7 +824,7 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
         )}
       </div>
 
-      {/* 今日新增引用 + 盲区 */}
+      {/* Citations added today + blind spots */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-lg" style={cardBg}>
           <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-color)' }}>
@@ -892,8 +913,9 @@ function TodayBody({ topic, todayRuns, todayResponses, yesterdayResponses }: {
   );
 }
 
-function engineName(e: string, t: ReturnType<typeof useTranslation>['t']): string {
-  return t(`dashboard.aiTelemetry.engine.${e}`, e);
+// Engine display names all come from the single authoritative source; the second parameter is kept only for compatibility with existing call-site signatures.
+function engineName(e: string, _t?: ReturnType<typeof useTranslation>['t']): string {
+  return engineLabel(e);
 }
 
 function TodayKpiCard({ label, value, sub, subColor, hint }: {
@@ -929,7 +951,7 @@ function EngineStatusDot({ status }: { status?: 'done' | 'failed' | 'pending' })
   );
 }
 
-// ── 概览 ───────────────────────────────────────────────────────
+// ── Overview ───────────────────────────────────────────────────────
 
 function OverviewTab({ topics, token, topicId, onTopicChange }: {
   topics: Topic[]; token: string;
@@ -972,16 +994,15 @@ function OverviewTab({ topics, token, topicId, onTopicChange }: {
 
   return (
     <div className="space-y-4">
-      {/* 顶部控制行 */}
+      {/* Top control row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="text-xs text-secondary">
           {t('dashboard.aiTelemetry.overview.selectTopic')}
-          <select
-            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+          <UiSelect
+            value={String(topicId ?? '')} onChange={val => setTopicId(Number(val))}
             className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
-          >
-            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
-          </select>
+            options={topics.map(tp => ({ value: String(tp.id), label: tp.name }))}
+          />
         </label>
         <div className="flex gap-1" style={{ background: 'var(--bg-input)', borderRadius: 6, padding: 2 }}>
           {([7, 30, 90] as const).map(p => (
@@ -1007,7 +1028,7 @@ function OverviewTab({ topics, token, topicId, onTopicChange }: {
         </div>
       )}
 
-      {/* 4 KPI 卡 */}
+      {/* 4 KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           label={t('dashboard.aiTelemetry.overview.kpiVisibility')}
@@ -1053,16 +1074,16 @@ function OverviewTab({ topics, token, topicId, onTopicChange }: {
         />
       </div>
 
-      {/* v1.3 — SAIV 声量份额 + 竞品引用份额差 */}
+      {/* v1.3 — SAIV share of voice + competitor citation share gap */}
       <ShareOfVoiceBlock data={sov} loading={loading} />
 
-      {/* 趋势图 */}
+      {/* Trend chart */}
       <TrendChart data={data} loading={loading} />
 
-      {/* intent 分布(picker 端聚出的簇 × 本期 mention 率)*/}
+      {/* intent distribution (clusters aggregated on the picker side × this period's mention rate) */}
       <IntentBreakdownBlock data={intent} loading={loading} />
 
-      {/* 引用分析:Top 10 + Owned vs Other */}
+      {/* Citation analysis: Top 10 + Owned vs Other */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="md:col-span-2">
           <TopDomainsBlock data={data?.top_domains ?? []} loading={loading} />
@@ -1070,7 +1091,7 @@ function OverviewTab({ topics, token, topicId, onTopicChange }: {
         <OwnedSplitBlock data={data?.owned_split} loading={loading} />
       </div>
 
-      {/* 引擎 × 平台 heatmap */}
+      {/* Engine × platform heatmap */}
       <EngineDomainMatrix
         engines={data?.engines ?? []}
         topDomains={data?.top_domains ?? []}
@@ -1081,7 +1102,7 @@ function OverviewTab({ topics, token, topicId, onTopicChange }: {
   );
 }
 
-// ── v1.3 SAIV 声量份额 + 竞品引用份额差 + 命中位置分布 ───────────
+// ── v1.3 SAIV share of voice + competitor citation share gap + hit position distribution ───────────
 
 function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loading: boolean }) {
   const { t } = useTranslation();
@@ -1096,7 +1117,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-      {/* SAIV KPI 卡 */}
+      {/* SAIV KPI card */}
       <div className="rounded-lg p-4"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
         <h3 className="text-sm font-medium text-primary mb-2 flex items-center gap-1">
@@ -1116,7 +1137,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
             total: data.brand_count + data.competitors_count_total,
           })}
         </p>
-        {/* 命中位置分布(检索排名简化版) */}
+        {/* Hit position distribution (simplified retrieval ranking) */}
         {hasSignal && data.brand_count > 0 && (
           <div className="mt-3">
             <div className="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1 inline-flex items-center gap-1">
@@ -1138,7 +1159,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         </div>
       </div>
 
-      {/* 竞品份额对比 */}
+      {/* Competitor share comparison */}
       <div className="rounded-lg p-4 md:col-span-2"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
         <h3 className="text-sm font-medium text-primary mb-3 inline-flex items-center gap-1">
@@ -1152,7 +1173,7 @@ function ShareOfVoiceBlock({ data, loading }: { data: ShareOfVoice | null; loadi
         )}
         {hasSignal && (
           <ul className="space-y-1.5">
-            {/* 把品牌自身和竞品一起排序展示 */}
+            {/* Sort and show the brand itself together with competitors */}
             {[
               { name: `★ ${data.target}`, count: data.brand_count,
                 pct: data.brand_count / Math.max(1, data.brand_count + data.competitors_count_total) * 100,
@@ -1199,9 +1220,9 @@ function PositionBar({ dist }: { dist: ShareOfVoice['position_dist'] }) {
   const total = dist.lead + dist.body + dist.tail + dist.unknown;
   if (total === 0) return <p className="text-[11px] text-muted">—</p>;
   const segs = [
-    { key: 'lead', color: '#10b981', n: dist.lead },     // 绿:开头
-    { key: 'body', color: '#3b82f6', n: dist.body },     // 蓝:中段
-    { key: 'tail', color: '#f59e0b', n: dist.tail },     // 黄:末尾
+    { key: 'lead', color: 'var(--success-fg)', n: dist.lead },     // green: opening
+    { key: 'body', color: 'var(--info-fg)', n: dist.body },     // blue: middle
+    { key: 'tail', color: 'var(--warn-fg)', n: dist.tail },     // yellow: end
     { key: 'unknown', color: '#9ca3af', n: dist.unknown },
   ];
   return (
@@ -1224,7 +1245,7 @@ function PositionBar({ dist }: { dist: ShareOfVoice['position_dist'] }) {
   );
 }
 
-// ── intent 分布 ────────────────────────────────────────────
+// ── intent distribution ────────────────────────────────────────────
 
 function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null; loading: boolean }) {
   const { t } = useTranslation();
@@ -1238,7 +1259,7 @@ function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null;
   const hasSignal = data.clusters.length > 0 || data.uncategorized.response_count > 0;
   if (!hasSignal) return null;
 
-  // 一行显示所有有 response 的簇 + 兜底桶。按 mention_rate 升序排,先看到弱簇 → 内容补强目标
+  // One row shows every cluster with responses + the fallback bucket. Sorted by mention_rate ascending, weak clusters first -> content reinforcement targets
   const items = [
     ...data.clusters,
     ...(data.uncategorized.response_count > 0 ? [data.uncategorized] : []),
@@ -1295,7 +1316,7 @@ function IntentBreakdownBlock({ data, loading }: { data: IntentBreakdown | null;
 }
 
 
-// ── 引用分析:Top 10 ────────────────────────────────────────────
+// ── Citation analysis: Top 10 ────────────────────────────────────────────
 
 function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: boolean }) {
   const { t } = useTranslation();
@@ -1365,7 +1386,7 @@ function TopDomainsBlock({ data, loading }: { data: DomainCount[]; loading: bool
   );
 }
 
-// ── 引用分析:自家 vs 其他 ─────────────────────────────────────
+// ── Citation analysis: own vs. others ─────────────────────────────────────
 
 function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; loading: boolean }) {
   const { t } = useTranslation();
@@ -1397,7 +1418,7 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
       {!loading && !empty && data && (
         <>
           <div className="h-44 relative">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={pieData} dataKey="value" nameKey="name"
@@ -1448,7 +1469,7 @@ function OwnedSplitBlock({ data, loading }: { data: OwnedSplit | undefined; load
   );
 }
 
-// ── 引用分析:引擎 × 平台 heatmap ──────────────────────────────
+// ── Citation analysis: engine × platform heatmap ──────────────────────────────
 
 function EngineDomainMatrix({
   engines, topDomains, matrix, loading,
@@ -1472,7 +1493,7 @@ function EngineDomainMatrix({
 
   const cellBg = (v: number): string => {
     if (v === 0) return 'var(--bg-card)';
-    // 5 段量化色阶,跨度 0.30 - 0.95 alpha,对比清晰
+    // 5-step quantized color scale, alpha spanning 0.30 - 0.95, clear contrast
     const ratio = v / maxVal;
     const alpha = 0.30 + ratio * 0.65;
     return `rgba(91, 108, 255, ${alpha.toFixed(2)})`;
@@ -1557,7 +1578,7 @@ function EngineDomainMatrix({
                           className="inline-block w-2 h-2 rounded-full flex-shrink-0"
                           style={{ background: ENGINE_COLORS[e] || '#888' }}
                         />
-                        {t(`dashboard.aiTelemetry.engine.${e}`, e)}
+                        {engineLabel(e)}
                       </span>
                     </td>
                     {topDomains.map(d => {
@@ -1598,7 +1619,7 @@ interface KpiCardProps {
   sparkline: number[];
   loading: boolean;
   fmt?: 'int' | 'float';
-  /** 大数字的颜色:value 为正绿、负红 */
+  /** Color of the big number: green for positive value, red for negative */
   accentByValue?: boolean;
   icon?: 'eye' | 'link' | 'trend' | 'cpu';
   hint?: string;
@@ -1659,7 +1680,7 @@ function KpiCard({ label, value, unit, delta, sparkline, loading, fmt, accentByV
           ) : <span />}
           {hasSparkline && (
             <div className="w-20 h-8">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={sparkline.map((v, i) => ({ i, v }))}>
                   <defs>
                     <linearGradient id={`spark-${label}`} x1="0" y1="0" x2="0" y2="1">
@@ -1713,7 +1734,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
     return row;
   });
 
-  // X 轴稀疏:总点数 ≤ 14 时全显示;否则每 N 个显示一次,目标 8-10 个 tick
+  // Sparse X axis: show all when total points ≤ 14; otherwise show every Nth, targeting 8-10 ticks
   const totalPoints = chartData.length;
   const tickInterval = totalPoints <= 14 ? 0 : Math.ceil(totalPoints / 8) - 1;
 
@@ -1738,13 +1759,13 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
                 className="inline-block w-2.5 h-2.5 rounded-full"
                 style={{ background: ENGINE_COLORS[e] || '#888' }}
               />
-              {t(`dashboard.aiTelemetry.engine.${e}`, e)}
+              {engineLabel(e)}
             </span>
           ))}
         </div>
       </div>
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 4 }}>
             <defs>
               {data.engines.map(e => (
@@ -1801,7 +1822,7 @@ function TrendChart({ data, loading }: { data: Overview | null; loading: boolean
   );
 }
 
-// ── 跑批结果 ───────────────────────────────────────────────────
+// ── Batch run results ───────────────────────────────────────────────────
 
 function ResultsTab({ topics, token, topicId, onTopicChange }: {
   topics: Topic[]; token: string;
@@ -1853,26 +1874,23 @@ function ResultsTab({ topics, token, topicId, onTopicChange }: {
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-xs text-secondary">
           {t('dashboard.aiTelemetry.results.selectTopic')}
-          <select
-            value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+          <UiSelect
+            value={String(topicId ?? '')} onChange={val => setTopicId(Number(val))}
             className="ml-2 px-2 py-1 text-sm rounded" style={inputStyle}
-          >
-            {topics.map(tp => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
-          </select>
+            options={topics.map(tp => ({ value: String(tp.id), label: tp.name }))}
+          />
         </label>
         <label className="text-xs text-secondary">
           {t('dashboard.aiTelemetry.results.selectRun')}
-          <select
-            value={runId ?? ''} onChange={e => setRunId(Number(e.target.value))}
+          <UiSelect
+            value={String(runId ?? '')} onChange={val => setRunId(Number(val))}
             disabled={runs.length === 0}
             className="ml-2 px-2 py-1 text-sm rounded disabled:opacity-50" style={inputStyle}
-          >
-            {runs.map(r => (
-              <option key={r.id} value={r.id}>
-                {`#${r.id} ${r.status} · ${formatTime(r.started_at)} · ${r.response_count} 条`}
-              </option>
-            ))}
-          </select>
+            options={runs.map(r => ({
+              value: String(r.id),
+              label: `#${r.id} ${r.status} · ${formatTime(r.started_at)} · ${r.response_count} 条`,
+            }))}
+          />
         </label>
         {runId !== null && runs.find(r => r.id === runId) && (
           <RunStatusChip run={runs.find(r => r.id === runId)!} />
@@ -1994,14 +2012,25 @@ function ResponseTable({
 }
 
 function EngineLabel({ id }: { id: EngineId }) {
-  const { t } = useTranslation();
-  return <span>{t(`dashboard.aiTelemetry.engine.${id}`, id)}</span>;
+  useTranslation();  // Subscribe to language changes to trigger re-render
+  return <span>{engineLabel(id)}</span>;
 }
 
 function ResponseDetail({ row }: { row: ResponseRow }) {
   const { t } = useTranslation();
   return (
     <div className="space-y-2 text-sm">
+      {row.reasoning ? (
+        // Chain of thought: shown collapsed, not mixed into the body; when the hit is only in the reasoning, hit_excerpt carries the 「[思考过程]」 ("[reasoning]") prefix
+        <details className="rounded px-2 py-1" style={{ border: '1px dashed var(--border-color)' }}>
+          <summary className="text-xs text-muted cursor-pointer select-none">
+            {t('dashboard.aiTelemetry.results.reasoning')} ({row.reasoning.length})
+          </summary>
+          <div className="mt-1 text-secondary whitespace-pre-wrap leading-relaxed text-xs">
+            {row.reasoning}
+          </div>
+        </details>
+      ) : null}
       <div>
         <div className="text-xs text-muted mb-1">Answer</div>
         <div className="text-primary whitespace-pre-wrap leading-relaxed">
@@ -2031,7 +2060,7 @@ function ResponseDetail({ row }: { row: ResponseRow }) {
   );
 }
 
-// ── 新建/编辑 Modal ───────────────────────────────────────────
+// ── Create/edit modal ───────────────────────────────────────────
 
 interface TopicEditorProps {
   initial: Topic | null;
@@ -2039,84 +2068,149 @@ interface TopicEditorProps {
   mode?: 'edit' | 'view';
   onCancel: () => void;
   onSave: (payload: TopicPayload) => Promise<Topic>;
-  // 回调可选接收 saved topic;admin 流程会用 saved.id 跳后续步骤。
-  // 老 callsite(用户端)忽略参数,签名兼容。
+  // The callback optionally receives the saved topic; the admin flow uses saved.id to jump to later steps.
+  // Old call sites (user side) ignore the argument; the signature stays compatible.
   onSaveDone: (saved?: Topic) => void;
-  // admin 替别人配主题:传 user_id 后,新建走 admin 通道直接 approved,
-  // 跳过 submit-for-review;编辑沿用 onSave。
+  // Admin configuring a topic for someone else: with user_id passed, creation goes through the admin channel and is approved directly,
+  // skipping submit-for-review; editing still uses onSave.
   adminTargetUserId?: number;
-  // 项目进度看板把 6 段 chip 都接入这个 wizard,通过 initialStep 直跳对应步骤:
+  // The project progress board wires all 6 chips into this wizard, jumping to the matching step via initialStep:
   // submit→1 / review→3 / diagnose→4 / plan→5 / content→6 / insight→7
   initialStep?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  // Only for the client "Topic info" page: always "view my own deliverables" -- steps 4/5 read-only, step 6 uses
+  // self-service "Article management" (not the AdminContentReview desk, which kicks non-admins to /dashboard).
+  // Decoupled from role: in CustomerTopics the topic always belongs to the current user, no guessing via isStaff.
+  customerView?: boolean;
+  /** Enterprise owner when an agency role creates a topic; the owner is immutable when editing an existing topic. */
+  enterpriseUserId?: number | null;
 }
 
 export function TopicEditor({
   initial, token, mode = 'edit', onCancel, onSave, onSaveDone, adminTargetUserId, initialStep,
+  customerView = false, enterpriseUserId = null,
 }: TopicEditorProps) {
   const readOnly = mode === 'view';
   const { t } = useTranslation();
-  // Phase D — 资料作为 Step 1 的核心;name/target/industry 从资料取值;只保留 aliases 单独输入
+  // Phase D — materials are the core of Step 1; name/target/industry come from the materials; only aliases keep a separate input
   const [profile, setProfile] = useState<BrandProfile>(
     () => ({ ...EMPTY_BRAND_PROFILE, ...(initial?.profile || {}) }),
   );
-  // 资料里没有 aliases 字段,单独留一个文本输入 — 仅 topic 表用
+  // The materials have no aliases field, so keep a separate text input — used only by the topic table
   const name = profile.profile_name;
   const target = profile.company_short_name;
   const [aliasesText, setAliasesText] = useState((initial?.target_aliases || []).join(', '));
-  // 没 topicId 时图片 / 视频先暂存在浏览器,持久化到 TopicEditor 这一层避免 step 切换丢失.
-  // persistTopic 拿到 saved.id 后一次性 flush 到服务器.
+  // Report center brand tags — set from step1 from now on (report center shows them read-only). ''/new/mid/leader, ''/regular/special.
+  const [brandTier, setBrandTier] = useState<string>(initial?.brand_tier || '');
+  const [industryClass, setIndustryClass] = useState<string>(initial?.industry_class || '');
+  // Without a topicId, images / videos are staged in the browser, held at the TopicEditor level to survive step switches.
+  // Once persistTopic gets saved.id, they are flushed to the server in one go.
   const [pendingMediaFiles, setPendingMediaFiles] = useState<File[]>([]);
-  // 引擎选择 UI 已隐藏 — 默认走 5 个国内引擎,编辑场景保留原配置;
-  // enabled 同样固定 true(产品口径:种子提示词都按每天跑)
+  // Engine selection UI is hidden — defaults to the 5 CN engines; editing keeps the existing config;
   const engines = useMemo<Set<EngineId>>(
     () => new Set((initial?.engines && initial.engines.length > 0) ? initial.engines : CN_ENGINES),
     [initial?.engines],
   );
-  const enabled = true;
-  // 1-4 是编辑器 wizard 表单步;5-7 是项目进度下游(计划书 / 内容与投放 / 效果检查),内联展示.
-  // initialStep 由 cockpit/项目进度 的 chip 链接 ?step=N 传入;5-7 需要 initial.id 否则退回 1.
+  // enabled likewise "keeps the existing config when editing"; editing uses the topic's current state. It used to be hardcoded true --
+  // after disabling a topic in the workbench, anyone editing and saving once would silently re-enable it and scheduling would resume batch runs
+  // (fixed 2026-07-20).
+  // Since 2026-09-21 **new topics default to false** (not in periodic batch runs): it used to default to true, and once step 3 saved,
+  // the batch-run center would dispatch the whole matrix at the next hour and charge credits, when the user had only clicked "Save". Batch runs are now
+  // triggered by step 4's "Generate GEO strategy optimization plan" / "New batch run" buttons; those wanting continuous monitoring switch
+  // daily / weekly on the "Continuous monitoring" card themselves.
+  const enabled = initial?.enabled ?? false;
+  // 1-4 are editor wizard form steps; 5-7 are project progress downstream (plan / content & placement / results check), shown inline.
+  // initialStep comes from cockpit/project progress chip links ?step=N; 5-7 require initial.id, otherwise fall back to 1.
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(() => {
     const s = initialStep ?? 1;
     if (s >= 5 && !initial?.id) return 1;
     return s;
   });
-  // 新建场景下 initial.id 为空,保存后才能拿到 id;step 4 健康报告组件依赖这个 id
+  // When creating, initial.id is empty and the id is only available after saving; the step 4 health report component depends on it
   const [savedTopicId, setSavedTopicId] = useState<number | null>(initial?.id ?? null);
   const [saving, setSaving] = useState(false);
-  // Step1「下一步」即落库:资料填完就建 draft / 存 profile,不拖到最后一次性保存。
+  // Step1 "Next" persists to DB right away: once materials are filled, create the draft / save the profile instead of saving everything at the end.
   const [step1Saving, setStep1Saving] = useState(false);
   const [step1Err, setStep1Err] = useState<string | null>(null);
 
-  // Query picker — 不再允许手填,候选全部走 DeepSeek 生成
-  // 编辑场景:把 initial.queries 当作"已存在候选",默认勾选
-  const SUGGEST_COUNT = 200;
-  const QUERY_MAX_PICK = 200;
-  // 种子提示词 — 多条,用户手填。Phase C 起会经过审核固化(已固化只能新增)
-  const [seeds, setSeeds] = useState<string[]>(() =>
-    (initial?.seed_prompts || []).map(s => s.text).filter(Boolean)
-  );
-  // industry 也从 profile 取(同步 profile.industry,跟 name/target 同源)
+  // Query picker — manual entry no longer allowed; all candidates are generated by DeepSeek
+  // Editing: treat initial.queries as "existing candidates", checked by default
+  // Total across 4 scenarios; the backend caps at MAX_EXPANSION_CANDIDATES (since 2026-09-21 120 = 30 per scenario, previously 200).
+  // Lowered because producing 50 per intent/brand scenario made a single LLM call exceed 90s and time out entirely, yielding no intent queries at all.
+  const SUGGEST_COUNT = 120;
+  // The selection cap uses a single constant in the api layer (same value as backend MAX_SELECTED_QUERIES); expansion still accumulates 200/round over multiple rounds
+  const QUERY_MAX_PICK = MAX_SELECTED_QUERIES;
+  // Seed prompts — new seeds typed by the user this time. Previously submitted seeds are shown in the review status list,
+  // no longer mixed into the input as removable tags (redesigned 2026-07-30)
+  const [seeds, setSeeds] = useState<string[]>([]);
+  // Recommended seeds (candidates offered by the materials-parsing LLM) — selected by default; not deletable, clicking only toggles "selected / grayed"
+  const [recommendedSeeds, setRecommendedSeeds] = useState<{ text: string; active: boolean }[]>([]);
+  const toggleRecommendedSeed = (text: string) =>
+    setRecommendedSeeds(prev => prev.map(r => (r.text === text ? { ...r, active: !r.active } : r)));
+  // Product names marked "featured" in the materials -> recommended seeds (2026-09-22). A seed matching a product triggers product mode in the backend:
+  // category queries are expanded by its category and product evaluation questions go to brand queries, so the featured product name itself is the best seed.
+  const featuredProductNames = (profile.products || [])
+    .filter(p => p.is_featured && p.name.trim())
+    .map(p => p.name.trim())
+    .join('\n');
+  useEffect(() => {
+    if (!featuredProductNames) return;
+    const taken = new Set([...seedPrompts.map(s => s.text), ...seeds.map(s => s.trim())]);
+    setRecommendedSeeds(prev => {
+      const have = new Set(prev.map(r => r.text));
+      const merged = [...prev];
+      for (const v of featuredProductNames.split('\n')) {
+        if (v && !have.has(v) && !taken.has(v)) { merged.push({ text: v, active: true }); have.add(v); }
+      }
+      return merged.length === prev.length ? prev : merged;
+    });
+    // seeds / seedPrompts are only used for dedup and don't trigger a rerun
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredProductNames]);
+  // Seeds to submit this time = selected recommended seeds + user-typed seeds (deduplicated)
+  const newSeedTexts = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of recommendedSeeds) {
+      if (!r.active) continue;
+      const t = r.text.trim();
+      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
+    }
+    for (const raw of seeds) {
+      const t = raw.trim();
+      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
+    }
+    return out;
+  }, [recommendedSeeds, seeds]);
+  // industry also comes from profile (synced with profile.industry, same source as name/target)
   const industry = profile.industry;
   const [suggesting, setSuggesting] = useState(false);
   const [suggestErr, setSuggestErr] = useState<string | null>(null);
-  // 编辑场景:initial.queries 当作"已存在候选"塞进 suggestions(无分数);
-  // 2026-05-20 起 picker 按 seed 分组,seed 来自 initial.query_seeds(legacy 为 "")。
-  // 2026-05-28 起 scene 来自 initial.query_scene_types(legacy 为 search)
+  // Per seed during query expansion, the first SSE meta frame reports "which product in the materials it matched"; unmatched seeds aren't in this map
+  const [matchedProducts, setMatchedProducts] = useState<Record<string, MatchedProduct>>({});
+  // Editing: put initial.queries into suggestions as "existing candidates" (no score);
+  // since 2026-05-20 the picker groups by seed, with seed from initial.query_seeds ("" for legacy).
+  // Since 2026-05-28 scene comes from initial.query_scene_types (search for legacy)
   const [suggestions, setSuggestions] = useState<QueryCandidate[]>(() => {
     const qs = initial?.queries || [];
     const seedsArr = initial?.query_seeds || [];
     const sceneArr = initial?.query_scene_types || [];
+    const delArr = initial?.query_deleted || [];
+    // Soft-deleted queries stay out of the candidate pool: they shouldn't be shown, nor checked and written back on save
     return qs.map((text, i) => ({
       text, score: 0, sources: [],
       ...(seedsArr[i] ? { seed: seedsArr[i] } : {}),
       ...(sceneArr[i] ? { scene: sceneArr[i] } : {}),
-    }));
+      ...(delArr[i] ? { deleted: true } : {}),
+    })).filter(c => !c.deleted);
   });
   const [collapsedSeeds, setCollapsedSeeds] = useState<Set<string>>(new Set());
-  const [picked, setPicked] = useState<Set<string>>(new Set(initial?.queries || []));
+  // Soft-deleted queries stay out of the checked set -- they aren't shown in the list, so they shouldn't count as "checked by the user"
+  const [picked, setPicked] = useState<Set<string>>(new Set(
+    (initial?.queries || []).filter((_q, i) => !(initial?.query_deleted || [])[i]),
+  ));
   const [queryFilter, setQueryFilter] = useState('');
   const [sortByScore, setSortByScore] = useState(true);
-  // 2026-05-28 — 候选 scene filter:null 表示全显示,否则只显示选中的场景
+  // 2026-05-28 — candidate scene filter: null shows all, otherwise only the selected scene
   const [sceneFilter, setSceneFilter] = useState<SceneType | null>(null);
 
   const queries = useMemo(() => Array.from(picked).slice(0, QUERY_MAX_PICK), [picked]);
@@ -2125,7 +2219,7 @@ export function TopicEditor({
     [aliasesText],
   );
 
-  // 4 维场景计数 — 给场景 filter 按钮上的徽章用,显示每场景在 suggestions 池中的条数
+  // 4-dimension scene counts — for the badges on scene filter buttons, showing each scene's count in the suggestions pool
   const sceneCounts = useMemo<Record<SceneType, number>>(() => {
     const c: Record<SceneType, number> = { search: 0, qa: 0, intent: 0, brand: 0 };
     for (const q of suggestions) {
@@ -2141,25 +2235,35 @@ export function TopicEditor({
     if (sceneFilter) out = out.filter(q => (q.scene || 'search') === sceneFilter);
     if (f) out = out.filter(q => q.text.toLowerCase().includes(f));
     if (sortByScore) {
-      // 纯按评分降序;不再把已勾选项拉到顶部,免得用户每次勾/取消都看到位置漂移
+      // Purely by score descending; checked items are no longer pulled to the top, so positions don't shift every time users check/uncheck
       out = [...out].sort((a, b) => b.score - a.score);
     }
     return out;
   }, [suggestions, queryFilter, sortByScore, sceneFilter]);
 
-  // 按种子提示词分组渲染。组顺序:先按 `seeds`(用户编辑器里现存的种子),再补
-  // suggestions 里出现但 seeds 没列的(防止数据漂移)。
-  // 只有 ≥2 个 seed 时才分组;单 seed / 零 seed 直接平铺。
-  // q.seed 为空(legacy 或手动添加无 seed)的归"未分组",作为最后一组。
+  // Render grouped by seed prompt. Group order: first the seeds pending submission (recommended selected + user-typed), then
+  // those appearing in suggestions but not listed (persisted seeds / data drift all take this fallback).
+  // Only group when there are ≥2 seeds; with a single seed / no seed, render flat.
+  // Items with empty q.seed (legacy or manually added without seed) go to "Ungrouped", the last group.
+  // brand-scene candidates don't follow seeds: whichever seed expanded them, they all go into the brand-name group, first
+  // (together with brand basic queries). This only affects display grouping; q.seed is unchanged -- it is persisted via buildPayload,
+  // and soft-deleting along with a seed relies on it. Without a brand name, group by seed as usual.
+  const brandGroupKey = target.trim();
+  const groupKeyOf = useCallback(
+    (q: QueryCandidate) => (q.scene === 'brand' && brandGroupKey ? brandGroupKey : (q.seed || '').trim()),
+    [brandGroupKey],
+  );
   const groupedBySeed = useMemo<{ seed: string; items: QueryCandidate[] }[] | null>(() => {
     const order: string[] = [];
     const seen = new Set<string>();
-    for (const s of seeds) {
-      const t = s.trim();
-      if (t && !seen.has(t)) { seen.add(t); order.push(t); }
+    if (brandGroupKey && suggestions.some(q => q.scene === 'brand')) {
+      seen.add(brandGroupKey); order.push(brandGroupKey);
+    }
+    for (const s of newSeedTexts) {
+      if (!seen.has(s)) { seen.add(s); order.push(s); }
     }
     for (const q of suggestions) {
-      const t = (q.seed || '').trim();
+      const t = groupKeyOf(q);
       if (t && !seen.has(t)) { seen.add(t); order.push(t); }
     }
     if (order.length < 2) return null;
@@ -2167,7 +2271,7 @@ export function TopicEditor({
     const byKey = new Map(groups.map(g => [g.seed, g]));
     const ungrouped: QueryCandidate[] = [];
     for (const q of filteredSuggestions) {
-      const t = (q.seed || '').trim();
+      const t = groupKeyOf(q);
       const g = t ? byKey.get(t) : undefined;
       if (g) g.items.push(q);
       else ungrouped.push(q);
@@ -2175,7 +2279,7 @@ export function TopicEditor({
     const out = groups.filter(g => g.items.length > 0);
     if (ungrouped.length > 0) out.push({ seed: '', items: ungrouped });
     return out;
-  }, [filteredSuggestions, seeds, suggestions]);
+  }, [filteredSuggestions, newSeedTexts, suggestions, brandGroupKey, groupKeyOf]);
 
   const toggleSeedCollapse = (seed: string) => {
     setCollapsedSeeds(prev => {
@@ -2187,7 +2291,7 @@ export function TopicEditor({
   const pickAllInSeed = (seed: string) => {
     setPicked(prev => {
       const next = new Set(prev);
-      const items = suggestions.filter(q => (q.seed || '').trim() === seed);
+      const items = suggestions.filter(q => groupKeyOf(q) === seed);
       for (const q of items) {
         if (next.size >= QUERY_MAX_PICK) break;
         next.add(q.text);
@@ -2201,8 +2305,8 @@ export function TopicEditor({
     && queries.length > 0 && engines.size > 0;
 
   const buildPayload = (): TopicPayload => {
-    // 按 queries 顺序回填 seed — suggestions 里 q.seed 是这条候选当时被哪条种子词扩展出来的。
-    // backend `_queries_with_meta` 会把 seed 持久化进 queries_json[].seed。
+    // Backfill seed in queries order — q.seed in suggestions is the seed query this candidate was expanded from.
+    // backend `_queries_with_meta` persists seed into queries_json[].seed.
     const textToSeed = new Map<string, string>();
     const textToScene = new Map<string, SceneType>();
     for (const q of suggestions) {
@@ -2211,12 +2315,16 @@ export function TopicEditor({
     }
     const query_seeds = queries.map(q => textToSeed.get(q) || '');
     const hasAnySeed = query_seeds.some(s => s);
-    // 2026-06-11 — 场景标签同 seed 一样按 queries 顺序回填;缺省条目空串(后端忽略,沿用已有标签)
+    // 2026-06-11 — scene tags are backfilled in queries order like seed; missing entries are empty strings (backend ignores them and keeps existing tags)
     const query_scene_types = queries.map(q => textToScene.get(q) || ('' as SceneType));
     const hasAnyScene = query_scene_types.some(s => s);
-    // Phase C — 把所有种子词附带提交;后端去重 + 自动追加为 pending
-    const seedTexts = seeds.map(s => s.trim()).filter(Boolean);
+    // Phase C — submit all seed queries along; the backend dedups + auto-appends as pending
+    // ★ Soft-deleted queries are **intentionally left out of the payload**: they aren't shown in the list, so they can't be checked. Backend
+    //   _queries_with_meta passes through items in existing that have deleted_at, preserving them --
+    //   don't stuff them back into the payload "just to be safe" here; that would restore them all.
+    const seedTexts = newSeedTexts;
     return {
+      ...(enterpriseUserId ? { enterprise_user_id: enterpriseUserId } : {}),
       name: name.trim(),
       target: target.trim(),
       target_aliases: aliases,
@@ -2228,36 +2336,38 @@ export function TopicEditor({
       enabled,
       ...(seedTexts.length > 0 ? { seed_drafts: seedTexts } : {}),
       profile,
+      brand_tier: brandTier,
+      industry_class: industryClass,
     };
   };
 
-  // 把"保存"流程抽成纯函数,返回 saved topic;handleSave / handleSubmitForReview 复用
+  // The "save" flow extracted into a pure function returning the saved topic; reused by handleSave / handleSubmitForReview
   const persistTopic = async (): Promise<Topic | null> => {
     if (!valid) return null;
-    // step1 已可能建过 draft(savedTopicId);此时它和"编辑已有主题"一样走 update,
-    // 不能再 create 否则会重复建一条。effectiveId 为空才是真·全新(admin 新建 / draft 没建成)。
+    // step1 may have already created a draft (savedTopicId); then it goes through update like "editing an existing topic",
+    // and must not create again or it would duplicate. Only an empty effectiveId is truly brand new (admin create / draft creation failed).
     const effectiveId = savedTopicId ?? initial?.id ?? null;
     if (effectiveId) {
       const existingTexts = new Set(seedPrompts.map(s => s.text));
-      const newSeeds = seeds.map(s => s.trim()).filter(s => s && !existingTexts.has(s));
+      const newSeeds = newSeedTexts.filter(s => !existingTexts.has(s));
       for (const s of newSeeds) {
         await handleSubmitSeed(s);
       }
     }
-    // admin 替别人新建主题:走 admin 通道,seeds 一次性进 payload + 落库即 approved;
-    // 跳过下面的 submitSeedPrompt 二次循环(那条接口会把 seed 强制设回 pending)。
+    // Admin creating a topic for someone else: via the admin channel, seeds go into the payload at once + approved on persist;
+    // skip the submitSeedPrompt loop below (that endpoint forces seeds back to pending).
     const isAdminNew = !effectiveId && typeof adminTargetUserId === 'number';
     let saved: Topic | null;
     if (effectiveId) {
-      // 已有主题(含 step1 建的 draft)→ 增量更新;补 queries/engines + 走提交审核
+      // Existing topic (including a draft created in step1) -> incremental update; add queries/engines + submit for review
       saved = await aiTelemetryApi.updateTopic(effectiveId, buildPayload(), token);
     } else if (isAdminNew) {
       saved = await aiTelemetryApi.adminCreateTopicForUser(adminTargetUserId, buildPayload(), token);
     } else {
-      // 兜底:step1 没建成 draft 的全新主题,仍走 create
+      // Fallback: brand-new topic whose step1 draft wasn't created still goes through create
       saved = await onSave(buildPayload());
       if (saved?.id) {
-        const cleanSeeds = seeds.map(s => s.trim()).filter(Boolean);
+        const cleanSeeds = newSeedTexts;
         for (const s of cleanSeeds) {
           try {
             await aiTelemetryApi.submitSeedPrompt(saved.id, s, token);
@@ -2267,8 +2377,8 @@ export function TopicEditor({
         }
       }
     }
-    // 把浏览器里暂存的图片 / 视频 flush 到刚保存的 topic 上。
-    // 失败一个不影响其它 — 错误聚合后通过 setSubmitErr 暴露,不阻断主流程。
+    // Flush images / videos staged in the browser onto the just-saved topic.
+    // One failure doesn't affect the others — errors are aggregated and exposed via setSubmitErr without blocking the main flow.
     if (saved?.id && pendingMediaFiles.length > 0) {
       const failed: string[] = [];
       for (const f of pendingMediaFiles) {
@@ -2286,11 +2396,11 @@ export function TopicEditor({
     return saved;
   };
 
-  // 「保存」按钮已合并到「提交」(handleSubmitForReview),用户保存即触发审核。
-  // 如未来要恢复"草稿保存"功能,可重新加 const handleSave = ... 包 persistTopic。
+  // The "Save" button has been merged into "Submit" (handleSubmitForReview); saving triggers review.
+  // To restore "save as draft" in the future, re-add const handleSave = ... wrapping persistTopic.
 
-  // 「保存」— 去审核流后不再「提交审核」,统一只 save.admin 模式走 adminCreateTopicForUser,
-  // 普通用户走 updateTopic.随后 onSaveDone 把保存好的 topic 传出去(供模态/外层用).
+  // "Save" — with the review flow removed there's no "submit for review" anymore, just save. Admin mode uses adminCreateTopicForUser,
+  // regular users use updateTopic. Then onSaveDone passes the saved topic out (for the modal/outer layer).
   const adminMode = typeof adminTargetUserId === 'number';
   const handleSubmitForReview = async () => {
     if (!valid || saving) return;
@@ -2298,8 +2408,8 @@ export function TopicEditor({
     try {
       const saved = await persistTopic();
       if (saved?.id) setSavedTopicId(saved.id);
-      // 顺序很关键:先 setStep(4) 再 onSaveDone,避免父组件关闭编辑器时 setStep 失效.
-      // 父组件 onSaveDone 实现应不再 unmount 编辑器(由 step 4 的「完成」按钮负责关闭).
+      // Order matters: setStep(4) before onSaveDone, so setStep isn't lost when the parent closes the editor.
+      // The parent's onSaveDone should no longer unmount the editor (step 4's "Done" button handles closing).
       setStep(4);
       onSaveDone(saved ?? undefined);
     } catch (e) {
@@ -2314,13 +2424,13 @@ export function TopicEditor({
     setSuggesting(true);
     setSuggestErr(null);
     try {
-      // 多个种子串行扇出;每个种子走 SSE 流式扩展 —— 某场景生成完就立刻把候选追加进 picker,
-      // 不必等整包(慢模型下体验差别明显)。每条候选打上 `seed` 字段,picker 按 seed 分组渲染。
-      // queries 全局去重(相同文本不同 seed 视作同一候选,沿用先到的 seed)。
+      // Multiple seeds fan out serially; each seed streams expansion via SSE -- as soon as a scene finishes its candidates are appended to the picker,
+      // without waiting for the whole batch (a noticeable difference with slow models). Each candidate gets a `seed` field; the picker groups by seed.
+      // queries are deduplicated globally (same text with different seeds counts as one candidate, keeping the first seed).
       const seenText = new Set(suggestions.map(q => q.text));
 
-      // 品牌基础词:瞬时模板拼接(品牌名 + 固定后缀),不走 LLM,点击即铺满。
-      // 单独按品牌名分组、归 brand 场景;问品牌自己的词自有内容最容易覆盖。
+      // Brand basic queries: instant template concatenation (brand name + fixed suffixes), no LLM, filled on click.
+      // Grouped separately under the brand name in the brand scene; queries about the brand itself are easiest for owned content to cover.
       const brandName = target.trim();
       if (brandName) {
         const basicAdds: QueryCandidate[] = [];
@@ -2338,20 +2448,22 @@ export function TopicEditor({
           target: target.trim(),
           aliases,
           industry: industry.trim(),
-          // 主体类型 — 让后端按 服务/制造/品牌 切换扩展词措辞
+          // Entity type — lets the backend switch expansion wording between service/manufacturing/brand
           entity_type: profile.entity_type || '',
-          // 资料里的服务地域 — 让 LLM 把地点维度锁在用户实际经营区域
+          // Service region from the materials — lets the LLM lock the location dimension to the user's actual operating area
           service_geo: (profile.service_geo || '').trim(),
-          // 2026-05-28 — 画像字段透传给后端;后端按 scene 自动取舍:
-          //   intent: 用 profile_cases(案例追溯型 query)
-          //   brand:  全用(资质 / 标签 / 业务说明 + 案例)
-          //   search / qa: 后端忽略,所以传了也不影响产出
+          // 2026-05-28 — profile fields passed through to the backend; the backend picks by scene:
+          //   intent: uses profile_cases (case-traceback queries)
+          //   brand:  uses everything (qualifications / tags / business description + cases)
+          //   search / qa: ignored by the backend, so passing them doesn't affect output
           profile_cases: profile.case_stories || [],
           core_credentials: profile.core_credentials || [],
           brand_diff_tags: profile.brand_diff_tags || [],
           core_service_overview: profile.core_service_overview || '',
+          // Product list from section 3 of the materials — a seed matching one of them uses product mode (backend find_product)
+          products: profile.products || [],
         }, token, (_scene, queries) => {
-          // 某场景到货 — 去重后增量追加,UI 立即可见
+          // A scene arrived — append incrementally after dedup, visible in the UI immediately
           const additions: QueryCandidate[] = [];
           for (const q of queries) {
             if (seenText.has(q.text)) continue;
@@ -2359,6 +2471,13 @@ export function TopicEditor({
             additions.push({ ...q, seed: validSeeds[i] });
           }
           if (additions.length) setSuggestions(prev => [...prev, ...additions]);
+        }, meta => {
+          const seedText = validSeeds[i];
+          setMatchedProducts(prev => {
+            if (meta.matched_product) return { ...prev, [seedText]: meta.matched_product };
+            if (!(seedText in prev)) return prev;
+            const next = { ...prev }; delete next[seedText]; return next;
+          });
         });
       }
 
@@ -2370,27 +2489,26 @@ export function TopicEditor({
     }
   };
 
-  // Phase C — 种子提示词审核固化:列表 + 提交 + 锁定 query 集
+  // Phase C — seed prompt review and persistence: list + submit + lock the query set
   const [seedPrompts, setSeedPrompts] = useState<SeedPrompt[]>(
     () => initial?.seed_prompts || []
   );
   const [seedSubmitErr, setSeedSubmitErr] = useState<string | null>(null);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
-  // step 3 用于挖掘候选的"种子选择" — 来源是 step 2 新加 + 服务端已固化的种子词;
-  // 默认全选,用户在 step 3 可勾掉个别种子只针对剩下的去扇出
+  // "Seed selection" used in step 3 to mine candidates — sourced from seeds newly added in step 2 + seeds persisted on the server;
+  // all selected by default; in step 3 users can uncheck individual seeds to fan out only on the rest
   const allSeedTexts = useMemo<string[]>(() => {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const s of seedPrompts) {
       if (s.text && !seen.has(s.text)) { seen.add(s.text); out.push(s.text); }
     }
-    for (const raw of seeds) {
-      const t = raw.trim();
-      if (t && !seen.has(t)) { seen.add(t); out.push(t); }
+    for (const t of newSeedTexts) {
+      if (!seen.has(t)) { seen.add(t); out.push(t); }
     }
     return out;
-  }, [seedPrompts, seeds]);
+  }, [seedPrompts, newSeedTexts]);
   const [deselectedSeeds, setDeselectedSeeds] = useState<Set<string>>(() => new Set());
   const selectedSeedsForMining = useMemo<string[]>(
     () => allSeedTexts.filter(t => !deselectedSeeds.has(t)),
@@ -2411,17 +2529,16 @@ export function TopicEditor({
     qs.forEach((q, i) => { if (sts[i] === 'approved') out.add(q); });
     return out;
   }, [initial?.queries, initial?.query_statuses]);
-  const queryStatusByText = useMemo<Map<string, ReviewStatus>>(() => {
-    const m = new Map<string, ReviewStatus>();
-    const qs = initial?.queries || [];
-    const sts = initial?.query_statuses || [];
-    qs.forEach((q, i) => { m.set(q, (sts[i] || 'approved') as ReviewStatus); });
-    return m;
-  }, [initial?.queries, initial?.query_statuses]);
+  // The "Active" badge shows when the query has **been persisted to DB**, not based on review progress (queries are no longer reviewed,
+  // see the note above ReviewBadge). Freshly expanded, unsaved candidates have no badge -- they really aren't running yet.
+  const savedQueryTexts = useMemo<Set<string>>(
+    () => new Set(initial?.queries || []),
+    [initial?.queries],
+  );
 
   const handleSubmitSeed = async (rawText: string): Promise<boolean> => {
     const text = rawText.trim();
-    // savedTopicId 初值即 initial?.id;step1 建草稿后变成草稿 id,种子也能立即落库
+    // savedTopicId starts as initial?.id; after step1 creates a draft it becomes the draft id, so seeds can be persisted immediately too
     const topicId = savedTopicId ?? initial?.id ?? null;
     if (!text || !topicId) return false;
     setSeedSubmitErr(null);
@@ -2435,8 +2552,79 @@ export function TopicEditor({
     }
   };
 
+  // Admin deleting a seed query: the seed is removed from the list, and the prompts expanded from it (including the same-named is_seed one) are soft-deleted by the backend.
+  // The frontend also clears the candidates under this seed in step 3, otherwise the just-deleted queries remain checkable in the picker.
+  const [deletingSeed, setDeletingSeed] = useState<string | null>(null);
+  const deleteSeedPrompt = async (text: string) => {
+    const topicId = savedTopicId ?? initial?.id ?? null;
+    if (!topicId || !adminMode || readOnly || deletingSeed) return;
+    const ok = await uiConfirm(
+      t('dashboard.aiTelemetry.form.seedDeleteConfirmBody', { q: text }),
+      {
+        title: t('dashboard.aiTelemetry.form.seedDeleteConfirmTitle'),
+        okText: t('dashboard.aiTelemetry.form.seedDeleteConfirm'),
+        danger: true,
+      },
+    );
+    if (!ok) return;
+    setDeletingSeed(text);
+    setSeedSubmitErr(null);
+    try {
+      const updated = await aiTelemetryApi.deleteSeedPrompt(topicId, text, token);
+      setSeedPrompts(updated.seed_prompts || []);
+      setSuggestions(prev => prev.filter(q => q.seed !== text && q.text !== text));
+      setPicked(prev => {
+        const next = new Set(prev);
+        next.delete(text);
+        return next;
+      });
+      setDeselectedSeeds(prev => {
+        const next = new Set(prev);
+        next.delete(text);
+        return next;
+      });
+      toast.success(t('dashboard.aiTelemetry.form.seedDeleted', { q: text }));
+    } catch (e: unknown) {
+      setSeedSubmitErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingSeed(null);
+    }
+  };
+
+  // Approved, active queries can't be removed by unchecking (backend _validate_query_diff returns 422);
+  // to stop monitoring, soft-delete: the query and historical responses are kept, it just no longer joins batch runs / report metrics / publish query selection.
+  const [deletingQuery, setDeletingQuery] = useState<string | null>(null);
+  const deleteApprovedQuery = async (text: string) => {
+    const topicId = savedTopicId ?? initial?.id ?? null;
+    if (!topicId || readOnly || deletingQuery) return;
+    const ok = await uiConfirm(
+      t('topic.profile.monitor.deleteConfirmBody', { q: text }),
+      {
+        title: t('topic.profile.monitor.deleteConfirmTitle'),
+        okText: t('topic.profile.monitor.deleteConfirm'),
+        danger: true,
+      },
+    );
+    if (!ok) return;
+    setDeletingQuery(text);
+    try {
+      await topicProfileApi.deleteQueries(topicId, [{ text, deleted: true }], token);
+      setSuggestions(prev => prev.filter(q => q.text !== text));
+      setPicked(prev => {
+        const next = new Set(prev);
+        next.delete(text);
+        return next;
+      });
+      toast.success(t('dashboard.aiTelemetry.form.queryDeleted', { q: text }));
+    } catch (e: unknown) {
+      setSuggestErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingQuery(null);
+    }
+  };
+
   const togglePicked = (q: string) => {
-    if (lockedQueryTexts.has(q)) return;   // approved 不允许取消勾选
+    if (lockedQueryTexts.has(q)) return;   // approved can't be unchecked; remove via deleteApprovedQuery
     setPicked(prev => {
       const next = new Set(prev);
       if (next.has(q)) {
@@ -2448,19 +2636,120 @@ export function TopicEditor({
     });
   };
 
-  const clearPicked = () => setPicked(new Set());
+  // With a search term / scene filter, "Clear selected" and "Remove unselected" only act on the currently filtered set;
+  // candidates and check states outside the filter are untouched; without a filter the scope = everything (same as before).
+  const isQueryFiltered = queryFilter.trim().length > 0 || sceneFilter !== null;
+  const visibleQueryTexts = useMemo(
+    () => new Set(filteredSuggestions.map(q => q.text)),
+    [filteredSuggestions],
+  );
+  const inClearScope = (text: string) => !isQueryFiltered || visibleQueryTexts.has(text);
+  const pickedInScopeCount = Array.from(picked)
+    .filter(q => inClearScope(q) && !lockedQueryTexts.has(q)).length;
+  const clearPicked = () => {
+    // Active (approved) queries can't be unchecked, same as togglePicked
+    setPicked(prev => new Set(Array.from(prev).filter(q => !inClearScope(q) || lockedQueryTexts.has(q))));
+  };
   const clearSuggestions = () => {
-    // 只清掉未勾选的候选,保留已勾选的(否则 valid 状态会瞬间崩)
-    setSuggestions(prev => prev.filter(q => picked.has(q.text)));
+    // Only clear unchecked candidates, keep checked ones (otherwise the valid state would collapse instantly)
+    setSuggestions(prev => prev.filter(q => picked.has(q.text) || !inClearScope(q.text)));
+  };
+
+  // 2026-09-22 — candidate pool CSV import / export (pure frontend). Export = current candidate pool + check state;
+  // import only writes the suggestions / picked / seeds states; persisting still goes through the existing "Save" path
+  // (buildPayload backfills seed / scene; new seeds go into seed_drafts or per-item submitSeedPrompt).
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const handleExportCsv = () => {
+    if (suggestions.length === 0) return;
+    const csv = serializeQueryCsv(
+      suggestions.map(q => ({
+        text: q.text, seed: q.seed || '', scene: q.scene || 'search', picked: picked.has(q.text),
+      })),
+      s => t(`topic.profile.monitor.scene.${s}.label`),
+    );
+    downloadTextFile(csv, queryCsvFilename(target.trim() || name.trim()));
+  };
+  const handleImportCsv = async (file: File | null) => {
+    if (!file || readOnly) return;
+    setSuggestErr(null);
+    let rows: ReturnType<typeof parseQueryCsv>;
+    try {
+      rows = parseQueryCsv(await file.text());
+    } catch (e) {
+      setSuggestErr(t('dashboard.aiTelemetry.form.queriesImportParseErr', {
+        err: e instanceof Error ? e.message : String(e),
+      }) || `文件解析失败:${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    if (rows.length === 0) {
+      setSuggestErr(t('dashboard.aiTelemetry.form.queriesImportEmpty') || '文件里没有可导入的提示词');
+      return;
+    }
+    // Compute the diff first; change state only after confirmation
+    const existingTexts = new Set(suggestions.map(q => q.text));
+    const knownSeeds = new Set(allSeedTexts);
+    const additions: QueryCandidate[] = [];
+    const nextPicked = new Set(picked);
+    const newSeeds: string[] = [];
+    let dupSkipped = 0;
+    let capSkipped = 0;
+    let pickedAdded = 0;
+    for (const r of rows) {
+      if (existingTexts.has(r.text)) {
+        dupSkipped += 1;
+        // Existing queries only sync "monitored" to checked (the export -> edit in Excel -> import loop); unchecking isn't done from the file
+        if (r.picked && !nextPicked.has(r.text) && !lockedQueryTexts.has(r.text)) {
+          if (nextPicked.size < QUERY_MAX_PICK) { nextPicked.add(r.text); pickedAdded += 1; }
+          else capSkipped += 1;
+        }
+        continue;
+      }
+      existingTexts.add(r.text);
+      additions.push({
+        text: r.text, score: 0, sources: [], scene: r.scene,
+        ...(r.seed ? { seed: r.seed } : {}),
+      });
+      if (r.seed && !knownSeeds.has(r.seed)) { knownSeeds.add(r.seed); newSeeds.push(r.seed); }
+      if (r.picked) {
+        if (nextPicked.size < QUERY_MAX_PICK) { nextPicked.add(r.text); pickedAdded += 1; }
+        else capSkipped += 1;
+      }
+    }
+    if (additions.length === 0 && pickedAdded === 0) {
+      toast.info(t('dashboard.aiTelemetry.form.queriesImportNothingNew', { dup: dupSkipped })
+        || `文件里的 ${dupSkipped} 条都已在候选池里,没有新增`);
+      return;
+    }
+    const seedPreview = newSeeds.slice(0, 5).join('、') + (newSeeds.length > 5 ? '…' : '');
+    const ok = await uiConfirm(
+      t('dashboard.aiTelemetry.form.queriesImportConfirmBody', {
+        n: additions.length, k: pickedAdded, m: newSeeds.length, seeds: seedPreview,
+        dup: dupSkipped, cap: capSkipped,
+      }) || `将新增 ${additions.length} 条候选(勾选 ${pickedAdded} 条);新增种子词 ${newSeeds.length} 个`
+        + (seedPreview ? `:${seedPreview}` : '') + `;重复跳过 ${dupSkipped} 条;超出上限未勾选 ${capSkipped} 条。`,
+      {
+        title: t('dashboard.aiTelemetry.form.queriesImportConfirmTitle') || '导入这份提示词表?',
+        okText: t('dashboard.aiTelemetry.form.queriesImportCsv') || '导入',
+      },
+    );
+    if (!ok) return;
+    if (newSeeds.length > 0) setSeeds(prev => [...prev, ...newSeeds]);
+    if (additions.length > 0) setSuggestions(prev => [...prev, ...additions]);
+    setPicked(nextPicked);
+    setCollapsedSeeds(new Set());
+    toast.success(t('dashboard.aiTelemetry.form.queriesImportDone', {
+      n: additions.length, k: pickedAdded, m: newSeeds.length,
+    }) || `已导入 ${additions.length} 条,勾选 ${pickedAdded} 条,新增种子词 ${newSeeds.length} 个`);
   };
 
   const step1Valid = name.trim().length > 0 && target.trim().length > 0;
-  const step2Valid = seeds.map(s => s.trim()).filter(Boolean).length > 0;
+  // Persisted seeds count too — editing doesn't force adding new ones
+  const step2Valid = newSeedTexts.length > 0 || seedPrompts.length > 0;
 
-  // step1「下一步」即落库:资料(6 大模块)+ 名称/简称/行业立即存,不拖到 step3 才一次性保存。
-  //   - 已有主题 / step1 已建过 draft → PUT /profile 增量存资料
-  //   - 全新主题 → POST /topics/draft 建 draft 草稿,拿到 id 给后续 step 用
-  //   - admin 替别人 / 只读 → 不预存,沿用 step3 权威保存(admin 走 adminCreate,避开锁状态校验)
+  // step1 "Next" persists to DB right away: materials (6 modules) + name/short name/industry saved immediately, not deferred to a single save in step3.
+  //   - Existing topic / draft already created in step1 -> PUT /profile to save materials incrementally
+  //   - Brand-new topic -> POST /topics/draft to create a draft and get an id for later steps
+  //   - Admin on behalf of others / read-only -> no pre-save; step3's authoritative save is used (admin goes via adminCreate, avoiding lock-state validation)
   const persistStep1 = async () => {
     if (readOnly || typeof adminTargetUserId === 'number') { setStep(2); return; }
     if (step1Saving) return;
@@ -2468,11 +2757,17 @@ export function TopicEditor({
     try {
       if (savedTopicId) {
         await topicProfileApi.updateProfile(savedTopicId, profile, token);
+        // The materials endpoint doesn't include brand tags; write them back separately via the report center report-tags endpoint
+        await reportsApi.updateReportTags(savedTopicId, token, {
+          brand_tier: brandTier as BrandTier, industry_class: industryClass as IndustryClass,
+        });
       } else {
         const saved = await aiTelemetryApi.createDraftTopic({
+          ...(enterpriseUserId ? { enterprise_user_id: enterpriseUserId } : {}),
           name: name.trim(), target: target.trim(),
           target_aliases: aliases, industry: industry.trim(),
           engines: Array.from(engines), enabled, profile,
+          brand_tier: brandTier, industry_class: industryClass,
         }, token);
         if (saved?.id) setSavedTopicId(saved.id);
       }
@@ -2499,6 +2794,28 @@ export function TopicEditor({
     else if (step === 2) setStep(1);
   };
 
+  // Register with the agent: fill brand materials for the user (step1) and advance the wizard. next/prev are equivalent to clicking "Next/Previous".
+  useRegisterAgentActions(readOnly ? null : {
+    page: 'topic_editor',
+    describe: '主题编辑向导(可填写品牌名称/简称/行业/别名,并下一步保存)',
+    snapshot: {
+      当前步骤: step, 名称: name, 目标简称: target, 行业: industry,
+      别名: aliasesText, 已填种子提示词: newSeedTexts, step1可保存: step1Valid,
+    },
+    actions: {
+      setField: ({ name: f, value }) => {
+        const v = String(value ?? '');
+        if (f === 'name') setProfile(p => ({ ...p, profile_name: v }));
+        else if (f === 'target') setProfile(p => ({ ...p, company_short_name: v }));
+        else if (f === 'industry') setProfile(p => ({ ...p, industry: v }));
+        else if (f === 'aliases') setAliasesText(v);
+      },
+      addSeed: ({ text }) => { void handleSubmitSeed(String(text ?? '')); },   // step2 add seed prompt (reuses the existing handler)
+      next: () => goNext(),
+      prev: () => goPrev(),
+    },
+  });
+
   return (
     <section
       className="rounded-xl"
@@ -2507,12 +2824,12 @@ export function TopicEditor({
       <StepHeader
         step={step}
         onJump={(s) => {
-          // 1-4:wizard 表单步,setStep 切表单
+          // 1-4: wizard form steps, setStep switches forms
           if (s === 1) setStep(1);
           else if (s === 2 && step1Valid) setStep(2);
           else if (s === 3 && step1Valid && step2Valid) setStep(3);
           else if (s === 4 && step1Valid && step2Valid) setStep(4);
-          // 5-7:项目进度下游阶段,内联展示;需要已保存的 topic_id
+          // 5-7: project progress downstream stages, shown inline; require a saved topic_id
           else if (s >= 5 && savedTopicId) {
             setStep(s as 5 | 6 | 7);
           }
@@ -2547,19 +2864,28 @@ export function TopicEditor({
                              topicId={initial?.id}
                              pendingMediaFiles={pendingMediaFiles}
                              onPendingMediaFilesChange={setPendingMediaFiles}
-                             onApplySeeds={suggestions => {
-                               // LLM 顺手给的种子词候选 — 跟用户已填的合并去重(用户已填的优先保留)
-                               setSeeds(prev => {
-                                 const have = new Set(prev.map(s => s.trim()).filter(Boolean));
+                             onApplySeeds={sugg => {
+                               // Seed query candidates offered by the LLM -> recommendation area (selected by default, can be grayed, not deleted);
+                               // deduplicated against submitted / user-typed ones
+                               const taken = new Set([
+                                 ...seedPrompts.map(s => s.text),
+                                 ...seeds.map(s => s.trim()),
+                               ]);
+                               setRecommendedSeeds(prev => {
+                                 const have = new Set(prev.map(r => r.text));
                                  const merged = [...prev];
-                                 for (const s of suggestions) {
-                                   if (s && !have.has(s)) { merged.push(s); have.add(s); }
+                                 for (const s of sugg) {
+                                   const v = (s || '').trim();
+                                   if (v && !have.has(v) && !taken.has(v)) {
+                                     merged.push({ text: v, active: true });
+                                     have.add(v);
+                                   }
                                  }
                                  return merged;
                                });
                              }} />
-            {/* 6 模块资料表单(名称/简称/行业 同时是 topic.name/target/industry)
-                别名(target_aliases)已收纳到「基础标识」tab 内,不再单独成节 */}
+            {/* 6-module materials form (name/short name/industry are also topic.name/target/industry)
+                Aliases (target_aliases) are folded into the "Basic identity" tab, no longer a separate section */}
             <BrandProfileForm
               profile={profile}
               onChange={setProfile}
@@ -2571,12 +2897,52 @@ export function TopicEditor({
               aliasesPlaceholder={t('dashboard.aiTelemetry.form.aliasesPlaceholder') || ''}
               aliasesHint={t('dashboard.aiTelemetry.form.aliasesHint', { count: aliases.length })}
             />
+            {/* Report center brand tags — set here, shown read-only in the report center. Targets are matched against same-tier reference ranges */}
+            <div className="rounded-md p-3 space-y-2"
+                 style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <div className="text-xs font-semibold text-secondary">
+                {t('dashboard.aiTelemetry.form.brandTagTitle')}
+              </div>
+              <p className="text-xs text-muted">{t('dashboard.aiTelemetry.form.brandTagHint')}</p>
+              <div className="flex flex-wrap gap-4">
+                <label className="text-xs text-secondary flex items-center gap-2">
+                  {t('dashboard.aiTelemetry.form.brandTierLabel')}
+                  <UiSelect value={brandTier} disabled={readOnly}
+                    className="px-2 py-1 text-sm rounded"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                    onChange={val => setBrandTier(val)}
+                    options={[
+                      { value: '', label: t('dashboard.aiTelemetry.form.tagUnset') },
+                      { value: 'new', label: t('dashboard.aiTelemetry.form.tierNew') },
+                      { value: 'mid', label: t('dashboard.aiTelemetry.form.tierMid') },
+                      { value: 'leader', label: t('dashboard.aiTelemetry.form.tierLeader') },
+                    ]} />
+                </label>
+                <label className="text-xs text-secondary flex items-center gap-2">
+                  {t('dashboard.aiTelemetry.form.industryClassLabel')}
+                  <UiSelect value={industryClass} disabled={readOnly}
+                    className="px-2 py-1 text-sm rounded"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                    onChange={val => setIndustryClass(val)}
+                    options={[
+                      { value: '', label: t('dashboard.aiTelemetry.form.tagUnset') },
+                      { value: 'regular', label: t('dashboard.aiTelemetry.form.industryRegular') },
+                      { value: 'special', label: t('dashboard.aiTelemetry.form.industrySpecial') },
+                    ]} />
+                </label>
+              </div>
+            </div>
+
+            {/* Fixed response denominator — visible only when admins edit topics in the workbench; not rendered at all on the client side */}
+            {adminMode && initial?.id ? (
+              <FixedDenominatorBox topicId={initial.id} token={token} disabled={readOnly} />
+            ) : null}
           </div>
         )}
 
         {step === 2 && (
           <div className="max-w-2xl space-y-4">
-            {/* Phase C — 已提交种子词的审核状态(编辑场景才显示) */}
+            {/* Phase C — review status of submitted seed queries (shown only when editing) */}
             {seedPrompts.length > 0 && (
               <div
                 className="rounded-md p-3 space-y-2"
@@ -2588,12 +2954,27 @@ export function TopicEditor({
                 <ul className="space-y-1">
                   {seedPrompts.map((s, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs">
-                      <ReviewBadge status={s.status} />
+                      <ReviewBadge />
                       <span className="text-primary">{s.text}</span>
                       {s.submitted_at && (
                         <span className="text-muted ml-auto">
-                          {new Date(s.submitted_at).toLocaleString()}
+                          {fmtTime(s.submitted_at)}
                         </span>
+                      )}
+                      {/* Only admins can delete seed queries; deleting takes the prompts expanded from it offline too */}
+                      {adminMode && !readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => void deleteSeedPrompt(s.text)}
+                          disabled={deletingSeed !== null}
+                          title={t('dashboard.aiTelemetry.form.seedDeleteHint')}
+                          className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] ${s.submitted_at ? '' : 'ml-auto'}`}
+                          style={{ color: 'var(--danger, #dc2626)', border: '1px solid var(--border-color)' }}
+                        >
+                          {deletingSeed === s.text
+                            ? t('dashboard.aiTelemetry.form.seedDeleting')
+                            : t('dashboard.aiTelemetry.form.seedDelete')}
+                        </button>
                       )}
                     </li>
                   ))}
@@ -2601,22 +2982,63 @@ export function TopicEditor({
               </div>
             )}
 
-            <label className="block">
-              <span className="text-xs text-secondary">
+            {/* Must wrap in a div, not a label: a label without htmlFor forwards any click inside it
+                to the first associable control — which is the first tag's "×" button, so clicking anywhere deleted a seed (fixed 2026-07-30) */}
+            <div>
+              <div className="text-xs text-secondary">
                 {t('dashboard.aiTelemetry.form.seedPromptsLabel')}*
-              </span>
+              </div>
+
+              {recommendedSeeds.length > 0 && (
+                <div
+                  className="mt-1.5 rounded-md p-2.5 space-y-1.5"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+                >
+                  <div className="text-xs text-muted">
+                    {t('dashboard.aiTelemetry.form.seedRecommendedHint')}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recommendedSeeds.map(r => (
+                      <button
+                        key={r.text}
+                        type="button"
+                        onClick={() => toggleRecommendedSeed(r.text)}
+                        className="rounded px-2 py-0.5 text-xs transition-colors"
+                        style={r.active
+                          ? { background: 'rgba(99,102,241,0.12)', color: 'var(--accent-primary)', border: '1px solid var(--accent-primary)' }
+                          : { background: 'var(--bg-tertiary)', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', opacity: 0.55 }}
+                        title={t(r.active
+                          ? 'dashboard.aiTelemetry.form.seedRecommendedOffTip'
+                          : 'dashboard.aiTelemetry.form.seedRecommendedOnTip')}
+                      >
+                        {r.active ? '✓ ' : ''}{r.text}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-1.5">
                 <TagInput
                   value={seeds}
                   onChange={setSeeds}
                   placeholder={t('dashboard.aiTelemetry.form.seedPromptsPlaceholder') || ''}
-                  reserved={seedPrompts.map(s => s.text)}
+                  reserved={[...seedPrompts.map(s => s.text), ...recommendedSeeds.map(r => r.text)]}
                 />
               </div>
-              <span className="text-xs text-muted">
-                {t('dashboard.aiTelemetry.form.seedPromptsListHint', { count: seeds.length })}
-              </span>
-            </label>
+              <div className="text-xs text-muted">
+                {t('dashboard.aiTelemetry.form.seedPromptsListHint', { count: newSeedTexts.length })}
+              </div>
+              {/* Is the seed your own product? One click registers it in section 3 of the materials so step 3 query expansion goes by category (see MarkSeedAsProduct header comment) */}
+              {newSeedTexts.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {newSeedTexts.map(sd => (
+                    <MarkSeedAsProduct key={sd} seed={sd} products={profile.products} disabled={readOnly}
+                                       onAdd={p => setProfile(prev => ({ ...prev, products: [...(prev.products || []), p] }))} />
+                  ))}
+                </div>
+              )}
+            </div>
 
             {seedSubmitErr && (
               <div className="text-xs text-rose-500">⚠ {seedSubmitErr}</div>
@@ -2626,7 +3048,7 @@ export function TopicEditor({
 
         {step === 3 && (
           <div className="space-y-5">
-            {/* ── 第 1 段:选种子 + 触发挖掘 ─────────────────────── */}
+            {/* ── Part 1: pick seeds + trigger mining ─────────────────────── */}
             <section
               className="rounded-md p-4 space-y-3"
               style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
@@ -2693,9 +3115,18 @@ export function TopicEditor({
               {suggestErr && (
                 <div className="text-xs text-rose-500">⚠ {suggestErr}</div>
               )}
+              {Object.entries(matchedProducts).map(([seedText, mp]) => (
+                <div key={seedText} className="text-xs rounded-md px-3 py-1.5"
+                     style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                  {t('dashboard.aiTelemetry.form.matchedProduct', {
+                    seed: seedText, name: mp.name,
+                    category: mp.category || t('dashboard.aiTelemetry.form.matchedProductNoCategory'),
+                  })}
+                </div>
+              ))}
             </section>
 
-            {/* ── 第 2 段:候选 Query 列表 ────────────────────────── */}
+            {/* ── Part 2: candidate query list ────────────────────────── */}
             <section
               className="rounded-md p-4 space-y-3"
               style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
@@ -2703,22 +3134,51 @@ export function TopicEditor({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-primary">
-                    {t('dashboard.aiTelemetry.form.candidateSectionTitle')}
+                    {t('dashboard.aiTelemetry.form.candidateSectionTitle', { max: QUERY_MAX_PICK })}
                   </div>
                   <div className="text-xs text-muted mt-0.5">
                     {t('dashboard.aiTelemetry.form.queriesPickerHint', { max: QUERY_MAX_PICK, count: SUGGEST_COUNT })}
                   </div>
                 </div>
-                <span
-                  className="text-sm font-mono tabular-nums shrink-0"
-                  style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
-                >
-                  {picked.size} / {QUERY_MAX_PICK}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* CSV import / export lives in the header rather than the bottom bar: the bottom bar only renders with a non-empty pool, and import must work on an empty pool */}
+                  <input
+                    ref={importInputRef} type="file" accept={QUERY_CSV_ACCEPT} hidden
+                    onChange={e => {
+                      const f = e.target.files?.[0] || null;
+                      e.target.value = '';   // Allow selecting the same file again
+                      void handleImportCsv(f);
+                    }}
+                  />
+                  <button
+                    type="button" onClick={() => importInputRef.current?.click()}
+                    disabled={readOnly}
+                    className="px-2 py-1 rounded text-xs disabled:opacity-45 whitespace-nowrap"
+                    style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+                    title={t('dashboard.aiTelemetry.form.queriesImportHint')
+                           || 'CSV 列:提示词, 种子词, 场景, 是否监测;也可导 .txt 一行一条'}
+                  >
+                    {t('dashboard.aiTelemetry.form.queriesImportCsv') || '导入 CSV'}
+                  </button>
+                  <button
+                    type="button" onClick={handleExportCsv}
+                    disabled={suggestions.length === 0}
+                    className="px-2 py-1 rounded text-xs disabled:opacity-45 whitespace-nowrap"
+                    style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+                  >
+                    {t('dashboard.aiTelemetry.form.queriesExportCsv') || '导出 CSV'}
+                  </button>
+                  <span
+                    className="text-sm font-mono tabular-nums"
+                    style={{ color: pickedCap ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
+                  >
+                    {picked.size} / {QUERY_MAX_PICK}
+                  </span>
+                </div>
               </div>
 
-              {/* 手动添加 — 必须选一条种子提示词归属;写入 suggestions(score=0)
-                  并打 seed 字段 + 自动勾进 picked. */}
+              {/* Manual add — must pick a seed prompt it belongs to; written into suggestions (score=0)
+                  with the seed field set + auto-checked into picked. */}
               <ManualQueryAdder
                 disabled={readOnly}
                 pickedCap={pickedCap}
@@ -2743,7 +3203,7 @@ export function TopicEditor({
                 </div>
               ) : (
                 <>
-                  {/* 2026-05-28 — 4 维场景 filter:点 chip 单选一个场景查看,再点取消(回到全部) */}
+                  {/* 2026-05-28 — 4-dimension scene filter: click a chip to view a single scene, click again to cancel (back to all) */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-muted">
                       {t('dashboard.aiTelemetry.form.sceneFilterLabel')}
@@ -2823,7 +3283,7 @@ export function TopicEditor({
                       const renderRow = (q: QueryCandidate) => {
                         const isPicked = picked.has(q.text);
                         const isLocked = lockedQueryTexts.has(q.text);
-                        const reviewStatus = queryStatusByText.get(q.text);
+                        const isSaved = savedQueryTexts.has(q.text);
                         const disabled = isLocked || (!isPicked && pickedCap);
                         const showScore = q.score > 0;
                         const scoreColor = q.score >= 75 ? 'var(--accent-primary)'
@@ -2855,7 +3315,7 @@ export function TopicEditor({
                                 {q.score}
                               </span>
                             )}
-                            {/* 2026-05-28 — 4 维场景 badge;2026-06-04 改实心填充 + 白字,原 13% 半透明底太淡看不清 */}
+                            {/* 2026-05-28 — 4-dimension scene badge; 2026-06-04 changed to solid fill + white text, the old 13% translucent background was too faint */}
                             {q.scene && (
                               <span
                                 className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none tracking-wide"
@@ -2870,8 +3330,23 @@ export function TopicEditor({
                               </span>
                             )}
                             <span className="break-all flex-1">{q.text}</span>
-                            {reviewStatus && (
-                              <span className="shrink-0"><ReviewBadge status={reviewStatus} /></span>
+                            {isSaved && (
+                              <span className="shrink-0"><ReviewBadge /></span>
+                            )}
+                            {/* Active queries can't be unchecked but can be soft-deleted (no more batch runs; history and restore preserved) */}
+                            {isLocked && !readOnly && (
+                              <button
+                                type="button"
+                                onClick={e => { e.preventDefault(); deleteApprovedQuery(q.text); }}
+                                disabled={deletingQuery !== null}
+                                className="shrink-0 px-1.5 py-0.5 rounded text-[11px] leading-none disabled:opacity-50"
+                                style={{ color: 'var(--danger-fg, #b91c1c)', border: '1px solid var(--border-color)' }}
+                                title={t('dashboard.aiTelemetry.form.queryDeleteHint') as string}
+                              >
+                                {deletingQuery === q.text
+                                  ? t('dashboard.aiTelemetry.form.queryDeleting')
+                                  : t('dashboard.aiTelemetry.form.queryDelete')}
+                              </button>
                             )}
                           </label>
                         );
@@ -2944,7 +3419,7 @@ export function TopicEditor({
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <button
-                      type="button" onClick={clearPicked} disabled={picked.size === 0}
+                      type="button" onClick={clearPicked} disabled={pickedInScopeCount === 0}
                       className="px-2 py-1 rounded disabled:opacity-45"
                       style={{
                         background: 'transparent',
@@ -2981,10 +3456,14 @@ export function TopicEditor({
                             token={token} />
         )}
         {step === 5 && savedTopicId && (
-          <ExecutionPlanView topicId={savedTopicId} />
+          // All plan actions belong to the client (backend opened them to owner-or-staff);
+          // the only one disabled is the true read-only state (mode='view', e.g. the agency's enterprise business is suspended).
+          <ExecutionPlanView topicId={savedTopicId} allowStart={!readOnly} />
         )}
         {step === 6 && savedTopicId && (
-          <AdminContentReview lockedTopicId={savedTopicId} />
+          customerView
+            ? <Content lockedTopicId={savedTopicId} />
+            : <AdminContentReview lockedTopicId={savedTopicId} />
         )}
         {step === 7 && savedTopicId && (
           <TopicBriefingsEmbed topicId={savedTopicId} token={token} />
@@ -3051,12 +3530,12 @@ export function TopicEditor({
         </div>
       </footer>
       {submitErr && (
-        <div className="px-5 pb-3 text-xs" style={{ color: '#ef4444' }}>
+        <div className="px-5 pb-3 text-xs" style={{ color: 'var(--danger-fg)' }}>
           ⚠ {submitErr}
         </div>
       )}
       {step1Err && (
-        <div className="px-5 pb-3 text-xs" style={{ color: '#ef4444' }}>
+        <div className="px-5 pb-3 text-xs" style={{ color: 'var(--danger-fg)' }}>
           ⚠ {step1Err}
         </div>
       )}
@@ -3075,11 +3554,11 @@ function ManualQueryAdder({
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const [chosenSeed, setChosenSeed] = useState<string>(seeds[0] || '');
-  // 2026-06-11 — 手动添加也必须归属一个场景标签(搜索/问答/意图/品牌),默认搜索
+  // 2026-06-11 — manual additions must also belong to a scene tag (search/QA/intent/brand), default search
   const [chosenScene, setChosenScene] = useState<SceneType>('search');
   const [hint, setHint] = useState<string | null>(null);
 
-  // seeds 列表变化(用户在 step 2 新加/删除种子)时,若当前选中的不在了就重置
+  // When the seeds list changes (user adds/removes seeds in step 2), reset if the current selection is gone
   useEffect(() => {
     if (!seeds.includes(chosenSeed)) setChosenSeed(seeds[0] || '');
   }, [seeds, chosenSeed]);
@@ -3102,7 +3581,7 @@ function ManualQueryAdder({
     } else {
       setHint(
         pickedCap
-          ? t('dashboard.aiTelemetry.form.manualAddCap')
+          ? t('dashboard.aiTelemetry.form.manualAddCap', { max: MAX_SELECTED_QUERIES })
           : t('dashboard.aiTelemetry.form.manualAddDuplicate'),
       );
     }
@@ -3110,9 +3589,9 @@ function ManualQueryAdder({
 
   return (
     <div className="flex items-start gap-2">
-      <select
+      <UiSelect
         value={chosenSeed}
-        onChange={e => { setChosenSeed(e.target.value); if (hint) setHint(null); }}
+        onChange={val => { setChosenSeed(val); if (hint) setHint(null); }}
         disabled={disabled || pickedCap || noSeeds}
         className="px-2 py-1.5 rounded-md text-xs shrink-0"
         style={{
@@ -3125,18 +3604,13 @@ function ManualQueryAdder({
         title={noSeeds
           ? (t('dashboard.aiTelemetry.form.manualAddNeedSeed') || '请先填种子提示词')
           : (t('dashboard.aiTelemetry.form.manualAddSeedTitle') || '关联到种子提示词')}
-      >
-        {noSeeds ? (
-          <option value="">
-            {t('dashboard.aiTelemetry.form.manualAddSeedEmpty') || '无可用种子'}
-          </option>
-        ) : (
-          seeds.map(s => <option key={s} value={s}>{s}</option>)
-        )}
-      </select>
-      <select
+        options={noSeeds
+          ? [{ value: '', label: t('dashboard.aiTelemetry.form.manualAddSeedEmpty') || '无可用种子' }]
+          : seeds.map(s => ({ value: s, label: s }))}
+      />
+      <UiSelect
         value={chosenScene}
-        onChange={e => { setChosenScene(e.target.value as SceneType); if (hint) setHint(null); }}
+        onChange={val => { setChosenScene(val as SceneType); if (hint) setHint(null); }}
         disabled={disabled || pickedCap || noSeeds}
         className="px-2 py-1.5 rounded-md text-xs shrink-0"
         style={{
@@ -3147,11 +3621,8 @@ function ManualQueryAdder({
           opacity: (disabled || pickedCap || noSeeds) ? 0.5 : 1,
         }}
         title={t('dashboard.aiTelemetry.form.manualAddSceneTitle') || '场景标签'}
-      >
-        {SCENE_KEYS.map(s => (
-          <option key={s} value={s}>{t(`topic.profile.monitor.scene.${s}.label`)}</option>
-        ))}
-      </select>
+        options={SCENE_KEYS.map(s => ({ value: s, label: t(`topic.profile.monitor.scene.${s}.label`) }))}
+      />
       <div className="flex-1">
         <input
           type="text" value={draft}
@@ -3163,7 +3634,7 @@ function ManualQueryAdder({
           style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)',
                    color: 'var(--text-primary)', opacity: (disabled || pickedCap || noSeeds) ? 0.5 : 1 }}
         />
-        {hint && <div className="mt-1 text-[11px]" style={{ color: '#f59e0b' }}>{hint}</div>}
+        {hint && <div className="mt-1 text-[11px]" style={{ color: 'var(--warn-fg)' }}>{hint}</div>}
       </div>
       <button
         type="button" onClick={submit}
@@ -3246,7 +3717,7 @@ function StepHeader({
 
 
 // ═══════════════════════════════════════════════════════════════
-//  v1 引用追踪 Tab
+//  v1 citation tracking tab
 // ═══════════════════════════════════════════════════════════════
 
 function TrackingTab({ topics, token, topicId, onTopicChange }: {
@@ -3288,13 +3759,12 @@ function TrackingTab({ topics, token, topicId, onTopicChange }: {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <label className="text-xs text-secondary">{t('dashboard.aiTelemetry.tracking.selectTopic')}</label>
-        <select
-          value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+        <UiSelect
+          value={String(topicId ?? '')} onChange={val => setTopicId(Number(val))}
           className="px-3 py-1.5 rounded-md text-sm"
           style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-        >
-          {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+          options={topics.map(t => ({ value: String(t.id), label: t.name }))}
+        />
       </div>
 
       {loading && <div className="py-12 text-center text-sm text-muted">…</div>}
@@ -3318,7 +3788,7 @@ function TrackingTab({ topics, token, topicId, onTopicChange }: {
 
 function TrackingHeader({ matrix, sov }: { matrix: TrackingMatrix; sov: ShareOfVoice | null }) {
   const { t } = useTranslation();
-  const started = matrix.started_at ? new Date(matrix.started_at).toLocaleDateString() : '-';
+  const started = matrix.started_at ? fmtTime(matrix.started_at, false).slice(0, 10) : '-';
   return (
     <div className="rounded-md p-3 text-xs flex flex-wrap items-center gap-x-4 gap-y-1"
       style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
@@ -3353,8 +3823,8 @@ function TrackingHeader({ matrix, sov }: { matrix: TrackingMatrix; sov: ShareOfV
             <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
               style={{
                 background: sov.optimal_rate_pct >= 70
-                  ? 'rgba(16,185,129,0.18)' : sov.optimal_rate_pct >= 40
-                    ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.18)',
+                  ? 'var(--success-bg)' : sov.optimal_rate_pct >= 40
+                    ? 'var(--warn-bg)' : 'var(--danger-bg)',
                 color: sov.optimal_rate_pct >= 70
                   ? '#10b981' : sov.optimal_rate_pct >= 40 ? '#f59e0b' : '#ef4444',
               }}>
@@ -3388,10 +3858,10 @@ function TimelineRow({ timeline }: { timeline: EngineFirstHit[] }) {
           <div key={e.engine} className="flex items-center gap-2">
             <span style={{
               display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-              background: hit ? '#10b981' : 'var(--border-color)',
+              background: hit ? 'var(--success-solid)' : 'var(--border-color)',
             }} />
             <span className="w-20" style={{ color: ENGINE_COLORS[e.engine] }}>
-              {t(`dashboard.aiTelemetry.engine.${e.engine}`)}
+              {engineLabel(e.engine)}
             </span>
             {hit ? (
               <>
@@ -3439,7 +3909,7 @@ function MatrixGrid({ matrix, onPick }: {
             {matrix.engines.map(e => (
               <th key={e} className="px-3 py-2 font-medium text-center"
                 style={{ color: ENGINE_COLORS[e] }}>
-                {t(`dashboard.aiTelemetry.engine.${e}`)}
+                {engineLabel(e)}
               </th>
             ))}
             <th className="px-3 py-2 font-medium text-center text-secondary">
@@ -3501,13 +3971,13 @@ function CellBadge({ cell, onClick }: { cell: QueryHitCell | undefined; onClick:
   }
   // done
   const hit = cell.total_hits >= 1;
-  const date = cell.first_hit_at ? new Date(cell.first_hit_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) : '';
+  const date = cell.first_hit_at ? fmtTime(cell.first_hit_at, false).slice(5, 10) : '';
   return (
     <button type="button" onClick={onClick}
       className="px-2 py-1 rounded transition-colors cursor-pointer"
       style={{
-        background: hit ? 'rgba(16,185,129,0.15)' : 'transparent',
-        color: hit ? '#10b981' : 'var(--text-muted)',
+        background: hit ? 'var(--success-bg)' : 'transparent',
+        color: hit ? 'var(--success-fg)' : 'var(--text-muted)',
         border: hit ? '1px solid rgba(16,185,129,0.4)' : '1px solid transparent',
       }}
       title={hit ? `${cell.total_hits}/${cell.total_runs} 命中` : `${cell.total_runs} 次跑批 0 命中`}>
@@ -3516,7 +3986,7 @@ function CellBadge({ cell, onClick }: { cell: QueryHitCell | undefined; onClick:
   );
 }
 
-// ── drawer:cell 详情 + 历次答复 + 诊断按钮 ────────────────────
+// ── drawer: cell details + past responses + diagnose button ────────────────────
 
 function CellDrawerView({
   topicId, query, engine, token, onClose,
@@ -3561,13 +4031,13 @@ function CellDrawerView({
           style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)' }}>
           <div>
             <div className="text-sm font-semibold text-primary">
-              {t(`dashboard.aiTelemetry.engine.${engine}`)} · {query}
+              {engineLabel(engine)} · {query}
             </div>
             {data && (
               <div className="text-[11px] text-muted mt-0.5">
                 {data.cell.total_hits}/{data.cell.total_runs} {t('dashboard.aiTelemetry.tracking.hits')}
                 {data.cell.first_hit_at && (
-                  <> · {t('dashboard.aiTelemetry.tracking.firstHit')}: {new Date(data.cell.first_hit_at).toLocaleDateString()}</>
+                  <> · {t('dashboard.aiTelemetry.tracking.firstHit')}: {fmtTime(data.cell.first_hit_at, false).slice(0, 10)}</>
                 )}
               </div>
             )}
@@ -3578,7 +4048,7 @@ function CellDrawerView({
         <div className="px-5 py-4 space-y-4 text-xs">
           {!data && <div className="text-muted py-6 text-center">…</div>}
 
-          {/* 诊断块(LLM) */}
+          {/* Diagnosis block (LLM) */}
           {data && (
             <section className="rounded-md p-3"
               style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
@@ -3605,7 +4075,7 @@ function CellDrawerView({
             </section>
           )}
 
-          {/* 历次答复 */}
+          {/* Past responses */}
           {data && data.evidence.length > 0 && (
             <section>
               <div className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">
@@ -3686,7 +4156,7 @@ function InsightBlock({ insight, onFeedback }: {
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-bold mr-2"
                   style={{
-                    background: r.priority === 'P0' ? '#ef4444' : r.priority === 'P1' ? '#f59e0b' : '#9ca3af',
+                    background: r.priority === 'P0' ? 'var(--danger-solid)' : r.priority === 'P1' ? 'var(--warn-solid)' : '#9ca3af',
                     color: 'white',
                   }}>{r.priority}</span>
                 <strong className="text-primary">{r.title}</strong>
@@ -3718,11 +4188,11 @@ function InsightBlock({ insight, onFeedback }: {
 
 function EvidenceCard({ ev }: { ev: CellDrawer['evidence'][number] }) {
   const { t } = useTranslation();
-  const dt = ev.created_at ? new Date(ev.created_at).toLocaleString() : '';
+  const dt = ev.created_at ? fmtTime(ev.created_at) : '';
   const posColor: Record<string, { bg: string; fg: string }> = {
-    lead: { bg: 'rgba(16,185,129,0.18)', fg: '#10b981' },
+    lead: { bg: 'var(--success-bg)', fg: '#10b981' },
     body: { bg: 'rgba(59,130,246,0.18)', fg: '#3b82f6' },
-    tail: { bg: 'rgba(245,158,11,0.18)', fg: '#f59e0b' },
+    tail: { bg: 'var(--warn-bg)', fg: '#f59e0b' },
     unknown: { bg: 'rgba(156,163,175,0.18)', fg: '#9ca3af' },
   };
   const pos = ev.mention_position;
@@ -3755,13 +4225,21 @@ function EvidenceCard({ ev }: { ev: CellDrawer['evidence'][number] }) {
       {!ev.hit && ev.answer && (
         <p className="mt-1 text-muted text-[11px] line-clamp-3">{ev.answer.slice(0, 200)}…</p>
       )}
+      {ev.reasoning ? (
+        <details className="mt-1">
+          <summary className="text-[11px] text-muted cursor-pointer select-none">
+            {t('dashboard.aiTelemetry.results.reasoning')} ({ev.reasoning.length})
+          </summary>
+          <p className="mt-1 text-muted text-[11px] whitespace-pre-wrap">{ev.reasoning}</p>
+        </details>
+      ) : null}
     </div>
   );
 }
 
 
 // ═══════════════════════════════════════════════════════════════
-//  v1.2 优化建议(周报) Tab
+//  v1.2 optimization suggestions (weekly report) tab
 // ═══════════════════════════════════════════════════════════════
 
 function BriefingsTab({ topics, token }: { topics: Topic[]; token: string }) {
@@ -3811,23 +4289,20 @@ function BriefingsTab({ topics, token }: { topics: Topic[]; token: string }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <label className="text-xs text-secondary">{t('dashboard.aiTelemetry.briefings.selectTopic')}</label>
-        <select
-          value={topicId ?? ''} onChange={e => setTopicId(Number(e.target.value))}
+        <UiSelect
+          value={String(topicId ?? '')} onChange={val => setTopicId(Number(val))}
           className="px-3 py-1.5 rounded-md text-sm"
           style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
-        >
-          {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+          options={topics.map(t => ({ value: String(t.id), label: t.name }))}
+        />
         {briefings.length > 0 && (
-          <select value={selectedId ?? ''} onChange={e => setSelectedId(Number(e.target.value))}
+          <UiSelect value={String(selectedId ?? '')} onChange={val => setSelectedId(Number(val))}
             className="px-3 py-1.5 rounded-md text-sm"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-            {briefings.map(b => (
-              <option key={b.id} value={b.id}>
-                {new Date(b.period_start).toLocaleDateString()} ~ {new Date(b.period_end).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            options={briefings.map(b => ({
+              value: String(b.id),
+              label: `${new Date(b.period_start).toLocaleDateString()} ~ ${new Date(b.period_end).toLocaleDateString()}`,
+            }))} />
         )}
         <button type="button" onClick={handleGenerate} disabled={generating || topicId == null}
           className="text-xs px-3 py-1.5 rounded-md text-white"
@@ -3847,7 +4322,7 @@ function BriefingsTab({ topics, token }: { topics: Topic[]; token: string }) {
   );
 }
 
-// 嵌入版:固定 topicId,无 topic 选择器.用于 TopicEditor 7 步 wizard 的第 7 步.
+// Embedded version: fixed topicId, no topic picker. Used for step 7 of the TopicEditor 7-step wizard.
 function TopicBriefingsEmbed({ topicId, token }: { topicId: number; token: string }) {
   const { t } = useTranslation();
   const [briefings, setBriefings] = useState<Briefing[]>([]);
@@ -3886,15 +4361,13 @@ function TopicBriefingsEmbed({ topicId, token }: { topicId: number; token: strin
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         {briefings.length > 0 && (
-          <select value={selectedId ?? ''} onChange={e => setSelectedId(Number(e.target.value))}
+          <UiSelect value={String(selectedId ?? '')} onChange={val => setSelectedId(Number(val))}
             className="px-3 py-1.5 rounded-md text-sm"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-            {briefings.map(b => (
-              <option key={b.id} value={b.id}>
-                {new Date(b.period_start).toLocaleDateString()} ~ {new Date(b.period_end).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+            options={briefings.map(b => ({
+              value: String(b.id),
+              label: `${new Date(b.period_start).toLocaleDateString()} ~ ${new Date(b.period_end).toLocaleDateString()}`,
+            }))} />
         )}
         <button type="button" onClick={handleGenerate} disabled={generating}
           className="text-xs px-3 py-1.5 rounded-md text-white disabled:opacity-50"
@@ -3931,7 +4404,7 @@ function BriefingView({ briefing, token }: { briefing: Briefing; token: string }
           📰 {new Date(briefing.period_start).toLocaleDateString()} - {new Date(briefing.period_end).toLocaleDateString()}
         </h3>
         <span className="text-[11px] text-muted">
-          {briefing.llm_model} · {t('dashboard.aiTelemetry.briefings.generatedAt')} {new Date(briefing.generated_at).toLocaleString()}
+          {t('dashboard.aiTelemetry.briefings.generatedAt')} {fmtTime(briefing.generated_at)}
         </span>
       </header>
 
@@ -3950,7 +4423,7 @@ function BriefingView({ briefing, token }: { briefing: Briefing; token: string }
                 style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-bold mr-2"
                   style={{
-                    background: a.priority === 'P0' ? '#ef4444' : a.priority === 'P1' ? '#f59e0b' : '#9ca3af',
+                    background: a.priority === 'P0' ? 'var(--danger-solid)' : a.priority === 'P1' ? 'var(--warn-solid)' : '#9ca3af',
                     color: 'white',
                   }}>{a.priority}</span>
                 <strong className="text-primary">{a.title}</strong>
@@ -3967,7 +4440,7 @@ function BriefingView({ briefing, token }: { briefing: Briefing; token: string }
         {[1, 2, 3, 4, 5].map(n => (
           <button key={n} type="button" onClick={() => handleScore(n)}
             className="hover:scale-110 transition-transform">
-            <span style={{ color: (score ?? 0) >= n ? '#f59e0b' : 'var(--text-muted)' }}>★</span>
+            <span style={{ color: (score ?? 0) >= n ? 'var(--warn-fg)' : 'var(--text-muted)' }}>★</span>
           </button>
         ))}
       </div>
@@ -3975,17 +4448,35 @@ function BriefingView({ briefing, token }: { briefing: Briefing; token: string }
   );
 }
 
-// TopicEditor step 4 — 内嵌健康诊断报告.idle 时显示生成按钮,generating 时轮询,ready 时
-// 显示状态 + 跳转到完整报告页.不重复实现 AdminSolution 的全部 UI(那个 ~600 行),只做摘要 +
-// 入口,真要看细节 admin 点「查看完整报告」跳走.
+// TopicEditor step 4 — embedded health diagnosis report. Shows a generate button when idle, polls while generating, and when ready
+// shows status + a link to the full report page. Doesn't reimplement AdminSolution's whole UI (~600 lines), only a summary +
+// entry point; for details, admins click "View full report" to navigate away.
+// Step 4 no longer takes readOnly: every action in this step belongs to the client (see the canAct note below);
+// the true read-only state is disabled uniformly by the outer fieldset (mode='view'), so the component needn't check again.
 function HealthReportStep({ topicId, initialWebsite, token }: {
   topicId: number | null;
   initialWebsite: string;
   token: string;
 }) {
   const { t, i18n } = useTranslation();
+  // Step 4 (GEO strategy optimization plan) is **the client's own deliverable**, with the same features as admins: generate / regenerate /
+  // retry are all available to them. All three buttons hit the same endpoint POST solution/generate, which the backend opened to
+  // owner-or-staff and bills per copy (KIND_SOLUTION), spending their own credits.
+  const canAct = true;
+  // canGenerate has the same source as canAct; a separate name is kept for the empty-state button to read, for clearer semantics.
+  const canGenerate = canAct;
   const [sol, setSol] = useState<TopicStrategicSolution | null>(null);
-  const [loaded, setLoaded] = useState(false);   // 首次拉完才能决定 UI,避免 idle 占位闪一下
+  // Unit price + balance: clicking charges immediately, so before clicking users must see the cost and whether it's enough. If unavailable, hide this line
+  // without blocking the button -- the real balance check is in the backend, which returns 402 with a message if it can't charge.
+  const [fee, setFee] = useState<{ price: number; balance: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    balanceApi.get(token).then(b => {
+      if (!cancelled) setFee({ price: b.price_solution_cents, balance: b.balance_cents });
+    }).catch(() => { if (!cancelled) setFee(null); });
+    return () => { cancelled = true; };
+  }, [token]);
+  const [loaded, setLoaded] = useState(false);   // UI can only be decided after the first fetch, avoiding a flash of the idle placeholder
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -4035,8 +4526,8 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
     };
   }, [topicId, token]);
 
-  // 自动生成 — 不再让用户输入 website,直接用 topic 资料里填的(initialWebsite).
-  // 空串也允许传:后端 generate 会走 4 块降级.
+  // Auto-generate — no longer asks the user for a website; uses the one filled in the topic materials (initialWebsite).
+  // An empty string is allowed too: backend generate degrades to 4 blocks.
   const handleGenerate = async () => {
     if (!topicId || busy) return;
     setBusy(true); setErr(null);
@@ -4059,7 +4550,7 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
     );
   }
 
-  // 首次拉完前显示 loading,避免 idle 占位先闪一下再被 ready 替换.
+  // Show loading until the first fetch completes, so the idle placeholder doesn't flash before being replaced by ready.
   if (!loaded) {
     return (
       <div className="py-12 flex flex-col items-center gap-3 text-sm text-muted">
@@ -4075,46 +4566,60 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
     <div className="space-y-3">
       {err && (
         <div className="rounded-md p-3 text-xs"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+             style={{ background: 'var(--danger-bg)', color: 'var(--danger-fg)',
                       border: '1px solid rgba(239,68,68,0.3)' }}>
           {err}
         </div>
       )}
 
+      {/* Monitoring & batch-run panel: which models / cadence and time / run new · run all once / current status.
+          This is the only entry to start a new topic running (manual by default, not in periodic batch runs); the same component is also on the topic settings page. */}
+      {topicId && <MonitorRunPanel topicId={topicId} token={token} />}
+
+      {/* Audit result overview (six metrics, same metric definition as the report overview) — 2026-07-30 replaced the batch-run process display */}
+      {topicId && <TopicKpiOverviewCard topicId={topicId} />}
+
       {status === 'idle' && (
         <div className="rounded-md p-4 space-y-3"
              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
           <div className="text-sm text-secondary">
-            {t('dashboard.aiTelemetry.form.step4Idle')}
+            {canGenerate
+              ? t('dashboard.aiTelemetry.form.step4Idle')
+              : t('dashboard.aiTelemetry.form.step4IdleCustomer')}
           </div>
-          <button type="button" disabled={busy}
-                  onClick={handleGenerate}
-                  className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
-                  style={{ background: 'var(--accent-primary)' }}>
-            {busy ? '…' : t('dashboard.aiTelemetry.form.step4Generate')}
-          </button>
+          {canGenerate && fee && fee.price > 0 && (
+            <div className="text-xs text-muted">
+              生成一份扣 <span className="text-primary font-medium">{fee.price}</span> 积分
+              {' '}· 余额 {fee.balance} 积分
+              {fee.balance < fee.price && (
+                <span style={{ color: '#dc2626' }}>
+                  {' '}· 还差 {fee.price - fee.balance} 积分
+                </span>
+              )}
+            </div>
+          )}
+          {canGenerate && (
+            <button type="button" disabled={busy}
+                    onClick={handleGenerate}
+                    className="px-3 py-1.5 text-sm rounded-md text-white disabled:opacity-40"
+                    style={{ background: 'var(--accent-primary)' }}>
+              {busy ? '…' : t('dashboard.aiTelemetry.form.step4Generate')}
+            </button>
+          )}
         </div>
       )}
 
-      {status === 'generating' && (
-        <div className="rounded-md p-4 flex items-center gap-3"
-             style={{ background: 'rgba(99,102,241,0.10)', color: 'var(--accent-primary)',
-                      border: '1px solid rgba(99,102,241,0.30)' }}>
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-transparent"
-               style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
-          <div className="text-sm">{t('dashboard.aiTelemetry.form.step4Generating')}</div>
-        </div>
-      )}
+      {status === 'generating' && sol && <SolutionGeneratingBanner sol={sol} />}
 
       {status === 'ready' && sol && (
         <div className="space-y-4">
-          {/* 顶栏:状态条 + 导出 PDF / Word + 重新生成,完整内容直接在下方铺开 */}
+          {/* Top bar: status bar + export PDF / Word + regenerate; full content laid out directly below */}
           <div className="rounded-md p-3 flex items-center justify-between gap-3 flex-wrap"
-               style={{ background: 'rgba(16,185,129,0.08)',
+               style={{ background: 'var(--success-bg)',
                         border: '1px solid rgba(16,185,129,0.30)' }}>
             <div className="text-sm text-primary">
               ✓ {t('dashboard.aiTelemetry.form.step4Ready', {
-                at: sol.updated_at ? new Date(sol.updated_at).toLocaleString() : '',
+                at: sol.updated_at ? fmtTime(sol.updated_at) : '',
               })}
             </div>
             <div className="flex items-center gap-2">
@@ -4128,11 +4633,13 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
                       style={{ background: '#2563eb' }}>
                 {exporting ? t('admin.solution.exporting') : t('admin.solution.exportDocx')}
               </button>
-              <button type="button" disabled={busy} onClick={handleGenerate}
-                      className="text-xs px-3 py-1.5 rounded-md whitespace-nowrap"
-                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                {t('dashboard.aiTelemetry.form.step4Regen')}
-              </button>
+              {canAct && (
+                <button type="button" disabled={busy} onClick={handleGenerate}
+                        className="text-xs px-3 py-1.5 rounded-md whitespace-nowrap"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                  {t('dashboard.aiTelemetry.form.step4Regen')}
+                </button>
+              )}
             </div>
           </div>
           <SolutionView sol={sol} />
@@ -4141,16 +4648,18 @@ function HealthReportStep({ topicId, initialWebsite, token }: {
 
       {status === 'failed' && (
         <div className="rounded-md p-4 space-y-3"
-             style={{ background: 'rgba(239,68,68,0.08)',
+             style={{ background: 'var(--danger-bg)',
                       border: '1px solid rgba(239,68,68,0.30)' }}>
-          <div className="text-sm" style={{ color: '#ef4444' }}>
+          <div className="text-sm" style={{ color: 'var(--danger-fg)' }}>
             {t('dashboard.aiTelemetry.form.step4Failed', { err: sol?.error || '—' })}
           </div>
-          <button type="button" disabled={busy} onClick={handleGenerate}
-                  className="px-3 py-1.5 text-sm rounded-md text-white"
-                  style={{ background: 'var(--accent-primary)' }}>
-            {t('dashboard.aiTelemetry.form.step4Regen')}
-          </button>
+          {canAct && (
+            <button type="button" disabled={busy} onClick={handleGenerate}
+                    className="px-3 py-1.5 text-sm rounded-md text-white"
+                    style={{ background: 'var(--accent-primary)' }}>
+              {t('dashboard.aiTelemetry.form.step4Regen')}
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -36,6 +36,14 @@ _page_cache_lock = threading.Lock()
 _scores = {}
 _scores_lock = threading.Lock()
 
+# Same shape as _scores, but a SEPARATE namespace for the SEO check suite
+# (seo_checks.py). Deliberately not merged into _scores: the GEO AI Visibility
+# Score must stay identical to the frozen root geo_checker.py baseline, and
+# adding SEO categories to the shared dict would silently move every site's
+# GEO score. Two namespaces, two scores, one process.
+_seo_scores = {}
+_seo_scores_lock = threading.Lock()
+
 
 def track_score(category, earned, max_points):
     """Record earned/max points for a check category. Thread-safe."""
@@ -50,6 +58,28 @@ def get_ai_visibility_score():
     """Calculate overall AI Visibility Score (0-100)."""
     total_earned = sum(v["earned"] for v in _scores.values())
     total_max = sum(v["max"] for v in _scores.values())
+    if total_max == 0:
+        return 0
+    return round((total_earned / total_max) * 100)
+
+
+def track_seo_score(category, earned, max_points):
+    """Record earned/max points for a SEO check category. Thread-safe.
+
+    Writes to `_seo_scores`, never to `_scores` — see the comment on
+    `_seo_scores` for why the two namespaces stay apart.
+    """
+    with _seo_scores_lock:
+        if category not in _seo_scores:
+            _seo_scores[category] = {"earned": 0.0, "max": 0.0}
+        _seo_scores[category]["earned"] += earned
+        _seo_scores[category]["max"] += max_points
+
+
+def get_seo_score():
+    """Calculate overall SEO Score (0-100) from the SEO namespace."""
+    total_earned = sum(v["earned"] for v in _seo_scores.values())
+    total_max = sum(v["max"] for v in _seo_scores.values())
     if total_max == 0:
         return 0
     return round((total_earned / total_max) * 100)
@@ -84,5 +114,7 @@ def reset_state():
     """
     with _scores_lock:
         _scores.clear()
+    with _seo_scores_lock:
+        _seo_scores.clear()
     with _page_cache_lock:
         _page_cache.clear()

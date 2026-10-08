@@ -47,7 +47,7 @@ def xueqiu_search(query: str, max_results: int = 20,
 
 
 if __name__ == "__main__":
-    q = sys.argv[1] if len(sys.argv) > 1 else "世纪互联"
+    q = sys.argv[1] if len(sys.argv) > 1 else "示例品牌"
     rows = xueqiu_search(q, max_results=10)
     print(f"query={q!r} → {len(rows)} 条")
     for r in rows:

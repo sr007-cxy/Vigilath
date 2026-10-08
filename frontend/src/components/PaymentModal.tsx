@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { membershipApi, currencySymbol } from '../services/membershipApi';
-import { paymentApi } from '../services/paymentApi';
+import { membershipApi, currencySymbol, grantPoints } from '../services/membershipApi';
 
 interface Membership {
   id: number;
@@ -26,15 +26,15 @@ interface PaymentModalProps {
   onSuccess: () => void;
 }
 
-export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentModalProps) {
-  const { t, i18n } = useTranslation();
+export function PaymentModal({ userName, onClose, onSuccess }: PaymentModalProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPaying, setIsPaying] = useState(false);
+  const [isPaying] = useState(false);
   const [error, setError] = useState('');
-  // Activation happens after the Stripe redirect on the CheckoutSuccess page,
-  // not here — we redirect out of this modal before any state can change.
+  // Activation happens after payment completes on the checkout page, not in this modal -- this only sends the user there.
   void onSuccess;
 
   useEffect(() => {
@@ -59,20 +59,9 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
     if (selectedId == null) return;
     const tier = memberships.find((m) => m.id === selectedId);
     if (!tier) return;
-    setIsPaying(true);
-    setError('');
-    try {
-      const { checkout_url } = await paymentApi.createStripeCheckoutSession(
-        token,
-        tier.slug,
-        i18n.language,
-      );
-      window.location.href = checkout_url;
-      // Navigation will unmount the modal; nothing else to do here.
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('common.errors.paymentFailed'));
-      setIsPaying(false);
-    }
+    // Only the WeChat Pay channel -- send the user straight to the checkout page, where the WeChat QR code is shown.
+    onClose();
+    navigate(`/checkout/pending?slug=${encodeURIComponent(tier.slug)}`);
   };
 
   return (
@@ -137,6 +126,14 @@ export function PaymentModal({ token, userName, onClose, onSuccess }: PaymentMod
                       <div className="mb-3">
                         <span className="text-2xl font-bold text-primary">{currencySymbol(tier.currency)}{tier.price}</span>
                         <span className="text-sm text-secondary">{tier.period}</span>
+                        {/* However much you pay is how many credits you get; that should be visible when choosing a tier */}
+                        {grantPoints(tier) !== null && (
+                          <span className="block text-xs font-medium text-accent-primary mt-1">
+                            {t('payment.grantPoints', '含 {{n}} 积分', {
+                              n: grantPoints(tier)!.toLocaleString('zh-CN'),
+                            })}
+                          </span>
+                        )}
                       </div>
                       <ul className="space-y-1.5">
                         {tier.features.slice(0, 4).map((feature, i) => (

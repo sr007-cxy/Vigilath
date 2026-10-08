@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/authApi';
 import { useAuthModal } from '../../contexts/AuthModalContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { displayName } from '../../utils/userDisplay';
 
 export function AccountLayout() {
   const navigate = useNavigate();
   const { openAuthModal } = useAuthModal();
   const { t } = useTranslation();
-  const { user, setUser, clearAuth } = useAuth();
+  const { user, role, setUser, clearAuth } = useAuth();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,15 +43,19 @@ export function AccountLayout() {
     navigate('/');
   };
 
+  // The account center only covers "about my account" -- slimmed from 14 items to 4.
+  //
+  // Three kinds were moved out:
+  //   business data (article review / audit records / my placements) -> /app; they're work content, not account;
+  //   business config (brand & monitoring) -> the topic profile in /app/content; it belongs to the business context;
+  //   similar items merged (membership + usage + credits + payment -> billing; integrations + email + SMS -> integrations).
   const menu = [
     { to: '/account/profile', label: t('account.menu.profile', '个人资料') },
-    { to: '/account/brand', label: t('account.menu.brand', '品牌与监控') },
-    { to: '/account/membership', label: t('account.menu.membership', '会员信息') },
-    { to: '/account/usage', label: t('account.menu.usage', '使用情况') },
-    { to: '/account/articles', label: t('account.menu.articles', '文章审核') },
-    { to: '/account/integration', label: t('account.menu.integration', '对接集成') },
-    { to: '/account/history', label: t('account.menu.history', '检测记录') },
-    { to: '/account/payments', label: t('account.menu.payments', '支付记录') },
+    { to: '/account/billing', label: t('account.menu.billing', '会员与计费') },
+    { to: '/account/integrations', label: t('account.menu.integrations', '集成与通知') },
+    ...(role === 'user' ? [{ to: '/account/agency', label: t('account.menu.agency', '我的代理商') }] : []),
+    // One of two report entries (the other is the footer) -- Article 15 of the "Interim Measures" requires public disclosure
+    { to: '/account/report', label: t('account.menu.report', '投诉与举报') },
   ];
 
   if (loading) {
@@ -70,7 +75,7 @@ export function AccountLayout() {
       <div className="bg-glow bg-glow-2"></div>
       <div className="bg-glow bg-glow-3"></div>
 
-      <div className="md:flex relative z-10">
+      <div className="md:flex relative">
         <aside
           className="md:w-64 md:shrink-0 md:sticky md:top-20 md:h-[calc(100vh-5rem)] md:flex md:flex-col md:border-r"
           style={{
@@ -83,7 +88,7 @@ export function AccountLayout() {
             style={{ borderColor: 'var(--border-color)' }}
           >
             <p className="text-sm font-semibold truncate text-primary">
-              {user?.email}
+              {displayName(user)}
             </p>
             <p className="text-xs text-secondary mt-1">
               {t('account.layout.subtitle', '账户信息')}

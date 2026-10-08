@@ -1,18 +1,22 @@
-// ⚠️ 已降级为兜底常量(2026-05-08 起)。
+// ⚠️ Downgraded to fallback constants (since 2026-05-08).
 //
-// Source of truth = backend `sentiment_platforms` 表(由 migration 010 seed),
-// 通过 GET /api/sentiment/platforms 暴露,FE 走 useSentimentPlatforms() 拉取。
-// 此文件只在两种场景被读:
-//   (1) VITE_USE_MOCK_SENTIMENT=1 的 mock 模式
-//   (2) /platforms 接口请求失败时的离线兜底(避免 UI 空白)
-// 加 / 改平台请改 backend/migrations/010_sentiment_platforms.py 的 SEED 数组,
-// 不要只改这里 — 否则线上(走 DB)和 mock(走这里)就会偏离。
+// Source of truth = backend `sentiment_platforms` table (seeded by migration 010),
+// exposed via GET /api/sentiment/platforms; the FE fetches it with useSentimentPlatforms().
+// This file is only read in two scenarios:
+//   (1) mock mode with VITE_USE_MOCK_SENTIMENT=1
+//   (2) offline fallback when the /platforms request fails (to avoid a blank UI)
+// To add / change platforms, edit the SEED array in backend/migrations/010_sentiment_platforms.py,
+// not just here -- otherwise production (via DB) and mock (via here) will diverge.
 
-// Legacy 单轴(010 引入,前端不再用作分组,保留为字段兼容旧 fallback 数据)
+// ICP filing remediation: the fallback constants no longer have overseas platforms; the types still keep 'overseas' / 'overseas_en',
+// because the backend sentiment_platforms table may still have historical rows -- useSentimentPlatforms()
+// uniformly filters out region === 'overseas', ensuring no overseas sites appear in the UI.
+//
+// Legacy single axis (introduced in 010; the frontend no longer groups by it; kept as a field for compatibility with old fallback data)
 export type PlatformCategory =
   | 'finance' | 'social' | 'forum' | 'video' | 'news' | 'overseas';
 
-// 011 起的正交两轴 — UI 用这两个画 filter
+// Two orthogonal axes since 011 -- the UI draws filters from these two
 export type MediaType =
   | 'web' | 'weibo' | 'wechat' | 'app' | 'forum'
   | 'short_video' | 'long_video' | 'broadcast'
@@ -33,9 +37,9 @@ export interface PlatformEntry {
   region: PlatformRegion;
 }
 
-/** code → (media_type, industry) — 与 backend/migrations/011 的 AXES_MAP 对齐。
- *  常量数组只手维护 (category, region),其余两轴在模块加载时从此表派生,
- *  减少行数据重复;与 backend/api 返回的字段一致。 */
+/** code -> (media_type, industry) -- aligned with AXES_MAP in backend/migrations/011.
+ *  The constant array only hand-maintains (category, region); the other two axes are derived from this table at module load,
+ *  reducing row data duplication; consistent with the fields returned by backend/api. */
 const AXES_MAP: Record<string, [MediaType, Industry]> = {
   xueqiu:       ['app',         'finance'],
   eastmoney:    ['forum',       'finance'],
@@ -100,11 +104,6 @@ const AXES_MAP: Record<string, [MediaType, Industry]> = {
   ifanr:        ['web',         'tech'],
   qbitai:       ['web',         'tech'],
   jiqizhixin:   ['web',         'tech'],
-  reddit:       ['forum',       'overseas_en'],
-  twitter:      ['weibo',       'overseas_en'],
-  seekingalpha: ['web',         'finance'],
-  bloomberg:    ['web',         'finance'],
-  reuters:      ['web',         'finance'],
 };
 
 interface RawEntry {
@@ -119,9 +118,9 @@ function deriveAxes(entry: RawEntry): PlatformEntry {
   return { ...entry, media_type: mt, industry: ind };
 }
 
-// 顺序按"category 分组、组内按重要度"排,前端分组渲染时按 media_type / industry 重新归类。
+// Ordered as "grouped by category, by importance within a group"; the frontend regroups by media_type / industry when rendering.
 const RAW_ENTRIES: readonly RawEntry[] = [
-  // ─── 财经媒体(主力)───
+  // ─── Financial media (core) ───
   { code: 'xueqiu',       domain: 'xueqiu.com',           category: 'finance',  region: 'mainland' },
   { code: 'eastmoney',    domain: 'guba.eastmoney.com',   category: 'finance',  region: 'mainland' },
   { code: 'caixin',       domain: 'caixin.com',           category: 'finance',  region: 'mainland' },
@@ -134,7 +133,7 @@ const RAW_ENTRIES: readonly RawEntry[] = [
   { code: 'yicai',        domain: 'yicai.com',            category: 'finance',  region: 'mainland' },
   { code: 'cls',          domain: 'cls.cn',               category: 'finance',  region: 'mainland' },
   { code: 'gelonghui',    domain: 'gelonghui.com',        category: 'finance',  region: 'hk'       },
-  // ─── 财经媒体(扩展)───
+  // ─── Financial media (extended) ───
   { code: 'jrj',          domain: 'jrj.com.cn',           category: 'finance',  region: 'mainland' },
   { code: 'hexun',        domain: 'hexun.com',            category: 'finance',  region: 'mainland' },
   { code: 'jin10',        domain: 'jin10.com',            category: 'finance',  region: 'mainland' },
@@ -150,13 +149,13 @@ const RAW_ENTRIES: readonly RawEntry[] = [
   { code: 'itiger',       domain: 'itiger.com',           category: 'finance',  region: 'mainland' },
   { code: 'zhitong',      domain: 'zhitongcaijing.com',   category: 'finance',  region: 'hk'       },
 
-  // ─── 社交媒体 ───
+  // ─── Social media ───
   { code: 'weibo',        domain: 'weibo.com',            category: 'social',   region: 'mainland' },
   { code: 'weixin',       domain: 'mp.weixin.qq.com',     category: 'social',   region: 'mainland' },
   { code: 'xiaohongshu',  domain: 'xiaohongshu.com',      category: 'social',   region: 'mainland' },
   { code: 'zhihu',        domain: 'zhihu.com',            category: 'social',   region: 'mainland' },
 
-  // ─── 论坛社区 ───
+  // ─── Forums & communities ───
   { code: 'tieba',        domain: 'tieba.baidu.com',      category: 'forum',    region: 'mainland' },
   { code: 'zhidao',       domain: 'zhidao.baidu.com',     category: 'forum',    region: 'mainland' },
   { code: 'hupu',         domain: 'hupu.com',             category: 'forum',    region: 'mainland' },
@@ -166,7 +165,7 @@ const RAW_ENTRIES: readonly RawEntry[] = [
   { code: 'csdn',         domain: 'csdn.net',             category: 'forum',    region: 'mainland' },
   { code: 'juejin',       domain: 'juejin.cn',            category: 'forum',    region: 'mainland' },
 
-  // ─── 视频平台 ───
+  // ─── Video platforms ───
   { code: 'bilibili',     domain: 'bilibili.com',         category: 'video',    region: 'mainland' },
   { code: 'douyin',       domain: 'douyin.com',           category: 'video',    region: 'mainland' },
   { code: 'kuaishou',     domain: 'kuaishou.com',         category: 'video',    region: 'mainland' },
@@ -175,7 +174,7 @@ const RAW_ENTRIES: readonly RawEntry[] = [
   { code: 'iqiyi',        domain: 'iqiyi.com',            category: 'video',    region: 'mainland' },
   { code: 'ixigua',       domain: 'ixigua.com',           category: 'video',    region: 'mainland' },
 
-  // ─── 资讯门户 ───
+  // ─── News portals ───
   { code: 'baidu_news',   domain: 'news.baidu.com',       category: 'news',     region: 'mainland' },
   { code: 'ifeng',        domain: 'ifeng.com',            category: 'news',     region: 'mainland' },
   { code: 'sina_main',    domain: 'sina.com.cn',          category: 'news',     region: 'mainland' },
@@ -194,13 +193,6 @@ const RAW_ENTRIES: readonly RawEntry[] = [
   { code: 'ifanr',        domain: 'ifanr.com',            category: 'news',     region: 'mainland' },
   { code: 'qbitai',       domain: 'qbitai.com',           category: 'news',     region: 'mainland' },
   { code: 'jiqizhixin',   domain: 'jiqizhixin.com',       category: 'news',     region: 'mainland' },
-
-  // ─── 海外 ───
-  { code: 'reddit',       domain: 'reddit.com',           category: 'overseas', region: 'overseas' },
-  { code: 'twitter',      domain: 'twitter.com',          category: 'overseas', region: 'overseas' },
-  { code: 'seekingalpha', domain: 'seekingalpha.com',     category: 'overseas', region: 'overseas' },
-  { code: 'bloomberg',    domain: 'bloomberg.com',        category: 'overseas', region: 'overseas' },
-  { code: 'reuters',      domain: 'reuters.com',          category: 'overseas', region: 'overseas' },
 ];
 
 export const SENTIMENT_PLATFORMS: readonly PlatformEntry[] = RAW_ENTRIES.map(deriveAxes);
@@ -208,10 +200,10 @@ export const SENTIMENT_PLATFORMS: readonly PlatformEntry[] = RAW_ENTRIES.map(der
 export const SENTIMENT_PLATFORM_CODES = SENTIMENT_PLATFORMS.map(p => p.code);
 
 export const PLATFORM_CATEGORY_ORDER: readonly PlatformCategory[] = [
-  'finance', 'social', 'forum', 'video', 'news', 'overseas',
+  'finance', 'social', 'forum', 'video', 'news',
 ];
 
-// 011 起 UI 渲染优先用这两个轴
+// Since 011 UI rendering prefers these two axes
 export const MEDIA_TYPE_ORDER: readonly MediaType[] = [
   'web', 'weibo', 'wechat', 'app', 'forum',
   'short_video', 'long_video', 'broadcast',
@@ -222,7 +214,7 @@ export const INDUSTRY_ORDER: readonly Industry[] = [
   'finance', 'tech', 'general', 'science', 'party_media', 'health', 'overseas_en',
 ];
 
-/** Legacy(category 单轴)— 仍被尚未迁移的代码调用。 */
+/** Legacy (single category axis) -- still called by code not yet migrated. */
 export function groupByCategory<T extends { category?: string }>(
   entries: readonly T[],
 ): { category: PlatformCategory; items: T[] }[] {
@@ -239,7 +231,7 @@ export function groupByCategory<T extends { category?: string }>(
     .map(c => ({ category: c, items: buckets.get(c)! }));
 }
 
-/** 按 media_type 分组(WisersOne 的"媒体类型"轴)。 */
+/** Group by media_type (WisersOne's "media type" axis). */
 export function groupByMediaType<T extends { media_type: string }>(
   entries: readonly T[],
 ): { mediaType: MediaType; items: T[] }[] {

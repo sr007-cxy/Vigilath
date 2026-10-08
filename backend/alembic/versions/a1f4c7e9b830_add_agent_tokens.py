@@ -1,6 +1,6 @@
-"""add agent_tokens (对外开放 1 年期账号 token)
+"""add agent_tokens (externally exposed 1-year account tokens)
 
-新建表,不动现有数据 —— 低风险。见 agent integration API。
+New table, existing data untouched: low risk. See docs/03-系统设计/Agent/对外开放-契约.md §12.
 
 Revision ID: a1f4c7e9b830
 Revises: e3c9a7b1d520

@@ -1,9 +1,9 @@
-// TopicStepper — 项目详情页共享的「6 步管线」导航条,与项目进度看板对齐.
-// 用法:任何 /workbench/topics/:topicId/* 的页面顶部 render 一个 <TopicStepper topicId={tid} active="plan" />
-// 6 步:① 画像 ② 诊断与方案预评估 ③ GEO策略优化方案 ④ 计划书 ⑤ 文案 ⑥ 效果查验与更新
-// 状态符号:✓ done / ⋯ running / ─ idle / ✗ failed
+// TopicStepper -- the shared "6-step pipeline" nav bar for project detail pages, aligned with the project progress board.
+// Usage: any /ops/topics/:topicId/* page renders a <TopicStepper topicId={tid} active="plan" /> at the top
+// 6 steps: (1) profile (2) diagnosis & plan pre-assessment (3) GEO strategy optimization plan (4) plan document (5) copy (6) effect verification & update
+// Status symbols: ✓ done / ⋯ running / ─ idle / ✗ failed
 //
-// Maintained workflow: docs/product/content-workflow.md
+// Design doc: docs/02-需求分析/产品需求/需求/no-audit-flow-design.md §4.4
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { adminReviewApi, type ExecutionPlan, type TopicReviewDetail, type TopicStrategicSolution } from '../services/adminReviewApi';
 
 export type StepKey = 'profile' | 'review' | 'solution' | 'plan' | 'docs' | 'insight';
-// editing 是新加的:plan 步骤在 draft 态下进入「等运营编辑发文表」,蓝调高亮.
+// editing is new: in draft state the plan step enters "waiting for ops to edit the publish table", highlighted in blue.
 export type StepStatus = 'idle' | 'running' | 'done' | 'failed' | 'editing';
 
 interface Props {
@@ -23,7 +23,7 @@ interface StepDef {
   key: StepKey;
   label: string;
   status: StepStatus;
-  hint?: string;     // 副标题(进度数字等)
+  hint?: string;     // subtitle (progress numbers etc.)
   onClick: () => void;
 }
 
@@ -42,40 +42,40 @@ export function TopicStepper({ topicId, active }: Props) {
     adminReviewApi.getTopicReview(topicId, token)
       .then((d) => { if (!cancelled) setTopic(d); })
       .catch((e) => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)); });
-    // 健康诊断报告状态用 getStrategicSolution 拿,失败不显示错误(stepper 上只用状态)
+    // Health diagnosis report status via getStrategicSolution; errors aren't shown on failure (the stepper only uses status)
     adminReviewApi.getStrategicSolution(topicId, token)
       .then((s) => { if (!cancelled) setSolution(s); })
       .catch(() => {});
-    // 执行计划状态:plan.status + 文章生成进度 → plan step chip
+    // Execution plan status: plan.status + article generation progress -> plan step chip
     adminReviewApi.getExecutionPlan(topicId, token)
       .then((p) => { if (!cancelled) setPlan(p); })
-      .catch(() => {});  // 还没启动项目时 404,不打扰
+      .catch(() => {});  // 404 before the project starts; don't bother the user
     return () => { cancelled = true; };
   }, [topicId, token]);
 
-  // 各步状态推断.画像 = profile 必填齐 + 至少 1 个 selected query(合并设计里的画像和监测问题).
-  // 文案 / 投放合并为「文案」.健康诊断报告从 solution.status 推 ready=done / generating=running / failed=failed.
+  // Infer each step's status. Profile = required profile fields complete + at least 1 selected query (profile and prompts are merged in the design).
+  // Copy / placement are merged into "copy". Health diagnosis report derives from solution.status: ready=done / generating=running / failed=failed.
   const profileOk = !!(topic?.profile?.company_short_name)
                     && ((topic?.selected_query_count ?? 0) > 0
                         || (topic?.query_selected?.some(Boolean) ?? false));
-  // 诊断与方案预评估:由 submission_status 推.复刻 cockpit deriveStages 的 reviewRaw.
-  // pending 在 stepper 视觉上没有独立态,合并到 running;rejected 走 failed.
+  // Diagnosis & plan pre-assessment: derived from submission_status. Replicates reviewRaw from cockpit deriveStages.
+  // pending has no separate visual state in the stepper, merged into running; rejected goes to failed.
   const sub = topic?.submission_status;
   const reviewChip: StepStatus =
     sub === 'approved' ? 'done'
     : sub === 'rejected' ? 'failed'
     : sub === 'pending' ? 'running'
     : 'idle';
-  // 计划步骤 chip:plan.status 优先;没 plan 时 fallback 到老 last_run_status.
-  // draft → editing(蓝)/ confirmed + 还有 doc 在跑或监控在跑 → running / confirmed + 全好 → done.
+  // Plan step chip: plan.status first; without a plan, fall back to the old last_run_status.
+  // draft -> editing (blue) / confirmed + docs still running or monitoring running -> running / confirmed + all good -> done.
   const planChip: StepStatus = (() => {
     if (plan) {
       if (plan.status === 'failed') return 'failed';
       if (plan.status === 'draft' || plan.status === 'generating') return 'editing';
-      // confirmed / ready 兼容
+      // confirmed / ready compatibility
       const docsTotal = plan.publishing_plan?.length ?? 0;
       const docsPending = (plan.publishing_plan || []).some(
-        it => !it.doc_id || it.doc_status === 'draft',
+        it => !it.doc_id || it.doc_status === 'generating' || it.doc_status === 'draft',
       );
       const monRunning = plan.run_status === 'running';
       if (docsTotal === 0 || docsPending || monRunning) return 'running';
@@ -90,8 +90,8 @@ export function TopicStepper({ topicId, active }: Props) {
                             : solution?.status === 'generating' ? 'running'
                             : solution?.status === 'failed' ? 'failed'
                             : 'idle';
-  // 效果查验与更新:复刻后端 admin_review._insight_state — approved + 有过运行才算非 idle.
-  // success → done / running → running / failed → failed / 其他 → idle.
+  // Effect verification & update: replicates backend admin_review._insight_state -- approved + has had a run counts as non-idle.
+  // success -> done / running -> running / failed -> failed / other -> idle.
   const insChip: StepStatus = (() => {
     if (topic?.submission_status !== 'approved' || !topic?.last_run_at) return 'idle';
     const s = (topic?.last_run_status || '').toLowerCase();
@@ -101,9 +101,9 @@ export function TopicStepper({ topicId, active }: Props) {
       : 'idle';
   })();
 
-  // 全部 6 段都跳「画像」主流程的对应 step,不再去单独的 review/solution/plan/docs/insight 详情页.
+  // All 6 segments jump to the matching step of the "profile" main flow, no longer to separate review/solution/plan/docs/insight detail pages.
   //   profile→step 1  review→step 3  solution→step 4  plan→step 5  docs→step 6  insight→step 7
-  const editBase = `/workbench/topics/${topicId}/edit`;
+  const editBase = `/ops/topics/${topicId}/edit`;
   const steps: StepDef[] = [
     {
       key: 'profile', label: t('workbench.topicStepper.profile'),
@@ -143,13 +143,13 @@ export function TopicStepper({ topicId, active }: Props) {
     <div className="rounded-md p-4 mb-4" style={{
       background: 'var(--bg-card)', border: '1px solid var(--border-color)',
     }}>
-      {/* 头部:面包屑(辅助按钮已合并进 step 4 健康诊断报告) */}
+      {/* Header: breadcrumbs (auxiliary buttons merged into the step 4 health diagnosis report) */}
       <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div className="text-xs">
           {topic && (
             <span className="text-muted">
               <button type="button"
-                      onClick={() => navigate(`/workbench/accounts/${topic.user_id}/topics`)}
+                      onClick={() => navigate(`/ops/accounts/${topic.user_id}/topics`)}
                       className="hover:underline">
                 ← {topic.target || topic.user_email || `用户 #${topic.user_id}`}
               </button>
@@ -175,9 +175,9 @@ export function TopicStepper({ topicId, active }: Props) {
 }
 
 const STATUS_PALETTE: Record<StepStatus, { fg: string; bg: string; line: string; mark: string }> = {
-  done:    { fg: '#10b981', bg: 'rgba(16,185,129,0.10)', line: '#10b981', mark: '✓' },
+  done:    { fg: '#10b981', bg: 'var(--success-bg)', line: '#10b981', mark: '✓' },
   running: { fg: '#eab308', bg: 'rgba(234,179,8,0.10)',  line: '#eab308', mark: '⋯' },
-  failed:  { fg: '#ef4444', bg: 'rgba(239,68,68,0.10)',  line: '#ef4444', mark: '✗' },
+  failed:  { fg: '#ef4444', bg: 'var(--danger-bg)',  line: '#ef4444', mark: '✗' },
   editing: { fg: '#3b82f6', bg: 'rgba(59,130,246,0.10)', line: '#3b82f6', mark: '✎' },
   idle:    { fg: 'var(--text-muted)', bg: 'var(--bg-tertiary)', line: 'var(--border-color)', mark: '─' },
 };

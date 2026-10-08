@@ -476,6 +476,19 @@ def authority_audit(url, return_data=False):
     print(f"{'='*60}\n")
 
     if return_data:
+        # Scores of each of the four sections -- the report must explain to users "where this score comes from".
+        # Derived here with exactly the same thresholds as above and self-checked against the sum; if they don't match nothing is output,
+        # and the caller (the authority endorsement chapter of full_diagnosis) shows only the total, not the breakdown, when fields are missing.
+        _sections = {
+            "reviews": 5 if len(found_platforms) >= 3 else (3 if len(found_platforms) >= 1 else 0),
+            "awards": 5 if award_signals >= 5 else (3 if award_signals >= 2 else 0),
+            "google": min(google_score, 5),
+            # The last section has a 1-point floor, so this item's theoretical minimum is 1 and the percent minimum is 5, not 0
+            "mentions": 5 if len(found_mentions) >= 4 else (3 if len(found_mentions) >= 2 else 1),
+        }
+        if sum(_sections.values()) != authority_score:
+            _sections = None
+
         return {
             "url": base_url,
             "domain": domain,
@@ -484,6 +497,7 @@ def authority_audit(url, return_data=False):
             "max_score": max_score,
             "percent": round(pct, 1),
             "grade": grade,
+            "section_scores": _sections,
             "reviews": {
                 "platforms": list(dict.fromkeys(found_platforms)),
                 "has_schema": has_review_schema,
@@ -498,7 +512,10 @@ def authority_audit(url, return_data=False):
                 "indexed_pages": google_indexed,
                 "kg_schema_fields": kg_signals,
                 "wikipedia_or_wikidata": wiki_found,
+                # score is the uncapped raw score; it's capped at 5 when added to the total, so don't reconcile it against the total when displaying
                 "score": google_score,
+                "score_raw": google_score,
+                "score_capped": min(google_score, 5),
             },
             "mentions": {
                 "platforms": found_mentions,

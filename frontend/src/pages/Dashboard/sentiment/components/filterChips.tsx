@@ -1,8 +1,8 @@
-// 文章筛选的 chip 原子组件 — ArticlesTab 顶部 chip 行和高级筛选 modal 共用.
+// Atomic chip components for article filtering — shared by the ArticlesTab top chip row and the advanced filter modal.
 //
-// FilterChip: 4-5 项 enum(风险/情感)用的实色 chip
-// GridChip:   单 chip,3 列 grid 排版,适合平台 code 这种带数量的
-// ExpandableGridChip: 在 GridChip 上加 ▾,展开后内联渲染下属平台 list
+// FilterChip: solid chip for 4-5 item enums (risk/sentiment)
+// GridChip:   single chip in a 3-column grid, suited to platform codes with counts
+// ExpandableGridChip: GridChip plus ▾; when expanded, renders the child platform list inline
 import { useState } from 'react';
 
 export function FilterChip({ label, active, onClick, dot }:
@@ -21,7 +21,7 @@ export function FilterChip({ label, active, onClick, dot }:
           style={{
             position: 'absolute', top: -3, right: -3,
             width: 8, height: 8, borderRadius: '50%',
-            background: '#ef4444',
+            background: 'var(--danger-solid)',
             border: '1px solid var(--bg-primary)',
           }} />
       )}
@@ -135,5 +135,5 @@ export function ExpandableGridChip({
   );
 }
 
-// toggleSet 改成各调用方各自维护一份 4 行的本地 toggle 帮手 — 见 ArticlesTab /
-// AdvancedFilterModal.tsx.原本的导出会触发 react-refresh/only-export-components.
+// toggleSet was replaced by each caller keeping its own 4-line local toggle helper — see ArticlesTab /
+// AdvancedFilterModal.tsx. The original export triggered react-refresh/only-export-components.

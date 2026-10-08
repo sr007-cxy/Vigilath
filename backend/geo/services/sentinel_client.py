@@ -1,6 +1,6 @@
-"""HTTP 客户端 — backend → sentinel-service.
+"""HTTP client -- backend -> sentinel-service.
 
-封装对 sentinel-service 5 个 RPC 的调用,统一处理超时、错误、API key 注入.
+Wraps calls to sentinel-service's 5 RPCs, uniformly handling timeouts, errors and API key injection.
 """
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ log = logging.getLogger(__name__)
 SENTINEL_URL = os.environ.get("SENTINEL_SERVICE_URL", "http://localhost:8090")
 PLATFORM_OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Hardcoded fallback — 仅当 DB 查询失败时使用(冷启动 / 表缺失 / 异常),
-# 真正的 source of truth 是 sentiment_platforms 表(由 migration 010 seed)。
-# 改 / 加平台不要改这里 — 改 DB(或重跑 migration)。
+# Hardcoded fallback -- used only when the DB query fails (cold start / missing table / exception);
+# the real source of truth is the sentiment_platforms table (seeded by migration 010).
+# To change / add platforms don't edit this -- change the DB (or rerun the migration).
 _PLATFORM_FALLBACK_MAP: dict[str, str] = {
-    # finance(主力)
+    # finance (primary)
     "xueqiu":       "xueqiu.com",
     "eastmoney":    "guba.eastmoney.com",
     "caixin":       "caixin.com",
@@ -34,7 +34,7 @@ _PLATFORM_FALLBACK_MAP: dict[str, str] = {
     "yicai":        "yicai.com",
     "cls":          "cls.cn",
     "gelonghui":    "gelonghui.com",
-    # finance(扩展)
+    # finance (extended)
     "jrj":          "jrj.com.cn",
     "hexun":        "hexun.com",
     "jin10":        "jin10.com",
@@ -98,8 +98,8 @@ _PLATFORM_FALLBACK_MAP: dict[str, str] = {
     "reuters":      "reuters.com",
 }
 
-# 60s 内存缓存 — pipeline 一次跑会调多个 RPC,避免每次都打 DB。
-# admin 改了平台后最多 60s 生效。
+# 60s in-memory cache -- one pipeline run calls several RPCs; avoid hitting the DB each time.
+# Admin platform changes take effect within 60s at most.
 _PLATFORM_CACHE: Optional[tuple[dict[str, str], list[str]]] = None
 _PLATFORM_CACHE_AT: float = 0.0
 _PLATFORM_CACHE_TTL = 60.0
@@ -107,9 +107,9 @@ _PLATFORM_CACHE_LOCK = threading.Lock()
 
 
 def _load_platform_map() -> tuple[dict[str, str], list[str]]:
-    """从 DB 读 (code→domain map, 全部 enabled 域名 list)。
-    DB 不可达时回落到 _PLATFORM_FALLBACK_MAP — 这样 sentinel-service 即使在
-    backend cold start / 表损坏的极端情况下仍能跑(用 27 个内置平台)。"""
+    """Read (code->domain map, list of all enabled domains) from the DB.
+    Falls back to _PLATFORM_FALLBACK_MAP when the DB is unreachable -- so sentinel-service still runs even in
+    the extreme case of backend cold start / table corruption (using 27 built-in platforms)."""
     global _PLATFORM_CACHE, _PLATFORM_CACHE_AT
     now = time.time()
     if _PLATFORM_CACHE is not None and (now - _PLATFORM_CACHE_AT) < _PLATFORM_CACHE_TTL:
@@ -118,7 +118,7 @@ def _load_platform_map() -> tuple[dict[str, str], list[str]]:
         if _PLATFORM_CACHE is not None and (now - _PLATFORM_CACHE_AT) < _PLATFORM_CACHE_TTL:
             return _PLATFORM_CACHE
         try:
-            # 延迟 import 避免 services/* ↔ models/* 之间的循环引用。
+            # Lazy import to avoid circular references between services/* <-> models/*.
             from geo.database import SessionLocal
             from geo.models.sentiment import SentimentPlatformORM
             db = SessionLocal()
@@ -127,7 +127,7 @@ def _load_platform_map() -> tuple[dict[str, str], list[str]]:
             finally:
                 db.close()
             if not rows:
-                # 表存在但还没 seed — 用 fallback 顶住,管理员稍后跑 migration
+                # Table exists but not seeded yet -- hold with the fallback; admin runs the migration later
                 log.warning("sentiment_platforms table is empty; using fallback (run migration 010)")
                 m = dict(_PLATFORM_FALLBACK_MAP)
             else:
@@ -142,7 +142,7 @@ def _load_platform_map() -> tuple[dict[str, str], list[str]]:
 
 
 def invalidate_platform_cache() -> None:
-    """admin 改完平台目录后调一下,下一次 RPC 立即生效(可选,不调也最多 60s 后生效)。"""
+    """Call after admin edits the platform catalog so the next RPC takes effect immediately (optional; otherwise within 60s)."""
     global _PLATFORM_CACHE, _PLATFORM_CACHE_AT
     with _PLATFORM_CACHE_LOCK:
         _PLATFORM_CACHE = None
@@ -150,11 +150,11 @@ def invalidate_platform_cache() -> None:
 
 
 def _resolve_media_allowlist(items: Optional[list[str]]) -> list[str]:
-    """codes → domains。
-    - items 含已识别 code → 翻成 domain
-    - items 含未识别字符串(例如用户手写 'xhslink.com')→ 原样透传
-    - items 空 / None → **展开为全部 enabled 平台域名**,这样 sentinel 永远拿到非空列表,
-      不再回落到自己的 PLATFORM_CATALOG — DB 真正成为 single source of truth。
+    """codes -> domains.
+    - items containing recognized codes -> translated to domains
+    - items containing unrecognized strings (e.g. user-written 'xhslink.com') -> passed through as-is
+    - items empty / None -> **expanded to all enabled platform domains**, so sentinel always gets a non-empty list
+      and never falls back to its own PLATFORM_CATALOG -- the DB truly becomes the single source of truth.
     """
     code_map, all_domains = _load_platform_map()
     if not items:
@@ -167,14 +167,14 @@ def _resolve_media_allowlist(items: Optional[list[str]]) -> list[str]:
         out.append(code_map.get(s, s))
     return out
 
-# 不同操作的合理超时:
-#   monitor 涉及 LLM 生成 plan + N 个搜索引擎调用 — 即使限定 backend + 走代理,
-#           30+ query × 6-8s/query 加上 LLM 限速重试可能跑到 10-15 分钟
-#   analyze 涉及 N 次 LLM 调用,免费 LLM(GLM glm-4.5-flash)RPM 限速 + 退避
-#           重试,30 篇帖子撞几次限速就可能跑 20-30 分钟
-#   brief   map-reduce LLM,GLM 限速下 5-15 分钟
-#   respond 单次 LLM,30 秒
-TIMEOUT_MONITOR = 1200   # 20 min
+# Reasonable timeouts per operation:
+#   monitor involves LLM plan generation + N search engine calls -- even limited to backend + via proxy,
+#           30+ queries x 6-8s/query plus LLM rate-limit retries can run 10-15 minutes
+#   analyze involves N LLM calls; free LLM (GLM glm-4.5-flash) RPM limits + backoff
+#           retries, 30 posts hitting the limit a few times can run 20-30 minutes
+#   brief   map-reduce LLM, 5-15 minutes under GLM rate limits
+#   respond single LLM call, 30 seconds
+TIMEOUT_MONITOR = 1800   # 30 min (many account aliases/competitors + slow browser-direct sources; 20min would time out)
 TIMEOUT_ANALYZE = 1800   # 30 min
 TIMEOUT_BRIEF = 1200     # 20 min
 TIMEOUT_RESPOND = 120    # 2 min
@@ -182,7 +182,7 @@ TIMEOUT_QUICK = 15
 
 
 class SentinelError(RuntimeError):
-    """sentinel-service 返回 status=failed 时抛."""
+    """Raised when sentinel-service returns status=failed."""
 
     def __init__(self, message: str, category: str = "unknown", payload: Optional[dict] = None):
         super().__init__(message)
@@ -199,7 +199,7 @@ def _headers(api_key: Optional[str] = None) -> dict[str, str]:
 
 
 def _unwrap(resp: httpx.Response) -> dict:
-    """sentinel-service 返回 {status, data, error} → 抛 SentinelError 或 return data."""
+    """sentinel-service returns {status, data, error} -> raise SentinelError or return data."""
     resp.raise_for_status()
     body = resp.json()
     if body.get("status") == "failed":
@@ -215,7 +215,8 @@ def _unwrap(resp: httpx.Response) -> dict:
 
 
 def run_monitor(
-    *, account_id: int, target: str, ticker: str,
+    # ticker optional (non-listed entities pass None) -- sentinel side uses `symbol = ticker or target`
+    *, account_id: int, target: str, ticker: Optional[str] = None,
     intent: Optional[str] = None,
     aliases: Optional[list[str]] = None,
     keywords: Optional[list[str]] = None,
@@ -224,8 +225,8 @@ def run_monitor(
     api_key: Optional[str] = None,
     timeout: int = TIMEOUT_MONITOR,
 ) -> dict:
-    """同步调用,定时任务专用(scheduler thread 内).
-    返回 {plan_summary, stats}.
+    """Synchronous call, for scheduled jobs only (inside the scheduler thread).
+    Returns {plan_summary, stats}.
     """
     payload = {
         "account_id": account_id, "target": target, "ticker": ticker,
@@ -257,17 +258,39 @@ def run_brief(
     date: Optional[str] = None,
     batch_size: int = 20,
     top_noteworthy: int = 5,
+    competitors: Optional[list[str]] = None,
     api_key: Optional[str] = None,
     timeout: int = TIMEOUT_BRIEF,
 ) -> dict:
-    """返回 {path, body, date}."""
+    """Returns {path, body, date}. competitors: competitor entity words; the brief uses them to split subject/competitor and add a competitor section."""
     payload = {
         "account_id": account_id, "ticker": ticker, "date": date,
         "batch_size": batch_size, "top_noteworthy": top_noteworthy,
+        "competitors": competitors or [],
     }
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/run-brief", json=payload, headers=_headers(api_key),
+        ))
+
+
+def run_monthly_brief(
+    *, account_id: int, ticker: str, year: int, month: int,
+    competitors: Optional[list[str]] = None,
+    force: bool = False,
+    api_key: Optional[str] = None,
+    timeout: int = TIMEOUT_BRIEF,
+) -> dict:
+    """Generate the monthly sentiment summary. Returns {skipped, path?, body, year, month}.
+    Idempotent: if the month already exists, skipped=True with the stored body; force=True forces a rerun."""
+    payload = {
+        "account_id": account_id, "ticker": ticker,
+        "year": year, "month": month,
+        "competitors": competitors or [], "force": force,
+    }
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/run-monthly-brief", json=payload, headers=_headers(api_key),
         ))
 
 
@@ -276,7 +299,7 @@ def crawl_eastmoney(
     pages: int = 2,
     timeout: int = 60,
 ) -> dict:
-    """直接抓东方财富股吧,不依赖搜索引擎."""
+    """Fetch Eastmoney Guba directly, without a search engine."""
     payload = {"account_id": account_id, "symbol": symbol, "pages": pages}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
@@ -289,7 +312,7 @@ def crawl_xueqiu(
     pages: int = 3,
     timeout: int = 60,
 ) -> dict:
-    """直接抓雪球讨论帖."""
+    """Fetch Xueqiu discussion posts directly."""
     payload = {"account_id": account_id, "symbol": symbol, "pages": pages}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
@@ -298,12 +321,13 @@ def crawl_xueqiu(
 
 
 def crawl_sina(
-    *, account_id: int, keyword: str,
+    *, account_id: int, keyword: str, symbol: Optional[str] = None,
     pages: int = 3,
     timeout: int = 60,
 ) -> dict:
-    """抓新浪财经搜索新闻."""
-    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    """Fetch Sina Finance search news."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages,
+               "symbol": symbol}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/run-crawl-sina", json=payload, headers=_headers(),
@@ -311,12 +335,13 @@ def crawl_sina(
 
 
 def crawl_eastmoney_news(
-    *, account_id: int, keyword: str,
+    *, account_id: int, keyword: str, symbol: Optional[str] = None,
     pages: int = 3,
     timeout: int = 60,
 ) -> dict:
-    """东财资讯搜索(新闻/研报/公告)."""
-    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    """Eastmoney news search (news/research reports/announcements)."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages,
+               "symbol": symbol}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/run-crawl-eastmoney-news", json=payload, headers=_headers(),
@@ -324,12 +349,13 @@ def crawl_eastmoney_news(
 
 
 def crawl_tieba(
-    *, account_id: int, keyword: str,
+    *, account_id: int, keyword: str, symbol: Optional[str] = None,
     pages: int = 3,
     timeout: int = 60,
 ) -> dict:
-    """百度贴吧搜索."""
-    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    """Baidu Tieba search."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages,
+               "symbol": symbol}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/run-crawl-tieba", json=payload, headers=_headers(),
@@ -337,12 +363,13 @@ def crawl_tieba(
 
 
 def crawl_cls(
-    *, account_id: int, keyword: str,
+    *, account_id: int, keyword: str, symbol: Optional[str] = None,
     pages: int = 3,
     timeout: int = 60,
 ) -> dict:
-    """财联社快讯+搜索."""
-    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    """Cailianshe flash news + search."""
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages,
+               "symbol": symbol}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/run-crawl-cls", json=payload, headers=_headers(),
@@ -350,70 +377,83 @@ def crawl_cls(
 
 
 def _crawl_generic(
-    endpoint: str, *, account_id: int, keyword: str,
+    endpoint: str, *, account_id: int, keyword: str, symbol: Optional[str] = None,
     pages: int = 3, timeout: int = 60,
 ) -> dict:
-    payload = {"account_id": account_id, "keyword": keyword, "pages": pages}
+    # symbol = persistence key (the account's ticker or brand name). keyword is just "what to search with";
+    # the two are not the same thing -- see the comment on sentinel-service `_stamped`.
+    payload = {"account_id": account_id, "keyword": keyword, "pages": pages,
+               "symbol": symbol}
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
             f"{SENTINEL_URL}/{endpoint}", json=payload, headers=_headers(),
         ))
 
 
-def crawl_gelonghui(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
-    return _crawl_generic("run-crawl-gelonghui", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+def crawl_gelonghui(*, account_id: int, keyword: str, symbol: Optional[str] = None,
+                    pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-gelonghui", account_id=account_id, keyword=keyword, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_wallstreetcn(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
-    return _crawl_generic("run-crawl-wallstreetcn", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+def crawl_wallstreetcn(*, account_id: int, keyword: str, symbol: Optional[str] = None,
+                       pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-wallstreetcn", account_id=account_id, keyword=keyword, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_yicai(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
-    return _crawl_generic("run-crawl-yicai", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+def crawl_yicai(*, account_id: int, keyword: str, symbol: Optional[str] = None,
+                pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-yicai", account_id=account_id, keyword=keyword, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_36kr(*, account_id: int, keyword: str, pages: int = 3, timeout: int = 60) -> dict:
-    return _crawl_generic("run-crawl-36kr", account_id=account_id, keyword=keyword, pages=pages, timeout=timeout)
+def crawl_36kr(*, account_id: int, keyword: str, symbol: Optional[str] = None,
+               pages: int = 3, timeout: int = 60) -> dict:
+    return _crawl_generic("run-crawl-36kr", account_id=account_id, keyword=keyword, symbol=symbol, pages=pages, timeout=timeout)
 
 
-# 2026-05-08 新增 EastMoney 系:这 3 个使用 6 位 A 股 ticker(不是品牌名)
-def crawl_eastmoney_ann(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
-    """A 股公告流(财报/复牌/增减持)。ticker 必须是 6 位代码,非 A 股自动跳过返回 0."""
-    return _crawl_generic("run-crawl-eastmoney-ann", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+# Added 2026-05-08 EastMoney family: these 3 use a 6-digit A-share ticker (not the brand name)
+def crawl_eastmoney_ann(*, account_id: int, ticker: str, symbol: Optional[str] = None,
+                        pages: int = 3, timeout: int = 60) -> dict:
+    """A-share announcement feed (earnings/resumption/stake changes). ticker must be a 6-digit code; non-A-shares are skipped automatically returning 0."""
+    return _crawl_generic("run-crawl-eastmoney-ann", account_id=account_id, keyword=ticker, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_eastmoney_research(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
-    """个股券商研报(评级/目标价)。仅 A 股,需 6 位 ticker."""
-    return _crawl_generic("run-crawl-eastmoney-research", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+def crawl_eastmoney_research(*, account_id: int, ticker: str, symbol: Optional[str] = None,
+                             pages: int = 3, timeout: int = 60) -> dict:
+    """Per-stock broker research reports (ratings/target prices). A-shares only, requires a 6-digit ticker."""
+    return _crawl_generic("run-crawl-eastmoney-research", account_id=account_id, keyword=ticker, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_eastmoney_industry(*, account_id: int, ticker: str, pages: int = 3, timeout: int = 60) -> dict:
-    """行业研究报告(基于 ticker 反查行业)。仅 A 股,需 6 位 ticker."""
-    return _crawl_generic("run-crawl-eastmoney-industry", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+def crawl_eastmoney_industry(*, account_id: int, ticker: str, symbol: Optional[str] = None,
+                             pages: int = 3, timeout: int = 60) -> dict:
+    """Industry research reports (industry reverse-looked-up from the ticker). A-shares only, requires a 6-digit ticker."""
+    return _crawl_generic("run-crawl-eastmoney-industry", account_id=account_id, keyword=ticker, symbol=symbol, pages=pages, timeout=timeout)
 
 
-def crawl_sina_stock(*, account_id: int, ticker: str, pages: int = 1, timeout: int = 30) -> dict:
-    """新浪财经个股新闻聚合页(server-rendered HTML)。
-    A 股(6 位代码自动加 sh/sz)和美股(纯字母)都支持;港股暂不支持。
-    单次返回约 30 条最近新闻,pages 被忽略(sina 这页无分页)。
+def crawl_sina_stock(*, account_id: int, ticker: str, symbol: Optional[str] = None,
+                     pages: int = 1, timeout: int = 30) -> dict:
+    """Sina Finance per-stock news aggregation page (server-rendered HTML).
+    Supports A-shares (6-digit codes auto-prefixed sh/sz) and US stocks (pure letters); HK stocks not yet supported.
+    Returns about 30 recent news items per call; pages is ignored (this sina page has no pagination).
     """
-    return _crawl_generic("run-crawl-sina-stock", account_id=account_id, keyword=ticker, pages=pages, timeout=timeout)
+    return _crawl_generic("run-crawl-sina-stock", account_id=account_id, keyword=ticker, symbol=symbol, pages=pages, timeout=timeout)
 
 
 def crawl_weixin_album(
     *, account_id: int, album_urls: list[str],
     hydrate_body: bool = False,
     max_articles_per_album: Optional[int] = None,
+    symbol: Optional[str] = None,
     timeout: int = 300,
 ) -> dict:
-    """微信公众号合集枚举(无 cookie)。timeout 300s — 500+ 文章大号可能跑分钟级。
-    album_urls 空 list 时 sentinel-service 直接返 {skipped: ...},不耗时。
+    """WeChat official account album enumeration (no cookie). timeout 300s -- large accounts with 500+ articles may take minutes.
+    When album_urls is an empty list sentinel-service returns {skipped: ...} directly, no time spent.
     """
     payload = {
         "account_id": account_id,
         "album_urls": album_urls,
         "hydrate_body": hydrate_body,
         "max_articles_per_album": max_articles_per_album,
+        "symbol": symbol,
     }
     with httpx.Client(timeout=timeout, trust_env=False) as client:
         return _unwrap(client.post(
@@ -427,8 +467,8 @@ def crawl_newsnow(
     base_url: Optional[str] = None,
     timeout: int = 120,
 ) -> dict:
-    """轮询自托管 newsnow 热榜。keywords 空 = 不过滤入全量。
-    source_ids 空 list 时 sentinel-service 直接返 {skipped: ...},不耗时。
+    """Poll the self-hosted newsnow trending lists. Empty keywords = no filter, take everything.
+    When source_ids is an empty list sentinel-service returns {skipped: ...} directly, no time spent.
     """
     payload = {
         "account_id": account_id,
@@ -464,18 +504,31 @@ def run_respond(
         ))
 
 
-# ────────────────────── 数据查询(给前端用)────────────────────
+def save_websearch_report(
+    *, account_id: int,
+    report: dict[str, Any],
+    timeout: int = TIMEOUT_QUICK,
+) -> dict:
+    """Write the Yuanbao WebSearch quick-check report into sentinel-service's tenant sentiment store."""
+    payload = {"account_id": account_id, "report": report}
+    with httpx.Client(timeout=timeout, trust_env=False) as client:
+        return _unwrap(client.post(
+            f"{SENTINEL_URL}/websearch-report", json=payload, headers=_headers(),
+        ))
+
+
+# ────────────────────── Data queries (for the frontend) ────────────────────
 
 
 def list_posts(account_id: int, ticker: str, limit: int = 50,
                days: int = 1, offset: int = 0,
                start: str | None = None, end: str | None = None,
                sort_by: str = "newest") -> dict:
-    """文章列表 + 分页 + 排序。
+    """Article list + pagination + sorting.
 
-    时间过滤(基于 ingested_at):start/end (YYYY-MM-DD,闭区间) 优先,否则按 days。
-    分页:limit + offset。
-    排序:sort_by — 见 sentinel-service /accounts/{id}/posts 接口注释。
+    Time filter (based on ingested_at): start/end (YYYY-MM-DD, inclusive) take precedence, otherwise days.
+    Pagination: limit + offset.
+    Sorting: sort_by -- see the comment on the sentinel-service /accounts/{id}/posts endpoint.
     """
     params: dict = {
         "ticker": ticker, "limit": limit, "offset": offset,
@@ -515,7 +568,7 @@ def list_drafts(account_id: int, ticker: str) -> dict:
 
 
 def get_today(account_id: int, ticker: str, days: int = 7) -> dict:
-    """聚合数据(KPI / 7d 趋势 / 风险分布 / 最新简报 / 高风险 Top5)."""
+    """Aggregate data (KPIs / 7d trend / risk distribution / latest brief / high-risk Top5)."""
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
         r = client.get(f"{SENTINEL_URL}/accounts/{account_id}/today",
                        params={"ticker": ticker, "days": days})
@@ -523,8 +576,17 @@ def get_today(account_id: int, ticker: str, days: int = 7) -> dict:
         return r.json()
 
 
+def get_websearch_latest(account_id: int, ticker: str | None = None) -> dict:
+    """Read the latest Yuanbao WebSearch quick-check report from sentinel-service's tenant sentiment store."""
+    params = {"ticker": ticker} if ticker else None
+    with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
+        r = client.get(f"{SENTINEL_URL}/accounts/{account_id}/websearch-latest", params=params)
+        r.raise_for_status()
+        return r.json()
+
+
 def list_newsnow_sources() -> dict:
-    """newsnow 推荐源目录(静态,渲染 tab 切换用)。"""
+    """newsnow recommended source catalog (static, used to render tab switching)."""
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
         r = client.get(f"{SENTINEL_URL}/newsnow/sources")
         r.raise_for_status()
@@ -532,7 +594,7 @@ def list_newsnow_sources() -> dict:
 
 
 def get_newsnow_hot(source: str, limit: int = 30) -> dict:
-    """指定 source 的当前热榜(纯转发,不入库)。"""
+    """Current trending list for the given source (pure passthrough, not persisted)."""
     with httpx.Client(timeout=TIMEOUT_QUICK, trust_env=False) as client:
         r = client.get(
             f"{SENTINEL_URL}/newsnow/hot",

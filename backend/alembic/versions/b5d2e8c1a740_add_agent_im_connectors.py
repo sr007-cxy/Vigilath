@@ -1,6 +1,6 @@
-"""add agent_im_connectors (IM 自建应用接入器)
+"""add agent_im_connectors (IM self-built app connectors)
 
-新建表,不动现有数据 —— 低风险。见 agent integration API。
+New table, existing data untouched: low risk. See docs/03-系统设计/Agent/对外开放-契约.md §14.
 
 Revision ID: b5d2e8c1a740
 Revises: a1f4c7e9b830

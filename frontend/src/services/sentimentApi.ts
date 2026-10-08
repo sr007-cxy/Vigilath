@@ -1,6 +1,6 @@
-// 舆情后端 API 客户端.
-// 所有方法走 /api/sentiment/*,需 Bearer token(由 AuthContext 注入).
-// VITE_USE_MOCK_SENTIMENT=1 时不走网络,前端组件直接读 mocks/sentiment.ts.
+// Sentiment monitoring backend API client.
+// All methods go through /api/sentiment/* and need a Bearer token (injected by AuthContext).
+// With VITE_USE_MOCK_SENTIMENT=1 there's no network; frontend components read mocks/sentiment.ts directly.
 
 import { localizedHeaders, readApiError } from './apiError';
 import type {
@@ -8,13 +8,13 @@ import type {
   Brief, BriefsResponse, DraftGenerateResult, DraftsResponse,
   KnowledgeDoc, NewsnowHotResponse, NewsnowSourcesResponse,
   PostsResponse, PostsQuery, RunStatusPayload,
-  SentimentAccount, SentimentPlatform, TodayResponse,
+  SentimentAccount, SentimentPlatform, SentimentWebSearchLatestResponse, TodayResponse,
 } from '../types/sentiment';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) || '/api';
 
-/** 是否使用 mock 数据(在 .env / 启动时设置 VITE_USE_MOCK_SENTIMENT=1)。
- *  Sentiment.tsx / 各 Tab 通过 isMockMode() 决定走 mock 还是真实 API. */
+/** Whether to use mock data (set VITE_USE_MOCK_SENTIMENT=1 in .env / at startup).
+ *  Sentiment.tsx / each tab decide between mock and the real API via isMockMode(). */
 export function isMockMode(): boolean {
   return String(import.meta.env.VITE_USE_MOCK_SENTIMENT || '').toLowerCase() === '1';
 }
@@ -26,16 +26,40 @@ function authHeaders(token: string, extra: Record<string, string> = {}): Record<
   });
 }
 
+/** Timeout for write operations: these backend calls are pure DB writes (batch runs are a BackgroundTask, not holding the response),
+ *  normally returning within 1s. 30s is set so that the state "clicked save and it spins forever, neither succeeding nor erroring"
+ *  **can't** exist -- either it succeeds, or it gives a message that can be followed up on.
+ *  Fetch endpoints have no timeout (briefs/articles really are slow when large); only writes are capped. */
+const WRITE_TIMEOUT_MS = 30_000;
+
 async function request<T>(
   method: string, path: string, token: string,
   body?: unknown,
+  timeoutMs?: number,
 ): Promise<T> {
   const init: RequestInit = {
     method,
     headers: authHeaders(token, body !== undefined ? { 'Content-Type': 'application/json' } : {}),
   };
   if (body !== undefined) init.body = JSON.stringify(body);
-  const resp = await fetch(`${API_BASE}/sentiment${path}`, init);
+
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  if (ctrl) init.signal = ctrl.signal;
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}/sentiment${path}`, init);
+  } catch (e) {
+    if (ctrl?.signal.aborted) {
+      throw new Error(`请求超时(${Math.round((timeoutMs ?? 0) / 1000)}s 无响应):${method} ${path}。`
+        + '服务端没有返回,请把这条信息发给运维查后端日志。');
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
   if (!resp.ok) {
     const msg = await readApiError(resp, `Request ${method} ${path} failed`);
     throw new Error(msg);
@@ -44,9 +68,30 @@ async function request<T>(
   return resp.json() as Promise<T>;
 }
 
-// ─────────────────────────── 账号 CRUD ────────────────────────
+// ─────────────────────────── Account CRUD ────────────────────────
+
+/** State machine of a one-off quick check. Only ready has a result. */
+export interface SentimentOnceState {
+  brand: string;
+  state: 'ready' | 'running' | 'started' | 'failed' | 'stale' | 'none' | 'timeout' | 'degraded';
+  result?: Record<string, unknown>;
+  elapsed_s?: number;
+  error?: string;
+}
 
 export const sentimentApi = {
+  /** Start a one-off quick check. No account created, not in batch runs; results go into a 24h cache. */
+  startOnce(brand: string, keywords: string[], token: string): Promise<SentimentOnceState> {
+    return request<SentimentOnceState>('POST', '/once', token, { brand, keywords });
+  },
+
+  /** Poll this check. A round takes up to 360s, so it must be polled, not awaited inline. */
+  getOnce(brand: string, keywords: string[], token: string): Promise<SentimentOnceState> {
+    const qs = new URLSearchParams({ brand });
+    if (keywords.length) qs.set('keywords', keywords.join(','));
+    return request<SentimentOnceState>('GET', `/once?${qs}`, token);
+  },
+
   listPlatforms(token: string): Promise<SentimentPlatform[]> {
     return request<SentimentPlatform[]>('GET', '/platforms', token);
   },
@@ -56,7 +101,7 @@ export const sentimentApi = {
   },
 
   createAccount(payload: AccountCreatePayload, token: string): Promise<SentimentAccount> {
-    return request<SentimentAccount>('POST', '/accounts', token, payload);
+    return request<SentimentAccount>('POST', '/accounts', token, payload, WRITE_TIMEOUT_MS);
   },
 
   getAccount(accountId: number, token: string): Promise<SentimentAccount> {
@@ -66,20 +111,22 @@ export const sentimentApi = {
   updateAccount(
     accountId: number, payload: AccountUpdatePayload, token: string,
   ): Promise<SentimentAccount> {
-    return request<SentimentAccount>('PUT', `/accounts/${accountId}`, token, payload);
+    return request<SentimentAccount>('PUT', `/accounts/${accountId}`, token, payload, WRITE_TIMEOUT_MS);
   },
 
   deleteAccount(accountId: number, token: string): Promise<void> {
-    return request<void>('DELETE', `/accounts/${accountId}`, token);
+    return request<void>('DELETE', `/accounts/${accountId}`, token, undefined, WRITE_TIMEOUT_MS);
   },
 
-  // ── 状态机 / 触发 ──
+  // ── State machine / trigger ──
   getRunStatus(accountId: number, token: string): Promise<RunStatusPayload> {
     return request<RunStatusPayload>('GET', `/accounts/${accountId}/run-status`, token);
   },
 
   runNow(accountId: number, token: string): Promise<{ queued: boolean }> {
-    return request<{ queued: boolean }>('POST', `/accounts/${accountId}/run-now`, token);
+    return request<{ queued: boolean }>(
+      'POST', `/accounts/${accountId}/run-now`, token, undefined, WRITE_TIMEOUT_MS,
+    );
   },
 
   listRunLogs(accountId: number, token: string, limit = 20) {
@@ -88,7 +135,13 @@ export const sentimentApi = {
     );
   },
 
-  // ── 数据查询 ──
+  getWebsearchLatest(accountId: number, token: string): Promise<SentimentWebSearchLatestResponse> {
+    return request<SentimentWebSearchLatestResponse>(
+      'GET', `/accounts/${accountId}/websearch-latest`, token,
+    );
+  },
+
+  // ── Data queries ──
   getToday(accountId: number, ticker: string, token: string, days = 7): Promise<TodayResponse> {
     return request<TodayResponse>(
       'GET',
@@ -107,7 +160,7 @@ export const sentimentApi = {
     usp.set('ticker', ticker);
     usp.set('limit', String(limit));
     usp.set('offset', String(offset));
-    // start/end 优先;若给了 start/end 则后端忽略 days,这里仍透传 days 兼容
+    // start/end take precedence; if start/end are given the backend ignores days, but days is still passed through for compatibility
     if (query.days !== undefined) usp.set('days', String(query.days));
     if (query.start) usp.set('start', query.start);
     if (query.end) usp.set('end', query.end);
@@ -146,7 +199,7 @@ export const sentimentApi = {
     return request<DraftGenerateResult>('POST', '/drafts/generate', token, payload);
   },
 
-  // ── newsnow 实时热点(不绑 account)──
+  // ── newsnow real-time trending (not bound to an account) ──
   listNewsnowSources(token: string): Promise<NewsnowSourcesResponse> {
     return request<NewsnowSourcesResponse>('GET', '/newsnow/sources', token);
   },
@@ -156,7 +209,7 @@ export const sentimentApi = {
     return request<NewsnowHotResponse>('GET', `/newsnow/hot?${usp.toString()}`, token);
   },
 
-  // ── 知识库 ──
+  // ── Knowledge base ──
   listKnowledge(accountId: number, token: string): Promise<KnowledgeDoc[]> {
     return request<KnowledgeDoc[]>('GET', `/accounts/${accountId}/knowledge`, token);
   },

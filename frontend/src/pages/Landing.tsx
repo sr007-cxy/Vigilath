@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHead } from '../components/PageHead';
+import { ENGINES } from '../constants/engines';
 
 export function Landing() {
   const { t } = useTranslation();
@@ -307,22 +308,13 @@ export function Landing() {
           </div>
           <div className="bg-gray-50 rounded-2xl p-8">
             <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">{t('data.platforms.title')}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="card p-4 text-center">
-                <div className="font-semibold text-gray-900">ChatGPT</div>
-              </div>
-              <div className="card p-4 text-center">
-                <div className="font-semibold text-gray-900">Gemini</div>
-              </div>
-              <div className="card p-4 text-center">
-                <div className="font-semibold text-gray-900">Perplexity</div>
-              </div>
-              <div className="card p-4 text-center">
-                <div className="font-semibold text-gray-900">Claude</div>
-              </div>
-              <div className="card p-4 text-center">
-                <div className="font-semibold text-gray-900">Copilot</div>
-              </div>
+            {/* The engine list reads the "single authoritative source" constants/engines.ts, same as site-wide display */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {ENGINES.map((eng) => (
+                <div key={eng.key} className="card p-4 text-center">
+                  <div className="font-semibold text-gray-900">{eng.zh}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

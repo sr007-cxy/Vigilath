@@ -1,31 +1,32 @@
-// 资料上传 — 两类资料分两个 sub-tab.
+// Profile upload -- two kinds of materials in two sub-tabs.
 //
-// ① 文本资料(.txt / .md / .docx / .pdf / 文本粘贴):走 LLM 抽取,自动回填 BrandProfile.
-//    后端:POST /api/ai-telemetry/profile/extract(JSON)/ /profile/extract-file(multipart)
-//    没配 DEEPSEEK_API_KEY 时后端 503,前端弹错误而不是静默吞.
+// (1) Text materials (.txt / .md / .docx / .pdf / pasted text): LLM extraction, auto-backfilling BrandProfile.
+//    Backend: POST /api/ai-telemetry/profile/extract (JSON) / /profile/extract-file (multipart)
+//    Without DEEPSEEK_API_KEY the backend returns 503, and the frontend shows an error rather than silently swallowing it.
 //
-// ② 图片 / 视频:落服务器(data/topic_media/{topic_id}/),作为后续生稿 / 发文的素材库.
-//    后端:POST /topics/{id}/media,GET /topics/{id}/media,DELETE /topics/{id}/media/{mid}.
-//    需要 topicId — 新建 topic 时还没有 ID,这一栏会显示「先保存主题以启用素材上传」.
+// (2) Images / videos: stored on the server (data/topic_media/{topic_id}/) as the asset library for later draft generation / publishing.
+//    Backend: POST /topics/{id}/media, GET /topics/{id}/media, DELETE /topics/{id}/media/{mid}.
+//    Requires topicId -- a new topic has no ID yet, so this section shows "save the topic first to enable asset upload".
 //
-// 合并策略(仅文本):
-//   - 「填充空白」:只填当前资料里为空的字段
-//   - 「全部覆盖」:LLM 抽到的非空值都覆盖现有值
-//   默认是「填充空白」,避免覆盖用户已经手填的内容.
+// Merge strategy (text only):
+//   - "Fill blanks": only fill fields that are empty in the current profile
+//   - "Overwrite all": every non-empty value extracted by the LLM overwrites the existing one
+//   The default is "Fill blanks", to avoid overwriting what the user already filled in by hand.
 
 import { useEffect, useRef, useState } from 'react';
-import type { BrandProfile } from '../services/aiTelemetryApi';
-import { topicProfileApi, type TopicMedia } from '../services/topicProfileApi';
+import type { BrandProduct, BrandProfile } from '../services/aiTelemetryApi';
+import { topicProfileApi, type MaterialDoc, type TopicMedia } from '../services/topicProfileApi';
+import { MediaDescriptionField } from './MediaDescriptionField';
 
-// 文本类 — 客户端 file.text() 读得到的就直接走 JSON 路径,docx / pdf 走 multipart 后端解析.
-// .doc 旧二进制和扫描版 PDF 抽不到字会在后端 415,前端再翻译成友好提示.
+// Text types -- whatever the client can read with file.text() goes the JSON path directly; docx / pdf go multipart for backend parsing.
+// Old binary .doc and scanned PDFs with no extractable text get a 415 from the backend, which the frontend translates into a friendly hint.
 const TEXT_EXTS = ['.txt', '.md'];
 const BINARY_EXTS = ['.docx', '.pdf'];
 const ACCEPT_TEXT_EXTS = [...TEXT_EXTS, ...BINARY_EXTS];
 const MAX_TEXT_LEN = 60000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-// 媒体类 — 跟后端 ALLOWED_MEDIA_EXTS 对齐
+// Media types -- aligned with backend ALLOWED_MEDIA_EXTS
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
 const VIDEO_EXTS = ['.mp4', '.mov', '.webm', '.m4v', '.mkv'];
 const ACCEPT_MEDIA_EXTS = [...IMAGE_EXTS, ...VIDEO_EXTS];
@@ -38,12 +39,12 @@ interface ProfileImporterProps {
   onApply: (next: BrandProfile) => void;
   token: string;
   disabled?: boolean;
-  // 可选:把 LLM 顺手给的种子提示词候选合并到种子词步骤。
+  // Optional: merge the seed prompt candidates the LLM gave along the way into the seed term step.
   onApplySeeds?: (suggestions: string[]) => void;
-  // 可选:topic ID — 已存在的主题直接走服务器上传。
+  // Optional: topic ID -- existing topics upload directly to the server.
   topicId?: number;
-  // 可选:本地暂存的待上传文件(没 topicId 时用)。父组件持有,
-  // 这样切 step / 关闭 modal 不丢;TopicEditor 在 persistTopic 拿到 saved.id 后批量 flush。
+  // Optional: locally staged files pending upload (used when there's no topicId). Held by the parent component,
+  // so switching steps / closing the modal doesn't lose them; TopicEditor flushes them in batch after persistTopic gets saved.id.
   pendingMediaFiles?: File[];
   onPendingMediaFilesChange?: (files: File[]) => void;
 }
@@ -83,7 +84,7 @@ export function ProfileImporter({
 
           {tab === 'text' && (
             <TextSection profile={profile} onApply={onApply} token={token}
-                         disabled={disabled} onApplySeeds={onApplySeeds} />
+                         disabled={disabled} onApplySeeds={onApplySeeds} topicId={topicId} />
           )}
           {tab === 'media' && (
             <MediaSection topicId={topicId} token={token} disabled={disabled}
@@ -112,7 +113,7 @@ function SubTabBtn({ active, onClick, children }: {
 }
 
 
-// ─────────────── 子页 ① 文本资料 ────────────────────────────
+// ─────────────── Subpage (1) Text materials ────────────────────────────
 
 interface TextSectionProps {
   profile: BrandProfile;
@@ -120,17 +121,36 @@ interface TextSectionProps {
   token: string;
   disabled?: boolean;
   onApplySeeds?: (suggestions: string[]) => void;
+  // With a topic id, the source text attaches to the topic and that topic's material list is shown; in the wizard stage there's none -> source text attaches at the account level
+  topicId?: number;
 }
 
-function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSectionProps) {
+function TextSection({ profile, onApply, token, disabled, onApplySeeds, topicId }: TextSectionProps) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  // Vector store material list (2026-09-22) -- after extracting into the form, the full source text is persisted to DB; listed here, deletable
+  const [docs, setDocs] = useState<MaterialDoc[] | null>(null);
+  const refreshDocs = async () => {
+    if (topicId == null) return;
+    try { setDocs(await topicProfileApi.listMaterials(topicId, token)); } catch { /* list failure doesn't interrupt import */ }
+  };
+  useEffect(() => { void refreshDocs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [topicId]);
+  const materialHint = (m: ExtractMaterial) => {
+    if (!m) return '';
+    let vec = '';
+    if (m.embedded < m.chunks) {
+      vec = m.embed_error === 'no_provider'
+        ? ',向量未生成:后端没配 embedding key(GLM_API_KEY / QWEN_API_KEY),先按关键词检索'
+        : `,向量未生成(${m.embedded}/${m.chunks}):${m.embed_error || '未知原因'},先按关键词检索`;
+    }
+    return `;原文已存入资料库(${m.chunks} 段${vec})`;
+  };
   const [drag, setDrag] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // 拖入后立刻 setText + 异步 callExtract,closure 抓的 profile 是回调时的 props,
-  // 父组件 re-render 后 profile 新值靠 ref 取。
+  // On drop, immediately setText + async callExtract; the profile captured by the closure is the props at callback time,
+  // so the new profile value after the parent re-renders is read via ref.
   const profileRef = useRef(profile);
   profileRef.current = profile;
 
@@ -142,18 +162,20 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
     }
     setBusy(true); setErr(null); setOkMsg(null);
     try {
-      const resp = await topicProfileApi.extractProfile(t, token);
+      const resp = await topicProfileApi.extractProfile(t, token, topicId);
       const merged = mergeProfile(profileRef.current, resp.profile, mode);
       const changed = countChanged(profileRef.current, merged);
       onApply(merged);
       const seeds = resp.seed_suggestions || [];
       if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
       const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
+      const mh = materialHint(resp.material);
       if (changed === 0) {
-        setOkMsg(`没解出可用字段(原文可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
+        setOkMsg(`表单没解出新字段(可能都已填过)${seedHint}${mh}`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}${mh}`);
       }
+      void refreshDocs();
     } catch (e) {
       setErr(humanizeFetchError(e));
     } finally {
@@ -164,18 +186,20 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
   const callExtractFile = async (file: File, mode: 'fill-blank' | 'overwrite') => {
     setBusy(true); setErr(null);
     try {
-      const resp = await topicProfileApi.extractProfileFile(file, token);
+      const resp = await topicProfileApi.extractProfileFile(file, token, topicId);
       const merged = mergeProfile(profileRef.current, resp.profile, mode);
       const changed = countChanged(profileRef.current, merged);
       onApply(merged);
       const seeds = resp.seed_suggestions || [];
       if (seeds.length > 0 && onApplySeeds) onApplySeeds(seeds);
       const seedHint = seeds.length > 0 && onApplySeeds ? `,种子提示词候选 ${seeds.length} 条已带到下一步` : '';
+      const mh = materialHint(resp.material);
       if (changed === 0) {
-        setOkMsg(`没解出可用字段(文件可能太短或没有品牌信息)${seedHint},可手动调整后再试`);
+        setOkMsg(`表单没解出新字段(可能都已填过)${seedHint}${mh}`);
       } else {
-        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}`);
+        setOkMsg(`已${mode === 'overwrite' ? '覆盖' : '填充'} ${changed} 个字段${seedHint}${mh}`);
       }
+      void refreshDocs();
     } catch (e) {
       setErr(humanizeFetchError(e));
     } finally {
@@ -285,22 +309,67 @@ function TextSection({ profile, onApply, token, disabled, onApplySeeds }: TextSe
           </button>
         </div>
       </div>
-      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
-      {okMsg && <div className="text-xs" style={{ color: '#10b981' }}>{okMsg}</div>}
+      {err && <div className="text-xs" style={{ color: 'var(--danger-fg)' }}>{err}</div>}
+      {okMsg && <div className="text-xs" style={{ color: 'var(--success-fg)' }}>{okMsg}</div>}
+      {topicId == null && (
+        <div className="text-xs text-muted">主题保存后,上传的原文会进入该品牌的资料库,供生稿 / 扩词按内容检索</div>
+      )}
+      {topicId != null && docs && (
+        <MaterialDocList docs={docs} disabled={disabled}
+                         onDelete={async d => {
+                           try {
+                             await topicProfileApi.deleteMaterial(topicId, d.source, d.topic_id == null ? 'account' : 'topic', token);
+                             void refreshDocs();
+                           } catch (e) { setErr(humanizeFetchError(e)); }
+                         }} />
+      )}
+    </div>
+  );
+}
+
+type ExtractMaterial = { source: string; chunks: number; embedded: number; embed_error?: string } | null | undefined;
+
+// Material library list: one row per material (name / chunk count / character count / has vectors / time), deletable.
+// The form is just a structured index extracted from the source text; the source text here is what draft generation / query expansion retrieves paragraphs from by similarity.
+function MaterialDocList({ docs, disabled, onDelete }: {
+  docs: MaterialDoc[]; disabled?: boolean; onDelete: (d: MaterialDoc) => void;
+}) {
+  return (
+    <div className="rounded-md p-2 space-y-1" style={{ border: '1px solid var(--border-color)' }}>
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-primary">资料库(原文,{docs.length} 份)</span>
+        <span className="text-muted">表单是从这些原文抽出来的索引;生稿 / 扩词会按内容检索原文段落</span>
+      </div>
+      {docs.length === 0 && <div className="text-xs text-muted">还没有资料 —— 上传或粘贴后原文会自动存进来</div>}
+      {docs.map(d => (
+        <div key={`${d.topic_id ?? 'a'}:${d.source}`} className="flex items-center gap-2 text-xs">
+          <span className="flex-1 truncate text-primary" title={d.source}>{d.title}</span>
+          <span className="text-muted whitespace-nowrap">
+            {d.chunks} 段 · {d.chars >= 10000 ? `${(d.chars / 10000).toFixed(1)} 万字` : `${d.chars} 字`}
+            {d.embedded < d.chunks ? ' · 无向量' : ''}
+            {d.topic_id == null ? ' · 账号级' : ''}
+            {d.created_at ? ` · ${new Date(d.created_at + 'Z').toLocaleDateString()}` : ''}
+          </span>
+          {!disabled && (
+            <button type="button" onClick={() => onDelete(d)}
+                    className="px-2 py-0.5 rounded-md" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>删除</button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
 
-// ─────────────── 子页 ② 图片 / 视频 ────────────────────────
+// ─────────────── Subpage (2) Images / videos ────────────────────────
 //
-// 两条上传路径:
-//   1) topicId 已就绪(编辑场景 / TopicProfile)→ 直接 POST 到服务器
-//   2) topicId 还没有(新建场景,用户还没保存主题)→ File 留在 parent 暂存,
-//      显示本地预览;parent 在保存主题拿到 saved.id 后再批量 flush。
+// Two upload paths:
+//   1) topicId ready (edit scenario / TopicProfile) -> POST directly to the server
+//   2) no topicId yet (create scenario, user hasn't saved the topic) -> the File is staged in the parent,
+//      showing a local preview; the parent flushes them in batch after saving the topic and getting saved.id.
 //
-// pendingFiles / onPendingFilesChange 是 controlled — 由 parent (TopicEditor) 持有,
-// 不放 MediaSection 内部 state,因为 step 1 ↔ step 2 切换会让本 section unmount。
+// pendingFiles / onPendingFilesChange are controlled -- held by the parent (TopicEditor),
+// not in MediaSection's internal state, because switching step 1 <-> step 2 unmounts this section.
 
 interface MediaSectionProps {
   topicId?: number;
@@ -334,9 +403,9 @@ function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesCh
     }
   };
 
-  useEffect(() => { if (topicId) refresh();   }, [topicId]);
+  useEffect(() => { if (topicId) refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [topicId]);
 
-  // 校验 — 跟后端 ALLOWED_MEDIA_EXTS 对齐,文本错误友好化.
+  // Validation -- aligned with backend ALLOWED_MEDIA_EXTS, with friendly error text.
   const validate = (file: File): string | null => {
     const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || '').toLowerCase();
     if (!ACCEPT_MEDIA_EXTS.includes(ext)) {
@@ -389,25 +458,28 @@ function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesCh
     onPendingFilesChange!(pending.filter((_, i) => i !== idx));
   };
 
-  const handleFiles = (files: File[]) => {
+  const handleFiles = async (files: File[]) => {
     if (disabled || busy) return;
-    for (const f of files) {
-      if (topicId) void uploadOne(f);
-      else if (stagingEnabled) stageOne(f);
+    if (!topicId) {
+      if (stagingEnabled) files.forEach(stageOne);
+      return;
     }
+    // Upload serially: with raw concurrency N requests share one busy/err, and the 3rd's failure gets overwritten by the 4th's success
+    for (const f of files) await uploadOne(f);
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDrag(false);
-    handleFiles(Array.from(e.dataTransfer.files || []));
+    void handleFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFiles(Array.from(e.target.files || []));
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
+    void handleFiles(files);
   };
 
-  // 既没 topicId、parent 也不提供暂存接口 → 给一个降级提示(目前没有调用方走到这里,留个保险)
+  // No topicId and the parent doesn't provide a staging interface -> show a degraded hint (no caller reaches here currently; kept as insurance)
   if (!topicId && !stagingEnabled) {
     return (
       <div className="rounded-md p-4 text-xs text-secondary"
@@ -438,6 +510,9 @@ function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesCh
             <span className="block text-muted mt-1">
               支持 {IMAGE_EXTS.join(' / ')} / {VIDEO_EXTS.join(' / ')};单文件最大 {MAX_MEDIA_BYTES / 1024 / 1024} MB
             </span>
+            <span className="block text-muted mt-1">
+              传完请给每张图写一句说明 —— 生成文章时按说明选图、放到对应段落;图片会自动去掉拍摄位置等元数据
+            </span>
             {!topicId && stagingEnabled && (
               <span className="block mt-1" style={{ color: 'var(--accent-primary)' }}>
                 主题尚未保存 — 文件先暂存浏览器,保存主题后会自动批量上传
@@ -450,7 +525,7 @@ function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesCh
                className="hidden" onChange={onPickFiles} disabled={disabled || busy} />
       </div>
 
-      {err && <div className="text-xs" style={{ color: '#ef4444' }}>{err}</div>}
+      {err && <div className="text-xs" style={{ color: 'var(--danger-fg)' }}>{err}</div>}
       {busy && <div className="text-xs text-muted">上传中…</div>}
       {loading && <div className="text-xs text-muted">加载中…</div>}
       {totalEmpty && (
@@ -465,6 +540,7 @@ function MediaSection({ topicId, token, disabled, pendingFiles, onPendingFilesCh
         {list.map(m => (
           <MediaCard key={m.id} media={m} token={token}
                      onRemove={() => remove(m.id)}
+                     onSaved={saved => setList(prev => prev.map(x => x.id === saved.id ? saved : x))}
                      disabled={disabled || busy} />
         ))}
       </div>
@@ -497,17 +573,18 @@ function PendingCard({ file, onRemove, disabled }: {
       </div>
       <button type="button" onClick={onRemove} disabled={disabled}
               className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }}>
+              style={{ background: 'var(--danger-bg)', color: '#fff' }}>
         移除
       </button>
     </div>
   );
 }
 
-function MediaCard({ media, token, onRemove, disabled }: {
-  media: TopicMedia; token: string; onRemove: () => void; disabled?: boolean;
+function MediaCard({ media, token, onRemove, onSaved, disabled }: {
+  media: TopicMedia; token: string; onRemove: () => void;
+  onSaved?: (m: TopicMedia) => void; disabled?: boolean;
 }) {
-  // 后端 blob 路由要 Bearer,直接 <img src> 拿不到 — 用 fetch + objectURL.
+  // The backend blob route requires Bearer, so a plain <img src> can't load it -- use fetch + objectURL.
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -536,7 +613,7 @@ function MediaCard({ media, token, onRemove, disabled }: {
     <div className="relative rounded-md overflow-hidden group"
          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}>
       <div className="aspect-square flex items-center justify-center text-xs text-muted">
-        {err && <span style={{ color: '#ef4444' }}>{err}</span>}
+        {err && <span style={{ color: 'var(--danger-fg)' }}>{err}</span>}
         {!err && !blobUrl && <span>…</span>}
         {!err && blobUrl && media.kind === 'image' && (
           <img src={blobUrl} alt={media.filename}
@@ -550,9 +627,12 @@ function MediaCard({ media, token, onRemove, disabled }: {
            title={media.filename}>
         {media.filename}
       </div>
+      <div className="px-1.5 pb-1.5">
+        <MediaDescriptionField media={media} token={token} disabled={disabled} onSaved={onSaved} compact />
+      </div>
       <button type="button" onClick={onRemove} disabled={disabled}
               className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }}>
+              style={{ background: 'var(--danger-bg)', color: '#fff' }}>
         删除
       </button>
     </div>
@@ -560,7 +640,7 @@ function MediaCard({ media, token, onRemove, disabled }: {
 }
 
 
-// ─────────────── merge 策略 ────────────────────────────────
+// ─────────────── Merge strategy ────────────────────────────────
 
 function isBlank(v: unknown): boolean {
   if (v == null) return true;
@@ -569,14 +649,47 @@ function isBlank(v: unknown): boolean {
   return false;
 }
 
-// 把 fetch 抛的 TypeError("Failed to fetch") 翻译成对用户更友好的提示.
-// 常见诱因:中间代理(BMS02 EIP 映射)在 60s 把长连接砍掉,导致连接重置.
+// Translate the TypeError("Failed to fetch") thrown by fetch into a more user-friendly hint.
+// Common cause: an intermediate proxy (prod host EIP mapping) cuts long connections at 60s, causing a connection reset.
 function humanizeFetchError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
   if (/failed to fetch|networkerror|load failed/i.test(raw)) {
     return 'AI 解析连接被中断 — 多半是中间代理在 60s 把长请求砍掉了。请把原文缩短到 1000 字以内,或分两段粘贴再重试。';
   }
   return raw;
+}
+
+// The product list merges by name (2026-09-22): a second material covering only a second product would be dropped by "Fill blanks" skipping the whole field,
+// and "Overwrite all" would push out the first product -- neither mode is right. Rule: same name (case-insensitive) merges into one (list fields take
+// the union, short fields follow mode, featured is OR'd), new names are appended, existing ones aren't deleted.
+const PRODUCT_LIST_KEYS = ['aliases', 'selling_points', 'target_users'] as const;
+const PRODUCT_TEXT_KEYS = ['category', 'launch_date', 'price_range', 'notes'] as const;
+function mergeProducts(
+  base: BrandProduct[], extracted: BrandProduct[], mode: 'fill-blank' | 'overwrite',
+): BrandProduct[] {
+  const out: BrandProduct[] = base.map(p => ({ ...p }));
+  const idx = new Map<string, number>();
+  out.forEach((p, i) => idx.set((p.name || '').trim().toLowerCase(), i));
+  for (const p of extracted) {
+    const key = (p.name || '').trim().toLowerCase();
+    if (!key) continue;
+    const i = idx.get(key);
+    if (i === undefined) {
+      idx.set(key, out.length);
+      out.push({ ...p });
+      continue;
+    }
+    const cur = out[i];
+    for (const lk of PRODUCT_LIST_KEYS) {
+      const seen = new Set((cur[lk] || []).map(x => x.toLowerCase()));
+      cur[lk] = [...(cur[lk] || []), ...(p[lk] || []).filter(x => x && !seen.has(x.toLowerCase()))];
+    }
+    for (const tk of PRODUCT_TEXT_KEYS) {
+      if (p[tk] && (mode === 'overwrite' || !cur[tk])) cur[tk] = p[tk];
+    }
+    cur.is_featured = Boolean(cur.is_featured || p.is_featured);
+  }
+  return out.slice(0, 30);
 }
 
 function mergeProfile(
@@ -586,6 +699,10 @@ function mergeProfile(
   for (const key of Object.keys(extracted) as (keyof BrandProfile)[]) {
     const newVal = extracted[key];
     if (isBlank(newVal)) continue;
+    if (key === 'products') {
+      out.products = mergeProducts(base.products || [], extracted.products || [], mode);
+      continue;
+    }
     if (mode === 'overwrite' || isBlank(base[key])) {
       out[key] = newVal;
     }
@@ -597,7 +714,10 @@ function countChanged(a: BrandProfile, b: BrandProfile): number {
   let n = 0;
   for (const key of Object.keys(a) as (keyof BrandProfile)[]) {
     const av = a[key], bv = b[key];
-    if (Array.isArray(av) && Array.isArray(bv)) {
+    if (key === 'products') {
+      // Compare object arrays by content, not by reference (mergeProducts returns a new array every time)
+      if (JSON.stringify(av || []) !== JSON.stringify(bv || [])) n++;
+    } else if (Array.isArray(av) && Array.isArray(bv)) {
       if (av.length !== bv.length || av.some((x, i) => x !== bv[i])) n++;
     } else if (av !== bv) {
       n++;

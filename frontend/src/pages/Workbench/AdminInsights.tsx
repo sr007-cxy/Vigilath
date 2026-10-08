@@ -1,5 +1,5 @@
-// 监测报告 — admin 视角的「效果查验与更新」反哺看板入口.
-// 列出所有 approved 主题,点入跳到 /brand-growth/insights(用户端反哺数据看板).
+// Monitoring reports — admin-view entry to the "results verification and updates" feedback board.
+// Lists all approved topics; clicking through goes to the client report center (/app/reports?topic=).
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -48,26 +48,28 @@ export function AdminInsights() {
           <p className="text-xs text-muted">{t('workbench.adminInsights.pickTopic')}</p>
           <div className="rounded-lg overflow-hidden"
                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-            <table className="w-full text-xs">
-              <tbody>
-                {pagedTopics.map(tp => (
-                  <tr key={tp.topic_id} className="border-t"
-                      style={{ borderColor: 'var(--border-color)' }}>
-                    <td className="px-3 py-2 text-primary">
-                      {tp.profile_name || tp.topic_name}
-                      <span className="ml-2 text-[10px] text-muted">#{tp.topic_id}</span>
-                    </td>
-                    <td className="px-3 py-2 text-secondary">{tp.user_email}</td>
-                    <td className="px-3 py-2 text-right">
-                      <Link to={`/brand-growth/insights?topicId=${tp.topic_id}`}
-                            className="text-accent hover:underline">
-                        {t('workbench.adminInsights.view')}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <tbody>
+                  {pagedTopics.map(tp => (
+                    <tr key={tp.topic_id} className="border-t"
+                        style={{ borderColor: 'var(--border-color)' }}>
+                      <td className="px-3 py-2 text-primary">
+                        {tp.profile_name || tp.topic_name}
+                        <span className="ml-2 text-[10px] text-muted">#{tp.topic_id}</span>
+                      </td>
+                      <td className="px-3 py-2 text-secondary">{tp.user_email}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Link to={`/app/reports?topic=${tp.topic_id}`}
+                              className="text-accent hover:underline">
+                          {t('workbench.adminInsights.view')}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {topics.length > PAGE_SIZE && (

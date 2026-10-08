@@ -1,8 +1,9 @@
-// React Query hooks 包装 sentimentApi.
-// 自动注入 token,统一 staleTime,提供 invalidate 方法.
+// React Query hooks wrapping sentimentApi.
+// Auto-injects the token, unifies staleTime, and provides invalidate methods.
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { useAgencyContext } from '../contexts/AgencyContext';
 import { sentimentApi, isMockMode } from '../services/sentimentApi';
 import { SENTIMENT_PLATFORMS as PLATFORM_FALLBACK } from '../constants/sentimentPlatforms';
 import type {
@@ -13,8 +14,8 @@ import type {
 const ACCOUNTS_KEY = ['sentiment', 'accounts'] as const;
 const PLATFORMS_KEY = ['sentiment', 'platforms'] as const;
 
-/** 把 constants/sentimentPlatforms.ts 里的本地静态条目"升级"为完整 SentimentPlatform 形态。
- *  仅用于 (a) mock 模式 (b) 后端 /platforms 拉取失败时的兜底,确保页面不至于空白。 */
+/** "Upgrade" the local static entries in constants/sentimentPlatforms.ts into the full SentimentPlatform shape.
+ *  Only used for (a) mock mode (b) fallback when the backend /platforms fetch fails, so the page isn't blank. */
 function fallbackPlatforms(): SentimentPlatform[] {
   return PLATFORM_FALLBACK.map(p => ({
     code: p.code,
@@ -23,14 +24,20 @@ function fallbackPlatforms(): SentimentPlatform[] {
     media_type: p.media_type,
     industry: p.industry,
     region: p.region,
-    name_zh: '', name_en: '',  // 让消费者回退到 i18n sourceLabels 翻译
+    name_zh: '', name_en: '',  // let consumers fall back to the i18n sourceLabels translation
   }));
 }
 
-/** 拉媒体平台目录(全局只读,几乎不变)。
- *  - mock 模式:直接用 constants
- *  - 真实模式:走 GET /api/sentiment/platforms,失败兜底 constants
- *  - staleTime: 1h(平台目录改完最多 1 小时生效;通常用户重新登录就拿到新版) */
+// ICP filing remediation: the backend sentiment_platforms table may still have historical overseas site rows,
+// never shown in the UI -- filtered out uniformly here, so each consumer doesn't filter on its own.
+function dropOverseas(list: SentimentPlatform[]): SentimentPlatform[] {
+  return list.filter((p) => p.region !== 'overseas');
+}
+
+/** Fetch the media platform catalog (global read-only, almost never changes).
+ *  - mock mode: use constants directly
+ *  - real mode: GET /api/sentiment/platforms, falling back to constants on failure
+ *  - staleTime: 1h (catalog changes take effect within 1 hour at most; usually users get the new version on re-login) */
 export function useSentimentPlatforms() {
   const { token } = useAuth();
   return useQuery<SentimentPlatform[]>({
@@ -39,50 +46,69 @@ export function useSentimentPlatforms() {
       if (isMockMode() || !token) return fallbackPlatforms();
       try {
         const data = await sentimentApi.listPlatforms(token);
-        return data.length > 0 ? data : fallbackPlatforms();
+        return data.length > 0 ? dropOverseas(data) : fallbackPlatforms();
       } catch {
         return fallbackPlatforms();
       }
     },
     staleTime: 60 * 60_000,
-    initialData: fallbackPlatforms,  // 首次渲染就有数据,避免 UI 闪空
+    initialData: fallbackPlatforms,  // data available on first render, avoiding a blank UI flash
   });
 }
 
 export function useSentimentAccounts() {
-  const { token } = useAuth();
+  const { token, isAgency } = useAuth();
+  const { enterpriseUserId } = useAgencyContext();
   return useQuery({
-    queryKey: ACCOUNTS_KEY,
-    queryFn: () => sentimentApi.listAccounts(token!),
+    queryKey: [...ACCOUNTS_KEY, isAgency ? enterpriseUserId : null],
+    queryFn: async () => {
+      const rows = await sentimentApi.listAccounts(token!);
+      return isAgency && enterpriseUserId
+        ? rows.filter(row => row.user_id === enterpriseUserId) : rows;
+    },
     enabled: !!token,
     staleTime: 60_000,
   });
 }
 
 export function useCreateAccount() {
-  const { token } = useAuth();
+  const { token, isAgency } = useAuth();
+  const { enterpriseUserId, canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: AccountCreatePayload) => sentimentApi.createAccount(payload, token!),
+    mutationFn: (payload: AccountCreatePayload) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.createAccount({
+        ...payload,
+        ...(isAgency && enterpriseUserId ? { enterprise_user_id: enterpriseUserId } : {}),
+      }, token!);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ACCOUNTS_KEY }),
   });
 }
 
 export function useUpdateAccount() {
   const { token } = useAuth();
+  const { canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: AccountUpdatePayload }) =>
-      sentimentApi.updateAccount(id, payload, token!),
+    mutationFn: ({ id, payload }: { id: number; payload: AccountUpdatePayload }) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.updateAccount(id, payload, token!);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ACCOUNTS_KEY }),
   });
 }
 
 export function useDeleteAccount() {
   const { token } = useAuth();
+  const { canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => sentimentApi.deleteAccount(id, token!),
+    mutationFn: (id: number) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.deleteAccount(id, token!);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ACCOUNTS_KEY }),
   });
 }
@@ -94,8 +120,8 @@ export function useRunStatus(accountId: number | null) {
     queryKey: ['sentiment', 'run-status', accountId],
     queryFn: async () => {
       const data = await sentimentApi.getRunStatus(accountId!, token!);
-      // 状态从 running/pending 翻到 terminal(success/failed)时,
-      // 主动让数据查询失效 — 用户不必手动刷新就能看到新结果.
+      // When the status flips from running/pending to terminal (success/failed),
+      // proactively invalidate data queries -- users see new results without manually refreshing.
       const prev = qc.getQueryData<{ status?: string }>(['sentiment', 'run-status', accountId]);
       const wasRunning = prev?.status === 'running' || prev?.status === 'pending';
       const nowDone = data?.status === 'success' || data?.status === 'failed';
@@ -103,13 +129,14 @@ export function useRunStatus(accountId: number | null) {
         qc.invalidateQueries({ queryKey: ['sentiment', 'today', accountId] });
         qc.invalidateQueries({ queryKey: ['sentiment', 'posts', accountId] });
         qc.invalidateQueries({ queryKey: ['sentiment', 'briefs', accountId] });
+        qc.invalidateQueries({ queryKey: ['sentiment', 'websearch-latest', accountId] });
         qc.invalidateQueries({ queryKey: ACCOUNTS_KEY });
       }
       return data;
     },
     enabled: !!token && accountId !== null && accountId > 0,
     staleTime: 5_000,
-    // 任务运行中每 15s 轮询;终态停止轮询(返回 false)
+    // Poll every 15s while the task runs; stop polling in a terminal state (return false)
     refetchInterval: (query) => {
       const s = (query.state.data as { status?: string } | undefined)?.status;
       return s === 'running' || s === 'pending' ? 15_000 : false;
@@ -120,11 +147,16 @@ export function useRunStatus(accountId: number | null) {
 
 export function useRunNow() {
   const { token } = useAuth();
+  const { canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (accountId: number) => sentimentApi.runNow(accountId, token!),
+    mutationFn: (accountId: number) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.runNow(accountId, token!);
+    },
     onSuccess: (_data, accountId) => {
       qc.invalidateQueries({ queryKey: ['sentiment', 'run-status', accountId] });
+      qc.invalidateQueries({ queryKey: ['sentiment', 'websearch-latest', accountId] });
       qc.invalidateQueries({ queryKey: ACCOUNTS_KEY });
     },
   });
@@ -141,7 +173,18 @@ export function useTodayData(accountId: number | null, ticker: string | null) {
   });
 }
 
-/** 一次性拉取(BriefsTab、向后兼容)。新代码请用 useInfinitePosts。 */
+export function useWebsearchLatest(accountId: number | null) {
+  const { token } = useAuth();
+  return useQuery({
+    queryKey: ['sentiment', 'websearch-latest', accountId],
+    queryFn: () => sentimentApi.getWebsearchLatest(accountId!, token!),
+    enabled: !!token && !!accountId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** One-shot fetch (BriefsTab, backward compatibility). New code should use useInfinitePosts. */
 export function usePosts(accountId: number | null, ticker: string | null, limit = 200) {
   const { token } = useAuth();
   return useQuery({
@@ -152,19 +195,19 @@ export function usePosts(accountId: number | null, ticker: string | null, limit 
   });
 }
 
-/** 分页 + 时间范围 — ArticlesTab 用。
- *  filters 改变会自动重置第一页(queryKey 含 filters);
- *  fetchNextPage() 拼接下一段。 */
+/** Pagination + time range -- used by ArticlesTab.
+ *  Changing filters automatically resets to the first page (queryKey includes filters);
+ *  fetchNextPage() appends the next segment. */
 export interface InfinitePostsFilters {
   pageSize?: number;
-  /** 时间范围:days 与 start/end 二选一 */
+  /** Time range: days or start/end, one of the two */
   days?: number;
   start?: string;
   end?: string;
-  /** 起始 offset — "跳转到第 N 页" 时设为 (N-1)*pageSize,
-   *  用 queryKey 区分,改值会重置 infinite query */
+  /** Starting offset -- set to (N-1)*pageSize when "jumping to page N",
+   *  distinguished by queryKey; changing it resets the infinite query */
   startOffset?: number;
-  /** 排序键 — 见 PostSortKey,改值会重置 infinite query 第一页 */
+  /** Sort key -- see PostSortKey; changing it resets the infinite query to the first page */
   sortBy?: import('../types/sentiment').PostSortKey;
 }
 
@@ -235,9 +278,9 @@ export function useDrafts(accountId: number | null, ticker: string | null) {
   });
 }
 
-// ─────────────────── newsnow 实时热点 ──────────────────
+// ─────────────────── newsnow real-time trending ──────────────────
 
-/** 推荐源目录(静态)。staleTime 长 — 几乎不变。 */
+/** Recommended source catalog (static). Long staleTime -- almost never changes. */
 export function useNewsnowSources() {
   const { token } = useAuth();
   return useQuery({
@@ -248,7 +291,7 @@ export function useNewsnowSources() {
   });
 }
 
-/** 指定 source 的热榜。newsnow 自身缓存 30 分钟,前端 5 分钟过期触发刷新。 */
+/** Trending list for a given source. newsnow caches for 30 minutes itself; the frontend expires after 5 minutes to trigger a refresh. */
 export function useNewsnowHot(source: string | null, limit = 30) {
   const { token } = useAuth();
   return useQuery({
@@ -262,10 +305,13 @@ export function useNewsnowHot(source: string | null, limit = 30) {
 
 export function useGenerateDraft() {
   const { token } = useAuth();
+  const { canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof sentimentApi.generateDraft>[0]) =>
-      sentimentApi.generateDraft(payload, token!),
+    mutationFn: (payload: Parameters<typeof sentimentApi.generateDraft>[0]) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.generateDraft(payload, token!);
+    },
     onSuccess: (_data, payload) => {
       qc.invalidateQueries({ queryKey: ['sentiment', 'drafts', payload.account_id] });
     },
@@ -284,10 +330,13 @@ export function useKnowledge(accountId: number | null) {
 
 export function useUpsertKnowledge() {
   const { token } = useAuth();
+  const { canWrite } = useAgencyContext();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ accountId, key, body }: { accountId: number; key: string; body: string }) =>
-      sentimentApi.upsertKnowledge(accountId, key, body, token!),
+    mutationFn: ({ accountId, key, body }: { accountId: number; key: string; body: string }) => {
+      if (!canWrite) throw new Error('当前企业业务处于只读状态');
+      return sentimentApi.upsertKnowledge(accountId, key, body, token!);
+    },
     onSuccess: (_data, { accountId }) => {
       qc.invalidateQueries({ queryKey: ['sentiment', 'knowledge', accountId] });
     },

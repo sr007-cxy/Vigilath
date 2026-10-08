@@ -7,7 +7,7 @@ import logging
 
 from geo.utils.error_i18n import localize
 
-# 配置日志
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,13 @@ def _request_lang(request: Request) -> str:
         or "en"
     )
 
-# 统一错误响应模型
+# Unified error response model
 class ErrorResponse:
-    def __init__(self, code: int, message: str, details: dict = None):
+    def __init__(self, code: int, message: str, details: dict = None, key: str = None):
         self.code = code
         self.message = message
         self.details = details
+        self.key = key
     
     def dict(self):
         response = {
@@ -39,24 +40,33 @@ class ErrorResponse:
                 "message": self.message
             }
         }
+        if self.key:
+            response["error"]["key"] = self.key
         if self.details:
             response["error"]["details"] = self.details
         return response
 
-# 自定义异常类
+# Custom exception classes
 class AppException(Exception):
-    def __init__(self, status_code: int, message: str, details: dict = None):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        details: dict = None,
+        key: str = None,
+    ):
         self.status_code = status_code
         self.message = message
         self.details = details
+        self.key = key
         super().__init__(self.message)
 
-# 全局异常处理
+# Global exception handling
 async def global_exception_handler(request: Request, exc: Exception):
-    # 日志级别按异常类型区分:
-    # - AppException / RequestValidationError / JWTError 是预期的业务/校验失败,
-    #   info 记录即可,避免每次 402/429/401 都把整栈刷进日志引起误判。
-    # - 其他一切都是真正的未知异常,err + exc_info 留给运维排障。
+    # Log level differs by exception type:
+    # - AppException / RequestValidationError / JWTError are expected business/validation failures;
+    #   info is enough, avoiding full stack traces in logs on every 402/429/401 that cause misjudgment.
+    # - Everything else is a genuinely unknown exception; err + exc_info is kept for ops troubleshooting.
     if isinstance(exc, (AppException, RequestValidationError, JWTError)):
         logger.info(f"Handled business exception: {type(exc).__name__}: {exc}")
     else:
@@ -64,18 +74,19 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     lang = _request_lang(request)
 
-    # 处理不同类型的异常
+    # Handle different exception types
     if isinstance(exc, AppException):
         return JSONResponse(
             status_code=exc.status_code,
             content=ErrorResponse(
                 code=exc.status_code,
                 message=localize(exc.message, lang),
-                details=exc.details
+                details=exc.details,
+                key=exc.key,
             ).dict()
         )
     elif isinstance(exc, RequestValidationError):
-        # 处理请求参数验证错误
+        # Handle request parameter validation errors
         details = []
         for error in exc.errors():
             details.append({
@@ -83,16 +94,28 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "message": error["msg"],
                 "type": error["type"]
             })
+        # A generic "request parameter validation failed" can't be debugged -- include the first failing field and reason in the message
+        message = localize("Validation error", lang)
+        if details:
+            first = details[0]
+            loc = [str(x) for x in (first["field"] or []) if str(x) != "body"]
+            fld = loc[-1] if loc else ""
+            zh = not str(lang or "").lower().startswith("en")
+            if "email" in fld or "email" in str(first["type"]):
+                hint = "邮箱格式不正确" if zh else "invalid email format"
+            else:
+                hint = str(first["message"])
+            message = f"{message}:{fld} {hint}".strip()
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=ErrorResponse(
                 code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                message=localize("Validation error", lang),
+                message=message,
                 details=details
             ).dict()
         )
     elif isinstance(exc, JWTError):
-        # 处理 JWT 错误
+        # Handle JWT errors
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content=ErrorResponse(
@@ -102,7 +125,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             headers={"WWW-Authenticate": "Bearer"}
         )
     elif isinstance(exc, SQLAlchemyError):
-        # 处理数据库错误
+        # Handle database errors
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(
@@ -111,7 +134,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             ).dict()
         )
     else:
-        # 处理其他未预期的错误
+        # Handle other unexpected errors
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse(

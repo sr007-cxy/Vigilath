@@ -9,7 +9,7 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid var(--border-color)',
 };
 
-// 中文按字符,英文按近似词(空白分割)。两者并存时取最大值,避免中英混排时低估。
+// Chinese counts by character, English by approximate words (whitespace split). When both are present take the max, to avoid underestimating mixed text.
 function countChars(s: string): number {
   const stripped = s.replace(/\s+/g, '');
   const wordCount = s.trim().split(/\s+/).filter(Boolean).length;
@@ -18,7 +18,7 @@ function countChars(s: string): number {
 
 interface Props {
   post: SentimentPost | null;
-  /** 返回按钮 — 点击清空 selectedKey,右栏 swap 回 FilterRail */
+  /** Back button — clicking clears selectedKey and the right column swaps back to FilterRail */
   onBack?: () => void;
 }
 
@@ -42,7 +42,7 @@ export function PostDetail({ post, onBack }: Props) {
     );
   }
 
-  // 容错:把可能为 null/undefined 的字段做默认值处理
+  // Tolerance: default values for fields that may be null/undefined
   const content = post.content ?? '';
   const citations = post.citations ?? [];
   const topics = post.topics ?? [];
@@ -60,7 +60,7 @@ export function PostDetail({ post, onBack }: Props) {
 
   return (
     <article className="p-5 space-y-3">
-      {/* row 0: 返回 + source/region/risk badges + 打开原文 (right-aligned) */}
+      {/* row 0: back + source/region/risk badges + open original (right-aligned) */}
       <div className="flex items-center gap-2 flex-wrap text-[11px]">
         {onBack && (
           <button type="button" onClick={onBack}
@@ -84,12 +84,12 @@ export function PostDetail({ post, onBack }: Props) {
         )}
       </div>
 
-      {/* row 1: 标题(大字) */}
+      {/* row 1: title (large) */}
       <h2 className="text-xl font-bold text-primary leading-snug">
         {post.title || '(无标题)'}
       </h2>
 
-      {/* row 2: @账号 · 发布时间 · counts */}
+      {/* row 2: @account · publish time · counts */}
       <div className="text-xs text-muted flex items-center gap-3 flex-wrap">
         {post.author && <span>@{post.author}</span>}
         <span>{(post.publish_time ?? post.ingested_at) ? new Date((post.publish_time ?? post.ingested_at)!).toLocaleString('zh-CN') : '—'}</span>
@@ -98,7 +98,7 @@ export function PostDetail({ post, onBack }: Props) {
         {post.reply_count != null && <span>💬 {post.reply_count.toLocaleString()}</span>}
       </div>
 
-      {/* row 3: 摘要 + 完整正文 */}
+      {/* row 3: summary + full body */}
       {post.summary && (
         <p className="text-sm text-secondary italic leading-relaxed border-l-2 pl-3"
           style={{ borderColor: 'var(--border-color)' }}>
@@ -111,18 +111,18 @@ export function PostDetail({ post, onBack }: Props) {
         </p>
       )}
 
-      {/* 底部元信息 — 风险 / 情感 / 立场 / 影响力 / 话题 / 实体 / 推理 */}
+      {/* Bottom metadata — risk / sentiment / stance / influence / topics / entities / reasoning */}
       <section className="pt-3 space-y-3" style={{ borderTop: '1px solid var(--border-color)' }}>
         <h4 className="text-[11px] font-semibold text-muted uppercase tracking-wider">
           {t('dashboard.sentiment.articles.detail.aiAnalysis')}
         </h4>
 
-        {/* 情感 chip(风险已在头部) */}
+        {/* Sentiment chip (risk is already in the header) */}
         <div className="flex items-center gap-2 flex-wrap">
           <SentimentBadge label={post.sentiment_label} score={post.sentiment_score} t={t} />
         </div>
 
-        {/* 立场 / 意图 / 事实性 */}
+        {/* Stance / intent / factuality */}
         <div className="grid grid-cols-3 gap-3">
           <MicroField label={t('dashboard.sentiment.articles.detail.stance')}
             value={localizeEnum(t, 'stanceLabels', post.stance)} />
@@ -132,7 +132,7 @@ export function PostDetail({ post, onBack }: Props) {
             value={localizeEnum(t, 'factualityLabels', post.factuality)} />
         </div>
 
-        {/* 影响力 */}
+        {/* Influence */}
         <Field label={t('dashboard.sentiment.articles.detail.influence')}>
           <div className="flex items-center gap-2">
             <div className="rounded-full overflow-hidden flex-1"
@@ -147,7 +147,7 @@ export function PostDetail({ post, onBack }: Props) {
           </div>
         </Field>
 
-        {/* 话题 / 实体 / 情绪 */}
+        {/* Topics / entities / emotions */}
         {topics.length > 0 && (
           <Field label={t('dashboard.sentiment.articles.detail.topics')}>
             <ChipList items={topics.map(s => `#${s}`)} />
@@ -164,14 +164,14 @@ export function PostDetail({ post, onBack }: Props) {
           </Field>
         )}
 
-        {/* 风险信号 */}
+        {/* Risk signals */}
         {riskSignals.length > 0 && (
           <Field label={t('dashboard.sentiment.articles.detail.riskSignals')}>
             <ul className="text-xs space-y-1">
               {riskSignals.map((r, i) => (
                 <li key={i}>
                   <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1.5"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#b91c1c' }}>
+                    style={{ background: 'var(--danger-bg)', color: '#b91c1c' }}>
                     {r.type}
                   </span>
                   <span className="text-secondary">{r.reason}</span>
@@ -181,14 +181,14 @@ export function PostDetail({ post, onBack }: Props) {
           </Field>
         )}
 
-        {/* 隐含意义 */}
+        {/* Implied meaning */}
         {post.hidden_meaning && (
           <Field label={t('dashboard.sentiment.articles.detail.hidden')}>
             <p className="text-sm italic text-secondary">{post.hidden_meaning}</p>
           </Field>
         )}
 
-        {/* AI 引用 */}
+        {/* AI citations */}
         {citations.length > 0 && (
           <Field label={t('dashboard.sentiment.articles.detail.citations')}>
             <ul className="text-xs space-y-1">
@@ -204,7 +204,7 @@ export function PostDetail({ post, onBack }: Props) {
           </Field>
         )}
 
-        {/* AI 推理(默认折叠) */}
+        {/* AI reasoning (collapsed by default) */}
         {post.reasoning && (
           <details open={reasoningOpen}
             onToggle={(e) => setReasoningOpen((e.target as HTMLDetailsElement).open)}>
@@ -256,9 +256,9 @@ function ChipList({ items }: { items: string[] }) {
   );
 }
 
-/** stance/intent/factuality 是 sentinel 上游的英文 enum,前端按 i18n 字典翻译;
- *  字典里没有该 key 时 i18next 会回显 key 本身,这里检测后 fallback 到 raw,
- *  防止后端新增 enum 时前端出现长串 key 路径。 */
+/** stance/intent/factuality are English enums from upstream sentinel, translated on the frontend via the i18n dictionary;
+ *  when the dictionary lacks the key, i18next echoes the key itself, so we detect that and fall back to raw,
+ *  preventing long key paths from appearing in the frontend when the backend adds new enums. */
 function localizeEnum(
   t: (k: string) => string,
   group: 'stanceLabels' | 'intentLabels' | 'factualityLabels',
@@ -270,11 +270,11 @@ function localizeEnum(
   return translated === key ? raw : translated;
 }
 
-/** 把 citations 在 content 里高亮(简单 split + replace)。 */
+/** Highlight citations in content (simple split + replace). */
 function renderHighlightedContent(content: string, citations: string[]): React.ReactNode {
   if (!citations.length) return content;
 
-  // 用所有 citations 构造一个正则,split 出来的奇数索引就是命中片段
+  // Build one regex from all citations; the odd indexes after split are the matched fragments
   const escaped = citations
     .filter(c => c && c.length >= 2)
     .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
